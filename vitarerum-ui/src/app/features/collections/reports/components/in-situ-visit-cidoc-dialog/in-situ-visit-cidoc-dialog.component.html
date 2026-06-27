@@ -1,0 +1,77 @@
+<dialog
+  #dialog
+  class="cidoc-dialog"
+  tabindex="-1"
+  aria-labelledby="cidoc-dialog-title"
+  aria-describedby="cidoc-dialog-description"
+  (cancel)="onCancel($event)"
+  (keydown.escape)="onCancel($event)"
+  (click)="onBackdropClick($event)"
+>
+  <section class="cidoc-dialog__surface">
+    <header class="cidoc-dialog__header">
+      <div>
+        <p class="cidoc-dialog__eyebrow">Semantic record · CIDOC-CRM 7.1.3</p>
+        <h2 id="cidoc-dialog-title">Knowledge graph source</h2>
+        <p id="cidoc-dialog-description">
+          The stored visit mapped as a self-contained JSON-LD document.
+        </p>
+      </div>
+      <button
+        type="button"
+        class="cidoc-dialog__close"
+        aria-label="Close CIDOC-CRM viewer"
+        (click)="requestClose()"
+      >
+        <span class="pi pi-times" aria-hidden="true"></span>
+      </button>
+    </header>
+
+    <div class="cidoc-dialog__record-strip">
+      <span>Record</span>
+      <code>{{ recordId() }}</code>
+      <span class="cidoc-dialog__format">JSON-LD</span>
+    </div>
+
+    <div class="cidoc-dialog__body">
+      @if (cidocResource.isLoading()) {
+        <app-loading-state label="Loading CIDOC-CRM data..." />
+      } @else if (cidocError()) {
+        <div class="cidoc-dialog__error">
+          <app-error-message [apiError]="cidocError()!" (retry)="retry()" />
+        </div>
+      } @else if (formattedDocument()) {
+        <pre
+          class="cidoc-dialog__code"
+          tabindex="0"
+          aria-label="CIDOC-CRM JSON-LD document"
+        ><code>{{ formattedDocument() }}</code></pre>
+      }
+    </div>
+
+    <footer class="cidoc-dialog__footer">
+      <p class="cidoc-dialog__status" aria-live="polite">
+        @switch (copyStatus()) {
+          @case ('copied') {
+            JSON-LD copied to clipboard.
+          }
+          @case ('error') {
+            Clipboard access is unavailable.
+          }
+        }
+      </p>
+      <div class="cidoc-dialog__footer-actions">
+        <button type="button" class="cidoc-dialog__button" (click)="requestClose()">Close</button>
+        <button
+          type="button"
+          class="cidoc-dialog__button cidoc-dialog__button--primary"
+          [disabled]="!formattedDocument()"
+          (click)="copyDocument()"
+        >
+          <span class="pi pi-copy" aria-hidden="true"></span>
+          {{ copyStatus() === 'copied' ? 'Copied' : 'Copy JSON-LD' }}
+        </button>
+      </div>
+    </footer>
+  </section>
+</dialog>

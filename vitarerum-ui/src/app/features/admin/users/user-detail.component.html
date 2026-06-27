@@ -1,0 +1,90 @@
+<div class="user-detail">
+  <a class="user-detail__back" routerLink="/p/admin/users">← Back to users</a>
+
+  @if (userResource.isLoading()) {
+    <app-loading-state />
+  } @else if (userApiError()) {
+    <app-error-message [apiError]="userApiError()!" (retry)="userResource.reload()" />
+  } @else if (user()) {
+    <header class="user-detail__header">
+      <p class="user-detail__eyebrow">User</p>
+      <h2>{{ user()!.name }}</h2>
+      <p class="user-detail__email">{{ user()!.email }}</p>
+    </header>
+
+    <section class="user-detail__section" aria-labelledby="groups-heading">
+      <h3 id="groups-heading">Group memberships</h3>
+
+      @if (!user()!.permissions.length) {
+        <p class="user-detail__empty">This user has no group memberships.</p>
+      } @else {
+        <ul class="user-detail__group-list" role="list">
+          @for (perm of user()!.permissions; track perm.permissionId) {
+            <li class="user-detail__group-item">
+              <span class="group-badge">{{ groupLabels[perm.group.name] }}</span>
+              <button
+                pButton
+                type="button"
+                class="p-button-outlined p-button-danger p-button-sm"
+                (click)="requestRevoke(perm)"
+                [attr.aria-label]="'Revoke ' + groupLabels[perm.group.name]"
+              >
+                Revoke
+              </button>
+            </li>
+          }
+        </ul>
+      }
+
+      @if (revokeTarget()) {
+        <div class="user-detail__confirm">
+          <app-confirm-action
+            [title]="'Remove from ' + groupLabels[revokeTarget()!.group.name]"
+            message="The user will lose access to this role immediately."
+            confirmLabel="Remove"
+            [disabled]="revokePending()"
+            (confirmed)="confirmRevoke()"
+            (cancelled)="cancelRevoke()"
+          />
+        </div>
+      }
+
+      @if (revokeError()) {
+        <app-error-message [apiError]="revokeError()!" />
+      }
+    </section>
+
+    @if (availableGroups().length) {
+      <section class="user-detail__section" aria-labelledby="assign-heading">
+        <h3 id="assign-heading">Assign to group</h3>
+        <div class="user-detail__assign-row">
+          <label class="sr-only" for="group-select">Group</label>
+          <select
+            id="group-select"
+            class="user-detail__group-select"
+            [value]="selectedGroupId()"
+            (change)="onGroupSelect($event)"
+          >
+            <option value="" disabled selected>Select group…</option>
+            @for (g of availableGroups(); track g.id) {
+              <option [value]="g.id">{{ groupLabels[g.name] }}</option>
+            }
+          </select>
+
+          <button
+            pButton
+            type="button"
+            [disabled]="!selectedGroupId() || assignPending()"
+            (click)="assignGroup()"
+          >
+            {{ assignPending() ? 'Assigning…' : 'Assign' }}
+          </button>
+        </div>
+
+        @if (assignError()) {
+          <app-error-message [apiError]="assignError()!" />
+        }
+      </section>
+    }
+  }
+</div>

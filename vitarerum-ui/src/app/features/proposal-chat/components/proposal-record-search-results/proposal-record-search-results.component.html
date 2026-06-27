@@ -1,0 +1,75 @@
+<article class="record-results" aria-labelledby="record-results-heading">
+  <header class="record-results__header">
+    <div>
+      <p class="record-results__eyebrow">Simulated catalog search</p>
+      <h3 id="record-results-heading">{{ records().length }} records found</h3>
+    </div>
+    <span class="record-results__selected">{{ selectedRecords().length }} selected</span>
+  </header>
+
+  <fieldset [disabled]="pending() || saved() || !submissionAllowed()">
+    <legend class="sr-only">Select catalog records to add to the proposal</legend>
+    <div class="record-results__grid">
+      @for (record of records(); track record.inventoryNumber) {
+        <label
+          class="record-card"
+          [class.record-card--selected]="selectedInventoryNumbers().has(record.inventoryNumber)"
+        >
+          <input
+            type="checkbox"
+            [checked]="selectedInventoryNumbers().has(record.inventoryNumber)"
+            (change)="setSelected(record.inventoryNumber, $event)"
+          />
+          <span class="record-card__body">
+            <span class="record-card__reference">{{ record.inventoryNumber }}</span>
+            <strong>{{ record.displayTitle }}</strong>
+            <span>{{ record.objectName }}</span>
+            <small>{{ record.briefDescriptionSnapshot }}</small>
+          </span>
+        </label>
+      }
+    </div>
+  </fieldset>
+
+  @if (!submissionAllowed()) {
+    <p class="record-results__locked" role="status">
+      Records cannot be added to a decided or cancelled proposal.
+    </p>
+  }
+
+  @if (apiError()) {
+    <app-error-message [apiError]="apiError()!" />
+  }
+
+  @if (saved()) {
+    <app-feedback-message
+      title="Requested objects added"
+      [message]="
+        selectedRecords().length +
+        (selectedRecords().length === 1
+          ? ' catalog record was added to the proposal.'
+          : ' catalog records were added to the proposal.')
+      "
+      tone="success"
+    />
+  }
+
+  <footer class="record-results__footer">
+    <p>Selected records are submitted as catalog snapshots.</p>
+    <button
+      type="button"
+      [disabled]="!selectedRecords().length || pending() || saved() || !submissionAllowed()"
+      (click)="submit()"
+    >
+      <span
+        class="pi"
+        [class.pi-plus]="!pending() && !saved()"
+        [class.pi-spinner]="pending()"
+        [class.pi-spin]="pending()"
+        [class.pi-check]="saved()"
+        aria-hidden="true"
+      ></span>
+      {{ saved() ? 'Objects added' : pending() ? 'Adding…' : 'Add selected objects' }}
+    </button>
+  </footer>
+</article>

@@ -1,0 +1,37 @@
+.empty-state {
+  display: grid;
+  justify-items: center;
+  gap: 0.75rem;
+  padding: 2rem;
+  border: 1px dashed var(--color-line-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-panel-muted);
+  color: var(--color-muted);
+  text-align: center;
+}
+
+.empty-state__mark {
+  width: 2rem;
+  /* Quiet monochrome rendition: the mark as a watermark, not a banner. */
+  --logo-ink: var(--color-line-strong);
+  --logo-flame: var(--color-line-strong);
+}
+
+h2,
+p {
+  margin: 0;
+}
+
+h2 {
+  color: var(--color-text);
+  font-size: 1.125rem;
+  line-height: 1.25;
+}
+
+.empty-state__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}

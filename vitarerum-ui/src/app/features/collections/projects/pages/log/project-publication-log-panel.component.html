@@ -1,0 +1,246 @@
+<div class="publication-log">
+  <section class="publication-sheet" aria-labelledby="publication-log-heading">
+    <header class="publication-sheet__header">
+      <div>
+        <p class="publication-sheet__eyebrow">Project · Publications</p>
+        <h2 id="publication-log-heading" class="publication-sheet__title">Publication log</h2>
+      </div>
+
+      <dl class="publication-summary" aria-label="Publication log summary">
+        <div class="publication-summary__item">
+          <dt>Reference</dt>
+          <dd>{{ publicationLog()?.referenceNumber ?? 'Not issued' }}</dd>
+        </div>
+        <div class="publication-summary__item">
+          <dt>Entries</dt>
+          <dd>{{ entries().length }}</dd>
+        </div>
+        <div class="publication-summary__item">
+          <dt>Curator</dt>
+          <dd>{{ publicationLog()?.curator?.user?.name ?? '—' }}</dd>
+        </div>
+      </dl>
+    </header>
+
+    <div class="publication-band">
+      <span>Publications &amp; outputs</span>
+      <span class="publication-band__hint"
+        >Notes and supporting files for outputs derived from this project</span
+      >
+    </div>
+
+    <div class="publication-sheet__body">
+      @if (projectError()) {
+        <app-error-message [apiError]="projectError()!" (retry)="projectResource.reload()" />
+      }
+
+      @if (publicationLockMessage()) {
+        <p id="publication-lock-message" class="publication-locked" role="status">
+          {{ publicationLockMessage() }}
+        </p>
+      }
+
+      @if (canWriteEntries()) {
+        <form
+          class="publication-add"
+          aria-label="Add publication entry"
+          (submit)="addEntry($event)"
+        >
+          @if (addError()) {
+            <app-error-message [apiError]="addError()!" />
+          }
+          <label class="publication-add__label" for="publication-note">Publication note</label>
+          <textarea
+            id="publication-note"
+            class="publication-add__textarea"
+            rows="3"
+            placeholder="Describe a publication or output derived from this project…"
+            [value]="addNote()"
+            (input)="onAddNoteInput($event)"
+          ></textarea>
+
+          <label class="publication-add__label" for="publication-files"
+            >Attachments (optional)</label
+          >
+          <input
+            id="publication-files"
+            type="file"
+            multiple
+            aria-label="Publication entry files"
+            (change)="onAddFilesInput($event)"
+          />
+
+          <div class="publication-add__actions">
+            <button type="submit" [disabled]="!addFormValid() || addSubmitting()">
+              {{ addSubmitting() ? 'Adding…' : 'Add entry' }}
+            </button>
+          </div>
+        </form>
+      }
+
+      @if (publicationResource.isLoading()) {
+        <app-loading-state label="Loading publication log…" />
+      } @else if (publicationError()) {
+        <app-error-message
+          [apiError]="publicationError()!"
+          (retry)="publicationResource.reload()"
+        />
+      } @else if (!entries().length) {
+        <app-empty-state
+          title="No publications recorded"
+          message="No publication entries have been added yet."
+        />
+      } @else {
+        <ul class="publication-entries" aria-label="Publication entries">
+          @for (entry of entries(); track entry.id) {
+            <li class="publication-entry">
+              <div class="publication-entry__meta">
+                <span class="publication-entry__author">{{ entry.addedBy.user.name }}</span>
+                <span class="publication-entry__date">{{ dateLabel(entry.addedAt) }}</span>
+              </div>
+
+              @if (editingEntryId() === entry.id) {
+                <form class="publication-entry__edit" (submit)="saveEdit($event)">
+                  @if (editError()) {
+                    <app-error-message [apiError]="editError()!" />
+                  }
+                  <textarea
+                    class="publication-entry__textarea"
+                    rows="3"
+                    [attr.aria-label]="'Edit note for entry ' + entry.id"
+                    [value]="editNote()"
+                    (input)="onEditNoteInput($event)"
+                  ></textarea>
+                  <div class="publication-entry__edit-actions">
+                    <button type="submit" [disabled]="!editFormValid() || editSubmitting()">
+                      {{ editSubmitting() ? 'Saving…' : 'Save' }}
+                    </button>
+                    <button type="button" [disabled]="editSubmitting()" (click)="closeEdit()">
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              } @else {
+                <p class="publication-entry__note">{{ entry.note }}</p>
+              }
+
+              <div class="publication-entry__controls">
+                <button
+                  type="button"
+                  class="publication-entry__toggle"
+                  [attr.aria-expanded]="expandedEntryId() === entry.id"
+                  [attr.aria-controls]="'publication-entry-files-' + entry.id"
+                  (click)="toggleAttachments(entry.id)"
+                >
+                  <span
+                    class="pi"
+                    [class.pi-plus]="expandedEntryId() !== entry.id"
+                    [class.pi-minus]="expandedEntryId() === entry.id"
+                    aria-hidden="true"
+                  ></span>
+                  Files ({{ entry.attachments.length }})
+                </button>
+                @if (canWriteEntries() && editingEntryId() !== entry.id) {
+                  <button
+                    type="button"
+                    class="publication-entry__edit-btn"
+                    (click)="openEdit(entry)"
+                  >
+                    Edit
+                  </button>
+                }
+              </div>
+
+              @if (expandedEntryId() === entry.id) {
+                <section
+                  class="entry-files"
+                  [id]="'publication-entry-files-' + entry.id"
+                  [attr.aria-label]="'Files for publication entry ' + entry.id"
+                >
+                  @if (entry.attachments.length) {
+                    <ul class="attachment-list" aria-label="Publication entry attachments">
+                      @for (attachment of entry.attachments; track attachment.fileReference) {
+                        <li>
+                          <button
+                            type="button"
+                            class="attachment-link"
+                            [disabled]="attachmentDownloading()[attachment.fileReference]"
+                            [attr.aria-label]="'Download ' + attachment.fileName"
+                            (click)="downloadAttachment(entry.id, attachment)"
+                          >
+                            <span
+                              class="attachment-link__icon pi"
+                              [class.pi-image]="attachment.mediaType === 'IMAGE'"
+                              [class.pi-video]="attachment.mediaType === 'VIDEO'"
+                              [class.pi-file]="
+                                attachment.mediaType !== 'IMAGE' && attachment.mediaType !== 'VIDEO'
+                              "
+                              aria-hidden="true"
+                            ></span>
+                            <span class="attachment-link__name">{{ attachment.fileName }}</span>
+                            @if (attachment.note) {
+                              <span class="attachment-link__meta">{{ attachment.note }}</span>
+                            }
+                            @if (attachmentDownloading()[attachment.fileReference]) {
+                              <span
+                                class="attachment-link__action pi pi-spin pi-spinner"
+                                aria-hidden="true"
+                              ></span>
+                            } @else {
+                              <span
+                                class="attachment-link__action pi pi-download"
+                                aria-hidden="true"
+                              ></span>
+                            }
+                          </button>
+                          @if (attachmentDownloadErrors()[attachment.fileReference]) {
+                            <app-error-message
+                              [apiError]="attachmentDownloadErrors()[attachment.fileReference]!"
+                            />
+                          }
+                        </li>
+                      }
+                    </ul>
+                  } @else {
+                    <p class="entry-files__empty">No files attached to this entry.</p>
+                  }
+
+                  @if (canWriteEntries()) {
+                    <form
+                      class="entry-upload"
+                      [attr.aria-label]="'Upload file for publication entry ' + entry.id"
+                      (submit)="uploadAttachment(entry.id, $event)"
+                    >
+                      <input
+                        type="file"
+                        aria-label="Publication entry file"
+                        (change)="onAttachmentFileInput(entry.id, $event)"
+                      />
+                      <input
+                        type="text"
+                        class="entry-upload__note"
+                        placeholder="Caption (optional)"
+                        aria-label="Publication attachment caption"
+                        [value]="attachmentNote(entry.id)"
+                        (input)="onAttachmentNoteInput(entry.id, $event)"
+                      />
+                      <button
+                        type="submit"
+                        [disabled]="!attachmentFiles()[entry.id] || attachmentUploading()[entry.id]"
+                      >
+                        {{ attachmentUploading()[entry.id] ? 'Uploading…' : 'Upload' }}
+                      </button>
+                    </form>
+                    @if (attachmentErrors()[entry.id]) {
+                      <app-error-message [apiError]="attachmentErrors()[entry.id]!" />
+                    }
+                  }
+                </section>
+              }
+            </li>
+          }
+        </ul>
+      }
+    </div>
+  </section>
+</div>

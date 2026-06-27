@@ -1,0 +1,201 @@
+<div class="proposals-new">
+  <app-page-header
+    eyebrow="Proposals"
+    title="Rejected / cancelled"
+    description="Requests that were rejected or cancelled before approval."
+  />
+
+  @if (proposalsResource.isLoading()) {
+    <app-loading-state />
+  } @else if (listError()) {
+    <app-error-message [apiError]="listError()!" (retry)="proposalsResource.reload()" />
+  } @else {
+    <section class="proposals-list-panel" aria-label="Rejected and cancelled proposals list">
+      <div class="proposals-toolbar">
+        <label class="proposals-search" for="proposals-search">
+          <span class="pi pi-search" aria-hidden="true"></span>
+          <input
+            id="proposals-search"
+            type="search"
+            [value]="searchDraft()"
+            (input)="onSearchInput($event)"
+            (keydown.enter)="applySearch()"
+            placeholder="Search reference or title"
+            aria-label="Search rejected and cancelled proposals"
+          />
+          @if (searchDraft()) {
+            <button
+              type="button"
+              class="proposals-search__clear"
+              (click)="clearSearch()"
+              aria-label="Clear rejected and cancelled proposal search"
+            >
+              <span class="pi pi-times" aria-hidden="true"></span>
+            </button>
+          }
+        </label>
+        <button type="button" class="action-btn action-btn--primary" (click)="applySearch()">
+          Search
+        </button>
+      </div>
+
+      @if (!proposals().length) {
+        <app-empty-state
+          [title]="
+            appliedSearch()
+              ? 'No rejected or cancelled proposals found'
+              : 'No rejected or cancelled proposals'
+          "
+          [message]="
+            appliedSearch()
+              ? 'No rejected or cancelled proposals match the current search.'
+              : 'There are no rejected or cancelled proposals.'
+          "
+        />
+      } @else {
+        <div class="proposals-table-shell">
+          <table class="proposals-table" aria-label="Rejected and cancelled proposals">
+            <colgroup>
+              <col class="proposals-table__col-ref" />
+              <col class="proposals-table__col-title" />
+              <col class="proposals-table__col-type" />
+              <col class="proposals-table__col-requester" />
+              <col class="proposals-table__col-requester" />
+              <col class="proposals-table__col-type" />
+              <col class="proposals-table__col-date" />
+              <col class="proposals-table__col-actions" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th scope="col">Reference</th>
+                <th scope="col">Title</th>
+                <th scope="col">Type</th>
+                <th scope="col">Requested by</th>
+                <th scope="col">Assigned to</th>
+                <th scope="col">Status</th>
+                <th scope="col">Submitted</th>
+                <th scope="col" class="proposals-table__actions-header">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (proposal of proposals(); track proposal.id) {
+                <tr>
+                  <td class="proposals-table__ref">
+                    {{ proposal.referenceNumber }}
+                  </td>
+                  <td>
+                    <a
+                      class="proposals-table__title"
+                      [routerLink]="['/p/collections/proposals/rejected', proposal.id]"
+                    >
+                      {{ proposal.title }}
+                    </a>
+                  </td>
+                  <td>
+                    <app-type-chip [type]="proposal.type" />
+                  </td>
+                  <td>
+                    <div class="proposals-table__requester">
+                      <span>{{ proposal.requestedBy.user.name }}</span>
+                      <span class="proposals-table__requester-email">
+                        {{ proposal.requestedBy.user.email }}
+                      </span>
+                    </div>
+                  </td>
+                  <td>
+                    <div class="proposals-table__requester">
+                      <span>{{ proposal.assignedTo?.user?.name ?? 'Unassigned' }}</span>
+                      @if (proposal.assignedTo?.user?.email) {
+                        <span class="proposals-table__requester-email">
+                          {{ proposal.assignedTo!.user.email }}
+                        </span>
+                      }
+                    </div>
+                  </td>
+                  <td>
+                    <app-status-chip kind="proposal" [status]="proposal.status" />
+                  </td>
+                  <td class="proposals-table__date">{{ proposal.submittedAt.slice(0, 10) }}</td>
+                  <td>
+                    <div class="proposals-table__actions">
+                      <app-row-actions
+                        [items]="actionItemsFor(proposal)"
+                        ariaLabel="More actions for {{ proposal.referenceNumber }}"
+                      />
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        @if (totalProposals() > 0) {
+          <div
+            class="proposals-pagination"
+            role="navigation"
+            aria-label="Rejected and cancelled proposals pagination"
+          >
+            <div class="proposals-pagination__meta">
+              <span class="proposals-pagination__info">
+                {{ rangeStart() }}-{{ rangeEnd() }} of {{ totalProposals() }} proposals
+              </span>
+              <label class="proposals-pagination__size" for="proposals-page-size">
+                Rows
+                <select
+                  id="proposals-page-size"
+                  (change)="onPageSizeChange($event)"
+                >
+                  @for (size of pageSizeOptions; track size) {
+                    <option [value]="size" [selected]="size === pageSize()">{{ size }}</option>
+                  }
+                </select>
+              </label>
+            </div>
+            <div class="proposals-pagination__controls">
+              <button
+                type="button"
+                class="action-btn"
+                [disabled]="currentPage() === 0"
+                (click)="firstPage()"
+                aria-label="First page"
+              >
+                First
+              </button>
+              <button
+                type="button"
+                class="action-btn"
+                [disabled]="currentPage() === 0"
+                (click)="prevPage()"
+                aria-label="Previous page"
+              >
+                Previous
+              </button>
+              <span class="proposals-pagination__page" aria-live="polite">
+                Page {{ currentPage() + 1 }} of {{ totalPages() }}
+              </span>
+              <button
+                type="button"
+                class="action-btn"
+                [disabled]="currentPage() >= totalPages() - 1"
+                (click)="nextPage()"
+                aria-label="Next page"
+              >
+                Next
+              </button>
+              <button
+                type="button"
+                class="action-btn"
+                [disabled]="currentPage() >= totalPages() - 1"
+                (click)="lastPage()"
+                aria-label="Last page"
+              >
+                Last
+              </button>
+            </div>
+          </div>
+        }
+      }
+    </section>
+  }
+</div>

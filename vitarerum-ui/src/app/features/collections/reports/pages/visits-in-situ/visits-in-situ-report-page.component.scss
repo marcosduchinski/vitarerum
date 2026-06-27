@@ -1,0 +1,98 @@
+@use '../../../projects/pages/completed/projects-completed-page.component.scss';
+
+.visits-report {
+  display: grid;
+  gap: 1.5rem;
+  align-content: start;
+}
+
+.report-list-panel {
+  @extend .projects-list-panel;
+}
+
+.report-table-shell {
+  @extend .projects-table-shell;
+}
+
+.report-table {
+  @extend .projects-table;
+}
+
+.report-table__col-code {
+  width: 13rem;
+}
+
+.report-table__col-visitor,
+.report-table__col-place {
+  width: 12rem;
+}
+
+.report-table__col-visit-dates,
+.report-table__col-generated {
+  width: 13rem;
+}
+
+.report-table__col-actions {
+  width: 6rem;
+}
+
+.report-table__code {
+  color: var(--color-text);
+  font-weight: 800;
+
+  small {
+    display: block;
+    max-width: 12rem;
+    overflow: hidden;
+    margin-top: 0.2rem;
+    color: var(--color-subtle);
+    font-size: 0.7rem;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.report-table__date {
+  color: var(--color-muted);
+  font-size: 0.84rem;
+  white-space: nowrap;
+}
+
+.report-table__unavailable {
+  color: var(--color-subtle);
+  font-style: italic;
+  font-weight: 500;
+}
+
+.report-table__actions-header {
+  text-align: right;
+}
+
+.report-table__actions {
+  @extend .projects-table__actions;
+}
+
+.report-pagination {
+  @extend .projects-pagination;
+}
+
+.report-pagination__meta {
+  @extend .projects-pagination__meta;
+}
+
+.report-pagination__info {
+  @extend .projects-pagination__info;
+}
+
+.report-pagination__size {
+  @extend .projects-pagination__size;
+}
+
+.report-pagination__controls {
+  @extend .projects-pagination__controls;
+}
+
+.report-pagination__page {
+  @extend .projects-pagination__page;
+}

@@ -1,0 +1,202 @@
+<div class="proposal-editor">
+  <a class="proposal-editor__back" [routerLink]="['/p/collections/proposals/my-assignments', id()]">
+    <span class="pi pi-arrow-left" aria-hidden="true"></span>
+    Back to assignment
+  </a>
+
+  @if (proposalResource.isLoading()) {
+    <app-loading-state label="Loading proposal metadata..." />
+  } @else if (loadError()) {
+    <app-error-message [apiError]="loadError()!" (retry)="proposalResource.reload()" />
+  } @else if (proposal(); as currentProposal) {
+    <header class="proposal-editor__header">
+      <div>
+        <p class="proposal-editor__eyebrow">Metadata correction</p>
+        <p class="proposal-editor__reference">{{ currentProposal.referenceNumber }}</p>
+        <h1>Edit proposal</h1>
+        <p class="proposal-editor__lede">
+          Correct the defining information without changing workflow status or recording a new
+          event.
+        </p>
+      </div>
+      <app-status-chip kind="proposal" [status]="asWorkflowStatus(currentProposal.status)" />
+    </header>
+
+    @if (!canEdit()) {
+      <section class="proposal-editor__locked" aria-labelledby="proposal-editor-locked-title">
+        <span class="pi pi-lock" aria-hidden="true"></span>
+        <div>
+          <h2 id="proposal-editor-locked-title">This proposal can no longer be edited</h2>
+          <p>Only submitted or pending proposals permit metadata corrections.</p>
+        </div>
+        <a [routerLink]="['/p/collections/proposals/my-assignments', id()]">
+          Return to assignment
+        </a>
+      </section>
+    } @else {
+      <form class="proposal-editor__form" novalidate (submit)="save($event)">
+        <div class="proposal-editor__fields">
+          @if (updateError()) {
+            <app-error-message [apiError]="updateError()!" />
+          }
+
+          <fieldset class="editor-section">
+            <legend>
+              <span>01</span>
+              Proposal identity
+            </legend>
+            <p class="editor-section__description">
+              The reference number remains fixed. The title may be cleared for an incomplete
+              proposal.
+            </p>
+            <div class="editor-field">
+              <label for="proposal-edit-title">Title</label>
+              <input
+                id="proposal-edit-title"
+                type="text"
+                autocomplete="off"
+                [formField]="editForm.title"
+                aria-describedby="proposal-edit-title-hint"
+              />
+              <p id="proposal-edit-title-hint" class="editor-field__hint">
+                Leave empty to clear the current title.
+              </p>
+            </div>
+          </fieldset>
+
+          <fieldset class="editor-section">
+            <legend>
+              <span>02</span>
+              Intended use
+            </legend>
+            <p class="editor-section__description">
+              Type and description are saved together as one intended-use statement.
+            </p>
+            <div class="editor-field-grid">
+              <div class="editor-field">
+                <label for="proposal-edit-use-type">Use type</label>
+                <select
+                  id="proposal-edit-use-type"
+                  [formField]="editForm.useType"
+                  aria-describedby="proposal-edit-use-type-error"
+                >
+                  <option value="">Not specified</option>
+                  <option value="EXHIBITION">Exhibition</option>
+                  <option value="IN_SITU_VISIT">In-situ visit</option>
+                  <option value="OTHER">Other</option>
+                </select>
+                <div
+                  id="proposal-edit-use-type-error"
+                  class="editor-field__validation"
+                  aria-live="polite"
+                >
+                  @if (
+                    (editForm.useType().touched() || editForm.useType().dirty()) &&
+                    editForm.useType().invalid()
+                  ) {
+                    {{ editForm.useType().errors()[0].message }}
+                  }
+                </div>
+              </div>
+              <div class="editor-field editor-field--wide">
+                <label for="proposal-edit-use-description">Description</label>
+                <textarea
+                  id="proposal-edit-use-description"
+                  rows="5"
+                  [formField]="editForm.intendedUseDescription"
+                  aria-describedby="proposal-edit-use-description-hint"
+                ></textarea>
+                <p id="proposal-edit-use-description-hint" class="editor-field__hint">
+                  Explain how the collection will be consulted, presented, or otherwise used.
+                </p>
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset class="editor-section">
+            <legend>
+              <span>03</span>
+              Requested period
+            </legend>
+            <p class="editor-section__description">
+              Either date may be cleared. When both are supplied, the end cannot precede the
+              beginning.
+            </p>
+            <div class="editor-field-grid editor-field-grid--dates">
+              <div class="editor-field">
+                <label for="proposal-edit-begin-date">Begin date</label>
+                <input id="proposal-edit-begin-date" type="date" [formField]="editForm.beginDate" />
+              </div>
+              <div class="editor-field">
+                <label for="proposal-edit-end-date">End date</label>
+                <input
+                  id="proposal-edit-end-date"
+                  type="date"
+                  [formField]="editForm.endDate"
+                  aria-describedby="proposal-edit-end-date-error"
+                />
+                <div
+                  id="proposal-edit-end-date-error"
+                  class="editor-field__validation"
+                  aria-live="polite"
+                >
+                  @if (
+                    (editForm.endDate().touched() || editForm.endDate().dirty()) &&
+                    editForm.endDate().invalid()
+                  ) {
+                    {{ editForm.endDate().errors()[0].message }}
+                  }
+                </div>
+              </div>
+            </div>
+          </fieldset>
+        </div>
+
+        <aside class="proposal-editor__summary" aria-label="Edit summary">
+          <p class="proposal-editor__summary-label">Correction record</p>
+          <dl>
+            <div>
+              <dt>Proposal</dt>
+              <dd>{{ currentProposal.referenceNumber }}</dd>
+            </div>
+            <div>
+              <dt>Workflow</dt>
+              <dd>Unchanged</dd>
+            </div>
+            <div>
+              <dt>Event log</dt>
+              <dd>No event added</dd>
+            </div>
+          </dl>
+          <p class="proposal-editor__summary-note">
+            Only fields that differ from the loaded proposal will be sent.
+          </p>
+        </aside>
+
+        <footer class="proposal-editor__actions">
+          <p aria-live="polite">
+            {{ changed() ? 'Unsaved metadata changes' : 'No changes to save' }}
+          </p>
+          <div>
+            <button type="button" class="editor-action" [disabled]="pending()" (click)="cancel()">
+              Cancel
+            </button>
+            <button
+              type="submit"
+              class="editor-action editor-action--primary"
+              [disabled]="saveDisabled()"
+            >
+              @if (pending()) {
+                <span class="pi pi-spin pi-spinner" aria-hidden="true"></span>
+                Saving
+              } @else {
+                <span class="pi pi-check" aria-hidden="true"></span>
+                Save changes
+              }
+            </button>
+          </div>
+        </footer>
+      </form>
+    }
+  }
+</div>

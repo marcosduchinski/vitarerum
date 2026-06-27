@@ -1,0 +1,27 @@
+<section class="detail-card" aria-labelledby="events-heading">
+  <h2 id="events-heading" class="detail-card__title">Event log</h2>
+
+  @if (loading()) {
+    <app-loading-state label="Loading events..." />
+  } @else if (!events().length) {
+    <p class="detail-card__empty">No events recorded.</p>
+  } @else {
+    <ol class="event-list" aria-label="Proposal events">
+      @for (event of events(); track event.occurredAt) {
+        <li class="event">
+          <div class="event__dot" aria-hidden="true"></div>
+          <div class="event__content">
+            <div class="event__header">
+              <span class="event__type">{{ event.type.replace('_', ' ') }}</span>
+              <span class="event__date">{{ formatDateTime(event.occurredAt) }}</span>
+            </div>
+            <p class="event__actor">{{ event.triggeredBy.user.name }}</p>
+            @if (event.note) {
+              <p class="event__note">"{{ event.note }}"</p>
+            }
+          </div>
+        </li>
+      }
+    </ol>
+  }
+</section>

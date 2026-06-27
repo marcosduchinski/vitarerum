@@ -1,0 +1,11 @@
+<div class="project-log">
+  <app-page-header
+    eyebrow="Projects"
+    title="Research occurrences"
+    description="Object occurrence log and reported occurrences for this research project."
+  >
+    <a class="back-link" [routerLink]="projectDetailRoute()">Back to the project</a>
+  </app-page-header>
+
+  <app-project-occurrence-log-panel [projectId]="id()" />
+</div>

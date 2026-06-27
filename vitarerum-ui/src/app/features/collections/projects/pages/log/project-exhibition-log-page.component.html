@@ -1,0 +1,11 @@
+<div class="project-log">
+  <app-page-header
+    eyebrow="Projects"
+    title="Exhibition log"
+    description="Object access log and object entries for this exhibition project."
+  >
+    <a class="back-link" [routerLink]="projectDetailRoute()">Back to the project</a>
+  </app-page-header>
+
+  <app-project-object-log-panel [projectId]="id()" />
+</div>

@@ -1,0 +1,18 @@
+<section [class]="'error-message error-message--' + resolvedTone()" role="alert">
+  <h2>{{ resolvedTitle() }}</h2>
+  <p>{{ resolvedMessage() }}</p>
+
+  @if (fieldErrors().length) {
+    <ul class="error-message__fields">
+      @for (fe of fieldErrors(); track fe.field) {
+        <li><strong>{{ fe.field }}</strong>: {{ fe.message }}</li>
+      }
+    </ul>
+  }
+
+  @if (showRetry()) {
+    <button class="error-message__retry" type="button" (click)="retry.emit()">
+      Try again
+    </button>
+  }
+</section>

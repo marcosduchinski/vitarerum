@@ -1,0 +1,409 @@
+<div class="proposal-detail">
+  <a class="proposal-detail__back" routerLink="/p/collections/proposals/my-assignments">
+    Back to my assignments
+  </a>
+
+  @if (proposalResource.isLoading()) {
+    <app-loading-state />
+  } @else if (proposalError()) {
+    <app-error-message [apiError]="proposalError()!" (retry)="proposalResource.reload()" />
+  } @else if (proposal()) {
+    <header class="proposal-detail__header">
+      <div class="proposal-detail__header-meta">
+        <p class="proposal-detail__ref">{{ proposal()!.referenceNumber }}</p>
+        <h1 class="proposal-detail__title">{{ proposal()!.title || 'Untitled proposal' }}</h1>
+        <div class="proposal-detail__status-row">
+          <app-status-chip kind="proposal" [status]="asWorkflowStatus(proposal()!.status)" />
+          <app-type-chip [type]="proposal()!.type" />
+        </div>
+      </div>
+    </header>
+
+    @if (actionError()) {
+      <app-error-message [apiError]="actionError()!" />
+    }
+
+    <app-confirm-modal
+      [open]="forwardModalOpen()"
+      title="Forward proposal"
+      confirmLabel="Forward"
+      cancelLabel="Cancel"
+      tone="warning"
+      [pending]="forwarding()"
+      [confirmDisabled]="!forwardTargetPermissionId() || staffUsersResource.isLoading()"
+      (confirmed)="forward()"
+      (cancelled)="closeForwardModal()"
+    >
+      <div class="forward-modal-body">
+        <p>
+          {{ proposal()!.referenceNumber }} —
+          {{ proposal()!.title || 'Untitled proposal' }}
+        </p>
+        @if (staffUsersResource.isLoading()) {
+          <app-loading-state label="Loading staff..." />
+        } @else {
+          <label for="my-detail-forward-target">Staff member</label>
+          <select
+            id="my-detail-forward-target"
+            [value]="forwardTargetPermissionId()"
+            (change)="onForwardTargetChange($event)"
+          >
+            <option value="" disabled>Select a staff member...</option>
+            @for (opt of staffOptions(); track opt.permissionId) {
+              <option [value]="opt.permissionId">{{ opt.label }}</option>
+            }
+          </select>
+          <label for="my-detail-forward-note">Note</label>
+          <textarea
+            id="my-detail-forward-note"
+            rows="3"
+            placeholder="Add a note (optional)..."
+            [value]="forwardNote()"
+            (input)="onForwardNoteChange($event)"
+          ></textarea>
+        }
+      </div>
+    </app-confirm-modal>
+
+    <app-confirm-modal
+      [open]="acceptConfirmOpen()"
+      title="Accept proposal?"
+      confirmLabel="Accept proposal"
+      cancelLabel="Review again"
+      [pending]="accepting()"
+      (confirmed)="accept()"
+      (cancelled)="cancelAcceptConfirmation()"
+    >
+      <div class="accept-modal-body">
+        <p class="accept-modal-body__hint">
+          Approving creates the project for
+          {{ proposal()!.referenceNumber }} using its requested title and use period.
+        </p>
+      </div>
+    </app-confirm-modal>
+
+    <app-confirm-modal
+      [open]="rejectModalOpen()"
+      title="Reject proposal?"
+      confirmLabel="Reject proposal"
+      cancelLabel="Cancel"
+      tone="danger"
+      [pending]="rejecting()"
+      [confirmDisabled]="!rejectionReason().trim()"
+      (confirmed)="reject()"
+      (cancelled)="closeRejectModal()"
+    >
+      <div class="reject-modal-body">
+        <p class="reject-modal-body__hint">
+          This will reject {{ proposal()!.referenceNumber }} permanently.
+        </p>
+        <label for="rejection-reason">Reason</label>
+        <textarea
+          id="rejection-reason"
+          rows="4"
+          placeholder="Explain the rejection reason..."
+          [value]="rejectionReason()"
+          (input)="onRejectionReasonInput($event)"
+        ></textarea>
+      </div>
+    </app-confirm-modal>
+
+    <nav class="proposal-detail__tabs" aria-label="Assignment detail sections" role="tablist">
+      <button
+        type="button"
+        id="overview-tab"
+        class="proposal-detail__tab"
+        [class.proposal-detail__tab--active]="activePanel() === 'overview'"
+        role="tab"
+        aria-controls="overview-panel"
+        [attr.aria-selected]="activePanel() === 'overview'"
+        (click)="selectPanel('overview')"
+      >
+        Overview
+      </button>
+      <button
+        type="button"
+        id="conversation-tab"
+        class="proposal-detail__tab"
+        [class.proposal-detail__tab--active]="activePanel() === 'conversation'"
+        role="tab"
+        aria-controls="conversation-panel"
+        [attr.aria-selected]="activePanel() === 'conversation'"
+        (click)="selectPanel('conversation')"
+      >
+        Conversation
+      </button>
+      <button
+        type="button"
+        id="ai-assistance-tab"
+        class="proposal-detail__tab"
+        [class.proposal-detail__tab--active]="activePanel() === 'ai-assistance'"
+        role="tab"
+        aria-controls="ai-assistance-panel"
+        [attr.aria-selected]="activePanel() === 'ai-assistance'"
+        (click)="selectPanel('ai-assistance')"
+      >
+        AI Assistance
+      </button>
+      <button
+        type="button"
+        id="actions-tab"
+        class="proposal-detail__tab"
+        [class.proposal-detail__tab--active]="activePanel() === 'actions'"
+        role="tab"
+        aria-controls="actions-panel"
+        [attr.aria-selected]="activePanel() === 'actions'"
+        (click)="selectPanel('actions')"
+      >
+        Actions
+      </button>
+    </nav>
+
+    @switch (activePanel()) {
+      @case ('overview') {
+        <section
+          id="overview-panel"
+          class="proposal-detail__panel proposal-detail__panel--overview"
+          role="tabpanel"
+          aria-labelledby="overview-tab"
+        >
+          <app-proposal-overview-section [proposal]="proposal()!" />
+          <app-proposal-events-section [events]="events()" [loading]="eventsResource.isLoading()" />
+        </section>
+      }
+      @case ('conversation') {
+        <section
+          id="conversation-panel"
+          class="proposal-detail__panel"
+          role="tabpanel"
+          aria-labelledby="conversation-tab"
+        >
+          <app-proposal-conversation-section
+            [proposal]="proposal()!"
+            [messages]="messages()"
+            [messagesLoading]="conversationResource.isLoading()"
+            [messageError]="messageError()"
+            [sendingMessage]="sendingMessage()"
+            [replyResetVersion]="replyResetVersion()"
+            [showRequestedObjectPicker]="true"
+            [showTriageAction]="true"
+            (triageRequested)="openTriage($event)"
+            (replySubmitted)="sendReply($event)"
+          />
+        </section>
+      }
+      @case ('ai-assistance') {
+        <section
+          id="ai-assistance-panel"
+          class="proposal-detail__panel"
+          role="tabpanel"
+          aria-labelledby="ai-assistance-tab"
+        >
+          @if (selectedTriageMessageId(); as messageId) {
+            <app-proposal-chat-panel
+              [conversationId]="proposal()!.conversationId"
+              [messageId]="messageId"
+              [embedded]="true"
+              (applied)="onTriageApplied()"
+              (requestedObjectsAdded)="onRequestedObjectsAdded()"
+            />
+          } @else {
+            <section class="detail-card" aria-labelledby="ai-assistance-empty-heading">
+              <h2 id="ai-assistance-empty-heading" class="detail-card__title">AI Assistance</h2>
+              <p class="detail-card__empty">
+                Select a message from the Conversation tab to run intended-use triage.
+              </p>
+            </section>
+          }
+        </section>
+      }
+      @case ('actions') {
+        <section
+          id="actions-panel"
+          class="proposal-detail__panel actions-panel"
+          role="tabpanel"
+          aria-labelledby="actions-tab"
+        >
+          <ol
+            class="lifecycle"
+            [class.lifecycle--cancelled]="closedOutcome()"
+            aria-label="Proposal lifecycle"
+          >
+            @for (step of lifecycle(); track step.label) {
+              <li
+                class="lifecycle__step"
+                [class.lifecycle__step--done]="step.done"
+                [class.lifecycle__step--current]="step.current"
+                [attr.aria-current]="step.current ? 'step' : null"
+              >
+                <span class="lifecycle__marker" aria-hidden="true">
+                  @if (step.done) {
+                    <span class="pi pi-check"></span>
+                  }
+                </span>
+                <span class="lifecycle__label">{{ step.label }}</span>
+              </li>
+            }
+            @if (closedOutcome(); as outcome) {
+              <li class="lifecycle__step lifecycle__step--cancelled" aria-current="step">
+                <span class="lifecycle__marker" aria-hidden="true">
+                  <span class="pi pi-times"></span>
+                </span>
+                <span class="lifecycle__label">{{ outcome }}</span>
+              </li>
+            }
+          </ol>
+
+          <div class="action-group" aria-labelledby="assignment-group-title">
+            <p id="assignment-group-title" class="action-group__title">Assignment</p>
+            <div class="task-row" aria-labelledby="assignment-task-heading">
+              <span class="task-row__icon task-row__icon--accent" aria-hidden="true">
+                <span class="pi pi-user"></span>
+              </span>
+              <div class="task-row__body">
+                @if (proposal()!.assignedTo; as assignedTo) {
+                  <h3 id="assignment-task-heading" class="task-row__title">
+                    {{ assignedTo.user.name }}
+                  </h3>
+                  <p class="task-row__desc">{{ assignedTo.user.email }}</p>
+                } @else {
+                  <h3 id="assignment-task-heading" class="task-row__title">Unassigned</h3>
+                  <p class="task-row__desc">No reviewer is currently assigned.</p>
+                }
+              </div>
+            </div>
+          </div>
+
+          @if (canEdit()) {
+            <div class="action-group" aria-labelledby="requester-access-group-title">
+              <p id="requester-access-group-title" class="action-group__title">Requester access</p>
+
+              @if (temporaryExternalUserEmail(); as createdEmail) {
+                <app-feedback-message
+                  title="Temporary external user created"
+                  [message]="'A new temporary external user for ' + createdEmail + ' was created.'"
+                  tone="success"
+                />
+              }
+
+              <div class="task-row" aria-labelledby="temporary-user-task-heading">
+                <span class="task-row__icon task-row__icon--accent" aria-hidden="true">
+                  <span class="pi pi-user-plus"></span>
+                </span>
+                <div class="task-row__body">
+                  <h3 id="temporary-user-task-heading" class="task-row__title">
+                    Create temporary external user
+                  </h3>
+                  <p class="task-row__desc">
+                    Create a temporary external account for the requester if no external user exists
+                    for their email address.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  class="action-btn task-row__control"
+                  [disabled]="temporaryExternalUserEmail() !== null"
+                  (click)="createTemporaryExternalUser()"
+                >
+                  {{ temporaryExternalUserEmail() ? 'Created' : 'Create user' }}
+                </button>
+              </div>
+            </div>
+          }
+
+          @if (canDecide()) {
+            <div class="action-group" aria-labelledby="decision-group-title">
+              <p id="decision-group-title" class="action-group__title">Decision</p>
+
+              <div class="task-row" aria-labelledby="accept-task-heading">
+                <span class="task-row__icon task-row__icon--accent" aria-hidden="true">
+                  <span class="pi pi-check-circle"></span>
+                </span>
+                <div class="task-row__body">
+                  <h3 id="accept-task-heading" class="task-row__title">Accept proposal</h3>
+                  <p class="task-row__desc">
+                    Approve and create the project using its requested title and use period.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  class="action-btn action-btn--primary task-row__control"
+                  [disabled]="accepting() || rejecting() || forwarding()"
+                  (click)="requestAcceptConfirmation()"
+                >
+                  {{ accepting() ? 'Accepting...' : 'Accept' }}
+                </button>
+              </div>
+
+              <div class="task-row" aria-labelledby="reject-task-heading">
+                <span class="task-row__icon task-row__icon--danger" aria-hidden="true">
+                  <span class="pi pi-times-circle"></span>
+                </span>
+                <div class="task-row__body">
+                  <h3 id="reject-task-heading" class="task-row__title">Reject proposal</h3>
+                  <p class="task-row__desc">
+                    Decline the request with a reason. This cannot be undone.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  class="action-btn action-btn--danger task-row__control"
+                  [disabled]="accepting() || rejecting() || forwarding()"
+                  (click)="openRejectModal()"
+                >
+                  Reject
+                </button>
+              </div>
+
+              <div class="task-row" aria-labelledby="forward-task-heading">
+                <span class="task-row__icon" aria-hidden="true">
+                  <span class="pi pi-send"></span>
+                </span>
+                <div class="task-row__body">
+                  <h3 id="forward-task-heading" class="task-row__title">
+                    Forward to another reviewer
+                  </h3>
+                  <p class="task-row__desc">
+                    Hand this assignment to a different staff member with an optional note.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  class="action-btn task-row__control"
+                  [disabled]="accepting() || rejecting() || forwarding()"
+                  (click)="openForwardModal()"
+                >
+                  {{ forwarding() ? 'Forwarding...' : 'Forward' }}
+                </button>
+              </div>
+            </div>
+          }
+
+          @if (canEdit()) {
+            <div class="action-group" aria-labelledby="edit-group-title">
+              <p id="edit-group-title" class="action-group__title">Corrections</p>
+              <div class="task-row" aria-labelledby="edit-task-heading">
+                <span class="task-row__icon" aria-hidden="true">
+                  <span class="pi pi-pencil"></span>
+                </span>
+                <div class="task-row__body">
+                  <h3 id="edit-task-heading" class="task-row__title">Edit proposal</h3>
+                  <p class="task-row__desc">
+                    Correct the title, intended use, or requested dates without changing the status.
+                  </p>
+                </div>
+                <button type="button" class="action-btn task-row__control" (click)="edit()">
+                  Edit
+                </button>
+              </div>
+            </div>
+          }
+
+          @if (!canDecide() && !canEdit()) {
+            <p class="proposal-actions__status-note">No actions available for this status.</p>
+          }
+        </section>
+      }
+    }
+  }
+</div>

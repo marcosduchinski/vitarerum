@@ -1,0 +1,74 @@
+.confirm-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-panel);
+  box-shadow: var(--shadow-panel);
+}
+
+h2,
+p {
+  margin: 0;
+}
+
+h2 {
+  color: var(--color-text);
+  font-size: 1rem;
+  line-height: 1.25;
+}
+
+p {
+  margin-top: 0.25rem;
+  color: var(--color-muted);
+}
+
+.confirm-action__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.confirm-action__button {
+  min-height: 2.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.875rem;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.confirm-action__button--secondary {
+  border: 1px solid var(--color-line-strong);
+  background: var(--color-panel);
+  color: var(--color-text);
+}
+
+.confirm-action__button--primary {
+  border: 1px solid var(--color-accent-strong);
+  background: var(--color-accent-strong);
+  color: #ffffff;
+}
+
+.confirm-action__button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+@media (max-width: 760px) {
+  .confirm-action {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .confirm-action__actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}

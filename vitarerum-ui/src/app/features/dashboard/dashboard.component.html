@@ -1,0 +1,18 @@
+<section class="dashboard" aria-labelledby="dashboard-title">
+  <div class="dashboard__header">
+    <div>
+      <p class="dashboard__eyebrow">Workspace</p>
+      <h2 id="dashboard-title">Dashboard</h2>
+    </div>
+    <p class="dashboard__total">{{ totalOpenWork() }} open items</p>
+  </div>
+
+  <div class="dashboard__metrics" aria-label="Dashboard metrics">
+    @for (metric of metrics(); track metric.label) {
+      <article class="metric">
+        <span>{{ metric.label }}</span>
+        <strong>{{ metric.value }}</strong>
+      </article>
+    }
+  </div>
+</section>

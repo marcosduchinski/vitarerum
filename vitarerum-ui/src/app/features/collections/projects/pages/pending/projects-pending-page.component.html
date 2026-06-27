@@ -1,0 +1,191 @@
+<div class="projects-pending">
+  <app-page-header
+    eyebrow="Projects"
+    title="Pending projects"
+    description="Collection-use projects created from approved proposals and waiting to start."
+  />
+
+  @if (projectsResource.isLoading()) {
+    <app-loading-state />
+  } @else if (listError()) {
+    <app-error-message [apiError]="listError()!" (retry)="projectsResource.reload()" />
+  } @else {
+    @if (actionError()) {
+      <app-error-message [apiError]="actionError()!" />
+    }
+
+    <section class="projects-pending__toolbar" aria-label="Pending projects summary">
+      <div class="projects-pending__meta">
+        <div>
+          <strong>{{ totalProjects() }} pending</strong>
+          <span>Created projects awaiting start</span>
+        </div>
+        @if (totalProjects() > 0) {
+          <p>{{ rangeStart() }}-{{ rangeEnd() }} of {{ totalProjects() }}</p>
+        }
+      </div>
+
+      <div class="projects-search">
+        <label class="projects-search__field" for="pending-projects-search">
+          <span class="pi pi-search" aria-hidden="true"></span>
+          <input
+            id="pending-projects-search"
+            type="search"
+            [value]="searchDraft()"
+            (input)="onSearchInput($event)"
+            (keydown.enter)="applySearch()"
+            placeholder="Search reference or title"
+            aria-label="Search pending projects"
+          />
+          @if (searchDraft()) {
+            <button
+              type="button"
+              class="projects-search__clear"
+              (click)="clearSearch()"
+              aria-label="Clear pending projects search"
+            >
+              <span class="pi pi-times" aria-hidden="true"></span>
+            </button>
+          }
+        </label>
+        <button type="button" class="action-btn action-btn--primary" (click)="applySearch()">
+          Search
+        </button>
+      </div>
+    </section>
+
+    @if (!projects().length) {
+      <app-empty-state
+        [title]="appliedSearch() ? 'No pending projects found' : 'No pending projects'"
+        [message]="
+          appliedSearch()
+            ? 'No created projects awaiting start match the current search.'
+            : 'There are no created projects awaiting start.'
+        "
+      />
+    } @else {
+      <section class="projects-grid" aria-label="Pending projects list">
+        @for (project of projects(); track project.id) {
+          <article class="project-card">
+            <header class="project-card__header">
+              <p class="project-card__reference">{{ project.referenceNumber }}</p>
+              <span class="project-card__status">Created - awaiting start</span>
+            </header>
+
+            <h2>{{ project.title }}</h2>
+            <p class="project-card__purpose">{{ project.purpose }}</p>
+
+            <dl class="project-card__facts">
+              <div>
+                <dt>Type</dt>
+                <dd>{{ typeLabels[project.type] }}</dd>
+              </div>
+              <div>
+                <dt>Requested by</dt>
+                <dd>
+                  <span>{{ requesterLabel(project) }}</span>
+                  @if (requesterEmail(project)) {
+                    <small>{{ requesterEmail(project) }}</small>
+                  }
+                </dd>
+              </div>
+              <div>
+                <dt>Assigned staff</dt>
+                <dd>
+                  <span>{{ assigneeLabel(project) }}</span>
+                  @if (assigneeEmail(project)) {
+                    <small>{{ assigneeEmail(project) }}</small>
+                  }
+                </dd>
+              </div>
+              <div>
+                <dt>Dates</dt>
+                <dd class="project-card__dates">
+                  {{ dateLabel(project.beginDate) }} to {{ dateLabel(project.endDate) }}
+                </dd>
+              </div>
+            </dl>
+
+            <footer class="project-card__actions">
+              @if (isExternal()) {
+                <button
+                  type="button"
+                  class="action-btn action-btn--primary"
+                  [disabled]="actionProjectId() === project.id"
+                  (click)="start(project.id)"
+                >
+                  {{ actionProjectId() === project.id ? 'Starting...' : 'Start' }}
+                </button>
+              }
+              <app-row-actions
+                [items]="actionItemsFor(project)"
+                [disabled]="actionProjectId() === project.id"
+                ariaLabel="More actions for {{ project.referenceNumber }}"
+              />
+            </footer>
+          </article>
+        }
+      </section>
+
+      @for (project of projects(); track project.id) {
+        <app-confirm-modal
+          [open]="cancelConfirmProjectId() === project.id"
+          title="Cancel project?"
+          [message]="
+            'This will cancel ' +
+            project.referenceNumber +
+            ' before work starts and move it to cancelled projects.'
+          "
+          confirmLabel="Cancel project"
+          cancelLabel="Keep pending"
+          tone="danger"
+          [pending]="actionProjectId() === project.id"
+          (confirmed)="cancel(project.id)"
+          (cancelled)="cancelCancelConfirmation()"
+        />
+      }
+
+      <nav class="projects-pagination" aria-label="Pending projects pagination">
+        <p aria-live="polite">Page {{ currentPage() + 1 }} of {{ totalPages() }}</p>
+        <div class="projects-pagination__controls">
+          <button
+            type="button"
+            class="page-btn"
+            [disabled]="currentPage() === 0"
+            (click)="firstPage()"
+            aria-label="First page"
+          >
+            First
+          </button>
+          <button
+            type="button"
+            class="page-btn"
+            [disabled]="currentPage() === 0"
+            (click)="prevPage()"
+            aria-label="Previous page"
+          >
+            Previous
+          </button>
+          <button
+            type="button"
+            class="page-btn"
+            [disabled]="currentPage() >= totalPages() - 1"
+            (click)="nextPage()"
+            aria-label="Next page"
+          >
+            Next
+          </button>
+          <button
+            type="button"
+            class="page-btn"
+            [disabled]="currentPage() >= totalPages() - 1"
+            (click)="lastPage()"
+            aria-label="Last page"
+          >
+            Last
+          </button>
+        </div>
+      </nav>
+    }
+  }
+</div>

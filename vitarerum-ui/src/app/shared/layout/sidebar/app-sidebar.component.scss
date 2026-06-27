@@ -1,0 +1,26 @@
+.layout-sidebar-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 3rem;
+  margin: 0.5rem 0 0.75rem;
+  padding: 0 1rem;
+  color: #f5f4ef;
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.layout-sidebar-logo__mark {
+  width: 1.35rem;
+  --logo-ink: #f5f4ef;
+}
+
+/* On desktop the topbar already carries the wordmark right above this spot —
+   showing it twice reads as a glitch, so the sidebar copy is mobile-only. */
+@media (min-width: 992px) {
+  .layout-sidebar-logo {
+    display: none;
+  }
+}

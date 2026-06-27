@@ -1,0 +1,244 @@
+:host {
+  display: contents;
+}
+
+.cidoc-dialog {
+  width: min(72rem, calc(100vw - 2rem));
+  max-width: none;
+  max-height: calc(100dvh - 2rem);
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 32%, var(--color-line));
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text);
+  box-shadow: 0 2rem 6rem rgba(9, 19, 34, 0.34);
+  overflow: hidden;
+}
+
+.cidoc-dialog::backdrop {
+  background: rgba(9, 19, 34, 0.68);
+  backdrop-filter: blur(3px);
+}
+
+.cidoc-dialog__surface {
+  display: grid;
+  grid-template-rows: auto auto minmax(12rem, 1fr) auto;
+  max-height: calc(100dvh - 2rem);
+  background:
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--color-accent) 7%, transparent),
+      transparent 28%
+    ),
+    var(--color-panel);
+}
+
+.cidoc-dialog__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 2rem;
+  padding: clamp(1.25rem, 3vw, 2rem);
+  border-bottom: 1px solid var(--color-line);
+
+  h2,
+  p {
+    margin: 0;
+  }
+
+  h2 {
+    margin-top: 0.25rem;
+    font-family: var(--font-display);
+    font-size: clamp(1.45rem, 2.5vw, 2.1rem);
+    font-weight: 600;
+    line-height: 1.12;
+  }
+
+  p:last-child {
+    margin-top: 0.45rem;
+    color: var(--color-subtle);
+    font-size: 0.9rem;
+  }
+}
+
+.cidoc-dialog__eyebrow {
+  color: var(--color-accent);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.cidoc-dialog__close {
+  display: inline-grid;
+  width: 2.5rem;
+  height: 2.5rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--color-line-strong);
+  border-radius: 999px;
+  background: var(--color-panel);
+  color: var(--color-text);
+  cursor: pointer;
+
+  &:hover {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+  }
+}
+
+.cidoc-dialog__record-strip {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.65rem clamp(1.25rem, 3vw, 2rem);
+  background: var(--color-panel-muted);
+  color: var(--color-subtle);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+
+  code {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--color-text);
+    font-size: 0.75rem;
+    text-overflow: ellipsis;
+    text-transform: none;
+    white-space: nowrap;
+  }
+}
+
+.cidoc-dialog__format {
+  margin-left: auto;
+  padding: 0.2rem 0.45rem;
+  border: 1px solid var(--color-line-strong);
+  border-radius: 999px;
+  color: var(--color-accent);
+}
+
+.cidoc-dialog__body {
+  min-height: 18rem;
+  padding: clamp(1rem, 2.4vw, 1.5rem);
+  background: color-mix(in srgb, var(--color-text) 97%, #14253c);
+  overflow: auto;
+
+  app-loading-state,
+  .cidoc-dialog__error {
+    display: block;
+    max-width: 42rem;
+    margin: 2rem auto;
+  }
+}
+
+.cidoc-dialog__error {
+  display: grid;
+  gap: 1rem;
+}
+
+.cidoc-dialog__code {
+  min-width: max-content;
+  margin: 0;
+  color: #d8e6d3;
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  font-size: clamp(0.72rem, 1vw, 0.84rem);
+  line-height: 1.65;
+  tab-size: 2;
+  white-space: pre;
+
+  &:focus-visible {
+    outline: 2px solid #94b88a;
+    outline-offset: 0.35rem;
+  }
+}
+
+.cidoc-dialog__footer {
+  display: flex;
+  min-height: 4.5rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem clamp(1.25rem, 3vw, 2rem);
+  border-top: 1px solid var(--color-line);
+}
+
+.cidoc-dialog__status {
+  margin: 0;
+  color: var(--color-subtle);
+  font-size: 0.78rem;
+}
+
+.cidoc-dialog__footer-actions {
+  display: flex;
+  gap: 0.6rem;
+  margin-left: auto;
+}
+
+.cidoc-dialog__button {
+  display: inline-flex;
+  min-height: 2.45rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.9rem;
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-panel);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 750;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+}
+
+.cidoc-dialog__button--primary {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: #fff;
+
+  &:hover:not(:disabled) {
+    border-color: var(--color-accent-strong);
+    background: var(--color-accent-strong);
+  }
+}
+
+@media (max-width: 640px) {
+  .cidoc-dialog {
+    width: 100vw;
+    max-height: 100dvh;
+    border-width: 0;
+    border-radius: 0;
+  }
+
+  .cidoc-dialog__surface {
+    min-height: 100dvh;
+    max-height: 100dvh;
+  }
+
+  .cidoc-dialog__footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .cidoc-dialog__footer-actions,
+  .cidoc-dialog__button {
+    width: 100%;
+  }
+}

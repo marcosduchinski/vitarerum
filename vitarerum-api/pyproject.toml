@@ -1,0 +1,303 @@
+[project]
+name = "vitarerum-api"
+version = "0.1.0"
+description = "Backend API for Vitarerum."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "aiosmtplib>=3.0.0",
+    "alembic>=1.13.0",
+    "asyncpg>=0.29.0",
+    "bcrypt>=4.2.0",
+    "email-validator>=2.0.0",
+    "fastapi>=0.115.0",
+    "httpx>=0.28.1",
+    "langchain-ollama>=1.1.0",
+    "langgraph>=1.2.5",
+    "owlrl>=7.1.4",
+    "pydantic-settings>=2.6.0",
+    "pyjwt>=2.9.0",
+    "pyshacl>=0.31.0",
+    "python-dotenv>=1.0.0",
+    "python-multipart>=0.0.29",
+    "rdflib>=7.6.0",
+    "sqlalchemy[asyncio]>=2.0.0",
+    "uvicorn[standard]>=0.30.0",
+]
+
+[dependency-groups]
+dev = [
+    "aiosqlite>=0.20.0",
+    "debugpy>=1.8.21",
+    "httpx>=0.27.0",
+    "import-linter>=2.11",
+    "mypy>=1.11.0",
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "ruff>=0.7.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["test"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+# Generated migration DDL (long CREATE TYPE/TABLE statements) is not hand-written
+# application code; mypy already excludes it.
+extend-exclude = ["alembic/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.12"
+plugins = ["pydantic.mypy"]
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+exclude = ["alembic/versions"]
+
+# LangGraph / Ollama / owlrl ship no type stubs; imported lazily by adapters.
+[[tool.mypy.overrides]]
+module = ["langgraph.*", "langchain_ollama.*", "langchain_core.*", "owlrl.*"]
+ignore_missing_imports = true
+
+# ── Architecture fitness function (HEXAGONAL_UP.md Step 0) ───────────────────
+# Whitelisted entries marked TEMP are known violations scheduled for removal in
+# the step named next to them; the contract direction is the target state.
+
+[tool.importlinter]
+root_package = "app"
+include_external_packages = true
+exclude_type_checking_imports = true
+
+[[tool.importlinter.contracts]]
+name = "Use of Collections layers (presentation > infrastructure > application > domain)"
+type = "layers"
+layers = [
+    "app.use_of_collections.presentation",
+    "app.use_of_collections.infrastructure",
+    "app.use_of_collections.application",
+    "app.use_of_collections.domain",
+]
+[[tool.importlinter.contracts]]
+name = "Identity layers (presentation > infrastructure > application)"
+type = "layers"
+layers = [
+    "app.identity.presentation",
+    "app.identity.infrastructure",
+    "app.identity.application",
+    "app.identity.domain",
+]
+
+[[tool.importlinter.contracts]]
+name = "Public submission layers (presentation > infrastructure > application > domain)"
+type = "layers"
+layers = [
+    "app.public_submission.presentation",
+    "app.public_submission.infrastructure",
+    "app.public_submission.application",
+    "app.public_submission.domain",
+]
+
+[[tool.importlinter.contracts]]
+name = "Public submission may import other contexts only via published language"
+type = "forbidden"
+source_modules = ["app.public_submission"]
+forbidden_modules = ["app.identity", "app.use_of_collections", "app.cidoc_crm"]
+ignore_imports = [
+    "app.public_submission.** -> app.identity.public",
+    # Known composition-root coupling: the public intake adapter wires other
+    # contexts' repositories/use cases directly to materialise the proposal.
+    # Tracked for extraction behind published ingestion facades; these ignores
+    # stop NEW drift meanwhile.
+    "app.public_submission.application.use_cases -> app.use_of_collections.application.use_cases",
+    "app.public_submission.presentation.dependencies -> app.identity.infrastructure.repositories",
+    "app.public_submission.presentation.dependencies -> app.use_of_collections.application.use_cases",
+    "app.public_submission.presentation.dependencies -> app.use_of_collections.infrastructure.repositories",
+]
+
+[[tool.importlinter.contracts]]
+name = "ProposalChat layers (presentation > infrastructure > application > domain)"
+type = "layers"
+layers = [
+    "app.ai.proposalchat.presentation",
+    "app.ai.proposalchat.infrastructure",
+    "app.ai.proposalchat.application",
+    "app.ai.proposalchat.domain",
+]
+
+[[tool.importlinter.contracts]]
+name = "Museum Narrative layers (presentation > infrastructure > application > domain)"
+type = "layers"
+layers = [
+    "app.ai.museum_narrative.presentation",
+    "app.ai.museum_narrative.infrastructure",
+    "app.ai.museum_narrative.application",
+    "app.ai.museum_narrative.domain",
+]
+
+[[tool.importlinter.contracts]]
+name = "Museum Narrative may import CIDOC-CRM only via cidoc_crm.public"
+type = "forbidden"
+source_modules = ["app.ai"]
+forbidden_modules = ["app.cidoc_crm"]
+ignore_imports = [
+    # Permanent: cidoc_crm.public is the published language the AI context uses.
+    "app.ai.** -> app.cidoc_crm.public",
+]
+
+[[tool.importlinter.contracts]]
+name = "Reports layers (presentation > infrastructure > application > domain)"
+type = "layers"
+layers = [
+    "app.reports.in_situ_visit.presentation",
+    "app.reports.in_situ_visit.infrastructure",
+    "app.reports.in_situ_visit.application",
+    "app.reports.in_situ_visit.domain",
+]
+
+[[tool.importlinter.contracts]]
+name = "Reports may import other contexts only via their published language"
+type = "forbidden"
+source_modules = ["app.reports"]
+forbidden_modules = ["app.cidoc_crm", "app.ai"]
+ignore_imports = [
+    # Permanent: the published languages are the report aggregator's only doors
+    # into the record (CIDOC-CRM) and narrative (KG-RAG) read models.
+    "app.reports.in_situ_visit.infrastructure.readers -> app.cidoc_crm.public",
+    "app.reports.in_situ_visit.infrastructure.readers -> app.ai.museum_narrative.public",
+    # The detail response embeds the two contexts' published presentation DTOs
+    # (single source of truth for the record/narrative shapes) instead of
+    # re-declaring them.
+    "app.reports.in_situ_visit.presentation.schemas -> app.cidoc_crm.in_situ_visit_mapping.presentation.schemas",
+    "app.reports.in_situ_visit.presentation.schemas -> app.ai.museum_narrative.presentation.schemas",
+    # Known composition-root coupling: the report orchestrator wires the CIDOC-CRM
+    # export and the KG-RAG narrative use cases of two other contexts directly.
+    # Tracked for extraction behind published facades; these ignores stop NEW
+    # drift meanwhile.
+    "app.reports.in_situ_visit.application.use_cases -> app.cidoc_crm.in_situ_visit_mapping.application.use_cases",
+    "app.reports.in_situ_visit.application.use_cases -> app.ai.museum_narrative.application.use_cases",
+    "app.reports.in_situ_visit.presentation.routes -> app.cidoc_crm.in_situ_visit_mapping.application.use_cases",
+    "app.reports.in_situ_visit.presentation.routes -> app.ai.museum_narrative.domain.ports",
+    "app.reports.in_situ_visit.presentation.dependencies -> app.cidoc_crm.in_situ_visit_mapping.presentation.dependencies",
+    "app.reports.in_situ_visit.presentation.dependencies -> app.ai.museum_narrative.presentation.dependencies",
+]
+
+[[tool.importlinter.contracts]]
+name = "Domain purity (no frameworks in domain)"
+type = "forbidden"
+source_modules = [
+    "app.use_of_collections.domain",
+    "app.ai.proposalchat.domain",
+    "app.ai.museum_narrative.domain",
+    "app.cidoc_crm.in_situ_visit_mapping.domain",
+    "app.reports.in_situ_visit.domain",
+    "app.public_submission.domain",
+]
+forbidden_modules = ["fastapi", "sqlalchemy", "pydantic"]
+
+[[tool.importlinter.contracts]]
+name = "Application purity (no frameworks in application)"
+type = "forbidden"
+source_modules = [
+    "app.use_of_collections.application",
+    "app.identity.application",
+    "app.ai.proposalchat.application",
+    "app.ai.museum_narrative.application",
+    "app.cidoc_crm.in_situ_visit_mapping.application",
+    "app.reports.in_situ_visit.application",
+    "app.public_submission.application",
+]
+forbidden_modules = ["fastapi", "sqlalchemy"]
+ignore_imports = [
+    # Lazy composition hooks inside the *.public OHS modules (function-level
+    # imports); applications never execute them — only inbound adapters do.
+    "app.identity.public -> app.identity.infrastructure.repositories",
+    "app.use_of_collections.public -> app.use_of_collections.infrastructure.repositories",
+]
+
+[[tool.importlinter.contracts]]
+name = "Identity must not depend on Use of Collections"
+type = "forbidden"
+source_modules = ["app.identity"]
+forbidden_modules = ["app.use_of_collections"]
+
+[[tool.importlinter.contracts]]
+name = "Use of Collections may import Identity only via identity.public"
+type = "forbidden"
+source_modules = ["app.use_of_collections"]
+forbidden_modules = ["app.identity"]
+ignore_imports = [
+    # Permanent: identity.public is the published language other contexts may use
+    "app.use_of_collections.** -> app.identity.public",
+    "app.shared.authorization -> app.identity.public",
+    "app.shared.dependencies -> app.identity.public",
+]
+
+[[tool.importlinter.contracts]]
+name = "ProposalChat may import User Request only via use_of_collections.public"
+type = "forbidden"
+source_modules = ["app.ai"]
+forbidden_modules = ["app.use_of_collections"]
+ignore_imports = [
+    # Permanent: the published OHS is ProposalChat's only door into User Request.
+    "app.ai.** -> app.use_of_collections.public",
+]
+
+[[tool.importlinter.contracts]]
+name = "ProposalChat may import Identity only via identity.public"
+type = "forbidden"
+source_modules = ["app.ai"]
+forbidden_modules = ["app.identity"]
+ignore_imports = [
+    "app.ai.** -> app.identity.public",
+    # Shared helpers already speak Identity's published language on ai's behalf.
+    "app.shared.authorization -> app.identity.public",
+    "app.shared.dependencies -> app.identity.public",
+    # Use of Collections' OHS reader hydrates names via the allowed identity.public
+    # (see its own contract); a transitive reach through it is not an ai->identity leak.
+    "app.use_of_collections.infrastructure.repositories -> app.identity.public",
+]
+
+[[tool.importlinter.contracts]]
+name = "Identity must not depend on ProposalChat"
+type = "forbidden"
+source_modules = ["app.identity", "app.use_of_collections", "app.public_submission"]
+forbidden_modules = ["app.ai"]
+
+[[tool.importlinter.contracts]]
+name = "CIDOC-CRM layers (presentation > infrastructure > application > domain)"
+type = "layers"
+layers = [
+    "app.cidoc_crm.in_situ_visit_mapping.presentation",
+    "app.cidoc_crm.in_situ_visit_mapping.infrastructure",
+    "app.cidoc_crm.in_situ_visit_mapping.application",
+    "app.cidoc_crm.in_situ_visit_mapping.domain",
+]
+
+[[tool.importlinter.contracts]]
+name = "CIDOC-CRM may import Use of Collections only via use_of_collections.public"
+type = "forbidden"
+source_modules = ["app.cidoc_crm"]
+forbidden_modules = ["app.use_of_collections"]
+ignore_imports = [
+    # The export ACL reads the project through the published OHS only.
+    "app.cidoc_crm.** -> app.use_of_collections.public",
+]
+
+[[tool.importlinter.contracts]]
+name = "Shared kernel imports stdlib only"
+type = "forbidden"
+source_modules = ["app.shared.kernel"]
+forbidden_modules = [
+    "fastapi",
+    "sqlalchemy",
+    "pydantic",
+    "app.use_of_collections",
+    "app.identity",
+    "app.ai",
+    "app.public_submission",
+]

@@ -1,0 +1,104 @@
+<section class="evidence" aria-labelledby="evidence-heading">
+  <div class="evidence__intro">
+    <p class="evidence__eyebrow">Source record</p>
+    <h2 id="evidence-heading">Evidence register</h2>
+    <p class="evidence__lead">Documented evidence captured against the in-situ visit record.</p>
+  </div>
+
+  @if (record()) {
+    <div class="evidence__tabs" role="tablist" aria-label="Evidence categories">
+      @for (section of sections(); track section.key; let i = $index) {
+        <button
+          type="button"
+          role="tab"
+          class="evidence-tab"
+          [id]="'evidence-tab-' + section.key"
+          [class.is-active]="activeSection()?.key === section.key"
+          [attr.aria-selected]="activeSection()?.key === section.key"
+          [attr.aria-controls]="'evidence-panel-' + section.key"
+          [attr.tabindex]="activeSection()?.key === section.key ? 0 : -1"
+          (click)="select(section.key)"
+          (keydown)="onTabKeydown($event, i)"
+        >
+          <span class="evidence-tab__label">{{ section.title }}</span>
+          <span class="evidence-tab__count" [class.is-empty]="!section.items.length">
+            {{ section.items.length }}
+          </span>
+        </button>
+      }
+    </div>
+
+    @if (activeSection(); as section) {
+      <div
+        class="evidence__panel"
+        role="tabpanel"
+        [id]="'evidence-panel-' + section.key"
+        [attr.aria-labelledby]="'evidence-tab-' + section.key"
+        tabindex="0"
+      >
+        <p class="evidence__panel-desc">{{ section.description }}</p>
+
+        @if (section.items.length) {
+          <div class="evidence__items">
+            @for (item of section.items; track item.id) {
+              <details class="evidence-item" [attr.data-has-files]="item.attachments.length > 0">
+                <summary>
+                  <span class="evidence-item__position">
+                    {{ (item.position + 1).toString().padStart(2, '0') }}
+                  </span>
+                  <span class="evidence-item__lede">
+                    <strong>{{ item.sourceId }}</strong>
+                    <span>{{ item.description }}</span>
+                  </span>
+                  <span class="evidence-item__meta">
+                    @if (item.attachments.length) {
+                      <span class="evidence-item__files">
+                        <span class="pi pi-paperclip" aria-hidden="true"></span>
+                        {{ item.attachments.length }}
+                      </span>
+                    } @else {
+                      <span class="evidence-item__files evidence-item__files--none">no files</span>
+                    }
+                    <span class="evidence-item__toggle" aria-hidden="true"></span>
+                  </span>
+                </summary>
+
+                <div class="evidence-item__body">
+                  @if (item.attachments.length) {
+                    <p class="evidence-item__label">Attachments</p>
+                    <ul class="attachment-list">
+                      @for (attachment of item.attachments; track attachment.id) {
+                        <li>
+                          @if (safeAttachmentHref(attachment.reference); as href) {
+                            <a [href]="href" target="_blank" rel="noopener noreferrer">
+                              <span class="pi pi-paperclip" aria-hidden="true"></span>
+                              <span>
+                                <strong>{{ attachment.description || attachment.sourceId }}</strong>
+                                <small>{{ attachment.sourceId }}</small>
+                              </span>
+                              <span class="pi pi-external-link" aria-hidden="true"></span>
+                            </a>
+                          } @else {
+                            <span class="attachment-list__unavailable">
+                              {{ attachment.description || attachment.sourceId }} — unavailable
+                            </span>
+                          }
+                        </li>
+                      }
+                    </ul>
+                  } @else {
+                    <p class="evidence-item__empty">No attachments recorded.</p>
+                  }
+                </div>
+              </details>
+            }
+          </div>
+        } @else {
+          <p class="evidence__empty">No entries recorded in this category.</p>
+        }
+      </div>
+    }
+  } @else {
+    <p class="evidence__unavailable">The source visit record is unavailable for this report.</p>
+  }
+</section>

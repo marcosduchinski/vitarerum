@@ -1,0 +1,229 @@
+<div class="proposals-new">
+  <app-page-header
+    eyebrow="Proposals"
+    title="My assignments"
+    description="Requests currently assigned to you."
+  />
+
+  @if (proposalsResource.isLoading()) {
+    <app-loading-state />
+  } @else if (listError()) {
+    <app-error-message [apiError]="listError()!" (retry)="proposalsResource.reload()" />
+  } @else {
+    @if (forwardSuccessMessage(); as message) {
+      <app-feedback-message
+        title="Assignment forwarded"
+        [message]="message"
+        tone="success"
+        [dismissible]="true"
+        (dismissed)="dismissForwardSuccess()"
+      />
+    }
+
+    <section class="proposals-list-panel" aria-label="My assignments list">
+      <div class="proposals-toolbar">
+        <label class="proposals-search" for="proposals-search">
+          <span class="pi pi-search" aria-hidden="true"></span>
+          <input
+            id="proposals-search"
+            type="search"
+            [value]="searchDraft()"
+            (input)="onSearchInput($event)"
+            (keydown.enter)="applySearch()"
+            placeholder="Search reference or title"
+            aria-label="Search my assignments"
+          />
+          @if (searchDraft()) {
+            <button
+              type="button"
+              class="proposals-search__clear"
+              (click)="clearSearch()"
+              aria-label="Clear assignment search"
+            >
+              <span class="pi pi-times" aria-hidden="true"></span>
+            </button>
+          }
+        </label>
+        <button type="button" class="action-btn action-btn--primary" (click)="applySearch()">
+          Search
+        </button>
+      </div>
+
+      @if (!proposals().length) {
+        <app-empty-state
+          [title]="appliedSearch() ? 'No assignments found' : 'No assignments'"
+          [message]="
+            appliedSearch()
+              ? 'No assigned proposals match the current search.'
+              : 'There are no proposals assigned to you.'
+          "
+        />
+      } @else {
+        <div class="proposals-table-shell">
+          <table class="proposals-table" aria-label="My assignments">
+            <colgroup>
+              <col class="proposals-table__col-ref" />
+              <col class="proposals-table__col-title" />
+              <col class="proposals-table__col-type" />
+              <col class="proposals-table__col-requester" />
+              <col class="proposals-table__col-date" />
+              <col class="proposals-table__col-actions" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th scope="col">Reference</th>
+                <th scope="col">Title</th>
+                <th scope="col">Type</th>
+                <th scope="col">Requested by</th>
+                <th scope="col">Submitted</th>
+                <th scope="col" class="proposals-table__actions-header">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (proposal of proposals(); track proposal.id) {
+                <tr>
+                  <td class="proposals-table__ref">
+                    {{ proposal.referenceNumber }}
+                  </td>
+                  <td>
+                    <a
+                      class="proposals-table__title"
+                      [routerLink]="['/p/collections/proposals/my-assignments', proposal.id]"
+                    >
+                      {{ proposal.title || 'Untitled proposal' }}
+                    </a>
+                  </td>
+                  <td>
+                    <app-type-chip [type]="proposal.type" />
+                  </td>
+                  <td>
+                    <div class="proposals-table__requester">
+                      <span>{{ proposal.requestedBy.user.name }}</span>
+                      <span class="proposals-table__requester-email">
+                        {{ proposal.requestedBy.user.email }}
+                      </span>
+                    </div>
+                  </td>
+                  <td class="proposals-table__date">{{ proposal.submittedAt.slice(0, 10) }}</td>
+                  <td>
+                    <div class="proposals-table__actions">
+                      <app-row-actions
+                        [items]="actionItemsFor(proposal)"
+                        ariaLabel="More actions for {{ proposal.referenceNumber }}"
+                      />
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        @if (totalProposals() > 0) {
+          <div class="proposals-pagination" role="navigation" aria-label="Assignments pagination">
+            <div class="proposals-pagination__meta">
+              <span class="proposals-pagination__info">
+                {{ rangeStart() }}-{{ rangeEnd() }} of {{ totalProposals() }} proposals
+              </span>
+              <label class="proposals-pagination__size" for="proposals-page-size">
+                Rows
+                <select id="proposals-page-size" (change)="onPageSizeChange($event)">
+                  @for (size of pageSizeOptions; track size) {
+                    <option [value]="size" [selected]="size === pageSize()">{{ size }}</option>
+                  }
+                </select>
+              </label>
+            </div>
+            <div class="proposals-pagination__controls">
+              <button
+                type="button"
+                class="action-btn"
+                [disabled]="currentPage() === 0"
+                (click)="firstPage()"
+                aria-label="First page"
+              >
+                First
+              </button>
+              <button
+                type="button"
+                class="action-btn"
+                [disabled]="currentPage() === 0"
+                (click)="prevPage()"
+                aria-label="Previous page"
+              >
+                Previous
+              </button>
+              <span class="proposals-pagination__page" aria-live="polite">
+                Page {{ currentPage() + 1 }} of {{ totalPages() }}
+              </span>
+              <button
+                type="button"
+                class="action-btn"
+                [disabled]="currentPage() >= totalPages() - 1"
+                (click)="nextPage()"
+                aria-label="Next page"
+              >
+                Next
+              </button>
+              <button
+                type="button"
+                class="action-btn"
+                [disabled]="currentPage() >= totalPages() - 1"
+                (click)="lastPage()"
+                aria-label="Last page"
+              >
+                Last
+              </button>
+            </div>
+          </div>
+        }
+      }
+    </section>
+    @if (forwardModalProposal(); as proposal) {
+      <app-confirm-modal
+        [open]="true"
+        title="Forward proposal"
+        confirmLabel="Forward"
+        cancelLabel="Cancel"
+        tone="warning"
+        [pending]="forwardPending()"
+        [confirmDisabled]="!forwardTargetPermissionId() || usersResource.isLoading()"
+        (confirmed)="forward(proposal.id)"
+        (cancelled)="closeForwardModal()"
+      >
+        <div class="forward-modal-body">
+          <p class="forward-modal-body__hint">
+            {{ proposal.referenceNumber }} —
+            {{ proposal.title || 'Untitled proposal' }}
+          </p>
+          @if (usersResource.isLoading()) {
+            <app-loading-state label="Loading staff..." />
+          } @else {
+            <label for="forward-modal-target">Staff member</label>
+            <select
+              id="forward-modal-target"
+              [value]="forwardTargetPermissionId()"
+              (change)="onForwardTargetChange($event)"
+            >
+              <option value="" disabled>Select a staff member...</option>
+              @for (opt of staffOptions(); track opt.permissionId) {
+                <option [value]="opt.permissionId">{{ opt.label }}</option>
+              }
+            </select>
+            <label for="forward-modal-note">Note</label>
+            <textarea
+              id="forward-modal-note"
+              rows="3"
+              placeholder="Add a note (optional)..."
+              [value]="forwardNote()"
+              (input)="onForwardNoteChange($event)"
+            ></textarea>
+            @if (forwardError()) {
+              <app-error-message [apiError]="forwardError()!" />
+            }
+          }
+        </div>
+      </app-confirm-modal>
+    }
+  }
+</div>

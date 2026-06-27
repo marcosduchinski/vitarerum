@@ -1,0 +1,75 @@
+<aside class="report-rail" aria-label="Report summary">
+  @if (record(); as value) {
+    <section class="report-rail__block" aria-labelledby="rail-glance-heading">
+      <h2 id="rail-glance-heading" class="report-rail__title">At a glance</h2>
+      <dl class="report-rail__list">
+        <div>
+          <dt>Visitor</dt>
+          <dd>{{ value.visitorName }}</dd>
+        </div>
+        <div>
+          <dt>Place</dt>
+          <dd>{{ value.placeName }}</dd>
+        </div>
+        <div>
+          <dt>Visit period</dt>
+          <dd>{{ formatDate(value.visitBeginDate) }} — {{ formatDate(value.visitEndDate) }}</dd>
+        </div>
+        <div>
+          <dt>Visit code</dt>
+          <dd class="report-rail__code">{{ value.code }}</dd>
+        </div>
+      </dl>
+    </section>
+
+    <section class="report-rail__block" aria-labelledby="rail-totals-heading">
+      <h2 id="rail-totals-heading" class="report-rail__title">
+        Evidence
+        <span class="report-rail__sum">{{ evidenceTotal() }}</span>
+      </h2>
+      <ul class="report-rail__totals">
+        @for (total of totals(); track total.key) {
+          <li [class.is-empty]="!total.count">
+            <span class="report-rail__count">{{ total.count }}</span>
+            <span class="report-rail__count-label">{{ total.label }}</span>
+          </li>
+        }
+      </ul>
+    </section>
+  }
+
+  @if (narrative(); as value) {
+    <section
+      class="report-rail__block report-rail__block--provenance"
+      aria-labelledby="rail-provenance-heading"
+    >
+      <h2 id="rail-provenance-heading" class="report-rail__title">Provenance</h2>
+      <dl class="report-rail__list">
+        <div>
+          <dt>Type</dt>
+          <dd>{{ value.meta.resolvedNarrativeType.replace('_', ' ') }}</dd>
+        </div>
+        <div>
+          <dt>Language</dt>
+          <dd>{{ value.meta.targetLanguage }}</dd>
+        </div>
+        <div>
+          <dt>Creativity</dt>
+          <dd>{{ value.meta.creativityTemperature.toFixed(1) }}</dd>
+        </div>
+        <div>
+          <dt>Model</dt>
+          <dd>{{ value.meta.llmModel }}</dd>
+        </div>
+        <div>
+          <dt>Resolution</dt>
+          <dd>{{ value.meta.resolutionSource }}</dd>
+        </div>
+        <div>
+          <dt>Generated</dt>
+          <dd>{{ formatDateTime(value.generatedAt) }}</dd>
+        </div>
+      </dl>
+    </section>
+  }
+</aside>

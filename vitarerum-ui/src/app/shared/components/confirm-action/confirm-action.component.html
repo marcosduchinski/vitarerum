@@ -1,0 +1,20 @@
+<section class="confirm-action" aria-labelledby="confirm-action-title">
+  <div>
+    <h2 id="confirm-action-title">{{ title() }}</h2>
+    <p>{{ message() }}</p>
+  </div>
+
+  <div class="confirm-action__actions">
+    <button type="button" class="confirm-action__button confirm-action__button--secondary" (click)="cancel()">
+      {{ cancelLabel() }}
+    </button>
+    <button
+      type="button"
+      class="confirm-action__button confirm-action__button--primary"
+      [disabled]="disabled()"
+      (click)="confirm()"
+    >
+      {{ confirmLabel() }}
+    </button>
+  </div>
+</section>

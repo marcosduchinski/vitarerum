@@ -1,0 +1,9 @@
+<nav aria-label="Main navigation">
+  <ul class="layout-menu">
+    @for (item of items(); track item.label) {
+      <li class="layout-root-menuitem">
+        <app-menu-item [item]="item" />
+      </li>
+    }
+  </ul>
+</nav>

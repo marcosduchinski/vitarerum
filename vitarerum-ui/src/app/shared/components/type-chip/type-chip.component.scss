@@ -1,0 +1,31 @@
+.type-chip {
+  min-height: 1.6rem;
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 0.125rem 0.625rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.type-chip--research {
+  border-color: color-mix(in srgb, var(--type-research-text) 18%, transparent);
+  background: var(--type-research-bg);
+  color: var(--type-research-text);
+}
+
+.type-chip--exhibition {
+  border-color: color-mix(in srgb, var(--type-exhibition-text) 18%, transparent);
+  background: var(--type-exhibition-bg);
+  color: var(--type-exhibition-text);
+}
+
+.type-chip--other {
+  border-color: color-mix(in srgb, var(--type-other-text) 18%, transparent);
+  background: var(--type-other-bg);
+  color: var(--type-other-text);
+}

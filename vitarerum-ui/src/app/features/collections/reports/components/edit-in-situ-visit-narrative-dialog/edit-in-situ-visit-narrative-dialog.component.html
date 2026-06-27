@@ -1,0 +1,124 @@
+<dialog
+  #dialog
+  class="narrative-editor"
+  tabindex="-1"
+  aria-labelledby="narrative-editor-title"
+  aria-describedby="narrative-editor-description"
+  (cancel)="onCancel($event)"
+  (keydown.escape)="onCancel($event)"
+  (click)="onBackdropClick($event)"
+>
+  <form class="narrative-editor__surface" (submit)="submit($event)">
+    <header class="narrative-editor__header">
+      <div>
+        <p class="narrative-editor__eyebrow">Editorial correction</p>
+        <h2 id="narrative-editor-title">Edit narrative</h2>
+        <p id="narrative-editor-description">
+          Revise the generated account. Its provenance and generation settings remain unchanged.
+        </p>
+      </div>
+      <button
+        type="button"
+        class="narrative-editor__close"
+        aria-label="Close narrative editor"
+        [disabled]="pending()"
+        (click)="requestClose()"
+      >
+        <span class="pi pi-times" aria-hidden="true"></span>
+      </button>
+    </header>
+
+    @if (narrative(); as value) {
+      <dl class="narrative-editor__provenance" aria-label="Immutable narrative metadata">
+        <div>
+          <dt>Type</dt>
+          <dd>{{ value.meta.resolvedNarrativeType.replace('_', ' ') }}</dd>
+        </div>
+        <div>
+          <dt>Language</dt>
+          <dd>{{ value.meta.targetLanguage.toUpperCase() }}</dd>
+        </div>
+        <div>
+          <dt>Model</dt>
+          <dd>{{ value.meta.llmModel }}</dd>
+        </div>
+      </dl>
+    }
+
+    <div class="narrative-editor__body">
+      @if (apiError()) {
+        <app-error-message [apiError]="apiError()" />
+      }
+
+      <div class="narrative-editor__field">
+        <label for="narrative-editor-text">Narrative text</label>
+        <textarea
+          #textarea
+          id="narrative-editor-text"
+          rows="16"
+          autofocus
+          [formField]="editorForm.narrative"
+          aria-describedby="narrative-editor-hint narrative-editor-count narrative-editor-error"
+        ></textarea>
+        <div class="narrative-editor__field-meta">
+          <p id="narrative-editor-hint">Only this text will be changed.</p>
+          <output id="narrative-editor-count" for="narrative-editor-text">
+            {{ characterCount() }} characters
+          </output>
+        </div>
+        <div id="narrative-editor-error" class="narrative-editor__validation" aria-live="polite">
+          @if (editorForm.narrative().touched() && editorForm.narrative().invalid()) {
+            {{ editorForm.narrative().errors()[0].message }}
+          }
+        </div>
+      </div>
+    </div>
+
+    <footer class="narrative-editor__footer">
+      @if (discardConfirmation()) {
+        <div class="narrative-editor__discard" role="alert">
+          <p><strong>Discard this correction?</strong> Your unsaved text will be lost.</p>
+          <div>
+            <button type="button" class="narrative-editor__button" (click)="keepEditing()">
+              Keep editing
+            </button>
+            <button
+              type="button"
+              class="narrative-editor__button narrative-editor__button--danger"
+              (click)="confirmDiscard()"
+            >
+              Discard changes
+            </button>
+          </div>
+        </div>
+      } @else {
+        <p class="narrative-editor__status" aria-live="polite">
+          {{ changed() ? 'Unsaved correction' : 'No changes' }}
+        </p>
+        <div class="narrative-editor__actions">
+          <button
+            type="button"
+            class="narrative-editor__button"
+            [disabled]="pending()"
+            (click)="requestClose()"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            class="narrative-editor__button narrative-editor__button--primary"
+            [disabled]="saveDisabled()"
+          >
+            @if (pending()) {
+              <span class="pi pi-spin pi-spinner" aria-hidden="true"></span>
+              Saving
+            } @else {
+              <span class="pi pi-check" aria-hidden="true"></span>
+              Save correction
+            }
+          </button>
+        </div>
+      }
+    </footer>
+  </form>
+</dialog>

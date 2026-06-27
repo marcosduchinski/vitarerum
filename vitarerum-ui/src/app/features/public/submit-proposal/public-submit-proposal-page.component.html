@@ -1,0 +1,145 @@
+<div class="public-submit">
+  <app-page-header
+    eyebrow="Public submission"
+    title="Submit a proposal"
+    description="Any member of the public may request access to our collections. Tell us who you are and what you need — we'll e-mail you a link to confirm your request."
+  />
+
+  <form class="submit-form" (submit)="submit($event)" novalidate>
+    <fieldset class="submit-form__section">
+      <legend class="submit-form__section-title">Your details</legend>
+
+      <div class="field" [class.field--error]="nameError()">
+        <label class="field__label" for="name">Full name <span aria-hidden="true">*</span></label>
+        <input
+          id="name"
+          type="text"
+          class="field__input"
+          autocomplete="name"
+          maxlength="120"
+          [value]="name()"
+          (input)="onInput('name', $event)"
+          [attr.aria-invalid]="nameError() || null"
+        />
+        @if (nameError()) {
+          <p class="field__error" role="alert">Your name is required.</p>
+        }
+      </div>
+
+      <div class="field" [class.field--error]="emailError()">
+        <label class="field__label" for="email">E-mail <span aria-hidden="true">*</span></label>
+        <input
+          id="email"
+          type="email"
+          class="field__input"
+          autocomplete="email"
+          maxlength="180"
+          placeholder="you@example.com"
+          [value]="email()"
+          (input)="onInput('email', $event)"
+          [attr.aria-invalid]="emailError() || null"
+        />
+        @if (emailError()) {
+          <p class="field__error" role="alert">A valid e-mail address is required.</p>
+        }
+        <p class="field__hint">We'll send a confirmation link here. Your request is only forwarded after you confirm.</p>
+      </div>
+
+      <!-- Honeypot: hidden from real users, irresistible to bots. Kept out of the
+           tab order and announced to nobody. -->
+      <div class="submit-form__honeypot" aria-hidden="true">
+        <label for="website">Website</label>
+        <input
+          id="website"
+          type="text"
+          tabindex="-1"
+          autocomplete="off"
+          [value]="website()"
+          (input)="onInput('website', $event)"
+        />
+      </div>
+    </fieldset>
+
+    <fieldset class="submit-form__section">
+      <legend class="submit-form__section-title">Your request</legend>
+      <p class="submit-form__section-hint">
+        Your proposal opens a conversation with the collections team. Describe what you'd like to access and why.
+      </p>
+
+      <div class="field" [class.field--error]="subjectError()">
+        <label class="field__label" for="subject">Subject <span aria-hidden="true">*</span></label>
+        <input
+          id="subject"
+          type="text"
+          class="field__input"
+          maxlength="160"
+          placeholder="Brief subject line"
+          [value]="subject()"
+          (input)="onInput('subject', $event)"
+          [attr.aria-invalid]="subjectError() || null"
+        />
+        @if (subjectError()) {
+          <p class="field__error" role="alert">Subject is required.</p>
+        }
+      </div>
+
+      <div class="field" [class.field--error]="bodyError()">
+        <label class="field__label" for="body">Message <span aria-hidden="true">*</span></label>
+        <textarea
+          id="body"
+          class="field__input field__input--textarea"
+          rows="7"
+          maxlength="4000"
+          placeholder="Introduce yourself and describe what you need…"
+          [value]="body()"
+          (input)="onInput('body', $event)"
+          [attr.aria-invalid]="bodyError() || null"
+        ></textarea>
+        @if (bodyError()) {
+          <p class="field__error" role="alert">Message body is required.</p>
+        }
+      </div>
+    </fieldset>
+
+    <div class="field field--checkbox" [class.field--error]="consentError()">
+      <label class="consent">
+        <input
+          type="checkbox"
+          [checked]="consent()"
+          (change)="onConsentChange($event)"
+          [attr.aria-invalid]="consentError() || null"
+        />
+        <span>
+          I agree that Vitarerum may process the personal data in this form to handle my request.
+          <span aria-hidden="true">*</span>
+        </span>
+      </label>
+      @if (consentError()) {
+        <p class="field__error" role="alert">Consent is required to submit.</p>
+      }
+    </div>
+
+    @if (captchaRequired()) {
+      <div class="field" [class.field--error]="captchaError()">
+        <app-turnstile
+          [siteKey]="siteKey"
+          (verified)="onVerified($event)"
+          (invalidated)="onCaptchaInvalidated()"
+        />
+        @if (captchaError()) {
+          <p class="field__error" role="alert">Please complete the verification.</p>
+        }
+      </div>
+    }
+
+    @if (submitError()) {
+      <app-error-message [apiError]="submitError()!" />
+    }
+
+    <div class="submit-form__footer">
+      <button type="submit" class="submit-btn" [disabled]="submitting()">
+        {{ submitting() ? 'Submitting…' : 'Submit proposal' }}
+      </button>
+    </div>
+  </form>
+</div>

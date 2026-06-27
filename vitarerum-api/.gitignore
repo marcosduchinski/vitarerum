@@ -1,0 +1,57 @@
+
+# Python & Virtual Environments
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Testing & Linting
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+*.cover
+
+# IDE & Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+.secrets/
+credentials.json
+client_secret*.json
+token.json
+
+# Database & Logs
+*.db
+*.sqlite
+*.sqlite3
+*.log
+alembic/versions/*
+!alembic/versions/.gitkeep
+!alembic/versions/*.py
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project-specific
+tmp/
+cache/
+uploads/
+data/

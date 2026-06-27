@@ -1,0 +1,229 @@
+from __future__ import annotations
+
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.identity.application.ports import UserFilters
+from app.identity.application.read_models import PermissionView, UserView
+from app.identity.domain.enums import GroupName
+from app.identity.domain.models import (
+    Group,
+    GroupId,
+    Permission,
+    PermissionId,
+    User,
+    UserId,
+)
+from app.identity.infrastructure.models import (
+    GroupRecord,
+    PermissionRecord,
+    UserRecord,
+)
+
+_PERMISSION_EAGER = [
+    selectinload(PermissionRecord.user),
+    selectinload(PermissionRecord.group),
+]
+
+
+# ── domain ↔ record mappers ──────────────────────────────────────────────────
+
+
+def user_to_record(user: User) -> UserRecord:
+    return UserRecord(
+        id=user.id,
+        name=user.name,
+        email=user.email,
+        password_hash=user.password_hash,
+    )
+
+
+def user_to_domain(record: UserRecord) -> User:
+    return User(
+        id=UserId(record.id),
+        name=record.name,
+        email=record.email,
+        password_hash=record.password_hash,
+    )
+
+
+def group_to_record(group: Group) -> GroupRecord:
+    return GroupRecord(id=group.id, name=group.name)
+
+
+def group_to_domain(record: GroupRecord) -> Group:
+    return Group(id=GroupId(record.id), name=record.name)
+
+
+def permission_to_record(permission: Permission) -> PermissionRecord:
+    return PermissionRecord(
+        id=permission.id,
+        user_id=permission.user_id,
+        group_id=permission.group_id,
+    )
+
+
+def permission_to_domain(record: PermissionRecord) -> Permission:
+    user = user_to_domain(record.user) if record.user else None
+    group = group_to_domain(record.group) if record.group else None
+    return Permission(
+        id=PermissionId(record.id),
+        user_id=UserId(record.user_id),
+        group_id=GroupId(record.group_id),
+        user=user,
+        group=group,
+    )
+
+
+def permission_to_view(record: PermissionRecord) -> PermissionView:
+    return PermissionView(
+        permission_id=record.id,
+        user=UserView(
+            id=record.user.id if record.user else "",
+            name=record.user.name if record.user else "",
+            email=record.user.email if record.user else "",
+        ),
+        group=record.group.name if record.group else GroupName.EXTERNAL,
+    )
+
+
+class SqlAlchemyPermissionReader:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get_detail(
+        self, permission_id: PermissionId
+    ) -> PermissionView | None:
+        record = await self._session.get(
+            PermissionRecord,
+            permission_id,
+            options=_PERMISSION_EAGER,
+        )
+        if record is None:
+            return None
+        return permission_to_view(record)
+
+
+class SqlAlchemyUserRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def add(self, user: User) -> None:
+        self._session.add(user_to_record(user))
+        await self._session.flush()
+
+    async def get_by_id(self, user_id: UserId) -> User | None:
+        record = await self._session.get(UserRecord, user_id)
+        return user_to_domain(record) if record else None
+
+    async def get_by_email(self, email: str) -> User | None:
+        stmt = select(UserRecord).where(UserRecord.email == email)
+        result = await self._session.execute(stmt)
+        record = result.scalar_one_or_none()
+        return user_to_domain(record) if record else None
+
+    async def list(
+        self,
+        filters: UserFilters,
+        page: int,
+        size: int,
+    ) -> tuple[list[User], int]:
+        base_stmt = select(UserRecord)
+        if filters.search:
+            pattern = f"%{filters.search}%"
+            base_stmt = base_stmt.where(
+                UserRecord.name.ilike(pattern) | UserRecord.email.ilike(pattern)
+            )
+        if filters.group_id:
+            base_stmt = base_stmt.join(
+                PermissionRecord,
+                PermissionRecord.user_id == UserRecord.id,
+            ).where(PermissionRecord.group_id == filters.group_id)
+
+        count_stmt = select(func.count()).select_from(base_stmt.subquery())
+        total_result = await self._session.execute(count_stmt)
+        total = total_result.scalar_one()
+
+        data_stmt = base_stmt.offset(page * size).limit(size)
+        data_result = await self._session.execute(data_stmt)
+        records = data_result.scalars().all()
+        return [user_to_domain(r) for r in records], total
+
+
+class SqlAlchemyGroupRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get_by_id(self, group_id: GroupId) -> Group | None:
+        record = await self._session.get(GroupRecord, group_id)
+        return group_to_domain(record) if record else None
+
+    async def get_by_name(self, name: GroupName) -> Group | None:
+        stmt = select(GroupRecord).where(GroupRecord.name == name)
+        result = await self._session.execute(stmt)
+        record = result.scalar_one_or_none()
+        return group_to_domain(record) if record else None
+
+    async def list(self) -> list[Group]:
+        stmt = select(GroupRecord).order_by(GroupRecord.name)
+        result = await self._session.execute(stmt)
+        return [group_to_domain(r) for r in result.scalars().all()]
+
+
+class SqlAlchemyPermissionRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def add(self, permission: Permission) -> None:
+        self._session.add(permission_to_record(permission))
+        await self._session.flush()
+
+    async def get_by_user_and_group(
+        self, user_id: UserId, group_id: GroupId
+    ) -> Permission | None:
+        stmt = (
+            select(PermissionRecord)
+            .where(
+                PermissionRecord.user_id == user_id,
+                PermissionRecord.group_id == group_id,
+            )
+            .options(*_PERMISSION_EAGER)
+        )
+        result = await self._session.execute(stmt)
+        record = result.scalar_one_or_none()
+        return permission_to_domain(record) if record else None
+
+    async def get_by_user_id(self, user_id: UserId) -> list[Permission]:
+        stmt = (
+            select(PermissionRecord)
+            .where(PermissionRecord.user_id == user_id)
+            .options(*_PERMISSION_EAGER)
+        )
+        result = await self._session.execute(stmt)
+        return [permission_to_domain(r) for r in result.scalars().all()]
+
+    async def get_by_group_id(
+        self, group_id: GroupId, page: int, size: int
+    ) -> tuple[list[Permission], int]:
+        base_stmt = select(PermissionRecord).where(
+            PermissionRecord.group_id == group_id
+        )
+        count_stmt = select(func.count()).select_from(base_stmt.subquery())
+        total_result = await self._session.execute(count_stmt)
+        total = total_result.scalar_one()
+
+        data_stmt = (
+            base_stmt.options(*_PERMISSION_EAGER)
+            .offset(page * size)
+            .limit(size)
+        )
+        data_result = await self._session.execute(data_stmt)
+        records = data_result.scalars().all()
+        return [permission_to_domain(r) for r in records], total
+
+    async def delete(self, permission_id: PermissionId) -> None:
+        record = await self._session.get(PermissionRecord, permission_id)
+        if record:
+            await self._session.delete(record)
+            await self._session.flush()

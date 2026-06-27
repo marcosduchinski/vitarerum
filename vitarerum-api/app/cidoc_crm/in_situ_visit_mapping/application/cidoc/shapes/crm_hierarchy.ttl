@@ -1,0 +1,28 @@
+# Minimal CIDOC-CRM 7.1.3 class hierarchy — only the classes the In Situ Visit
+# mapper emits, plus the ancestors the SHACL range/domain shapes check against.
+# Used as the ont_graph (with rdfs inference) so e.g. an E20 instance counts as
+# an E70 Thing. Verified against docs/cidoc_crm_version_7.1.3.docx.
+@prefix crm:  <http://www.cidoc-crm.org/cidoc-crm/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+crm:E2_Temporal_Entity      rdfs:subClassOf crm:E1_CRM_Entity .
+crm:E4_Period               rdfs:subClassOf crm:E2_Temporal_Entity .
+crm:E5_Event                rdfs:subClassOf crm:E4_Period .
+crm:E7_Activity             rdfs:subClassOf crm:E5_Event .
+crm:E65_Creation            rdfs:subClassOf crm:E7_Activity .
+
+crm:E39_Actor               rdfs:subClassOf crm:E1_CRM_Entity .
+crm:E21_Person              rdfs:subClassOf crm:E39_Actor .
+
+crm:E70_Thing               rdfs:subClassOf crm:E1_CRM_Entity .
+crm:E19_Physical_Object     rdfs:subClassOf crm:E70_Thing .
+crm:E20_Biological_Object   rdfs:subClassOf crm:E19_Physical_Object .
+
+crm:E53_Place               rdfs:subClassOf crm:E1_CRM_Entity .
+crm:E52_Time-Span           rdfs:subClassOf crm:E1_CRM_Entity .
+
+crm:E28_Conceptual_Object   rdfs:subClassOf crm:E1_CRM_Entity .
+crm:E55_Type                rdfs:subClassOf crm:E28_Conceptual_Object .
+crm:E89_Propositional_Object rdfs:subClassOf crm:E28_Conceptual_Object .
+crm:E73_Information_Object   rdfs:subClassOf crm:E89_Propositional_Object .
+crm:E31_Document            rdfs:subClassOf crm:E73_Information_Object .

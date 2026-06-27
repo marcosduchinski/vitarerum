@@ -1,0 +1,93 @@
+<div class="users-page">
+  <div class="users-page__header">
+    <div>
+      <p class="users-page__eyebrow">Administration</p>
+      <h2>Users</h2>
+    </div>
+    <label class="sr-only" for="user-search">Search users</label>
+    <input
+      pInputText
+      id="user-search"
+      type="search"
+      placeholder="Search by name or email…"
+      [value]="searchQuery()"
+      (input)="onSearch($event)"
+      class="users-page__search"
+    />
+  </div>
+
+  @if (usersResource.isLoading()) {
+    <app-loading-state />
+  } @else if (apiError()) {
+    <app-error-message [apiError]="apiError()!" (retry)="usersResource.reload()" />
+  } @else if (!users().length) {
+    <app-empty-state
+      title="No users found"
+      [message]="searchQuery() ? 'Try a different search term.' : 'No users in the system yet.'"
+    />
+  } @else {
+    <table class="users-table" aria-label="Users">
+      <thead>
+        <tr>
+          <th scope="col">Name</th>
+          <th scope="col">Email</th>
+          <th scope="col">Groups</th>
+          <th scope="col" class="sr-only">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (user of users(); track user.id) {
+          <tr>
+            <td>
+              <a class="users-table__name" [routerLink]="user.id">{{ user.name }}</a>
+            </td>
+            <td class="users-table__email">{{ user.email }}</td>
+            <td>
+              <div class="users-table__groups">
+                @for (perm of user.permissions; track perm.permissionId) {
+                  <span class="group-badge">{{ groupLabels[perm.group.name] }}</span>
+                } @empty {
+                  <span class="users-table__no-groups">—</span>
+                }
+              </div>
+            </td>
+            <td class="users-table__actions">
+              <app-row-actions
+                [items]="actionItemsFor(user)"
+                ariaLabel="More actions for {{ user.name }}"
+              />
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+
+    @if (totalUsers() > 0) {
+      <div class="users-pagination" role="navigation" aria-label="User list pagination">
+        <span class="users-pagination__info">
+          {{ rangeStart() }}–{{ rangeEnd() }} of {{ totalUsers() }} users
+        </span>
+        <div class="users-pagination__controls">
+          <button
+            pButton
+            type="button"
+            [disabled]="currentPage() === 0"
+            (click)="prevPage()"
+            aria-label="Previous page"
+          >
+            Previous
+          </button>
+          <button
+            pButton
+            type="button"
+            [disabled]="currentPage() >= totalPages() - 1"
+            (click)="nextPage()"
+            aria-label="Next page"
+          >
+            Next
+          </button>
+        </div>
+      </div>
+    }
+  }
+</div>

@@ -1,0 +1,302 @@
+<div class="access-log">
+  <section class="access-sheet" aria-labelledby="object-access-log-heading">
+    <header class="access-sheet__header">
+      <div>
+        <p class="access-sheet__eyebrow">RAIS · Collection access</p>
+        <h2 id="object-access-log-heading" class="access-sheet__title">Object access log</h2>
+        <div class="access-sheet__actions">
+          <button
+            type="button"
+            class="access-sheet__action access-sheet__action--download"
+            [disabled]="!canDownloadDocxDemo()"
+            title="Demonstration export; backend document generation is not connected"
+            (click)="downloadObjectAccessLogDemo()"
+          >
+            <span class="pi pi-download" aria-hidden="true"></span>
+            Download DOCX
+            <span class="access-sheet__action-badge">Demo</span>
+          </button>
+        </div>
+      </div>
+
+      <dl class="access-summary" aria-label="Object access log summary">
+        <div class="access-summary__item">
+          <dt>Reference</dt>
+          <dd>{{ accessLog()?.referenceNumber ?? 'Not issued' }}</dd>
+        </div>
+        <div class="access-summary__item">
+          <dt>Curator</dt>
+          <dd>{{ accessLog()?.curator?.user?.name ?? '—' }}</dd>
+        </div>
+      </dl>
+    </header>
+
+    <div class="access-band">
+      <span>Objects Consulted</span>
+      <span class="access-band__hint">Inventory, quantity, observations, and supporting files</span>
+    </div>
+
+    <div class="access-sheet__body">
+      @if (projectError()) {
+        <app-error-message [apiError]="projectError()!" (retry)="projectResource.reload()" />
+      }
+
+      @if (objectAccessMessage()) {
+        <p id="object-access-lock-message" class="object-register__locked" role="status">
+          {{ objectAccessMessage() }}
+        </p>
+      }
+
+      @if (logResource.isLoading()) {
+        <app-loading-state label="Loading object access log…" />
+      } @else if (logError()) {
+        <app-error-message [apiError]="logError()!" (retry)="logResource.reload()" />
+      } @else if (!logEntries().length) {
+        <app-empty-state
+          title="No objects recorded"
+          message="No object access entries have been added yet."
+        />
+      } @else {
+        <div class="object-register-form">
+          @if (objectSaveError()) {
+            <app-error-message [apiError]="objectSaveError()!" />
+          }
+
+          @if (canEditObjectEntries()) {
+            <div class="object-register-form__toolbar">
+              <button
+                type="button"
+                class="object-register-form__save"
+                [disabled]="
+                  objectSaveSubmitting() || !objectRowsValid() || !hasObjectDraftChanges()
+                "
+                (click)="saveObjectEntries($event)"
+              >
+                {{ objectSaveSubmitting() ? 'Saving...' : 'Save' }}
+              </button>
+            </div>
+          }
+
+          <div
+            class="object-register"
+            role="region"
+            aria-label="Object access entries"
+            tabindex="0"
+          >
+            <table class="object-register__table">
+              <caption style="height: 1px; overflow: hidden">
+                Object access entries with inventory number, access date, quantity, observations,
+                and expandable attachment details.
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col" class="object-register__expand-header">
+                    <span class="sr-only"></span>
+                  </th>
+                  <th scope="col">Inventory</th>
+                  <th scope="col">Access date</th>
+                  <th scope="col">No. objects</th>
+                  <th scope="col">Observations</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (entry of logEntries(); track entry.id) {
+                  <tr
+                    class="object-register__row"
+                    [class.object-register__row--open]="expandedObjectEntryId() === entry.id"
+                  >
+                    <td class="object-register__expand-cell">
+                      <button
+                        type="button"
+                        class="object-register__toggle"
+                        [attr.aria-expanded]="expandedObjectEntryId() === entry.id"
+                        [attr.aria-controls]="'object-entry-files-' + entry.id"
+                        [attr.aria-label]="
+                          (expandedObjectEntryId() === entry.id
+                            ? 'Hide attachments for '
+                            : 'Show attachments for ') + entry.objectReference.inventoryNumber
+                        "
+                        (click)="toggleObjectAttachments(entry.id)"
+                      >
+                        <span
+                          class="pi"
+                          [class.pi-plus]="expandedObjectEntryId() !== entry.id"
+                          [class.pi-minus]="expandedObjectEntryId() === entry.id"
+                          aria-hidden="true"
+                        ></span>
+                      </button>
+                    </td>
+                    <td>
+                      <span class="object-register__inventory">
+                        {{ entry.objectReference.inventoryNumber }}
+                      </span>
+                    </td>
+                    <td>
+                      <input
+                        class="object-register__input"
+                        type="datetime-local"
+                        [value]="draftAddedAt(entry)"
+                        (input)="onObjectAddedAtInput(entry.id, $event)"
+                        [disabled]="!canEditObjectEntries()"
+                        [attr.aria-invalid]="!draftAddedAt(entry).trim() || null"
+                        [attr.aria-describedby]="
+                          objectAccessMessage() ? 'object-access-lock-message' : null
+                        "
+                        [attr.aria-label]="
+                          'Access date for ' + entry.objectReference.inventoryNumber
+                        "
+                      />
+                    </td>
+                    <td>
+                      <input
+                        class="object-register__input object-register__input--number"
+                        type="number"
+                        min="1"
+                        step="1"
+                        [value]="draftNumberOfObjects(entry)"
+                        (input)="onObjectQuantityInput(entry.id, $event)"
+                        [disabled]="!canEditObjectEntries()"
+                        [attr.aria-invalid]="draftNumberOfObjects(entry) < 1 || null"
+                        [attr.aria-describedby]="
+                          objectAccessMessage() ? 'object-access-lock-message' : null
+                        "
+                        [attr.aria-label]="
+                          'Number of objects for ' + entry.objectReference.inventoryNumber
+                        "
+                      />
+                    </td>
+                    <td>
+                      <textarea
+                        class="object-register__textarea"
+                        rows="2"
+                        [value]="draftObservations(entry)"
+                        (input)="onObjectObservationsInput(entry.id, $event)"
+                        [disabled]="!canEditObjectEntries()"
+                        [attr.aria-describedby]="
+                          objectAccessMessage() ? 'object-access-lock-message' : null
+                        "
+                        [attr.aria-label]="
+                          'Observations for ' + entry.objectReference.inventoryNumber
+                        "
+                      ></textarea>
+                    </td>
+                  </tr>
+                  @if (expandedObjectEntryId() === entry.id) {
+                    <tr class="object-register__details-row">
+                      <td colspan="5">
+                        <section
+                          class="entry-files"
+                          [id]="'object-entry-files-' + entry.id"
+                          [attr.aria-label]="'Files for ' + entry.objectReference.inventoryNumber"
+                        >
+                          <div class="entry-files__header">
+                            <div>
+                              <h3>Entry files</h3>
+                              <p>{{ entry.objectReference.inventoryNumber }}</p>
+                            </div>
+                            <span class="file-cell__count">
+                              {{ entry.attachments.length }}
+                              {{ entry.attachments.length === 1 ? 'file' : 'files' }}
+                            </span>
+                          </div>
+
+                          @if (entry.attachments.length) {
+                            <ul class="attachment-list" aria-label="Entry attachments">
+                              @for (
+                                attachment of entry.attachments;
+                                track attachment.fileReference
+                              ) {
+                                <li>
+                                  <button
+                                    type="button"
+                                    class="attachment-link"
+                                    [disabled]="
+                                      objectAttachmentDownloading()[attachment.fileReference]
+                                    "
+                                    [attr.aria-label]="'Download ' + attachment.fileName"
+                                    (click)="downloadObjectAttachment(entry.id, attachment)"
+                                  >
+                                    <span
+                                      class="attachment-link__icon pi"
+                                      [class.pi-image]="attachment.mediaType === 'IMAGE'"
+                                      [class.pi-video]="attachment.mediaType === 'VIDEO'"
+                                      [class.pi-file]="
+                                        attachment.mediaType !== 'IMAGE' &&
+                                        attachment.mediaType !== 'VIDEO'
+                                      "
+                                      aria-hidden="true"
+                                    ></span>
+                                    <span class="attachment-link__name">{{
+                                      attachment.fileName
+                                    }}</span>
+                                    <span class="attachment-link__meta">{{
+                                      attachment.mediaType
+                                    }}</span>
+                                    @if (objectAttachmentDownloading()[attachment.fileReference]) {
+                                      <span
+                                        class="attachment-link__action pi pi-spin pi-spinner"
+                                        aria-hidden="true"
+                                      ></span>
+                                    } @else {
+                                      <span
+                                        class="attachment-link__action pi pi-download"
+                                        aria-hidden="true"
+                                      ></span>
+                                    }
+                                  </button>
+                                  @if (objectAttachmentDownloadErrors()[attachment.fileReference]) {
+                                    <app-error-message
+                                      [apiError]="
+                                        objectAttachmentDownloadErrors()[attachment.fileReference]!
+                                      "
+                                    />
+                                  }
+                                </li>
+                              }
+                            </ul>
+                          } @else {
+                            <p class="entry-files__empty">No files attached to this entry.</p>
+                          }
+
+                          <form
+                            class="entry-upload"
+                            [attr.aria-label]="
+                              'Upload file for ' + entry.objectReference.inventoryNumber
+                            "
+                            (submit)="uploadObjectAttachment(entry.id, $event)"
+                          >
+                            <input
+                              type="file"
+                              [disabled]="!canEditObjectEntries()"
+                              (change)="onObjectAttachmentFileInput(entry.id, $event)"
+                              aria-label="Object entry file"
+                            />
+                            <button
+                              type="submit"
+                              [disabled]="
+                                !canEditObjectEntries() ||
+                                !objectAttachmentFiles()[entry.id] ||
+                                objectAttachmentUploading()[entry.id]
+                              "
+                            >
+                              {{
+                                objectAttachmentUploading()[entry.id] ? 'Uploading...' : 'Upload'
+                              }}
+                            </button>
+                          </form>
+                          @if (objectAttachmentErrors()[entry.id]) {
+                            <app-error-message [apiError]="objectAttachmentErrors()[entry.id]!" />
+                          }
+                        </section>
+                      </td>
+                    </tr>
+                  }
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      }
+    </div>
+  </section>
+</div>

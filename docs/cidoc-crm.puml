@@ -1,0 +1,90 @@
+@startuml InSituVisitRecordModel
+
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+skinparam shadowing false
+
+
+package "In Situ Visit CEDOC Mapping" <<Bounded Context>> {
+
+class InSituVisitRecord {
+    + id: UUID <<PK>>
+    + code: String
+    + visitBeginDate: Date
+    + visitEndDate: Date
+    + visitorName: String
+    + placeName: String
+    + generatedAt: DateTime
+}
+
+class RequestedObjectRecord {
+    + id: UUID <<PK>>
+    + visitRecordId: UUID <<FK>>
+    + sourceId: String
+    + description: Text
+    + position: Integer
+}
+
+class InSituOccurrenceRecord {
+    + id: UUID <<PK>>
+    + visitRecordId: UUID <<FK>>
+    + sourceId: String
+    + description: Text
+    + position: Integer
+}
+
+class InSituOccurrenceAttachmentRecord {
+    + id: UUID <<PK>>
+    + occurrenceId: UUID <<FK>>
+    + sourceId: String
+    + description: Text
+    + reference: String
+    + position: Integer
+}
+
+class InSituLogRecord {
+    + id: UUID <<PK>>
+    + visitRecordId: UUID <<FK>>
+    + sourceId: String
+    + description: Text
+    + position: Integer
+}
+
+class InSituLogAttachmentRecord {
+    + id: UUID <<PK>>
+    + logId: UUID <<FK>>
+    + sourceId: String
+    + description: Text
+    + reference: String
+    + position: Integer
+}
+
+class InSituPublicationRecord {
+    + id: UUID <<PK>>
+    + visitRecordId: UUID <<FK>>
+    + sourceId: String
+    + description: Text
+    + position: Integer
+}
+
+class InSituPublicationAttachmentRecord {
+    + id: UUID <<PK>>
+    + publicationId: UUID <<FK>>
+    + sourceId: String
+    + description: Text
+    + reference: String
+    + position: Integer
+}
+
+InSituVisitRecord "1" *-- "0..*" RequestedObjectRecord : requestedObjects
+InSituVisitRecord "1" *-- "0..*" InSituOccurrenceRecord : inSituOccurrences
+InSituVisitRecord "1" *-- "0..*" InSituLogRecord : inSituLogs
+InSituVisitRecord "1" *-- "0..*" InSituPublicationRecord : inSituPublications
+
+InSituOccurrenceRecord "1" *-- "0..*" InSituOccurrenceAttachmentRecord : attachments
+InSituLogRecord "1" *-- "0..*" InSituLogAttachmentRecord : attachments
+InSituPublicationRecord "1" *-- "0..*" InSituPublicationAttachmentRecord : attachments
+
+
+
+@enduml

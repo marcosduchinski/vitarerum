@@ -1,0 +1,11 @@
+<div class="project-log">
+  <app-page-header
+    eyebrow="Projects"
+    title="Publication log"
+    description="Publications and outputs derived from this project, with supporting files."
+  >
+    <a class="back-link" [routerLink]="projectDetailRoute()">Back to the project</a>
+  </app-page-header>
+
+  <app-project-publication-log-panel [projectId]="id()" />
+</div>

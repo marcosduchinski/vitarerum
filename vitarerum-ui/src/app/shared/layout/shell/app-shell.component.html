@@ -1,0 +1,19 @@
+<div [class]="containerClass()">
+  <a class="shell__skip-link" href="#main-content">Skip to main content</a>
+  <app-topbar />
+  <app-sidebar />
+  <div class="layout-main-container">
+    <main id="main-content" class="layout-main" tabindex="-1">
+      <router-outlet />
+    </main>
+    <app-footer />
+  </div>
+  <div
+    class="layout-mask"
+    role="button"
+    tabindex="-1"
+    aria-label="Close navigation"
+    (click)="layoutService.closeMenu()"
+    (keydown.escape)="layoutService.closeMenu()"
+  ></div>
+</div>

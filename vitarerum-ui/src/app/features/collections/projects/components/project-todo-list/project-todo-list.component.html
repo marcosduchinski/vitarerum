@@ -1,0 +1,67 @@
+<section class="todo-board" aria-labelledby="project-todo-heading">
+  <header class="todo-board__header">
+    <div>
+      <p class="todo-board__eyebrow">Working notes</p>
+      <h2 id="project-todo-heading">Project TODO List</h2>
+    </div>
+    <span class="todo-board__count" aria-label="Total items">{{ items().length }}</span>
+  </header>
+
+  <p class="todo-board__notice">Items are kept only for this demonstration and are not saved.</p>
+
+  <form class="todo-compose" (submit)="addItem($event)">
+    <label for="project-todo-input">New item</label>
+    <div class="todo-compose__controls">
+      <input
+        id="project-todo-input"
+        type="text"
+        maxlength="160"
+        autocomplete="off"
+        placeholder="Add a project follow-up…"
+        [value]="draft()"
+        (input)="onDraftInput($event)"
+      />
+      <button type="submit" [disabled]="!draft().trim()">
+        <span class="pi pi-plus" aria-hidden="true"></span>
+        Add item
+      </button>
+    </div>
+  </form>
+
+  @if (items().length) {
+    <ul class="todo-list" aria-label="Project TODO items">
+      @for (item of items(); track item.id) {
+        <li class="todo-item" [class.todo-item--completed]="item.completed">
+          <label class="todo-item__check">
+            <input
+              type="checkbox"
+              [checked]="item.completed"
+              (change)="setCompleted(item.id, $event)"
+            />
+            <span>{{ item.text }}</span>
+          </label>
+          <button
+            type="button"
+            class="todo-item__remove"
+            [attr.aria-label]="'Remove ' + item.text"
+            (click)="removeItem(item.id)"
+          >
+            <span class="pi pi-trash" aria-hidden="true"></span>
+          </button>
+        </li>
+      }
+    </ul>
+  } @else {
+    <div class="todo-empty" role="status">
+      <span class="pi pi-check-square" aria-hidden="true"></span>
+      <div>
+        <h3>No items yet</h3>
+        <p>Add the first follow-up for this project.</p>
+      </div>
+    </div>
+  }
+
+  <p class="todo-progress" aria-live="polite">
+    {{ completedCount() }} of {{ items().length }} completed
+  </p>
+</section>

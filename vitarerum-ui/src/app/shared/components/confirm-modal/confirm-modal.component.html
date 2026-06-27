@@ -1,0 +1,50 @@
+@if (open()) {
+  <div class="confirm-modal" role="presentation" (keydown.escape)="cancel()">
+    <button
+      type="button"
+      class="confirm-modal__backdrop"
+      [disabled]="pending()"
+      (click)="cancel()"
+      aria-label="Cancel confirmation"
+    ></button>
+
+    <section
+      [class]="'confirm-modal__dialog confirm-modal__dialog--' + tone()"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="confirm-modal-title"
+      aria-describedby="confirm-modal-message"
+      tabindex="-1"
+    >
+      <header class="confirm-modal__header">
+        <p class="confirm-modal__eyebrow">Confirm action</p>
+        <h2 id="confirm-modal-title">{{ title() }}</h2>
+      </header>
+
+      @if (message()) {
+        <p id="confirm-modal-message" class="confirm-modal__message">{{ message() }}</p>
+      }
+
+      <ng-content />
+
+      <footer class="confirm-modal__footer">
+        <button
+          type="button"
+          class="confirm-modal__button confirm-modal__button--secondary"
+          [disabled]="pending()"
+          (click)="cancel()"
+        >
+          {{ cancelLabel() }}
+        </button>
+        <button
+          type="button"
+          class="confirm-modal__button confirm-modal__button--primary"
+          [disabled]="pending() || confirmDisabled()"
+          (click)="confirm()"
+        >
+          {{ pending() ? 'Working...' : confirmLabel() }}
+        </button>
+      </footer>
+    </section>
+  </div>
+}

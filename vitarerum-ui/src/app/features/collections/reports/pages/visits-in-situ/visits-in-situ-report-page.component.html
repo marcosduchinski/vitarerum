@@ -1,0 +1,139 @@
+<div class="visits-report">
+  <app-page-header
+    eyebrow="Reports"
+    title="In-situ visit reports"
+    description="Generated narrative reports for collection-use in-situ visits."
+  />
+
+  @if (reportResource.isLoading()) {
+    <app-loading-state />
+  } @else if (listError()) {
+    <app-error-message [apiError]="listError()!" (retry)="reportResource.reload()" />
+  } @else {
+    <section class="report-list-panel" aria-label="In-situ visit report history">
+      @if (!rows().length) {
+        <app-empty-state
+          title="No reports generated"
+          message="Generated in-situ visit reports will appear here."
+        />
+      } @else {
+        <div class="report-table-shell">
+          <table class="report-table" aria-label="In-situ visit reports">
+            <colgroup>
+              <col class="report-table__col-code" />
+              <col class="report-table__col-visitor" />
+              <col class="report-table__col-place" />
+              <col class="report-table__col-visit-dates" />
+              <col class="report-table__col-generated" />
+              <col class="report-table__col-actions" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th scope="col">Visit code</th>
+                <th scope="col">Visitor</th>
+                <th scope="col">Place</th>
+                <th scope="col">Visit dates</th>
+                <th scope="col">Report generated</th>
+                <th scope="col" class="report-table__actions-header">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (report of rows(); track report.id) {
+                <tr>
+                  <td class="report-table__code">
+                    <span [class.report-table__unavailable]="!report.code">
+                      {{ valueOrUnavailable(report.code) }}
+                    </span>
+                    <small [title]="report.id">Report {{ report.id }}</small>
+                  </td>
+                  <td [class.report-table__unavailable]="!report.visitorName">
+                    {{ valueOrUnavailable(report.visitorName) }}
+                  </td>
+                  <td [class.report-table__unavailable]="!report.placeName">
+                    {{ valueOrUnavailable(report.placeName) }}
+                  </td>
+                  <td
+                    class="report-table__date"
+                    [class.report-table__unavailable]="
+                      !report.visitBeginDate && !report.visitEndDate
+                    "
+                  >
+                    {{ visitPeriod(report) }}
+                  </td>
+                  <td class="report-table__date">{{ formatDateTime(report.createdAt) }}</td>
+                  <td>
+                    <div class="report-table__actions">
+                      <app-row-actions
+                        [items]="actionItemsFor(report)"
+                        ariaLabel="More actions for report {{ report.id }}"
+                      />
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        @if (totalRows() > 0) {
+          <div class="report-pagination" role="navigation" aria-label="Report pagination">
+            <div class="report-pagination__meta">
+              <span class="report-pagination__info">
+                {{ rangeStart() }}-{{ rangeEnd() }} of {{ totalRows() }} reports
+              </span>
+              <label class="report-pagination__size" for="visits-in-situ-page-size">
+                Rows
+                <select id="visits-in-situ-page-size" (change)="onPageSizeChange($event)">
+                  @for (size of pageSizeOptions; track size) {
+                    <option [value]="size" [selected]="size === pageSize()">{{ size }}</option>
+                  }
+                </select>
+              </label>
+            </div>
+            <div class="report-pagination__controls">
+              <button
+                type="button"
+                class="action-btn"
+                [disabled]="currentPage() === 0"
+                (click)="firstPage()"
+                aria-label="First page"
+              >
+                First
+              </button>
+              <button
+                type="button"
+                class="action-btn"
+                [disabled]="currentPage() === 0"
+                (click)="prevPage()"
+                aria-label="Previous page"
+              >
+                Previous
+              </button>
+              <span class="report-pagination__page" aria-live="polite">
+                Page {{ currentPage() + 1 }} of {{ totalPages() }}
+              </span>
+              <button
+                type="button"
+                class="action-btn"
+                [disabled]="currentPage() >= totalPages() - 1"
+                (click)="nextPage()"
+                aria-label="Next page"
+              >
+                Next
+              </button>
+              <button
+                type="button"
+                class="action-btn"
+                [disabled]="currentPage() >= totalPages() - 1"
+                (click)="lastPage()"
+                aria-label="Last page"
+              >
+                Last
+              </button>
+            </div>
+          </div>
+        }
+      }
+    </section>
+  }
+</div>

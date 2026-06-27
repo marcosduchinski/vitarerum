@@ -1,0 +1,49 @@
+@if (visible()) {
+  @if (isRoot()) {
+    <div class="layout-menuitem-root-text">{{ item().label }}</div>
+  }
+
+  @if (!isRoot() || !hasChildren()) {
+    @if (item().routerLink) {
+      <a
+        [routerLink]="item().routerLink"
+        routerLinkActive="active-route"
+        ariaCurrentWhenActive="page"
+        [routerLinkActiveOptions]="{ paths: 'exact', queryParams: 'ignored', matrixParams: 'ignored', fragment: 'ignored' }"
+        [attr.aria-disabled]="item().disabled || null"
+        (click)="toggle($event)"
+      >
+        @if (item().icon) {
+          <i [class]="iconClass()"></i>
+        }
+        <span class="layout-menuitem-text">{{ item().label }}</span>
+      </a>
+    } @else {
+      <button
+        type="button"
+        [attr.aria-controls]="hasChildren() ? submenuId() : null"
+        [attr.aria-expanded]="hasChildren() ? expanded() : null"
+        [disabled]="item().disabled || null"
+        (click)="toggle($event)"
+      >
+        @if (item().icon) {
+          <i [class]="iconClass()"></i>
+        }
+        <span class="layout-menuitem-text">{{ item().label }}</span>
+        @if (hasChildren()) {
+          <i class="pi pi-fw pi-angle-down layout-submenu-toggler"></i>
+        }
+      </button>
+    }
+  }
+
+  @if (showChildren()) {
+    <ul [id]="submenuId()">
+      @for (child of item().items; track child.label) {
+        <li>
+          <app-menu-item [item]="child" [depth]="depth() + 1" />
+        </li>
+      }
+    </ul>
+  }
+}

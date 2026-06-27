@@ -1,0 +1,39 @@
+<section class="detail-card" aria-labelledby="overview-heading">
+  <h2 id="overview-heading" class="detail-card__title">Overview</h2>
+  <dl class="detail-dl">
+    <div class="detail-dl__row">
+      <dt>Requested by</dt>
+      <dd>
+        {{ proposal().requestedBy.user.name }}
+        <span class="detail-dl__email">{{ proposal().requestedBy.user.email }}</span>
+      </dd>
+    </div>
+    @if (proposal().assignedTo) {
+      <div class="detail-dl__row">
+        <dt>Assigned to</dt>
+        <dd>
+          {{ proposal().assignedTo!.user.name }}
+          <span class="detail-dl__email">{{ proposal().assignedTo!.user.email }}</span>
+        </dd>
+      </div>
+    } @else {
+      <div class="detail-dl__row">
+        <dt>Assigned to</dt>
+        <dd class="detail-dl__empty">Unassigned</dd>
+      </div>
+    }
+    <div class="detail-dl__row">
+      <dt>Submitted</dt>
+      <dd>{{ formatDateTime(proposal().submittedAt) }}</dd>
+    </div>
+    <div class="detail-dl__row">
+      <dt>Status</dt>
+      <dd>
+        <app-status-chip
+          kind="proposal"
+          [status]="asWorkflowStatus(proposal().status)"
+        />
+      </dd>
+    </div>
+  </dl>
+</section>

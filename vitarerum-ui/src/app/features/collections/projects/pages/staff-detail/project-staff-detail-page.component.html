@@ -1,0 +1,389 @@
+<div class="project-detail project-staff-detail">
+  <a class="project-detail__back" [routerLink]="backLink()">← {{ backLabel() }}</a>
+
+  @if (projectResource.isLoading()) {
+    <app-loading-state />
+  } @else if (projectError()) {
+    <app-error-message [apiError]="projectError()!" (retry)="projectResource.reload()" />
+  } @else if (project()) {
+    <header class="project-detail__header">
+      <div class="project-detail__header-meta">
+        <p class="project-detail__ref">{{ project()!.referenceNumber }}</p>
+        <h1 class="project-detail__title">{{ project()!.title }}</h1>
+        <div class="project-detail__status-row">
+          <app-status-chip kind="project" [status]="asWorkflowStatus(project()!.status)" />
+          <app-type-chip [type]="project()!.type" />
+        </div>
+      </div>
+    </header>
+
+    @if (actionError()) {
+      <app-error-message [apiError]="actionError()!" />
+    }
+
+    <app-confirm-modal
+      [open]="cancelConfirmOpen()"
+      title="Cancel project?"
+      [message]="'This will cancel ' + project()!.referenceNumber + ' and cannot be undone.'"
+      confirmLabel="Cancel project"
+      cancelLabel="Keep project"
+      tone="danger"
+      [pending]="acting()"
+      (confirmed)="cancel()"
+      (cancelled)="closeCancelConfirm()"
+    />
+
+    <app-create-in-situ-visit-report-modal
+      [open]="reportModalOpen()"
+      [pending]="reportCreating()"
+      [apiError]="reportError()"
+      (submitted)="createInSituVisitReport($event)"
+      (cancelled)="closeReportModal()"
+    />
+
+    <nav
+      class="project-detail__tabs"
+      [attr.aria-label]="sectionLabel() + ' project sections'"
+      role="tablist"
+    >
+      <button
+        type="button"
+        id="overview-tab"
+        class="project-detail__tab"
+        [class.project-detail__tab--active]="activePanel() === 'overview'"
+        role="tab"
+        aria-controls="overview-panel"
+        [attr.aria-selected]="activePanel() === 'overview'"
+        (click)="selectPanel('overview')"
+      >
+        Overview
+      </button>
+      <button
+        type="button"
+        id="tasks-tab"
+        class="project-detail__tab"
+        [class.project-detail__tab--active]="activePanel() === 'tasks'"
+        role="tab"
+        aria-controls="tasks-panel"
+        [attr.aria-selected]="activePanel() === 'tasks'"
+        (click)="selectPanel('tasks')"
+      >
+        Actions
+      </button>
+      <button
+        type="button"
+        id="todo-tab"
+        class="project-detail__tab"
+        [class.project-detail__tab--active]="activePanel() === 'todo'"
+        role="tab"
+        aria-controls="todo-panel"
+        [attr.aria-selected]="activePanel() === 'todo'"
+        (click)="selectPanel('todo')"
+      >
+        TODO List
+      </button>
+    </nav>
+
+    @switch (activePanel()) {
+      @case ('overview') {
+        <section
+          id="overview-panel"
+          class="project-detail__panel"
+          role="tabpanel"
+          aria-labelledby="overview-tab"
+        >
+          <div class="project-detail__grid">
+            <section class="detail-card" aria-labelledby="project-overview-heading">
+              <h2 id="project-overview-heading" class="detail-card__title">Overview</h2>
+              <dl class="detail-dl">
+                <div class="detail-dl__row">
+                  <dt>Purpose</dt>
+                  <dd>{{ project()!.purpose }}</dd>
+                </div>
+                <div class="detail-dl__row">
+                  <dt>Dates</dt>
+                  <dd>
+                    {{ formatDate(project()!.beginDate) }} - {{ formatDate(project()!.endDate) }}
+                  </dd>
+                </div>
+                <div class="detail-dl__row">
+                  <dt>Requested by</dt>
+                  <dd>
+                    @if (project()!.requestedBy; as requester) {
+                      {{ requester.user.name }}
+                      <span class="detail-dl__email">{{ requester.user.email }}</span>
+                    } @else {
+                      <span class="detail-dl__empty">-</span>
+                    }
+                  </dd>
+                </div>
+                <div class="detail-dl__row">
+                  <dt>Assigned staff</dt>
+                  <dd>
+                    @if (project()!.proposal.assignedTo) {
+                      {{ project()!.proposal.assignedTo!.user.name }}
+                      <span class="detail-dl__email">
+                        {{ project()!.proposal.assignedTo!.user.email }}
+                      </span>
+                    } @else {
+                      <span class="detail-dl__empty">Unassigned</span>
+                    }
+                  </dd>
+                </div>
+                <div class="detail-dl__row">
+                  <dt>Proposal status</dt>
+                  <dd>
+                    <app-status-chip
+                      kind="proposal"
+                      [status]="asWorkflowStatus(project()!.proposal.status)"
+                    />
+                  </dd>
+                </div>
+              </dl>
+            </section>
+
+            <section class="detail-card" aria-labelledby="project-events-heading">
+              <h2 id="project-events-heading" class="detail-card__title">Event log</h2>
+
+              @if (eventsResource.isLoading()) {
+                <app-loading-state label="Loading events..." />
+              } @else if (!events().length) {
+                <p class="detail-card__empty">No events recorded.</p>
+              } @else {
+                <ol class="event-list" aria-label="Project events">
+                  @for (event of events(); track event.occurredAt) {
+                    <li class="event">
+                      <div class="event__dot" aria-hidden="true"></div>
+                      <div class="event__content">
+                        <div class="event__header">
+                          <span class="event__type">{{ event.type.replace('_', ' ') }}</span>
+                          <span class="event__date">{{ formatDateTime(event.occurredAt) }}</span>
+                        </div>
+                        <p class="event__actor">{{ event.triggeredBy.user.name }}</p>
+                        @if (event.note) {
+                          <p class="event__note">"{{ event.note }}"</p>
+                        }
+                      </div>
+                    </li>
+                  }
+                </ol>
+              }
+            </section>
+          </div>
+        </section>
+      }
+      @case ('tasks') {
+        <section
+          id="tasks-panel"
+          class="project-detail__panel actions-panel"
+          role="tabpanel"
+          aria-labelledby="tasks-tab"
+        >
+          <ol
+            class="lifecycle"
+            [class.lifecycle--cancelled]="isCancelled()"
+            aria-label="Project lifecycle"
+          >
+            @for (step of lifecycle(); track step.label) {
+              <li
+                class="lifecycle__step"
+                [class.lifecycle__step--done]="step.done"
+                [class.lifecycle__step--current]="step.current"
+                [attr.aria-current]="step.current ? 'step' : null"
+              >
+                <span class="lifecycle__marker" aria-hidden="true">
+                  @if (step.done) {
+                    <span class="pi pi-check"></span>
+                  }
+                </span>
+                <span class="lifecycle__label">{{ step.label }}</span>
+              </li>
+            }
+            @if (isCancelled()) {
+              <li class="lifecycle__step lifecycle__step--cancelled" aria-current="step">
+                <span class="lifecycle__marker" aria-hidden="true">
+                  <span class="pi pi-times"></span>
+                </span>
+                <span class="lifecycle__label">Cancelled</span>
+              </li>
+            }
+          </ol>
+
+          @if (canOpenLogTasks() || canOpenPublication()) {
+            <div class="action-group" aria-labelledby="logs-group-title">
+              <p id="logs-group-title" class="action-group__title">Logs &amp; records</p>
+
+              @if (canOpenLogTasks()) {
+                <div
+                  class="task-row task-row--link"
+                  aria-labelledby="object-access-log-task-heading"
+                >
+                  <span class="task-row__icon" aria-hidden="true">
+                    <span class="pi pi-file-edit"></span>
+                  </span>
+                  <div class="task-row__body">
+                    <h3 id="object-access-log-task-heading" class="task-row__title">
+                      Object access log
+                    </h3>
+                    <p class="task-row__desc">
+                      Review and update the object access register for this active project.
+                    </p>
+                  </div>
+                  <a
+                    class="task-row__cta"
+                    [routerLink]="['/p/collections/projects', id(), 'log', logRouteSegment()]"
+                  >
+                    <span class="task-row__cta-text">Open access log</span>
+                    <span class="pi pi-arrow-right" aria-hidden="true"></span>
+                  </a>
+                </div>
+
+                <div
+                  class="task-row task-row--link"
+                  aria-labelledby="object-occurrence-log-task-heading"
+                >
+                  <span class="task-row__icon" aria-hidden="true">
+                    <span class="pi pi-clipboard"></span>
+                  </span>
+                  <div class="task-row__body">
+                    <h3 id="object-occurrence-log-task-heading" class="task-row__title">
+                      Object occurrence log
+                    </h3>
+                    <p class="task-row__desc">
+                      Record or inspect object occurrences reported during this active project.
+                    </p>
+                  </div>
+                  <a
+                    class="task-row__cta"
+                    [routerLink]="[
+                      '/p/collections/projects',
+                      id(),
+                      'occurrences',
+                      logRouteSegment(),
+                    ]"
+                  >
+                    <span class="task-row__cta-text">Open occurrence log</span>
+                    <span class="pi pi-arrow-right" aria-hidden="true"></span>
+                  </a>
+                </div>
+              }
+
+              @if (canOpenPublication()) {
+                <div class="task-row task-row--link" aria-labelledby="publication-log-task-heading">
+                  <span class="task-row__icon" aria-hidden="true">
+                    <span class="pi pi-book"></span>
+                  </span>
+                  <div class="task-row__body">
+                    <h3 id="publication-log-task-heading" class="task-row__title">
+                      Publication log
+                    </h3>
+                    <p class="task-row__desc">
+                      Record or inspect publications and outputs derived from this project.
+                    </p>
+                  </div>
+                  <a
+                    class="task-row__cta"
+                    [routerLink]="['/p/collections/projects', id(), 'publications']"
+                  >
+                    <span class="task-row__cta-text">Open publication log</span>
+                    <span class="pi pi-arrow-right" aria-hidden="true"></span>
+                  </a>
+                </div>
+              }
+            </div>
+          }
+
+          @if (canCreateInSituVisitReport()) {
+            <div class="action-group action-group--reports" aria-labelledby="reports-group-title">
+              <p id="reports-group-title" class="action-group__title">Reports</p>
+
+              @if (createdReport()) {
+                <app-feedback-message
+                  title="In-situ visit report created"
+                  [message]="
+                    'Report ' +
+                    createdReport()!.id +
+                    ' was created. Creating again will produce a separate report.'
+                  "
+                  tone="success"
+                  [dismissible]="true"
+                  (dismissed)="dismissCreatedReport()"
+                />
+              }
+
+              <div class="task-row task-row--report" aria-labelledby="report-task-heading">
+                <span class="task-row__icon task-row__icon--accent" aria-hidden="true">
+                  <span class="pi pi-sparkles"></span>
+                </span>
+                <div class="task-row__body">
+                  <h3 id="report-task-heading" class="task-row__title">
+                    In-situ visit narrative report
+                  </h3>
+                  <p class="task-row__desc">
+                    Generate an institutional, scientific, or social-media narrative from this
+                    project's in-situ visit and object-access records.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  class="action-btn action-btn--report task-row__control"
+                  [disabled]="reportCreating()"
+                  (click)="openReportModal()"
+                >
+                  Create new In Situ Visit Report
+                </button>
+              </div>
+            </div>
+          }
+
+          <div class="action-group action-group--danger" aria-labelledby="danger-group-title">
+            <p id="danger-group-title" class="action-group__title action-group__title--danger">
+              Danger zone
+            </p>
+
+            <div
+              class="task-row task-row--danger"
+              [class.task-row--locked]="!canCancel()"
+              aria-labelledby="cancel-project-task-heading"
+            >
+              <span class="task-row__icon task-row__icon--danger" aria-hidden="true">
+                <span class="pi pi-times-circle"></span>
+              </span>
+              <div class="task-row__body">
+                <h3 id="cancel-project-task-heading" class="task-row__title">Cancel project</h3>
+                <p class="task-row__desc">
+                  Stop this project and move it to cancelled projects. This action records a project
+                  cancellation event.
+                </p>
+                @if (!canCancel()) {
+                  <p class="task-row__status">
+                    <span class="pi pi-lock" aria-hidden="true"></span>
+                    This task is unavailable for the current status.
+                  </p>
+                }
+              </div>
+              <button
+                type="button"
+                class="action-btn action-btn--danger task-row__control"
+                [disabled]="acting() || !canCancel()"
+                (click)="openCancelConfirm()"
+              >
+                {{ acting() ? 'Cancelling...' : 'Cancel project' }}
+              </button>
+            </div>
+          </div>
+        </section>
+      }
+      @case ('todo') {
+        <section
+          id="todo-panel"
+          class="project-detail__panel"
+          role="tabpanel"
+          aria-labelledby="todo-tab"
+        >
+          <app-project-todo-list [projectId]="id()" />
+        </section>
+      }
+    }
+  }
+</div>

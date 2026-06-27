@@ -1,0 +1,236 @@
+.login-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  background:
+    radial-gradient(60rem 40rem at 70% -10%, rgba(244, 62, 26, 0.06), transparent 60%),
+    radial-gradient(50rem 36rem at 10% 110%, rgba(125, 147, 236, 0.06), transparent 60%), #1b1916;
+}
+
+.login-container {
+  width: min(100%, 420px);
+}
+
+.login-panel {
+  position: relative;
+  overflow: hidden;
+  background: var(--color-panel);
+  border: 1px solid var(--color-line);
+  border-radius: 16px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.35);
+}
+
+.panel-background {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    transparent 60%,
+    color-mix(in srgb, var(--color-accent) 6%, transparent) 100%
+  );
+  pointer-events: none;
+}
+
+.login-header,
+.login-form {
+  position: relative;
+  z-index: 1;
+  padding-inline: 2rem;
+}
+
+.login-header {
+  padding-block: 2.5rem 1.5rem;
+}
+
+.header-branding {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.app-logo {
+  width: 2.6rem;
+  flex-shrink: 0;
+}
+
+:is(h1, h2, p) {
+  margin: 0;
+}
+
+.app-name {
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.app-subtitle {
+  color: var(--color-muted);
+  font-size: 0.875rem;
+}
+
+h1 {
+  margin-bottom: 0.375rem;
+  font-size: 1.9rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.header-content p {
+  color: var(--color-muted);
+  font-size: 0.9375rem;
+}
+
+.login-form {
+  display: grid;
+  gap: 1.25rem;
+  padding-bottom: 2rem;
+}
+
+:is(.form-fieldset, .form-group) {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.form-group {
+  gap: 0.425rem;
+}
+
+label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.input-wrapper {
+  position: relative;
+}
+
+input {
+  width: 100%;
+  padding: 0.875rem 2.75rem 0.875rem 0.975rem;
+  border: 1.5px solid var(--color-line);
+  border-radius: 10px;
+  background: var(--color-panel);
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  font-family: inherit;
+  outline: none;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+input:focus {
+  border-color: var(--color-accent);
+  box-shadow: var(--focus-ring);
+}
+
+input::placeholder {
+  color: var(--color-subtle);
+}
+
+input[aria-invalid='true'] {
+  border-color: var(--color-cta);
+}
+
+.input-icon {
+  position: absolute;
+  right: 0.95rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-subtle);
+  font-size: 0.875rem;
+  pointer-events: none;
+}
+
+.field-error {
+  color: var(--color-cta);
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+.login-error {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.85rem 0.975rem;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--color-cta) 8%, var(--color-panel));
+  color: var(--color-cta);
+  font-size: 0.875rem;
+}
+
+.submit-button {
+  width: 100%;
+  min-height: 2.875rem;
+  border: 0;
+  border-radius: 10px;
+  background: #1b1916;
+  color: #f5f4ef;
+  font-family: inherit;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 120ms ease;
+}
+
+.submit-button:hover:not(:disabled) {
+  opacity: 0.88;
+}
+
+.submit-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.public-submission-link {
+  margin: -0.25rem 0 0;
+  text-align: center;
+  font-size: 0.875rem;
+}
+
+.public-submission-link a {
+  color: var(--color-accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.public-submission-link a:hover {
+  text-decoration: underline;
+}
+
+.public-submission-link a:focus-visible {
+  border-radius: 4px;
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.button-content {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+}
+
+.spinner {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

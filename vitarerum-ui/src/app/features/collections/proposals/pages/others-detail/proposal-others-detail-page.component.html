@@ -1,0 +1,90 @@
+<div class="proposal-detail">
+  <a class="proposal-detail__back" routerLink="/p/collections/proposals/others">
+    ← Back to other assignments
+  </a>
+
+  @if (proposalResource.isLoading()) {
+    <app-loading-state />
+  } @else if (proposalError()) {
+    <app-error-message [apiError]="proposalError()!" (retry)="proposalResource.reload()" />
+  } @else if (proposal()) {
+    <header class="proposal-detail__header">
+      <div class="proposal-detail__header-meta">
+        <p class="proposal-detail__ref">{{ proposal()!.referenceNumber }}</p>
+        <h1 class="proposal-detail__title">{{ proposal()!.title }}</h1>
+        <div class="proposal-detail__status-row">
+          <app-status-chip kind="proposal" [status]="asWorkflowStatus(proposal()!.status)" />
+          <app-type-chip [type]="proposal()!.type" />
+        </div>
+      </div>
+    </header>
+
+    @if (actionError()) {
+      <app-error-message [apiError]="actionError()!" />
+    }
+
+    <section class="detail-card" aria-labelledby="assignment-heading">
+      <h2 id="assignment-heading" class="detail-card__title">Current assignment</h2>
+      <dl class="detail-dl">
+        <div class="detail-dl__row">
+          <dt>Assigned to</dt>
+          @if (assignee(); as assignee) {
+            <dd>
+              {{ assignee.user.name }}
+              <span class="detail-dl__email">{{ assignee.user.email }}</span>
+              <span class="detail-dl__email">{{ groupLabels[assignee.group] }}</span>
+            </dd>
+          } @else {
+            <dd class="detail-dl__empty">No reviewer is currently assigned.</dd>
+          }
+        </div>
+        <div class="detail-dl__row">
+          <dt>Status</dt>
+          <dd>
+            <app-status-chip kind="proposal" [status]="asWorkflowStatus(proposal()!.status)" />
+          </dd>
+        </div>
+      </dl>
+      <button
+        type="button"
+        class="action-btn action-btn--primary"
+        [disabled]="takingOver()"
+        (click)="requestTakeOverConfirmation()"
+      >
+        <span class="pi pi-user-plus" aria-hidden="true"></span>
+        {{ takingOver() ? 'Taking over...' : 'Take over' }}
+      </button>
+    </section>
+
+    <app-confirm-modal
+      [open]="takeOverConfirmOpen()"
+      title="Take over assignment?"
+      [message]="
+        'This will move ' +
+        proposal()!.referenceNumber +
+        (assignee() ? ' from ' + assignee()!.user.name : '') +
+        ' to you.'
+      "
+      confirmLabel="Take over assignment"
+      cancelLabel="Keep assigned"
+      tone="warning"
+      [pending]="takingOver()"
+      (confirmed)="takeOver()"
+      (cancelled)="cancelTakeOverConfirmation()"
+    />
+
+    <app-proposal-overview-section [proposal]="proposal()!" />
+
+    <app-proposal-events-section [events]="events()" [loading]="eventsResource.isLoading()" />
+
+    <app-proposal-conversation-section
+      [proposal]="proposal()!"
+      [messages]="messages()"
+      [messagesLoading]="conversationResource.isLoading()"
+      [sendingMessage]="false"
+      [messageError]="null"
+      [replyResetVersion]="0"
+      [canReply]="false"
+    />
+  }
+</div>

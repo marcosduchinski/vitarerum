@@ -1,0 +1,94 @@
+<div class="report-detail">
+  <div class="report-detail__toolbar">
+    <a class="report-detail__back" routerLink="/p/collections/reports/visits-in-situ">
+      <span aria-hidden="true">←</span> Back to in-situ visit reports
+    </a>
+
+    @if (!detailResource.isLoading() && !detailError() && detail()) {
+      <div class="report-detail__actions">
+        <button type="button" class="report-action" (click)="print()">
+          <span class="pi pi-print" aria-hidden="true"></span> Print
+        </button>
+        <button type="button" class="report-action report-action--primary" (click)="exportReport()">
+          <span class="pi pi-download" aria-hidden="true"></span> Export
+        </button>
+      </div>
+    }
+  </div>
+
+  @if (detailResource.isLoading()) {
+    <app-loading-state label="Loading report details..." />
+  } @else if (detailError()) {
+    <div class="report-detail__error">
+      <app-error-message [apiError]="detailError()!" (retry)="detailResource.reload()" />
+    </div>
+  } @else if (detail(); as report) {
+    <header class="report-detail__masthead">
+      <p class="report-detail__eyebrow">
+        In-situ visit report
+        @if (code(); as value) {
+          <span class="report-detail__code">{{ value }}</span>
+        }
+      </p>
+      <h1>{{ headline() }}</h1>
+      @if (report.record; as record) {
+        <p class="report-detail__deck">
+          Visit to <strong>{{ record.placeName }}</strong> ·
+          {{ formatDate(record.visitBeginDate) }} — {{ formatDate(record.visitEndDate) }}
+        </p>
+      }
+      <p class="report-detail__generated">
+        Report generated {{ formatDateTime(report.createdAt) }}
+      </p>
+    </header>
+
+    <div class="report-detail__body">
+      <main class="report-detail__main">
+        <app-in-situ-visit-report-narrative
+          [narrative]="report.narrative"
+          [recordId]="report.inSituVisitRecordId"
+          (viewCidocCrm)="openCidocDialog($event)"
+          (editNarrative)="openNarrativeEditor($event)"
+        />
+        <app-in-situ-visit-report-record [record]="report.record" />
+      </main>
+
+      <app-in-situ-visit-report-rail [record]="report.record" [narrative]="report.narrative" />
+    </div>
+
+    <details class="report-detail__refs">
+      <summary>Technical references</summary>
+      <dl>
+        <div>
+          <dt>Report ID</dt>
+          <dd>{{ report.id }}</dd>
+        </div>
+        <div>
+          <dt>Project ID</dt>
+          <dd>{{ report.projectId }}</dd>
+        </div>
+        <div>
+          <dt>Narrative ID</dt>
+          <dd>{{ report.narrativeId }}</dd>
+        </div>
+        <div>
+          <dt>Record ID</dt>
+          <dd>{{ report.inSituVisitRecordId }}</dd>
+        </div>
+      </dl>
+    </details>
+  }
+</div>
+
+<app-in-situ-visit-cidoc-dialog
+  [open]="cidocDialogOpen()"
+  [recordId]="cidocRecordId()"
+  (closed)="closeCidocDialog()"
+/>
+
+<app-edit-in-situ-visit-narrative-dialog
+  [open]="narrativeEditorOpen()"
+  [narrative]="narrativeBeingEdited()"
+  (closed)="closeNarrativeEditor()"
+  (saved)="applyUpdatedNarrative($event)"
+/>

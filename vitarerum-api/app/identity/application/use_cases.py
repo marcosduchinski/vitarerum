@@ -1,0 +1,215 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from uuid import uuid4
+
+from app.identity.application.ports import (
+    GroupRepository,
+    PasswordHasher,
+    PermissionRepository,
+    UserFilters,
+    UserRepository,
+)
+from app.identity.application.read_models import Actor
+from app.identity.domain.enums import GroupName
+from app.identity.domain.models import (
+    GroupId,
+    Permission,
+    PermissionId,
+    User,
+    UserId,
+)
+
+
+class InvalidCredentials(Exception):
+    """Raised when login fails: unknown email, bad password, or no permissions."""
+
+
+def _new_id() -> str:
+    return str(uuid4())
+
+
+def _normalize_email(email: str) -> str:
+    """Case-insensitive, whitespace-trimmed email key, so uniqueness and
+    lookups are consistent regardless of how the address was typed."""
+    return email.strip().lower()
+
+
+@dataclass(slots=True)
+class ProvisionedRequester:
+    actor: Actor
+    user_created: bool
+
+
+class ProvisionExternalRequester:
+    """Get-or-create a user (by email) with an EXTERNAL permission.
+
+    Published use case (Open Host Service): lets inbound orchestrators obtain an
+    acting EXTERNAL requester without touching Identity aggregates.
+    """
+
+    def __init__(
+        self,
+        user_repo: UserRepository,
+        group_repo: GroupRepository,
+        permission_repo: PermissionRepository,
+    ) -> None:
+        self._user_repo = user_repo
+        self._group_repo = group_repo
+        self._permission_repo = permission_repo
+
+    async def execute(self, email: str, name: str) -> ProvisionedRequester:
+        email = _normalize_email(email)
+        user_created = False
+        user = await self._user_repo.get_by_email(email)
+        if user is None:
+            user = User(id=UserId(_new_id()), name=name, email=email)
+            await self._user_repo.add(user)
+            user_created = True
+
+        external_group = await self._group_repo.get_by_name(GroupName.EXTERNAL)
+        if external_group is None:
+            raise RuntimeError("EXTERNAL group not found — run seed_groups first")
+
+        permission = await self._permission_repo.get_by_user_and_group(
+            user.id, external_group.id
+        )
+        if permission is None:
+            permission = Permission(
+                id=PermissionId(_new_id()),
+                user_id=user.id,
+                group_id=external_group.id,
+                user=user,
+                group=external_group,
+            )
+            await self._permission_repo.add(permission)
+
+        return ProvisionedRequester(
+            actor=Actor(
+                id=permission.id,
+                group=GroupName.EXTERNAL,
+                email=user.email,
+            ),
+            user_created=user_created,
+        )
+
+
+class CreateUser:
+    def __init__(
+        self, repo: UserRepository, hasher: PasswordHasher | None = None
+    ) -> None:
+        self._repo = repo
+        self._hasher = hasher
+
+    async def execute(self, name: str, email: str, password: str | None = None) -> User:
+        password_hash = ""
+        if password:
+            if self._hasher is None:
+                raise ValueError("A PasswordHasher is required to set a password")
+            password_hash = self._hasher.hash(password)
+        user = User(
+            id=UserId(str(uuid4())),
+            name=name,
+            email=_normalize_email(email),
+            password_hash=password_hash,
+        )
+        await self._repo.add(user)
+        return user
+
+
+class AuthenticateUser:
+    def __init__(
+        self,
+        user_repo: UserRepository,
+        permission_repo: PermissionRepository,
+        hasher: PasswordHasher,
+    ) -> None:
+        self._user_repo = user_repo
+        self._permission_repo = permission_repo
+        self._hasher = hasher
+
+    async def execute(
+        self, email: str, password: str
+    ) -> tuple[User, list[Permission]]:
+        user = await self._user_repo.get_by_email(_normalize_email(email))
+        if user is None or not self._hasher.verify(password, user.password_hash):
+            raise InvalidCredentials("Invalid email or password")
+        permissions = await self._permission_repo.get_by_user_id(UserId(user.id))
+        if not permissions:
+            # A principal with no group membership cannot establish a session.
+            raise InvalidCredentials("Invalid email or password")
+        return user, permissions
+
+
+class ListUsers:
+    def __init__(self, repo: UserRepository) -> None:
+        self._repo = repo
+
+    async def execute(
+        self,
+        filters: UserFilters,
+        page: int,
+        size: int,
+    ) -> tuple[list[User], int]:
+        return await self._repo.list(filters, page, size)
+
+
+class GetUser:
+    def __init__(self, repo: UserRepository) -> None:
+        self._repo = repo
+
+    async def execute(self, user_id: UserId) -> User | None:
+        return await self._repo.get_by_id(user_id)
+
+
+class AssignUserToGroup:
+    def __init__(
+        self,
+        user_repo: UserRepository,
+        group_repo: GroupRepository,
+        permission_repo: PermissionRepository,
+    ) -> None:
+        self._user_repo = user_repo
+        self._group_repo = group_repo
+        self._permission_repo = permission_repo
+
+    async def execute(
+        self, user_id: UserId, group_id: GroupId
+    ) -> tuple[Permission, bool]:
+        """Returns (permission, created). created=False means it already existed."""
+        user = await self._user_repo.get_by_id(user_id)
+        if user is None:
+            raise LookupError(f"No user found with id {user_id}")
+        group = await self._group_repo.get_by_id(group_id)
+        if group is None:
+            raise LookupError(f"No group found with id {group_id}")
+        existing = await self._permission_repo.get_by_user_and_group(user_id, group_id)
+        if existing is not None:
+            existing.user = user
+            existing.group = group
+            return existing, False
+        permission = Permission(
+            id=PermissionId(_new_id()),
+            user_id=user_id,
+            group_id=group_id,
+            user=user,
+            group=group,
+        )
+        await self._permission_repo.add(permission)
+        return permission, True
+
+
+class RemoveUserFromGroup:
+    def __init__(
+        self,
+        permission_repo: PermissionRepository,
+    ) -> None:
+        self._permission_repo = permission_repo
+
+    async def execute(self, user_id: UserId, group_id: GroupId) -> None:
+        existing = await self._permission_repo.get_by_user_and_group(user_id, group_id)
+        if existing is None:
+            raise LookupError(
+                f"User {user_id} is not a member of group {group_id}"
+            )
+        await self._permission_repo.delete(existing.id)

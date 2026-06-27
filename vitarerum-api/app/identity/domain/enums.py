@@ -1,0 +1,9 @@
+from enum import StrEnum
+
+
+class GroupName(StrEnum):
+    EXTERNAL = "EXTERNAL"
+    CURATORIAL = "CURATORIAL"
+    COLLECTIONS_MANAGEMENT = "COLLECTIONS_MANAGEMENT"
+    DIRECTION = "DIRECTION"
+    SYS_ADMIN = "SYS_ADMIN"

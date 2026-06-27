@@ -1,0 +1,272 @@
+@use '../detail/proposal-detail-page.component.scss';
+
+.reject-modal-body {
+  display: grid;
+  gap: 0.5rem;
+
+  textarea {
+    min-height: 5rem;
+    resize: vertical;
+  }
+}
+
+.reject-modal-body__hint {
+  margin: 0;
+  color: var(--color-subtle);
+}
+
+.accept-modal-body__hint {
+  margin: 0;
+  color: var(--color-subtle);
+}
+
+/* Underline tab strip — navigation, distinct from the solid-indigo Accept CTA. */
+.proposal-detail__tabs {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.proposal-detail__tab {
+  appearance: none;
+  margin: 0 0 -1px;
+  padding: 0.65rem 0.15rem;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    color 120ms ease,
+    border-color 120ms ease;
+
+  &:hover {
+    color: var(--color-text);
+  }
+
+  &:focus-visible {
+    outline: 3px solid color-mix(in srgb, var(--color-accent) 50%, transparent);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+}
+
+.proposal-detail__tab--active {
+  color: var(--color-accent);
+  border-bottom-color: var(--color-accent);
+}
+
+/* Panels stack their cards with the same rhythm as the rest of the page. */
+.proposal-detail__panel {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.proposal-actions__status-note {
+  margin: 0;
+  color: var(--color-subtle);
+  font-size: 0.85rem;
+}
+
+/* ── Actions panel ──────────────────────────────────────────
+   Decision desk relocated into a tab, mirroring the project
+   detail "Actions" pattern: a lifecycle rail above grouped task
+   rows. */
+.actions-panel {
+  gap: 2rem;
+}
+
+/* Lifecycle rail: Submitted -> Under review -> Decided (a negative
+   outcome is drawn as a terminal off-shoot). */
+.lifecycle {
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.25rem;
+}
+
+.lifecycle__step {
+  flex: 1 1 0;
+  display: grid;
+  justify-items: center;
+  gap: 0.5rem;
+  position: relative;
+  color: var(--color-subtle);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-align: center;
+
+  &:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    top: 0.6875rem;
+    left: calc(50% + 1rem);
+    right: calc(-50% + 1rem);
+    height: 2px;
+    background: var(--color-line);
+  }
+}
+
+.lifecycle__marker {
+  display: grid;
+  place-items: center;
+  width: 1.375rem;
+  height: 1.375rem;
+  border-radius: 50%;
+  border: 2px solid var(--color-line-strong);
+  background: var(--color-panel);
+  color: #fff;
+  font-size: 0.7rem;
+  z-index: 1;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease;
+}
+
+.lifecycle__step--done {
+  color: var(--color-text);
+
+  .lifecycle__marker {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+  }
+
+  &::after {
+    background: var(--color-accent);
+  }
+}
+
+.lifecycle__step--current {
+  color: var(--color-accent-strong);
+
+  .lifecycle__marker {
+    border-color: var(--color-accent);
+    box-shadow: var(--focus-ring);
+  }
+}
+
+.lifecycle__step--cancelled {
+  color: var(--color-cta);
+  flex: 0 0 auto;
+  padding-left: 0.5rem;
+
+  .lifecycle__marker {
+    background: var(--color-cta);
+    border-color: var(--color-cta);
+  }
+}
+
+.lifecycle--cancelled .lifecycle__step:not(.lifecycle__step--cancelled) {
+  color: var(--color-subtle);
+
+  .lifecycle__marker {
+    background: var(--color-panel);
+    border-color: var(--color-line-strong);
+    box-shadow: none;
+  }
+
+  &::after {
+    background: var(--color-line);
+  }
+}
+
+/* ── Grouped task rows ─────────────────────────────────────── */
+.action-group {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.action-group__title {
+  margin: 0 0 0.1rem;
+  color: var(--color-subtle);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.task-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.5rem 1rem;
+  align-items: start;
+  padding: 1rem 1.15rem;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-panel);
+
+  @media (min-width: 640px) {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+  }
+}
+
+.task-row__icon {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-panel-muted);
+  color: var(--color-muted);
+  font-size: 1rem;
+}
+
+.task-row__icon--accent {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+
+.task-row__icon--danger {
+  background: var(--color-cta-soft);
+  color: var(--color-cta);
+}
+
+.task-row__body {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.task-row__title {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.task-row__desc {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-muted);
+}
+
+.task-row__control {
+  grid-column: 1 / -1;
+  justify-self: start;
+
+  @media (min-width: 640px) {
+    grid-column: auto;
+    justify-self: end;
+  }
+}
+
+.action-btn--danger {
+  border-color: var(--color-cta);
+  color: var(--color-cta);
+  background: var(--color-panel);
+
+  &:hover:not(:disabled) {
+    border-color: var(--color-cta-hover);
+    background: var(--color-cta-soft);
+    color: var(--color-cta-hover);
+  }
+}

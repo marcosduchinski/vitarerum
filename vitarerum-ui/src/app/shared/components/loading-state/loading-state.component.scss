@@ -1,0 +1,21 @@
+.loading-state {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+}
+
+.loading-state__bar {
+  height: 1rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-line);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+.loading-state__bar--short {
+  width: 60%;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}

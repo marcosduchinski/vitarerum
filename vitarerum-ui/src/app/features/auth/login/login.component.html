@@ -1,0 +1,92 @@
+<main class="login-page">
+  <div class="login-container">
+    <section class="login-panel" aria-labelledby="login-title">
+      <div class="panel-background" aria-hidden="true"></div>
+
+      <header class="login-header">
+        <div class="header-branding">
+          <app-logo-mark class="app-logo" />
+          <div class="app-info">
+            <h2 class="app-name">Vitarerum</h2>
+            <p class="app-subtitle">In Situ Visit Management</p>
+          </div>
+        </div>
+        <div class="header-content">
+          <h1 id="login-title">Welcome back</h1>
+          <p>Sign in to continue.</p>
+        </div>
+      </header>
+
+      <form (submit)="submit($event)" novalidate class="login-form">
+        <fieldset [disabled]="loading()" class="form-fieldset">
+          <div class="form-group">
+            <label for="email">Email address</label>
+            <div class="input-wrapper">
+              <input
+                id="email"
+                type="email"
+                autocomplete="email"
+                placeholder="you@institution.com"
+                [value]="email()"
+                (input)="onEmailInput($event)"
+                [attr.aria-invalid]="emailRequired() || emailFormat() || null"
+                aria-describedby="email-error"
+              />
+              <i class="pi pi-envelope input-icon" aria-hidden="true"></i>
+            </div>
+            @if (emailRequired()) {
+              <p id="email-error" class="field-error" role="alert">Email is required</p>
+            } @else if (emailFormat()) {
+              <p id="email-error" class="field-error" role="alert">Please enter a valid email</p>
+            }
+          </div>
+
+          <div class="form-group">
+            <label for="password">Password</label>
+            <div class="input-wrapper">
+              <input
+                id="password"
+                type="password"
+                autocomplete="current-password"
+                placeholder="Password"
+                [value]="password()"
+                (input)="onPasswordInput($event)"
+                [attr.aria-invalid]="passwordRequired() || null"
+                aria-describedby="password-error"
+              />
+              <i class="pi pi-lock input-icon" aria-hidden="true"></i>
+            </div>
+            @if (passwordRequired()) {
+              <p id="password-error" class="field-error" role="alert">Password is required</p>
+            }
+          </div>
+        </fieldset>
+
+        @if (loginError()) {
+          <div class="login-error" role="alert">
+            <i class="pi pi-exclamation-circle" aria-hidden="true"></i>
+            <span>Authentication failed. Please check your credentials.</span>
+          </div>
+        }
+
+        <button type="submit" [disabled]="loading()" class="submit-button">
+          @if (loading()) {
+            <span class="button-content">
+              <span class="spinner" aria-hidden="true"></span>
+              Signing in…
+            </span>
+          } @else {
+            <span class="button-content">
+              Sign in
+              <i class="pi pi-arrow-right" aria-hidden="true"></i>
+            </span>
+          }
+        </button>
+
+        <p class="public-submission-link">
+          <a routerLink="/submit-proposal">For public submission, start here</a>
+        </p>
+      </form>
+    </section>
+  </div>
+</main>

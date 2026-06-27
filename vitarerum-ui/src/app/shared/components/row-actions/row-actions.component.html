@@ -1,0 +1,20 @@
+<button
+  type="button"
+  class="action-btn action-btn--icon"
+  [class.action-btn--active]="open()"
+  [disabled]="disabled()"
+  aria-haspopup="menu"
+  [attr.aria-expanded]="open()"
+  [attr.aria-label]="ariaLabel()"
+  (click)="menu.toggle($event)"
+>
+  <span class="pi pi-ellipsis-v" aria-hidden="true"></span>
+</button>
+<p-menu
+  #menu
+  [model]="items()"
+  [popup]="true"
+  appendTo="body"
+  (onShow)="open.set(true)"
+  (onHide)="open.set(false)"
+/>

@@ -1,0 +1,251 @@
+<section class="detail-card" aria-labelledby="conversation-heading">
+  <h2 id="conversation-heading" class="detail-card__title">Conversation</h2>
+
+  @if (messagesLoading()) {
+    <app-loading-state label="Loading messages..." />
+  } @else if (!messages().length) {
+    <p class="detail-card__empty">No messages yet.</p>
+  } @else {
+    <ol class="message-list" aria-label="Conversation messages">
+      @for (msg of messages(); track msg.id) {
+        <li class="message" [class.message--requester]="isRequesterMessage(msg)">
+          <div class="message__avatar" aria-hidden="true">
+            <span [class]="messageIcon(msg)"></span>
+          </div>
+          <div class="message__content">
+            <div class="message__header">
+              <div>
+                <span class="message__sender">{{ msg.sender }}</span>
+                <span class="message__role">{{ messageRoleLabel(msg) }}</span>
+              </div>
+              <span class="message__date">{{ formatDateTime(msg.sentAt) }}</span>
+            </div>
+            <p class="message__subject">{{ msg.subject }}</p>
+            <div class="message__body" [innerHTML]="sanitizeMessageBody(msg.body)"></div>
+            @if (msg.attachments?.length) {
+              <ul class="message-attachments" aria-label="Message attachments">
+                @for (attachment of msg.attachments; track attachment.documentId) {
+                  <li>
+                    <button
+                      type="button"
+                      class="message-attachment"
+                      [disabled]="downloadingDocumentId() === attachment.documentId"
+                      [attr.aria-label]="'Download ' + attachment.fileName"
+                      (click)="downloadAttachment(attachment)"
+                    >
+                      <span class="pi pi-paperclip" aria-hidden="true"></span>
+                      {{ attachment.fileName }}
+                      @if (downloadingDocumentId() === attachment.documentId) {
+                        <span class="pi pi-spin pi-spinner" aria-hidden="true"></span>
+                      }
+                    </button>
+                  </li>
+                }
+              </ul>
+              @if (downloadError()) {
+                <app-error-message [apiError]="downloadError()!" />
+              }
+            }
+            @if (showTriageAction()) {
+              <div class="message__assistant-actions">
+                <button
+                  type="button"
+                  class="message__assistant-action"
+                  [attr.aria-label]="'Run intended-use triage for ' + msg.subject"
+                  title="Run intended-use triage"
+                  (click)="requestTriage(msg)"
+                >
+                  <span class="pi pi-sparkles" aria-hidden="true"></span>
+                </button>
+              </div>
+            }
+          </div>
+        </li>
+      }
+    </ol>
+  }
+
+  @if (messageError()) {
+    <app-error-message [apiError]="messageError()!" />
+  }
+
+  @if (canReply()) {
+    <form
+      class="reply-composer"
+      aria-label="Reply to requester"
+      (submit)="$event.preventDefault(); sendReply()"
+    >
+      <div class="reply-composer__header">
+        <div>
+          <p class="reply-composer__eyebrow">{{ replyEyebrow() }}</p>
+          <h3>{{ replyHeading() }}</h3>
+        </div>
+        <span class="reply-composer__recipient"> To {{ resolvedRecipientEmail() }} </span>
+      </div>
+
+      @if (showRequestedObjectPicker() && proposal().requestedObjects.length) {
+        <div class="requested-object-disclosure">
+          <button
+            type="button"
+            class="requested-object-disclosure__toggle"
+            aria-controls="requested-object-picker-panel"
+            [attr.aria-expanded]="requestedObjectPickerExpanded()"
+            (click)="toggleRequestedObjectPicker()"
+          >
+            <span
+              class="pi"
+              [class.pi-chevron-right]="!requestedObjectPickerExpanded()"
+              [class.pi-chevron-down]="requestedObjectPickerExpanded()"
+              aria-hidden="true"
+            ></span>
+            Requested objects
+            <span class="requested-object-disclosure__count">
+              {{ proposal().requestedObjects.length }}
+            </span>
+          </button>
+
+          @if (requestedObjectPickerExpanded()) {
+            <fieldset id="requested-object-picker-panel" class="requested-object-picker">
+              <legend>Select requested objects</legend>
+              <p class="requested-object-picker__hint">
+                Select the collection records that should be referenced in this response.
+              </p>
+              <ul class="requested-object-picker__list">
+                @for (requestedObject of proposal().requestedObjects; track requestedObject.id) {
+                  <li
+                    class="requested-object-picker__item"
+                    [class.requested-object-picker__item--inserted]="
+                      isRequestedObjectInserted(requestedObject.id)
+                    "
+                  >
+                    <label>
+                      <input
+                        type="checkbox"
+                        [checked]="isRequestedObjectSelected(requestedObject.id)"
+                        [disabled]="isRequestedObjectInserted(requestedObject.id)"
+                        (change)="onRequestedObjectSelectionChange(requestedObject.id, $event)"
+                      />
+                      <span class="requested-object-picker__content">
+                        <span class="requested-object-picker__title">
+                          {{ requestedObject.objectReference.inventoryNumber }} —
+                          {{
+                            requestedObject.objectReference.displayTitle ??
+                              requestedObject.objectReference.objectName ??
+                              'Untitled object'
+                          }}
+                        </span>
+                        @if (requestedObject.objectReference.objectName) {
+                          <span class="requested-object-picker__meta">
+                            {{ requestedObject.objectReference.objectName }}
+                          </span>
+                        }
+                      </span>
+                    </label>
+                    @if (isRequestedObjectInserted(requestedObject.id)) {
+                      <span class="requested-object-picker__status">
+                        <span class="pi pi-check" aria-hidden="true"></span>
+                        Included
+                      </span>
+                    }
+                  </li>
+                }
+              </ul>
+              <button
+                type="button"
+                class="requested-object-picker__insert"
+                [disabled]="!hasSelectedRequestedObjects()"
+                (click)="insertSelectedRequestedObjects()"
+              >
+                <span class="pi pi-plus" aria-hidden="true"></span>
+                Insert selected into message
+              </button>
+            </fieldset>
+          }
+        </div>
+      }
+
+      <div class="reply-toolbar" aria-label="Rich text formatting">
+        <button
+          type="button"
+          class="editor-btn"
+          (click)="applyEditorCommand('bold')"
+          aria-label="Bold"
+          title="Bold"
+        >
+          <strong>B</strong>
+        </button>
+        <button
+          type="button"
+          class="editor-btn"
+          (click)="applyEditorCommand('italic')"
+          aria-label="Italic"
+          title="Italic"
+        >
+          <em>I</em>
+        </button>
+        <button
+          type="button"
+          class="editor-btn"
+          (click)="applyEditorCommand('insertUnorderedList')"
+          aria-label="Bulleted list"
+          title="Bulleted list"
+        >
+          <span class="pi pi-list" aria-hidden="true"></span>
+        </button>
+        <button
+          type="button"
+          class="editor-btn"
+          (click)="clearReplyFormatting()"
+          aria-label="Clear formatting"
+          title="Clear formatting"
+        >
+          <span class="pi pi-eraser" aria-hidden="true"></span>
+        </button>
+      </div>
+
+      <div
+        #replyEditor
+        class="reply-editor"
+        contenteditable="true"
+        role="textbox"
+        aria-multiline="true"
+        aria-label="Response message"
+        data-placeholder="Write the response to the requester..."
+        (input)="onReplyInput($event)"
+      ></div>
+
+      <div class="reply-files">
+        <label class="file-picker" for="staff-response-files">
+          <span class="pi pi-paperclip" aria-hidden="true"></span>
+          Attach files
+        </label>
+        <input id="staff-response-files" type="file" multiple (change)="onFilesSelected($event)" />
+        @if (selectedFiles().length) {
+          <ul class="selected-files" aria-label="Selected files">
+            @for (file of selectedFiles(); track file.name + file.size + $index) {
+              <li>
+                <span class="pi pi-file" aria-hidden="true"></span>
+                {{ file.name }}
+                <button
+                  type="button"
+                  class="selected-files__remove"
+                  (click)="removeSelectedFile($index)"
+                  aria-label="Remove {{ file.name }}"
+                >
+                  <span class="pi pi-times" aria-hidden="true"></span>
+                </button>
+              </li>
+            }
+          </ul>
+        }
+      </div>
+
+      <div class="reply-composer__footer">
+        <button type="submit" class="action-btn action-btn--primary" [disabled]="!canSendReply()">
+          <span class="pi pi-send" aria-hidden="true"></span>
+          {{ sendingMessage() ? 'Sending...' : 'Send response' }}
+        </button>
+      </div>
+    </form>
+  }
+</section>

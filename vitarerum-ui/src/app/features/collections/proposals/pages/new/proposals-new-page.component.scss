@@ -1,0 +1,393 @@
+.proposals-new {
+  display: grid;
+  gap: 1.5rem;
+  align-content: start;
+}
+
+.proposals-list-panel {
+  display: grid;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-panel);
+  box-shadow: var(--shadow-panel);
+}
+
+.proposals-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--color-line);
+  background: color-mix(in srgb, var(--color-panel-muted) 60%, var(--color-panel));
+}
+
+.proposals-search {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: min(100%, 24rem);
+  color: var(--color-subtle);
+
+  .pi-search {
+    position: absolute;
+    left: 0.75rem;
+    font-size: 0.85rem;
+  }
+
+  input {
+    width: 100%;
+    min-height: 2.25rem;
+    padding: 0.45rem 2.25rem 0.45rem 2.1rem;
+    border: 1px solid var(--color-line-strong);
+    border-radius: var(--radius-sm);
+    background: var(--color-bg-raised);
+    color: var(--color-text);
+
+    &:focus {
+      outline: none;
+      border-color: var(--color-accent);
+      box-shadow: var(--focus-ring);
+    }
+  }
+}
+
+.proposals-search__clear {
+  position: absolute;
+  right: 0.35rem;
+  display: inline-grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-subtle);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--color-panel-muted);
+    color: var(--color-text);
+  }
+}
+
+.proposals-table-shell {
+  max-height: 70vh;
+  overflow: auto;
+  /* Horizontal scroll-shadow cue: edge shadows that fade out at the ends. */
+  background:
+    linear-gradient(to right, var(--color-panel) 30%, transparent) 0 0,
+    linear-gradient(to right, transparent, var(--color-panel) 70%) 100% 0,
+    radial-gradient(
+        farthest-side at 0 50%,
+        color-mix(in srgb, var(--color-text) 14%, transparent),
+        transparent
+      )
+      0 0,
+    radial-gradient(
+        farthest-side at 100% 50%,
+        color-mix(in srgb, var(--color-text) 14%, transparent),
+        transparent
+      )
+      100% 0;
+  background-repeat: no-repeat;
+  background-size:
+    40px 100%,
+    40px 100%,
+    14px 100%,
+    14px 100%;
+  background-attachment: local, local, scroll, scroll;
+}
+
+.proposals-table {
+  width: 100%;
+  min-width: 64rem;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 0.875rem;
+}
+
+.proposals-table__col-ref {
+  width: 7.5rem;
+}
+
+.proposals-table__col-title {
+  width: 16rem;
+}
+
+.proposals-table__col-type {
+  width: 6.5rem;
+}
+
+.proposals-table__col-requester {
+  width: 13.5rem;
+}
+
+.proposals-table__col-date {
+  width: 7.5rem;
+}
+
+.proposals-table__col-actions {
+  width: 9rem;
+}
+
+.proposals-table th,
+.proposals-table td {
+  padding: 0.65rem 0.85rem;
+  text-align: left;
+  border-bottom: 1px solid var(--color-line);
+  vertical-align: middle;
+}
+
+.proposals-table th {
+  /* Sticky header keeps the column labels in view on long lists. The inset
+     shadow stands in for the bottom border, which collapses under sticky. */
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: color-mix(in srgb, var(--color-panel-muted) 78%, var(--color-panel));
+  border-bottom: none;
+  box-shadow: inset 0 -1px 0 var(--color-line);
+  color: var(--color-subtle);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+}
+
+.proposals-table td {
+  overflow-wrap: normal;
+}
+
+.proposals-table__actions-header {
+  text-align: right;
+}
+
+.proposals-table tbody tr:hover {
+  background: color-mix(in srgb, var(--color-panel-muted) 55%, var(--color-panel));
+}
+
+.proposals-table__ref {
+  color: var(--color-subtle);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.proposals-table__title {
+  color: var(--color-accent-strong);
+  font-weight: 600;
+  overflow-wrap: break-word;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.proposals-table__requester {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.proposals-table__requester-email {
+  color: var(--color-subtle);
+  font-size: 0.8rem;
+}
+
+.proposals-table__date {
+  color: var(--color-subtle);
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.proposals-table__actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: flex-end;
+  white-space: nowrap;
+}
+
+.action-btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  transition:
+    background 120ms,
+    border-color 120ms,
+    color 120ms;
+
+  &:hover:not(:disabled) {
+    background: var(--color-panel-muted);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  &--primary {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+    color: #fff;
+
+    &:hover:not(:disabled) {
+      background: var(--color-accent-strong);
+      border-color: var(--color-accent-strong);
+    }
+  }
+
+  &--active {
+    background: var(--color-accent-soft);
+    border-color: var(--color-accent);
+    color: var(--color-accent-strong);
+  }
+
+  &--icon {
+    justify-content: center;
+    width: 2rem;
+    padding: 0;
+  }
+
+  &--link {
+    border-color: transparent;
+    color: var(--color-accent);
+
+    &:hover {
+      background: var(--color-accent-soft);
+    }
+  }
+}
+
+.proposals-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem;
+  border-top: 1px solid var(--color-line);
+  background: color-mix(in srgb, var(--color-panel-muted) 45%, var(--color-panel));
+  flex-wrap: wrap;
+}
+
+.proposals-pagination__meta {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.proposals-pagination__info {
+  color: var(--color-subtle);
+  font-size: 0.875rem;
+}
+
+.proposals-pagination__size {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--color-subtle);
+  font-size: 0.875rem;
+
+  select {
+    min-height: 2rem;
+    padding: 0.25rem 1.75rem 0.25rem 0.5rem;
+    border: 1px solid var(--color-line-strong);
+    border-radius: var(--radius-sm);
+    background: var(--color-panel);
+    color: var(--color-text);
+  }
+}
+
+.proposals-pagination__controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.proposals-pagination__page {
+  color: var(--color-subtle);
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+@media (max-width: 700px) {
+  .proposals-table th,
+  .proposals-table td {
+    padding-inline: 0.75rem;
+  }
+
+  .proposals-table__col-actions {
+    width: 13rem;
+  }
+
+  .action-btn {
+    padding-inline: 0.625rem;
+  }
+}
+
+.forward-modal-body {
+  display: grid;
+  gap: 0.5rem;
+
+  label {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: var(--color-text);
+  }
+
+  select,
+  textarea {
+    width: 100%;
+    padding: 0.55rem 0.75rem;
+    border: 1.5px solid var(--color-line);
+    border-radius: var(--radius-sm);
+    background: var(--color-panel);
+    color: var(--color-text);
+    font: inherit;
+    font-size: 0.9rem;
+
+    &:focus {
+      outline: none;
+      border-color: var(--color-accent);
+      box-shadow: var(--focus-ring);
+    }
+  }
+
+  textarea {
+    resize: vertical;
+  }
+}
+
+.forward-modal-body__hint {
+  margin: 0 0 0.25rem;
+  color: var(--color-subtle);
+  font-size: 0.875rem;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

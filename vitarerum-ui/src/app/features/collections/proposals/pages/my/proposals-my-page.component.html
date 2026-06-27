@@ -1,0 +1,219 @@
+<div class="proposals-new">
+  <app-page-header
+    eyebrow="Proposals"
+    title="My proposals"
+    description="Requests submitted by you across every status."
+  />
+
+  @if (initialLoading()) {
+    <app-loading-state />
+  } @else if (listError() && !proposals().length) {
+    <app-error-message [apiError]="listError()!" (retry)="proposalsResource.reload()" />
+  } @else {
+    <section
+      class="proposals-list-panel"
+      aria-label="My proposals list"
+      [class.is-reloading]="reloading()"
+      [attr.aria-busy]="reloading()"
+    >
+      <div class="proposals-toolbar">
+        <label class="proposals-search" for="proposals-search">
+          <span class="pi pi-search" aria-hidden="true"></span>
+          <input
+            id="proposals-search"
+            type="search"
+            [value]="searchDraft()"
+            (input)="onSearchInput($event)"
+            (keydown.enter)="applySearch()"
+            placeholder="Search reference or title"
+            aria-label="Search my proposals"
+          />
+          @if (searchDraft()) {
+            <button
+              type="button"
+              class="proposals-search__clear"
+              (click)="clearSearch()"
+              aria-label="Clear proposal search"
+            >
+              <span class="pi pi-times" aria-hidden="true"></span>
+            </button>
+          }
+        </label>
+        <button type="button" class="action-btn action-btn--primary" (click)="applySearch()">
+          Search
+        </button>
+      </div>
+
+      @if (!proposals().length) {
+        <app-empty-state
+          [title]="appliedSearch() ? 'No proposals found' : 'No proposals'"
+          [message]="
+            appliedSearch()
+              ? 'None of your proposals match the current search.'
+              : 'You have not submitted proposals yet.'
+          "
+        />
+      } @else {
+        <div class="proposals-table-shell">
+          <table class="proposals-table" aria-label="My proposals">
+            <colgroup>
+              <col class="proposals-table__col-ref" />
+              <col class="proposals-table__col-title" />
+              <col class="proposals-table__col-type" />
+              <col class="proposals-table__col-status" />
+              <col class="proposals-table__col-requester" />
+              <col class="proposals-table__col-date" />
+              <col class="proposals-table__col-actions" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th scope="col">Reference</th>
+                <th scope="col">Title</th>
+                <th scope="col">Type</th>
+                <th scope="col">Status</th>
+                <th scope="col">Requested by</th>
+                <th scope="col">Submitted</th>
+                <th scope="col" class="proposals-table__actions-header">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (proposal of proposals(); track proposal.id) {
+                <tr>
+                  <td class="proposals-table__ref">
+                    {{ proposal.referenceNumber }}
+                  </td>
+                  <td>
+                    <a
+                      class="proposals-table__title"
+                      [routerLink]="['/p/collections/proposals', proposal.id]"
+                      [queryParams]="{
+                        returnTo: '/p/collections/proposals/my',
+                        returnLabel: 'my proposals',
+                      }"
+                    >
+                      {{ proposal.title }}
+                    </a>
+                  </td>
+                  <td>
+                    <app-type-chip [type]="proposal.type" />
+                  </td>
+                  <td>
+                    <app-status-chip kind="proposal" [status]="proposal.status" />
+                  </td>
+                  <td>
+                    <div class="proposals-table__requester">
+                      <span>{{ proposal.requestedBy.user.name }}</span>
+                      <span class="proposals-table__requester-email">
+                        {{ proposal.requestedBy.user.email }}
+                      </span>
+                    </div>
+                  </td>
+                  <td class="proposals-table__date">{{ proposal.submittedAt.slice(0, 10) }}</td>
+                  <td>
+                    <div class="proposals-table__actions">
+                      <app-row-actions
+                        [items]="actionItemsFor(proposal)"
+                        ariaLabel="More actions for {{ proposal.referenceNumber }}"
+                      />
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        @if (totalProposals() > 0) {
+          <div class="proposals-pagination" role="navigation" aria-label="Proposals pagination">
+            <div class="proposals-pagination__meta">
+              <span class="proposals-pagination__info">
+                {{ rangeStart() }}-{{ rangeEnd() }} of {{ totalProposals() }} proposals
+              </span>
+              <label class="proposals-pagination__size" for="proposals-page-size">
+                Rows
+                <select id="proposals-page-size" (change)="onPageSizeChange($event)">
+                  @for (size of pageSizeOptions; track size) {
+                    <option [value]="size" [selected]="size === pageSize()">{{ size }}</option>
+                  }
+                </select>
+              </label>
+            </div>
+            <div class="proposals-pagination__controls">
+              <button
+                type="button"
+                class="action-btn"
+                [disabled]="currentPage() === 0 || reloading()"
+                (click)="firstPage()"
+                aria-label="First page"
+              >
+                First
+              </button>
+              <button
+                type="button"
+                class="action-btn"
+                [disabled]="currentPage() === 0 || reloading()"
+                (click)="prevPage()"
+                aria-label="Previous page"
+              >
+                Previous
+              </button>
+              <span class="proposals-pagination__page" aria-live="polite">
+                Page {{ currentPage() + 1 }} of {{ totalPages() }}
+              </span>
+              <button
+                type="button"
+                class="action-btn"
+                [disabled]="currentPage() >= totalPages() - 1 || reloading()"
+                (click)="nextPage()"
+                aria-label="Next page"
+              >
+                Next
+              </button>
+              <button
+                type="button"
+                class="action-btn"
+                [disabled]="currentPage() >= totalPages() - 1 || reloading()"
+                (click)="lastPage()"
+                aria-label="Last page"
+              >
+                Last
+              </button>
+            </div>
+          </div>
+        }
+      }
+    </section>
+
+    <app-confirm-modal
+      [open]="cancelModalOpen()"
+      title="Cancel proposal?"
+      confirmLabel="Cancel proposal"
+      cancelLabel="Keep proposal"
+      tone="danger"
+      [pending]="cancelling()"
+      [confirmDisabled]="!cancelReason().trim()"
+      (confirmed)="confirmCancel()"
+      (cancelled)="closeCancelModal()"
+    >
+      @if (cancelTarget(); as target) {
+        <div class="cancel-modal-body">
+          <p class="cancel-modal-body__hint">
+            This will cancel {{ target.referenceNumber }} and cannot be undone. Any linked project
+            will be cancelled too.
+          </p>
+          <label for="cancel-reason">Reason</label>
+          <textarea
+            id="cancel-reason"
+            rows="4"
+            placeholder="Explain why you are cancelling..."
+            [value]="cancelReason()"
+            (input)="onCancelReasonInput($event)"
+          ></textarea>
+          @if (cancelError(); as error) {
+            <app-error-message [apiError]="error" />
+          }
+        </div>
+      }
+    </app-confirm-modal>
+  }
+</div>

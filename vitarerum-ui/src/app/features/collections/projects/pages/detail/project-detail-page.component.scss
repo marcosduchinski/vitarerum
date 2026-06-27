@@ -1,0 +1,386 @@
+@use '../../../proposals/pages/detail/proposal-detail-page.component.scss';
+
+.project-detail {
+  display: grid;
+  gap: 1.5rem;
+  align-content: start;
+}
+
+.project-detail__back {
+  @extend .proposal-detail__back;
+}
+
+.project-detail__header {
+  @extend .proposal-detail__header;
+}
+
+.project-detail__ref {
+  @extend .proposal-detail__ref;
+}
+
+.project-detail__title {
+  @extend .proposal-detail__title;
+}
+
+.project-detail__status-row {
+  @extend .proposal-detail__status-row;
+}
+
+.project-actions {
+  @extend .proposal-actions;
+}
+
+.project-actions__buttons {
+  @extend .proposal-actions__buttons;
+}
+
+.project-detail__grid {
+  display: grid;
+  gap: 1.5rem;
+
+  @media (min-width: 900px) {
+    grid-template-columns: 18rem 1fr;
+  }
+}
+
+.project-detail__tabs {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.project-detail__tab {
+  appearance: none;
+  margin: 0 0 -1px;
+  padding: 0.65rem 0.15rem;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    color 120ms ease,
+    border-color 120ms ease;
+
+  &:hover {
+    color: var(--color-text);
+  }
+
+  &:focus-visible {
+    outline: 3px solid color-mix(in srgb, var(--color-accent) 50%, transparent);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+}
+
+.project-detail__tab--active {
+  color: var(--color-accent);
+  border-bottom-color: var(--color-accent);
+}
+
+.project-detail__panel {
+  display: grid;
+  gap: 1.5rem;
+}
+
+/* ---- Actions panel ------------------------------------------------------- */
+
+.actions-panel {
+  gap: 2rem;
+}
+
+/* Lifecycle rail: Created -> In progress -> Completed (Cancelled is terminal) */
+.lifecycle {
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.25rem;
+}
+
+.lifecycle__step {
+  flex: 1 1 0;
+  display: grid;
+  justify-items: center;
+  gap: 0.5rem;
+  position: relative;
+  color: var(--color-subtle);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-align: center;
+
+  /* connector line to the next step */
+  &:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    top: 0.6875rem;
+    left: calc(50% + 1rem);
+    right: calc(-50% + 1rem);
+    height: 2px;
+    background: var(--color-line);
+  }
+}
+
+.lifecycle__marker {
+  display: grid;
+  place-items: center;
+  width: 1.375rem;
+  height: 1.375rem;
+  border-radius: 50%;
+  border: 2px solid var(--color-line-strong);
+  background: var(--color-panel);
+  color: #fff;
+  font-size: 0.7rem;
+  z-index: 1;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease;
+}
+
+.lifecycle__step--done {
+  color: var(--color-text);
+
+  .lifecycle__marker {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+  }
+
+  &::after {
+    background: var(--color-accent);
+  }
+}
+
+.lifecycle__step--current {
+  color: var(--color-accent-strong);
+
+  .lifecycle__marker {
+    border-color: var(--color-accent);
+    box-shadow: var(--focus-ring);
+  }
+}
+
+.lifecycle__step--cancelled {
+  color: var(--color-cta);
+  flex: 0 0 auto;
+  padding-left: 0.5rem;
+
+  .lifecycle__marker {
+    background: var(--color-cta);
+    border-color: var(--color-cta);
+  }
+}
+
+/* When cancelled, the forward steps never completed — keep the line neutral. */
+.lifecycle--cancelled .lifecycle__step:not(.lifecycle__step--cancelled) {
+  color: var(--color-subtle);
+
+  .lifecycle__marker {
+    background: var(--color-panel);
+    border-color: var(--color-line-strong);
+    box-shadow: none;
+  }
+
+  &::after {
+    background: var(--color-line);
+  }
+}
+
+/* ---- Grouped task rows --------------------------------------------------- */
+
+.action-group {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.action-group__title {
+  margin: 0 0 0.1rem;
+  color: var(--color-subtle);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.action-group__title--danger {
+  color: var(--color-cta);
+}
+
+.task-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.5rem 1rem;
+  align-items: start;
+  padding: 1rem 1.15rem;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-panel);
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    background 140ms ease;
+
+  @media (min-width: 640px) {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+  }
+}
+
+.task-row__icon {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-panel-muted);
+  color: var(--color-muted);
+  font-size: 1rem;
+}
+
+.task-row__icon--accent {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+
+.task-row__icon--danger {
+  background: var(--color-cta-soft);
+  color: var(--color-cta);
+}
+
+.task-row__body {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.task-row__title {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.task-row__desc {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-muted);
+}
+
+.task-row__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.15rem 0 0;
+  font-size: 0.8rem;
+  color: var(--color-subtle);
+
+  .pi {
+    font-size: 0.7rem;
+  }
+}
+
+/* trailing control alignment on narrow screens */
+.task-row__control,
+.task-row__cta {
+  grid-column: 1 / -1;
+
+  @media (min-width: 640px) {
+    grid-column: auto;
+  }
+}
+
+.task-row__control {
+  justify-self: start;
+
+  @media (min-width: 640px) {
+    justify-self: end;
+  }
+}
+
+/* Link rows: whole row is clickable (stretched link), arrow nudges on hover */
+.task-row--link {
+  &:hover:not(.task-row--locked) {
+    border-color: color-mix(in srgb, var(--color-accent) 35%, var(--color-line));
+    box-shadow: var(--shadow-panel);
+  }
+}
+
+.task-row__cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  justify-self: start;
+  color: var(--color-accent);
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+
+  @media (min-width: 640px) {
+    justify-self: end;
+  }
+
+  .pi {
+    transition: transform 140ms ease;
+  }
+
+  /* stretched link makes the entire row tappable */
+  &:not(.task-row__cta--disabled)::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: var(--radius-md);
+  }
+
+  &:focus-visible {
+    outline: none;
+
+    &::after {
+      box-shadow: var(--focus-ring);
+    }
+  }
+}
+
+.task-row--link:hover .task-row__cta:not(.task-row__cta--disabled) .pi {
+  transform: translateX(3px);
+}
+
+.task-row__cta--disabled {
+  color: var(--color-subtle);
+  pointer-events: none;
+}
+
+.task-row--danger {
+  border-color: color-mix(in srgb, var(--color-cta) 30%, var(--color-line));
+}
+
+.task-row--locked {
+  background: color-mix(in srgb, var(--color-panel-muted) 45%, var(--color-panel));
+
+  .task-row__title {
+    color: var(--color-muted);
+  }
+}
+
+.action-btn--danger {
+  border-color: var(--color-cta);
+  color: var(--color-cta);
+  background: var(--color-panel);
+
+  &:hover:not(:disabled) {
+    border-color: var(--color-cta-hover);
+    background: var(--color-cta-soft);
+    color: var(--color-cta-hover);
+  }
+}
+
+.action-btn--disabled {
+  pointer-events: none;
+  opacity: 0.55;
+}

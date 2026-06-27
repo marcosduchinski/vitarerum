@@ -1,0 +1,188 @@
+<div class="projects-completed">
+  <app-page-header
+    eyebrow="Projects"
+    title="Completed / closed"
+    description="Collection-use projects completed by the team."
+  />
+
+  @if (projectsResource.isLoading()) {
+    <app-loading-state />
+  } @else if (listError()) {
+    <app-error-message [apiError]="listError()!" (retry)="projectsResource.reload()" />
+  } @else {
+    <section class="projects-list-panel" aria-label="Completed projects list">
+      <div class="projects-toolbar">
+        <label class="projects-search" for="completed-projects-search">
+          <span class="pi pi-search" aria-hidden="true"></span>
+          <input
+            id="completed-projects-search"
+            type="search"
+            [value]="searchDraft()"
+            (input)="onSearchInput($event)"
+            (keydown.enter)="applySearch()"
+            placeholder="Search reference or title"
+            aria-label="Search completed projects"
+          />
+          @if (searchDraft()) {
+            <button
+              type="button"
+              class="projects-search__clear"
+              (click)="clearSearch()"
+              aria-label="Clear project search"
+            >
+              <span class="pi pi-times" aria-hidden="true"></span>
+            </button>
+          }
+        </label>
+        <button type="button" class="action-btn action-btn--primary" (click)="applySearch()">
+          Search
+        </button>
+      </div>
+
+      @if (!projects().length) {
+        <app-empty-state
+          [title]="appliedSearch() ? 'No projects found' : 'No completed projects'"
+          [message]="
+            appliedSearch()
+              ? 'No completed projects match the current search.'
+              : 'There are no completed collection-use projects.'
+          "
+        />
+      } @else {
+        <div class="projects-table-shell">
+          <table class="projects-table" aria-label="Completed projects">
+            <colgroup>
+              <col class="projects-table__col-ref" />
+              <col class="projects-table__col-title" />
+              <col class="projects-table__col-type" />
+              <col class="projects-table__col-requester" />
+              <col class="projects-table__col-assignee" />
+              <col class="projects-table__col-dates" />
+              <col class="projects-table__col-actions" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th scope="col">Reference</th>
+                <th scope="col">Title</th>
+                <th scope="col">Type</th>
+                <th scope="col">Requested by</th>
+                <th scope="col">Assigned staff</th>
+                <th scope="col">Dates</th>
+                <th scope="col" class="projects-table__actions-header">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (project of projects(); track project.id) {
+                <tr>
+                  <td class="projects-table__ref">{{ project.referenceNumber }}</td>
+                  <td>
+                    <a
+                      class="projects-table__title"
+                      [routerLink]="detailRoute(project.id)"
+                      [queryParams]="detailQueryParams"
+                    >
+                      {{ project.title }}
+                    </a>
+                  </td>
+                  <td>
+                    <span class="type-badge">{{ typeLabels[project.type] }}</span>
+                  </td>
+                  <td>
+                    <div class="projects-table__person">
+                      <span>{{ requesterLabel(project) }}</span>
+                      @if (requesterEmail(project)) {
+                        <span class="projects-table__person-email">
+                          {{ requesterEmail(project) }}
+                        </span>
+                      }
+                    </div>
+                  </td>
+                  <td>
+                    <div class="projects-table__person">
+                      <span>{{ assigneeLabel(project) }}</span>
+                      @if (assigneeEmail(project)) {
+                        <span class="projects-table__person-email">
+                          {{ assigneeEmail(project) }}
+                        </span>
+                      }
+                    </div>
+                  </td>
+                  <td class="projects-table__dates">
+                    {{ dateLabel(project.beginDate) }} to {{ dateLabel(project.endDate) }}
+                  </td>
+                  <td>
+                    <div class="projects-table__actions">
+                      <app-row-actions
+                        [items]="actionItemsFor(project)"
+                        ariaLabel="More actions for {{ project.referenceNumber }}"
+                      />
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        @if (totalProjects() > 0) {
+          <div class="projects-pagination" role="navigation" aria-label="Projects pagination">
+            <div class="projects-pagination__meta">
+              <span class="projects-pagination__info">
+                {{ rangeStart() }}-{{ rangeEnd() }} of {{ totalProjects() }} projects
+              </span>
+              <label class="projects-pagination__size" for="completed-projects-page-size">
+                Rows
+                <select id="completed-projects-page-size" (change)="onPageSizeChange($event)">
+                  @for (size of pageSizeOptions; track size) {
+                    <option [value]="size" [selected]="size === pageSize()">{{ size }}</option>
+                  }
+                </select>
+              </label>
+            </div>
+            <div class="projects-pagination__controls">
+              <button
+                type="button"
+                class="action-btn"
+                [disabled]="currentPage() === 0"
+                (click)="firstPage()"
+                aria-label="First page"
+              >
+                First
+              </button>
+              <button
+                type="button"
+                class="action-btn"
+                [disabled]="currentPage() === 0"
+                (click)="prevPage()"
+                aria-label="Previous page"
+              >
+                Previous
+              </button>
+              <span class="projects-pagination__page" aria-live="polite">
+                Page {{ currentPage() + 1 }} of {{ totalPages() }}
+              </span>
+              <button
+                type="button"
+                class="action-btn"
+                [disabled]="currentPage() >= totalPages() - 1"
+                (click)="nextPage()"
+                aria-label="Next page"
+              >
+                Next
+              </button>
+              <button
+                type="button"
+                class="action-btn"
+                [disabled]="currentPage() >= totalPages() - 1"
+                (click)="lastPage()"
+                aria-label="Last page"
+              >
+                Last
+              </button>
+            </div>
+          </div>
+        }
+      }
+    </section>
+  }
+</div>

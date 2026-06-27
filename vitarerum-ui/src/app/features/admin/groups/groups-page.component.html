@@ -1,0 +1,30 @@
+<div class="groups-page">
+  <div class="groups-page__header">
+    <p class="groups-page__eyebrow">Administration</p>
+    <h2>Groups</h2>
+    <p class="groups-page__subtitle">
+      Institutional groups are fixed by the system. Manage user assignments from the
+      <a routerLink="/p/admin/users">Users</a> section.
+    </p>
+  </div>
+
+  @if (groupsResource.isLoading()) {
+    <app-loading-state />
+  } @else if (apiError()) {
+    <app-error-message [apiError]="apiError()!" (retry)="groupsResource.reload()" />
+  } @else {
+    <div class="groups-grid" role="list" aria-label="Institutional groups">
+      @for (group of groups(); track group.id) {
+        <article class="group-card" role="listitem">
+          <div class="group-card__body">
+            <h3 class="group-card__name">{{ groupMeta[group.name].label }}</h3>
+            <p class="group-card__desc">{{ groupMeta[group.name].description }}</p>
+          </div>
+          <a class="group-card__link" [routerLink]="group.id" aria-label="View members of {{ groupMeta[group.name].label }}">
+            View members →
+          </a>
+        </article>
+      }
+    </div>
+  }
+</div>

@@ -1,0 +1,65 @@
+<header class="layout-topbar">
+  <div class="layout-topbar-logo-container">
+    <button
+      class="layout-menu-button layout-topbar-action"
+      type="button"
+      aria-label="Toggle navigation"
+      (click)="layoutService.onMenuToggle()"
+    >
+      <i class="pi pi-bars"></i>
+    </button>
+
+    <a class="layout-topbar-logo" routerLink="/p/dashboard" aria-label="Vitarerum — home">
+      <app-logo-mark class="layout-topbar-logo__mark" />
+      <span class="layout-topbar-logo__text">Vitarerum</span>
+    </a>
+  </div>
+  <div class="layout-topbar-menu-container">
+    {{ getInstitutionName() }}
+  </div>
+
+
+  <div class="layout-topbar-actions">
+    @if (showSwitcher()) {
+      <label class="sr-only" for="role-switcher">Active role</label>
+      <select
+        id="role-switcher"
+        class="layout-topbar-role-select"
+        (change)="onGroupChange($event)"
+        aria-label="Switch active role"
+      >
+        @for (g of availableGroups(); track g.value) {
+          <option [value]="g.value" [selected]="g.value === currentGroup()">{{ g.label }}</option>
+        }
+      </select>
+    }
+
+    <button
+      type="button"
+      class="layout-topbar-action"
+      (click)="layoutService.toggleDarkMode()"
+      [attr.aria-label]="
+        layoutService.isDarkTheme() ? 'Switch to light mode' : 'Switch to dark mode'
+      "
+    >
+      <i
+        class="pi"
+        [class.pi-moon]="!layoutService.isDarkTheme()"
+        [class.pi-sun]="layoutService.isDarkTheme()"
+      ></i>
+    </button>
+
+    @if (session()) {
+      <button
+        type="button"
+        class="layout-topbar-action"
+        aria-label="User menu"
+        aria-haspopup="true"
+        (click)="userMenu.toggle($event)"
+      >
+        <i class="pi pi-user"></i>
+      </button>
+      <p-menu #userMenu [popup]="true" [model]="userMenuItems()" [appendTo]="'body'" />
+    }
+  </div>
+</header>

@@ -1,0 +1,71 @@
+@use '../detail/project-detail-page.component.scss';
+
+.project-detail__tabs {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.project-detail__tab {
+  appearance: none;
+  margin: 0 0 -1px;
+  padding: 0.65rem 0.15rem;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    color 120ms ease,
+    border-color 120ms ease;
+
+  &:hover {
+    color: var(--color-text);
+  }
+
+  &:focus-visible {
+    outline: 3px solid color-mix(in srgb, var(--color-accent) 50%, transparent);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+}
+
+.project-detail__tab--active {
+  color: var(--color-accent);
+  border-bottom-color: var(--color-accent);
+}
+
+.project-detail__panel {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.action-group--reports {
+  position: relative;
+}
+
+.task-row--report {
+  border-color: color-mix(in srgb, var(--color-accent) 28%, var(--color-line));
+  background:
+    linear-gradient(
+      110deg,
+      color-mix(in srgb, var(--color-accent) 6%, transparent),
+      transparent 48%
+    ),
+    var(--color-panel);
+}
+
+.action-btn--report {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-on-accent, #fff);
+
+  &:hover:not(:disabled) {
+    border-color: var(--color-accent-hover, var(--color-accent));
+    background: var(--color-accent-hover, var(--color-accent));
+  }
+}

@@ -1,0 +1,35 @@
+.project-log {
+  display: grid;
+  gap: 1rem;
+  align-content: start;
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-decoration: none;
+
+  &:hover {
+    background: var(--color-panel-muted);
+  }
+}
+
+.project-log__placeholder {
+  padding: 1rem;
+  border: 1px dashed var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-panel);
+  color: var(--color-subtle);
+
+  p {
+    margin: 0;
+    font-size: 0.875rem;
+  }
+}

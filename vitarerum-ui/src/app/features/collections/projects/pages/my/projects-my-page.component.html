@@ -1,0 +1,235 @@
+<div class="projects-my">
+  <app-page-header
+    eyebrow="Projects"
+    title="My projects"
+    [description]="
+      isExternalRequester()
+        ? 'Collection-use projects submitted by you across every status.'
+        : 'Collection-use projects currently in progress.'
+    "
+  />
+
+  @if (projectsResource.isLoading()) {
+    <app-loading-state />
+  } @else if (listError()) {
+    <app-error-message [apiError]="listError()!" (retry)="projectsResource.reload()" />
+  } @else {
+    @if (actionError()) {
+      <app-error-message [apiError]="actionError()!" />
+    }
+
+    <section class="projects-my__toolbar" aria-label="My projects summary">
+      <div class="projects-my__meta">
+        <div>
+          <strong>{{ totalProjects() }} {{ isExternalRequester() ? 'total' : 'active' }}</strong>
+          <span>Three cards per page</span>
+        </div>
+        @if (totalProjects() > 0) {
+          <p>{{ rangeStart() }}-{{ rangeEnd() }} of {{ totalProjects() }}</p>
+        }
+      </div>
+
+      <div class="projects-search">
+        <label class="projects-search__field" for="my-projects-search">
+          <span class="pi pi-search" aria-hidden="true"></span>
+          <input
+            id="my-projects-search"
+            type="search"
+            [value]="searchDraft()"
+            (input)="onSearchInput($event)"
+            (keydown.enter)="applySearch()"
+            placeholder="Search reference or title"
+            aria-label="Search my projects"
+          />
+          @if (searchDraft()) {
+            <button
+              type="button"
+              class="projects-search__clear"
+              (click)="clearSearch()"
+              aria-label="Clear my projects search"
+            >
+              <span class="pi pi-times" aria-hidden="true"></span>
+            </button>
+          }
+        </label>
+        <button type="button" class="action-btn action-btn--primary" (click)="applySearch()">
+          Search
+        </button>
+      </div>
+    </section>
+
+    @if (!projects().length) {
+      <app-empty-state
+        [title]="
+          appliedSearch()
+            ? 'No projects found'
+            : isExternalRequester()
+              ? 'No projects'
+              : 'No active projects'
+        "
+        [message]="
+          appliedSearch()
+            ? isExternalRequester()
+              ? 'None of your projects match the current search.'
+              : 'No active projects match the current search.'
+            : isExternalRequester()
+              ? 'You do not have collection-use projects yet.'
+              : 'There are no projects currently in progress.'
+        "
+      />
+    } @else {
+      <section class="projects-grid" aria-label="My projects list">
+        @for (project of projects(); track project.id) {
+          <article class="project-card" [attr.data-status]="project.status">
+            <header class="project-card__header">
+              <p class="project-card__reference">{{ project.referenceNumber }}</p>
+              <span class="project-card__status">{{ statusLabel(project) }}</span>
+            </header>
+
+            <h2>{{ project.title }}</h2>
+            <p class="project-card__purpose">{{ project.purpose }}</p>
+
+            <dl class="project-card__facts">
+              <div>
+                <dt>Type</dt>
+                <dd>{{ typeLabels[project.type] }}</dd>
+              </div>
+              <div>
+                <dt>Requested by</dt>
+                <dd>
+                  <span>{{ requesterLabel(project) }}</span>
+                  @if (requesterEmail(project)) {
+                    <small>{{ requesterEmail(project) }}</small>
+                  }
+                </dd>
+              </div>
+              <div>
+                <dt>Assigned staff</dt>
+                <dd>
+                  <span>{{ assigneeLabel(project) }}</span>
+                  @if (assigneeEmail(project)) {
+                    <small>{{ assigneeEmail(project) }}</small>
+                  }
+                </dd>
+              </div>
+              <div>
+                <dt>Dates</dt>
+                <dd class="project-card__dates">
+                  {{ dateLabel(project.beginDate) }} to {{ dateLabel(project.endDate) }}
+                </dd>
+              </div>
+            </dl>
+
+            <footer class="project-card__actions">
+              <button
+                type="button"
+                class="action-btn action-btn--primary"
+                [attr.title]="
+                  !canLog(project) ? 'Log is available when the project is in progress' : null
+                "
+                [disabled]="actionProjectId() === project.id || !canLog(project)"
+                (click)="log(project)"
+              >
+                Log
+              </button>
+              <button
+                type="button"
+                class="action-btn"
+                [attr.title]="
+                  !canLog(project)
+                    ? 'Occurrences are available when the project is in progress'
+                    : null
+                "
+                [disabled]="actionProjectId() === project.id || !canLog(project)"
+                (click)="occurrences(project)"
+              >
+                Occurrences
+              </button>
+              <app-row-actions
+                [items]="actionItemsFor(project)"
+                [disabled]="actionProjectId() === project.id"
+                ariaLabel="More actions for {{ project.referenceNumber }}"
+              />
+            </footer>
+          </article>
+        }
+      </section>
+
+      @for (project of projects(); track project.id) {
+        <app-confirm-modal
+          [open]="concludeConfirmProjectId() === project.id"
+          title="Conclude project?"
+          [message]="
+            'This will mark ' +
+            project.referenceNumber +
+            ' as completed and move it out of active projects.'
+          "
+          confirmLabel="Conclude project"
+          cancelLabel="Keep active"
+          tone="warning"
+          [pending]="actionProjectId() === project.id"
+          (confirmed)="conclude(project.id)"
+          (cancelled)="cancelConcludeConfirmation()"
+        />
+
+        <app-confirm-modal
+          [open]="cancelConfirmProjectId() === project.id"
+          title="Cancel project?"
+          [message]="
+            'This will cancel ' +
+            project.referenceNumber +
+            ' and move it to completed / closed projects.'
+          "
+          confirmLabel="Cancel project"
+          cancelLabel="Keep active"
+          tone="danger"
+          [pending]="actionProjectId() === project.id"
+          (confirmed)="cancel(project.id)"
+          (cancelled)="cancelCancelConfirmation()"
+        />
+      }
+
+      <nav class="projects-pagination" aria-label="My projects pagination">
+        <p aria-live="polite">Page {{ currentPage() + 1 }} of {{ totalPages() }}</p>
+        <div class="projects-pagination__controls">
+          <button
+            type="button"
+            class="page-btn"
+            [disabled]="currentPage() === 0"
+            (click)="firstPage()"
+            aria-label="First page"
+          >
+            First
+          </button>
+          <button
+            type="button"
+            class="page-btn"
+            [disabled]="currentPage() === 0"
+            (click)="prevPage()"
+            aria-label="Previous page"
+          >
+            Previous
+          </button>
+          <button
+            type="button"
+            class="page-btn"
+            [disabled]="currentPage() >= totalPages() - 1"
+            (click)="nextPage()"
+            aria-label="Next page"
+          >
+            Next
+          </button>
+          <button
+            type="button"
+            class="page-btn"
+            [disabled]="currentPage() >= totalPages() - 1"
+            (click)="lastPage()"
+            aria-label="Last page"
+          >
+            Last
+          </button>
+        </div>
+      </nav>
+    }
+  }
+</div>

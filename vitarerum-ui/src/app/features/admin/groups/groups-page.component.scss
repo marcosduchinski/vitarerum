@@ -1,0 +1,90 @@
+.groups-page {
+  display: grid;
+  gap: 1.75rem;
+  align-content: start;
+}
+
+.groups-page__eyebrow {
+  margin: 0 0 0.25rem;
+  color: var(--color-subtle);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+h2 {
+  margin: 0 0 0.5rem;
+  color: var(--color-text);
+  font-size: 1.8rem;
+  line-height: 1.2;
+}
+
+.groups-page__header {
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.groups-page__subtitle {
+  margin: 0;
+  color: var(--color-subtle);
+  font-size: 0.9rem;
+}
+
+.groups-page__subtitle a {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+.groups-page__subtitle a:hover {
+  text-decoration: underline;
+}
+
+.groups-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.group-card {
+  display: grid;
+  grid-template-rows: 1fr auto;
+  padding: 1.25rem;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-panel);
+  box-shadow: var(--shadow-panel);
+  gap: 1rem;
+}
+
+.group-card__name {
+  margin: 0 0 0.4rem;
+  color: var(--color-text);
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.group-card__desc {
+  margin: 0;
+  color: var(--color-subtle);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.group-card__link {
+  justify-self: start;
+  color: var(--color-accent-strong);
+  font-size: 0.875rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.group-card__link:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 640px) {
+  .groups-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,129 @@
+.report-rail {
+  display: grid;
+  gap: 1px;
+  align-content: start;
+  overflow: hidden;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-line);
+
+  @media (min-width: 960px) {
+    position: sticky;
+    top: 1.5rem;
+  }
+}
+
+.report-rail__block {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1.25rem 1.35rem;
+  background: var(--color-panel);
+}
+
+.report-rail__block--provenance {
+  background: var(--color-panel-muted);
+}
+
+.report-rail__title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 0;
+  color: var(--color-subtle);
+  font-family: var(--font-body);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.report-rail__sum {
+  display: grid;
+  place-items: center;
+  min-width: 1.6rem;
+  height: 1.6rem;
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.report-rail__list {
+  display: grid;
+  gap: 0.85rem;
+  margin: 0;
+}
+
+.report-rail__list div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.report-rail__list dt {
+  color: var(--color-subtle);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.report-rail__list dd {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 0.88rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.report-rail__code {
+  font-family: var(--font-display);
+  font-weight: 600;
+}
+
+.report-rail__totals {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.report-rail__totals li {
+  display: grid;
+  grid-template-columns: 2.1rem 1fr;
+  gap: 0.7rem;
+  align-items: center;
+}
+
+.report-rail__count {
+  display: grid;
+  place-items: center;
+  height: 2.1rem;
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.report-rail__totals li.is-empty .report-rail__count {
+  border-style: dashed;
+  border-color: var(--color-line);
+  color: var(--color-subtle);
+}
+
+.report-rail__count-label {
+  color: var(--color-muted);
+  font-size: 0.82rem;
+}
+
+.report-rail__totals li.is-empty .report-rail__count-label {
+  color: var(--color-subtle);
+}

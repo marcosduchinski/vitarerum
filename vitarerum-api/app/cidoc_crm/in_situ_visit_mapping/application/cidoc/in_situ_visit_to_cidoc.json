@@ -1,0 +1,185 @@
+{
+  "metadata": {
+    "mapping_id": "in-situ-visit-record-to-cidoc-crm",
+    "mapping_version": "0.3.1",
+    "crm_version": "7.1.3",
+    "crm_context_url": "https://cidoc-crm.org/rdfs/7.1.3/CIDOC_CRM_v7.1.3_JSON-LD_Context.jsonld",
+    "institution": "Museu Nacional de História Natural e da Ciência de Lisboa",
+    "source_schema": "InSituVisitRecord",
+    "target_schema": "CIDOC CRM JSON-LD",
+    "created": "2026-06-19",
+    "description": "Maps the InSituVisitRecord aggregate (visit + requested objects, occurrences, logs, publications, attachments) to CIDOC CRM 7.1.3 JSON-LD."
+  },
+  "nodes": [
+    {
+      "key": "visit",
+      "id_template": "ex:visit/{id}",
+      "type": "crm:E7_Activity",
+      "label_template": "In situ visit {code}",
+      "rationale": "E7_Activity asserts the visit as a deliberate human activity."
+    },
+    {
+      "key": "actor",
+      "id_template": "ex:actor/{visitor_name|slug}",
+      "type": "crm:E21_Person",
+      "label_template": "{visitor_name}",
+      "rationale": "The named visitor is modelled as an individual person."
+    },
+    {
+      "key": "place",
+      "id_template": "ex:place/{place_name|slug}",
+      "type": "crm:E53_Place",
+      "label_template": "{place_name}",
+      "rationale": "Physical location where the visit took place."
+    },
+    {
+      "key": "timespan",
+      "id_template": "ex:timespan/visit-{id}",
+      "type": "crm:E52_Time-Span",
+      "label_template": "{visit_begin_date} - {visit_end_date}",
+      "field_mappings": [
+        {
+          "predicate": "crm:P170i_time_is_defined_by",
+          "value_policy": "declared_interval",
+          "begin_field": "visit_begin_date",
+          "end_field": "visit_end_date",
+          "rationale": "CRM 7.1.3 models a declared interval with an E61 Time Primitive linked via P170 (here the inverse P170i on the time-span), not P82a/P82b."
+        }
+      ]
+    }
+  ],
+  "links": [
+    {
+      "subject": "visit",
+      "predicate": "crm:P14_carried_out_by",
+      "object": "actor"
+    },
+    {
+      "subject": "visit",
+      "predicate": "crm:P7_took_place_at",
+      "object": "place"
+    },
+    {
+      "subject": "visit",
+      "predicate": "crm:P4_has_time-span",
+      "object": "timespan"
+    },
+    {
+      "subject": "visit",
+      "predicate": "crm:P2_has_type",
+      "object_vocab": "type_in_situ_visit"
+    }
+  ],
+  "vocabularies": [
+    {
+      "key": "type_in_situ_visit",
+      "id": "ex:type/in-situ-visit",
+      "type": "crm:E55_Type",
+      "label": "In situ collection visit"
+    },
+    {
+      "key": "type_field_document",
+      "id": "ex:type/field-document",
+      "type": "crm:E55_Type",
+      "label": "Field document"
+    },
+    {
+      "key": "type_scientific_return_publication",
+      "id": "ex:type/scientific-return-publication",
+      "type": "crm:E55_Type",
+      "label": "Scientific return publication"
+    }
+  ],
+  "collection_nodes": [
+    {
+      "key": "requested_object",
+      "source_collection": "requested_objects",
+      "id_template": "ex:object/visit-{_visit_id}/{source_id|slug}",
+      "type": "crm:E20_Biological_Object",
+      "label_template": "{description|source_id}",
+      "link": {"predicate": "crm:P16_used_specific_object", "direction": "from_visit"}
+    },
+    {
+      "key": "occurrence",
+      "source_collection": "in_situ_occurrences",
+      "id_template": "ex:occurrence/visit-{_visit_id}/{source_id|slug}",
+      "type": "crm:E7_Activity",
+      "label_template": "Occurrence {source_id}",
+      "link": {"predicate": "crm:P9_consists_of", "direction": "from_visit"},
+      "field_mappings": [
+        {
+          "predicate": "crm:P3_has_note",
+          "value_policy": "note_literal",
+          "source_field": "description",
+          "when": {"field": "description", "policy": "non_empty"}
+        }
+      ],
+      "attachments": {
+        "source_collection": "attachments",
+        "id_template": "ex:document/occurrence-attachment/{_visit_id}/{source_id|slug}",
+        "type": "crm:E31_Document",
+        "label_template": "{description|source_id}",
+        "link": {"predicate": "crm:P70_documents", "direction": "to_visit"},
+        "content_field": "reference"
+      }
+    },
+    {
+      "key": "log",
+      "source_collection": "in_situ_logs",
+      "id_template": "ex:document/log-{_visit_id}/{source_id|slug}",
+      "type": "crm:E31_Document",
+      "label_template": "{source_id}",
+      "type_vocab": "type_field_document",
+      "link": {"predicate": "crm:P70_documents", "direction": "to_visit"},
+      "field_mappings": [
+        {
+          "predicate": "crm:P3_has_note",
+          "value_policy": "note_literal",
+          "source_field": "description",
+          "when": {"field": "description", "policy": "non_empty"}
+        }
+      ],
+      "attachments": {
+        "source_collection": "attachments",
+        "id_template": "ex:document/log-attachment/{_visit_id}/{source_id|slug}",
+        "type": "crm:E31_Document",
+        "label_template": "{description|source_id}",
+        "link": {"predicate": "crm:P70_documents", "direction": "to_visit"},
+        "content_field": "reference"
+      }
+    },
+    {
+      "key": "publication",
+      "source_collection": "in_situ_publications",
+      "id_template": "ex:creation/visit-{_visit_id}/{source_id|slug}",
+      "type": "crm:E65_Creation",
+      "label_template": "Creation of scientific return {source_id}",
+      "link": {"predicate": "crm:P9_consists_of", "direction": "from_visit"},
+      "creates": {
+        "predicate": "crm:P94_has_created",
+        "node": {
+          "id_template": "ex:information/visit-{_visit_id}/{source_id|slug}",
+          "type": "crm:E73_Information_Object",
+          "label_template": "Scientific return {source_id}",
+          "type_vocab": "type_scientific_return_publication",
+          "field_mappings": [
+            {
+              "predicate": "crm:P3_has_note",
+              "value_policy": "note_literal",
+              "source_field": "description",
+              "when": {"field": "description", "policy": "non_empty"}
+            }
+          ]
+        }
+      },
+      "attachments": {
+        "source_collection": "attachments",
+        "id_template": "ex:document/publication-attachment/{_visit_id}/{source_id|slug}",
+        "type": "crm:E31_Document",
+        "label_template": "{description|source_id}",
+        "link": {"predicate": "crm:P70_documents", "direction": "to_visit"},
+        "content_field": "reference"
+      }
+    }
+  ]
+}

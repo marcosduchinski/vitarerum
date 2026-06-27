@@ -1,0 +1,31 @@
+@use '../new/proposals-new-page.component.scss';
+
+.proposals-table__col-status {
+  width: 8rem;
+}
+
+/* Page navigation keeps the table mounted; dim it while the next page loads. */
+.proposals-list-panel.is-reloading {
+  position: relative;
+
+  .proposals-table-shell {
+    opacity: 0.55;
+    transition: opacity 120ms ease;
+    pointer-events: none;
+  }
+}
+
+.cancel-modal-body {
+  display: grid;
+  gap: 0.5rem;
+
+  textarea {
+    min-height: 5rem;
+    resize: vertical;
+  }
+}
+
+.cancel-modal-body__hint {
+  margin: 0;
+  color: var(--color-subtle);
+}

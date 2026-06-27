@@ -1,0 +1,108 @@
+@use '../../../proposals/pages/my/proposals-my-page.component.scss';
+
+.projects-completed {
+  display: grid;
+  gap: 1.5rem;
+  align-content: start;
+}
+
+.projects-list-panel {
+  @extend .proposals-list-panel;
+}
+
+.projects-toolbar {
+  @extend .proposals-toolbar;
+}
+
+.projects-search {
+  @extend .proposals-search;
+}
+
+.projects-search__clear {
+  @extend .proposals-search__clear;
+}
+
+.projects-table-shell {
+  @extend .proposals-table-shell;
+}
+
+.projects-table {
+  @extend .proposals-table;
+}
+
+.projects-table__col-ref {
+  width: 7.5rem;
+}
+
+.projects-table__col-title {
+  width: 15rem;
+}
+
+.projects-table__col-type {
+  width: 6.5rem;
+}
+
+.projects-table__col-requester,
+.projects-table__col-assignee {
+  width: 12.5rem;
+}
+
+.projects-table__col-dates {
+  width: 11rem;
+}
+
+.projects-table__col-actions {
+  width: 7rem;
+}
+
+.projects-table__actions-header {
+  text-align: right;
+}
+
+.projects-table__ref {
+  @extend .proposals-table__ref;
+}
+
+.projects-table__title {
+  @extend .proposals-table__title;
+}
+
+.projects-table__person {
+  @extend .proposals-table__requester;
+}
+
+.projects-table__person-email {
+  @extend .proposals-table__requester-email;
+}
+
+.projects-table__dates {
+  @extend .proposals-table__date;
+}
+
+.projects-table__actions {
+  @extend .proposals-table__actions;
+}
+
+.projects-pagination {
+  @extend .proposals-pagination;
+}
+
+.projects-pagination__meta {
+  @extend .proposals-pagination__meta;
+}
+
+.projects-pagination__info {
+  @extend .proposals-pagination__info;
+}
+
+.projects-pagination__size {
+  @extend .proposals-pagination__size;
+}
+
+.projects-pagination__controls {
+  @extend .proposals-pagination__controls;
+}
+
+.projects-pagination__page {
+  @extend .proposals-pagination__page;
+}

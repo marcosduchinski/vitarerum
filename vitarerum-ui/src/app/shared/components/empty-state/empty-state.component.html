@@ -1,0 +1,12 @@
+<section class="empty-state" aria-live="polite">
+  <app-logo-mark class="empty-state__mark" />
+  <h2>{{ title() }}</h2>
+
+  @if (message(); as messageText) {
+    <p>{{ messageText }}</p>
+  }
+
+  <div class="empty-state__actions">
+    <ng-content />
+  </div>
+</section>

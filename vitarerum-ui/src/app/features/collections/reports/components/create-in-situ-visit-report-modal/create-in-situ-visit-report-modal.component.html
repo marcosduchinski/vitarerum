@@ -1,0 +1,64 @@
+<app-confirm-modal
+  [open]="open()"
+  title="Create in-situ visit report"
+  message="Choose how the narrative should be generated. A new source record, narrative, and report are created for every submission."
+  confirmLabel="Create report"
+  cancelLabel="Cancel"
+  [pending]="pending()"
+  [confirmDisabled]="reportForm().invalid()"
+  (confirmed)="submit()"
+  (cancelled)="cancel()"
+>
+  <div class="report-form" aria-label="In-situ visit report options">
+    @if (apiError()) {
+      <app-error-message [apiError]="apiError()!" />
+    }
+
+    <div class="report-form__field">
+      <label for="report-target-language">Target language</label>
+      <select id="report-target-language" [formField]="reportForm.targetLanguage">
+        <option value="pt">Portuguese</option>
+        <option value="en">English</option>
+      </select>
+    </div>
+
+    <div class="report-form__field">
+      <label for="report-narrative-type">Narrative type</label>
+      <select id="report-narrative-type" [formField]="reportForm.narrativeType">
+        <option value="institutional">Institutional</option>
+        <option value="scientific">Scientific</option>
+        <option value="audioguide_adult">Audioguide (adult)</option>
+        <option value="audioguide_child">Audioguide (child)</option>
+        <option value="social_media">Social media</option>
+      </select>
+    </div>
+
+    <div class="report-form__field report-form__field--temperature">
+      <div class="report-form__label-row">
+        <label for="report-creativity">Creativity</label>
+        <output for="report-creativity">{{ formModel().creativityTemperature.toFixed(1) }}</output>
+      </div>
+      <input
+        id="report-creativity"
+        type="range"
+        step="0.1"
+        [formField]="reportForm.creativityTemperature"
+        aria-describedby="report-creativity-hint"
+      />
+      <div class="report-form__range-labels" aria-hidden="true">
+        <span>Precise</span>
+        <span>Expressive</span>
+      </div>
+      <p id="report-creativity-hint" class="report-form__hint">
+        Lower values produce more consistent language; higher values allow more variation.
+      </p>
+      @if (
+        reportForm.creativityTemperature().touched() && reportForm.creativityTemperature().invalid()
+      ) {
+        <p class="report-form__error" role="alert">
+          {{ reportForm.creativityTemperature().errors()[0].message }}
+        </p>
+      }
+    </div>
+  </div>
+</app-confirm-modal>

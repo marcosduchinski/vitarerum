@@ -1,0 +1,826 @@
+.occurrence-log {
+  display: grid;
+  gap: 1rem;
+}
+
+.access-sheet {
+  overflow: hidden;
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-panel);
+  box-shadow: var(--shadow-panel);
+}
+
+.access-sheet__header {
+  display: grid;
+  grid-template-columns: minmax(14rem, 1fr) minmax(24rem, 1.6fr);
+  gap: 1rem;
+  align-items: start;
+  padding: 1.25rem;
+  border-bottom: 1px solid var(--color-line);
+  background: var(--color-bg-raised);
+
+  @media (max-width: 820px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.access-sheet__eyebrow {
+  margin: 0 0 0.25rem;
+  color: var(--color-muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.access-sheet__title {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 1.25rem;
+}
+
+.access-sheet__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  align-items: center;
+  margin-top: 0.75rem;
+}
+
+.access-sheet__action,
+.occurrence-entry-form__submit,
+.occurrence-register__action,
+.occurrence-modal__secondary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  padding: 0.3rem 0.8rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.84rem;
+  font-weight: 800;
+  cursor: pointer;
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+}
+
+.access-sheet__action,
+.occurrence-register__action--secondary,
+.occurrence-modal__secondary {
+  border: 1px solid var(--color-line-strong);
+  background: var(--color-panel);
+  color: var(--color-text);
+}
+
+.access-sheet__action {
+  gap: 0.4rem;
+  font-size: 0.8rem;
+}
+
+.access-sheet__action--download:not(:disabled) {
+  border-color: var(--color-accent);
+  color: var(--color-accent-strong);
+}
+
+.access-sheet__action-badge {
+  padding: 0.08rem 0.32rem;
+  border-radius: 999px;
+  background: var(--color-accent-soft);
+  color: var(--color-accent-strong);
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.occurrence-entry-form__submit,
+.occurrence-register__action {
+  border: 1px solid var(--color-accent);
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.access-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-panel);
+
+  @media (max-width: 720px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.access-summary__item {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+  padding: 0.7rem 0.8rem;
+  border-right: 1px solid var(--color-line);
+
+  &:last-child {
+    border-right: 0;
+  }
+
+  @media (max-width: 720px) {
+    &:nth-child(2) {
+      border-right: 0;
+    }
+
+    &:nth-child(-n + 2) {
+      border-bottom: 1px solid var(--color-line);
+    }
+  }
+
+  dt {
+    color: var(--color-subtle);
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  dd {
+    min-width: 0;
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: var(--color-text);
+    font-size: 0.86rem;
+    font-weight: 700;
+  }
+}
+
+.access-band {
+  display: flex;
+  gap: 0.65rem;
+  align-items: center;
+  min-height: 2.2rem;
+  padding: 0.48rem 1rem;
+  border-bottom: 1px solid var(--color-line);
+  background: color-mix(in srgb, var(--color-panel-muted) 72%, var(--color-accent) 8%);
+  color: var(--color-text);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+
+  @media (max-width: 720px) {
+    display: grid;
+    gap: 0.1rem;
+  }
+}
+
+.access-band__hint {
+  color: var(--color-muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.access-sheet__body {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.occurrence-entry-form__locked {
+  margin: 0;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--status-approved-bg);
+  border-radius: var(--radius-sm);
+  background: var(--status-approved-bg);
+  color: var(--status-approved-text);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.occurrence-entry-form__grid {
+  display: grid;
+  grid-template-columns: minmax(10rem, 0.9fr) 7rem minmax(12rem, 0.9fr) minmax(14rem, 1fr);
+  gap: 0.75rem;
+  align-items: end;
+
+  @media (max-width: 960px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @media (max-width: 760px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.occurrence-entry-form__field {
+  display: grid;
+  gap: 0.35rem;
+
+  label {
+    color: var(--color-subtle);
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  input,
+  textarea {
+    width: 100%;
+    min-width: 0;
+    padding: 0.5rem 0.6rem;
+    border: 1px solid var(--color-line-strong);
+    border-radius: var(--radius-sm);
+    background: var(--color-bg);
+    color: var(--color-text);
+
+    &:focus {
+      border-color: var(--color-accent);
+      outline: none;
+      box-shadow: var(--focus-ring);
+    }
+
+    &[aria-invalid='true'] {
+      border-color: var(--color-cta);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-cta) 18%, transparent);
+    }
+  }
+
+  textarea {
+    resize: vertical;
+  }
+}
+
+.occurrence-entry-form__field--quantity input {
+  text-align: right;
+}
+
+.occurrence-entry-form__field--wide {
+  grid-column: span 2;
+
+  @media (max-width: 760px) {
+    grid-column: auto;
+  }
+}
+
+.occurrence-entry-form__submit {
+  justify-self: end;
+}
+
+.occurrence-register {
+  overflow-x: auto;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-raised);
+
+  &:focus-visible {
+    box-shadow: var(--focus-ring);
+  }
+}
+
+.occurrence-register__table,
+.occurrence-details__table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+
+  th,
+  td {
+    padding: 0.7rem 0.75rem;
+    border-bottom: 1px solid var(--color-line);
+    text-align: left;
+    vertical-align: top;
+  }
+
+  th {
+    background: var(--color-panel-muted);
+    color: var(--color-muted);
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }
+
+  td {
+    color: var(--color-text);
+    font-size: 0.83rem;
+  }
+
+  tr:last-child td {
+    border-bottom: 0;
+  }
+}
+
+.occurrence-register__table {
+  min-width: 64rem;
+
+  th:nth-child(1),
+  td:nth-child(1) {
+    width: 3.25rem;
+  }
+
+  th:nth-child(2),
+  td:nth-child(2) {
+    width: 3rem;
+  }
+
+  th:nth-child(4),
+  td:nth-child(4) {
+    width: 4rem;
+  }
+
+  th:nth-child(5),
+  td:nth-child(5) {
+    width: 7rem;
+  }
+}
+
+// Row affordance + open-state highlight. An expanded row is tinted and drops
+// its bottom border so it visually fuses with the drawer that opens below it.
+.occurrence-register__row:hover:not(.occurrence-register__row--open) > td {
+  background: color-mix(in srgb, var(--color-accent-soft) 45%, transparent);
+}
+
+.occurrence-register__row--open > td {
+  background: var(--color-accent-soft);
+  border-bottom-color: transparent;
+}
+
+.occurrence-register__expand-header,
+.occurrence-register__expand-cell {
+  text-align: center;
+}
+
+.occurrence-register__toggle {
+  display: inline-grid;
+  width: 1.85rem;
+  height: 1.85rem;
+  place-items: center;
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-panel);
+  color: var(--color-text);
+  cursor: pointer;
+  transition:
+    background 120ms,
+    border-color 120ms,
+    color 120ms;
+
+  &:hover {
+    border-color: var(--color-accent);
+    background: var(--color-accent-soft);
+    color: var(--color-accent-strong);
+  }
+
+  &:focus {
+    outline: none;
+    box-shadow: var(--focus-ring);
+  }
+}
+
+.occurrence-register__index {
+  color: var(--color-subtle);
+}
+
+.occurrence-register__inventory {
+  display: inline-flex;
+  max-width: 100%;
+  padding: 0.1rem 0.3rem;
+  border: 1px solid var(--color-line);
+  border-radius: 0.25rem;
+  background: var(--color-bg);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.76rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.occurrence-register__description {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--color-muted);
+  font-size: 0.76rem;
+}
+
+.occurrence-register__action {
+  min-height: 1.9rem;
+  padding: 0.25rem 0.65rem;
+  font-size: 0.78rem;
+
+  &:focus {
+    outline: none;
+    box-shadow: var(--focus-ring);
+  }
+}
+
+.occurrence-register__action--secondary {
+  border-color: var(--color-line-strong);
+}
+
+// Level-1 drawer: an inset panel that reads as a tray opening beneath the row —
+// left accent rail, recessed surface, soft inset top shadow, and indentation.
+.occurrence-details,
+.entry-files {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.95rem 1rem 1.1rem 1.4rem;
+  border-left: 3px solid var(--color-accent);
+  background: var(--color-panel-muted);
+  box-shadow: inset 0 7px 9px -8px rgba(15, 23, 42, 0.3);
+}
+
+.occurrence-details__table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-panel);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.06),
+    0 6px 14px -10px rgba(15, 23, 42, 0.22);
+}
+
+.occurrence-details__table {
+  min-width: 58rem;
+
+  th,
+  td {
+    padding: 0.6rem 0.65rem;
+  }
+
+  th {
+    font-size: 0.66rem;
+  }
+
+  td {
+    font-size: 0.8rem;
+  }
+
+  th:nth-child(1),
+  td:nth-child(1) {
+    width: 3.25rem;
+  }
+
+  th:nth-child(2),
+  td:nth-child(2) {
+    width: 7rem;
+  }
+
+  th:nth-child(4),
+  td:nth-child(4) {
+    width: 5rem;
+  }
+
+  th:nth-child(7),
+  td:nth-child(7),
+  th:nth-child(8),
+  td:nth-child(8) {
+    width: 6rem;
+  }
+}
+
+.file-cell__count {
+  color: var(--color-muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.occurrence-register__details-row td {
+  padding: 0;
+  background: var(--color-panel-muted);
+}
+
+// Level-2 drawer (attachments nested under an occurrence row): a step deeper —
+// indented further, a lighter surface, and a quieter rail than level 1.
+.occurrence-details .entry-files {
+  padding-left: 1.9rem;
+  border-left-color: var(--color-line-strong);
+  background: var(--color-bg-raised);
+}
+
+.entry-files__header {
+  display: flex;
+  gap: 0.75rem;
+  align-items: start;
+  justify-content: space-between;
+
+  h3,
+  p {
+    margin: 0;
+  }
+
+  h3 {
+    color: var(--color-text);
+    font-size: 0.9rem;
+  }
+
+  p {
+    margin-top: 0.15rem;
+    color: var(--color-muted);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.76rem;
+    font-weight: 700;
+  }
+}
+
+.entry-files__empty {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 0.82rem;
+}
+
+.attachment-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.attachment-list li {
+  display: grid;
+  gap: 0.4rem;
+  min-width: 0;
+  max-width: 100%;
+}
+
+// File chips read as links: a media-type icon, the file name (the click target
+// that triggers the download), a media-type tag, and a trailing download glyph
+// that swaps to a spinner while fetching.
+.attachment-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0.4rem 0.7rem;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.82rem;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    background 120ms ease,
+    color 120ms ease;
+
+  &:hover:not(:disabled) {
+    border-color: var(--color-accent);
+    background: var(--color-accent-soft);
+    color: var(--color-accent-strong);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+  }
+
+  &:disabled {
+    cursor: progress;
+    opacity: 0.65;
+  }
+}
+
+.attachment-link__icon {
+  flex-shrink: 0;
+  font-size: 0.9rem;
+  color: var(--color-muted);
+}
+
+.attachment-link__name {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment-link:hover:not(:disabled) .attachment-link__name {
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.attachment-link__meta {
+  flex-shrink: 0;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: var(--color-panel-muted);
+  color: var(--color-subtle);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.attachment-link__action {
+  flex-shrink: 0;
+  margin-left: 0.1rem;
+  font-size: 0.8rem;
+  color: var(--color-muted);
+}
+
+.attachment-link:hover:not(:disabled) :is(.attachment-link__icon, .attachment-link__action) {
+  color: var(--color-accent-strong);
+}
+
+.entry-upload {
+  display: grid;
+  grid-template-columns: minmax(12rem, 1fr) minmax(8rem, 12rem) auto;
+  gap: 0.35rem;
+  margin-top: 0.45rem;
+  align-items: center;
+
+  input,
+  select {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  button {
+    min-height: 2rem;
+    padding: 0.25rem 0.7rem;
+  }
+
+  @media (max-width: 760px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.occurrence-modal {
+  position: fixed;
+  inset: 0;
+  // Above the app shell menu (1000) and topbar (997) so the dialog is never
+  // overlapped; matches the shared confirm-modal top layer.
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  animation: occurrence-modal-overlay-in 160ms ease-out;
+}
+
+.occurrence-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: color-mix(in srgb, var(--color-text) 55%, transparent);
+  backdrop-filter: blur(2px);
+  cursor: pointer;
+
+  &:disabled {
+    cursor: default;
+  }
+}
+
+.occurrence-modal__panel {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(42rem, 100%);
+  max-height: min(46rem, calc(100dvh - 2rem));
+  overflow: hidden;
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-panel);
+  box-shadow: 0 1.5rem 4rem rgba(15, 23, 42, 0.28);
+  animation: occurrence-modal-panel-in 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.occurrence-modal__body {
+  display: grid;
+  gap: 1rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 1rem;
+}
+
+.occurrence-modal__header,
+.occurrence-modal__actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.9rem 1rem;
+}
+
+.occurrence-modal__header {
+  border-bottom: 1px solid var(--color-line);
+  background: var(--color-bg-raised);
+
+  h3 {
+    margin: 0;
+    color: var(--color-text);
+    font-size: 1.05rem;
+  }
+}
+
+@keyframes occurrence-modal-overlay-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes occurrence-modal-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem) scale(0.98);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .occurrence-modal,
+  .occurrence-modal__panel {
+    animation: none;
+  }
+}
+
+.occurrence-modal__close {
+  display: inline-grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-panel);
+  color: var(--color-text);
+  cursor: pointer;
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  &:focus {
+    outline: none;
+    box-shadow: var(--focus-ring);
+  }
+}
+
+.occurrence-modal__object {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-raised);
+
+  div {
+    display: grid;
+    gap: 0.2rem;
+    min-width: 0;
+    padding: 0.65rem 0.75rem;
+
+    &:first-child {
+      border-right: 1px solid var(--color-line);
+    }
+  }
+
+  dt {
+    color: var(--color-subtle);
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  dd {
+    min-width: 0;
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: var(--color-text);
+    font-size: 0.86rem;
+    font-weight: 800;
+  }
+}
+
+.occurrence-modal__actions {
+  justify-content: flex-end;
+  border-top: 1px solid var(--color-line);
+  background: var(--color-bg-raised);
+}
+
+// The shared occurrence-entry-form grid is tuned for a wide inline form; inside
+// the constrained modal panel its column min-widths overflow and squeeze the
+// inputs. Override to a tidy two-column layout that fits the 42rem dialog.
+.occurrence-modal .occurrence-entry-form__grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+
+  @media (max-width: 560px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.occurrence-modal .occurrence-entry-form__field--quantity input {
+  text-align: left;
+}
+
+.occurrence-modal__secondary {
+  &:disabled {
+    opacity: 0.55;
+  }
+}

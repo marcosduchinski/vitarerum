@@ -1,0 +1,201 @@
+<div class="proposal-detail">
+  <a class="proposal-detail__back" [routerLink]="backLink()"> ← {{ backLabel() }} </a>
+
+  @if (proposalResource.isLoading()) {
+    <app-loading-state />
+  } @else if (proposalError()) {
+    <app-error-message [apiError]="proposalError()!" (retry)="proposalResource.reload()" />
+  } @else if (proposal()) {
+    <header class="proposal-detail__header">
+      <div class="proposal-detail__header-meta">
+        <p class="proposal-detail__ref">{{ proposal()!.referenceNumber }}</p>
+        <h1 class="proposal-detail__title">{{ proposal()!.title }}</h1>
+        <div class="proposal-detail__status-row">
+          <app-status-chip kind="proposal" [status]="asWorkflowStatus(proposal()!.status)" />
+          <app-type-chip [type]="proposal()!.type" />
+        </div>
+      </div>
+      <aside class="proposal-actions" aria-label="Proposal actions">
+        @if (canAssign()) {
+          <div class="proposal-actions__copy">
+            <span class="proposal-actions__eyebrow">Decision desk</span>
+            <strong>Route this proposal</strong>
+          </div>
+          <div class="proposal-actions__buttons">
+            <button
+              type="button"
+              class="action-btn action-btn--primary"
+              [disabled]="assuming()"
+              (click)="requestAssumeConfirmation()"
+            >
+              <span class="pi pi-check-circle" aria-hidden="true"></span>
+              {{ assuming() ? 'Assigning…' : 'Assign to me' }}
+            </button>
+            <button
+              type="button"
+              class="action-btn"
+              [class.action-btn--active]="forwardModalOpen()"
+              (click)="openForwardModal()"
+            >
+              <span class="pi pi-send" aria-hidden="true"></span>
+              Forward
+            </button>
+          </div>
+        } @else {
+          <div class="proposal-actions__copy">
+            <span class="proposal-actions__eyebrow">Current route</span>
+            @if (proposal()!.assignedTo) {
+              <strong>{{ proposal()!.assignedTo!.user.name }}</strong>
+              <span>{{ proposal()!.assignedTo!.user.email }}</span>
+            } @else {
+              <strong>{{ proposal()!.status.replace('_', ' ') }}</strong>
+              <span>No routing action is available for this status.</span>
+            }
+          </div>
+        }
+      </aside>
+    </header>
+
+    <app-confirm-modal
+      [open]="assumeConfirmOpen()"
+      title="Assign to me?"
+      [message]="'This will assign ' + proposal()!.referenceNumber + ' to you for review.'"
+      confirmLabel="Assign to me"
+      cancelLabel="Keep unassigned"
+      tone="warning"
+      [pending]="assuming()"
+      (confirmed)="assume()"
+      (cancelled)="cancelAssumeConfirmation()"
+    />
+
+    @if (actionError()) {
+      <app-error-message [apiError]="actionError()!" />
+    }
+
+    <app-confirm-modal
+      [open]="forwardModalOpen()"
+      title="Forward proposal"
+      confirmLabel="Forward"
+      cancelLabel="Cancel"
+      tone="warning"
+      [pending]="forwarding()"
+      [confirmDisabled]="!forwardTargetPermissionId() || staffUsersResource.isLoading()"
+      (confirmed)="forward()"
+      (cancelled)="closeForwardModal()"
+    >
+      <div class="forward-modal-body">
+        <p class="forward-modal-body__hint">
+          {{ proposal()!.referenceNumber }} —
+          {{ proposal()!.title }}
+        </p>
+        @if (staffUsersResource.isLoading()) {
+          <app-loading-state label="Loading staff..." />
+        } @else {
+          <label for="forward-modal-target">Staff member</label>
+          <select
+            id="forward-modal-target"
+            [value]="forwardTargetPermissionId()"
+            (change)="onForwardTargetChange($event)"
+          >
+            <option value="" disabled>Select a staff member...</option>
+            @for (opt of staffOptions(); track opt.permissionId) {
+              <option [value]="opt.permissionId">{{ opt.label }}</option>
+            }
+          </select>
+          <label for="forward-modal-note">Note</label>
+          <textarea
+            id="forward-modal-note"
+            rows="3"
+            placeholder="Add a note (optional)..."
+            [value]="forwardNote()"
+            (input)="onForwardNoteChange($event)"
+          ></textarea>
+          @if (actionError()) {
+            <app-error-message [apiError]="actionError()!" />
+          }
+        }
+      </div>
+    </app-confirm-modal>
+
+    <div class="proposal-detail__grid">
+      <section class="detail-card" aria-labelledby="overview-heading">
+        <h2 id="overview-heading" class="detail-card__title">Overview</h2>
+        <dl class="detail-dl">
+          <div class="detail-dl__row">
+            <dt>Requested by</dt>
+            <dd>
+              {{ proposal()!.requestedBy.user.name }}
+              <span class="detail-dl__email">{{ proposal()!.requestedBy.user.email }}</span>
+            </dd>
+          </div>
+          @if (proposal()!.assignedTo) {
+            <div class="detail-dl__row">
+              <dt>Assigned to</dt>
+              <dd>
+                {{ proposal()!.assignedTo!.user.name }}
+                <span class="detail-dl__email">{{ proposal()!.assignedTo!.user.email }}</span>
+              </dd>
+            </div>
+          } @else {
+            <div class="detail-dl__row">
+              <dt>Assigned to</dt>
+              <dd class="detail-dl__empty">Unassigned</dd>
+            </div>
+          }
+          <div class="detail-dl__row">
+            <dt>Submitted</dt>
+            <dd>{{ formatDateTime(proposal()!.submittedAt) }}</dd>
+          </div>
+          <div class="detail-dl__row">
+            <dt>Status</dt>
+            <dd>
+              <app-status-chip kind="proposal" [status]="asWorkflowStatus(proposal()!.status)" />
+            </dd>
+          </div>
+        </dl>
+      </section>
+
+      <app-proposal-conversation-section
+        [proposal]="proposal()!"
+        [messages]="messages()"
+        [messagesLoading]="conversationResource.isLoading()"
+        [messageError]="messageError()"
+        [sendingMessage]="sendingMessage()"
+        [replyResetVersion]="replyResetVersion()"
+        replyEyebrow="Your response"
+        replyHeading="Reply to staff"
+        [recipientEmail]="staffRecipientEmail()"
+        [canReply]="!!proposal()!.assignedTo"
+        (replySubmitted)="sendReply($event)"
+      />
+
+      <section class="detail-card" aria-labelledby="events-heading">
+        <h2 id="events-heading" class="detail-card__title">Event log</h2>
+
+        @if (eventsResource.isLoading()) {
+          <app-loading-state label="Loading events…" />
+        } @else if (!events().length) {
+          <p class="detail-card__empty">No events recorded.</p>
+        } @else {
+          <ol class="event-list" aria-label="Proposal events">
+            @for (event of events(); track event.occurredAt) {
+              <li class="event">
+                <div class="event__dot" aria-hidden="true"></div>
+                <div class="event__content">
+                  <div class="event__header">
+                    <span class="event__type">{{ event.type.replace('_', ' ') }}</span>
+                    <span class="event__date">{{ formatDateTime(event.occurredAt) }}</span>
+                  </div>
+                  <p class="event__actor">{{ event.triggeredBy.user.name }}</p>
+                  @if (event.note) {
+                    <p class="event__note">"{{ event.note }}"</p>
+                  }
+                </div>
+              </li>
+            }
+          </ol>
+        }
+      </section>
+    </div>
+  }
+</div>

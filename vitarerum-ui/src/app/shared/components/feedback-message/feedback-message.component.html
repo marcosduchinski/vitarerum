@@ -1,0 +1,21 @@
+<section
+  [class]="'feedback-message feedback-message--' + tone()"
+  [attr.role]="role()"
+  [attr.aria-live]="ariaLive()"
+>
+  <div>
+    <h2>{{ title() }}</h2>
+    <p>{{ message() }}</p>
+  </div>
+
+  @if (dismissible()) {
+    <button
+      type="button"
+      class="feedback-message__dismiss"
+      (click)="dismissed.emit()"
+      aria-label="Dismiss message"
+    >
+      <span class="pi pi-times" aria-hidden="true"></span>
+    </button>
+  }
+</section>
