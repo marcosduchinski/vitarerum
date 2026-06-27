@@ -1,45 +1,19 @@
-"""Published read models for the User Request triage context (Open Host Service).
+"""Published read models for the Use of Collections export context (Open Host
+Service).
 
 These are plain application DTOs (no ORM, no Pydantic) handed to downstream
-contexts — currently ProposalChat — so they never receive User Request
-aggregates directly (Anti-Corruption Layer rule). Re-exported, together with the
-composition factory, from ``app.use_of_collections.public``.
+contexts — currently the CIDOC-CRM mapping — so they never receive Use of
+Collections aggregates directly (Anti-Corruption Layer rule). Re-exported,
+together with the composition factory, from ``app.use_of_collections.public``.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date
 from typing import Protocol
 
 from app.shared.kernel import IntendedUse
-from app.use_of_collections.domain.enums import ProposalStatus
-
-
-@dataclass(frozen=True, slots=True)
-class FocusMessageView:
-    """One message of a conversation, resolved through the conversation root."""
-
-    message_id: str
-    sent_at: datetime
-    sender: str
-    subject: str
-    body: str
-
-
-@dataclass(frozen=True, slots=True)
-class ProposalContextView:
-    """The triage context for a focus message: the message plus a summary of the
-    proposal its conversation belongs to."""
-
-    conversation_id: str
-    focus_message: FocusMessageView
-    proposal_id: str
-    reference_number: str
-    title: str
-    status: ProposalStatus
-    intended_use: IntendedUse
-
 
 # ── Project export read-view (consumed by the CIDOC-CRM mapping context) ───────
 
@@ -96,21 +70,3 @@ class ProjectExportReader(Protocol):
     not exist."""
 
     async def load(self, project_id: str) -> ProjectExportView | None: ...
-
-
-class ConversationNotFound(Exception):
-    """Raised when no conversation exists for the given id."""
-
-
-class MessageNotFound(Exception):
-    """Raised when the conversation has no message with the given id."""
-
-
-class ProposalContextReader(Protocol):
-    """Published read port (OHS): resolves a conversation + focus message into a
-    translated, read-only triage context. Raises :class:`ConversationNotFound`
-    or :class:`MessageNotFound` rather than returning ``None``."""
-
-    async def load(
-        self, conversation_id: str, message_id: str
-    ) -> ProposalContextView: ...

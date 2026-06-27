@@ -1,8 +1,8 @@
 """Local LLM adapter implementing ``NarrativeModelPort`` via Ollama.
 
-Mirrors ``app/ai/proposalchat/infrastructure/model_ollama.py``: heavy imports
-(langchain-ollama / httpx) are loaded lazily inside :meth:`generate` so the
-module imports without the model stack and unit tests can substitute a fake port.
+Heavy imports (langchain-ollama / httpx) are loaded lazily inside
+:meth:`generate` so the module imports without the model stack and unit tests can
+substitute a fake port.
 
 Failure mapping:
 - connection failures        → ModelUnavailable  (503)

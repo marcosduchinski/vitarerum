@@ -6,7 +6,6 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.ai.museum_narrative.presentation.routes import museum_narrative_router
-from app.ai.proposalchat.presentation.routes import proposalchat_router
 from app.cidoc_crm.in_situ_visit_mapping.presentation.routes import (
     in_situ_visit_router,
     project_export_router,
@@ -99,7 +98,6 @@ app.include_router(projects_router, prefix=prefix)
 app.include_router(users_router, prefix=prefix)
 app.include_router(groups_router, prefix=prefix)
 app.include_router(public_proposals_router, prefix=prefix)
-app.include_router(proposalchat_router, prefix=prefix)
 app.include_router(in_situ_visit_router, prefix=prefix)
 app.include_router(project_export_router, prefix=prefix)
 app.include_router(museum_narrative_router, prefix=prefix)

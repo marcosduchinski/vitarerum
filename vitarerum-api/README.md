@@ -75,26 +75,6 @@ variables are ignored. Defaults are tuned for local development.
 | `ACCESS_TOKEN_TTL_MINUTES` | `720`                                    | Access-token lifetime in minutes (default 12 hours).                        |
 | `OLLAMA_BASE_URL`          | `http://localhost:11434`                 | Base URL of the Ollama server. For Ollama Cloud use `https://ollama.com`.    |
 | `OLLAMA_API_KEY`           | _(empty)_                                | Bearer token for Ollama Cloud; leave empty for a local/self-hosted server.   |
-| `PROPOSALCHAT_MODEL`       | `llama3.1:8b`                            | Ollama model name for the intended-use suggestion.                          |
-| `PROPOSALCHAT_TIMEOUT_SECONDS` | `30`                                 | Per-call timeout for the model; exceeding it returns `504 MODEL_TIMEOUT`.   |
-
-### ProposalChat (AI-assisted intended-use triage)
-
-`app/ai/proposalchat` is a separate bounded context that helps staff classify an
-incoming message. It reads the conversation/message/proposal from User Request
-through a published OHS (`use_of_collections.public`) via an anti-corruption
-layer, and suggests an `intendedUse` (a Shared Kernel `UseType` + free-text
-description). Suggestions are **ephemeral and advisory** — never stored, no
-`ProposalEvent`. Endpoints are staff-only (`EXTERNAL` → `403`):
-
-- `GET /api/v1/proposalchat/context` — focus message + proposal summary (no model).
-- `POST /api/v1/proposalchat/intended-use-suggestions` — runs the LangGraph +
-  Ollama model; returns `503 MODEL_UNAVAILABLE` if Ollama is unreachable or
-  `504 MODEL_TIMEOUT` on timeout. Requires a running Ollama with the configured
-  model pulled (`ollama pull llama3.1:8b`). In Docker, the `api` service reaches
-  a host Ollama via `OLLAMA_BASE_URL=http://host.docker.internal:11434`. To use
-  Ollama Cloud instead of a local server, set `OLLAMA_BASE_URL=https://ollama.com`
-  and `OLLAMA_API_KEY=<your-key>` (no local model pull required).
 
 ### Security validation outside local environments
 

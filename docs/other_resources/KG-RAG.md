@@ -92,7 +92,7 @@ Generate the final text tailored to the specified narrative type constraints.
 
 ### Phase 4: Local LLM Interfacing
 
-1. Send the persona prompt + validated graph to **Llama 3.1:8b** via Ollama (`langchain-ollama`), reusing the ProposalChat adapter pattern.
+1. Send the persona prompt + validated graph to **Llama 3.1:8b** via Ollama (`langchain-ollama`), using the museum-narrative Ollama adapter (`app/ai/museum_narrative/infrastructure/model_ollama.py`).
 2. Keep `temperature=0.3` (or the user-defined override) to ensure strict factual grounding.
 
 > **Implemented notes.** The response is a **single JSON body** (non-streaming) matching §4. Connection failures map to `503 MODEL_UNAVAILABLE`, timeouts to `504 MODEL_TIMEOUT`. Configured via `OLLAMA_BASE_URL`, `NARRATIVE_MODEL` (default `llama3.1:8b`), `NARRATIVE_TIMEOUT_SECONDS`.

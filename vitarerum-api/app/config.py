@@ -22,13 +22,11 @@ class Settings(BaseSettings):
     jwt_secret: str = "change-me-too-local-dev-secret-32b"
     jwt_algorithm: str = "HS256"
     access_token_ttl_minutes: int = 60 * 12
-    # ProposalChat AI triage (LangGraph + Ollama).
+    # Ollama (shared by the AI-assisted contexts).
     # For Ollama Cloud, set OLLAMA_BASE_URL=https://ollama.com and provide
     # OLLAMA_API_KEY; an empty key targets a local/self-hosted Ollama.
     ollama_base_url: str = "http://localhost:11434"
     ollama_api_key: str = ""
-    proposalchat_model: str = "llama3.1:8b"
-    proposalchat_timeout_seconds: float = 30.0
     # KG-RAG museum-narrative generation (local Llama via Ollama).
     narrative_model: str = "llama3.1:8b"
     narrative_timeout_seconds: float = 60.0

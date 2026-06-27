@@ -1,8 +1,8 @@
 from enum import StrEnum
 
-# UseType was promoted to the Shared Kernel so the ProposalChat context can use
-# the taxonomy without importing User Request. Re-exported here so existing
-# imports (and the SQLAlchemy `use_type` enum bound to this class) keep working.
+# UseType lives in the Shared Kernel so any context can use the taxonomy without
+# crossing a bounded-context boundary. Re-exported here so existing imports (and
+# the SQLAlchemy `use_type` enum bound to this class) keep working.
 from app.shared.kernel import UseType as UseType
 
 

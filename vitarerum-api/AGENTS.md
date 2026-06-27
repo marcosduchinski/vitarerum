@@ -18,12 +18,12 @@ Core stack:
 Primary bounded contexts:
 - `identity`: users, groups, permissions, login, JWT identity.
 - `use_of_collections`: proposal and collection-use project workflows.
-- `ai.proposalchat`: ephemeral AI-assisted intended-use triage.
+- `ai.museum_narrative`: AI-assisted (KG-RAG) museum narrative generation.
 - `cidoc_crm.in_situ_visit_mapping`: persisted in-situ visit records for CIDOC-CRM mapping.
 - `shared`: exceptions, authorization helpers, and shared kernel value objects.
 
 Context namespaces:
-- `app/ai/*` groups AI-assisted contexts (e.g. `proposalchat`).
+- `app/ai/*` groups AI-assisted contexts (e.g. `museum_narrative`).
 - `app/cidoc_crm/*` groups CIDOC-CRM mapping contexts (e.g. `in_situ_visit_mapping`).
 
 > This file is the canonical `AGENTS.md`. It complements `CLAUDE.md` and the
@@ -97,17 +97,11 @@ Dependency rules:
 
 Cross-context rules:
 - Other contexts may use Identity only through `app.identity.public`.
-- ProposalChat may use Use of Collections only through `app.use_of_collections.public`.
+- AI contexts may use other contexts only through their published-language modules (`*.public`).
 - `app.shared.kernel` must stay stdlib-only.
 - Do not bypass published-language modules with direct imports into another context.
 - Preserve import-linter contracts in `pyproject.toml`.
 - Every bounded context must register its own import-linter contracts in `pyproject.toml`: a `layers` contract for its `presentation > infrastructure > application > domain` ordering, plus coverage in the domain/application purity (`forbidden`) contracts. A new context is not complete until these are added.
-
-ProposalChat rules:
-- Suggestions are advisory and ephemeral.
-- Do not persist ProposalChat suggestions.
-- Do not emit `ProposalEvent` from ProposalChat.
-- Keep ACL translation in `app/ai/proposalchat/infrastructure/context_acl.py`.
 
 API contract rules:
 - Treat `docs/api_contracts/` as the public contract.
@@ -226,7 +220,6 @@ When coding:
 - Do not import FastAPI, SQLAlchemy, or Pydantic into domain models.
 - Do not bypass `identity.public` or `use_of_collections.public`.
 - Do not put business rules in route handlers.
-- Do not persist ProposalChat suggestions.
 - Do not change public JSON shapes without updating docs and golden tests.
 - Do not store plaintext passwords or secrets.
 - Do not hardcode production credentials, absolute local paths, or user-specific paths.

@@ -58,9 +58,9 @@ class MessageAttachment:
 
 
 class UseType(StrEnum):
-    """The collection-use taxonomy shared by Proposal, CollectionUseProject and
-    the ProposalChat triage suggestion. Promoted to the Shared Kernel so any
-    context can speak it without crossing a bounded-context boundary."""
+    """The collection-use taxonomy shared by Proposal and CollectionUseProject.
+    Promoted to the Shared Kernel so any context can speak it without crossing a
+    bounded-context boundary."""
 
     EXHIBITION = "EXHIBITION"
     IN_SITU_VISIT = "IN_SITU_VISIT"

@@ -7,17 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.use_of_collections.application.context_views import (
-    ConversationNotFound,
     ExportAttachmentView,
     ExportEntryView,
     ExportObjectView,
-    FocusMessageView,
-    MessageNotFound,
     ProjectExportView,
-    ProposalContextView,
 )
 from app.use_of_collections.application.ports import ProjectFilters, ProposalFilters
-from app.use_of_collections.domain.enums import UseType
 from app.use_of_collections.domain.models import (
     Attachment,
     CollectionUseObject,
@@ -1097,70 +1092,6 @@ class SqlAlchemyPublicationLogRepository:
         )
         records = (await self._session.execute(data_stmt)).scalars().all()
         return [publication_entry_to_domain(r) for r in records], total
-
-
-class SqlAlchemyProposalContextReader:
-    """OHS read adapter backing :class:`ProposalContextReader`.
-
-    Resolves the focus message through the conversation root (never by reaching
-    into ``Message`` directly), then loads the owning proposal, and translates
-    both into the published :class:`ProposalContextView`.
-    """
-
-    def __init__(self, session: AsyncSession) -> None:
-        self._session = session
-
-    async def load(
-        self, conversation_id: str, message_id: str
-    ) -> ProposalContextView:
-        conv_stmt = (
-            select(ConversationRecord)
-            .where(ConversationRecord.id == conversation_id)
-            .options(_MESSAGE_EAGER)
-        )
-        conversation = (
-            await self._session.execute(conv_stmt)
-        ).scalar_one_or_none()
-        if conversation is None:
-            raise ConversationNotFound(conversation_id)
-
-        message = next(
-            (m for m in conversation.messages if m.id == message_id), None
-        )
-        if message is None:
-            raise MessageNotFound(message_id)
-
-        proposal_stmt = (
-            select(ProposalRecord)
-            .where(ProposalRecord.id == conversation.proposal_id)
-            .options(*_PROPOSAL_EAGER)
-        )
-        proposal = (await self._session.execute(proposal_stmt)).scalar_one_or_none()
-        if proposal is None:
-            # A conversation always points at a proposal; a dangling row means a
-            # corrupt aggregate, surfaced as a missing conversation to the caller.
-            raise ConversationNotFound(conversation_id)
-
-        return ProposalContextView(
-            conversation_id=str(conversation.id),
-            focus_message=FocusMessageView(
-                message_id=str(message.id),
-                sent_at=message.sent_at,
-                sender=message.sender,
-                subject=message.subject,
-                body=message.body,
-            ),
-            proposal_id=str(proposal.id),
-            reference_number=proposal.reference_number,
-            # A stub proposal may lack a title/type; the triage view falls back
-            # to an empty title and the OTHER (unclassified) use type.
-            title=proposal.title or "",
-            status=proposal.status,
-            intended_use=IntendedUse(
-                use_type=proposal.type or UseType.OTHER,
-                description=proposal.intended_use_description,
-            ),
-        )
 
 
 def _attachment_views(attachments: list[Attachment]) -> list[ExportAttachmentView]:

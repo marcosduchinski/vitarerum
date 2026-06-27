@@ -13,7 +13,6 @@ dependencies = [
     "fastapi>=0.115.0",
     "httpx>=0.28.1",
     "langchain-ollama>=1.1.0",
-    "langgraph>=1.2.5",
     "owlrl>=7.1.4",
     "pydantic-settings>=2.6.0",
     "pyjwt>=2.9.0",
@@ -59,9 +58,9 @@ warn_return_any = true
 warn_unused_configs = true
 exclude = ["alembic/versions"]
 
-# LangGraph / Ollama / owlrl ship no type stubs; imported lazily by adapters.
+# Ollama / owlrl ship no type stubs; imported lazily by adapters.
 [[tool.mypy.overrides]]
-module = ["langgraph.*", "langchain_ollama.*", "langchain_core.*", "owlrl.*"]
+module = ["langchain_ollama.*", "langchain_core.*", "owlrl.*"]
 ignore_missing_imports = true
 
 # ── Architecture fitness function (HEXAGONAL_UP.md Step 0) ───────────────────
@@ -117,16 +116,6 @@ ignore_imports = [
     "app.public_submission.presentation.dependencies -> app.identity.infrastructure.repositories",
     "app.public_submission.presentation.dependencies -> app.use_of_collections.application.use_cases",
     "app.public_submission.presentation.dependencies -> app.use_of_collections.infrastructure.repositories",
-]
-
-[[tool.importlinter.contracts]]
-name = "ProposalChat layers (presentation > infrastructure > application > domain)"
-type = "layers"
-layers = [
-    "app.ai.proposalchat.presentation",
-    "app.ai.proposalchat.infrastructure",
-    "app.ai.proposalchat.application",
-    "app.ai.proposalchat.domain",
 ]
 
 [[tool.importlinter.contracts]]
@@ -191,7 +180,6 @@ name = "Domain purity (no frameworks in domain)"
 type = "forbidden"
 source_modules = [
     "app.use_of_collections.domain",
-    "app.ai.proposalchat.domain",
     "app.ai.museum_narrative.domain",
     "app.cidoc_crm.in_situ_visit_mapping.domain",
     "app.reports.in_situ_visit.domain",
@@ -205,7 +193,6 @@ type = "forbidden"
 source_modules = [
     "app.use_of_collections.application",
     "app.identity.application",
-    "app.ai.proposalchat.application",
     "app.ai.museum_narrative.application",
     "app.cidoc_crm.in_situ_visit_mapping.application",
     "app.reports.in_situ_visit.application",
@@ -238,32 +225,7 @@ ignore_imports = [
 ]
 
 [[tool.importlinter.contracts]]
-name = "ProposalChat may import User Request only via use_of_collections.public"
-type = "forbidden"
-source_modules = ["app.ai"]
-forbidden_modules = ["app.use_of_collections"]
-ignore_imports = [
-    # Permanent: the published OHS is ProposalChat's only door into User Request.
-    "app.ai.** -> app.use_of_collections.public",
-]
-
-[[tool.importlinter.contracts]]
-name = "ProposalChat may import Identity only via identity.public"
-type = "forbidden"
-source_modules = ["app.ai"]
-forbidden_modules = ["app.identity"]
-ignore_imports = [
-    "app.ai.** -> app.identity.public",
-    # Shared helpers already speak Identity's published language on ai's behalf.
-    "app.shared.authorization -> app.identity.public",
-    "app.shared.dependencies -> app.identity.public",
-    # Use of Collections' OHS reader hydrates names via the allowed identity.public
-    # (see its own contract); a transitive reach through it is not an ai->identity leak.
-    "app.use_of_collections.infrastructure.repositories -> app.identity.public",
-]
-
-[[tool.importlinter.contracts]]
-name = "Identity must not depend on ProposalChat"
+name = "Core contexts must not depend on AI contexts"
 type = "forbidden"
 source_modules = ["app.identity", "app.use_of_collections", "app.public_submission"]
 forbidden_modules = ["app.ai"]
