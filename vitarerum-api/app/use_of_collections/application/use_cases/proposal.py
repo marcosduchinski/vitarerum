@@ -37,7 +37,6 @@ from app.use_of_collections.domain.models import (
     Message,
     MessageAttachment,
     MessageId,
-    ObjectReference,
     PermissionId,
     Proposal,
     ProposalId,
@@ -140,9 +139,9 @@ class SubmitProposal:
 
 @dataclass(slots=True)
 class RequestedObjectSnapshotInput:
-    """A requested object whose ObjectReference snapshot is supplied by the
-    caller — the user selects objects from a catalog search result, so the
-    display fields are already known client-side and arrive with the request.
+    """A requested object whose inventory snapshot is supplied by the caller —
+    the user selects objects from a catalog search result, so the display fields
+    are already known client-side and arrive with the request.
     ``inventory_number``/``display_title``/``object_name`` are mandatory at the
     API boundary; ``brief_description_snapshot`` is optional."""
 
@@ -173,12 +172,10 @@ class AddRequestedObjects:
         resolved = [
             RequestedObject(
                 id=RequestedObjectId(_new_id()),
-                object_reference=ObjectReference(
-                    inventory_number=item.inventory_number,
-                    display_title=item.display_title,
-                    object_name=item.object_name,
-                    brief_description_snapshot=item.brief_description_snapshot,
-                ),
+                inventory_number=item.inventory_number,
+                display_title=item.display_title,
+                object_name=item.object_name,
+                brief_description_snapshot=item.brief_description_snapshot,
                 category=item.category,
                 description=item.description,
                 requested_at=now,

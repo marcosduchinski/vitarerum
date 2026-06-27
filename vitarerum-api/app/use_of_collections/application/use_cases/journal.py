@@ -1,8 +1,9 @@
 """Object journal use cases: the access log and the occurrence log.
 
 Each project has at most one ObjectAccessLog and one ObjectOccurrenceLog, lazily
-created on first entry. Entries may optionally link back to a RequestedObject of
-the project's proposal (a read into User Request, validated here).
+created on first entry. Every entry links to a RequestedObject of the project's
+proposal (a read into User Request, validated here) — the RequestedObject is the
+single carrier of the object's inventory snapshot.
 
 The access-log and occurrence-log use cases share the same shape; the common
 preamble (load a writable project), entry-log validation, and attachment
@@ -20,7 +21,6 @@ from app.use_of_collections.application.ports import (
     CollectionUseProjectRepository,
     FileStoragePort,
     ObjectAccessLogRepository,
-    ObjectCatalogPort,
     ObjectOccurrenceLogRepository,
     ProposalRepository,
 )
@@ -105,10 +105,8 @@ async def _validate_requested_object_link(
     proposal_repository: ProposalRepository,
     project_id: CollectionUseProjectId,
     requested_object_id: RequestedObjectId,
-    inventory_number: str,
 ) -> None:
-    """An entry may only link to a RequestedObject of this project's proposal,
-    and its inventory number must match the entry's object."""
+    """An entry may only link to a RequestedObject of this project's proposal."""
     proposal = await proposal_repository.get_by_project_id(project_id)
     requested = (
         next(
@@ -122,10 +120,6 @@ async def _validate_requested_object_link(
         raise ValueError(
             f"Requested object {requested_object_id} is not part of "
             "this project's request"
-        )
-    if requested.object_reference.inventory_number != inventory_number:
-        raise ValueError(
-            "requestedObjectId does not match the entry's inventory number"
         )
 
 
@@ -151,10 +145,9 @@ async def _get_or_create_access_log(
 class AddObjectLogEntryInput:
     project_id: CollectionUseProjectId
     caller: Actor
-    inventory_number: str
+    requested_object_id: RequestedObjectId
     number_of_objects: int
     observations: str | None = None
-    requested_object_id: RequestedObjectId | None = None
     restrict_to_in_progress: bool = False
 
 
@@ -163,36 +156,30 @@ class AddObjectLogEntry:
         self,
         project_repository: CollectionUseProjectRepository,
         access_log_repository: ObjectAccessLogRepository,
-        object_catalog: ObjectCatalogPort,
         proposal_repository: ProposalRepository,
     ) -> None:
         self._project_repo = project_repository
         self._repo = access_log_repository
-        self._catalog = object_catalog
         self._proposal_repo = proposal_repository
 
     async def execute(self, data: AddObjectLogEntryInput) -> ObjectLogEntry:
         await _load_writable_project(
             self._project_repo, data.project_id, data.restrict_to_in_progress
         )
-        if data.requested_object_id is not None:
-            await _validate_requested_object_link(
-                self._proposal_repo,
-                data.project_id,
-                data.requested_object_id,
-                data.inventory_number,
-            )
+        await _validate_requested_object_link(
+            self._proposal_repo,
+            data.project_id,
+            data.requested_object_id,
+        )
         access_log = await _get_or_create_access_log(data.project_id, self._repo)
-        reference = await self._catalog.resolve(data.inventory_number)
         entry = ObjectLogEntry(
             id=ObjectLogEntryId(_new_id()),
             object_access_log_id=access_log.id,
-            object_reference=reference,
+            requested_object_id=data.requested_object_id,
             number_of_objects=data.number_of_objects,
             added_at=_now(),
             added_by=data.caller.id,
             observations=data.observations,
-            requested_object_id=data.requested_object_id,
         )
         access_log.add_object_log_entry(entry)
         await self._repo.save_entry(entry)
@@ -345,13 +332,12 @@ async def _get_or_create_occurrence_log(
 class AddObjectOccurrenceEntryInput:
     project_id: CollectionUseProjectId
     caller: Actor
-    inventory_number: str
+    requested_object_id: RequestedObjectId
     number_of_objects: int
     occurrence_date: datetime
     location: str
     detailed_description: str
     testimonial: str | None = None
-    requested_object_id: RequestedObjectId | None = None
     restrict_to_in_progress: bool = False
 
 
@@ -360,12 +346,10 @@ class AddObjectOccurrenceEntry:
         self,
         project_repository: CollectionUseProjectRepository,
         occurrence_log_repository: ObjectOccurrenceLogRepository,
-        object_catalog: ObjectCatalogPort,
         proposal_repository: ProposalRepository,
     ) -> None:
         self._project_repo = project_repository
         self._repo = occurrence_log_repository
-        self._catalog = object_catalog
         self._proposal_repo = proposal_repository
 
     async def execute(
@@ -374,28 +358,24 @@ class AddObjectOccurrenceEntry:
         await _load_writable_project(
             self._project_repo, data.project_id, data.restrict_to_in_progress
         )
-        if data.requested_object_id is not None:
-            await _validate_requested_object_link(
-                self._proposal_repo,
-                data.project_id,
-                data.requested_object_id,
-                data.inventory_number,
-            )
+        await _validate_requested_object_link(
+            self._proposal_repo,
+            data.project_id,
+            data.requested_object_id,
+        )
         occurrence_log = await _get_or_create_occurrence_log(
             data.project_id, self._repo
         )
-        reference = await self._catalog.resolve(data.inventory_number)
         entry = ObjectOccurrenceEntry(
             id=ObjectOccurrenceEntryId(_new_id()),
             object_occurrence_log_id=occurrence_log.id,
-            object_reference=reference,
+            requested_object_id=data.requested_object_id,
             number_of_objects=data.number_of_objects,
             occurrence_date=data.occurrence_date,
             location=data.location,
             reported_by=data.caller.id,
             detailed_description=data.detailed_description,
             testimonial=data.testimonial,
-            requested_object_id=data.requested_object_id,
         )
         occurrence_log.add_object_occurrence_entry(entry)
         await self._repo.save_entry(entry)

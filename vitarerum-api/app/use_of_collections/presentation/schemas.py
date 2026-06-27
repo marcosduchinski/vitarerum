@@ -28,16 +28,6 @@ class PermissionDetail(BaseModel):
     group: GroupName
 
 
-# ── Shared object reference (collection object snapshot) ──────────────────────
-
-
-class ObjectReferenceResponse(BaseModel):
-    inventoryNumber: str
-    displayTitle: str | None = None
-    objectName: str | None = None
-    briefDescriptionSnapshot: str | None = None
-
-
 # ── Intended use (use type + free-text description) ──────────────────────────
 
 
@@ -125,7 +115,10 @@ class RequestedDocumentResponse(BaseModel):
 
 class RequestedObjectResponse(BaseModel):
     id: str
-    objectReference: ObjectReferenceResponse
+    inventoryNumber: str
+    displayTitle: str | None = None
+    objectName: str | None = None
+    briefDescriptionSnapshot: str | None = None
     category: str
     description: str
     requestedAt: datetime
@@ -257,8 +250,8 @@ class RequestDocumentsRequest(BaseModel):
 
 
 class RequestedObjectSnapshotInput(BaseModel):
-    """Caller-supplied ObjectReference snapshot: the user picks objects from a
-    catalog search result, so the display fields are known client-side.
+    """Caller-supplied inventory snapshot: the user picks objects from a catalog
+    search result, so the display fields are known client-side.
     inventoryNumber/displayTitle/objectName are required; briefDescriptionSnapshot
     is optional."""
 
@@ -331,10 +324,9 @@ class AttachmentResponse(BaseModel):
 
 
 class AddLogEntryRequest(BaseModel):
-    inventoryNumber: str
+    requestedObjectId: str = Field(min_length=1)
     numberOfObjects: int = Field(ge=1)
     observations: str | None = None
-    requestedObjectId: str | None = None
 
 
 class EditLogEntryRequest(BaseModel):
@@ -345,12 +337,11 @@ class EditLogEntryRequest(BaseModel):
 
 class ObjectLogEntryResponse(BaseModel):
     id: str
-    objectReference: ObjectReferenceResponse
+    requestedObjectId: str
     numberOfObjects: int
     addedAt: datetime
     addedBy: PermissionDetail
     observations: str | None
-    requestedObjectId: str | None
     attachments: list[AttachmentResponse]
 
 
@@ -376,13 +367,12 @@ class PaginatedLogEntriesResponse(BaseModel):
 
 
 class AddOccurrenceEntryRequest(BaseModel):
-    inventoryNumber: str
+    requestedObjectId: str = Field(min_length=1)
     numberOfObjects: int = Field(ge=1)
     occurrenceDate: datetime
     location: str = Field(min_length=1)
     detailedDescription: str = Field(min_length=1)
     testimonial: str | None = None
-    requestedObjectId: str | None = None
 
 
 class EditOccurrenceEntryRequest(BaseModel):
@@ -395,14 +385,13 @@ class EditOccurrenceEntryRequest(BaseModel):
 
 class ObjectOccurrenceEntryResponse(BaseModel):
     id: str
-    objectReference: ObjectReferenceResponse
+    requestedObjectId: str
     numberOfObjects: int
     occurrenceDate: datetime
     location: str
     reportedBy: PermissionDetail
     detailedDescription: str
     testimonial: str | None
-    requestedObjectId: str | None
     attachments: list[AttachmentResponse]
 
 

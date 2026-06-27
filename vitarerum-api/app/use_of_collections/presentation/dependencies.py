@@ -1,8 +1,8 @@
 """Composition root for the Use of Collections inbound adapter.
 
 All wiring of concrete outbound adapters (SQLAlchemy repositories, file
-storage, object catalog, Identity's PermissionReader) happens here; the route
-modules depend only on ports and these FastAPI dependency factories.
+storage, Identity's PermissionReader) happens here; the route modules depend
+only on ports and these FastAPI dependency factories.
 """
 
 from typing import Annotated
@@ -17,7 +17,6 @@ from app.use_of_collections.application.ports import (
     ConversationRepository,
     FileStoragePort,
     ObjectAccessLogRepository,
-    ObjectCatalogPort,
     ObjectOccurrenceLogRepository,
     ProposalRepository,
     PublicationLogRepository,
@@ -28,7 +27,6 @@ from app.use_of_collections.application.queries import (
     ListProjects,
     ListProposals,
 )
-from app.use_of_collections.infrastructure.catalog import StubObjectCatalog
 from app.use_of_collections.infrastructure.file_storage import LocalDiskFileStorage
 from app.use_of_collections.infrastructure.repositories import (
     SqlAlchemyCollectionUseProjectRepository,
@@ -68,10 +66,6 @@ def get_publication_log_repo(session: DBSession) -> PublicationLogRepository:
     return SqlAlchemyPublicationLogRepository(session)
 
 
-def get_object_catalog() -> ObjectCatalogPort:
-    return StubObjectCatalog()
-
-
 def get_file_storage() -> FileStoragePort:
     return LocalDiskFileStorage(settings.data_dir)
 
@@ -90,7 +84,6 @@ OccurrenceLogRepo = Annotated[
 PublicationLogRepo = Annotated[
     PublicationLogRepository, Depends(get_publication_log_repo)
 ]
-ObjectCatalog = Annotated[ObjectCatalogPort, Depends(get_object_catalog)]
 FileStorage = Annotated[FileStoragePort, Depends(get_file_storage)]
 PermReader = Annotated[PermissionReader, Depends(get_reader)]
 

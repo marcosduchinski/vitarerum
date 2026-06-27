@@ -107,16 +107,12 @@ class ObjectLogEntryRecord(Base):
         ForeignKey("object_access_logs.id"),
         index=True,
     )
-    inventory_number: Mapped[str] = mapped_column(String(128))
-    display_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    object_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    brief_description_snapshot: Mapped[str | None] = mapped_column(Text, nullable=True)
     number_of_objects: Mapped[int] = mapped_column(Integer)
     added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     added_by: Mapped[str] = mapped_column(String(36), index=True)
     observations: Mapped[str | None] = mapped_column(Text, nullable=True)
-    requested_object_id: Mapped[str | None] = mapped_column(
-        String(36), nullable=True, index=True
+    requested_object_id: Mapped[str] = mapped_column(
+        String(36), nullable=False, index=True
     )
 
     access_log: Mapped[ObjectAccessLogRecord] = relationship(back_populates="objects")
@@ -171,18 +167,14 @@ class ObjectOccurrenceEntryRecord(Base):
         ForeignKey("object_occurrence_logs.id"),
         index=True,
     )
-    inventory_number: Mapped[str] = mapped_column(String(128))
-    display_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    object_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    brief_description_snapshot: Mapped[str | None] = mapped_column(Text, nullable=True)
     number_of_objects: Mapped[int] = mapped_column(Integer)
     occurrence_date: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     location: Mapped[str] = mapped_column(String(255))
     reported_by: Mapped[str] = mapped_column(String(36), index=True)
     detailed_description: Mapped[str] = mapped_column(Text)
     testimonial: Mapped[str | None] = mapped_column(Text, nullable=True)
-    requested_object_id: Mapped[str | None] = mapped_column(
-        String(36), nullable=True, index=True
+    requested_object_id: Mapped[str] = mapped_column(
+        String(36), nullable=False, index=True
     )
 
     occurrence_log: Mapped[ObjectOccurrenceLogRecord] = relationship(

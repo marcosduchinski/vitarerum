@@ -14,6 +14,7 @@ from test.use_of_collections.test_api import (
     _project,
     _project_proposal,
     _proposal,
+    _proposal_with_requested_object,
     client_with_repos,
 )
 
@@ -269,15 +270,16 @@ async def test_golden_log_entries_shapes() -> None:
     async with client_with_repos(caller=_STAFF_CALLER) as (
         client,
         project_repo,
-        _,
+        proposal_repo,
         _,
     ):
         await project_repo.add(_project("project-1", status=UseStatus.IN_PROGRESS))
+        await proposal_repo.add(_proposal_with_requested_object())
 
         created = await client.post(
             "/api/v1/collection-use-projects/project-1/log-entries",
             json={
-                "inventoryNumber": "INV-001",
+                "requestedObjectId": "req-1",
                 "numberOfObjects": 2,
                 "observations": "obs",
             },
@@ -291,10 +293,6 @@ async def test_golden_log_entries_shapes() -> None:
 
     entry_shape = {
         "id",
-        "objectReference.inventoryNumber",
-        "objectReference.displayTitle",
-        "objectReference.objectName",
-        "objectReference.briefDescriptionSnapshot",
         "numberOfObjects",
         "addedAt",
         "observations",
@@ -332,15 +330,16 @@ async def test_golden_occurrence_entries_shapes() -> None:
     async with client_with_repos(caller=_STAFF_CALLER) as (
         client,
         project_repo,
-        _,
+        proposal_repo,
         _,
     ):
         await project_repo.add(_project("project-1", status=UseStatus.IN_PROGRESS))
+        await proposal_repo.add(_proposal_with_requested_object())
 
         created = await client.post(
             "/api/v1/collection-use-projects/project-1/occurrence-entries",
             json={
-                "inventoryNumber": "INV-001",
+                "requestedObjectId": "req-1",
                 "numberOfObjects": 1,
                 "occurrenceDate": "2026-06-03T11:30:00Z",
                 "location": "Lab",
@@ -354,10 +353,6 @@ async def test_golden_occurrence_entries_shapes() -> None:
 
     entry_shape = {
         "id",
-        "objectReference.inventoryNumber",
-        "objectReference.displayTitle",
-        "objectReference.objectName",
-        "objectReference.briefDescriptionSnapshot",
         "numberOfObjects",
         "occurrenceDate",
         "location",

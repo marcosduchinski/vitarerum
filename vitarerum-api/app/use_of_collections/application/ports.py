@@ -16,7 +16,6 @@ from app.use_of_collections.domain.models import (
     ObjectOccurrenceEntryId,
     ObjectOccurrenceLog,
     ObjectOccurrenceLogId,
-    ObjectReference,
     Proposal,
     ProposalId,
     PublicationLog,
@@ -194,12 +193,6 @@ class PublicationLogRepository(Protocol):
         page: int,
         size: int,
     ) -> tuple[list[PublicationLogEntry], int]: ...
-
-
-class ObjectCatalogPort(Protocol):
-    async def resolve(self, inventory_number: str) -> ObjectReference:
-        """Resolve an inventory number to an ObjectReference snapshot."""
-        ...
 
 
 class FileStoragePort(Protocol):

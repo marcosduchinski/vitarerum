@@ -83,7 +83,6 @@ from app.use_of_collections.presentation.common import (
     _load_permission_detail,
     _message_response,
     _not_found,
-    _object_reference_response,
     _require_staff_permission_target,
     _stub_perm,
     ensure_docx,
@@ -314,7 +313,10 @@ async def get_proposal(
     requested_objects = [
         RequestedObjectResponse(
             id=ro.id,
-            objectReference=_object_reference_response(ro.object_reference),
+            inventoryNumber=ro.inventory_number,
+            displayTitle=ro.display_title,
+            objectName=ro.object_name,
+            briefDescriptionSnapshot=ro.brief_description_snapshot,
             category=ro.category,
             description=ro.description,
             requestedAt=ro.requested_at,

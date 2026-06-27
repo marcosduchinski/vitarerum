@@ -211,11 +211,10 @@ class StartProject:
             entry = ObjectLogEntry(
                 id=ObjectLogEntryId(_new_id()),
                 object_access_log_id=access_log.id,
-                object_reference=requested.object_reference,
+                requested_object_id=requested.id,
                 number_of_objects=1,
                 added_at=now,
                 added_by=caller_id,
-                requested_object_id=requested.id,
             )
             access_log.add_object_log_entry(entry)
             await self._access_log_repo.save_entry(entry)

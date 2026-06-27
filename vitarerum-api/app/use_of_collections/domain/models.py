@@ -29,9 +29,6 @@ from app.shared.kernel import (
     MessageAttachment as MessageAttachment,
 )
 from app.shared.kernel import (
-    ObjectReference as ObjectReference,
-)
-from app.shared.kernel import (
     PermissionId as PermissionId,
 )
 from app.shared.kernel import (
@@ -89,16 +86,19 @@ class UseEvent:
 
 @dataclass(slots=True)
 class ObjectLogEntry:
-    """Entity inside ObjectAccessLog — one accessed object with its quantity."""
+    """Entity inside ObjectAccessLog — one accessed object with its quantity.
+
+    The accessed object is identified through ``requested_object_id``, which
+    points to a RequestedObject of the project's proposal (the single carrier of
+    the object's inventory snapshot)."""
 
     id: ObjectLogEntryId
     object_access_log_id: ObjectAccessLogId
-    object_reference: ObjectReference
+    requested_object_id: RequestedObjectId
     number_of_objects: int
     added_at: datetime
     added_by: PermissionId
     observations: str | None = None
-    requested_object_id: RequestedObjectId | None = None
     attachments: list[Attachment] = field(default_factory=list)
 
     def __post_init__(self) -> None:
@@ -155,14 +155,13 @@ class ObjectOccurrenceEntry:
 
     id: ObjectOccurrenceEntryId
     object_occurrence_log_id: ObjectOccurrenceLogId
-    object_reference: ObjectReference
+    requested_object_id: RequestedObjectId
     number_of_objects: int
     occurrence_date: datetime
     location: str
     reported_by: PermissionId
     detailed_description: str
     testimonial: str | None = None
-    requested_object_id: RequestedObjectId | None = None
     attachments: list[Attachment] = field(default_factory=list)
 
     def __post_init__(self) -> None:
@@ -396,12 +395,25 @@ class RequestedDocument:
 
 @dataclass(slots=True)
 class RequestedObject:
+    """Entity carrying the collection-object snapshot requested on a proposal.
+
+    The inventory snapshot (formerly the ObjectReference value object) lives
+    directly on this entity — it is the single source of an object's identity,
+    referenced by journal entries through ``RequestedObjectId``."""
+
     id: RequestedObjectId
-    object_reference: ObjectReference
+    inventory_number: str
     category: str
     description: str
     requested_at: datetime
     requested_by: PermissionId
+    display_title: str | None = None
+    object_name: str | None = None
+    brief_description_snapshot: str | None = None
+
+    def __post_init__(self) -> None:
+        if not self.inventory_number:
+            raise ValueError("inventoryNumber is required.")
 
 
 @dataclass(slots=True)

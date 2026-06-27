@@ -132,7 +132,7 @@ permission id. `page` is zero-based. `size` must be between 1 and 100.
 
 ### `POST /proposals/{proposal_id}/requested-objects`
 
-**Description** — Append collection objects the researcher wishes to use to an existing proposal. This is the **only** way objects are attached to a proposal. The objects come from an external catalog: the researcher searches it, selects the matching items from the result list, and the client submits the **`ObjectReference` snapshot it already holds from that search result**. The server does not resolve anything — it stores the snapshot as given. Allowed while the proposal is not in a terminal status (`APPROVED`/`REJECTED`/`CANCELLED`). Returns the full updated proposal detail (same shape as `GET /proposals/{proposal_id}`).
+**Description** — Append collection objects the researcher wishes to use to an existing proposal. This is the **only** way objects are attached to a proposal. The objects come from an external catalog: the researcher searches it, selects the matching items from the result list, and the client submits the **inventory snapshot it already holds from that search result**. The server does not resolve anything — it stores the snapshot as given. Allowed while the proposal is not in a terminal status (`APPROVED`/`REJECTED`/`CANCELLED`). Returns the full updated proposal detail (same shape as `GET /proposals/{proposal_id}`).
 
 **Path parameters**
 ```
@@ -258,12 +258,10 @@ proposal_id : UUID (required)
   "requestedObjects": [
     {
       "id": "uuid",
-      "objectReference": {
-        "inventoryNumber": "INV-001",
-        "displayTitle": "Book of Hours",
-        "objectName": "Illuminated manuscript",
-        "briefDescriptionSnapshot": "string | null"
-      },
+      "inventoryNumber": "INV-001",
+      "displayTitle": "Book of Hours",
+      "objectName": "Illuminated manuscript",
+      "briefDescriptionSnapshot": "string | null",
       "category": "manuscript",
       "description": "string",
       "requestedAt": "2025-01-15T10:30:00",
@@ -282,7 +280,7 @@ proposal_id : UUID (required)
 }
 ```
 
-`status` is a `ProposalStatus` — one of `SUBMITTED`, `PENDING`, `APPROVED`, `REJECTED`, `CANCELLED`. The top-level `referenceNumber` is the proposal reference (`VRP-YYYYMMDD-XXXX`), the top-level `title` is the title submitted with the proposal, and `beginDate` / `endDate` are the requested use period. `title`, `intendedUse`, `beginDate`, and `endDate` are nullable: a stub proposal submitted without them carries `null` until they are filled in (e.g. at approval). The `intendedUse` object is either fully present or `null` as a whole. `collectionUseProject` is always present in the shape, but until the proposal is approved no project exists yet: its `id`, `referenceNumber`, and `title` are empty strings, `status` is the placeholder `CREATED`, and `requestedBy` is `null`. After approval these reflect the real project (`CUP-XXXXXXXX`) and its `requestedBy` permission. `conversationId` may be `null` only if the persisted proposal has no conversation row. `requestedDocuments` lists the document types a staff attendant has formally requested (via `POST /proposals/{proposal_id}/request-documents`); `documents` lists the files actually uploaded; `requestedObjects` lists the collection objects the researcher asked to use (attached via `POST /proposals/{proposal_id}/requested-objects`). `submittedBy`, `requestedBy` are full permission objects, not bare ids. Each `objectReference` carries the snapshot the client supplied from the catalog search result — `inventoryNumber` is always present; `displayTitle`, `objectName`, and `briefDescriptionSnapshot` may be `null` in stored data, although the requested-object creation endpoint requires `displayTitle` and `objectName`.
+`status` is a `ProposalStatus` — one of `SUBMITTED`, `PENDING`, `APPROVED`, `REJECTED`, `CANCELLED`. The top-level `referenceNumber` is the proposal reference (`VRP-YYYYMMDD-XXXX`), the top-level `title` is the title submitted with the proposal, and `beginDate` / `endDate` are the requested use period. `title`, `intendedUse`, `beginDate`, and `endDate` are nullable: a stub proposal submitted without them carries `null` until they are filled in (e.g. at approval). The `intendedUse` object is either fully present or `null` as a whole. `collectionUseProject` is always present in the shape, but until the proposal is approved no project exists yet: its `id`, `referenceNumber`, and `title` are empty strings, `status` is the placeholder `CREATED`, and `requestedBy` is `null`. After approval these reflect the real project (`CUP-XXXXXXXX`) and its `requestedBy` permission. `conversationId` may be `null` only if the persisted proposal has no conversation row. `requestedDocuments` lists the document types a staff attendant has formally requested (via `POST /proposals/{proposal_id}/request-documents`); `documents` lists the files actually uploaded; `requestedObjects` lists the collection objects the researcher asked to use (attached via `POST /proposals/{proposal_id}/requested-objects`). `submittedBy`, `requestedBy` are full permission objects, not bare ids. Each requested object carries the inventory snapshot the client supplied from the catalog search result directly on the object — `inventoryNumber` is always present; `displayTitle`, `objectName`, and `briefDescriptionSnapshot` may be `null` in stored data, although the requested-object creation endpoint requires `displayTitle` and `objectName`.
 
 **Response `404 Not Found`**
 ```json

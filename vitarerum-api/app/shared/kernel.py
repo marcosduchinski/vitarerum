@@ -52,20 +52,6 @@ class DocumentType:
 
 
 @dataclass(frozen=True, slots=True)
-class ObjectReference:
-    """Shared Kernel snapshot of a collection object identified by inventory number."""
-
-    inventory_number: str
-    display_title: str | None = None
-    object_name: str | None = None
-    brief_description_snapshot: str | None = None
-
-    def __post_init__(self) -> None:
-        if not self.inventory_number:
-            raise ValueError("inventoryNumber is required.")
-
-
-@dataclass(frozen=True, slots=True)
 class MessageAttachment:
     document_id: DocumentId
     file_name: str

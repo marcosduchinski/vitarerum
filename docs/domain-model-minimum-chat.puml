@@ -23,13 +23,6 @@ package "Shared Kernel" <<Shared Kernel>> {
         - value: String
         }
 
-        class ObjectReference <<Value Object>> #e0afea {
-        - inventoryNumber: String
-        - displayTitle: String?
-        - objectName: String?
-        - briefDescriptionSnapshot: String?
-        }
-
         class MessageAttachment <<Value Object>> #e0afea {
         - documentId: DocumentId
         - fileName: String
@@ -165,7 +158,10 @@ package "Proposal Phase" <<Module>> {
 
         class RequestedObject <<Entity>> #ffeead {
         - id: RequestedObjectId
-        - objectReference: ObjectReference
+        - inventoryNumber: String
+        - displayTitle: String?
+        - objectName: String?
+        - briefDescriptionSnapshot: String?
         - category: String
         - description: String
         - requestedAt: DateTime
@@ -207,7 +203,6 @@ package "Proposal Phase" <<Module>> {
         Proposal *-- "0..*" Document
 
         RequestedDocument *-- DocumentType
-        RequestedObject *-- ObjectReference
         Document *-- DocumentType
 
         Proposal ..> Permission : requestedBy
@@ -253,6 +248,7 @@ package "Project Phase" <<Module>> {
         + recordStarted(...)
         + recordCompleted(...)
         + recordCancelled(...)
+        + recordCancelledFromProposal(...)
         }
 
         enum UseStatus #ff6f69 {
@@ -309,12 +305,11 @@ package "Project Phase" <<Module>> {
         class ObjectLogEntry <<Entity>> #ffb7b2 {
         - id: ObjectLogEntryId
         - objectAccessLogId: ObjectAccessLogId
-        - objectReference: ObjectReference
+        - requestedObjectId: RequestedObjectId
         - numberOfObjects: Int
         - addedAt: DateTime
         - addedBy: PermissionId
         - observations: String?
-        - requestedObjectId: RequestedObjectId?
         - attachments: List<Attachment>
         + addAttachment(...)
         + edit(...)
@@ -335,14 +330,13 @@ package "Project Phase" <<Module>> {
         class ObjectOccurrenceEntry <<Entity>> #ffb7b2 {
         - id: ObjectOccurrenceEntryId
         - objectOccurrenceLogId: ObjectOccurrenceLogId
-        - objectReference: ObjectReference
+        - requestedObjectId: RequestedObjectId
         - numberOfObjects: Int
         - occurrenceDate: DateTime
         - location: String
         - reportedBy: PermissionId
         - detailedDescription: String
         - testimonial: String?
-        - requestedObjectId: RequestedObjectId?
         - attachments: List<Attachment>
         + addAttachment(...)
         + edit(...)
@@ -387,9 +381,8 @@ package "Project Phase" <<Module>> {
         ObjectAccessLog ..> Permission : curator
 
         ObjectLogEntry *-- "0..*" Attachment
-        ObjectLogEntry *-- "1..1" ObjectReference
         ObjectLogEntry ..> Permission : addedBy
-        ObjectLogEntry ..> RequestedObject : requestedObjectId
+        ObjectLogEntry --> "1" RequestedObject : requestedObjectId
 
         ObjectOccurrenceLog "1..1" -- CollectionUseProject : collectionUseProjectId
         ObjectOccurrenceLog *-- "0..*" ObjectOccurrenceEntry
@@ -397,9 +390,8 @@ package "Project Phase" <<Module>> {
         ObjectOccurrenceLog ..> Permission : curator
 
         ObjectOccurrenceEntry *-- "0..*" Attachment
-        ObjectOccurrenceEntry *-- "1..1" ObjectReference
         ObjectOccurrenceEntry ..> Permission : reportedBy
-        ObjectOccurrenceEntry ..> RequestedObject : requestedObjectId
+        ObjectOccurrenceEntry --> "1" RequestedObject : requestedObjectId
 
         PublicationLog "1..1" -- CollectionUseProject : collectionUseProjectId
         PublicationLog *-- "0..*" PublicationLogEntry
@@ -426,6 +418,7 @@ package "ProposalChat" <<Bounded Context>> {
     package "domain" {
 
         class ConversationContext <<Value Object>> #a0c4ff {
+        + conversationId: String
         + focus: FocusMessage
         + proposal: ProposalSummary
         }
@@ -494,7 +487,8 @@ package "ProposalChat" <<Bounded Context>> {
     }
 
     package "presentation" {
-        class ProposalChatController <<driving adapter>> #caffbf
+        ' FastAPI APIRouter (module-level), not a controller class
+        class ProposalChatRouter <<driving adapter>> #caffbf
     }
 
     ConversationContext *-- FocusMessage
@@ -510,8 +504,8 @@ package "ProposalChat" <<Bounded Context>> {
 
     UserRequestContextAdapter ..|> ProposalContextPort
     LangGraphIntendedUseAdapter ..|> IntendedUseSuggestionPort
-    ProposalChatController ..> SuggestIntendedUseService
-    ProposalChatController ..> GetTriageContext
+    ProposalChatRouter ..> SuggestIntendedUseService
+    ProposalChatRouter ..> GetTriageContext
 }
 
 ' --- cross-context integration ---

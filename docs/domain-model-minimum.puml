@@ -30,13 +30,6 @@ package "Shared Kernel" <<Shared Kernel>> {
         - value: String
         }
 
-        class ObjectReference <<Value Object>> #e0afea {
-        - inventoryNumber: String
-        - displayTitle: String?
-        - objectName: String?
-        - briefDescriptionSnapshot: String?
-        }
-
         class MessageAttachment <<Value Object>> #e0afea {
         - documentId: DocumentId
         - fileName: String
@@ -168,7 +161,10 @@ package "User Request" <<Bounded Context>> {
 
         class RequestedObject <<Entity>> #ffeead {
         - id: RequestedObjectId
-        - objectReference: ObjectReference
+        - inventoryNumber: String
+        - displayTitle: String?
+        - objectName: String?
+        - briefDescriptionSnapshot: String?
         - category: String
         - description: String
         - requestedAt: DateTime
@@ -210,7 +206,6 @@ package "User Request" <<Bounded Context>> {
         Proposal *-- "0..*" Document
 
         RequestedDocument *-- DocumentType
-        RequestedObject *-- ObjectReference
         Document *-- DocumentType
 
         Proposal ..> Permission : requestedBy
@@ -313,12 +308,11 @@ package "Collection Use" <<Bounded Context>> {
         class ObjectLogEntry <<Entity>> #ffb7b2 {
         - id: ObjectLogEntryId
         - objectAccessLogId: ObjectAccessLogId
-        - objectReference: ObjectReference
+        - requestedObjectId: RequestedObjectId
         - numberOfObjects: Int
         - addedAt: DateTime
         - addedBy: PermissionId
         - observations: String?
-        - requestedObjectId: RequestedObjectId?
         - attachments: List<Attachment>
         + addAttachment(...)
         + edit(...)
@@ -339,14 +333,13 @@ package "Collection Use" <<Bounded Context>> {
         class ObjectOccurrenceEntry <<Entity>> #ffb7b2 {
         - id: ObjectOccurrenceEntryId
         - objectOccurrenceLogId: ObjectOccurrenceLogId
-        - objectReference: ObjectReference
+        - requestedObjectId: RequestedObjectId
         - numberOfObjects: Int
         - occurrenceDate: DateTime
         - location: String
         - reportedBy: PermissionId
         - detailedDescription: String
         - testimonial: String?
-        - requestedObjectId: RequestedObjectId?
         - attachments: List<Attachment>
         + addAttachment(...)
         + edit(...)
@@ -391,9 +384,8 @@ package "Collection Use" <<Bounded Context>> {
         ObjectAccessLog ..> Permission : curator
 
         ObjectLogEntry *-- "0..*" Attachment
-        ObjectLogEntry *-- "1..1" ObjectReference
         ObjectLogEntry ..> Permission : addedBy
-        ObjectLogEntry ..> RequestedObject : requestedObjectId
+        ObjectLogEntry --> "1" RequestedObject : requestedObjectId
 
         ObjectOccurrenceLog "1..1" -- CollectionUseProject : collectionUseProjectId
         ObjectOccurrenceLog *-- "0..*" ObjectOccurrenceEntry
@@ -401,9 +393,8 @@ package "Collection Use" <<Bounded Context>> {
         ObjectOccurrenceLog ..> Permission : curator
 
         ObjectOccurrenceEntry *-- "0..*" Attachment
-        ObjectOccurrenceEntry *-- "1..1" ObjectReference
         ObjectOccurrenceEntry ..> Permission : reportedBy
-        ObjectOccurrenceEntry ..> RequestedObject : requestedObjectId
+        ObjectOccurrenceEntry --> "1" RequestedObject : requestedObjectId
 
         PublicationLog "1..1" -- CollectionUseProject : collectionUseProjectId
         PublicationLog *-- "0..*" PublicationLogEntry

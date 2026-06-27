@@ -40,7 +40,6 @@ from app.use_of_collections.domain.models import (
     ObjectOccurrenceEntryId,
     ObjectOccurrenceLog,
     ObjectOccurrenceLogId,
-    ObjectReference,
     PermissionId,
     Proposal,
     ProposalEvent,
@@ -159,10 +158,6 @@ def log_entry_to_record(entry: ObjectLogEntry) -> ObjectLogEntryRecord:
     return ObjectLogEntryRecord(
         id=entry.id,
         access_log_id=entry.object_access_log_id,
-        inventory_number=entry.object_reference.inventory_number,
-        display_title=entry.object_reference.display_title,
-        object_name=entry.object_reference.object_name,
-        brief_description_snapshot=entry.object_reference.brief_description_snapshot,
         number_of_objects=entry.number_of_objects,
         added_at=entry.added_at,
         added_by=entry.added_by,
@@ -185,21 +180,11 @@ def log_entry_to_domain(record: ObjectLogEntryRecord) -> ObjectLogEntry:
     return ObjectLogEntry(
         id=ObjectLogEntryId(record.id),
         object_access_log_id=ObjectAccessLogId(record.access_log_id),
-        object_reference=ObjectReference(
-            inventory_number=record.inventory_number,
-            display_title=record.display_title,
-            object_name=record.object_name,
-            brief_description_snapshot=record.brief_description_snapshot,
-        ),
+        requested_object_id=RequestedObjectId(record.requested_object_id),
         number_of_objects=record.number_of_objects,
         added_at=record.added_at,
         added_by=PermissionId(record.added_by),
         observations=record.observations,
-        requested_object_id=(
-            RequestedObjectId(record.requested_object_id)
-            if record.requested_object_id
-            else None
-        ),
         attachments=[_attachment_to_domain(a) for a in record.attachments],
     )
 
@@ -232,10 +217,6 @@ def occurrence_entry_to_record(
     return ObjectOccurrenceEntryRecord(
         id=entry.id,
         occurrence_log_id=entry.object_occurrence_log_id,
-        inventory_number=entry.object_reference.inventory_number,
-        display_title=entry.object_reference.display_title,
-        object_name=entry.object_reference.object_name,
-        brief_description_snapshot=entry.object_reference.brief_description_snapshot,
         number_of_objects=entry.number_of_objects,
         occurrence_date=entry.occurrence_date,
         location=entry.location,
@@ -262,23 +243,13 @@ def occurrence_entry_to_domain(
     return ObjectOccurrenceEntry(
         id=ObjectOccurrenceEntryId(record.id),
         object_occurrence_log_id=ObjectOccurrenceLogId(record.occurrence_log_id),
-        object_reference=ObjectReference(
-            inventory_number=record.inventory_number,
-            display_title=record.display_title,
-            object_name=record.object_name,
-            brief_description_snapshot=record.brief_description_snapshot,
-        ),
+        requested_object_id=RequestedObjectId(record.requested_object_id),
         number_of_objects=record.number_of_objects,
         occurrence_date=record.occurrence_date,
         location=record.location,
         reported_by=PermissionId(record.reported_by),
         detailed_description=record.detailed_description,
         testimonial=record.testimonial,
-        requested_object_id=(
-            RequestedObjectId(record.requested_object_id)
-            if record.requested_object_id
-            else None
-        ),
         attachments=[_attachment_to_domain(a) for a in record.attachments],
     )
 
@@ -406,10 +377,10 @@ def proposal_to_record(proposal: Proposal) -> ProposalRecord:
         requested_objects=[
             RequestedObjectRecord(
                 id=ro.id,
-                inventory_number=ro.object_reference.inventory_number,
-                display_title=ro.object_reference.display_title,
-                object_name=ro.object_reference.object_name,
-                brief_description_snapshot=ro.object_reference.brief_description_snapshot,
+                inventory_number=ro.inventory_number,
+                display_title=ro.display_title,
+                object_name=ro.object_name,
+                brief_description_snapshot=ro.brief_description_snapshot,
                 category=ro.category,
                 description=ro.description,
                 requested_at=ro.requested_at,
@@ -474,12 +445,10 @@ def proposal_to_domain(record: ProposalRecord) -> Proposal:
         requested_objects=[
             RequestedObject(
                 id=RequestedObjectId(ro.id),
-                object_reference=ObjectReference(
-                    inventory_number=ro.inventory_number,
-                    display_title=ro.display_title,
-                    object_name=ro.object_name,
-                    brief_description_snapshot=ro.brief_description_snapshot,
-                ),
+                inventory_number=ro.inventory_number,
+                display_title=ro.display_title,
+                object_name=ro.object_name,
+                brief_description_snapshot=ro.brief_description_snapshot,
                 category=ro.category,
                 description=ro.description,
                 requested_at=ro.requested_at,
@@ -1213,7 +1182,7 @@ class SqlAlchemyProjectExportReader:
             visitor_name=await self._visitor_name(project.requested_by),
             requested_objects=[
                 ExportObjectView(
-                    source_id=ro.object_reference.inventory_number,
+                    source_id=ro.inventory_number,
                     description=ro.description,
                     position=index,
                 )

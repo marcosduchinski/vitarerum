@@ -73,7 +73,6 @@ from app.use_of_collections.presentation.dependencies import (
     AccessLogRepo,
     DBSession,
     FileStorage,
-    ObjectCatalog,
     OccurrenceLogRepo,
     ProjectRepo,
     ProposalRepo,
@@ -137,7 +136,6 @@ async def add_log_entry(
     project_repo: ProjectRepo,
     proposal_repo: ProposalRepo,
     access_log_repo: AccessLogRepo,
-    object_catalog: ObjectCatalog,
     session: DBSession,
 ) -> ObjectLogEntryResponse:
     await _assert_existing_project_access(
@@ -145,19 +143,14 @@ async def add_log_entry(
     )
     try:
         entry = await AddObjectLogEntry(
-            project_repo, access_log_repo, object_catalog, proposal_repo
+            project_repo, access_log_repo, proposal_repo
         ).execute(
             AddObjectLogEntryInput(
                 project_id=CollectionUseProjectId(project_id),
                 caller=caller,
-                inventory_number=body.inventoryNumber,
+                requested_object_id=RequestedObjectId(body.requestedObjectId),
                 number_of_objects=body.numberOfObjects,
                 observations=body.observations,
-                requested_object_id=(
-                    RequestedObjectId(body.requestedObjectId)
-                    if body.requestedObjectId
-                    else None
-                ),
                 restrict_to_in_progress=not _is_staff(caller),
             )
         )
@@ -361,7 +354,6 @@ async def add_occurrence_entry(
     project_repo: ProjectRepo,
     proposal_repo: ProposalRepo,
     occurrence_log_repo: OccurrenceLogRepo,
-    object_catalog: ObjectCatalog,
     session: DBSession,
 ) -> ObjectOccurrenceEntryResponse:
     await _assert_existing_project_access(
@@ -369,22 +361,17 @@ async def add_occurrence_entry(
     )
     try:
         entry = await AddObjectOccurrenceEntry(
-            project_repo, occurrence_log_repo, object_catalog, proposal_repo
+            project_repo, occurrence_log_repo, proposal_repo
         ).execute(
             AddObjectOccurrenceEntryInput(
                 project_id=CollectionUseProjectId(project_id),
                 caller=caller,
-                inventory_number=body.inventoryNumber,
+                requested_object_id=RequestedObjectId(body.requestedObjectId),
                 number_of_objects=body.numberOfObjects,
                 occurrence_date=body.occurrenceDate,
                 location=body.location,
                 detailed_description=body.detailedDescription,
                 testimonial=body.testimonial,
-                requested_object_id=(
-                    RequestedObjectId(body.requestedObjectId)
-                    if body.requestedObjectId
-                    else None
-                ),
                 restrict_to_in_progress=not _is_staff(caller),
             )
         )

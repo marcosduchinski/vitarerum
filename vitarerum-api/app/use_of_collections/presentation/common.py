@@ -44,7 +44,6 @@ from app.use_of_collections.domain.models import (
     ObjectLogEntry,
     ObjectOccurrenceEntry,
     ObjectOccurrenceLog,
-    ObjectReference,
     PermissionId,
     Proposal,
     ProposalEvent,
@@ -68,7 +67,6 @@ from app.use_of_collections.presentation.schemas import (
     ObjectLogEntryResponse,
     ObjectOccurrenceEntryResponse,
     ObjectOccurrenceLogResponse,
-    ObjectReferenceResponse,
     PermissionDetail,
     ProposalEventResponse,
     PublicationLogEntryResponse,
@@ -270,15 +268,6 @@ def _intended_use_response(
     )
 
 
-def _object_reference_response(obj: ObjectReference) -> ObjectReferenceResponse:
-    return ObjectReferenceResponse(
-        inventoryNumber=obj.inventory_number,
-        displayTitle=obj.display_title,
-        objectName=obj.object_name,
-        briefDescriptionSnapshot=obj.brief_description_snapshot,
-    )
-
-
 async def _build_proposal_event(
     event: ProposalEvent, session: AsyncSession
 ) -> ProposalEventResponse:
@@ -329,7 +318,10 @@ async def _build_requested_object(
     )
     return RequestedObjectResponse(
         id=ro.id,
-        objectReference=_object_reference_response(ro.object_reference),
+        inventoryNumber=ro.inventory_number,
+        displayTitle=ro.display_title,
+        objectName=ro.object_name,
+        briefDescriptionSnapshot=ro.brief_description_snapshot,
         category=ro.category,
         description=ro.description,
         requestedAt=ro.requested_at,
@@ -345,14 +337,13 @@ async def _build_occurrence_entry(
     )
     return ObjectOccurrenceEntryResponse(
         id=entry.id,
-        objectReference=_object_reference_response(entry.object_reference),
+        requestedObjectId=entry.requested_object_id,
         numberOfObjects=entry.number_of_objects,
         occurrenceDate=entry.occurrence_date,
         location=entry.location,
         reportedBy=reported_by,
         detailedDescription=entry.detailed_description,
         testimonial=entry.testimonial,
-        requestedObjectId=entry.requested_object_id,
         attachments=[
             AttachmentResponse(
                 fileReference=a.file_reference,
@@ -433,12 +424,11 @@ async def _build_object_log_entry(
     )
     return ObjectLogEntryResponse(
         id=entry.id,
-        objectReference=_object_reference_response(entry.object_reference),
+        requestedObjectId=entry.requested_object_id,
         numberOfObjects=entry.number_of_objects,
         addedAt=entry.added_at,
         addedBy=added_by,
         observations=entry.observations,
-        requestedObjectId=entry.requested_object_id,
         attachments=[
             AttachmentResponse(
                 fileReference=a.file_reference,

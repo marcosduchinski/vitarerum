@@ -47,7 +47,6 @@ from app.use_of_collections.domain.models import (
     ObjectOccurrenceEntryId,
     ObjectOccurrenceLog,
     ObjectOccurrenceLogId,
-    ObjectReference,
     Proposal,
     ProposalId,
     ReferenceNumber,
@@ -248,11 +247,6 @@ def _make_curator() -> Actor:
         group=GroupName.CURATORIAL,
         email="bob@museum.pt",
     )
-
-
-class StubCatalog:
-    async def resolve(self, inventory_number: str) -> ObjectReference:
-        return ObjectReference(inventory_number=inventory_number)
 
 
 def _make_project(status: UseStatus = UseStatus.IN_PROGRESS) -> CollectionUseProject:
@@ -557,7 +551,7 @@ async def test_log_entry_attachment_invalid_media_type_does_not_save_file() -> N
     entry = ObjectLogEntry(
         id=ObjectLogEntryId("entry-1"),
         object_access_log_id=access_log.id,
-        object_reference=ObjectReference(inventory_number="INV-001"),
+        requested_object_id=RequestedObjectId("req-1"),
         number_of_objects=1,
         added_at=datetime(2026, 6, 1, tzinfo=UTC),
         added_by=PermissionId("permission-1"),
@@ -586,17 +580,20 @@ async def test_log_entry_attachment_invalid_media_type_does_not_save_file() -> N
 async def test_add_object_log_entry_creates_access_log_on_first_entry() -> None:
     project_repository = InMemoryCollectionUseProjectRepository()
     access_log_repository = InMemoryAccessLogRepository()
+    proposal_repository = InMemoryProposalRepository()
     project = _make_project()
     await project_repository.add(project)
+    await proposal_repository.add(
+        _proposal_with_requested_object(extra_objects=[("req-2", "INV-002")])
+    )
 
     entry = await AddObjectLogEntry(
-        project_repository, access_log_repository, StubCatalog(),
-        InMemoryProposalRepository(),
+        project_repository, access_log_repository, proposal_repository
     ).execute(
         AddObjectLogEntryInput(
             project_id=project.id,
             caller=_make_caller(),
-            inventory_number="INV-001",
+            requested_object_id=RequestedObjectId("req-1"),
             number_of_objects=2,
             observations="Handled with gloves",
         )
@@ -608,18 +605,17 @@ async def test_add_object_log_entry_creates_access_log_on_first_entry() -> None:
     assert access_log.date_conclusion is None
     assert access_log.curator is None
     assert entry.object_access_log_id == access_log.id
-    assert entry.object_reference.inventory_number == "INV-001"
+    assert entry.requested_object_id == "req-1"
     assert entry.number_of_objects == 2
     assert entry.observations == "Handled with gloves"
 
     await AddObjectLogEntry(
-        project_repository, access_log_repository, StubCatalog(),
-        InMemoryProposalRepository(),
+        project_repository, access_log_repository, proposal_repository
     ).execute(
         AddObjectLogEntryInput(
             project_id=project.id,
             caller=_make_caller(),
-            inventory_number="INV-002",
+            requested_object_id=RequestedObjectId("req-2"),
             number_of_objects=1,
         )
     )
@@ -629,7 +625,13 @@ async def test_add_object_log_entry_creates_access_log_on_first_entry() -> None:
 def _proposal_with_requested_object(
     inventory_number: str = "INV-001",
     requested_object_id: str = "req-1",
+    extra_objects: list[tuple[str, str]] | None = None,
 ) -> Proposal:
+    """Approved proposal carrying one (or more) requested objects.
+
+    ``extra_objects`` is a list of ``(requested_object_id, inventory_number)``
+    tuples for tests that add several journal entries."""
+    objects = [(requested_object_id, inventory_number), *(extra_objects or [])]
     return Proposal(
         id=ProposalId("proposal-1"),
         reference_number=ReferenceNumber("VRP-20260601-0001"),
@@ -643,13 +645,14 @@ def _proposal_with_requested_object(
         submitted_at=datetime(2026, 6, 1, tzinfo=UTC),
         requested_objects=[
             RequestedObject(
-                id=RequestedObjectId(requested_object_id),
-                object_reference=ObjectReference(inventory_number=inventory_number),
+                id=RequestedObjectId(rid),
+                inventory_number=inv,
                 category="fox head",
                 description="a fox head",
                 requested_at=datetime(2026, 6, 1, tzinfo=UTC),
                 requested_by=PermissionId("permission-1"),
             )
+            for rid, inv in objects
         ],
     )
 
@@ -682,9 +685,8 @@ async def test_start_project_seeds_access_log_from_requested_objects() -> None:
     )
     assert total == 1
     entry = entries[0]
-    # The requested object's snapshot is copied verbatim and linked back to it,
-    # with quantity defaulting to 1 and the curator recorded as addedBy.
-    assert entry.object_reference.inventory_number == "INV-001"
+    # The entry links back to the requested object, with quantity defaulting to
+    # 1 and the curator recorded as addedBy.
     assert entry.requested_object_id == RequestedObjectId("req-1")
     assert entry.number_of_objects == 1
     assert entry.added_by == PermissionId("curator-1")
@@ -723,14 +725,13 @@ async def test_log_entry_links_to_requested_object() -> None:
     await proposal_repository.add(_proposal_with_requested_object())
 
     entry = await AddObjectLogEntry(
-        project_repository, access_log_repository, StubCatalog(), proposal_repository
+        project_repository, access_log_repository, proposal_repository
     ).execute(
         AddObjectLogEntryInput(
             project_id=CollectionUseProjectId("project-1"),
             caller=_make_caller(),
-            inventory_number="INV-001",
-            number_of_objects=1,
             requested_object_id=RequestedObjectId("req-1"),
+            number_of_objects=1,
         )
     )
 
@@ -748,45 +749,17 @@ async def test_log_entry_rejects_unknown_requested_object() -> None:
         await AddObjectLogEntry(
             project_repository,
             access_log_repository,
-            StubCatalog(),
             proposal_repository,
         ).execute(
             AddObjectLogEntryInput(
                 project_id=CollectionUseProjectId("project-1"),
                 caller=_make_caller(),
-                inventory_number="INV-001",
-                number_of_objects=1,
                 requested_object_id=RequestedObjectId("does-not-exist"),
+                number_of_objects=1,
             )
         )
     # the failed link must not have created an entry or a log
     assert access_log_repository.entries == {}
-
-
-async def test_log_entry_rejects_requested_object_inventory_mismatch() -> None:
-    project_repository = InMemoryCollectionUseProjectRepository()
-    access_log_repository = InMemoryAccessLogRepository()
-    proposal_repository = InMemoryProposalRepository()
-    await project_repository.add(_make_project())
-    await proposal_repository.add(
-        _proposal_with_requested_object(inventory_number="INV-999")
-    )
-
-    with pytest.raises(ValueError, match="does not match"):
-        await AddObjectLogEntry(
-            project_repository,
-            access_log_repository,
-            StubCatalog(),
-            proposal_repository,
-        ).execute(
-            AddObjectLogEntryInput(
-                project_id=CollectionUseProjectId("project-1"),
-                caller=_make_caller(),
-                inventory_number="INV-001",
-                number_of_objects=1,
-                requested_object_id=RequestedObjectId("req-1"),
-            )
-        )
 
 
 async def test_occurrence_entry_links_to_requested_object() -> None:
@@ -799,18 +772,16 @@ async def test_occurrence_entry_links_to_requested_object() -> None:
     entry = await AddObjectOccurrenceEntry(
         project_repository,
         occurrence_log_repository,
-        StubCatalog(),
         proposal_repository,
     ).execute(
         AddObjectOccurrenceEntryInput(
             project_id=CollectionUseProjectId("project-1"),
             caller=_make_caller(),
-            inventory_number="INV-001",
+            requested_object_id=RequestedObjectId("req-1"),
             number_of_objects=1,
             occurrence_date=datetime(2026, 6, 2, tzinfo=UTC),
             location="Conservation lab",
             detailed_description="Condition checked",
-            requested_object_id=RequestedObjectId("req-1"),
         )
     )
 
@@ -822,7 +793,7 @@ async def test_object_log_entry_requires_at_least_one_object() -> None:
         ObjectLogEntry(
             id=ObjectLogEntryId("entry-1"),
             object_access_log_id=ObjectAccessLogId("log-1"),
-            object_reference=ObjectReference(inventory_number="INV-001"),
+            requested_object_id=RequestedObjectId("req-1"),
             number_of_objects=0,
             added_at=datetime(2026, 6, 1, tzinfo=UTC),
             added_by=PermissionId("permission-1"),
@@ -843,7 +814,7 @@ async def test_occurrence_attachment_invalid_media_type_does_not_save_file() -> 
     entry = ObjectOccurrenceEntry(
         id=ObjectOccurrenceEntryId("occ-1"),
         object_occurrence_log_id=occurrence_log.id,
-        object_reference=ObjectReference(inventory_number="INV-001"),
+        requested_object_id=RequestedObjectId("req-1"),
         number_of_objects=1,
         occurrence_date=datetime(2026, 6, 1, tzinfo=UTC),
         location="Storage room",
@@ -874,17 +845,20 @@ async def test_occurrence_attachment_invalid_media_type_does_not_save_file() -> 
 async def test_add_occurrence_entry_creates_occurrence_log_on_first_entry() -> None:
     project_repository = InMemoryCollectionUseProjectRepository()
     occurrence_log_repository = InMemoryOccurrenceLogRepository()
+    proposal_repository = InMemoryProposalRepository()
     project = _make_project()
     await project_repository.add(project)
+    await proposal_repository.add(
+        _proposal_with_requested_object(extra_objects=[("req-2", "INV-002")])
+    )
 
     entry = await AddObjectOccurrenceEntry(
-        project_repository, occurrence_log_repository, StubCatalog(),
-        InMemoryProposalRepository(),
+        project_repository, occurrence_log_repository, proposal_repository
     ).execute(
         AddObjectOccurrenceEntryInput(
             project_id=project.id,
             caller=_make_caller(),
-            inventory_number="INV-001",
+            requested_object_id=RequestedObjectId("req-1"),
             number_of_objects=2,
             occurrence_date=datetime(2026, 6, 2, 11, 30, tzinfo=UTC),
             location="Conservation lab",
@@ -899,7 +873,7 @@ async def test_add_occurrence_entry_creates_occurrence_log_on_first_entry() -> N
     assert occurrence_log.date_conclusion is None
     assert occurrence_log.curator is None
     assert entry.object_occurrence_log_id == occurrence_log.id
-    assert entry.object_reference.inventory_number == "INV-001"
+    assert entry.requested_object_id == "req-1"
     assert entry.number_of_objects == 2
     assert entry.occurrence_date == datetime(2026, 6, 2, 11, 30, tzinfo=UTC)
     assert entry.location == "Conservation lab"
@@ -908,13 +882,12 @@ async def test_add_occurrence_entry_creates_occurrence_log_on_first_entry() -> N
     assert entry.testimonial == "Reported by the conservator"
 
     await AddObjectOccurrenceEntry(
-        project_repository, occurrence_log_repository, StubCatalog(),
-        InMemoryProposalRepository(),
+        project_repository, occurrence_log_repository, proposal_repository
     ).execute(
         AddObjectOccurrenceEntryInput(
             project_id=project.id,
             caller=_make_caller(),
-            inventory_number="INV-002",
+            requested_object_id=RequestedObjectId("req-2"),
             number_of_objects=1,
             occurrence_date=datetime(2026, 6, 3, tzinfo=UTC),
             location="Storage room",
@@ -929,7 +902,7 @@ async def test_occurrence_entry_validates_required_fields() -> None:
         kwargs = {
             "id": ObjectOccurrenceEntryId("occ-1"),
             "object_occurrence_log_id": ObjectOccurrenceLogId("log-1"),
-            "object_reference": ObjectReference(inventory_number="INV-001"),
+            "requested_object_id": RequestedObjectId("req-1"),
             "number_of_objects": 1,
             "occurrence_date": datetime(2026, 6, 1, tzinfo=UTC),
             "location": "Storage room",

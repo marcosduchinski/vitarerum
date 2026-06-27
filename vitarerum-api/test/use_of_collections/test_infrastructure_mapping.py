@@ -46,7 +46,6 @@ from app.use_of_collections.domain.models import (
     ObjectOccurrenceEntryId,
     ObjectOccurrenceLog,
     ObjectOccurrenceLogId,
-    ObjectReference,
     PermissionId,
     Proposal,
     ProposalEvent,
@@ -125,15 +124,11 @@ def test_object_log_entry_roundtrip_preserves_reference_and_attachments() -> Non
     entry = ObjectLogEntry(
         id=ObjectLogEntryId("entry-1"),
         object_access_log_id=ObjectAccessLogId("log-1"),
-        object_reference=ObjectReference(
-            inventory_number="INV-001",
-            display_title="Illuminated manuscript",
-        ),
+        requested_object_id=RequestedObjectId("req-1"),
         number_of_objects=3,
         added_at=now,
         added_by=PermissionId("permission-1"),
         observations="Inspected the manuscript",
-        requested_object_id=RequestedObjectId("req-1"),
         attachments=[
             Attachment(
                 file_reference="files/photo.jpg",
@@ -148,11 +143,9 @@ def test_object_log_entry_roundtrip_preserves_reference_and_attachments() -> Non
 
     assert rebuilt.id == entry.id
     assert rebuilt.object_access_log_id == "log-1"
-    assert rebuilt.object_reference.inventory_number == "INV-001"
-    assert rebuilt.object_reference.display_title == "Illuminated manuscript"
+    assert rebuilt.requested_object_id == "req-1"
     assert rebuilt.number_of_objects == 3
     assert rebuilt.observations == "Inspected the manuscript"
-    assert rebuilt.requested_object_id == "req-1"
     assert rebuilt.attachments[0].media_type == MediaType.IMAGE
 
 
@@ -168,7 +161,7 @@ def test_object_access_log_roundtrip_preserves_entries_and_conclusion() -> None:
             ObjectLogEntry(
                 id=ObjectLogEntryId("entry-1"),
                 object_access_log_id=ObjectAccessLogId("log-1"),
-                object_reference=ObjectReference(inventory_number="INV-001"),
+                requested_object_id=RequestedObjectId("req-1"),
                 number_of_objects=1,
                 added_at=now,
                 added_by=PermissionId("permission-1"),
@@ -183,7 +176,7 @@ def test_object_access_log_roundtrip_preserves_entries_and_conclusion() -> None:
     assert rebuilt.collection_use_project_id == "project-1"
     assert rebuilt.date_conclusion == now
     assert rebuilt.curator == "permission-9"
-    assert rebuilt.objects[0].object_reference.inventory_number == "INV-001"
+    assert rebuilt.objects[0].requested_object_id == "req-1"
 
 
 def test_publication_log_roundtrip_preserves_entries_and_curator() -> None:
@@ -247,7 +240,7 @@ def test_object_occurrence_entry_roundtrip_preserves_occurrence_data() -> None:
     entry = ObjectOccurrenceEntry(
         id=ObjectOccurrenceEntryId("occ-1"),
         object_occurrence_log_id=ObjectOccurrenceLogId("log-1"),
-        object_reference=ObjectReference(inventory_number="INV-002"),
+        requested_object_id=RequestedObjectId("req-1"),
         number_of_objects=2,
         occurrence_date=now,
         location="Conservation lab",
@@ -260,7 +253,7 @@ def test_object_occurrence_entry_roundtrip_preserves_occurrence_data() -> None:
 
     assert rebuilt.id == entry.id
     assert rebuilt.object_occurrence_log_id == "log-1"
-    assert rebuilt.object_reference.inventory_number == "INV-002"
+    assert rebuilt.requested_object_id == "req-1"
     assert rebuilt.number_of_objects == 2
     assert rebuilt.occurrence_date == now
     assert rebuilt.location == "Conservation lab"
@@ -280,7 +273,7 @@ def test_object_occurrence_log_roundtrip_preserves_entries_and_conclusion() -> N
             ObjectOccurrenceEntry(
                 id=ObjectOccurrenceEntryId("occ-1"),
                 object_occurrence_log_id=ObjectOccurrenceLogId("log-1"),
-                object_reference=ObjectReference(inventory_number="INV-002"),
+                requested_object_id=RequestedObjectId("req-1"),
                 number_of_objects=1,
                 occurrence_date=now,
                 location="Storage room",
@@ -297,7 +290,7 @@ def test_object_occurrence_log_roundtrip_preserves_entries_and_conclusion() -> N
     assert rebuilt.collection_use_project_id == "project-1"
     assert rebuilt.date_conclusion == now
     assert rebuilt.curator == "permission-9"
-    assert rebuilt.objects[0].object_reference.inventory_number == "INV-002"
+    assert rebuilt.objects[0].requested_object_id == "req-1"
 
 
 def test_proposal_roundtrip_preserves_key_data() -> None:
@@ -327,7 +320,7 @@ def test_proposal_roundtrip_preserves_key_data() -> None:
         requested_objects=[
             RequestedObject(
                 id=RequestedObjectId("ro-1"),
-                object_reference=ObjectReference(inventory_number="INV-010"),
+                inventory_number="INV-010",
                 category="manuscript",
                 description="for study",
                 requested_at=now,
@@ -357,7 +350,7 @@ def test_proposal_roundtrip_preserves_key_data() -> None:
     assert rebuilt.end_date == date(2026, 6, 7)
     assert rebuilt.submitted_at == now
     assert rebuilt.events[0].type == ProposalEventType.SUBMITTED
-    assert rebuilt.requested_objects[0].object_reference.inventory_number == "INV-010"
+    assert rebuilt.requested_objects[0].inventory_number == "INV-010"
     assert rebuilt.requested_objects[0].category == "manuscript"
     assert rebuilt.documents[0].type.value == "request-form"
     assert rebuilt.documents[0].file_name == "request.pdf"

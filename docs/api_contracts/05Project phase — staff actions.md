@@ -153,35 +153,33 @@ project_id : UUID (required)
 **Request body** — `log-entries`
 ```json
 {
-  "inventoryNumber": "INV-001",
+  "requestedObjectId": "uuid",
   "numberOfObjects": 2,
-  "observations": "string",
-  "requestedObjectId": "uuid"
+  "observations": "string"
 }
 ```
 
 **Request body** — `occurrence-entries`
 ```json
 {
-  "inventoryNumber": "INV-001",
+  "requestedObjectId": "uuid",
   "numberOfObjects": 1,
   "occurrenceDate": "2025-06-03T11:30:00",
   "location": "Conservation lab, room 2",
   "detailedDescription": "string",
-  "testimonial": "string",
-  "requestedObjectId": "uuid"
+  "testimonial": "string"
 }
 ```
 
-Both bodies accept an optional `requestedObjectId` linking the entry to a `RequestedObject` of this project's proposal (inventory number must match, else `422`).
+Both bodies require a `requestedObjectId` linking the entry to a `RequestedObject` of this project's proposal (else `422`). The object's inventory snapshot lives on that `RequestedObject`.
 
-**Response `201 Created`** — the `ObjectLogEntry` (`id`, `objectReference`, `numberOfObjects`, `addedAt`, `addedBy`, `observations`, `requestedObjectId`, `attachments`) or the `ObjectOccurrenceEntry` (`id`, `objectReference`, `numberOfObjects`, `occurrenceDate`, `location`, `reportedBy`, `detailedDescription`, `testimonial`, `requestedObjectId`, `attachments`) respectively.
+**Response `201 Created`** — the `ObjectLogEntry` (`id`, `requestedObjectId`, `numberOfObjects`, `addedAt`, `addedBy`, `observations`, `attachments`) or the `ObjectOccurrenceEntry` (`id`, `requestedObjectId`, `numberOfObjects`, `occurrenceDate`, `location`, `reportedBy`, `detailedDescription`, `testimonial`, `attachments`) respectively.
 
 ---
 
 ### `PATCH /collection-use-projects/{project_id}/log-entries/{entry_id}`
 
-**Description** — Edit an existing object log entry. Only `addedAt`, `numberOfObjects` and `observations` are editable; the entry's object, `addedBy` and `requestedObjectId` are immutable. Partial update — only fields present in the body change (`observations: null` clears it). Staff may edit at any project status, but not once the access log is concluded (`409`). Request/response shapes are defined in the researcher group (file 04).
+**Description** — Edit an existing object log entry. Only `addedAt`, `numberOfObjects` and `observations` are editable; the entry's linked object (`requestedObjectId`) and `addedBy` are immutable. Partial update — only fields present in the body change (`observations: null` clears it). Staff may edit at any project status, but not once the access log is concluded (`409`). Request/response shapes are defined in the researcher group (file 04).
 
 **Path parameters**
 ```
@@ -204,7 +202,7 @@ entry_id   : UUID (required)
 
 ### `PATCH /collection-use-projects/{project_id}/occurrence-entries/{entry_id}`
 
-**Description** — Edit an existing object occurrence entry. Only `numberOfObjects`, `occurrenceDate`, `location`, `detailedDescription` and `testimonial` are editable; the entry's object, `reportedBy` and `requestedObjectId` are immutable. Partial update — only fields present in the body change (`testimonial: null` clears it). Staff may edit at any project status, but not once the occurrence log is concluded (`409`). Request/response shapes are defined in the researcher group (file 04).
+**Description** — Edit an existing object occurrence entry. Only `numberOfObjects`, `occurrenceDate`, `location`, `detailedDescription` and `testimonial` are editable; the entry's linked object (`requestedObjectId`) and `reportedBy` are immutable. Partial update — only fields present in the body change (`testimonial: null` clears it). Staff may edit at any project status, but not once the occurrence log is concluded (`409`). Request/response shapes are defined in the researcher group (file 04).
 
 **Path parameters**
 ```
@@ -427,6 +425,6 @@ A few conventions worth noting across this group:
 
 **No staff-only project commands** — `start`, `complete`, and `cancel` (file 04) are the only state-changing project commands and carry no group restriction; any authorised caller may invoke them. The earlier `suspend`, `resume`, and `close` commands have been removed, along with the `SUSPENDED` and `CLOSED` states.
 
-**Two distinct journal resources** — both are per-project, curator-concluded log aggregates whose entries record exactly one `objectReference`. `log-entries` belong to the **object access log** (`ObjectAccessLog`, `OAL-` reference number) with `numberOfObjects` and optional `observations`; `occurrence-entries` belong to the **object occurrence log** (`ObjectOccurrenceLog`, `OOL-` reference number) with `numberOfObjects`, `occurrenceDate`, `location`, `reportedBy`, `detailedDescription` and optional `testimonial`. Both gain the staff permission filter on their `GET` endpoints (`added_by` / `reportedBy`) and hydrate it as a full `PermissionDetail`. Either entry may carry an optional `requestedObjectId` tying it back to a `RequestedObject` of the proposal, for end-to-end object traceability.
+**Two distinct journal resources** — both are per-project, curator-concluded log aggregates whose entries link to exactly one `RequestedObject` via `requestedObjectId`. `log-entries` belong to the **object access log** (`ObjectAccessLog`, `OAL-` reference number) with `numberOfObjects` and optional `observations`; `occurrence-entries` belong to the **object occurrence log** (`ObjectOccurrenceLog`, `OOL-` reference number) with `numberOfObjects`, `occurrenceDate`, `location`, `reportedBy`, `detailedDescription` and optional `testimonial`. Both gain the staff permission filter on their `GET` endpoints (`added_by` / `reportedBy`) and hydrate it as a full `PermissionDetail`. Every entry carries a required `requestedObjectId` tying it back to a `RequestedObject` of the proposal, for end-to-end object traceability.
 
 **Shared endpoints are not repeated** — `GET /collection-use-projects/{project_id}` and `GET /collection-use-projects/{project_id}/events` follow the same response structure as the researcher group. The only difference is access scope (staff see all, plus a populated `requestedBy`).
