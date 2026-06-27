@@ -25,6 +25,8 @@ from app.use_of_collections.domain.enums import (
     UseType,
 )
 from app.use_of_collections.domain.models import (
+    CollectionUseObject,
+    CollectionUseObjectId,
     CollectionUseProject,
     CollectionUseProjectId,
     Conversation,
@@ -47,8 +49,6 @@ from app.use_of_collections.domain.models import (
     PublicationLog,
     PublicationLogEntry,
     ReferenceNumber,
-    RequestedObject,
-    RequestedObjectId,
 )
 from app.use_of_collections.presentation.dependencies import (
     get_access_log_repo,
@@ -119,10 +119,24 @@ def _proposal(
     )
 
 
+def _collection_use_object(
+    object_id: str = "cuo-1", inventory_number: str = "INV-001"
+) -> CollectionUseObject:
+    return CollectionUseObject(
+        id=CollectionUseObjectId(object_id),
+        inventory_number=inventory_number,
+        category="fox head",
+        description="a fox head",
+        requested_at=datetime(2026, 6, 1, tzinfo=UTC),
+        requested_by=PermissionId("permission-1"),
+    )
+
+
 def _project(
     project_id: str = "proj-1",
     requested_by: PermissionId | None = None,
     status: UseStatus = UseStatus.CREATED,
+    objects: list[CollectionUseObject] | None = None,
 ) -> CollectionUseProject:
     requested_by = requested_by or PermissionId("permission-1")
     return CollectionUseProject(
@@ -136,6 +150,7 @@ def _project(
         end_date=date(2026, 6, 7),
         requested_by=requested_by,
         proposal_id=ProposalId("prop-1"),
+        objects=objects if objects is not None else [],
     )
 
 
@@ -1776,7 +1791,7 @@ async def test_log_entry_attachment_invalid_media_type_returns_422() -> None:
             ObjectLogEntry(
                 id=ObjectLogEntryId("entry-1"),
                 object_access_log_id=ObjectAccessLogId("log-1"),
-                requested_object_id=RequestedObjectId("req-1"),
+                collection_use_object_id=CollectionUseObjectId("cuo-1"),
                 number_of_objects=1,
                 added_at=datetime(2026, 6, 7, tzinfo=UTC),
                 added_by=PermissionId("permission-staff"),
@@ -1800,11 +1815,16 @@ async def test_log_entry_attachment_persists_optional_note() -> None:
         proposal_repo,
         _,
     ):
-        await project_repo.add(_project("project-1", status=UseStatus.IN_PROGRESS))
-        await proposal_repo.add(_proposal_with_requested_object())
+        await project_repo.add(
+            _project(
+                "project-1",
+                status=UseStatus.IN_PROGRESS,
+                objects=[_collection_use_object()],
+            )
+        )
         created = await client.post(
             "/api/v1/collection-use-projects/project-1/log-entries",
-            json={"requestedObjectId": "req-1", "numberOfObjects": 1},
+            json={"collectionUseObjectId": "cuo-1", "numberOfObjects": 1},
             headers={"X-Permission-Id": "permission-staff"},
         )
         entry_id = created.json()["id"]
@@ -1842,11 +1862,16 @@ async def test_download_log_entry_attachment_returns_file() -> None:
         proposal_repo,
         _,
     ):
-        await project_repo.add(_project("project-1", status=UseStatus.IN_PROGRESS))
-        await proposal_repo.add(_proposal_with_requested_object())
+        await project_repo.add(
+            _project(
+                "project-1",
+                status=UseStatus.IN_PROGRESS,
+                objects=[_collection_use_object()],
+            )
+        )
         created = await client.post(
             "/api/v1/collection-use-projects/project-1/log-entries",
-            json={"requestedObjectId": "req-1", "numberOfObjects": 1},
+            json={"collectionUseObjectId": "cuo-1", "numberOfObjects": 1},
             headers={"X-Permission-Id": "permission-staff"},
         )
         entry_id = created.json()["id"]
@@ -1876,11 +1901,16 @@ async def test_download_log_entry_attachment_unknown_reference_returns_404() -> 
         proposal_repo,
         _,
     ):
-        await project_repo.add(_project("project-1", status=UseStatus.IN_PROGRESS))
-        await proposal_repo.add(_proposal_with_requested_object())
+        await project_repo.add(
+            _project(
+                "project-1",
+                status=UseStatus.IN_PROGRESS,
+                objects=[_collection_use_object()],
+            )
+        )
         created = await client.post(
             "/api/v1/collection-use-projects/project-1/log-entries",
-            json={"requestedObjectId": "req-1", "numberOfObjects": 1},
+            json={"collectionUseObjectId": "cuo-1", "numberOfObjects": 1},
             headers={"X-Permission-Id": "permission-staff"},
         )
         entry_id = created.json()["id"]
@@ -1901,12 +1931,17 @@ async def test_download_occurrence_entry_attachment_returns_file() -> None:
         proposal_repo,
         _,
     ):
-        await project_repo.add(_project("project-1", status=UseStatus.IN_PROGRESS))
-        await proposal_repo.add(_proposal_with_requested_object())
+        await project_repo.add(
+            _project(
+                "project-1",
+                status=UseStatus.IN_PROGRESS,
+                objects=[_collection_use_object()],
+            )
+        )
         created = await client.post(
             "/api/v1/collection-use-projects/project-1/occurrence-entries",
             json={
-                "requestedObjectId": "req-1",
+                "collectionUseObjectId": "cuo-1",
                 "numberOfObjects": 1,
                 "occurrenceDate": "2026-06-03T11:30:00Z",
                 "location": "Lab",
@@ -1941,13 +1976,18 @@ async def test_add_log_entry_returns_201_with_access_log_created() -> None:
         proposal_repo,
         _,
     ):
-        await project_repo.add(_project("project-1", status=UseStatus.IN_PROGRESS))
-        await proposal_repo.add(_proposal_with_requested_object())
+        await project_repo.add(
+            _project(
+                "project-1",
+                status=UseStatus.IN_PROGRESS,
+                objects=[_collection_use_object()],
+            )
+        )
 
         response = await client.post(
             "/api/v1/collection-use-projects/project-1/log-entries",
             json={
-                "requestedObjectId": "req-1",
+                "collectionUseObjectId": "cuo-1",
                 "numberOfObjects": 2,
                 "observations": "Handled with gloves",
             },
@@ -1956,7 +1996,7 @@ async def test_add_log_entry_returns_201_with_access_log_created() -> None:
 
         assert response.status_code == 201
         body = response.json()
-        assert body["requestedObjectId"] == "req-1"
+        assert body["collectionUseObjectId"] == "cuo-1"
         assert body["numberOfObjects"] == 2
         assert body["observations"] == "Handled with gloves"
         assert body["attachments"] == []
@@ -1982,12 +2022,17 @@ async def test_edit_log_entry_updates_editable_fields() -> None:
         proposal_repo,
         _,
     ):
-        await project_repo.add(_project("project-1", status=UseStatus.IN_PROGRESS))
-        await proposal_repo.add(_proposal_with_requested_object())
+        await project_repo.add(
+            _project(
+                "project-1",
+                status=UseStatus.IN_PROGRESS,
+                objects=[_collection_use_object()],
+            )
+        )
         created = await client.post(
             "/api/v1/collection-use-projects/project-1/log-entries",
             json={
-                "requestedObjectId": "req-1",
+                "collectionUseObjectId": "cuo-1",
                 "numberOfObjects": 2,
                 "observations": "original",
             },
@@ -2012,7 +2057,7 @@ async def test_edit_log_entry_updates_editable_fields() -> None:
     assert body["observations"] == "corrected"
     assert body["addedAt"] == "2025-06-03T14:00:00"
     # Immutable fields are preserved.
-    assert body["requestedObjectId"] == "req-1"
+    assert body["collectionUseObjectId"] == "cuo-1"
     assert body["addedBy"]["permissionId"] == "permission-staff"
 
 
@@ -2023,12 +2068,17 @@ async def test_edit_log_entry_is_partial_and_clears_observations() -> None:
         proposal_repo,
         _,
     ):
-        await project_repo.add(_project("project-1", status=UseStatus.IN_PROGRESS))
-        await proposal_repo.add(_proposal_with_requested_object())
+        await project_repo.add(
+            _project(
+                "project-1",
+                status=UseStatus.IN_PROGRESS,
+                objects=[_collection_use_object()],
+            )
+        )
         created = await client.post(
             "/api/v1/collection-use-projects/project-1/log-entries",
             json={
-                "requestedObjectId": "req-1",
+                "collectionUseObjectId": "cuo-1",
                 "numberOfObjects": 2,
                 "observations": "original",
             },
@@ -2068,33 +2118,6 @@ async def test_edit_log_entry_unknown_entry_returns_404() -> None:
     assert response.json()["error"] == "ENTRY_NOT_FOUND"
 
 
-def _proposal_with_requested_object(
-    inventory_number: str = "INV-001",
-) -> Proposal:
-    return Proposal(
-        id=ProposalId("prop-1"),
-        reference_number=ReferenceNumber("VRP-20260601-0001"),
-        title="Proposal title",
-        collection_use_project_id=CollectionUseProjectId("project-1"),
-        intended_use=IntendedUse(use_type=UseType.IN_SITU_VISIT),
-        begin_date=date(2026, 6, 1),
-        end_date=date(2026, 6, 7),
-        status=ProposalStatus.APPROVED,
-        requested_by=PermissionId("permission-1"),
-        submitted_at=datetime(2026, 6, 7, tzinfo=UTC),
-        requested_objects=[
-            RequestedObject(
-                id=RequestedObjectId("req-1"),
-                inventory_number=inventory_number,
-                category="fox head",
-                description="a fox head",
-                requested_at=datetime(2026, 6, 1, tzinfo=UTC),
-                requested_by=PermissionId("permission-1"),
-            )
-        ],
-    )
-
-
 async def test_log_entry_links_to_requested_object_over_http() -> None:
     async with client_with_repos(caller=_STAFF_CALLER) as (
         client,
@@ -2102,14 +2125,19 @@ async def test_log_entry_links_to_requested_object_over_http() -> None:
         proposal_repo,
         _,
     ):
-        await project_repo.add(_project("project-1", status=UseStatus.IN_PROGRESS))
-        await proposal_repo.add(_proposal_with_requested_object())
+        await project_repo.add(
+            _project(
+                "project-1",
+                status=UseStatus.IN_PROGRESS,
+                objects=[_collection_use_object()],
+            )
+        )
 
         ok = await client.post(
             "/api/v1/collection-use-projects/project-1/log-entries",
             json={
                 "numberOfObjects": 1,
-                "requestedObjectId": "req-1",
+                "collectionUseObjectId": "cuo-1",
             },
             headers={"X-Permission-Id": "permission-staff"},
         )
@@ -2117,13 +2145,13 @@ async def test_log_entry_links_to_requested_object_over_http() -> None:
             "/api/v1/collection-use-projects/project-1/log-entries",
             json={
                 "numberOfObjects": 1,
-                "requestedObjectId": "does-not-exist",
+                "collectionUseObjectId": "does-not-exist",
             },
             headers={"X-Permission-Id": "permission-staff"},
         )
 
     assert ok.status_code == 201
-    assert ok.json()["requestedObjectId"] == "req-1"
+    assert ok.json()["collectionUseObjectId"] == "cuo-1"
     assert unknown.status_code == 422
     assert unknown.json()["error"] == "VALIDATION_ERROR"
 
@@ -2153,13 +2181,18 @@ async def test_add_occurrence_entry_returns_201_with_occurrence_log_created() ->
         proposal_repo,
         _,
     ):
-        await project_repo.add(_project("project-1", status=UseStatus.IN_PROGRESS))
-        await proposal_repo.add(_proposal_with_requested_object())
+        await project_repo.add(
+            _project(
+                "project-1",
+                status=UseStatus.IN_PROGRESS,
+                objects=[_collection_use_object()],
+            )
+        )
 
         response = await client.post(
             "/api/v1/collection-use-projects/project-1/occurrence-entries",
             json={
-                "requestedObjectId": "req-1",
+                "collectionUseObjectId": "cuo-1",
                 "numberOfObjects": 2,
                 "occurrenceDate": "2026-06-03T11:30:00Z",
                 "location": "Conservation lab",
@@ -2171,7 +2204,7 @@ async def test_add_occurrence_entry_returns_201_with_occurrence_log_created() ->
 
         assert response.status_code == 201
         body = response.json()
-        assert body["requestedObjectId"] == "req-1"
+        assert body["collectionUseObjectId"] == "cuo-1"
         assert body["numberOfObjects"] == 2
         assert body["location"] == "Conservation lab"
         assert body["detailedDescription"] == "Minor abrasion observed"
@@ -2194,7 +2227,7 @@ async def test_add_occurrence_entry_returns_201_with_occurrence_log_created() ->
 
 def _add_occurrence_entry_payload() -> dict[str, object]:
     return {
-        "requestedObjectId": "req-1",
+        "collectionUseObjectId": "cuo-1",
         "numberOfObjects": 2,
         "occurrenceDate": "2026-06-03T11:30:00Z",
         "location": "Conservation lab",
@@ -2210,8 +2243,13 @@ async def test_edit_occurrence_entry_updates_editable_fields() -> None:
         proposal_repo,
         _,
     ):
-        await project_repo.add(_project("project-1", status=UseStatus.IN_PROGRESS))
-        await proposal_repo.add(_proposal_with_requested_object())
+        await project_repo.add(
+            _project(
+                "project-1",
+                status=UseStatus.IN_PROGRESS,
+                objects=[_collection_use_object()],
+            )
+        )
         created = await client.post(
             "/api/v1/collection-use-projects/project-1/occurrence-entries",
             json=_add_occurrence_entry_payload(),
@@ -2240,7 +2278,7 @@ async def test_edit_occurrence_entry_updates_editable_fields() -> None:
     assert body["detailedDescription"] == "Re-examined under raking light"
     assert body["testimonial"] == "Confirmed by the curator"
     # Immutable fields are preserved.
-    assert body["requestedObjectId"] == "req-1"
+    assert body["collectionUseObjectId"] == "cuo-1"
     assert body["reportedBy"]["permissionId"] == "permission-staff"
 
 
@@ -2251,8 +2289,13 @@ async def test_edit_occurrence_entry_is_partial_and_clears_testimonial() -> None
         proposal_repo,
         _,
     ):
-        await project_repo.add(_project("project-1", status=UseStatus.IN_PROGRESS))
-        await proposal_repo.add(_proposal_with_requested_object())
+        await project_repo.add(
+            _project(
+                "project-1",
+                status=UseStatus.IN_PROGRESS,
+                objects=[_collection_use_object()],
+            )
+        )
         created = await client.post(
             "/api/v1/collection-use-projects/project-1/occurrence-entries",
             json=_add_occurrence_entry_payload(),

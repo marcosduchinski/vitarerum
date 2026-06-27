@@ -31,6 +31,8 @@ from app.use_of_collections.domain.enums import (
     UseType,
 )
 from app.use_of_collections.domain.models import (
+    CollectionUseObject,
+    CollectionUseObjectId,
     CollectionUseProject,
     CollectionUseProjectId,
     Conversation,
@@ -50,8 +52,6 @@ from app.use_of_collections.domain.models import (
     Proposal,
     ProposalId,
     ReferenceNumber,
-    RequestedObject,
-    RequestedObjectId,
 )
 
 
@@ -249,7 +249,23 @@ def _make_curator() -> Actor:
     )
 
 
-def _make_project(status: UseStatus = UseStatus.IN_PROGRESS) -> CollectionUseProject:
+def _collection_use_object(
+    object_id: str = "cuo-1", inventory_number: str = "INV-001"
+) -> CollectionUseObject:
+    return CollectionUseObject(
+        id=CollectionUseObjectId(object_id),
+        inventory_number=inventory_number,
+        category="fox head",
+        description="a fox head",
+        requested_at=datetime(2026, 6, 1, tzinfo=UTC),
+        requested_by=PermissionId("permission-1"),
+    )
+
+
+def _make_project(
+    status: UseStatus = UseStatus.IN_PROGRESS,
+    objects: list[CollectionUseObject] | None = None,
+) -> CollectionUseProject:
     return CollectionUseProject(
         id=CollectionUseProjectId("project-1"),
         reference_number=ReferenceNumber("CUP-LOG00001"),
@@ -260,6 +276,7 @@ def _make_project(status: UseStatus = UseStatus.IN_PROGRESS) -> CollectionUsePro
         begin_date=date(2026, 6, 1),
         end_date=date(2026, 6, 7),
         requested_by=PermissionId("permission-1"),
+        objects=objects if objects is not None else [],
     )
 
 
@@ -551,7 +568,7 @@ async def test_log_entry_attachment_invalid_media_type_does_not_save_file() -> N
     entry = ObjectLogEntry(
         id=ObjectLogEntryId("entry-1"),
         object_access_log_id=access_log.id,
-        requested_object_id=RequestedObjectId("req-1"),
+        collection_use_object_id=CollectionUseObjectId("cuo-1"),
         number_of_objects=1,
         added_at=datetime(2026, 6, 1, tzinfo=UTC),
         added_by=PermissionId("permission-1"),
@@ -580,20 +597,21 @@ async def test_log_entry_attachment_invalid_media_type_does_not_save_file() -> N
 async def test_add_object_log_entry_creates_access_log_on_first_entry() -> None:
     project_repository = InMemoryCollectionUseProjectRepository()
     access_log_repository = InMemoryAccessLogRepository()
-    proposal_repository = InMemoryProposalRepository()
-    project = _make_project()
-    await project_repository.add(project)
-    await proposal_repository.add(
-        _proposal_with_requested_object(extra_objects=[("req-2", "INV-002")])
+    project = _make_project(
+        objects=[
+            _collection_use_object("cuo-1", "INV-001"),
+            _collection_use_object("cuo-2", "INV-002"),
+        ]
     )
+    await project_repository.add(project)
 
     entry = await AddObjectLogEntry(
-        project_repository, access_log_repository, proposal_repository
+        project_repository, access_log_repository
     ).execute(
         AddObjectLogEntryInput(
             project_id=project.id,
             caller=_make_caller(),
-            requested_object_id=RequestedObjectId("req-1"),
+            collection_use_object_id=CollectionUseObjectId("cuo-1"),
             number_of_objects=2,
             observations="Handled with gloves",
         )
@@ -605,67 +623,34 @@ async def test_add_object_log_entry_creates_access_log_on_first_entry() -> None:
     assert access_log.date_conclusion is None
     assert access_log.curator is None
     assert entry.object_access_log_id == access_log.id
-    assert entry.requested_object_id == "req-1"
+    assert entry.collection_use_object_id == "cuo-1"
     assert entry.number_of_objects == 2
     assert entry.observations == "Handled with gloves"
 
     await AddObjectLogEntry(
-        project_repository, access_log_repository, proposal_repository
+        project_repository, access_log_repository
     ).execute(
         AddObjectLogEntryInput(
             project_id=project.id,
             caller=_make_caller(),
-            requested_object_id=RequestedObjectId("req-2"),
+            collection_use_object_id=CollectionUseObjectId("cuo-2"),
             number_of_objects=1,
         )
     )
     assert len(access_log_repository.items) == 1
 
 
-def _proposal_with_requested_object(
-    inventory_number: str = "INV-001",
-    requested_object_id: str = "req-1",
-    extra_objects: list[tuple[str, str]] | None = None,
-) -> Proposal:
-    """Approved proposal carrying one (or more) requested objects.
-
-    ``extra_objects`` is a list of ``(requested_object_id, inventory_number)``
-    tuples for tests that add several journal entries."""
-    objects = [(requested_object_id, inventory_number), *(extra_objects or [])]
-    return Proposal(
-        id=ProposalId("proposal-1"),
-        reference_number=ReferenceNumber("VRP-20260601-0001"),
-        title="Proposal title",
-        collection_use_project_id=CollectionUseProjectId("project-1"),
-        intended_use=IntendedUse(use_type=UseType.IN_SITU_VISIT),
-        begin_date=date(2026, 6, 1),
-        end_date=date(2026, 6, 7),
-        status=ProposalStatus.APPROVED,
-        requested_by=PermissionId("permission-1"),
-        submitted_at=datetime(2026, 6, 1, tzinfo=UTC),
-        requested_objects=[
-            RequestedObject(
-                id=RequestedObjectId(rid),
-                inventory_number=inv,
-                category="fox head",
-                description="a fox head",
-                requested_at=datetime(2026, 6, 1, tzinfo=UTC),
-                requested_by=PermissionId("permission-1"),
-            )
-            for rid, inv in objects
-        ],
+async def test_start_project_seeds_access_log_from_project_objects() -> None:
+    project_repository = InMemoryCollectionUseProjectRepository()
+    access_log_repository = InMemoryAccessLogRepository()
+    await project_repository.add(
+        _make_project(
+            status=UseStatus.CREATED, objects=[_collection_use_object("cuo-1")]
+        )
     )
 
-
-async def test_start_project_seeds_access_log_from_requested_objects() -> None:
-    project_repository = InMemoryCollectionUseProjectRepository()
-    proposal_repository = InMemoryProposalRepository()
-    access_log_repository = InMemoryAccessLogRepository()
-    await project_repository.add(_make_project(status=UseStatus.CREATED))
-    await proposal_repository.add(_proposal_with_requested_object())
-
     project = await StartProject(
-        project_repository, proposal_repository, access_log_repository
+        project_repository, access_log_repository
     ).execute(
         StartProjectInput(
             project_id=CollectionUseProjectId("project-1"),
@@ -685,24 +670,20 @@ async def test_start_project_seeds_access_log_from_requested_objects() -> None:
     )
     assert total == 1
     entry = entries[0]
-    # The entry links back to the requested object, with quantity defaulting to
+    # The entry links back to the project's object, with quantity defaulting to
     # 1 and the curator recorded as addedBy.
-    assert entry.requested_object_id == RequestedObjectId("req-1")
+    assert entry.collection_use_object_id == CollectionUseObjectId("cuo-1")
     assert entry.number_of_objects == 1
     assert entry.added_by == PermissionId("curator-1")
 
 
-async def test_start_project_without_requested_objects_creates_no_access_log() -> None:
+async def test_start_project_without_objects_creates_no_access_log() -> None:
     project_repository = InMemoryCollectionUseProjectRepository()
-    proposal_repository = InMemoryProposalRepository()
     access_log_repository = InMemoryAccessLogRepository()
     await project_repository.add(_make_project(status=UseStatus.CREATED))
-    proposal = _proposal_with_requested_object()
-    proposal.requested_objects = []
-    await proposal_repository.add(proposal)
 
     await StartProject(
-        project_repository, proposal_repository, access_log_repository
+        project_repository, access_log_repository
     ).execute(
         StartProjectInput(
             project_id=CollectionUseProjectId("project-1"),
@@ -710,51 +691,50 @@ async def test_start_project_without_requested_objects_creates_no_access_log() -
         )
     )
 
-    # Nothing requested → the log stays lazily uncreated.
+    # No project objects → the log stays lazily uncreated.
     access_log = await access_log_repository.get_by_project_id(
         CollectionUseProjectId("project-1")
     )
     assert access_log is None
 
 
-async def test_log_entry_links_to_requested_object() -> None:
+async def test_log_entry_links_to_collection_use_object() -> None:
     project_repository = InMemoryCollectionUseProjectRepository()
     access_log_repository = InMemoryAccessLogRepository()
-    proposal_repository = InMemoryProposalRepository()
-    await project_repository.add(_make_project())
-    await proposal_repository.add(_proposal_with_requested_object())
+    await project_repository.add(
+        _make_project(objects=[_collection_use_object("cuo-1")])
+    )
 
     entry = await AddObjectLogEntry(
-        project_repository, access_log_repository, proposal_repository
+        project_repository, access_log_repository
     ).execute(
         AddObjectLogEntryInput(
             project_id=CollectionUseProjectId("project-1"),
             caller=_make_caller(),
-            requested_object_id=RequestedObjectId("req-1"),
+            collection_use_object_id=CollectionUseObjectId("cuo-1"),
             number_of_objects=1,
         )
     )
 
-    assert entry.requested_object_id == "req-1"
+    assert entry.collection_use_object_id == "cuo-1"
 
 
-async def test_log_entry_rejects_unknown_requested_object() -> None:
+async def test_log_entry_rejects_unknown_collection_use_object() -> None:
     project_repository = InMemoryCollectionUseProjectRepository()
     access_log_repository = InMemoryAccessLogRepository()
-    proposal_repository = InMemoryProposalRepository()
-    await project_repository.add(_make_project())
-    await proposal_repository.add(_proposal_with_requested_object())
+    await project_repository.add(
+        _make_project(objects=[_collection_use_object("cuo-1")])
+    )
 
     with pytest.raises(ValueError, match="not part of this project"):
         await AddObjectLogEntry(
             project_repository,
             access_log_repository,
-            proposal_repository,
         ).execute(
             AddObjectLogEntryInput(
                 project_id=CollectionUseProjectId("project-1"),
                 caller=_make_caller(),
-                requested_object_id=RequestedObjectId("does-not-exist"),
+                collection_use_object_id=CollectionUseObjectId("does-not-exist"),
                 number_of_objects=1,
             )
         )
@@ -762,22 +742,21 @@ async def test_log_entry_rejects_unknown_requested_object() -> None:
     assert access_log_repository.entries == {}
 
 
-async def test_occurrence_entry_links_to_requested_object() -> None:
+async def test_occurrence_entry_links_to_collection_use_object() -> None:
     project_repository = InMemoryCollectionUseProjectRepository()
     occurrence_log_repository = InMemoryOccurrenceLogRepository()
-    proposal_repository = InMemoryProposalRepository()
-    await project_repository.add(_make_project())
-    await proposal_repository.add(_proposal_with_requested_object())
+    await project_repository.add(
+        _make_project(objects=[_collection_use_object("cuo-1")])
+    )
 
     entry = await AddObjectOccurrenceEntry(
         project_repository,
         occurrence_log_repository,
-        proposal_repository,
     ).execute(
         AddObjectOccurrenceEntryInput(
             project_id=CollectionUseProjectId("project-1"),
             caller=_make_caller(),
-            requested_object_id=RequestedObjectId("req-1"),
+            collection_use_object_id=CollectionUseObjectId("cuo-1"),
             number_of_objects=1,
             occurrence_date=datetime(2026, 6, 2, tzinfo=UTC),
             location="Conservation lab",
@@ -785,7 +764,7 @@ async def test_occurrence_entry_links_to_requested_object() -> None:
         )
     )
 
-    assert entry.requested_object_id == "req-1"
+    assert entry.collection_use_object_id == "cuo-1"
 
 
 async def test_object_log_entry_requires_at_least_one_object() -> None:
@@ -793,7 +772,7 @@ async def test_object_log_entry_requires_at_least_one_object() -> None:
         ObjectLogEntry(
             id=ObjectLogEntryId("entry-1"),
             object_access_log_id=ObjectAccessLogId("log-1"),
-            requested_object_id=RequestedObjectId("req-1"),
+            collection_use_object_id=CollectionUseObjectId("cuo-1"),
             number_of_objects=0,
             added_at=datetime(2026, 6, 1, tzinfo=UTC),
             added_by=PermissionId("permission-1"),
@@ -814,7 +793,7 @@ async def test_occurrence_attachment_invalid_media_type_does_not_save_file() -> 
     entry = ObjectOccurrenceEntry(
         id=ObjectOccurrenceEntryId("occ-1"),
         object_occurrence_log_id=occurrence_log.id,
-        requested_object_id=RequestedObjectId("req-1"),
+        collection_use_object_id=CollectionUseObjectId("cuo-1"),
         number_of_objects=1,
         occurrence_date=datetime(2026, 6, 1, tzinfo=UTC),
         location="Storage room",
@@ -845,20 +824,21 @@ async def test_occurrence_attachment_invalid_media_type_does_not_save_file() -> 
 async def test_add_occurrence_entry_creates_occurrence_log_on_first_entry() -> None:
     project_repository = InMemoryCollectionUseProjectRepository()
     occurrence_log_repository = InMemoryOccurrenceLogRepository()
-    proposal_repository = InMemoryProposalRepository()
-    project = _make_project()
-    await project_repository.add(project)
-    await proposal_repository.add(
-        _proposal_with_requested_object(extra_objects=[("req-2", "INV-002")])
+    project = _make_project(
+        objects=[
+            _collection_use_object("cuo-1", "INV-001"),
+            _collection_use_object("cuo-2", "INV-002"),
+        ]
     )
+    await project_repository.add(project)
 
     entry = await AddObjectOccurrenceEntry(
-        project_repository, occurrence_log_repository, proposal_repository
+        project_repository, occurrence_log_repository
     ).execute(
         AddObjectOccurrenceEntryInput(
             project_id=project.id,
             caller=_make_caller(),
-            requested_object_id=RequestedObjectId("req-1"),
+            collection_use_object_id=CollectionUseObjectId("cuo-1"),
             number_of_objects=2,
             occurrence_date=datetime(2026, 6, 2, 11, 30, tzinfo=UTC),
             location="Conservation lab",
@@ -873,7 +853,7 @@ async def test_add_occurrence_entry_creates_occurrence_log_on_first_entry() -> N
     assert occurrence_log.date_conclusion is None
     assert occurrence_log.curator is None
     assert entry.object_occurrence_log_id == occurrence_log.id
-    assert entry.requested_object_id == "req-1"
+    assert entry.collection_use_object_id == "cuo-1"
     assert entry.number_of_objects == 2
     assert entry.occurrence_date == datetime(2026, 6, 2, 11, 30, tzinfo=UTC)
     assert entry.location == "Conservation lab"
@@ -882,12 +862,12 @@ async def test_add_occurrence_entry_creates_occurrence_log_on_first_entry() -> N
     assert entry.testimonial == "Reported by the conservator"
 
     await AddObjectOccurrenceEntry(
-        project_repository, occurrence_log_repository, proposal_repository
+        project_repository, occurrence_log_repository
     ).execute(
         AddObjectOccurrenceEntryInput(
             project_id=project.id,
             caller=_make_caller(),
-            requested_object_id=RequestedObjectId("req-2"),
+            collection_use_object_id=CollectionUseObjectId("cuo-2"),
             number_of_objects=1,
             occurrence_date=datetime(2026, 6, 3, tzinfo=UTC),
             location="Storage room",
@@ -902,7 +882,7 @@ async def test_occurrence_entry_validates_required_fields() -> None:
         kwargs = {
             "id": ObjectOccurrenceEntryId("occ-1"),
             "object_occurrence_log_id": ObjectOccurrenceLogId("log-1"),
-            "requested_object_id": RequestedObjectId("req-1"),
+            "collection_use_object_id": CollectionUseObjectId("cuo-1"),
             "number_of_objects": 1,
             "occurrence_date": datetime(2026, 6, 1, tzinfo=UTC),
             "location": "Storage room",

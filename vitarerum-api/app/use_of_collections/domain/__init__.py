@@ -9,6 +9,8 @@ from app.use_of_collections.domain.enums import (
 )
 from app.use_of_collections.domain.models import (
     Attachment,
+    CollectionUseObject,
+    CollectionUseObjectId,
     CollectionUseProject,
     CollectionUseProjectId,
     Conversation,
@@ -47,6 +49,8 @@ from app.use_of_collections.domain.models import (
 
 __all__ = [
     "Attachment",
+    "CollectionUseObject",
+    "CollectionUseObjectId",
     "CollectionUseProject",
     "CollectionUseProjectId",
     "Conversation",

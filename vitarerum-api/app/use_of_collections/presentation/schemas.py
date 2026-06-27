@@ -324,7 +324,7 @@ class AttachmentResponse(BaseModel):
 
 
 class AddLogEntryRequest(BaseModel):
-    requestedObjectId: str = Field(min_length=1)
+    collectionUseObjectId: str = Field(min_length=1)
     numberOfObjects: int = Field(ge=1)
     observations: str | None = None
 
@@ -337,7 +337,7 @@ class EditLogEntryRequest(BaseModel):
 
 class ObjectLogEntryResponse(BaseModel):
     id: str
-    requestedObjectId: str
+    collectionUseObjectId: str
     numberOfObjects: int
     addedAt: datetime
     addedBy: PermissionDetail
@@ -367,7 +367,7 @@ class PaginatedLogEntriesResponse(BaseModel):
 
 
 class AddOccurrenceEntryRequest(BaseModel):
-    requestedObjectId: str = Field(min_length=1)
+    collectionUseObjectId: str = Field(min_length=1)
     numberOfObjects: int = Field(ge=1)
     occurrenceDate: datetime
     location: str = Field(min_length=1)
@@ -385,7 +385,7 @@ class EditOccurrenceEntryRequest(BaseModel):
 
 class ObjectOccurrenceEntryResponse(BaseModel):
     id: str
-    requestedObjectId: str
+    collectionUseObjectId: str
     numberOfObjects: int
     occurrenceDate: datetime
     location: str
@@ -482,6 +482,19 @@ class ProjectListItemResponse(BaseModel):
     requestedBy: PermissionDetail | None = None
 
 
+class CollectionUseObjectResponse(BaseModel):
+    """Project-owned object snapshot (copied from the proposal at approval).
+    Journal entries reference these by ``id`` via ``collectionUseObjectId``."""
+
+    id: str
+    inventoryNumber: str
+    displayTitle: str | None = None
+    objectName: str | None = None
+    briefDescriptionSnapshot: str | None = None
+    category: str
+    description: str
+
+
 class ProjectDetailResponse(BaseModel):
     id: str
     referenceNumber: str
@@ -497,6 +510,7 @@ class ProjectDetailResponse(BaseModel):
     authorisedAt: datetime | None = None
     proposal: ProposalRefSummary | None = None
     requestedBy: PermissionDetail | None = None
+    objects: list[CollectionUseObjectResponse] = []
 
 
 class PaginatedProjectsResponse(BaseModel):

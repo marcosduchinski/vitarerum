@@ -44,6 +44,7 @@ from app.use_of_collections.domain.enums import (
 )
 
 CollectionUseProjectId = NewType("CollectionUseProjectId", str)
+CollectionUseObjectId = NewType("CollectionUseObjectId", str)
 ObjectAccessLogId = NewType("ObjectAccessLogId", str)
 ObjectLogEntryId = NewType("ObjectLogEntryId", str)
 ObjectOccurrenceLogId = NewType("ObjectOccurrenceLogId", str)
@@ -88,13 +89,13 @@ class UseEvent:
 class ObjectLogEntry:
     """Entity inside ObjectAccessLog — one accessed object with its quantity.
 
-    The accessed object is identified through ``requested_object_id``, which
-    points to a RequestedObject of the project's proposal (the single carrier of
-    the object's inventory snapshot)."""
+    The accessed object is identified through ``collection_use_object_id``, which
+    points to a CollectionUseObject of the project (the project-owned copy that
+    carries the object's inventory snapshot)."""
 
     id: ObjectLogEntryId
     object_access_log_id: ObjectAccessLogId
-    requested_object_id: RequestedObjectId
+    collection_use_object_id: CollectionUseObjectId
     number_of_objects: int
     added_at: datetime
     added_by: PermissionId
@@ -155,7 +156,7 @@ class ObjectOccurrenceEntry:
 
     id: ObjectOccurrenceEntryId
     object_occurrence_log_id: ObjectOccurrenceLogId
-    requested_object_id: RequestedObjectId
+    collection_use_object_id: CollectionUseObjectId
     number_of_objects: int
     occurrence_date: datetime
     location: str
@@ -266,6 +267,31 @@ class PublicationLog:
 
 
 @dataclass(slots=True)
+class CollectionUseObject:
+    """Project-owned copy of an object to be used, taken from the proposal's
+    requested objects when the project is created.
+
+    This is a clean clone of :class:`RequestedObject`: the project carries its own
+    object snapshots so the Project Phase is self-contained and does not depend on
+    the proposal at runtime (the proposal context may later live in a separate
+    service). Journal entries reference these by ``CollectionUseObjectId``."""
+
+    id: CollectionUseObjectId
+    inventory_number: str
+    category: str
+    description: str
+    requested_at: datetime
+    requested_by: PermissionId
+    display_title: str | None = None
+    object_name: str | None = None
+    brief_description_snapshot: str | None = None
+
+    def __post_init__(self) -> None:
+        if not self.inventory_number:
+            raise ValueError("inventoryNumber is required.")
+
+
+@dataclass(slots=True)
 class CollectionUseProject:
     id: CollectionUseProjectId
     reference_number: ReferenceNumber
@@ -283,6 +309,7 @@ class CollectionUseProject:
     authorised_by: PermissionId | None = None
     authorised_at: datetime | None = None
     events: list[UseEvent] = field(default_factory=list)
+    objects: list[CollectionUseObject] = field(default_factory=list)
 
     def record_requested(
         self,
@@ -397,9 +424,9 @@ class RequestedDocument:
 class RequestedObject:
     """Entity carrying the collection-object snapshot requested on a proposal.
 
-    The inventory snapshot (formerly the ObjectReference value object) lives
-    directly on this entity — it is the single source of an object's identity,
-    referenced by journal entries through ``RequestedObjectId``."""
+    The inventory snapshot lives directly on this entity (Proposal Phase). When
+    the proposal is approved, it is copied into a project-owned
+    :class:`CollectionUseObject`, which is what journal entries reference."""
 
     id: RequestedObjectId
     inventory_number: str

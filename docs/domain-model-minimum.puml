@@ -248,10 +248,23 @@ package "Collection Use" <<Bounded Context>> {
         - authorisedBy: PermissionId?
         - authorisedAt: DateTime?
         - events: List<UseEvent>
+        - objects: List<CollectionUseObject>
         + recordRequested(...)
         + recordStarted(...)
         + recordCompleted(...)
         + recordCancelled(...)
+        }
+
+        class CollectionUseObject <<Entity>> #ff6f69 {
+        - id: CollectionUseObjectId
+        - inventoryNumber: String
+        - displayTitle: String?
+        - objectName: String?
+        - briefDescriptionSnapshot: String?
+        - category: String
+        - description: String
+        - requestedAt: DateTime
+        - requestedBy: PermissionId
         }
 
         enum UseStatus #ff6f69 {
@@ -308,7 +321,7 @@ package "Collection Use" <<Bounded Context>> {
         class ObjectLogEntry <<Entity>> #ffb7b2 {
         - id: ObjectLogEntryId
         - objectAccessLogId: ObjectAccessLogId
-        - requestedObjectId: RequestedObjectId
+        - collectionUseObjectId: CollectionUseObjectId
         - numberOfObjects: Int
         - addedAt: DateTime
         - addedBy: PermissionId
@@ -333,7 +346,7 @@ package "Collection Use" <<Bounded Context>> {
         class ObjectOccurrenceEntry <<Entity>> #ffb7b2 {
         - id: ObjectOccurrenceEntryId
         - objectOccurrenceLogId: ObjectOccurrenceLogId
-        - requestedObjectId: RequestedObjectId
+        - collectionUseObjectId: CollectionUseObjectId
         - numberOfObjects: Int
         - occurrenceDate: DateTime
         - location: String
@@ -372,9 +385,12 @@ package "Collection Use" <<Bounded Context>> {
         CollectionUseProject *-- ReferenceNumber
         CollectionUseProject *-- "1..1" IntendedUse
         CollectionUseProject *-- "0..*" UseEvent
+        CollectionUseProject *-- "0..*" CollectionUseObject
         CollectionUseProject ..> Proposal : proposalId
         CollectionUseProject ..> Permission : requestedBy
         CollectionUseProject ..> Permission : authorisedBy
+        CollectionUseObject ..> Permission : requestedBy
+        CollectionUseObject ..> RequestedObject : copied from on approve
         UseEvent ..> Permission : triggeredBy
 
 
@@ -385,7 +401,7 @@ package "Collection Use" <<Bounded Context>> {
 
         ObjectLogEntry *-- "0..*" Attachment
         ObjectLogEntry ..> Permission : addedBy
-        ObjectLogEntry --> "1" RequestedObject : requestedObjectId
+        ObjectLogEntry --> "1" CollectionUseObject : collectionUseObjectId
 
         ObjectOccurrenceLog "1..1" -- CollectionUseProject : collectionUseProjectId
         ObjectOccurrenceLog *-- "0..*" ObjectOccurrenceEntry
@@ -394,7 +410,7 @@ package "Collection Use" <<Bounded Context>> {
 
         ObjectOccurrenceEntry *-- "0..*" Attachment
         ObjectOccurrenceEntry ..> Permission : reportedBy
-        ObjectOccurrenceEntry --> "1" RequestedObject : requestedObjectId
+        ObjectOccurrenceEntry --> "1" CollectionUseObject : collectionUseObjectId
 
         PublicationLog "1..1" -- CollectionUseProject : collectionUseProjectId
         PublicationLog *-- "0..*" PublicationLogEntry

@@ -20,6 +20,8 @@ from app.use_of_collections.application.ports import ProjectFilters, ProposalFil
 from app.use_of_collections.domain.enums import UseType
 from app.use_of_collections.domain.models import (
     Attachment,
+    CollectionUseObject,
+    CollectionUseObjectId,
     CollectionUseProject,
     CollectionUseProjectId,
     Conversation,
@@ -56,6 +58,7 @@ from app.use_of_collections.domain.models import (
     UseEvent,
 )
 from app.use_of_collections.infrastructure.models import (
+    CollectionUseObjectRecord,
     CollectionUseProjectRecord,
     ConversationRecord,
     DocumentRecord,
@@ -107,6 +110,20 @@ def project_to_record(project: CollectionUseProject) -> CollectionUseProjectReco
             )
             for event in project.events
         ],
+        objects=[
+            CollectionUseObjectRecord(
+                id=obj.id,
+                inventory_number=obj.inventory_number,
+                display_title=obj.display_title,
+                object_name=obj.object_name,
+                brief_description_snapshot=obj.brief_description_snapshot,
+                category=obj.category,
+                description=obj.description,
+                requested_at=obj.requested_at,
+                requested_by=obj.requested_by,
+            )
+            for obj in project.objects
+        ],
     )
 
 
@@ -140,6 +157,20 @@ def project_to_domain(record: CollectionUseProjectRecord) -> CollectionUseProjec
             )
             for event in record.events
         ],
+        objects=[
+            CollectionUseObject(
+                id=CollectionUseObjectId(obj.id),
+                inventory_number=obj.inventory_number,
+                display_title=obj.display_title,
+                object_name=obj.object_name,
+                brief_description_snapshot=obj.brief_description_snapshot,
+                category=obj.category,
+                description=obj.description,
+                requested_at=obj.requested_at,
+                requested_by=PermissionId(obj.requested_by),
+            )
+            for obj in record.objects
+        ],
     )
 
 
@@ -162,7 +193,7 @@ def log_entry_to_record(entry: ObjectLogEntry) -> ObjectLogEntryRecord:
         added_at=entry.added_at,
         added_by=entry.added_by,
         observations=entry.observations,
-        requested_object_id=entry.requested_object_id,
+        collection_use_object_id=entry.collection_use_object_id,
         attachments=[
             LogEntryAttachmentRecord(
                 file_reference=a.file_reference,
@@ -180,7 +211,7 @@ def log_entry_to_domain(record: ObjectLogEntryRecord) -> ObjectLogEntry:
     return ObjectLogEntry(
         id=ObjectLogEntryId(record.id),
         object_access_log_id=ObjectAccessLogId(record.access_log_id),
-        requested_object_id=RequestedObjectId(record.requested_object_id),
+        collection_use_object_id=CollectionUseObjectId(record.collection_use_object_id),
         number_of_objects=record.number_of_objects,
         added_at=record.added_at,
         added_by=PermissionId(record.added_by),
@@ -223,7 +254,7 @@ def occurrence_entry_to_record(
         reported_by=entry.reported_by,
         detailed_description=entry.detailed_description,
         testimonial=entry.testimonial,
-        requested_object_id=entry.requested_object_id,
+        collection_use_object_id=entry.collection_use_object_id,
         attachments=[
             OccurrenceEntryAttachmentRecord(
                 file_reference=a.file_reference,
@@ -243,7 +274,7 @@ def occurrence_entry_to_domain(
     return ObjectOccurrenceEntry(
         id=ObjectOccurrenceEntryId(record.id),
         object_occurrence_log_id=ObjectOccurrenceLogId(record.occurrence_log_id),
-        requested_object_id=RequestedObjectId(record.requested_object_id),
+        collection_use_object_id=CollectionUseObjectId(record.collection_use_object_id),
         number_of_objects=record.number_of_objects,
         occurrence_date=record.occurrence_date,
         location=record.location,
@@ -524,7 +555,10 @@ def conversation_to_domain(record: ConversationRecord) -> Conversation:
 
 # ── eager-load options ──────────────────────────────────────────────────────--
 
-_PROJECT_EAGER = [selectinload(CollectionUseProjectRecord.events)]
+_PROJECT_EAGER = [
+    selectinload(CollectionUseProjectRecord.events),
+    selectinload(CollectionUseProjectRecord.objects),
+]
 
 _PROPOSAL_EAGER = [
     selectinload(ProposalRecord.events),

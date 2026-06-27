@@ -337,7 +337,7 @@ async def _build_occurrence_entry(
     )
     return ObjectOccurrenceEntryResponse(
         id=entry.id,
-        requestedObjectId=entry.requested_object_id,
+        collectionUseObjectId=entry.collection_use_object_id,
         numberOfObjects=entry.number_of_objects,
         occurrenceDate=entry.occurrence_date,
         location=entry.location,
@@ -424,7 +424,7 @@ async def _build_object_log_entry(
     )
     return ObjectLogEntryResponse(
         id=entry.id,
-        requestedObjectId=entry.requested_object_id,
+        collectionUseObjectId=entry.collection_use_object_id,
         numberOfObjects=entry.number_of_objects,
         addedAt=entry.added_at,
         addedBy=added_by,

@@ -47,12 +47,12 @@ from app.use_of_collections.application.use_cases import (
 )
 from app.use_of_collections.domain.models import (
     Attachment,
+    CollectionUseObjectId,
     CollectionUseProjectId,
     InvalidTransition,
     ObjectLogEntryId,
     ObjectOccurrenceEntryId,
     PublicationLogEntryId,
-    RequestedObjectId,
 )
 from app.use_of_collections.presentation.common import (
     _assert_existing_project_access,
@@ -142,13 +142,13 @@ async def add_log_entry(
         project_id, caller, project_repo, proposal_repo
     )
     try:
-        entry = await AddObjectLogEntry(
-            project_repo, access_log_repo, proposal_repo
-        ).execute(
+        entry = await AddObjectLogEntry(project_repo, access_log_repo).execute(
             AddObjectLogEntryInput(
                 project_id=CollectionUseProjectId(project_id),
                 caller=caller,
-                requested_object_id=RequestedObjectId(body.requestedObjectId),
+                collection_use_object_id=CollectionUseObjectId(
+                    body.collectionUseObjectId
+                ),
                 number_of_objects=body.numberOfObjects,
                 observations=body.observations,
                 restrict_to_in_progress=not _is_staff(caller),
@@ -361,12 +361,14 @@ async def add_occurrence_entry(
     )
     try:
         entry = await AddObjectOccurrenceEntry(
-            project_repo, occurrence_log_repo, proposal_repo
+            project_repo, occurrence_log_repo
         ).execute(
             AddObjectOccurrenceEntryInput(
                 project_id=CollectionUseProjectId(project_id),
                 caller=caller,
-                requested_object_id=RequestedObjectId(body.requestedObjectId),
+                collection_use_object_id=CollectionUseObjectId(
+                    body.collectionUseObjectId
+                ),
                 number_of_objects=body.numberOfObjects,
                 occurrence_date=body.occurrenceDate,
                 location=body.location,

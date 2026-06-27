@@ -1,9 +1,10 @@
 """Object journal use cases: the access log and the occurrence log.
 
 Each project has at most one ObjectAccessLog and one ObjectOccurrenceLog, lazily
-created on first entry. Every entry links to a RequestedObject of the project's
-proposal (a read into User Request, validated here) — the RequestedObject is the
-single carrier of the object's inventory snapshot.
+created on first entry. Every entry links to a CollectionUseObject of the project
+(validated here against the project's own objects) — the CollectionUseObject is
+the carrier of the object's inventory snapshot, so journaling never reads back
+into the proposal.
 
 The access-log and occurrence-log use cases share the same shape; the common
 preamble (load a writable project), entry-log validation, and attachment
@@ -22,7 +23,6 @@ from app.use_of_collections.application.ports import (
     FileStoragePort,
     ObjectAccessLogRepository,
     ObjectOccurrenceLogRepository,
-    ProposalRepository,
 )
 from app.use_of_collections.application.use_cases._shared import (
     _new_access_log_reference_number,
@@ -34,6 +34,7 @@ from app.use_of_collections.application.use_cases._shared import (
 from app.use_of_collections.domain.enums import UseStatus
 from app.use_of_collections.domain.models import (
     Attachment,
+    CollectionUseObjectId,
     CollectionUseProject,
     CollectionUseProjectId,
     InvalidTransition,
@@ -46,7 +47,6 @@ from app.use_of_collections.domain.models import (
     ObjectOccurrenceLog,
     ObjectOccurrenceLogId,
     ReferenceNumber,
-    RequestedObjectId,
 )
 
 # ── Shared helpers ─────────────────────────────────────────────────────────────
@@ -101,25 +101,15 @@ def _assert_entry_log_writable(
         raise InvalidTransition(f"Cannot {action} a concluded {log_kind}")
 
 
-async def _validate_requested_object_link(
-    proposal_repository: ProposalRepository,
-    project_id: CollectionUseProjectId,
-    requested_object_id: RequestedObjectId,
+def _validate_collection_use_object(
+    project: CollectionUseProject,
+    collection_use_object_id: CollectionUseObjectId,
 ) -> None:
-    """An entry may only link to a RequestedObject of this project's proposal."""
-    proposal = await proposal_repository.get_by_project_id(project_id)
-    requested = (
-        next(
-            (ro for ro in proposal.requested_objects if ro.id == requested_object_id),
-            None,
-        )
-        if proposal is not None
-        else None
-    )
-    if requested is None:
+    """An entry may only link to a CollectionUseObject owned by this project."""
+    if not any(o.id == collection_use_object_id for o in project.objects):
         raise ValueError(
-            f"Requested object {requested_object_id} is not part of "
-            "this project's request"
+            f"Collection use object {collection_use_object_id} is not part of "
+            "this project"
         )
 
 
@@ -145,7 +135,7 @@ async def _get_or_create_access_log(
 class AddObjectLogEntryInput:
     project_id: CollectionUseProjectId
     caller: Actor
-    requested_object_id: RequestedObjectId
+    collection_use_object_id: CollectionUseObjectId
     number_of_objects: int
     observations: str | None = None
     restrict_to_in_progress: bool = False
@@ -156,26 +146,20 @@ class AddObjectLogEntry:
         self,
         project_repository: CollectionUseProjectRepository,
         access_log_repository: ObjectAccessLogRepository,
-        proposal_repository: ProposalRepository,
     ) -> None:
         self._project_repo = project_repository
         self._repo = access_log_repository
-        self._proposal_repo = proposal_repository
 
     async def execute(self, data: AddObjectLogEntryInput) -> ObjectLogEntry:
-        await _load_writable_project(
+        project = await _load_writable_project(
             self._project_repo, data.project_id, data.restrict_to_in_progress
         )
-        await _validate_requested_object_link(
-            self._proposal_repo,
-            data.project_id,
-            data.requested_object_id,
-        )
+        _validate_collection_use_object(project, data.collection_use_object_id)
         access_log = await _get_or_create_access_log(data.project_id, self._repo)
         entry = ObjectLogEntry(
             id=ObjectLogEntryId(_new_id()),
             object_access_log_id=access_log.id,
-            requested_object_id=data.requested_object_id,
+            collection_use_object_id=data.collection_use_object_id,
             number_of_objects=data.number_of_objects,
             added_at=_now(),
             added_by=data.caller.id,
@@ -332,7 +316,7 @@ async def _get_or_create_occurrence_log(
 class AddObjectOccurrenceEntryInput:
     project_id: CollectionUseProjectId
     caller: Actor
-    requested_object_id: RequestedObjectId
+    collection_use_object_id: CollectionUseObjectId
     number_of_objects: int
     occurrence_date: datetime
     location: str
@@ -346,30 +330,24 @@ class AddObjectOccurrenceEntry:
         self,
         project_repository: CollectionUseProjectRepository,
         occurrence_log_repository: ObjectOccurrenceLogRepository,
-        proposal_repository: ProposalRepository,
     ) -> None:
         self._project_repo = project_repository
         self._repo = occurrence_log_repository
-        self._proposal_repo = proposal_repository
 
     async def execute(
         self, data: AddObjectOccurrenceEntryInput
     ) -> ObjectOccurrenceEntry:
-        await _load_writable_project(
+        project = await _load_writable_project(
             self._project_repo, data.project_id, data.restrict_to_in_progress
         )
-        await _validate_requested_object_link(
-            self._proposal_repo,
-            data.project_id,
-            data.requested_object_id,
-        )
+        _validate_collection_use_object(project, data.collection_use_object_id)
         occurrence_log = await _get_or_create_occurrence_log(
             data.project_id, self._repo
         )
         entry = ObjectOccurrenceEntry(
             id=ObjectOccurrenceEntryId(_new_id()),
             object_occurrence_log_id=occurrence_log.id,
-            requested_object_id=data.requested_object_id,
+            collection_use_object_id=data.collection_use_object_id,
             number_of_objects=data.number_of_objects,
             occurrence_date=data.occurrence_date,
             location=data.location,

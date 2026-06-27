@@ -55,6 +55,31 @@ class CollectionUseProjectRecord(Base):
         back_populates="project",
         cascade="all, delete-orphan",
     )
+    objects: Mapped[list[CollectionUseObjectRecord]] = relationship(
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
+
+
+class CollectionUseObjectRecord(Base):
+    __tablename__ = "collection_use_objects"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("collection_use_projects.id"), index=True
+    )
+    inventory_number: Mapped[str] = mapped_column(String(128))
+    display_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    object_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    brief_description_snapshot: Mapped[str | None] = mapped_column(Text, nullable=True)
+    category: Mapped[str] = mapped_column(String(255), default="")
+    description: Mapped[str] = mapped_column(Text, default="")
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    requested_by: Mapped[str] = mapped_column(String(36), index=True)
+
+    project: Mapped[CollectionUseProjectRecord] = relationship(
+        back_populates="objects"
+    )
 
 
 class UseEventRecord(Base):
@@ -111,7 +136,7 @@ class ObjectLogEntryRecord(Base):
     added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     added_by: Mapped[str] = mapped_column(String(36), index=True)
     observations: Mapped[str | None] = mapped_column(Text, nullable=True)
-    requested_object_id: Mapped[str] = mapped_column(
+    collection_use_object_id: Mapped[str] = mapped_column(
         String(36), nullable=False, index=True
     )
 
@@ -173,7 +198,7 @@ class ObjectOccurrenceEntryRecord(Base):
     reported_by: Mapped[str] = mapped_column(String(36), index=True)
     detailed_description: Mapped[str] = mapped_column(Text)
     testimonial: Mapped[str | None] = mapped_column(Text, nullable=True)
-    requested_object_id: Mapped[str] = mapped_column(
+    collection_use_object_id: Mapped[str] = mapped_column(
         String(36), nullable=False, index=True
     )
 

@@ -26,6 +26,8 @@ from app.use_of_collections.application.use_cases._shared import (
 )
 from app.use_of_collections.domain.enums import UseStatus, UseType
 from app.use_of_collections.domain.models import (
+    CollectionUseObject,
+    CollectionUseObjectId,
     CollectionUseProject,
     CollectionUseProjectId,
     IntendedUse,
@@ -90,6 +92,23 @@ class ApproveProposal:
             end_date=data.end_date,
             requested_by=proposal.requested_by,
             proposal_id=proposal.id,
+            # Copy the proposal's requested objects into the project as it is
+            # created: the project owns its own object snapshots from here on, so
+            # the Project Phase never has to read back into the proposal.
+            objects=[
+                CollectionUseObject(
+                    id=CollectionUseObjectId(_new_id()),
+                    inventory_number=ro.inventory_number,
+                    category=ro.category,
+                    description=ro.description,
+                    requested_at=ro.requested_at,
+                    requested_by=ro.requested_by,
+                    display_title=ro.display_title,
+                    object_name=ro.object_name,
+                    brief_description_snapshot=ro.brief_description_snapshot,
+                )
+                for ro in proposal.requested_objects
+            ],
         )
         project.record_requested(
             occurred_at=now, triggered_by=data.caller.id, note=data.note
@@ -165,11 +184,9 @@ class StartProject:
     def __init__(
         self,
         project_repository: CollectionUseProjectRepository,
-        proposal_repository: ProposalRepository,
         access_log_repository: ObjectAccessLogRepository,
     ) -> None:
         self._repo = project_repository
-        self._proposal_repo = proposal_repository
         self._access_log_repo = access_log_repository
 
     async def execute(self, data: StartProjectInput) -> CollectionUseProject:
@@ -181,21 +198,20 @@ class StartProject:
             occurred_at=now, triggered_by=data.caller.id, note=data.note
         )
         await self._repo.save(project)
-        # Materialise the access log as work begins: the objects requested on the
-        # proposal are the ones that will be handled, so each becomes a registered
+        # Materialise the access log as work begins: the project's own objects are
+        # the ones that will be handled, so each becomes a registered
         # ObjectLogEntry (quantity defaults to 1), linked back to its
-        # RequestedObject for end-to-end traceability.
-        await self._seed_access_log_from_requests(project, data.caller.id, now)
+        # CollectionUseObject for end-to-end traceability.
+        await self._seed_access_log_from_objects(project, data.caller.id, now)
         return project
 
-    async def _seed_access_log_from_requests(
+    async def _seed_access_log_from_objects(
         self,
         project: CollectionUseProject,
         caller_id: PermissionId,
         now: datetime,
     ) -> None:
-        proposal = await self._proposal_repo.get_by_project_id(project.id)
-        if proposal is None or not proposal.requested_objects:
+        if not project.objects:
             return
         # Only seed when the log does not exist yet; if entries were already
         # added (e.g. by staff before start) we leave it untouched.
@@ -207,11 +223,11 @@ class StartProject:
             collection_use_project_id=project.id,
         )
         await self._access_log_repo.add(access_log)
-        for requested in proposal.requested_objects:
+        for obj in project.objects:
             entry = ObjectLogEntry(
                 id=ObjectLogEntryId(_new_id()),
                 object_access_log_id=access_log.id,
-                requested_object_id=requested.id,
+                collection_use_object_id=obj.id,
                 number_of_objects=1,
                 added_at=now,
                 added_by=caller_id,

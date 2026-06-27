@@ -10,11 +10,11 @@ from app.use_of_collections.domain.enums import UseStatus
 from test.use_of_collections.test_api import (
     _CALLER,
     _STAFF_CALLER,
+    _collection_use_object,
     _permission_record,
     _project,
     _project_proposal,
     _proposal,
-    _proposal_with_requested_object,
     client_with_repos,
 )
 
@@ -168,7 +168,7 @@ async def test_golden_project_detail_and_list_shapes() -> None:
         _,
     ):
         await proposal_repo.add(_proposal())
-        await project_repo.add(_project())
+        await project_repo.add(_project(objects=[_collection_use_object()]))
 
         detail = await client.get("/api/v1/collection-use-projects/proj-1")
         listing = await client.get("/api/v1/collection-use-projects")
@@ -199,6 +199,13 @@ async def test_golden_project_detail_and_list_shapes() -> None:
             "endDate",
             "authorisedBy",
             "authorisedAt",
+            "objects[].id",
+            "objects[].inventoryNumber",
+            "objects[].displayTitle",
+            "objects[].objectName",
+            "objects[].briefDescriptionSnapshot",
+            "objects[].category",
+            "objects[].description",
         }
         | {f"proposal.{f}" for f in proposal_summary}
         | _nested("requestedBy", _PERMISSION_DETAIL)
@@ -273,13 +280,18 @@ async def test_golden_log_entries_shapes() -> None:
         proposal_repo,
         _,
     ):
-        await project_repo.add(_project("project-1", status=UseStatus.IN_PROGRESS))
-        await proposal_repo.add(_proposal_with_requested_object())
+        await project_repo.add(
+            _project(
+                "project-1",
+                status=UseStatus.IN_PROGRESS,
+                objects=[_collection_use_object()],
+            )
+        )
 
         created = await client.post(
             "/api/v1/collection-use-projects/project-1/log-entries",
             json={
-                "requestedObjectId": "req-1",
+                "collectionUseObjectId": "cuo-1",
                 "numberOfObjects": 2,
                 "observations": "obs",
             },
@@ -296,7 +308,7 @@ async def test_golden_log_entries_shapes() -> None:
         "numberOfObjects",
         "addedAt",
         "observations",
-        "requestedObjectId",
+        "collectionUseObjectId",
         "attachments.[]",
     }
     assert created.status_code == 201
@@ -333,13 +345,18 @@ async def test_golden_occurrence_entries_shapes() -> None:
         proposal_repo,
         _,
     ):
-        await project_repo.add(_project("project-1", status=UseStatus.IN_PROGRESS))
-        await proposal_repo.add(_proposal_with_requested_object())
+        await project_repo.add(
+            _project(
+                "project-1",
+                status=UseStatus.IN_PROGRESS,
+                objects=[_collection_use_object()],
+            )
+        )
 
         created = await client.post(
             "/api/v1/collection-use-projects/project-1/occurrence-entries",
             json={
-                "requestedObjectId": "req-1",
+                "collectionUseObjectId": "cuo-1",
                 "numberOfObjects": 1,
                 "occurrenceDate": "2026-06-03T11:30:00Z",
                 "location": "Lab",
@@ -358,7 +375,7 @@ async def test_golden_occurrence_entries_shapes() -> None:
         "location",
         "detailedDescription",
         "testimonial",
-        "requestedObjectId",
+        "collectionUseObjectId",
         "attachments.[]",
     }
     assert created.status_code == 201

@@ -100,13 +100,24 @@ project_id : UUID (required)
     "submittedAt": "2025-01-15T10:30:00",
     "assignedTo": null
   },
-  "requestedBy": null
+  "requestedBy": null,
+  "objects": [
+    {
+      "id": "uuid",
+      "inventoryNumber": "INV-001",
+      "displayTitle": "string | null",
+      "objectName": "string | null",
+      "briefDescriptionSnapshot": "string | null",
+      "category": "string",
+      "description": "string"
+    }
+  ]
 }
 ```
 
 `authorisedBy` / `authorisedAt` and the hydrated `requestedBy` object are populated only for staff callers — all three are `null` for a researcher. `CollectionUseProject.requestedBy` remains the ownership field used for access control.
 
-Researcher project detail intentionally omits staff review context such as requested objects, proposal documents, and conversation summaries. Use the proposal endpoints for researcher-facing proposal data, and use `GET /collection-use-projects/{project_id}/log-entries` / `.../occurrence-entries` for paginated project log content.
+`objects` lists the project's own `CollectionUseObject`s (copied from the proposal's requested objects when the project was approved); their `id`s are what journal entries reference via `collectionUseObjectId`. Researcher project detail still omits staff review context such as proposal documents and conversation summaries. Use the proposal endpoints for researcher-facing proposal data, and use `GET /collection-use-projects/{project_id}/log-entries` / `.../occurrence-entries` for paginated project log content.
 
 **Response `403 Forbidden`**
 ```json
@@ -130,7 +141,7 @@ Researcher project detail intentionally omits staff review context such as reque
 
 **Description** — Researcher starts the project. Transitions `CollectionUseProject` from `CREATED` to `IN_PROGRESS`. Records a `STARTED` `UseEvent`.
 
-**Side effect — the object access log is seeded from the proposal's requested objects.** As work begins, the project's `ObjectAccessLog` (`OAL-XXXXXXXX`) is created and one `ObjectLogEntry` is registered for **each `RequestedObject`** of the proposal — these are the objects that will be handled. Each entry links back to its source via `requestedObjectId`, sets `numberOfObjects` to `1` (the default — adjust later via `PATCH .../log-entries/{entry_id}`), and records the caller as `addedBy`. The seeded entries are then visible at `GET /collection-use-projects/{project_id}/log-entries`. Seeding only happens when the proposal has requested objects **and** no access log exists yet: a proposal with no requested objects leaves the log lazily uncreated, and if entries were already added (e.g. by staff before start) the existing log is left untouched.
+**Side effect — the object access log is seeded from the project's objects.** As work begins, the project's `ObjectAccessLog` (`OAL-XXXXXXXX`) is created and one `ObjectLogEntry` is registered for **each `CollectionUseObject`** of the project — these are the objects that will be handled. Each entry links back to its source via `collectionUseObjectId`, sets `numberOfObjects` to `1` (the default — adjust later via `PATCH .../log-entries/{entry_id}`), and records the caller as `addedBy`. The seeded entries are then visible at `GET /collection-use-projects/{project_id}/log-entries`. Seeding only happens when the project has objects **and** no access log exists yet: a project with no objects leaves the log lazily uncreated, and if entries were already added (e.g. by staff before start) the existing log is left untouched.
 
 **Path parameters**
 ```
@@ -282,7 +293,7 @@ project_id : UUID (required)
 
 ### `POST /collection-use-projects/{project_id}/log-entries`
 
-**Description** — Researcher adds an **object log entry** to the project's **object access log** — a structured record of one collection object accessed, with a quantity and optional observations. The access log (one per project, with its own `OAL-XXXXXXXX` reference number) is created automatically — either seeded from the proposal's requested objects when the project is started (see `POST .../start`), or on the first entry if it does not yet exist. For non-staff callers the project must be `IN_PROGRESS`; otherwise `409`. The caller's `permissionId` is recorded as `addedBy`. The accessed object is identified by `requestedObjectId` (a `RequestedObject` of this project's proposal), which carries the inventory snapshot. Entries cannot be added once the access log is concluded (`409`).
+**Description** — Researcher adds an **object log entry** to the project's **object access log** — a structured record of one collection object accessed, with a quantity and optional observations. The access log (one per project, with its own `OAL-XXXXXXXX` reference number) is created automatically — either seeded from the project's objects when the project is started (see `POST .../start`), or on the first entry if it does not yet exist. For non-staff callers the project must be `IN_PROGRESS`; otherwise `409`. The caller's `permissionId` is recorded as `addedBy`. The accessed object is identified by `collectionUseObjectId` (a `CollectionUseObject` of this project), which carries the inventory snapshot. Entries cannot be added once the access log is concluded (`409`).
 
 **Path parameters**
 ```
@@ -292,19 +303,19 @@ project_id : UUID (required)
 **Request body**
 ```json
 {
-  "requestedObjectId": "uuid",
+  "collectionUseObjectId": "uuid",
   "numberOfObjects": 2,
   "observations": "string"
 }
 ```
 
-`observations` is optional; `numberOfObjects` must be ≥ 1. `requestedObjectId` is **required** — it links this access to the `RequestedObject` it fulfils (the single carrier of the object's inventory snapshot) and must belong to this project's proposal (otherwise `422`).
+`observations` is optional; `numberOfObjects` must be ≥ 1. `collectionUseObjectId` is **required** — it links this access to the `CollectionUseObject` it fulfils (the carrier of the object's inventory snapshot) and must be one of this project's objects (otherwise `422`).
 
 **Response `201 Created`**
 ```json
 {
   "id": "uuid",
-  "requestedObjectId": "uuid",
+  "collectionUseObjectId": "uuid",
   "numberOfObjects": 2,
   "addedAt": "2025-06-03T14:00:00",
   "addedBy": {
@@ -317,7 +328,7 @@ project_id : UUID (required)
 }
 ```
 
-`addedBy` is a full permission object, not a bare UUID. The accessed object's inventory snapshot is not duplicated on the entry — resolve it through `requestedObjectId` against the proposal's `requestedObjects`.
+`addedBy` is a full permission object, not a bare UUID. The accessed object's inventory snapshot is not duplicated on the entry — resolve it through `collectionUseObjectId` against the project's `objects`.
 
 **Response `409 Conflict`**
 ```json
@@ -331,7 +342,7 @@ project_id : UUID (required)
 
 ### `PATCH /collection-use-projects/{project_id}/log-entries/{entry_id}`
 
-**Description** — Edit an existing object log entry. Only the entry's editable fields may be changed: `addedAt`, `numberOfObjects` and `observations`. The entry's linked object (`requestedObjectId`) and its `addedBy` are immutable. The request is a partial update: only the fields present in the body are changed — omit a field to leave it untouched, send `observations: null` to clear it. For non-staff callers the project must be `IN_PROGRESS` (`409` otherwise), and the entry cannot be edited once the access log is concluded (`409`).
+**Description** — Edit an existing object log entry. Only the entry's editable fields may be changed: `addedAt`, `numberOfObjects` and `observations`. The entry's linked object (`collectionUseObjectId`) and its `addedBy` are immutable. The request is a partial update: only the fields present in the body are changed — omit a field to leave it untouched, send `observations: null` to clear it. For non-staff callers the project must be `IN_PROGRESS` (`409` otherwise), and the entry cannot be edited once the access log is concluded (`409`).
 
 **Path parameters**
 ```
@@ -402,7 +413,7 @@ size    : Integer  (default 20)
   "content": [
     {
       "id": "uuid",
-      "requestedObjectId": "uuid",
+      "collectionUseObjectId": "uuid",
       "numberOfObjects": 1,
       "addedAt": "2025-06-03T14:00:00",
       "addedBy": {
@@ -534,7 +545,7 @@ file_reference : String (required) the attachment's fileReference
 
 ### `POST /collection-use-projects/{project_id}/occurrence-entries`
 
-**Description** — Researcher records an **object occurrence entry** in the project's **object occurrence log** — a structured report of one occurrence involving a collection object (when, where, what happened, optional testimonial). The occurrence log (one per project, with its own `OOL-XXXXXXXX` reference number) is created automatically on the first entry. Researcher restricted to `IN_PROGRESS`; the caller's `permissionId` is recorded as `reportedBy`; the object is identified by `requestedObjectId` (a `RequestedObject` of this project's proposal). Entries cannot be added once the occurrence log is concluded (`409`).
+**Description** — Researcher records an **object occurrence entry** in the project's **object occurrence log** — a structured report of one occurrence involving a collection object (when, where, what happened, optional testimonial). The occurrence log (one per project, with its own `OOL-XXXXXXXX` reference number) is created automatically on the first entry. Researcher restricted to `IN_PROGRESS`; the caller's `permissionId` is recorded as `reportedBy`; the object is identified by `collectionUseObjectId` (a `CollectionUseObject` of this project). Entries cannot be added once the occurrence log is concluded (`409`).
 
 **Path parameters**
 ```
@@ -544,7 +555,7 @@ project_id : UUID (required)
 **Request body**
 ```json
 {
-  "requestedObjectId": "uuid",
+  "collectionUseObjectId": "uuid",
   "numberOfObjects": 1,
   "occurrenceDate": "2025-06-03T11:30:00",
   "location": "Conservation lab, room 2",
@@ -553,13 +564,13 @@ project_id : UUID (required)
 }
 ```
 
-`testimonial` is optional; `numberOfObjects` must be ≥ 1; `occurrenceDate` is when the occurrence happened (client-supplied), `location` and `detailedDescription` are required. `requestedObjectId` is **required** — it links this occurrence to the `RequestedObject` it concerns (the carrier of the object's inventory snapshot) and must belong to this project's proposal (else `422`).
+`testimonial` is optional; `numberOfObjects` must be ≥ 1; `occurrenceDate` is when the occurrence happened (client-supplied), `location` and `detailedDescription` are required. `collectionUseObjectId` is **required** — it links this occurrence to the `CollectionUseObject` it concerns (the carrier of the object's inventory snapshot) and must be one of this project's objects (else `422`).
 
 **Response `201 Created`**
 ```json
 {
   "id": "uuid",
-  "requestedObjectId": "uuid",
+  "collectionUseObjectId": "uuid",
   "numberOfObjects": 1,
   "occurrenceDate": "2025-06-03T11:30:00",
   "location": "Conservation lab, room 2",
@@ -578,7 +589,7 @@ project_id : UUID (required)
 
 ### `PATCH /collection-use-projects/{project_id}/occurrence-entries/{entry_id}`
 
-**Description** — Edit an existing object occurrence entry. Only the entry's editable fields may be changed: `numberOfObjects`, `occurrenceDate`, `location`, `detailedDescription` and `testimonial`. The entry's linked object (`requestedObjectId`) and its `reportedBy` are immutable. The request is a partial update: only the fields present in the body are changed — omit a field to leave it untouched, send `testimonial: null` to clear it. For non-staff callers the project must be `IN_PROGRESS` (`409` otherwise), and the entry cannot be edited once the occurrence log is concluded (`409`).
+**Description** — Edit an existing object occurrence entry. Only the entry's editable fields may be changed: `numberOfObjects`, `occurrenceDate`, `location`, `detailedDescription` and `testimonial`. The entry's linked object (`collectionUseObjectId`) and its `reportedBy` are immutable. The request is a partial update: only the fields present in the body are changed — omit a field to leave it untouched, send `testimonial: null` to clear it. For non-staff callers the project must be `IN_PROGRESS` (`409` otherwise), and the entry cannot be edited once the occurrence log is concluded (`409`).
 
 **Path parameters**
 ```
@@ -952,9 +963,9 @@ The project's first `UseEvent` is `REQUESTED`, recorded when the curator approve
 
 A few conventions worth noting across this group:
 
-**Two distinct journal resources** — both are per-project, curator-concluded log aggregates whose entries link to exactly one `RequestedObject` via `requestedObjectId`. `log-entries` belong to the **object access log** (`ObjectAccessLog`, `OAL-` reference number): each entry records a `numberOfObjects` and optional `observations`. `occurrence-entries` belong to the **object occurrence log** (`ObjectOccurrenceLog`, `OOL-` reference number): each entry records `numberOfObjects`, `occurrenceDate`, `location`, `reportedBy`, `detailedDescription` and an optional `testimonial`. Both logs are created lazily on the first entry (the **access log** is additionally seeded from the proposal's requested objects when the project is started — see `POST .../start`), reject entries and attachments once concluded, and are restricted to `IN_PROGRESS` projects for researchers. Every entry carries a required `requestedObjectId` tying it back to the `RequestedObject` it fulfils (log entry) or concerns (occurrence entry), giving end-to-end traceability from request → visit → attachments for a given object.
+**Two distinct journal resources** — both are per-project, curator-concluded log aggregates whose entries link to exactly one `CollectionUseObject` via `collectionUseObjectId`. `log-entries` belong to the **object access log** (`ObjectAccessLog`, `OAL-` reference number): each entry records a `numberOfObjects` and optional `observations`. `occurrence-entries` belong to the **object occurrence log** (`ObjectOccurrenceLog`, `OOL-` reference number): each entry records `numberOfObjects`, `occurrenceDate`, `location`, `reportedBy`, `detailedDescription` and an optional `testimonial`. Both logs are created lazily on the first entry (the **access log** is additionally seeded from the project's objects when the project is started — see `POST .../start`), reject entries and attachments once concluded, and are restricted to `IN_PROGRESS` projects for researchers. Every entry carries a required `collectionUseObjectId` tying it back to the `CollectionUseObject` it fulfils (log entry) or concerns (occurrence entry), giving end-to-end traceability from request → visit → attachments for a given object.
 
-**Entries reference requested objects** — log-entry and occurrence-entry requests send a `requestedObjectId` identifying a `RequestedObject` of the project's proposal. The inventory snapshot (`inventoryNumber`, `displayTitle`, `objectName`, `briefDescriptionSnapshot`) lives on that `RequestedObject` and is no longer duplicated on the journal entries.
+**Entries reference collection use objects** — log-entry and occurrence-entry requests send a `collectionUseObjectId` identifying a `CollectionUseObject` of the project (copied from the proposal at approval). The inventory snapshot (`inventoryNumber`, `displayTitle`, `objectName`, `briefDescriptionSnapshot`) lives on that `CollectionUseObject` and is not duplicated on the journal entries.
 
 **`addedBy` is a full permission object** — entry responses return `addedBy` as a nested `PermissionDetail`, not a bare UUID.
 

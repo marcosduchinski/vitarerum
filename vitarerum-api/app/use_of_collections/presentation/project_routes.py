@@ -56,6 +56,7 @@ from app.use_of_collections.presentation.dependencies import (
     ProposalRepo,
 )
 from app.use_of_collections.presentation.schemas import (
+    CollectionUseObjectResponse,
     NoteRequest,
     PaginatedEventsResponse,
     PaginatedProjectsResponse,
@@ -184,6 +185,18 @@ async def get_project(
         authorisedAt=authorised_at,
         proposal=proposal_ref,
         requestedBy=_detail_or_none(detail.requested_by),
+        objects=[
+            CollectionUseObjectResponse(
+                id=obj.id,
+                inventoryNumber=obj.inventory_number,
+                displayTitle=obj.display_title,
+                objectName=obj.object_name,
+                briefDescriptionSnapshot=obj.brief_description_snapshot,
+                category=obj.category,
+                description=obj.description,
+            )
+            for obj in project.objects
+        ],
     )
 
 
@@ -217,7 +230,7 @@ async def start_project(
     )
     try:
         project = await StartProject(
-            project_repo, proposal_repo, access_log_repo
+            project_repo, access_log_repo
         ).execute(
             StartProjectInput(
                 project_id=CollectionUseProjectId(project_id),
