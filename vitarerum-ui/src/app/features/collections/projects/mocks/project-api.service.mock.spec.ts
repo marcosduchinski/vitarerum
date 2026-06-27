@@ -73,7 +73,7 @@ describe('ProjectApiServiceMock', () => {
     const detail = await firstValueFrom(service.getProject('proj-4'));
 
     expect(detail.actions).toMatchObject({
-      canStart: false,
+      canStart: true,
       canCancel: true,
       canOpenLog: true,
       canCreateObjectLogEntry: true,

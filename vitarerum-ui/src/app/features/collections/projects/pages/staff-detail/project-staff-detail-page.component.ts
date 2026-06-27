@@ -75,6 +75,9 @@ function formatDateTime(iso: string): string {
   }
 }
 
+const START_NOTE = 'Started from staff project detail.';
+const COMPLETE_NOTE = 'Completed from staff project detail.';
+
 @Component({
   selector: 'app-project-staff-detail-page',
   standalone: true,
@@ -135,6 +138,19 @@ export class ProjectStaffDetailPageComponent {
       (project.status === 'CREATED' || project.status === 'IN_PROGRESS')
     );
   });
+  protected readonly canStart = computed(() => {
+    const project = this.project();
+    if (!project) return false;
+
+    return project.actions?.canStart ?? project.status === 'CREATED';
+  });
+  protected readonly canComplete = computed(() => {
+    const project = this.project();
+    if (!project) return false;
+
+    return project.actions?.canComplete ?? project.status === 'IN_PROGRESS';
+  });
+  protected readonly canCreateFollowUp = computed(() => this.project()?.status === 'COMPLETED');
   protected readonly canOpenLogTasks = computed(() => this.project()?.status === 'IN_PROGRESS');
   // Staff write publication entries once COMPLETED; the log stays readable in
   // both phases, so surface the task for IN_PROGRESS and COMPLETED projects.
@@ -178,6 +194,8 @@ export class ProjectStaffDetailPageComponent {
   protected readonly activePanel = signal<StaffProjectPanel>('overview');
   protected readonly acting = signal(false);
   protected readonly actionError = signal<ApiError | null>(null);
+  protected readonly startConfirmOpen = signal(false);
+  protected readonly completeConfirmOpen = signal(false);
   protected readonly cancelConfirmOpen = signal(false);
   protected readonly reportModalOpen = signal(false);
   protected readonly reportCreating = signal(false);
@@ -203,6 +221,31 @@ export class ProjectStaffDetailPageComponent {
 
   protected closeCancelConfirm(): void {
     this.cancelConfirmOpen.set(false);
+  }
+
+  protected openStartConfirm(): void {
+    if (!this.canStart()) return;
+    this.actionError.set(null);
+    this.startConfirmOpen.set(true);
+  }
+
+  protected closeStartConfirm(): void {
+    this.startConfirmOpen.set(false);
+  }
+
+  protected openCompleteConfirm(): void {
+    if (!this.canComplete()) return;
+    this.actionError.set(null);
+    this.completeConfirmOpen.set(true);
+  }
+
+  protected closeCompleteConfirm(): void {
+    this.completeConfirmOpen.set(false);
+  }
+
+  protected createFollowUpProject(): void {
+    if (!this.canCreateFollowUp()) return;
+    void this.router.navigate(['/p/collections/projects', this.id(), 'follow-up', 'new']);
   }
 
   protected openReportModal(): void {
@@ -238,6 +281,44 @@ export class ProjectStaffDetailPageComponent {
       this.reportError.set(toApiError(err));
     } finally {
       this.reportCreating.set(false);
+    }
+  }
+
+  protected async start(): Promise<void> {
+    if (this.acting() || !this.canStart()) return;
+
+    this.acting.set(true);
+    this.actionError.set(null);
+
+    try {
+      await firstValueFrom(this.projectService.startProject(this.id(), { note: START_NOTE }));
+      this.startConfirmOpen.set(false);
+      this.projectResource.reload();
+      this.eventsResource.reload();
+    } catch (err) {
+      this.actionError.set(toApiError(err));
+      this.startConfirmOpen.set(false);
+    } finally {
+      this.acting.set(false);
+    }
+  }
+
+  protected async complete(): Promise<void> {
+    if (this.acting() || !this.canComplete()) return;
+
+    this.acting.set(true);
+    this.actionError.set(null);
+
+    try {
+      await firstValueFrom(this.projectService.completeProject(this.id(), { note: COMPLETE_NOTE }));
+      this.completeConfirmOpen.set(false);
+      this.projectResource.reload();
+      this.eventsResource.reload();
+    } catch (err) {
+      this.actionError.set(toApiError(err));
+      this.completeConfirmOpen.set(false);
+    } finally {
+      this.acting.set(false);
     }
   }
 

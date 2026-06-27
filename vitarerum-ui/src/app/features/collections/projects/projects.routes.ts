@@ -107,6 +107,14 @@ export const PROJECTS_ROUTES: Routes = [
       ),
   },
   {
+    path: ':id/follow-up/new',
+    title: 'Create Follow-up Project',
+    loadComponent: () =>
+      import('./pages/follow-up/project-follow-up-page.component').then(
+        (m) => m.ProjectFollowUpPageComponent,
+      ),
+  },
+  {
     path: 'collections/:id',
     title: 'Project Detail',
     loadComponent: () =>

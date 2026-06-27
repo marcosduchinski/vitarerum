@@ -247,14 +247,18 @@ describe('ProjectsPendingPageComponent', () => {
     expect(compiled.textContent).toContain('1-3 of 5');
   });
 
-  it('starts a pending project and reloads the list', async () => {
-    await identity.signIn({ email: 'alice@ext.example.com', password: 'vita2026' });
+  it('starts a pending project from the popup menu and reloads the list', async () => {
+    await identity.signIn({ email: 'bob@collections.example.com', password: 'vita2026' });
     const fixture = TestBed.createComponent(ProjectsPendingPageComponent);
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
 
-    buttonByText(fixture.nativeElement, 'Start').click();
+    openActionsMenu(fixture.nativeElement, PROJECT.referenceNumber);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    menuItemByText('Start').click();
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
@@ -266,15 +270,25 @@ describe('ProjectsPendingPageComponent', () => {
     expect(projectService.queries).toHaveLength(2);
   });
 
-  it('hides Start from staff users', async () => {
+  it('links the project reference to the role-specific detail route', async () => {
     await identity.signIn({ email: 'bob@collections.example.com', password: 'vita2026' });
     const fixture = TestBed.createComponent(ProjectsPendingPageComponent);
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect((fixture.nativeElement as HTMLElement).textContent).not.toContain('Start');
-    expect(projectService.started).toEqual([]);
+    const link = (fixture.nativeElement as HTMLElement).querySelector<HTMLAnchorElement>(
+      'a.project-card__reference',
+    );
+
+    expect(link).not.toBeNull();
+    expect(link?.getAttribute('href')).toContain(
+      `/p/collections/projects/collections/${PROJECT.id}`,
+    );
+    expect(link?.getAttribute('href')).toContain(
+      'returnTo=%2Fp%2Fcollections%2Fprojects%2Fpending',
+    );
+    expect(link?.textContent?.trim()).toBe(PROJECT.referenceNumber);
   });
 
   it('opens secondary actions from the popup menu', async () => {
@@ -288,6 +302,7 @@ describe('ProjectsPendingPageComponent', () => {
     await fixture.whenStable();
 
     expect(document.body.textContent).toContain('Detail');
+    expect(document.body.textContent).toContain('Start');
     expect(document.body.textContent).toContain('Cancel');
     expect((fixture.nativeElement as HTMLElement).textContent).not.toContain('Cancel');
   });

@@ -68,7 +68,16 @@
         @for (project of projects(); track project.id) {
           <article class="project-card">
             <header class="project-card__header">
-              <p class="project-card__reference">{{ project.referenceNumber }}</p>
+              <a
+                class="project-card__reference"
+                [routerLink]="detailRoute(project.id)"
+                [queryParams]="{
+                  returnTo: '/p/collections/projects/pending',
+                  returnLabel: 'pending projects',
+                }"
+              >
+                {{ project.referenceNumber }}
+              </a>
               <span class="project-card__status">Created - awaiting start</span>
             </header>
 
@@ -107,16 +116,6 @@
             </dl>
 
             <footer class="project-card__actions">
-              @if (isExternal()) {
-                <button
-                  type="button"
-                  class="action-btn action-btn--primary"
-                  [disabled]="actionProjectId() === project.id"
-                  (click)="start(project.id)"
-                >
-                  {{ actionProjectId() === project.id ? 'Starting...' : 'Start' }}
-                </button>
-              }
               <app-row-actions
                 [items]="actionItemsFor(project)"
                 [disabled]="actionProjectId() === project.id"

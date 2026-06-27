@@ -6,7 +6,7 @@ import {
   resource,
   signal,
 } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { MenuItem } from 'primeng/api';
 import { firstValueFrom } from 'rxjs';
 
@@ -40,6 +40,7 @@ const TYPE_LABELS: Record<UseType, string> = {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     RowActionsComponent,
+    RouterLink,
     PageHeaderComponent,
     LoadingStateComponent,
     ErrorMessageComponent,
@@ -61,7 +62,6 @@ export class ProjectsPendingPageComponent {
 
   // Refetch when the active role changes: requests carry X-Permission-Id.
   protected readonly currentPermissionId = computed(() => this.identity.getPermissionId());
-  protected readonly isExternal = computed(() => this.identity.session()?.group === 'EXTERNAL');
 
   protected readonly projectsResource = resource({
     params: () => ({
@@ -121,6 +121,13 @@ export class ProjectsPendingPageComponent {
         },
       },
       {
+        label: 'Start',
+        icon: 'pi pi-play',
+        command: () => {
+          void this.start(projectId);
+        },
+      },
+      {
         label: 'Cancel',
         icon: 'pi pi-times',
         command: () => this.requestCancelConfirmation(projectId),
@@ -132,7 +139,7 @@ export class ProjectsPendingPageComponent {
     return project.requestedBy?.user.name ?? 'Unknown requester';
   }
 
-  private detailRoute(projectId: string): readonly string[] {
+  protected detailRoute(projectId: string): readonly string[] {
     return projectDetailRouteForGroup(projectId, this.identity.session()?.group);
   }
 

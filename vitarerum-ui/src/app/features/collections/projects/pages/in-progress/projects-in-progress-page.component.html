@@ -10,6 +10,10 @@
   } @else if (listError()) {
     <app-error-message [apiError]="listError()!" (retry)="projectsResource.reload()" />
   } @else {
+    @if (actionError()) {
+      <app-error-message [apiError]="actionError()!" />
+    }
+
     <section class="projects-list-panel" aria-label="In progress projects list">
       <div class="projects-toolbar">
         <label class="projects-search" for="projects-search">
@@ -117,6 +121,7 @@
                     <div class="projects-table__actions">
                       <app-row-actions
                         [items]="actionItemsFor(project)"
+                        [disabled]="actionProjectId() === project.id"
                         ariaLabel="More actions for {{ project.referenceNumber }}"
                       />
                     </div>
@@ -184,6 +189,21 @@
               </button>
             </div>
           </div>
+        }
+
+        @for (project of projects(); track project.id) {
+          <app-confirm-modal
+            [open]="completeConfirmProjectId() === project.id"
+            title="Complete project?"
+            [message]="
+              'This will mark ' + project.referenceNumber + ' as completed and close active work.'
+            "
+            confirmLabel="Complete project"
+            cancelLabel="Keep in progress"
+            [pending]="actionProjectId() === project.id"
+            (confirmed)="complete(project.id)"
+            (cancelled)="cancelCompleteConfirmation()"
+          />
         }
       }
     </section>

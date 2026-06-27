@@ -39,6 +39,7 @@ const PROJECTS: readonly CollectionUseProjectSummary[] = Array.from({ length: 25
 
 class ProjectApiServiceStub {
   readonly queries: ProjectListQuery[] = [];
+  readonly completed: { projectId: string; note: string }[] = [];
 
   listProjects(query: ProjectListQuery = {}) {
     this.queries.push(query);
@@ -61,6 +62,11 @@ class ProjectApiServiceStub {
       totalElements: items.length,
       totalPages: Math.max(1, Math.ceil(items.length / size)),
     });
+  }
+
+  completeProject(projectId: string, request: { note: string }) {
+    this.completed.push({ projectId, note: request.note });
+    return of({ id: projectId, referenceNumber: PROJECTS[0].referenceNumber, status: 'COMPLETED' });
   }
 }
 
@@ -122,9 +128,7 @@ describe('ProjectsInProgressPageComponent', () => {
     expect(text).toContain('Alice Ferreira');
     expect(text).toContain('Bob Santos');
     expect(text).toContain('1-20 of 25 projects');
-    expect(
-      compiled.querySelector('[aria-label="More actions for VR-2026-061"]'),
-    ).not.toBeNull();
+    expect(compiled.querySelector('[aria-label="More actions for VR-2026-061"]')).not.toBeNull();
   });
 
   it('opens the row menu and navigates to the role-specific detail with return params', async () => {
@@ -151,6 +155,40 @@ describe('ProjectsInProgressPageComponent', () => {
         returnLabel: 'in progress projects',
       },
     });
+  });
+
+  it('completes a project from the row menu and reloads the list', async () => {
+    const fixture = TestBed.createComponent(ProjectsInProgressPageComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    (fixture.nativeElement as HTMLElement)
+      .querySelector<HTMLButtonElement>('[aria-label="More actions for VR-2026-061"]')!
+      .click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const complete = Array.from(
+      document.body.querySelectorAll<HTMLElement>('.p-menu a, .p-menu button'),
+    ).find((item) => item.textContent?.trim() === 'Complete');
+    complete!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Complete project?');
+
+    buttonByText(fixture.nativeElement, 'Complete project').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await new Promise<void>((resolve) => setTimeout(resolve));
+    fixture.detectChanges();
+
+    expect(projectService.completed).toEqual([
+      { projectId: PROJECTS[0].id, note: 'Completed from in progress projects.' },
+    ]);
+    expect(projectService.queries).toHaveLength(2);
   });
 
   it('applies and clears search from the first page', async () => {

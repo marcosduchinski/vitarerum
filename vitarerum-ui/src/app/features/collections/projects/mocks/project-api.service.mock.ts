@@ -635,8 +635,8 @@ export class ProjectApiServiceMock {
     const isExternal = group === 'EXTERNAL' || group === null;
 
     return {
-      canStart: isExternal && p.status === 'CREATED',
-      canComplete: isExternal && p.status === 'IN_PROGRESS',
+      canStart: p.status === 'CREATED',
+      canComplete: p.status === 'IN_PROGRESS',
       canCancel: p.status === 'CREATED' || p.status === 'IN_PROGRESS',
       canOpenLog: !isExternal || p.status === 'IN_PROGRESS',
       canCreateObjectLogEntry: isExternal ? p.status === 'IN_PROGRESS' : true,

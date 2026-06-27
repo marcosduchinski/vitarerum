@@ -82,7 +82,16 @@
         @for (project of projects(); track project.id) {
           <article class="project-card" [attr.data-status]="project.status">
             <header class="project-card__header">
-              <p class="project-card__reference">{{ project.referenceNumber }}</p>
+              <a
+                class="project-card__reference"
+                [routerLink]="detailRoute(project.id)"
+                [queryParams]="{
+                  returnTo: '/p/collections/projects/my',
+                  returnLabel: 'my projects',
+                }"
+              >
+                {{ project.referenceNumber }}
+              </a>
               <span class="project-card__status">{{ statusLabel(project) }}</span>
             </header>
 

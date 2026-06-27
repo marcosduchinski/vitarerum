@@ -116,6 +116,7 @@ class IdentityServiceStub implements IdentityService {
 
 class ProjectApiServiceStub {
   readonly queries: ProjectListQuery[] = [];
+  readonly started: { projectId: string; note: string }[] = [];
   readonly completed: { projectId: string; note: string }[] = [];
   readonly cancelled: { projectId: string; reason: string }[] = [];
 
@@ -139,6 +140,15 @@ class ProjectApiServiceStub {
       size,
       totalElements: items.length,
       totalPages: Math.max(1, Math.ceil(items.length / size)),
+    });
+  }
+
+  startProject(projectId: string, request: { note: string }) {
+    this.started.push({ projectId, note: request.note });
+    return of({
+      id: projectId,
+      referenceNumber: PROJECTS[0].referenceNumber,
+      status: 'IN_PROGRESS',
     });
   }
 
@@ -222,6 +232,16 @@ describe('ProjectsMyPageComponent', () => {
     expect(text).toContain('In progress');
     expect(text).toContain('1-3 of 4');
     expect(compiled.querySelectorAll('.project-card')).toHaveLength(3);
+    const referenceLink = compiled.querySelector<HTMLAnchorElement>('a.project-card__reference');
+
+    expect(referenceLink).not.toBeNull();
+    expect(referenceLink?.getAttribute('href')).toContain(
+      `/p/collections/projects/collections/${PROJECTS[0].id}`,
+    );
+    expect(referenceLink?.getAttribute('href')).toContain(
+      'returnTo=%2Fp%2Fcollections%2Fprojects%2Fmy',
+    );
+    expect(referenceLink?.textContent?.trim()).toBe(PROJECTS[0].referenceNumber);
   });
 
   it('paginates my projects three cards at a time', async () => {
@@ -369,6 +389,38 @@ describe('ProjectsMyPageComponent', () => {
         returnLabel: 'my projects',
       },
     });
+  });
+
+  it('starts a created external project from the popup menu', async () => {
+    activeSession = EXTERNAL_SESSION;
+    vi.spyOn(projectService, 'listProjects').mockReturnValue(
+      of<Page<CollectionUseProjectSummary>>({
+        content: [{ ...PROJECTS[0], status: 'CREATED' }],
+        page: 0,
+        size: 3,
+        totalElements: 1,
+        totalPages: 1,
+      }),
+    );
+
+    const fixture = TestBed.createComponent(ProjectsMyPageComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    openActionsMenu(fixture.nativeElement, PROJECTS[0].referenceNumber);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(document.body.textContent).toContain('Start');
+
+    menuItemByText('Start').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(projectService.started).toEqual([
+      { projectId: PROJECTS[0].id, note: 'Started from my projects.' },
+    ]);
   });
 
   it('hides cancel for external projects that are no longer cancellable', async () => {

@@ -6,7 +6,7 @@ import {
   resource,
   signal,
 } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { MenuItem } from 'primeng/api';
 import { firstValueFrom } from 'rxjs';
 
@@ -25,6 +25,7 @@ import { PROJECT_API_SERVICE } from '../../services/project-api.service';
 import { projectDetailRouteForGroup } from '../../utils/project-detail-route.util';
 
 const PAGE_SIZE = 3;
+const START_NOTE = 'Started from my projects.';
 const CONCLUDE_NOTE = 'Concluded from my projects.';
 const CANCEL_REASON = 'Cancelled from my projects.';
 
@@ -46,6 +47,7 @@ const LOG_ROUTE_SEGMENTS: Record<UseType, string> = {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     RowActionsComponent,
+    RouterLink,
     PageHeaderComponent,
     LoadingStateComponent,
     ErrorMessageComponent,
@@ -143,6 +145,16 @@ export class ProjectsMyPageComponent {
         },
       ];
 
+      if (project.status === 'CREATED') {
+        items.push({
+          label: 'Start',
+          icon: 'pi pi-play',
+          command: () => {
+            void this.start(projectId);
+          },
+        });
+      }
+
       // Requesters may cancel their own project while it is still cancellable
       // (CREATED or IN_PROGRESS); the backend rejects other statuses with 409.
       if (this.isCancellable(projectId)) {
@@ -191,7 +203,7 @@ export class ProjectsMyPageComponent {
     return project?.status === 'CREATED' || project?.status === 'IN_PROGRESS';
   }
 
-  private detailRoute(projectId: string): readonly string[] {
+  protected detailRoute(projectId: string): readonly string[] {
     return projectDetailRouteForGroup(projectId, this.identity.session()?.group);
   }
 
@@ -279,6 +291,21 @@ export class ProjectsMyPageComponent {
 
   protected cancelCancelConfirmation(): void {
     this.cancelConfirmProjectId.set(null);
+  }
+
+  protected async start(projectId: string): Promise<void> {
+    if (this.actionProjectId()) return;
+    this.actionProjectId.set(projectId);
+    this.actionError.set(null);
+
+    try {
+      await firstValueFrom(this.projectService.startProject(projectId, { note: START_NOTE }));
+      this.projectsResource.reload();
+    } catch (err) {
+      this.actionError.set(toApiError(err));
+    } finally {
+      this.actionProjectId.set(null);
+    }
   }
 
   protected async conclude(projectId: string): Promise<void> {

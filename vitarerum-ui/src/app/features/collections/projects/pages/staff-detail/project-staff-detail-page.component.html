@@ -22,6 +22,29 @@
     }
 
     <app-confirm-modal
+      [open]="startConfirmOpen()"
+      title="Start project?"
+      [message]="'This will move ' + project()!.referenceNumber + ' to in progress.'"
+      confirmLabel="Start project"
+      cancelLabel="Not yet"
+      tone="warning"
+      [pending]="acting()"
+      (confirmed)="start()"
+      (cancelled)="closeStartConfirm()"
+    />
+
+    <app-confirm-modal
+      [open]="completeConfirmOpen()"
+      title="Complete project?"
+      [message]="'This will mark ' + project()!.referenceNumber + ' as completed.'"
+      confirmLabel="Complete project"
+      cancelLabel="Keep in progress"
+      [pending]="acting()"
+      (confirmed)="complete()"
+      (cancelled)="closeCompleteConfirm()"
+    />
+
+    <app-confirm-modal
       [open]="cancelConfirmOpen()"
       title="Cancel project?"
       [message]="'This will cancel ' + project()!.referenceNumber + ' and cannot be undone.'"
@@ -208,6 +231,79 @@
               </li>
             }
           </ol>
+
+          <div class="action-group" aria-labelledby="lifecycle-group-title">
+            <p id="lifecycle-group-title" class="action-group__title">Lifecycle</p>
+
+            @if (canStart()) {
+              <div class="task-row" aria-labelledby="start-project-task-heading">
+                <span class="task-row__icon task-row__icon--accent" aria-hidden="true">
+                  <span class="pi pi-play"></span>
+                </span>
+                <div class="task-row__body">
+                  <h3 id="start-project-task-heading" class="task-row__title">Start project</h3>
+                  <p class="task-row__desc">
+                    Move this project to in progress so log and completion tasks become available.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  class="action-btn action-btn--primary task-row__control"
+                  [disabled]="acting()"
+                  (click)="openStartConfirm()"
+                >
+                  {{ acting() ? 'Starting...' : 'Start project' }}
+                </button>
+              </div>
+            }
+
+            @if (canComplete()) {
+              <div class="task-row" aria-labelledby="complete-project-task-heading">
+                <span class="task-row__icon task-row__icon--accent" aria-hidden="true">
+                  <span class="pi pi-check-circle"></span>
+                </span>
+                <div class="task-row__body">
+                  <h3 id="complete-project-task-heading" class="task-row__title">
+                    Complete project
+                  </h3>
+                  <p class="task-row__desc">
+                    Finish this project and move it to completed projects.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  class="action-btn action-btn--primary task-row__control"
+                  [disabled]="acting()"
+                  (click)="openCompleteConfirm()"
+                >
+                  {{ acting() ? 'Completing...' : 'Complete project' }}
+                </button>
+              </div>
+            }
+
+            @if (canCreateFollowUp()) {
+              <div class="task-row" aria-labelledby="follow-up-project-task-heading">
+                <span class="task-row__icon task-row__icon--accent" aria-hidden="true">
+                  <span class="pi pi-step-forward"></span>
+                </span>
+                <div class="task-row__body">
+                  <h3 id="follow-up-project-task-heading" class="task-row__title">
+                    Create follow-up project
+                  </h3>
+                  <p class="task-row__desc">
+                    Start a new project as a continuation of this completed project.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  class="action-btn task-row__control"
+                  (click)="createFollowUpProject()"
+                >
+                  Create follow-up project
+                </button>
+              </div>
+            }
+          </div>
 
           @if (canOpenLogTasks() || canOpenPublication()) {
             <div class="action-group" aria-labelledby="logs-group-title">
