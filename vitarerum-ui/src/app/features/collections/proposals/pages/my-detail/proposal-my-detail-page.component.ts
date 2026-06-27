@@ -18,7 +18,6 @@ import { ConfirmModalComponent } from '@shared/components/confirm-modal/confirm-
 import { ErrorMessageComponent } from '@shared/components/error-message/error-message.component';
 import { FeedbackMessageComponent } from '@shared/components/feedback-message/feedback-message.component';
 import { LoadingStateComponent } from '@shared/components/loading-state/loading-state.component';
-import { ProposalChatPanelComponent } from '@features/proposal-chat/components/proposal-chat-panel/proposal-chat-panel.component';
 import {
   StatusChipComponent,
   WorkflowStatus,
@@ -33,9 +32,8 @@ import {
 import { ProposalEventsSectionComponent } from '../../components/proposal-events-section/proposal-events-section.component';
 import { ProposalOverviewSectionComponent } from '../../components/proposal-overview-section/proposal-overview-section.component';
 import { PROPOSAL_DETAIL_GROUP_LABELS, StaffOption } from '../../proposal-detail.presentation';
-import { Message } from '../../models/proposal.model';
 
-type MyDetailPanel = 'overview' | 'conversation' | 'ai-assistance' | 'actions';
+type MyDetailPanel = 'overview' | 'conversation' | 'actions';
 
 @Component({
   selector: 'app-proposal-my-detail-page',
@@ -52,7 +50,6 @@ type MyDetailPanel = 'overview' | 'conversation' | 'ai-assistance' | 'actions';
     ProposalOverviewSectionComponent,
     ProposalConversationSectionComponent,
     ProposalEventsSectionComponent,
-    ProposalChatPanelComponent,
   ],
   templateUrl: './proposal-my-detail-page.component.html',
   styleUrl: './proposal-my-detail-page.component.scss',
@@ -65,12 +62,11 @@ export class ProposalMyDetailPageComponent {
 
   readonly id = input.required<string>();
 
-  // The active tab and the message under triage live in the URL (query params,
+  // The active tab lives in the URL (query params,
   // bound via withComponentInputBinding) so the view is shareable and survives a
-  // refresh. linkedSignal keeps them locally writable while resetting to the URL
+  // refresh. linkedSignal keeps it locally writable while resetting to the URL
   // whenever the params change.
   readonly tab = input<string>();
-  readonly triageMessageId = input<string>();
 
   protected readonly proposalResource = resource({
     params: () => this.id(),
@@ -131,9 +127,6 @@ export class ProposalMyDetailPageComponent {
     this.id();
     return null;
   });
-  protected readonly selectedTriageMessageId = linkedSignal<string | null>(
-    () => this.triageMessageId() ?? null,
-  );
 
   protected readonly canDecide = computed(() => this.proposal()?.status === 'PENDING');
   protected readonly canEdit = computed(() => {
@@ -197,39 +190,16 @@ export class ProposalMyDetailPageComponent {
     this.syncUrl({ tab: panel });
   }
 
-  protected openTriage(message: Message): void {
-    this.selectedTriageMessageId.set(message.id);
-    this.activePanel.set('ai-assistance');
-    this.syncUrl({ tab: 'ai-assistance', triageMessageId: message.id });
-  }
-
-  protected onTriageApplied(): void {
-    this.proposalResource.reload();
-    this.eventsResource.reload();
-    this.selectedTriageMessageId.set(null);
-    this.activePanel.set('overview');
-    this.syncUrl({ tab: 'overview', triageMessageId: null });
-  }
-
-  protected onRequestedObjectsAdded(): void {
-    this.proposalResource.reload();
-  }
-
   private normalizeTab(tab: string | undefined): MyDetailPanel {
-    return tab === 'conversation' || tab === 'ai-assistance' || tab === 'actions'
-      ? tab
-      : 'overview';
+    return tab === 'conversation' || tab === 'actions' ? tab : 'overview';
   }
 
   /** Reflects the current view state into the URL query string. A null value drops
    *  the param (the 'overview' tab is the default, so its URL stays clean). */
-  private syncUrl(state: { tab?: MyDetailPanel; triageMessageId?: string | null }): void {
+  private syncUrl(state: { tab?: MyDetailPanel }): void {
     const queryParams: Record<string, string | null> = {};
     if (state.tab !== undefined) {
       queryParams['tab'] = state.tab === 'overview' ? null : state.tab;
-    }
-    if (state.triageMessageId !== undefined) {
-      queryParams['triageMessageId'] = state.triageMessageId;
     }
     void this.router
       .navigate([], {

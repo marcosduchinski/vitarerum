@@ -1,20 +1,11 @@
 import { ComponentRef } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { By } from '@angular/platform-browser';
 import { provideRouter, Router } from '@angular/router';
 import { of } from 'rxjs';
 
 import { UserDetail } from '@core/auth/models/user.model';
-import { PROPOSAL_CHAT_SERVICE } from '@features/proposal-chat/services/proposal-chat.service';
-import { ProposalChatPanelComponent } from '@features/proposal-chat/components/proposal-chat-panel/proposal-chat-panel.component';
 import { USER_MANAGEMENT_SERVICE } from '@features/admin/services/user-management.service';
 import { Page } from '@shared/models/page.model';
-import {
-  IntendedUseSuggestion,
-  ProposalChatContext,
-  ProposalChatContextQuery,
-  SuggestIntendedUseRequest,
-} from '@features/proposal-chat/models/proposal-chat.model';
 
 import {
   Conversation,
@@ -27,8 +18,6 @@ import {
 import { PROPOSAL_API_SERVICE } from '../../services/proposal-api.service';
 import { ApproveProposalRequest, UpdateProposalRequest } from '../../models/proposal-actions.model';
 import { ProposalMyDetailPageComponent } from './proposal-my-detail-page.component';
-
-const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 const PROPOSAL: ProposalDetail = {
   id: 'proposal-1',
@@ -276,55 +265,9 @@ class UserManagementServiceStub {
   }
 }
 
-function makeProposalChatContext(messageId: string): ProposalChatContext {
-  const message =
-    CONVERSATION.messages.find((item) => item.id === messageId) ?? CONVERSATION.messages[0];
-  return {
-    conversationId: PROPOSAL.conversationId,
-    focusMessage: {
-      messageId: message.id,
-      sentAt: message.sentAt,
-      sender: message.sender,
-      subject: message.subject,
-      body: message.body,
-    },
-    proposal: {
-      proposalId: PROPOSAL.id,
-      referenceNumber: PROPOSAL.referenceNumber,
-      title: PROPOSAL.title,
-      status: PROPOSAL.status,
-      intendedUse: PROPOSAL.intendedUse!,
-    },
-  };
-}
-
-class ProposalChatServiceStub {
-  readonly contextCalls: ProposalChatContextQuery[] = [];
-  readonly suggestionCalls: SuggestIntendedUseRequest[] = [];
-
-  getContext(query: ProposalChatContextQuery) {
-    this.contextCalls.push(query);
-    return of(makeProposalChatContext(query.messageId));
-  }
-
-  suggestIntendedUse(request: SuggestIntendedUseRequest) {
-    this.suggestionCalls.push(request);
-    const suggestion: IntendedUseSuggestion = {
-      intendedUse: {
-        useType: 'IN_SITU_VISIT',
-        description: 'Research access to photographic records.',
-      },
-      confidence: 0.82,
-      rationale: 'The selected message mentions a research request.',
-      source: request,
-    };
-    return of(suggestion);
-  }
-}
-
 async function selectPanel(
   fixture: ComponentFixture<ProposalMyDetailPageComponent>,
-  name: 'Overview' | 'Conversation' | 'AI Assistance' | 'Actions',
+  name: 'Overview' | 'Conversation' | 'Actions',
 ): Promise<void> {
   const compiled = fixture.nativeElement as HTMLElement;
   const tab = Array.from(compiled.querySelectorAll<HTMLButtonElement>('[role="tab"]')).find(
@@ -341,11 +284,9 @@ async function selectPanel(
 
 describe('ProposalMyDetailPageComponent', () => {
   let proposalService: ProposalApiServiceStub;
-  let proposalChatService: ProposalChatServiceStub;
 
   beforeEach(async () => {
     proposalService = new ProposalApiServiceStub();
-    proposalChatService = new ProposalChatServiceStub();
 
     await TestBed.configureTestingModule({
       imports: [ProposalMyDetailPageComponent],
@@ -353,7 +294,6 @@ describe('ProposalMyDetailPageComponent', () => {
         provideRouter([]),
         { provide: PROPOSAL_API_SERVICE, useValue: proposalService },
         { provide: USER_MANAGEMENT_SERVICE, useClass: UserManagementServiceStub },
-        { provide: PROPOSAL_CHAT_SERVICE, useValue: proposalChatService },
       ],
     }).compileComponents();
   });
@@ -381,7 +321,6 @@ describe('ProposalMyDetailPageComponent', () => {
     expect(compiled.textContent).toContain('Assigned to');
     expect(compiled.textContent).toContain('Bob Santos');
     expect(compiled.textContent).toContain('Conversation');
-    expect(compiled.textContent).toContain('AI Assistance');
     expect(compiled.textContent).toContain('Event log');
     expect(compiled.textContent).toContain('SUBMITTED');
     // The decision actions now live behind the Actions tab, not the header.
@@ -398,7 +337,6 @@ describe('ProposalMyDetailPageComponent', () => {
     );
     expect(compiled.querySelector('#overview-panel')).not.toBeNull();
     expect(compiled.querySelector('#conversation-panel')).toBeNull();
-    expect(compiled.querySelector('#ai-assistance-panel')).toBeNull();
     expect(compiled.textContent).not.toContain('Initial request');
   });
 
@@ -552,29 +490,6 @@ describe('ProposalMyDetailPageComponent', () => {
     expect(toggle?.getAttribute('aria-expanded')).toBe('false');
   });
 
-  it('shows an empty AI Assistance panel until a message is selected', async () => {
-    const fixture = TestBed.createComponent(ProposalMyDetailPageComponent);
-    const componentRef: ComponentRef<ProposalMyDetailPageComponent> = fixture.componentRef;
-
-    componentRef.setInput('id', 'proposal-1');
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    await selectPanel(fixture, 'AI Assistance');
-
-    const compiled = fixture.nativeElement as HTMLElement;
-
-    expect(compiled.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toContain(
-      'AI Assistance',
-    );
-    expect(compiled.querySelector('#ai-assistance-panel')).not.toBeNull();
-    expect(compiled.textContent).toContain(
-      'Select a message from the Conversation tab to run intended-use triage.',
-    );
-    expect(proposalChatService.contextCalls).toEqual([]);
-  });
-
   it('marks requester and staff messages with distinct roles and icons', async () => {
     const fixture = TestBed.createComponent(ProposalMyDetailPageComponent);
     const componentRef: ComponentRef<ProposalMyDetailPageComponent> = fixture.componentRef;
@@ -594,125 +509,6 @@ describe('ProposalMyDetailPageComponent', () => {
     expect(messages[1].textContent).toContain('COLLECTIONS MANAGEMENT');
     expect(messages[1].querySelector('.pi-briefcase')).not.toBeNull();
     expect(messages[1].textContent).toContain('signed-response.docx');
-  });
-
-  it('opens ProposalChat triage for the selected conversation message', async () => {
-    const fixture = TestBed.createComponent(ProposalMyDetailPageComponent);
-    const componentRef: ComponentRef<ProposalMyDetailPageComponent> = fixture.componentRef;
-
-    componentRef.setInput('id', 'proposal-1');
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
-    await selectPanel(fixture, 'Conversation');
-
-    const compiled = fixture.nativeElement as HTMLElement;
-    const buttons = Array.from(
-      compiled.querySelectorAll<HTMLButtonElement>('[aria-label^="Run intended-use triage"]'),
-    );
-
-    expect(buttons).toHaveLength(2);
-
-    buttons[0].click();
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    expect(compiled.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toContain(
-      'AI Assistance',
-    );
-    expect(compiled.querySelector('#ai-assistance-panel')).not.toBeNull();
-    expect(proposalChatService.contextCalls).toEqual([
-      { conversationId: 'conversation-1', messageId: 'message-1' },
-    ]);
-    expect(compiled.textContent).toContain('ProposalChat');
-    expect(compiled.textContent).toContain('Initial request');
-    expect(compiled.textContent).toContain('Requester message');
-    expect(compiled.querySelector('[data-task="intended-use"]')).not.toBeNull();
-    expect(proposalChatService.suggestionCalls).toEqual([]);
-  });
-
-  it('applies triage suggestions and returns to the overview panel', async () => {
-    const fixture = TestBed.createComponent(ProposalMyDetailPageComponent);
-    const componentRef: ComponentRef<ProposalMyDetailPageComponent> = fixture.componentRef;
-
-    componentRef.setInput('id', 'proposal-1');
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
-    await selectPanel(fixture, 'Conversation');
-
-    let compiled = fixture.nativeElement as HTMLElement;
-    compiled.querySelector<HTMLButtonElement>('[aria-label^="Run intended-use triage"]')!.click();
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    compiled = fixture.nativeElement as HTMLElement;
-    // Delegate the intended-use task, wait out the assistant's "thinking" pause.
-    compiled.querySelector<HTMLButtonElement>('[data-task="intended-use"]')!.click();
-    await wait(700);
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    (fixture.nativeElement as HTMLElement)
-      .querySelector<HTMLButtonElement>('.agent-apply')!
-      .click();
-    fixture.detectChanges();
-    await fixture.whenStable();
-    await wait(20);
-    fixture.detectChanges();
-
-    expect(proposalService.updateProposalCalls).toEqual([
-      {
-        proposalId: 'proposal-1',
-        request: {
-          intendedUse: {
-            useType: 'IN_SITU_VISIT',
-            description: 'Research access to photographic records.',
-          },
-        },
-      },
-    ]);
-    expect(
-      (fixture.nativeElement as HTMLElement).querySelector('[role="tab"][aria-selected="true"]')
-        ?.textContent,
-    ).toContain('Overview');
-    expect(proposalService.getProposalCalls.length).toBeGreaterThan(1);
-    expect(proposalService.listEventsCalls.length).toBeGreaterThan(1);
-  });
-
-  it('reloads proposal data after requested objects are added and keeps AI Assistance open', async () => {
-    const fixture = TestBed.createComponent(ProposalMyDetailPageComponent);
-    fixture.componentRef.setInput('id', 'proposal-1');
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
-    await selectPanel(fixture, 'Conversation');
-
-    (fixture.nativeElement as HTMLElement)
-      .querySelector<HTMLButtonElement>('[aria-label^="Run intended-use triage"]')!
-      .click();
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    const proposalCallsBefore = proposalService.getProposalCalls.length;
-    const eventCallsBefore = proposalService.listEventsCalls.length;
-    const chat = fixture.debugElement.query(By.directive(ProposalChatPanelComponent))
-      .componentInstance as ProposalChatPanelComponent;
-    chat.requestedObjectsAdded.emit();
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    expect(proposalService.getProposalCalls.length).toBeGreaterThan(proposalCallsBefore);
-    expect(proposalService.listEventsCalls).toHaveLength(eventCallsBefore);
-    expect(
-      (fixture.nativeElement as HTMLElement).querySelector('[role="tab"][aria-selected="true"]')
-        ?.textContent,
-    ).toContain('AI Assistance');
   });
 
   it('uploads selected files and attaches them to a staff response message', async () => {

@@ -1,18 +1,7 @@
-import { inject } from '@angular/core';
-import { ResolveFn, Routes } from '@angular/router';
-import { map } from 'rxjs';
+import { Routes } from '@angular/router';
 
 import { externalGuard } from '@core/guards/external.guard';
 import { staffGuard } from '@core/guards/staff.guard';
-
-import { PROPOSAL_API_SERVICE } from './services/proposal-api.service';
-
-const proposalChatConversationIdResolver: ResolveFn<string> = (route) => {
-  const proposalId = route.paramMap.get('id') ?? '';
-  return inject(PROPOSAL_API_SERVICE)
-    .getProposal(proposalId)
-    .pipe(map((proposal) => proposal.conversationId));
-};
 
 export const PROPOSALS_ROUTES: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'new' },
@@ -45,18 +34,6 @@ export const PROPOSALS_ROUTES: Routes = [
     loadComponent: () =>
       import('./pages/my-assignments/proposals-my-assignments-page.component').then(
         (m) => m.ProposalsMyAssignmentsPageComponent,
-      ),
-  },
-  {
-    path: 'my-assignments/:id/assistant/:messageId',
-    title: 'ProposalChat',
-    canMatch: [staffGuard],
-    resolve: {
-      conversationId: proposalChatConversationIdResolver,
-    },
-    loadComponent: () =>
-      import('../../proposal-chat/components/proposal-chat-panel/proposal-chat-panel.component').then(
-        (m) => m.ProposalChatPanelComponent,
       ),
   },
   {

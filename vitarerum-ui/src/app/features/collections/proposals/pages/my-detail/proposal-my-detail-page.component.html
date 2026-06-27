@@ -135,18 +135,6 @@
       </button>
       <button
         type="button"
-        id="ai-assistance-tab"
-        class="proposal-detail__tab"
-        [class.proposal-detail__tab--active]="activePanel() === 'ai-assistance'"
-        role="tab"
-        aria-controls="ai-assistance-panel"
-        [attr.aria-selected]="activePanel() === 'ai-assistance'"
-        (click)="selectPanel('ai-assistance')"
-      >
-        AI Assistance
-      </button>
-      <button
-        type="button"
         id="actions-tab"
         class="proposal-detail__tab"
         [class.proposal-detail__tab--active]="activePanel() === 'actions'"
@@ -186,35 +174,8 @@
             [sendingMessage]="sendingMessage()"
             [replyResetVersion]="replyResetVersion()"
             [showRequestedObjectPicker]="true"
-            [showTriageAction]="true"
-            (triageRequested)="openTriage($event)"
             (replySubmitted)="sendReply($event)"
           />
-        </section>
-      }
-      @case ('ai-assistance') {
-        <section
-          id="ai-assistance-panel"
-          class="proposal-detail__panel"
-          role="tabpanel"
-          aria-labelledby="ai-assistance-tab"
-        >
-          @if (selectedTriageMessageId(); as messageId) {
-            <app-proposal-chat-panel
-              [conversationId]="proposal()!.conversationId"
-              [messageId]="messageId"
-              [embedded]="true"
-              (applied)="onTriageApplied()"
-              (requestedObjectsAdded)="onRequestedObjectsAdded()"
-            />
-          } @else {
-            <section class="detail-card" aria-labelledby="ai-assistance-empty-heading">
-              <h2 id="ai-assistance-empty-heading" class="detail-card__title">AI Assistance</h2>
-              <p class="detail-card__empty">
-                Select a message from the Conversation tab to run intended-use triage.
-              </p>
-            </section>
-          }
         </section>
       }
       @case ('actions') {

@@ -46,19 +46,6 @@
                 <app-error-message [apiError]="downloadError()!" />
               }
             }
-            @if (showTriageAction()) {
-              <div class="message__assistant-actions">
-                <button
-                  type="button"
-                  class="message__assistant-action"
-                  [attr.aria-label]="'Run intended-use triage for ' + msg.subject"
-                  title="Run intended-use triage"
-                  (click)="requestTriage(msg)"
-                >
-                  <span class="pi pi-sparkles" aria-hidden="true"></span>
-                </button>
-              </div>
-            }
           </div>
         </li>
       }

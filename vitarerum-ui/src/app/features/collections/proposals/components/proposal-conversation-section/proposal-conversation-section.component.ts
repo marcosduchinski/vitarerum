@@ -73,9 +73,7 @@ export class ProposalConversationSectionComponent {
   readonly recipientEmail = input<string | null>(null);
   readonly canReply = input(true);
   readonly showRequestedObjectPicker = input(false);
-  readonly showTriageAction = input(false);
   readonly replySubmitted = output<ReplyComposerPayload>();
-  readonly triageRequested = output<Message>();
 
   protected readonly resolvedRecipientEmail = computed(
     () => this.recipientEmail() ?? this.proposal().requestedBy.user.email,
@@ -126,10 +124,6 @@ export class ProposalConversationSectionComponent {
     } finally {
       this.downloadingDocumentId.set(null);
     }
-  }
-
-  protected requestTriage(message: Message): void {
-    this.triageRequested.emit(message);
   }
 
   protected sanitizeMessageBody(body: string): string {

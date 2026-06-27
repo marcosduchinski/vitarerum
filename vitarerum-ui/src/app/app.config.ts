@@ -19,7 +19,6 @@ import {
 import { AppConfigService } from '@core/config/app-config.service';
 import { authInterceptor } from '@core/auth/auth.interceptor';
 import { sessionExpiredInterceptor } from '@core/auth/session-expired.interceptor';
-import { provideProposalChat } from '@core/providers/provide-proposal-chat';
 import { provideCollectionUse } from '@core/providers/provide-collection-use';
 import { provideIdentity } from '@core/providers/provide-identity';
 import { provideUserManagement } from '@core/providers/provide-user-management';
@@ -96,7 +95,6 @@ export const appConfig: ApplicationConfig = {
     },
     provideIdentity(),
     provideCollectionUse(),
-    provideProposalChat(),
     provideUserManagement(),
   ],
 };
