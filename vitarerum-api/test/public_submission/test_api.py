@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
+import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.database import get_async_session
@@ -14,6 +15,7 @@ from app.public_submission.application.use_cases import (
 from app.public_submission.domain.models import PendingPublicSubmission
 from app.public_submission.presentation.dependencies import (
     get_confirm_use_case,
+    get_email_sender,
     get_submit_use_case,
 )
 
@@ -30,6 +32,11 @@ class _Repo:
         self.by_token[s.token] = s
 
     async def get_by_token(self, token: str) -> PendingPublicSubmission | None:
+        return self.by_token.get(token)
+
+    async def get_by_token_for_update(
+        self, token: str
+    ) -> PendingPublicSubmission | None:
         return self.by_token.get(token)
 
     async def save(self, s: PendingPublicSubmission) -> None:
@@ -81,13 +88,23 @@ class _Submit:
 
 
 class _Session:
+    def __init__(self, *, fail_commit: bool = False) -> None:
+        self.committed = False
+        self._fail_commit = fail_commit
+
     async def commit(self) -> None:
+        if self._fail_commit:
+            raise RuntimeError("commit failed")
         self.committed = True
+
+
+async def _passthrough_retry(op):  # type: ignore[no-untyped-def]
+    return await op()
 
 
 @asynccontextmanager
 async def _client(
-    *, captcha_ok: bool = True, rate_limited: bool = False
+    *, captcha_ok: bool = True, rate_limited: bool = False, fail_commit: bool = False
 ) -> AsyncIterator[tuple[AsyncClient, _Repo, _Email]]:
     repo = _Repo()
     email = _Email()
@@ -95,7 +112,6 @@ async def _client(
     submit_uc = SubmitPublicProposal(
         repository=repo,
         captcha=_Captcha(ok=captcha_ok),
-        email_sender=email,
         rate_limiter=limiter,
         clock=_Clock(),
     )
@@ -106,10 +122,14 @@ async def _client(
         rate_limiter=limiter,
         clock=_Clock(),
         token_ttl=timedelta(hours=24),
+        retry_runner=_passthrough_retry,
     )
     app.dependency_overrides[get_submit_use_case] = lambda: submit_uc
     app.dependency_overrides[get_confirm_use_case] = lambda: confirm_uc
-    app.dependency_overrides[get_async_session] = lambda: _Session()
+    app.dependency_overrides[get_email_sender] = lambda: email
+    app.dependency_overrides[get_async_session] = lambda: _Session(
+        fail_commit=fail_commit
+    )
     transport = ASGITransport(app=app)
     try:
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -197,3 +217,13 @@ async def test_confirm_unknown_token_returns_200_invalid() -> None:
         resp = await client.post(_CONFIRM_URL, json={"token": "nope"})
     assert resp.status_code == 200
     assert resp.json() == {"status": "INVALID", "referenceNumber": None}
+
+
+async def test_submit_does_not_email_when_commit_fails() -> None:
+    # Bug #2: the confirmation e-mail must be sent only after the pending row is
+    # durably committed. If the commit fails, the citizen must not receive a link
+    # whose token was rolled back.
+    async with _client(fail_commit=True) as (client, repo, email):
+        with pytest.raises(RuntimeError):
+            await client.post(_SUBMIT_URL, json=_payload())
+        assert email.sent == []

@@ -52,12 +52,29 @@ class SqlAlchemyPendingSubmissionRepository:
         record = PublicProposalSubmissionRecord()
         _apply(record, submission)
         self._session.add(record)
+        # Flush so unique-token / constraint violations surface here, before any
+        # side effect (e.g. the confirmation e-mail) is triggered by the caller.
+        await self._session.flush()
 
     async def get_by_token(self, token: str) -> PendingPublicSubmission | None:
         result = await self._session.execute(
             select(PublicProposalSubmissionRecord).where(
                 PublicProposalSubmissionRecord.token == token
             )
+        )
+        record = result.scalar_one_or_none()
+        return _to_domain(record) if record is not None else None
+
+    async def get_by_token_for_update(
+        self, token: str
+    ) -> PendingPublicSubmission | None:
+        # Row-level lock held until the request transaction commits: concurrent
+        # confirmations of the same token are serialised, so only one materialises
+        # a proposal; the loser re-reads the row as CONFIRMED.
+        result = await self._session.execute(
+            select(PublicProposalSubmissionRecord)
+            .where(PublicProposalSubmissionRecord.token == token)
+            .with_for_update()
         )
         record = result.scalar_one_or_none()
         return _to_domain(record) if record is not None else None

@@ -12,6 +12,8 @@ from app.use_of_collections.application.use_cases import (
     AddObjectOccurrenceEntryInput,
     AddOccurrenceEntryAttachment,
     AddOccurrenceEntryAttachmentInput,
+    AddPublicationEntryAttachment,
+    AddPublicationEntryAttachmentInput,
     ApproveProposal,
     ApproveProposalInput,
     RejectProposal,
@@ -51,6 +53,10 @@ from app.use_of_collections.domain.models import (
     ObjectOccurrenceLogId,
     Proposal,
     ProposalId,
+    PublicationLog,
+    PublicationLogEntry,
+    PublicationLogEntryId,
+    PublicationLogId,
     ReferenceNumber,
 )
 
@@ -227,10 +233,14 @@ class InMemoryOccurrenceLogRepository:
 class RecordingFileStorage:
     def __init__(self) -> None:
         self.saved: list[tuple[bytes, str]] = []
+        self.deleted: list[str] = []
 
     async def save(self, content: bytes, filename: str) -> str:
         self.saved.append((content, filename))
         return f"uploads/{filename}"
+
+    async def delete(self, file_reference: str) -> None:
+        self.deleted.append(file_reference)
 
 
 def _make_caller(email: str = "alice@example.org") -> Actor:
@@ -898,3 +908,150 @@ async def test_occurrence_entry_validates_required_fields() -> None:
         _entry(location="")
     with pytest.raises(ValueError):
         _entry(detailed_description="")
+
+
+# ── #3: attachment uploads delete the stored file when persistence fails ────────
+
+
+class _FailingSaveAccessLogRepository(InMemoryAccessLogRepository):
+    async def save_entry(self, entry: ObjectLogEntry) -> None:
+        raise RuntimeError("db unavailable")
+
+
+class _FailingSaveOccurrenceLogRepository(InMemoryOccurrenceLogRepository):
+    async def save_entry(self, entry: ObjectOccurrenceEntry) -> None:
+        raise RuntimeError("db unavailable")
+
+
+class _InMemoryPublicationLogRepository:
+    def __init__(self) -> None:
+        self.items: dict[str, PublicationLog] = {}
+        self.entries: dict[str, PublicationLogEntry] = {}
+
+    async def get_by_id(self, publication_log_id) -> PublicationLog | None:
+        return self.items.get(publication_log_id)
+
+    async def get_entry_by_id(self, entry_id) -> PublicationLogEntry | None:
+        return self.entries.get(entry_id)
+
+    async def save_entry(self, entry: PublicationLogEntry) -> None:
+        raise RuntimeError("db unavailable")
+
+
+async def test_add_log_entry_attachment_deletes_file_when_save_fails() -> None:
+    project_repository = InMemoryCollectionUseProjectRepository()
+    access_log_repository = _FailingSaveAccessLogRepository()
+    storage = RecordingFileStorage()
+    project = _make_project()
+    await project_repository.add(project)
+    access_log = ObjectAccessLog(
+        id=ObjectAccessLogId("log-1"),
+        reference_number=ReferenceNumber("OAL-12345678"),
+        collection_use_project_id=project.id,
+    )
+    await access_log_repository.add(access_log)
+    access_log_repository.entries["entry-1"] = ObjectLogEntry(
+        id=ObjectLogEntryId("entry-1"),
+        object_access_log_id=access_log.id,
+        collection_use_object_id=CollectionUseObjectId("cuo-1"),
+        number_of_objects=1,
+        added_at=datetime(2026, 6, 1, tzinfo=UTC),
+        added_by=PermissionId("permission-1"),
+    )
+
+    with pytest.raises(RuntimeError):
+        await AddLogEntryAttachment(
+            project_repository, access_log_repository, storage
+        ).execute(
+            AddLogEntryAttachmentInput(
+                project_id=project.id,
+                entry_id=ObjectLogEntryId("entry-1"),
+                caller=_make_caller(),
+                file_content=b"jpeg",
+                file_name="photo.jpg",
+                media_type="IMAGE",
+            )
+        )
+
+    assert storage.saved  # the file was written
+    # the exact stored reference (uuid-prefixed) is the one deleted
+    assert storage.deleted == ["uploads/" + storage.saved[0][1]]
+
+
+async def test_add_occurrence_entry_attachment_deletes_file_when_save_fails() -> None:
+    project_repository = InMemoryCollectionUseProjectRepository()
+    occurrence_log_repository = _FailingSaveOccurrenceLogRepository()
+    storage = RecordingFileStorage()
+    project = _make_project()
+    await project_repository.add(project)
+    occurrence_log = ObjectOccurrenceLog(
+        id=ObjectOccurrenceLogId("log-1"),
+        reference_number=ReferenceNumber("OOL-12345678"),
+        collection_use_project_id=project.id,
+    )
+    await occurrence_log_repository.add(occurrence_log)
+    occurrence_log_repository.entries["occ-1"] = ObjectOccurrenceEntry(
+        id=ObjectOccurrenceEntryId("occ-1"),
+        object_occurrence_log_id=occurrence_log.id,
+        collection_use_object_id=CollectionUseObjectId("cuo-1"),
+        number_of_objects=1,
+        occurrence_date=datetime(2026, 6, 1, tzinfo=UTC),
+        location="Storage room",
+        reported_by=PermissionId("permission-1"),
+        detailed_description="Entry",
+    )
+
+    with pytest.raises(RuntimeError):
+        await AddOccurrenceEntryAttachment(
+            project_repository, occurrence_log_repository, storage
+        ).execute(
+            AddOccurrenceEntryAttachmentInput(
+                project_id=project.id,
+                entry_id=ObjectOccurrenceEntryId("occ-1"),
+                caller=_make_caller(),
+                file_content=b"jpeg",
+                file_name="photo.jpg",
+                media_type="IMAGE",
+            )
+        )
+
+    assert storage.saved
+    assert storage.deleted == ["uploads/" + storage.saved[0][1]]
+
+
+async def test_add_publication_entry_attachment_deletes_file_when_save_fails() -> None:
+    project_repository = InMemoryCollectionUseProjectRepository()
+    publication_log_repository = _InMemoryPublicationLogRepository()
+    storage = RecordingFileStorage()
+    project = _make_project()  # IN_PROGRESS, requester is permission-1 (external)
+    await project_repository.add(project)
+    publication_log = PublicationLog(
+        id=PublicationLogId("plog-1"),
+        reference_number=ReferenceNumber("PUB-12345678"),
+        collection_use_project_id=project.id,
+    )
+    publication_log_repository.items["plog-1"] = publication_log
+    publication_log_repository.entries["pent-1"] = PublicationLogEntry(
+        id=PublicationLogEntryId("pent-1"),
+        publication_log_id=publication_log.id,
+        added_at=datetime(2026, 6, 1, tzinfo=UTC),
+        added_by=PermissionId("permission-1"),
+        note="A publication",
+    )
+
+    with pytest.raises(RuntimeError):
+        await AddPublicationEntryAttachment(
+            project_repository, publication_log_repository, storage
+        ).execute(
+            AddPublicationEntryAttachmentInput(
+                project_id=project.id,
+                entry_id=PublicationLogEntryId("pent-1"),
+                caller=_make_caller(),
+                file_content=b"pdf",
+                file_name="paper.pdf",
+                media_type="DOCUMENT",
+            )
+        )
+
+    assert storage.saved
+    assert storage.deleted == ["uploads/" + storage.saved[0][1]]

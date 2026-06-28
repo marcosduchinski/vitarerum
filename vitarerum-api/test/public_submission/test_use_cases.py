@@ -2,6 +2,7 @@ from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from app.public_submission.application.use_cases import (
     CaptchaFailed,
@@ -29,8 +30,17 @@ class FakeRepo:
     async def get_by_token(self, token: str) -> PendingPublicSubmission | None:
         return self.by_token.get(token)
 
+    async def get_by_token_for_update(
+        self, token: str
+    ) -> PendingPublicSubmission | None:
+        return self.by_token.get(token)
+
     async def save(self, submission: PendingPublicSubmission) -> None:
         self.by_token[submission.token] = submission
+
+
+async def _passthrough_retry(op):  # type: ignore[no-untyped-def]
+    return await op()
 
 
 class FakeCaptcha:
@@ -42,14 +52,6 @@ class FakeCaptcha:
         if self._error is not None:
             raise self._error
         return self._ok
-
-
-class FakeEmail:
-    def __init__(self) -> None:
-        self.sent: list[tuple[str, str, str]] = []
-
-    async def send(self, to_email: str, citizen_name: str, token: str) -> None:
-        self.sent.append((to_email, citizen_name, token))
 
 
 class FakeRateLimiter:
@@ -89,26 +91,22 @@ def _submit_use_case(
     repo: FakeRepo,
     *,
     captcha: FakeCaptcha | None = None,
-    email: FakeEmail | None = None,
     limiter: FakeRateLimiter | None = None,
-) -> tuple[SubmitPublicProposal, FakeEmail]:
-    email = email or FakeEmail()
-    use_case = SubmitPublicProposal(
+) -> SubmitPublicProposal:
+    return SubmitPublicProposal(
         repository=repo,
         captcha=captcha or FakeCaptcha(),
-        email_sender=email,
         rate_limiter=limiter or FakeRateLimiter(),
         clock=FakeClock(),
     )
-    return use_case, email
 
 
 # ── submit ─────────────────────────────────────────────────────────────────────
 
 
-async def test_happy_path_stores_pending_and_sends_email() -> None:
+async def test_happy_path_stores_pending_and_returns_token() -> None:
     repo = FakeRepo()
-    use_case, email = _submit_use_case(repo)
+    use_case = _submit_use_case(repo)
 
     out = await use_case.execute(_submit_input())
 
@@ -116,46 +114,45 @@ async def test_happy_path_stores_pending_and_sends_email() -> None:
     assert len(repo.by_token) == 1
     submission = next(iter(repo.by_token.values()))
     assert submission.status is PendingSubmissionStatus.PENDING_CONFIRMATION
-    assert email.sent == [("pedro@example.test", "Pedro Silva", submission.token)]
+    # The use case no longer sends e-mail itself; it returns the token + name so
+    # the route can dispatch the confirmation only after it commits (bug #2).
+    assert out.token == submission.token
+    assert out.name == "Pedro Silva"
 
 
 async def test_honeypot_accepts_and_drops() -> None:
     repo = FakeRepo()
-    use_case, email = _submit_use_case(repo)
+    use_case = _submit_use_case(repo)
 
     out = await use_case.execute(_submit_input(website="http://spam.example"))
 
     assert out.email == "pedro@example.test"
+    assert out.token is None  # nothing to send
     assert repo.by_token == {}  # no work
-    assert email.sent == []
 
 
 async def test_rate_limited_raises() -> None:
     repo = FakeRepo()
-    use_case, email = _submit_use_case(
-        repo, limiter=FakeRateLimiter(block_prefix="ip:")
-    )
+    use_case = _submit_use_case(repo, limiter=FakeRateLimiter(block_prefix="ip:"))
 
     with pytest.raises(RateLimitExceeded) as exc:
         await use_case.execute(_submit_input())
     assert exc.value.retry_after == 60
     assert repo.by_token == {}
-    assert email.sent == []
 
 
 async def test_captcha_failure_raises() -> None:
     repo = FakeRepo()
-    use_case, email = _submit_use_case(repo, captcha=FakeCaptcha(ok=False))
+    use_case = _submit_use_case(repo, captcha=FakeCaptcha(ok=False))
 
     with pytest.raises(CaptchaFailed):
         await use_case.execute(_submit_input())
     assert repo.by_token == {}
-    assert email.sent == []
 
 
 async def test_captcha_unavailable_raises() -> None:
     repo = FakeRepo()
-    use_case, _ = _submit_use_case(
+    use_case = _submit_use_case(
         repo, captcha=FakeCaptcha(error=RuntimeError("network down"))
     )
 
@@ -199,11 +196,12 @@ def _confirm_use_case(
         rate_limiter=FakeRateLimiter(),
         clock=FakeClock(),
         token_ttl=timedelta(hours=24),
+        retry_runner=_passthrough_retry,
     )
 
 
 async def _seed_pending(repo: FakeRepo, *, created_at: datetime = _NOW) -> str:
-    use_case, _ = _submit_use_case(repo)
+    use_case = _submit_use_case(repo)
     await use_case.execute(_submit_input())
     submission = next(iter(repo.by_token.values()))
     submission.created_at = created_at
@@ -263,7 +261,82 @@ async def test_confirm_rate_limited_raises() -> None:
         rate_limiter=FakeRateLimiter(block_prefix="confirm-ip:"),
         clock=FakeClock(),
         token_ttl=timedelta(hours=24),
+        retry_runner=_passthrough_retry,
     )
 
     with pytest.raises(RateLimitExceeded):
         await use_case.execute(token, "203.0.113.1")
+
+
+# ── #1: confirm resolves the pending row through the locking read ───────────────
+
+
+async def test_confirm_uses_locking_read() -> None:
+    # Bug #1: the confirm path must read the pending row with a row lock so two
+    # concurrent confirmations cannot both materialise. Prove it goes through
+    # get_by_token_for_update (not the plain get_by_token) by making the plain
+    # read blind.
+    repo = FakeRepo()
+    token = await _seed_pending(repo)
+
+    async def _blind(_token: str) -> None:
+        raise AssertionError("confirm must use get_by_token_for_update")
+
+    repo.get_by_token = _blind  # type: ignore[method-assign]
+
+    result = await _confirm_use_case(repo).execute(token, "203.0.113.1")
+    assert result.status == "CONFIRMED"
+
+
+# ── #4: confirm retries a reference-number unique conflict ──────────────────────
+
+
+class FlakySubmitProposal:
+    """Raises IntegrityError on the first materialisation, then succeeds — the
+    sequential MAX+1 reference-number race the retry runner must absorb."""
+
+    def __init__(self, reference: str = "VRP-20260626-0011") -> None:
+        self._reference = reference
+        self.calls = 0
+
+    async def execute(self, data: object) -> SimpleNamespace:
+        self.calls += 1
+        if self.calls == 1:
+            raise IntegrityError("INSERT proposals", {}, Exception("duplicate ref"))
+        return SimpleNamespace(
+            proposal=SimpleNamespace(
+                reference_number=SimpleNamespace(value=self._reference)
+            ),
+            conversation_id="conv-1",
+        )
+
+
+async def _retry_on_integrity(op, attempts: int = 3):  # type: ignore[no-untyped-def]
+    for attempt in range(attempts):
+        try:
+            return await op()
+        except IntegrityError:
+            if attempt == attempts - 1:
+                raise
+
+
+async def test_confirm_retries_reference_number_conflict() -> None:
+    repo = FakeRepo()
+    token = await _seed_pending(repo)
+    submit = FlakySubmitProposal()
+    use_case = ConfirmPublicProposal(
+        repository=repo,
+        provision_requester=FakeProvision(),  # type: ignore[arg-type]
+        submit_proposal=submit,  # type: ignore[arg-type]
+        rate_limiter=FakeRateLimiter(),
+        clock=FakeClock(),
+        token_ttl=timedelta(hours=24),
+        retry_runner=_retry_on_integrity,
+    )
+
+    result = await use_case.execute(token, "203.0.113.1")
+
+    assert result.status == "CONFIRMED"
+    assert result.reference_number == "VRP-20260626-0011"
+    assert submit.calls == 2  # first conflicted, retry succeeded
+    assert repo.by_token[token].status is PendingSubmissionStatus.CONFIRMED

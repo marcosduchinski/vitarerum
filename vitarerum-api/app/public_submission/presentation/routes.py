@@ -23,6 +23,7 @@ from app.public_submission.application.use_cases import (
 )
 from app.public_submission.presentation.dependencies import (
     ConfirmUseCase,
+    EmailSender,
     SubmitUseCase,
 )
 from app.public_submission.presentation.schemas import (
@@ -58,6 +59,7 @@ async def submit_public_proposal(
     body: PublicProposalSubmission,
     request: Request,
     use_case: SubmitUseCase,
+    email_sender: EmailSender,
     session: DBSession,
 ) -> PublicSubmissionReceipt:
     try:
@@ -86,6 +88,11 @@ async def submit_public_proposal(
             detail={"message": "Captcha provider unreachable; please retry."},
         ) from exc
     await session.commit()
+    # Send the confirmation link only after the pending row is durably committed,
+    # so the citizen never receives a token that was rolled back. Skipped for the
+    # honeypot path (token is None).
+    if output.token is not None:
+        await email_sender.send(output.email, output.name, output.token)
     return PublicSubmissionReceipt(email=output.email)
 
 

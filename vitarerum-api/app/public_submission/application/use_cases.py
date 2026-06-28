@@ -20,9 +20,9 @@ from app.identity.public import ProvisionExternalRequester
 from app.public_submission.application.ports import (
     CaptchaVerifier,
     Clock,
-    ConfirmationEmailSender,
     PendingSubmissionRepository,
     RateLimiter,
+    UniqueRetryRunner,
 )
 from app.public_submission.domain.models import PendingPublicSubmission
 from app.use_of_collections.application.use_cases import (
@@ -69,6 +69,11 @@ class SubmitPublicProposalInput:
 @dataclass(slots=True)
 class SubmitPublicProposalOutput:
     email: str
+    # The confirmation e-mail is dispatched by the route AFTER commit, so the
+    # token is only ever e-mailed once it is durably persisted. ``token`` is
+    # ``None`` for the honeypot accept-and-drop path (nothing to send).
+    name: str = ""
+    token: str | None = None
 
 
 class SubmitPublicProposal:
@@ -76,13 +81,11 @@ class SubmitPublicProposal:
         self,
         repository: PendingSubmissionRepository,
         captcha: CaptchaVerifier,
-        email_sender: ConfirmationEmailSender,
         rate_limiter: RateLimiter,
         clock: Clock,
     ) -> None:
         self._repo = repository
         self._captcha = captcha
-        self._email = email_sender
         self._rate_limiter = rate_limiter
         self._clock = clock
 
@@ -91,7 +94,7 @@ class SubmitPublicProposal:
     ) -> SubmitPublicProposalOutput:
         # 1) Honeypot: accept-and-drop. Same 202 shape so a bot learns nothing.
         if data.website:
-            return SubmitPublicProposalOutput(email=data.citizen_email)
+            return SubmitPublicProposalOutput(email=data.citizen_email, token=None)
 
         # 2) Rate limits (IP, e-mail, global).
         email_key = data.citizen_email.strip().lower()
@@ -122,10 +125,13 @@ class SubmitPublicProposal:
             created_at=self._clock.now(),
         )
         await self._repo.add(submission)
-        await self._email.send(
-            data.citizen_email, data.citizen_name, submission.token
+        # The route sends the confirmation e-mail only after it commits, so the
+        # citizen never receives a link whose token failed to persist.
+        return SubmitPublicProposalOutput(
+            email=data.citizen_email,
+            name=data.citizen_name,
+            token=submission.token,
         )
-        return SubmitPublicProposalOutput(email=data.citizen_email)
 
 
 # ── Step 2: confirm ────────────────────────────────────────────────────────────
@@ -148,6 +154,7 @@ class ConfirmPublicProposal:
         rate_limiter: RateLimiter,
         clock: Clock,
         token_ttl: timedelta,
+        retry_runner: UniqueRetryRunner,
     ) -> None:
         self._repo = repository
         self._provision = provision_requester
@@ -155,17 +162,20 @@ class ConfirmPublicProposal:
         self._rate_limiter = rate_limiter
         self._clock = clock
         self._ttl = token_ttl
+        self._retry_runner = retry_runner
 
     async def execute(
         self, token: str, remote_ip: str
     ) -> ConfirmPublicProposalOutput:
         if self._rate_limiter.too_many(f"confirm-ip:{remote_ip}", *RATE_LIMIT_PER_IP):
             raise RateLimitExceeded()
-        submission = await self._repo.get_by_token(token)
+        # Lock the row for the rest of the transaction so two concurrent
+        # confirmations of the same token cannot both materialise a proposal.
+        submission = await self._repo.get_by_token_for_update(token)
         if submission is None:
             return ConfirmPublicProposalOutput(status="INVALID")
         if submission.is_confirmed:
-            # Idempotent re-click of an already-used link.
+            # Idempotent re-click of an already-used link (or the loser of a race).
             return ConfirmPublicProposalOutput(
                 status="ALREADY_CONFIRMED",
                 reference_number=submission.proposal_reference,
@@ -174,7 +184,9 @@ class ConfirmPublicProposal:
         if submission.is_expired(now, self._ttl):
             return ConfirmPublicProposalOutput(status="EXPIRED")
 
-        reference = await self._materialise(submission)
+        # Retry the proposal materialisation on a reference-number unique
+        # conflict (sequential MAX+1 allocation), matching authenticated submit.
+        reference = await self._retry_runner(lambda: self._materialise(submission))
         submission.confirm(proposal_reference=reference, occurred_at=now)
         await self._repo.save(submission)
         return ConfirmPublicProposalOutput(

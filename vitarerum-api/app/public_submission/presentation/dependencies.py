@@ -9,6 +9,7 @@ the published ``ProvisionExternalRequester`` (Identity) and ``SubmitProposal``
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from datetime import timedelta
 from typing import Annotated
 
@@ -46,6 +47,7 @@ from app.public_submission.infrastructure.rate_limiter import (
 from app.public_submission.infrastructure.repositories import (
     SqlAlchemyPendingSubmissionRepository,
 )
+from app.shared.persistence import run_with_unique_retry
 from app.use_of_collections.application.use_cases import SubmitProposal
 from app.use_of_collections.infrastructure.repositories import (
     SqlAlchemyConversationRepository,
@@ -88,10 +90,13 @@ def get_submit_use_case(session: DBSession) -> SubmitPublicProposal:
     return SubmitPublicProposal(
         repository=SqlAlchemyPendingSubmissionRepository(session),
         captcha=_captcha_verifier(),
-        email_sender=_email_sender(),
         rate_limiter=_rate_limiter,
         clock=_clock,
     )
+
+
+def get_email_sender() -> ConfirmationEmailSender:
+    return _email_sender()
 
 
 def get_confirm_use_case(session: DBSession) -> ConfirmPublicProposal:
@@ -104,6 +109,10 @@ def get_confirm_use_case(session: DBSession) -> ConfirmPublicProposal:
         SqlAlchemyProposalRepository(session),
         SqlAlchemyConversationRepository(session),
     )
+
+    async def retry_runner[T](operation: Callable[[], Awaitable[T]]) -> T:
+        return await run_with_unique_retry(session, operation)
+
     return ConfirmPublicProposal(
         repository=SqlAlchemyPendingSubmissionRepository(session),
         provision_requester=provision,
@@ -111,8 +120,10 @@ def get_confirm_use_case(session: DBSession) -> ConfirmPublicProposal:
         rate_limiter=_rate_limiter,
         clock=_clock,
         token_ttl=timedelta(hours=settings.public_confirm_token_ttl_hours),
+        retry_runner=retry_runner,
     )
 
 
 SubmitUseCase = Annotated[SubmitPublicProposal, Depends(get_submit_use_case)]
+EmailSender = Annotated[ConfirmationEmailSender, Depends(get_email_sender)]
 ConfirmUseCase = Annotated[ConfirmPublicProposal, Depends(get_confirm_use_case)]

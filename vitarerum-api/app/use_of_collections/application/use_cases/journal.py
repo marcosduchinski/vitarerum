@@ -290,7 +290,12 @@ class AddLogEntryAttachment:
             data.note,
         )
         entry.add_attachment(attachment)
-        await self._repo.save_entry(entry)
+        try:
+            await self._repo.save_entry(entry)
+        except BaseException:
+            # Don't leave an orphaned file when the entry fails to persist.
+            await self._storage.delete(attachment.file_reference)
+            raise
         return attachment
 
 
@@ -496,5 +501,10 @@ class AddOccurrenceEntryAttachment:
             data.note,
         )
         entry.add_attachment(attachment)
-        await self._repo.save_entry(entry)
+        try:
+            await self._repo.save_entry(entry)
+        except BaseException:
+            # Don't leave an orphaned file when the entry fails to persist.
+            await self._storage.delete(attachment.file_reference)
+            raise
         return attachment

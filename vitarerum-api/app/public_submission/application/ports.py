@@ -7,6 +7,7 @@ system clock) are wired in the presentation composition root.
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from datetime import datetime
 from typing import Protocol
 
@@ -18,7 +19,25 @@ class PendingSubmissionRepository(Protocol):
 
     async def get_by_token(self, token: str) -> PendingPublicSubmission | None: ...
 
+    async def get_by_token_for_update(
+        self, token: str
+    ) -> PendingPublicSubmission | None:
+        """Load the pending row and lock it for the rest of the transaction.
+
+        Serialises concurrent confirmations of the same token: the loser blocks
+        until the winner commits, then re-reads the row as ``CONFIRMED``."""
+        ...
+
     async def save(self, submission: PendingPublicSubmission) -> None: ...
+
+
+class UniqueRetryRunner(Protocol):
+    """Runs an operation that allocates a unique value (e.g. a sequential
+    reference number), retrying on a unique-constraint conflict. Implemented in
+    the composition root over the infrastructure transaction helper so the
+    application stays framework-free."""
+
+    async def __call__[T](self, operation: Callable[[], Awaitable[T]]) -> T: ...
 
 
 class CaptchaVerifier(Protocol):
