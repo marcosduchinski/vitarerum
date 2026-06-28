@@ -1,3 +1,5 @@
+import { staffGuard } from '@core/guards/staff.guard';
+
 import { PROJECTS_ROUTES } from './projects.routes';
 import { projectLogAccessGuard } from './guards/project-log-access.guard';
 import { ProjectCollectionsDetailPageComponent } from './pages/collections-detail/project-collections-detail-page.component';
@@ -65,6 +67,33 @@ describe('PROJECTS_ROUTES', () => {
       expect(route?.redirectTo).toBeUndefined();
       expect(component).toBe(alias.component);
     }
+  });
+
+  it('restricts staff-only project routes with the staff guard', () => {
+    const staffPaths = [
+      'pending',
+      'in-progress',
+      'completed',
+      'cancelled',
+      ':id/follow-up/new',
+      'collections/:id',
+      'curatorial/:id',
+      'direction/:id',
+    ];
+
+    for (const path of staffPaths) {
+      const route = PROJECTS_ROUTES.find((candidate) => candidate.path === path);
+
+      expect(route?.canMatch).toContain(staffGuard);
+    }
+  });
+
+  it('keeps my projects and the generic detail route open to external users', () => {
+    const myRoute = PROJECTS_ROUTES.find((candidate) => candidate.path === 'my');
+    const detailRoute = PROJECTS_ROUTES.find((candidate) => candidate.path === ':id');
+
+    expect(myRoute?.canMatch).toBeUndefined();
+    expect(detailRoute?.canMatch).toBeUndefined();
   });
 
   it('guards and lazy-loads occurrence log routes separately from access log routes', () => {

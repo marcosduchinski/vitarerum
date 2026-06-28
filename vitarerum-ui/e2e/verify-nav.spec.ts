@@ -1,12 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-async function loginAs(page: import('@playwright/test').Page, email: string) {
-  await page.goto('/login');
-  await page.getByLabel('Email address').fill(email);
-  await page.getByLabel('Password').fill('vita2026');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await page.waitForURL('**/p/dashboard');
-}
+import { loginAs } from './support/auth';
 
 const sidebar = (page: import('@playwright/test').Page) => page.locator('.layout-sidebar');
 
@@ -153,6 +147,7 @@ test('multi-group user sees only their 3 groups in the switcher and can switch b
   // Switching again from the dashboard keeps the same deterministic landing.
   await page.selectOption('#role-switcher', 'DIRECTION');
   await expect(page).toHaveURL(/\/p\/dashboard$/);
+  await sb.getByRole('button', { name: 'Proposals' }).click();
   await expect(sb.getByRole('link', { name: 'Rejected / cancelled' })).toBeVisible();
   await expect(sb.getByRole('link', { name: 'Users' })).not.toBeVisible();
 });

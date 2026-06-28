@@ -1,11 +1,9 @@
 import { expect, test } from '@playwright/test';
 
+import { loginAs } from './support/auth';
+
 async function loginAsStaff(page: import('@playwright/test').Page) {
-  await page.goto('/login');
-  await page.getByLabel('Email address').fill('eve@admin.example.com');
-  await page.getByLabel('Password').fill('vita2026');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await page.waitForURL('**/p/dashboard');
+  await loginAs(page, 'eve@admin.example.com');
   await page.getByRole('link', { name: 'Users' }).click();
   await page.waitForURL('**/p/admin/users');
 }

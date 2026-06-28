@@ -1,6 +1,9 @@
 import { expect, test } from '@playwright/test';
 
+import { useMockConfig } from './support/auth';
+
 test('signs in, shows dashboard, and handles unknown routes', async ({ page }) => {
+  await useMockConfig(page);
   await page.goto('/');
 
   await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();

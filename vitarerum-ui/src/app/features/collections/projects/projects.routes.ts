@@ -1,5 +1,7 @@
 import { Routes } from '@angular/router';
 
+import { staffGuard } from '@core/guards/staff.guard';
+
 import { projectLogAccessGuard } from './guards/project-log-access.guard';
 import { projectPublicationAccessGuard } from './guards/project-publication-access.guard';
 
@@ -14,6 +16,7 @@ export const PROJECTS_ROUTES: Routes = [
   {
     path: 'pending',
     title: 'Pending Projects',
+    canMatch: [staffGuard],
     loadComponent: () =>
       import('./pages/pending/projects-pending-page.component').then(
         (m) => m.ProjectsPendingPageComponent,
@@ -22,6 +25,7 @@ export const PROJECTS_ROUTES: Routes = [
   {
     path: 'in-progress',
     title: 'In Progress Projects',
+    canMatch: [staffGuard],
     loadComponent: () =>
       import('./pages/in-progress/projects-in-progress-page.component').then(
         (m) => m.ProjectsInProgressPageComponent,
@@ -30,6 +34,7 @@ export const PROJECTS_ROUTES: Routes = [
   {
     path: 'completed',
     title: 'Completed Projects',
+    canMatch: [staffGuard],
     loadComponent: () =>
       import('./pages/completed/projects-completed-page.component').then(
         (m) => m.ProjectsCompletedPageComponent,
@@ -38,6 +43,7 @@ export const PROJECTS_ROUTES: Routes = [
   {
     path: 'cancelled',
     title: 'Cancelled Projects',
+    canMatch: [staffGuard],
     loadComponent: () =>
       import('./pages/cancelled/projects-cancelled-page.component').then(
         (m) => m.ProjectsCancelledPageComponent,
@@ -109,6 +115,7 @@ export const PROJECTS_ROUTES: Routes = [
   {
     path: ':id/follow-up/new',
     title: 'Create Follow-up Project',
+    canMatch: [staffGuard],
     loadComponent: () =>
       import('./pages/follow-up/project-follow-up-page.component').then(
         (m) => m.ProjectFollowUpPageComponent,
@@ -117,6 +124,7 @@ export const PROJECTS_ROUTES: Routes = [
   {
     path: 'collections/:id',
     title: 'Project Detail',
+    canMatch: [staffGuard],
     loadComponent: () =>
       import('./pages/collections-detail/project-collections-detail-page.component').then(
         (m) => m.ProjectCollectionsDetailPageComponent,
@@ -125,6 +133,7 @@ export const PROJECTS_ROUTES: Routes = [
   {
     path: 'curatorial/:id',
     title: 'Project Detail',
+    canMatch: [staffGuard],
     loadComponent: () =>
       import('./pages/curatorial-detail/project-curatorial-detail-page.component').then(
         (m) => m.ProjectCuratorialDetailPageComponent,
@@ -133,6 +142,7 @@ export const PROJECTS_ROUTES: Routes = [
   {
     path: 'direction/:id',
     title: 'Project Detail',
+    canMatch: [staffGuard],
     loadComponent: () =>
       import('./pages/direction-detail/project-direction-detail-page.component').then(
         (m) => m.ProjectDirectionDetailPageComponent,
