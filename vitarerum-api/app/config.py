@@ -63,6 +63,11 @@ class Settings(BaseSettings):
             errors.append("jwt_secret must be at least 32 bytes")
         if self.turnstile_secret_key.startswith("1x0000"):
             errors.append("turnstile_secret_key must be configured outside local/test")
+        if not self.smtp_host:
+            errors.append(
+                "smtp_host must be configured outside local/test "
+                "(otherwise confirmation e-mails are only logged, not sent)"
+            )
         if "*" in self.cors_origins:
             errors.append("cors_origins cannot contain '*' outside local/test")
         if errors:

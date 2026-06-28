@@ -56,7 +56,7 @@ class SmtpConfirmationEmailSender:
         message = EmailMessage()
         message["From"] = self._from
         message["To"] = to_email
-        message["Subject"] = "Confirme o seu pedido de acesso à coleção"
+        message["Subject"] = "Confirme o seu pedido de acesso à coleção / "
         message.set_content(
             f"Olá {citizen_name},\n\n"
             "Para concluir o seu pedido, confirme através do link abaixo:\n\n"
