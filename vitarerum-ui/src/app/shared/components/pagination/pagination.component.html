@@ -1,0 +1,27 @@
+@if (total() > 0) {
+  <div class="pagination" role="navigation" [attr.aria-label]="itemLabel() + ' pagination'">
+    <span class="pagination__info">
+      {{ rangeStart() }}–{{ rangeEnd() }} of {{ total() }} {{ itemLabel() }}
+    </span>
+    <div class="pagination__controls">
+      <button
+        pButton
+        type="button"
+        [disabled]="isFirst()"
+        (click)="previous.emit()"
+        aria-label="Previous page"
+      >
+        Previous
+      </button>
+      <button
+        pButton
+        type="button"
+        [disabled]="isLast()"
+        (click)="next.emit()"
+        aria-label="Next page"
+      >
+        Next
+      </button>
+    </div>
+  </div>
+}

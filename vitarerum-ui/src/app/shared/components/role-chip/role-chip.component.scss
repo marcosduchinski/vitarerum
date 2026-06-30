@@ -1,0 +1,43 @@
+.role-chip {
+  min-height: 1.6rem;
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 0.125rem 0.625rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.role-chip--external {
+  border-color: color-mix(in srgb, var(--role-external-text) 18%, transparent);
+  background: var(--role-external-bg);
+  color: var(--role-external-text);
+}
+
+.role-chip--curatorial {
+  border-color: color-mix(in srgb, var(--role-curatorial-text) 18%, transparent);
+  background: var(--role-curatorial-bg);
+  color: var(--role-curatorial-text);
+}
+
+.role-chip--collections {
+  border-color: color-mix(in srgb, var(--role-collections-text) 18%, transparent);
+  background: var(--role-collections-bg);
+  color: var(--role-collections-text);
+}
+
+.role-chip--direction {
+  border-color: color-mix(in srgb, var(--role-direction-text) 18%, transparent);
+  background: var(--role-direction-bg);
+  color: var(--role-direction-text);
+}
+
+.role-chip--admin {
+  border-color: color-mix(in srgb, var(--role-admin-text) 18%, transparent);
+  background: var(--role-admin-bg);
+  color: var(--role-admin-text);
+}

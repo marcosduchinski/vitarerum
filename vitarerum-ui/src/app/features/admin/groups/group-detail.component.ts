@@ -10,13 +10,17 @@ import {
 import { Router, RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { MenuItem } from 'primeng/api';
-import { ButtonDirective } from 'primeng/button';
 import { USER_MANAGEMENT_SERVICE, GroupUsersPage } from '@features/admin/services/user-management.service';
 import { GroupName } from '@core/auth/models/group-name.enum';
 import { toApiError } from '@core/http/api-error.model';
+import { AvatarComponent } from '@shared/components/avatar/avatar.component';
+import { DataTableComponent } from '@shared/components/data-table/data-table.component';
 import { ErrorMessageComponent } from '@shared/components/error-message/error-message.component';
 import { LoadingStateComponent } from '@shared/components/loading-state/loading-state.component';
 import { EmptyStateComponent } from '@shared/components/empty-state/empty-state.component';
+import { PageHeaderComponent } from '@shared/components/page-header/page-header.component';
+import { PaginationComponent } from '@shared/components/pagination/pagination.component';
+import { RoleChipComponent } from '@shared/components/role-chip/role-chip.component';
 import { RowActionsComponent } from '@shared/components/row-actions/row-actions.component';
 
 const GROUP_META: Record<GroupName, { label: string; description: string }> = {
@@ -50,10 +54,14 @@ const PAGE_SIZE = 20;
   imports: [
     RouterLink,
     RowActionsComponent,
-    ButtonDirective,
+    AvatarComponent,
+    DataTableComponent,
     ErrorMessageComponent,
     LoadingStateComponent,
     EmptyStateComponent,
+    PageHeaderComponent,
+    PaginationComponent,
+    RoleChipComponent,
   ],
   templateUrl: './group-detail.component.html',
   styleUrl: './group-detail.component.scss',
@@ -93,10 +101,7 @@ export class GroupDetailComponent {
     return g ? (GROUP_META[g.name]?.description ?? '') : '';
   });
 
-  protected readonly rangeStart = computed(() => this.currentPage() * PAGE_SIZE + 1);
-  protected readonly rangeEnd = computed(() =>
-    Math.min((this.currentPage() + 1) * PAGE_SIZE, this.totalMembers()),
-  );
+  protected readonly pageSize = PAGE_SIZE;
 
   protected actionItemsFor(userId: string): MenuItem[] {
     return [

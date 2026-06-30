@@ -8,18 +8,14 @@
   } @else if (isEditMode() && loadError()) {
     <app-error-message [apiError]="loadError()!" (retry)="institutionResource.reload()" />
   } @else {
-    <header class="institution-detail__header">
-      <p class="institution-detail__eyebrow">Institution</p>
-      <h2>{{ isEditMode() ? formModel().name || 'Institution' : 'New institution' }}</h2>
-    </header>
+    <app-page-header eyebrow="Institution" [title]="headerTitle()" />
 
     <form class="institution-form" (submit)="save($event)">
       @if (saveError()) {
         <app-error-message [apiError]="saveError()!" />
       }
 
-      <div class="institution-form__field">
-        <label for="institution-name">Name</label>
+      <app-form-field label="Name" controlId="institution-name" [field]="institutionForm.name">
         <input
           id="institution-name"
           type="text"
@@ -27,15 +23,9 @@
           [formField]="institutionForm.name"
           aria-describedby="institution-name-error"
         />
-        <div id="institution-name-error" class="institution-form__validation" aria-live="polite">
-          @if (institutionForm.name().touched() && institutionForm.name().invalid()) {
-            {{ institutionForm.name().errors()[0].message }}
-          }
-        </div>
-      </div>
+      </app-form-field>
 
-      <div class="institution-form__field">
-        <label for="institution-email">Email</label>
+      <app-form-field label="Email" controlId="institution-email" [field]="institutionForm.email">
         <input
           id="institution-email"
           type="email"
@@ -43,32 +33,31 @@
           [formField]="institutionForm.email"
           aria-describedby="institution-email-error"
         />
-        <div id="institution-email-error" class="institution-form__validation" aria-live="polite">
-          @if (institutionForm.email().touched() && institutionForm.email().invalid()) {
-            {{ institutionForm.email().errors()[0].message }}
-          }
-        </div>
-      </div>
+      </app-form-field>
 
-      <div class="institution-form__field">
-        <label for="institution-address">Address</label>
+      <app-form-field
+        label="Address"
+        controlId="institution-address"
+        [field]="institutionForm.address"
+      >
         <input
           id="institution-address"
           type="text"
           autocomplete="street-address"
           [formField]="institutionForm.address"
+          aria-describedby="institution-address-error"
         />
-      </div>
+      </app-form-field>
 
-      <div class="institution-form__field">
-        <label for="institution-phone">Phone</label>
+      <app-form-field label="Phone" controlId="institution-phone" [field]="institutionForm.phone">
         <input
           id="institution-phone"
           type="tel"
           autocomplete="tel"
           [formField]="institutionForm.phone"
+          aria-describedby="institution-phone-error"
         />
-      </div>
+      </app-form-field>
 
       <div class="institution-form__actions">
         <button
@@ -94,9 +83,17 @@
     @if (isEditMode()) {
       <section class="institution-detail__danger" aria-labelledby="danger-heading">
         <h3 id="danger-heading">Delete institution</h3>
-        <p class="institution-detail__danger-hint">
-          An institution can only be removed once it no longer owns any groups.
-        </p>
+        @if (canDelete()) {
+          <p class="institution-detail__danger-hint">
+            This institution owns no groups and can be removed.
+          </p>
+        } @else {
+          <p class="institution-detail__danger-hint">
+            This institution owns {{ ownedGroupCount() }}
+            {{ ownedGroupCount() === 1 ? 'group' : 'groups' }} and cannot be deleted
+            until they are reassigned.
+          </p>
+        }
 
         @if (deleteConfirm()) {
           <app-confirm-action
@@ -112,6 +109,7 @@
             pButton
             type="button"
             class="p-button-outlined p-button-danger"
+            [disabled]="!canDelete()"
             (click)="requestDelete()"
           >
             Delete institution

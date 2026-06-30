@@ -1,38 +1,17 @@
 .groups-page {
   display: grid;
-  gap: 1.75rem;
+  gap: 1.25rem;
   align-content: start;
 }
 
-.groups-page__eyebrow {
-  margin: 0 0 0.25rem;
-  color: var(--color-subtle);
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-h2 {
-  margin: 0 0 0.5rem;
-  color: var(--color-text);
-  font-size: 1.8rem;
-  line-height: 1.2;
-}
-
-.groups-page__header {
-  padding-bottom: 1rem;
-  border-bottom: 1px solid var(--color-line);
-}
-
 .groups-page__subtitle {
-  margin: 0;
+  margin: -0.25rem 0 0.5rem;
   color: var(--color-subtle);
   font-size: 0.9rem;
 }
 
 .groups-page__subtitle a {
-  color: var(--color-accent);
+  color: var(--color-accent-strong);
   text-decoration: none;
 }
 
@@ -55,6 +34,10 @@ h2 {
   background: var(--color-panel);
   box-shadow: var(--shadow-panel);
   gap: 1rem;
+}
+
+.group-card__body app-role-chip {
+  margin-bottom: 0.75rem;
 }
 
 .group-card__name {

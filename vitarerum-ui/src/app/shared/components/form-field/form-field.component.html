@@ -1,0 +1,9 @@
+<div class="form-field" [class.form-field--invalid]="invalid()">
+  <label [attr.for]="controlId()">{{ label() }}</label>
+  <ng-content />
+  <div class="form-field__error" [id]="controlId() + '-error'" aria-live="polite">
+    @if (invalid()) {
+      {{ firstError() }}
+    }
+  </div>
+</div>

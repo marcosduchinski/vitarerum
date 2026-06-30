@@ -14,9 +14,12 @@ import { toApiError } from '@core/http/api-error.model';
 import { INSTITUTION_MANAGEMENT_SERVICE } from '@features/admin/services/institution-management.service';
 import { Institution } from '@core/auth/models/institution.model';
 import { Page } from '@shared/models/page.model';
+import { DataTableComponent } from '@shared/components/data-table/data-table.component';
 import { ErrorMessageComponent } from '@shared/components/error-message/error-message.component';
 import { LoadingStateComponent } from '@shared/components/loading-state/loading-state.component';
 import { EmptyStateComponent } from '@shared/components/empty-state/empty-state.component';
+import { PageHeaderComponent } from '@shared/components/page-header/page-header.component';
+import { PaginationComponent } from '@shared/components/pagination/pagination.component';
 import { RowActionsComponent } from '@shared/components/row-actions/row-actions.component';
 
 const PAGE_SIZE = 20;
@@ -28,9 +31,12 @@ const PAGE_SIZE = 20;
     RouterLink,
     RowActionsComponent,
     ButtonDirective,
+    DataTableComponent,
     ErrorMessageComponent,
     LoadingStateComponent,
     EmptyStateComponent,
+    PageHeaderComponent,
+    PaginationComponent,
   ],
   templateUrl: './institutions-page.component.html',
   styleUrl: './institutions-page.component.scss',
@@ -62,13 +68,7 @@ export class InstitutionsPageComponent {
   protected readonly totalPages = computed(
     () => this.institutionsResource.value()?.totalPages ?? 0,
   );
-
-  protected readonly rangeStart = computed(() =>
-    this.total() === 0 ? 0 : this.currentPage() * PAGE_SIZE + 1,
-  );
-  protected readonly rangeEnd = computed(() =>
-    Math.min((this.currentPage() + 1) * PAGE_SIZE, this.total()),
-  );
+  protected readonly pageSize = PAGE_SIZE;
 
   protected actionItemsFor(institution: Institution): MenuItem[] {
     return [

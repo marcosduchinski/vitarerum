@@ -6,13 +6,15 @@ import {
   resource,
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, forkJoin, map, Observable } from 'rxjs';
 import { USER_MANAGEMENT_SERVICE } from '@features/admin/services/user-management.service';
 import { GroupName } from '@core/auth/models/group-name.enum';
 import { GroupsResponse } from '@core/auth/models/group.model';
 import { toApiError } from '@core/http/api-error.model';
 import { ErrorMessageComponent } from '@shared/components/error-message/error-message.component';
 import { LoadingStateComponent } from '@shared/components/loading-state/loading-state.component';
+import { PageHeaderComponent } from '@shared/components/page-header/page-header.component';
+import { RoleChipComponent } from '@shared/components/role-chip/role-chip.component';
 
 interface GroupMeta {
   readonly label: string;
@@ -45,7 +47,13 @@ const GROUP_META: Record<GroupName, GroupMeta> = {
 @Component({
   selector: 'app-groups-page',
   standalone: true,
-  imports: [RouterLink, ErrorMessageComponent, LoadingStateComponent],
+  imports: [
+    RouterLink,
+    ErrorMessageComponent,
+    LoadingStateComponent,
+    PageHeaderComponent,
+    RoleChipComponent,
+  ],
   templateUrl: './groups-page.component.html',
   styleUrl: './groups-page.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -64,4 +72,22 @@ export class GroupsPageComponent {
 
   protected readonly groups = computed(() => this.groupsResource.value()?.groups ?? []);
   protected readonly groupMeta = GROUP_META;
+
+  // Member counts are fetched per group (size=1, read totalElements) once the
+  // fixed group list is known. Keyed by group id for O(1) template lookup.
+  protected readonly countsResource = resource<Record<string, number>, string[]>({
+    params: () => this.groups().map(g => g.id),
+    loader: ({ params: ids }): Promise<Record<string, number>> => {
+      if (!ids.length) return Promise.resolve({});
+      const requests: Record<string, Observable<number>> = {};
+      for (const id of ids) {
+        requests[id] = this.userService
+          .listGroupUsers(id, { size: 1 })
+          .pipe(map(page => page.totalElements));
+      }
+      return firstValueFrom(forkJoin(requests));
+    },
+  });
+
+  protected readonly counts = computed(() => this.countsResource.value() ?? {});
 }

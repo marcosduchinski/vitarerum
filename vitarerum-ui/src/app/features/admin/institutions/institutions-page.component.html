@@ -1,14 +1,10 @@
 <div class="institutions-page">
-  <div class="institutions-page__header">
-    <div>
-      <p class="institutions-page__eyebrow">Administration</p>
-      <h2>Institutions</h2>
-    </div>
+  <app-page-header eyebrow="Administration" title="Institutions">
     <button pButton type="button" (click)="createInstitution()">
       <span class="pi pi-plus" aria-hidden="true"></span>
       New institution
     </button>
-  </div>
+  </app-page-header>
 
   @if (institutionsResource.isLoading()) {
     <app-loading-state />
@@ -20,12 +16,12 @@
       message="Create the first institution to get started."
     />
   } @else {
-    <table class="institutions-table" aria-label="Institutions">
+    <app-data-table ariaLabel="Institutions">
       <thead>
         <tr>
           <th scope="col">Name</th>
-          <th scope="col">Email</th>
-          <th scope="col">Phone</th>
+          <th scope="col" class="is-secondary">Email</th>
+          <th scope="col" class="is-secondary">Phone</th>
           <th scope="col" class="sr-only">Actions</th>
         </tr>
       </thead>
@@ -33,13 +29,15 @@
         @for (institution of institutions(); track institution.id) {
           <tr>
             <td>
-              <a class="institutions-table__name" [routerLink]="institution.id">
+              <a class="data-table__link" [routerLink]="institution.id">
                 {{ institution.name }}
               </a>
             </td>
-            <td class="institutions-table__muted">{{ institution.email || '—' }}</td>
-            <td class="institutions-table__muted">{{ institution.phone || '—' }}</td>
-            <td class="institutions-table__actions">
+            <td class="data-table__muted is-secondary">{{ institution.email || '—' }}</td>
+            <td class="data-table__muted data-table__num is-secondary">
+              {{ institution.phone || '—' }}
+            </td>
+            <td class="data-table__actions">
               <app-row-actions
                 [items]="actionItemsFor(institution)"
                 ariaLabel="More actions for {{ institution.name }}"
@@ -48,38 +46,16 @@
           </tr>
         }
       </tbody>
-    </table>
+    </app-data-table>
 
-    @if (total() > 0) {
-      <div
-        class="institutions-pagination"
-        role="navigation"
-        aria-label="Institution list pagination"
-      >
-        <span class="institutions-pagination__info">
-          {{ rangeStart() }}–{{ rangeEnd() }} of {{ total() }} institutions
-        </span>
-        <div class="institutions-pagination__controls">
-          <button
-            pButton
-            type="button"
-            [disabled]="currentPage() === 0"
-            (click)="prevPage()"
-            aria-label="Previous page"
-          >
-            Previous
-          </button>
-          <button
-            pButton
-            type="button"
-            [disabled]="currentPage() >= totalPages() - 1"
-            (click)="nextPage()"
-            aria-label="Next page"
-          >
-            Next
-          </button>
-        </div>
-      </div>
-    }
+    <app-pagination
+      [page]="currentPage()"
+      [totalPages]="totalPages()"
+      [total]="total()"
+      [pageSize]="pageSize"
+      itemLabel="institutions"
+      (previous)="prevPage()"
+      (next)="nextPage()"
+    />
   }
 </div>

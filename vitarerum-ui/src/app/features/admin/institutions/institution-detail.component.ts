@@ -14,6 +14,7 @@ import { firstValueFrom } from 'rxjs';
 import { ButtonDirective } from 'primeng/button';
 import { ApiError, toApiError } from '@core/http/api-error.model';
 import { INSTITUTION_MANAGEMENT_SERVICE } from '@features/admin/services/institution-management.service';
+import { USER_MANAGEMENT_SERVICE } from '@features/admin/services/user-management.service';
 import {
   Institution,
   InstitutionPayload,
@@ -21,6 +22,8 @@ import {
 import { ErrorMessageComponent } from '@shared/components/error-message/error-message.component';
 import { LoadingStateComponent } from '@shared/components/loading-state/loading-state.component';
 import { ConfirmActionComponent } from '@shared/components/confirm-action/confirm-action.component';
+import { FormFieldComponent } from '@shared/components/form-field/form-field.component';
+import { PageHeaderComponent } from '@shared/components/page-header/page-header.component';
 
 interface InstitutionFormModel {
   readonly name: string;
@@ -44,6 +47,8 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     ErrorMessageComponent,
     LoadingStateComponent,
     ConfirmActionComponent,
+    FormFieldComponent,
+    PageHeaderComponent,
   ],
   templateUrl: './institution-detail.component.html',
   styleUrl: './institution-detail.component.scss',
@@ -51,6 +56,7 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 })
 export class InstitutionDetailComponent {
   private readonly institutionService = inject(INSTITUTION_MANAGEMENT_SERVICE);
+  private readonly userService = inject(USER_MANAGEMENT_SERVICE);
   private readonly router = inject(Router);
   private loadedId: string | null = null;
 
@@ -58,6 +64,10 @@ export class InstitutionDetailComponent {
   readonly id = input<string>();
 
   protected readonly isEditMode = computed(() => !!this.id());
+
+  protected readonly headerTitle = computed(() =>
+    this.isEditMode() ? this.formModel().name || 'Institution' : 'New institution',
+  );
 
   protected readonly institutionResource = resource<Institution, string | undefined>({
     params: () => this.id(),
@@ -69,6 +79,20 @@ export class InstitutionDetailComponent {
     const err = this.institutionResource.error();
     return err ? toApiError(err) : null;
   });
+
+  // The API blocks deleting an institution that still owns groups. Groups carry
+  // their institutionId, so we can surface that count up front instead of
+  // letting the user discover the rule via a 409 on delete.
+  private readonly groupsResource = resource({
+    params: () => this.id(),
+    loader: () => firstValueFrom(this.userService.listGroups()),
+  });
+  protected readonly ownedGroupCount = computed(() => {
+    const id = this.id();
+    const groups = this.groupsResource.value()?.groups ?? [];
+    return id ? groups.filter(g => g.institutionId === id).length : 0;
+  });
+  protected readonly canDelete = computed(() => this.ownedGroupCount() === 0);
 
   protected readonly formModel = signal<InstitutionFormModel>({ ...EMPTY_FORM });
 

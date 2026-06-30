@@ -73,6 +73,18 @@
   --type-other-bg: #f1f5f9;
   --type-other-text: #475569;
 
+  /* ── Role semantics (Identity & Access groups) ────────── */
+  --role-external-bg: #eef1f5;
+  --role-external-text: #5b6471;
+  --role-curatorial-bg: #e0f2fe;
+  --role-curatorial-text: #075985;
+  --role-collections-bg: #dff2e7;
+  --role-collections-text: #23593c;
+  --role-direction-bg: #f2eafa;
+  --role-direction-text: #5d3a82;
+  --role-admin-bg: #fdeae3;
+  --role-admin-text: #9c3412;
+
   /* ── Elevation (near-flat; hairlines do the work) ─────── */
   --shadow-panel: 0 1px 2px color-mix(in srgb, #201e1a 5%, transparent);
   --shadow-raised: 0 10px 32px color-mix(in srgb, #201e1a 12%, transparent);
@@ -132,6 +144,18 @@
   --type-exhibition-text: #f0abfc;
   --type-other-bg: #1e293b;
   --type-other-text: #cbd5e1;
+
+  /* ── Role semantics (dark) ────────────────────────────── */
+  --role-external-bg: #283041;
+  --role-external-text: #cbd5e1;
+  --role-curatorial-bg: #082f49;
+  --role-curatorial-text: #7dd3fc;
+  --role-collections-bg: #0c2f1f;
+  --role-collections-text: #86efac;
+  --role-direction-bg: #2e1d45;
+  --role-direction-text: #d8b4fe;
+  --role-admin-bg: #3a1409;
+  --role-admin-text: #fdba74;
 
   --shadow-panel: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-raised: 0 12px 36px rgba(0, 0, 0, 0.55);

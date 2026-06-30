@@ -13,6 +13,8 @@ import { ApiError, toApiError } from '@core/http/api-error.model';
 import { USER_MANAGEMENT_SERVICE } from '@features/admin/services/user-management.service';
 import { CreateUserPayload } from '@core/auth/models/user.model';
 import { ErrorMessageComponent } from '@shared/components/error-message/error-message.component';
+import { FormFieldComponent } from '@shared/components/form-field/form-field.component';
+import { PageHeaderComponent } from '@shared/components/page-header/page-header.component';
 
 interface UserFormModel {
   readonly name: string;
@@ -29,7 +31,14 @@ const MIN_PASSWORD_LENGTH = 8;
 @Component({
   selector: 'app-user-new',
   standalone: true,
-  imports: [RouterLink, FormField, ButtonDirective, ErrorMessageComponent],
+  imports: [
+    RouterLink,
+    FormField,
+    ButtonDirective,
+    ErrorMessageComponent,
+    FormFieldComponent,
+    PageHeaderComponent,
+  ],
   templateUrl: './user-new.component.html',
   styleUrl: './user-new.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

@@ -14,20 +14,18 @@ import { ButtonDirective } from 'primeng/button';
 import { toApiError } from '@core/http/api-error.model';
 import { USER_MANAGEMENT_SERVICE } from '@features/admin/services/user-management.service';
 import { GroupName } from '@core/auth/models/group-name.enum';
+import { groupNameOf } from '@core/auth/models/permission.model';
 import { UserDetail } from '@core/auth/models/user.model';
 import { Page } from '@shared/models/page.model';
+import { AvatarComponent } from '@shared/components/avatar/avatar.component';
+import { DataTableComponent } from '@shared/components/data-table/data-table.component';
 import { ErrorMessageComponent } from '@shared/components/error-message/error-message.component';
 import { LoadingStateComponent } from '@shared/components/loading-state/loading-state.component';
 import { EmptyStateComponent } from '@shared/components/empty-state/empty-state.component';
+import { PageHeaderComponent } from '@shared/components/page-header/page-header.component';
+import { PaginationComponent } from '@shared/components/pagination/pagination.component';
+import { RoleChipComponent } from '@shared/components/role-chip/role-chip.component';
 import { RowActionsComponent } from '@shared/components/row-actions/row-actions.component';
-
-const GROUP_LABELS: Record<GroupName, string> = {
-  EXTERNAL: 'External researcher',
-  COLLECTIONS_MANAGEMENT: 'Collections management',
-  CURATORIAL: 'Curatorial',
-  DIRECTION: 'Direction',
-  SYS_ADMIN: 'Administrator',
-};
 
 const PAGE_SIZE = 20;
 
@@ -39,9 +37,14 @@ const PAGE_SIZE = 20;
     RowActionsComponent,
     InputText,
     ButtonDirective,
+    AvatarComponent,
+    DataTableComponent,
     ErrorMessageComponent,
     LoadingStateComponent,
     EmptyStateComponent,
+    PageHeaderComponent,
+    PaginationComponent,
+    RoleChipComponent,
   ],
   templateUrl: './users-page.component.html',
   styleUrl: './users-page.component.scss',
@@ -68,18 +71,19 @@ export class UsersPageComponent {
     return err ? toApiError(err) : null;
   });
 
+  protected readonly pageSize = PAGE_SIZE;
   protected readonly users = computed(() => this.usersResource.value()?.content ?? []);
   protected readonly totalUsers = computed(() => this.usersResource.value()?.totalElements ?? 0);
   protected readonly totalPages = computed(() => this.usersResource.value()?.totalPages ?? 0);
 
-  protected readonly rangeStart = computed(() =>
-    this.totalUsers() === 0 ? 0 : this.currentPage() * PAGE_SIZE + 1,
-  );
-  protected readonly rangeEnd = computed(() =>
-    Math.min((this.currentPage() + 1) * PAGE_SIZE, this.totalUsers()),
-  );
+  // Normalises a permission's group (the backend may send a bare GroupName
+  // string or a nested {id, name}) to a GroupName for chips/avatars.
+  protected readonly groupNameOf = groupNameOf;
 
-  protected readonly groupLabels = GROUP_LABELS;
+  protected primaryGroup(user: UserDetail): GroupName | undefined {
+    const permission = user.permissions[0];
+    return permission ? groupNameOf(permission.group) : undefined;
+  }
 
   protected actionItemsFor(user: UserDetail): MenuItem[] {
     return [

@@ -1,0 +1,50 @@
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.85rem;
+  height: 1.85rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  flex: 0 0 auto;
+  user-select: none;
+}
+
+.avatar--neutral {
+  background: var(--color-panel-muted);
+  color: var(--color-muted);
+  border-color: var(--color-line);
+}
+
+.avatar--external {
+  background: var(--role-external-bg);
+  color: var(--role-external-text);
+  border-color: color-mix(in srgb, var(--role-external-text) 18%, transparent);
+}
+
+.avatar--curatorial {
+  background: var(--role-curatorial-bg);
+  color: var(--role-curatorial-text);
+  border-color: color-mix(in srgb, var(--role-curatorial-text) 18%, transparent);
+}
+
+.avatar--collections {
+  background: var(--role-collections-bg);
+  color: var(--role-collections-text);
+  border-color: color-mix(in srgb, var(--role-collections-text) 18%, transparent);
+}
+
+.avatar--direction {
+  background: var(--role-direction-bg);
+  color: var(--role-direction-text);
+  border-color: color-mix(in srgb, var(--role-direction-text) 18%, transparent);
+}
+
+.avatar--admin {
+  background: var(--role-admin-bg);
+  color: var(--role-admin-text);
+  border-color: color-mix(in srgb, var(--role-admin-text) 18%, transparent);
+}

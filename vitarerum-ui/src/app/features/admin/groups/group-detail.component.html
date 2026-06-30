@@ -6,11 +6,11 @@
   } @else if (apiError()) {
     <app-error-message [apiError]="apiError()!" (retry)="membersResource.reload()" />
   } @else if (group()) {
-    <header class="group-detail__header">
-      <p class="group-detail__eyebrow">Group</p>
-      <h2>{{ groupLabel() }}</h2>
-      <p class="group-detail__desc">{{ groupDescription() }}</p>
-    </header>
+    <app-page-header eyebrow="Group" [title]="groupLabel()" [description]="groupDescription()">
+      @if (group(); as g) {
+        <app-role-chip [group]="g.name" />
+      }
+    </app-page-header>
 
     <section class="group-detail__section" aria-labelledby="members-heading">
       <div class="group-detail__section-header">
@@ -21,11 +21,11 @@
       @if (!members().length) {
         <app-empty-state title="No members" message="This group has no users assigned yet." />
       } @else {
-        <table class="members-table" aria-label="Group members">
+        <app-data-table ariaLabel="Group members">
           <thead>
             <tr>
               <th scope="col">Name</th>
-              <th scope="col">Email</th>
+              <th scope="col" class="is-secondary">Email</th>
               <th scope="col" class="sr-only">Actions</th>
             </tr>
           </thead>
@@ -33,12 +33,15 @@
             @for (member of members(); track member.permissionId) {
               <tr>
                 <td>
-                  <a class="members-table__name" [routerLink]="['/p/admin/users', member.user.id]">
-                    {{ member.user.name }}
-                  </a>
+                  <div class="member-cell">
+                    <app-avatar [name]="member.user.name" [group]="group()?.name" />
+                    <a class="data-table__link" [routerLink]="['/p/admin/users', member.user.id]">
+                      {{ member.user.name }}
+                    </a>
+                  </div>
                 </td>
-                <td class="members-table__email">{{ member.user.email }}</td>
-                <td class="members-table__actions">
+                <td class="data-table__muted is-secondary">{{ member.user.email }}</td>
+                <td class="data-table__actions">
                   <app-row-actions
                     [items]="actionItemsFor(member.user.id)"
                     ariaLabel="More actions for {{ member.user.name }}"
@@ -47,35 +50,17 @@
               </tr>
             }
           </tbody>
-        </table>
+        </app-data-table>
 
-        @if (totalMembers() > 0) {
-          <div class="members-pagination" role="navigation" aria-label="Members pagination">
-            <span class="members-pagination__info">
-              {{ rangeStart() }}–{{ rangeEnd() }} of {{ totalMembers() }} members
-            </span>
-            <div class="members-pagination__controls">
-              <button
-                pButton
-                type="button"
-                [disabled]="currentPage() === 0"
-                (click)="prevPage()"
-                aria-label="Previous page"
-              >
-                Previous
-              </button>
-              <button
-                pButton
-                type="button"
-                [disabled]="currentPage() >= totalPages() - 1"
-                (click)="nextPage()"
-                aria-label="Next page"
-              >
-                Next
-              </button>
-            </div>
-          </div>
-        }
+        <app-pagination
+          [page]="currentPage()"
+          [totalPages]="totalPages()"
+          [total]="totalMembers()"
+          [pageSize]="pageSize"
+          itemLabel="members"
+          (previous)="prevPage()"
+          (next)="nextPage()"
+        />
       }
     </section>
   }

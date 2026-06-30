@@ -6,11 +6,7 @@
   } @else if (userApiError()) {
     <app-error-message [apiError]="userApiError()!" (retry)="userResource.reload()" />
   } @else if (user()) {
-    <header class="user-detail__header">
-      <p class="user-detail__eyebrow">User</p>
-      <h2>{{ user()!.name }}</h2>
-      <p class="user-detail__email">{{ user()!.email }}</p>
-    </header>
+    <app-page-header eyebrow="User" [title]="user()!.name" [description]="user()!.email" />
 
     <section class="user-detail__section" aria-labelledby="groups-heading">
       <h3 id="groups-heading">Group memberships</h3>
@@ -21,13 +17,13 @@
         <ul class="user-detail__group-list" role="list">
           @for (perm of user()!.permissions; track perm.permissionId) {
             <li class="user-detail__group-item">
-              <span class="group-badge">{{ groupLabels[perm.group.name] }}</span>
+              <app-role-chip [group]="groupNameOf(perm.group)" />
               <button
                 pButton
                 type="button"
                 class="p-button-outlined p-button-danger p-button-sm"
                 (click)="requestRevoke(perm)"
-                [attr.aria-label]="'Revoke ' + groupLabels[perm.group.name]"
+                [attr.aria-label]="'Revoke ' + groupLabels[groupNameOf(perm.group)]"
               >
                 Revoke
               </button>
@@ -39,7 +35,7 @@
       @if (revokeTarget()) {
         <div class="user-detail__confirm">
           <app-confirm-action
-            [title]="'Remove from ' + groupLabels[revokeTarget()!.group.name]"
+            [title]="'Remove from ' + groupLabels[groupNameOf(revokeTarget()!.group)]"
             message="The user will lose access to this role immediately."
             confirmLabel="Remove"
             [disabled]="revokePending()"

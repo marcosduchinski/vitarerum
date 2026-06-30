@@ -6,7 +6,7 @@
 }
 
 .group-detail__back {
-  color: var(--color-accent);
+  color: var(--color-accent-strong);
   font-size: 0.875rem;
   font-weight: 600;
   text-decoration: none;
@@ -14,34 +14,6 @@
 
 .group-detail__back:hover {
   text-decoration: underline;
-}
-
-.group-detail__eyebrow {
-  margin: 0 0 0.25rem;
-  color: var(--color-subtle);
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-h2 {
-  margin: 0 0 0.375rem;
-  color: var(--color-text);
-  font-size: 1.8rem;
-  line-height: 1.2;
-}
-
-.group-detail__desc {
-  margin: 0;
-  color: var(--color-subtle);
-  font-size: 0.9rem;
-  line-height: 1.5;
-}
-
-.group-detail__header {
-  padding-bottom: 1.25rem;
-  border-bottom: 1px solid var(--color-line);
 }
 
 .group-detail__section {
@@ -64,6 +36,12 @@ h2 {
   font-weight: 700;
 }
 
+.member-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
 .group-detail__count {
   padding: 0.15rem 0.55rem;
   border-radius: 999px;
@@ -71,68 +49,7 @@ h2 {
   color: var(--color-subtle);
   font-size: 0.75rem;
   font-weight: 700;
-}
-
-.members-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.9rem;
-}
-
-.members-table th,
-.members-table td {
-  padding: 0.75rem 1rem;
-  text-align: left;
-  border-bottom: 1px solid var(--color-line);
-}
-
-.members-table th {
-  background: var(--color-panel-muted);
-  color: var(--color-subtle);
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.members-table tbody tr:hover {
-  background: var(--color-panel-muted);
-}
-
-.members-table__name {
-  color: var(--color-accent-strong);
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.members-table__name:hover {
-  text-decoration: underline;
-}
-
-.members-table__email {
-  color: var(--color-subtle);
-}
-
-.members-table__actions {
-  text-align: right;
-}
-
-.members-pagination {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-
-.members-pagination__info {
-  color: var(--color-subtle);
-  font-size: 0.875rem;
-}
-
-.members-pagination__controls {
-  display: flex;
-  gap: 0.5rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .sr-only {

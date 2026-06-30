@@ -1,21 +1,18 @@
 <div class="user-new">
   <a class="user-new__back" routerLink="/p/admin/users">← Back to users</a>
 
-  <header class="user-new__header">
-    <p class="user-new__eyebrow">User</p>
-    <h2>New user</h2>
-    <p class="user-new__hint">
-      Create the account, then assign it to one or more groups on the next screen.
-    </p>
-  </header>
+  <app-page-header
+    eyebrow="User"
+    title="New user"
+    description="Create the account, then assign it to one or more groups on the next screen."
+  />
 
   <form class="user-form" (submit)="save($event)">
     @if (saveError()) {
       <app-error-message [apiError]="saveError()!" />
     }
 
-    <div class="user-form__field">
-      <label for="user-name">Name</label>
+    <app-form-field label="Name" controlId="user-name" [field]="userForm.name">
       <input
         id="user-name"
         type="text"
@@ -23,15 +20,9 @@
         [formField]="userForm.name"
         aria-describedby="user-name-error"
       />
-      <div id="user-name-error" class="user-form__validation" aria-live="polite">
-        @if (userForm.name().touched() && userForm.name().invalid()) {
-          {{ userForm.name().errors()[0].message }}
-        }
-      </div>
-    </div>
+    </app-form-field>
 
-    <div class="user-form__field">
-      <label for="user-email">Email</label>
+    <app-form-field label="Email" controlId="user-email" [field]="userForm.email">
       <input
         id="user-email"
         type="email"
@@ -39,15 +30,9 @@
         [formField]="userForm.email"
         aria-describedby="user-email-error"
       />
-      <div id="user-email-error" class="user-form__validation" aria-live="polite">
-        @if (userForm.email().touched() && userForm.email().invalid()) {
-          {{ userForm.email().errors()[0].message }}
-        }
-      </div>
-    </div>
+    </app-form-field>
 
-    <div class="user-form__field">
-      <label for="user-password">Password</label>
+    <app-form-field label="Password" controlId="user-password" [field]="userForm.password">
       <input
         id="user-password"
         type="password"
@@ -55,12 +40,7 @@
         [formField]="userForm.password"
         aria-describedby="user-password-error"
       />
-      <div id="user-password-error" class="user-form__validation" aria-live="polite">
-        @if (userForm.password().touched() && userForm.password().invalid()) {
-          {{ userForm.password().errors()[0].message }}
-        }
-      </div>
-    </div>
+    </app-form-field>
 
     <div class="user-form__actions">
       <button

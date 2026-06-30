@@ -49,7 +49,7 @@ test('member name links to user detail', async ({ page }) => {
   await page.getByRole('link', { name: 'View members of Collections management' }).click();
   await page.waitForURL('**/p/admin/groups/g-collections');
 
-  await page.locator('a.members-table__name', { hasText: 'Bob Santos' }).click();
+  await page.locator('a.data-table__link', { hasText: 'Bob Santos' }).click();
   await page.waitForURL('**/p/admin/users/u-bob');
   await expect(page.getByRole('heading', { name: 'Bob Santos' })).toBeVisible();
 });
