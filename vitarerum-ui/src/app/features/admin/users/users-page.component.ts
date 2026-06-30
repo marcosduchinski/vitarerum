@@ -93,6 +93,10 @@ export class UsersPageComponent {
     ];
   }
 
+  protected createUser(): void {
+    void this.router.navigate(['/p/admin/users/new']);
+  }
+
   protected onSearch(event: Event): void {
     this.searchQuery.set((event.target as HTMLInputElement).value);
     this.currentPage.set(0);

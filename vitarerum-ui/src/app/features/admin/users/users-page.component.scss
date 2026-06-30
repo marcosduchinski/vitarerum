@@ -30,6 +30,13 @@ h2 {
   flex-wrap: wrap;
 }
 
+.users-page__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
 .users-page__search {
   width: min(22rem, 100%);
 }

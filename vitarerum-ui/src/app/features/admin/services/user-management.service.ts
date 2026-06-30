@@ -8,7 +8,7 @@ import {
   GroupMembership,
   UserPermissionsResponse,
 } from '@core/auth/models/permission.model';
-import { UserDetail } from '@core/auth/models/user.model';
+import { CreateUserPayload, UserDetail } from '@core/auth/models/user.model';
 import { Page, PageQuery } from '@shared/models/page.model';
 import { Observable } from 'rxjs';
 
@@ -34,6 +34,10 @@ export class UserManagementService {
     return this.http.get<Page<UserDetail>>(this.url('/users'), {
       params: buildHttpParams(query),
     });
+  }
+
+  createUser(payload: CreateUserPayload): Observable<UserDetail> {
+    return this.http.post<UserDetail>(this.url('/users'), payload);
   }
 
   getUser(userId: string): Observable<UserDetail> {

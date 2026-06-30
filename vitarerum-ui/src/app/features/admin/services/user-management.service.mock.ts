@@ -3,7 +3,7 @@ import { GroupsResponse } from '@core/auth/models/group.model';
 import { IDENTITY_SERVICE } from '@core/auth/identity.service';
 import { GroupName } from '@core/auth/models/group-name.enum';
 import { GroupMembership, UserPermissionsResponse } from '@core/auth/models/permission.model';
-import { UserDetail } from '@core/auth/models/user.model';
+import { CreateUserPayload, UserDetail } from '@core/auth/models/user.model';
 import { makePageFrom, MOCK_GROUPS, MOCK_MEMBERSHIPS, MOCK_USERS } from '../../collections/proposals/mocks/mock-data';
 import { Page, PageQuery } from '@shared/models/page.model';
 import { Observable, of, throwError } from 'rxjs';
@@ -34,6 +34,21 @@ export class UserManagementServiceMock {
   getUser(userId: string): Observable<UserDetail> {
     const user = this.users.find(u => u.id === userId);
     if (!user) return throwError(() => ({ status: 404, error: 'NOT_FOUND' }));
+    return of(user);
+  }
+
+  createUser(payload: CreateUserPayload): Observable<UserDetail> {
+    const email = payload.email.trim().toLowerCase();
+    if (this.users.some(u => u.email.toLowerCase() === email)) {
+      return throwError(() => ({ status: 409, error: { error: 'EMAIL_ALREADY_EXISTS' } }));
+    }
+    const user: UserDetail = {
+      id: `u-${Date.now()}`,
+      name: payload.name.trim(),
+      email,
+      permissions: [],
+    };
+    this.users.push(user);
     return of(user);
   }
 

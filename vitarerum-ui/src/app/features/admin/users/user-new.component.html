@@ -1,0 +1,85 @@
+<div class="user-new">
+  <a class="user-new__back" routerLink="/p/admin/users">← Back to users</a>
+
+  <header class="user-new__header">
+    <p class="user-new__eyebrow">User</p>
+    <h2>New user</h2>
+    <p class="user-new__hint">
+      Create the account, then assign it to one or more groups on the next screen.
+    </p>
+  </header>
+
+  <form class="user-form" (submit)="save($event)">
+    @if (saveError()) {
+      <app-error-message [apiError]="saveError()!" />
+    }
+
+    <div class="user-form__field">
+      <label for="user-name">Name</label>
+      <input
+        id="user-name"
+        type="text"
+        autocomplete="name"
+        [formField]="userForm.name"
+        aria-describedby="user-name-error"
+      />
+      <div id="user-name-error" class="user-form__validation" aria-live="polite">
+        @if (userForm.name().touched() && userForm.name().invalid()) {
+          {{ userForm.name().errors()[0].message }}
+        }
+      </div>
+    </div>
+
+    <div class="user-form__field">
+      <label for="user-email">Email</label>
+      <input
+        id="user-email"
+        type="email"
+        autocomplete="email"
+        [formField]="userForm.email"
+        aria-describedby="user-email-error"
+      />
+      <div id="user-email-error" class="user-form__validation" aria-live="polite">
+        @if (userForm.email().touched() && userForm.email().invalid()) {
+          {{ userForm.email().errors()[0].message }}
+        }
+      </div>
+    </div>
+
+    <div class="user-form__field">
+      <label for="user-password">Password</label>
+      <input
+        id="user-password"
+        type="password"
+        autocomplete="new-password"
+        [formField]="userForm.password"
+        aria-describedby="user-password-error"
+      />
+      <div id="user-password-error" class="user-form__validation" aria-live="polite">
+        @if (userForm.password().touched() && userForm.password().invalid()) {
+          {{ userForm.password().errors()[0].message }}
+        }
+      </div>
+    </div>
+
+    <div class="user-form__actions">
+      <button
+        pButton
+        type="button"
+        class="p-button-text"
+        [disabled]="pending()"
+        (click)="cancel()"
+      >
+        Cancel
+      </button>
+      <button pButton type="submit" [disabled]="saveDisabled()">
+        @if (pending()) {
+          <span class="pi pi-spin pi-spinner" aria-hidden="true"></span>
+          Creating…
+        } @else {
+          Create user
+        }
+      </button>
+    </div>
+  </form>
+</div>

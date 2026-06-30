@@ -38,6 +38,17 @@ describe('UserManagementService', () => {
     request.flush({ content: [], page: 1, size: 10, totalElements: 0, totalPages: 0 });
   });
 
+  it('creates a user', () => {
+    const payload = { name: 'Ana', email: 'ana@example.test', password: 'secret123' };
+    service.createUser(payload).subscribe();
+
+    const request = http.expectOne('https://api.example.test/users');
+
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual(payload);
+    request.flush({ id: 'user-1', name: 'Ana', email: 'ana@example.test', permissions: [] });
+  });
+
   it('assigns and revokes group membership', () => {
     service.assignGroup('user-1', 'group-1').subscribe();
 

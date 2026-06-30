@@ -9,6 +9,12 @@ export const ADMIN_ROUTES: Routes = [
       import('./users/users-page.component').then(m => m.UsersPageComponent),
   },
   {
+    path: 'users/new',
+    title: 'New user',
+    loadComponent: () =>
+      import('./users/user-new.component').then(m => m.UserNewComponent),
+  },
+  {
     path: 'users/:id',
     title: 'User',
     loadComponent: () =>

@@ -4,16 +4,22 @@
       <p class="users-page__eyebrow">Administration</p>
       <h2>Users</h2>
     </div>
-    <label class="sr-only" for="user-search">Search users</label>
-    <input
-      pInputText
-      id="user-search"
-      type="search"
-      placeholder="Search by name or email…"
-      [value]="searchQuery()"
-      (input)="onSearch($event)"
-      class="users-page__search"
-    />
+    <div class="users-page__actions">
+      <label class="sr-only" for="user-search">Search users</label>
+      <input
+        pInputText
+        id="user-search"
+        type="search"
+        placeholder="Search by name or email…"
+        [value]="searchQuery()"
+        (input)="onSearch($event)"
+        class="users-page__search"
+      />
+      <button pButton type="button" (click)="createUser()">
+        <span class="pi pi-plus" aria-hidden="true"></span>
+        New user
+      </button>
+    </div>
   </div>
 
   @if (usersResource.isLoading()) {
