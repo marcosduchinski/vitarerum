@@ -5,7 +5,7 @@ submission, so it can seed the materialised proposal's IntendedUse on confirm. T
 column is added nullable, backfilled to OTHER for any in-flight pending rows, then
 made NOT NULL — safe on a populated database.
 
-Revision ID: 0002_add_use_type_to_public_submissions
+Revision ID: 0002_public_use_type
 Revises: 0001_add_institutions
 Create Date: 2026-06-30 00:00:00.000000
 """
@@ -14,7 +14,7 @@ from collections.abc import Sequence
 
 from alembic import op
 
-revision: str = "0002_add_use_type_to_public_submissions"
+revision: str = "0002_public_use_type"
 down_revision: str | None = "0001_add_institutions"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None

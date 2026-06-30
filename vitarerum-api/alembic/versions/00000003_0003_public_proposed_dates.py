@@ -4,8 +4,8 @@ Captures the dates a citizen proposes for the use on a pending public
 submission, seeding the materialised proposal's begin/end on confirm. Both
 columns are optional, so they are added nullable with no backfill.
 
-Revision ID: 0003_add_proposed_dates_to_public_submissions
-Revises: 0002_add_use_type_to_public_submissions
+Revision ID: 0003_public_proposed_dates
+Revises: 0002_public_use_type
 Create Date: 2026-06-30 00:00:00.000000
 """
 
@@ -13,8 +13,8 @@ from collections.abc import Sequence
 
 from alembic import op
 
-revision: str = "0003_add_proposed_dates_to_public_submissions"
-down_revision: str | None = "0002_add_use_type_to_public_submissions"
+revision: str = "0003_public_proposed_dates"
+down_revision: str | None = "0002_public_use_type"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
