@@ -85,8 +85,11 @@
         }
       </div>
 
-      <div class="field" [class.field--error]="dateRangeError()">
-        <span class="field__label">Proposed dates</span>
+      <div
+        class="field"
+        [class.field--error]="beginDateError() || endDateError() || dateRangeError()"
+      >
+        <span class="field__label">Proposed dates <span aria-hidden="true">*</span></span>
         <div class="field__row">
           <label class="field__sublabel" for="proposedBeginDate">From</label>
           <input
@@ -95,7 +98,7 @@
             class="field__input"
             [value]="proposedBeginDate()"
             (input)="onInput('proposedBeginDate', $event)"
-            [attr.aria-invalid]="dateRangeError() || null"
+            [attr.aria-invalid]="beginDateError() || dateRangeError() || null"
           />
           <label class="field__sublabel" for="proposedEndDate">To</label>
           <input
@@ -104,13 +107,15 @@
             class="field__input"
             [value]="proposedEndDate()"
             (input)="onInput('proposedEndDate', $event)"
-            [attr.aria-invalid]="dateRangeError() || null"
+            [attr.aria-invalid]="endDateError() || dateRangeError() || null"
           />
         </div>
-        @if (dateRangeError()) {
+        @if (beginDateError() || endDateError()) {
+          <p class="field__error" role="alert">Please give both a start and an end date.</p>
+        } @else if (dateRangeError()) {
           <p class="field__error" role="alert">The end date can't be before the start date.</p>
         } @else {
-          <p class="field__hint">Optional — when would you like to access the collection?</p>
+          <p class="field__hint">When would you like to access the collection?</p>
         }
       </div>
 

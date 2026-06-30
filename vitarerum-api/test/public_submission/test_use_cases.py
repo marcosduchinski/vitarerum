@@ -84,6 +84,8 @@ def _submit_input(**overrides: object) -> SubmitPublicProposalInput:
         "captcha_token": "tok",
         "website": "",
         "remote_ip": "203.0.113.1",
+        "proposed_begin_date": date(2026, 7, 1),
+        "proposed_end_date": date(2026, 7, 15),
     }
     data.update(overrides)
     return SubmitPublicProposalInput(**data)  # type: ignore[arg-type]

@@ -66,8 +66,8 @@ class SubmitPublicProposalInput:
     captcha_token: str
     website: str
     remote_ip: str
-    proposed_begin_date: date | None = None
-    proposed_end_date: date | None = None
+    proposed_begin_date: date
+    proposed_end_date: date
 
 
 @dataclass(slots=True)

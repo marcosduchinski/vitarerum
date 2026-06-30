@@ -145,6 +145,8 @@ def _payload(**overrides: object) -> dict:
         "subject": "Acesso à Coleção de Zoologia",
         "body": "Gostaria de estudar um espécime para a minha tese.",
         "useType": "IN_SITU_VISIT",
+        "proposedBeginDate": "2026-07-01",
+        "proposedEndDate": "2026-07-15",
         "consent": True,
         "captchaToken": "0.AbC-token",
         "website": "",
@@ -169,21 +171,22 @@ async def test_submit_persists_proposed_dates() -> None:
     async with _client() as (client, repo, _):
         resp = await client.post(
             _SUBMIT_URL,
-            json=_payload(proposedBeginDate="2026-07-01", proposedEndDate="2026-07-15"),
+            json=_payload(proposedBeginDate="2026-08-01", proposedEndDate="2026-08-15"),
         )
     assert resp.status_code == 202
     submission = next(iter(repo.by_token.values()))
-    assert submission.proposed_begin_date == date(2026, 7, 1)
-    assert submission.proposed_end_date == date(2026, 7, 15)
+    assert submission.proposed_begin_date == date(2026, 8, 1)
+    assert submission.proposed_end_date == date(2026, 8, 15)
 
 
-async def test_submit_without_proposed_dates_leaves_them_unset() -> None:
+async def test_submit_missing_proposed_dates_is_rejected() -> None:
     async with _client() as (client, repo, _):
-        resp = await client.post(_SUBMIT_URL, json=_payload())
-    assert resp.status_code == 202
-    submission = next(iter(repo.by_token.values()))
-    assert submission.proposed_begin_date is None
-    assert submission.proposed_end_date is None
+        payload = _payload()
+        del payload["proposedBeginDate"]
+        del payload["proposedEndDate"]
+        resp = await client.post(_SUBMIT_URL, json=payload)
+    assert resp.status_code == 422
+    assert repo.by_token == {}
 
 
 async def test_submit_honeypot_returns_202_no_work() -> None:

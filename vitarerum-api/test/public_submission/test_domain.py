@@ -1,4 +1,4 @@
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 
@@ -21,6 +21,8 @@ def _pending(created_at: datetime) -> PendingPublicSubmission:
         use_type=UseType.IN_SITU_VISIT,
         consent=True,
         created_at=created_at,
+        proposed_begin_date=date(2026, 7, 1),
+        proposed_end_date=date(2026, 7, 15),
     )
 
 

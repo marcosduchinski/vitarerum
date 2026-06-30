@@ -27,10 +27,10 @@ class PublicProposalSubmission(BaseModel):
     # The citizen's intended use of the collection. One of the shared UseType
     # values; an unknown/missing value is a 422 (enforced by the enum).
     useType: UseType
-    # Optional dates the citizen proposes for the use (ISO 8601, YYYY-MM-DD).
-    # Seed the materialised proposal's begin/end; staff may refine them later.
-    proposedBeginDate: date | None = None
-    proposedEndDate: date | None = None
+    # Dates the citizen proposes for the use (ISO 8601, YYYY-MM-DD). Required;
+    # seed the materialised proposal's begin/end (staff may refine them later).
+    proposedBeginDate: date
+    proposedEndDate: date
     consent: Literal[True]  # RGPD consent; must be exactly true
     captchaToken: str = Field(min_length=1, max_length=2048)
     # Honeypot. The YAML caps this at length 0, but enforcing that at the schema

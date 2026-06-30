@@ -44,7 +44,7 @@ export class PublicSubmitProposalPageComponent {
   protected readonly body = signal('');
   // Empty until the citizen picks one of USE_TYPE_OPTIONS; '' is invalid.
   protected readonly useType = signal<UseType | ''>('');
-  // Optional proposed period (ISO YYYY-MM-DD); empty means "not specified".
+  // Required proposed period (ISO YYYY-MM-DD); empty is invalid.
   protected readonly proposedBeginDate = signal('');
   protected readonly proposedEndDate = signal('');
   protected readonly consent = signal(false);
@@ -64,8 +64,10 @@ export class PublicSubmitProposalPageComponent {
   protected readonly subjectError = computed(() => this.submitted() && !this.subject().trim());
   protected readonly bodyError = computed(() => this.submitted() && !this.body().trim());
   protected readonly useTypeError = computed(() => this.submitted() && !this.useType());
-  // Both dates are optional, but if both are given the end must not precede the
-  // begin (ISO YYYY-MM-DD strings compare lexicographically).
+  protected readonly beginDateError = computed(() => this.submitted() && !this.proposedBeginDate());
+  protected readonly endDateError = computed(() => this.submitted() && !this.proposedEndDate());
+  // When both dates are present the end must not precede the begin (ISO
+  // YYYY-MM-DD strings compare lexicographically).
   protected readonly dateRangeError = computed(
     () => this.submitted() && this.hasInvalidDateRange(),
   );
@@ -85,6 +87,8 @@ export class PublicSubmitProposalPageComponent {
       !!this.subject().trim() &&
       !!this.body().trim() &&
       !!this.useType() &&
+      !!this.proposedBeginDate() &&
+      !!this.proposedEndDate() &&
       !this.hasInvalidDateRange() &&
       this.consent() &&
       (!this.captchaRequired() || !!this.captchaToken()),
@@ -161,9 +165,9 @@ export class PublicSubmitProposalPageComponent {
           body: this.body().trim(),
           // isValid() guarantees a non-empty selection before we get here.
           useType: this.useType() as UseType,
-          // Send null (not '') for an unspecified date so the server omits it.
-          proposedBeginDate: this.proposedBeginDate() || null,
-          proposedEndDate: this.proposedEndDate() || null,
+          // isValid() guarantees both dates are present and in order here.
+          proposedBeginDate: this.proposedBeginDate(),
+          proposedEndDate: this.proposedEndDate(),
           consent: this.consent(),
           captchaToken: this.captchaToken(),
           website: this.website(),

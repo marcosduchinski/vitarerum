@@ -15,10 +15,10 @@ export interface PublicProposalSubmission {
   readonly body: string;
   /** How the citizen intends to use the collection; seeds the proposal's intended use. */
   readonly useType: UseType;
-  /** Optional date (ISO 8601, YYYY-MM-DD) the citizen proposes the use to begin. */
-  readonly proposedBeginDate?: string | null;
-  /** Optional date (ISO 8601, YYYY-MM-DD) the citizen proposes the use to end. */
-  readonly proposedEndDate?: string | null;
+  /** Date (ISO 8601, YYYY-MM-DD) the citizen proposes the use to begin. */
+  readonly proposedBeginDate: string;
+  /** Date (ISO 8601, YYYY-MM-DD) the citizen proposes the use to end. */
+  readonly proposedEndDate: string;
   /** RGPD consent — the citizen agreed to their data being processed. */
   readonly consent: boolean;
   /** Cloudflare Turnstile token; the server must verify it via siteverify. */

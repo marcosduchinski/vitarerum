@@ -446,8 +446,8 @@ package "Public Submission" <<Bounded Context>> {
         - subject: String
         - body: String
         - useType: UseType
-        - proposedBeginDate: LocalDate?
-        - proposedEndDate: LocalDate?
+        - proposedBeginDate: LocalDate
+        - proposedEndDate: LocalDate
         - consent: Boolean
         - status: PendingSubmissionStatus
         - createdAt: DateTime

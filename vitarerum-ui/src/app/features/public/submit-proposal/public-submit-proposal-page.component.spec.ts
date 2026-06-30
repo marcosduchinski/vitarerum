@@ -60,6 +60,8 @@ describe('PublicSubmitProposalPageComponent', () => {
     setInputValue(compiled, '#subject', 'Access to the zoology collection');
     setInputValue(compiled, '#body', 'I would like to study a specimen for my thesis.');
     setSelectValue(compiled, '#useType', 'IN_SITU_VISIT');
+    setInputValue(compiled, '#proposedBeginDate', '2026-07-01');
+    setInputValue(compiled, '#proposedEndDate', '2026-07-15');
     setChecked(compiled, '.consent input[type="checkbox"]', true);
 
     submitForm(compiled);
@@ -72,6 +74,8 @@ describe('PublicSubmitProposalPageComponent', () => {
       citizenEmail: 'pedro@example.test',
       subject: 'Access to the zoology collection',
       useType: 'IN_SITU_VISIT',
+      proposedBeginDate: '2026-07-01',
+      proposedEndDate: '2026-07-15',
       consent: true,
       website: '', // honeypot stayed empty
     });
@@ -99,7 +103,7 @@ describe('PublicSubmitProposalPageComponent', () => {
     expect(compiled.textContent).toContain('Consent is required to submit.');
   });
 
-  it('submits the optional proposed dates when provided', async () => {
+  it('submits the proposed dates', async () => {
     await setup('');
     const fixture = TestBed.createComponent(PublicSubmitProposalPageComponent);
     fixture.detectChanges();
@@ -125,7 +129,7 @@ describe('PublicSubmitProposalPageComponent', () => {
     });
   });
 
-  it('sends null proposed dates when none are entered', async () => {
+  it('blocks submission until both proposed dates are provided', async () => {
     await setup('');
     const fixture = TestBed.createComponent(PublicSubmitProposalPageComponent);
     fixture.detectChanges();
@@ -137,14 +141,13 @@ describe('PublicSubmitProposalPageComponent', () => {
     setInputValue(compiled, '#body', 'Details about my request.');
     setSelectValue(compiled, '#useType', 'OTHER');
     setChecked(compiled, '.consent input[type="checkbox"]', true);
+    // proposed dates intentionally left empty
 
     submitForm(compiled);
     fixture.detectChanges();
-    await fixture.whenStable();
 
-    expect(api.submitCalls).toHaveLength(1);
-    expect(api.submitCalls[0].proposedBeginDate).toBeNull();
-    expect(api.submitCalls[0].proposedEndDate).toBeNull();
+    expect(api.submitCalls).toHaveLength(0);
+    expect(compiled.textContent).toContain('Please give both a start and an end date.');
   });
 
   it('blocks submission when the end date precedes the start date', async () => {
