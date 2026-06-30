@@ -37,10 +37,17 @@ class AuthPermission(BaseModel):
     group: GroupName
 
 
+class InstitutionSummary(BaseModel):
+    id: str
+    name: str
+
+
 class LoginResponse(BaseModel):
     accessToken: str
     user: AuthUser
     permissions: list[AuthPermission]
+    # The institution the principal acts within (resolved via their group).
+    institution: InstitutionSummary | None = None
 
 
 class UserDetailResponse(BaseModel):

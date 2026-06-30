@@ -22,6 +22,7 @@ from app.identity.domain.models import (
 from app.identity.infrastructure import security
 from app.identity.infrastructure.models import (
     GroupRecord,
+    InstitutionRecord,
     PermissionRecord,
     UserRecord,
 )
@@ -274,25 +275,29 @@ class _LoginResult:
 
 
 class LoginSession:
-    """Returns a fixed user via scalar_one_or_none and permissions via scalars()."""
+    """Returns a fixed user via scalar_one_or_none and permissions via scalars();
+    institution lookups (session.get) return the provided record, if any."""
 
-    def __init__(self, user_record, perm_records):  # noqa: ANN001
+    def __init__(self, user_record, perm_records, institution_record=None):  # noqa: ANN001
         self._result = _LoginResult(user_record, perm_records)
+        self._institution = institution_record
 
     async def execute(self, *args, **kwargs):
         return self._result
 
     async def get(self, *args, **kwargs):
-        return None
+        return self._institution
 
     async def commit(self):
         return None
 
 
 @asynccontextmanager
-async def login_client(user_record, perm_records) -> AsyncIterator[AsyncClient]:  # noqa: ANN001
+async def login_client(  # noqa: ANN001
+    user_record, perm_records, institution_record=None
+) -> AsyncIterator[AsyncClient]:
     app.dependency_overrides[get_async_session] = lambda: LoginSession(
-        user_record, perm_records
+        user_record, perm_records, institution_record
     )
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -310,13 +315,18 @@ def _login_records(password: str):
     )
     perm_rec = PermissionRecord(id="perm-1", user_id="u1", group_id="g1")
     perm_rec.user = user_rec
-    perm_rec.group = GroupRecord(id="g1", name=GroupName.COLLECTIONS_MANAGEMENT)
+    perm_rec.group = GroupRecord(
+        id="g1", name=GroupName.COLLECTIONS_MANAGEMENT, institution_id="inst-1"
+    )
     return user_rec, [perm_rec]
 
 
 async def test_login_success_returns_token_user_and_flat_group() -> None:
     user_rec, perm_recs = _login_records("secret")
-    async with login_client(user_rec, perm_recs) as client:
+    institution_rec = InstitutionRecord(
+        id="inst-1", name="MUHNAC", email="", address="", phone=""
+    )
+    async with login_client(user_rec, perm_recs, institution_rec) as client:
         resp = await client.post(
             "/api/v1/auth/login",
             json={"email": "alice@x.org", "password": "secret"},
@@ -335,6 +345,8 @@ async def test_login_success_returns_token_user_and_flat_group() -> None:
     assert body["permissions"] == [
         {"permissionId": "perm-1", "group": "COLLECTIONS_MANAGEMENT"}
     ]
+    # institution is resolved via the principal's group.
+    assert body["institution"] == {"id": "inst-1", "name": "MUHNAC"}
 
 
 async def test_login_wrong_password_is_401_with_message() -> None:
