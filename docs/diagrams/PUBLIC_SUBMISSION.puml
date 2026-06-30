@@ -1,0 +1,176 @@
+@startuml PUBLIC_SUBMISSION
+title Public Submission - Double Opt-In Proposal Intake
+
+skinparam shadowing false
+skinparam activity {
+  BackgroundColor #F8FAFC
+  BorderColor #334155
+  DiamondBackgroundColor #FEF3C7
+  DiamondBorderColor #92400E
+  StartColor #166534
+  EndColor #7F1D1D
+}
+skinparam note {
+  BackgroundColor #FFFBEB
+  BorderColor #B45309
+}
+
+|Citizen / Public SPA|
+start
+:Fill public proposal form; <<#DFF7E2>>
+:POST /api/v1/public/proposals; <<#DFF7E2>>
+
+|Presentation (routes.py / schemas.py)|
+:Validate PublicProposalSubmission schema; <<#DFF7E2>>
+if (Schema valid?) then (no)
+  :Return 422 validation error;
+  stop
+else (yes)
+  :Map request to SubmitPublicProposalInput; <<#DFF7E2>>
+endif
+
+|Application (SubmitPublicProposal)|
+if (Honeypot website field filled?) then (yes)
+  :Accept and drop silently;
+  :Return token = null;
+  |Presentation (routes.py)|
+  :Commit database transaction;
+  :Skip e-mail;
+  :Return 202\nPENDING_CONFIRMATION + e-mail;
+  stop
+else (no)
+  :Apply rate limits\nIP, e-mail, global; <<#DFF7E2>>
+  if (Any submit limit exceeded?) then (yes)
+    :Raise RateLimitExceeded;
+    |Presentation (routes.py)|
+    :Return 429 with Retry-After;
+    stop
+  else (no)
+    |Infrastructure adapters|
+    :Verify captcha\nCloudflare Turnstile or local AlwaysPass; <<#DFF7E2>>
+
+    |Application (SubmitPublicProposal)|
+    if (Captcha provider unreachable?) then (yes)
+      :Raise CaptchaUnavailable;
+      |Presentation (routes.py)|
+      :Return 503 captcha provider unreachable;
+      stop
+    else (no)
+      if (Captcha valid?) then (no)
+        :Raise CaptchaFailed;
+        |Presentation (routes.py)|
+        :Return 403 captcha verification failed;
+        stop
+      else (yes)
+        :Generate UUID and opaque confirmation token; <<#DFF7E2>>
+      endif
+    endif
+
+    |Domain (PendingPublicSubmission)|
+    :Create aggregate in\nPENDING_CONFIRMATION; <<#DFF7E2>>
+
+    |Infrastructure (SqlAlchemyPendingSubmissionRepository)|
+    :Insert public_proposal_submissions row; <<#DFF7E2>>
+    :Flush so token / constraint errors surface\nbefore side effects; <<#DFF7E2>>
+
+    |Application (SubmitPublicProposal)|
+    :Return e-mail, citizen name, token; <<#DFF7E2>>
+  endif
+endif
+
+|Presentation (routes.py)|
+:Commit database transaction; <<#DFF7E2>>
+|Infrastructure (ConfirmationEmailSender)|
+:Send or log confirmation link\n/public submit confirm route + token; <<#DFF7E2>>
+
+|Presentation (routes.py)|
+:Return 202\nPENDING_CONFIRMATION + e-mail; <<#DFF7E2>>
+
+|Citizen / Public SPA|
+:Open confirmation link from e-mail; <<#DFF7E2>>
+:POST /api/v1/public/proposals/confirm\nwith token; <<#DFF7E2>>
+
+|Presentation (routes.py / schemas.py)|
+:Validate PublicConfirmationRequest; <<#DFF7E2>>
+if (Schema valid?) then (no)
+  :Return 422 validation error;
+  stop
+else (yes)
+  :Pass token and client IP to ConfirmPublicProposal; <<#DFF7E2>>
+endif
+
+|Application (ConfirmPublicProposal)|
+:Apply confirm-IP rate limit; <<#DFF7E2>>
+if (Confirm limit exceeded?) then (yes)
+  :Raise RateLimitExceeded;
+  |Presentation (routes.py)|
+  :Return 429 with Retry-After;
+  stop
+else (no)
+  |Infrastructure (SqlAlchemyPendingSubmissionRepository)|
+  :Load pending row by token\nwith SELECT ... FOR UPDATE; <<#DFF7E2>>
+
+  |Application (ConfirmPublicProposal)|
+  if (Submission found?) then (no)
+    :Return INVALID;
+    |Presentation (routes.py)|
+    :Commit database transaction;
+    :Return 200 PublicConfirmationResult\nstatus = INVALID;
+    stop
+  else (yes)
+    if (Already CONFIRMED?) then (yes)
+      :Return ALREADY_CONFIRMED\nwith stored proposal reference;
+      |Presentation (routes.py)|
+      :Commit database transaction;
+      :Return 200 PublicConfirmationResult\nstatus = ALREADY_CONFIRMED, referenceNumber;
+      stop
+    else (no)
+      |Domain (PendingPublicSubmission)|
+      :Check token expiry against configured TTL; <<#DFF7E2>>
+
+      |Application (ConfirmPublicProposal)|
+      if (Expired?) then (yes)
+        :Return EXPIRED;
+        |Presentation (routes.py)|
+        :Commit database transaction;
+        :Return 200 PublicConfirmationResult\nstatus = EXPIRED;
+        stop
+      else (no)
+        |Infrastructure (run_with_unique_retry)|
+        :Run materialisation with retry on\nreference-number unique conflict; <<#DFF7E2>>
+
+        |Identity published language|
+        :ProvisionExternalRequester\nfor citizen e-mail + name; <<#DFF7E2>>
+
+        |Use of Collections|
+        :SubmitProposal with citizen message; <<#DFF7E2>>
+        :Allocate proposal reference; <<#DFF7E2>>
+
+        |Domain (PendingPublicSubmission)|
+        :confirm(reference, now); <<#DFF7E2>>
+        :Set status CONFIRMED,\nconfirmed_at, proposal_reference; <<#DFF7E2>>
+
+        |Infrastructure (SqlAlchemyPendingSubmissionRepository)|
+        :Save confirmed pending submission; <<#DFF7E2>>
+
+        |Application (ConfirmPublicProposal)|
+        :Return CONFIRMED\nwith proposal reference; <<#DFF7E2>>
+
+        |Presentation (routes.py)|
+        :Commit database transaction; <<#DFF7E2>>
+        :Return 200 PublicConfirmationResult\nstatus = CONFIRMED, referenceNumber; <<#DFF7E2>>
+        stop
+      endif
+    endif
+  endif
+endif
+
+legend bottom
+  #DFF7E2 = happy path: valid form, no limits, valid captcha, fresh token, proposal materialized.
+
+  Public Submission owns only the PendingPublicSubmission aggregate.
+  The materialized proposal belongs to Use of Collections and is linked back
+  by the human-readable proposal_reference string, not a cross-context FK.
+endlegend
+
+@enduml

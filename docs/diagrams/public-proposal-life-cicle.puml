@@ -1,0 +1,70 @@
+@startuml public-proposal-life-cicle
+title Public Proposal Submission Status Life Cycle
+
+skinparam shadowing false
+skinparam state {
+  BackgroundColor #F8FAFC
+  BorderColor #334155
+  FontColor #111827
+  StartColor #166534
+  EndColor #7F1D1D
+}
+skinparam note {
+  BackgroundColor #FFFBEB
+  BorderColor #B45309
+}
+
+[*] --> FormSubmitted : POST /public/proposals
+
+state "FORM_SUBMITTED\n(not persisted)" as FormSubmitted
+state "PENDING_CONFIRMATION\n(persisted)" as Pending
+state "CONFIRMED\n(persisted)" as Confirmed
+state "INVALID\n(response only)" as Invalid <<transient>>
+state "EXPIRED\n(response only)" as Expired <<derived>>
+state "ALREADY_CONFIRMED\n(response only)" as AlreadyConfirmed <<derived>>
+
+FormSubmitted --> [*] : honeypot filled\naccept and drop, 202
+FormSubmitted --> [*] : schema / rate-limit / captcha failure\n422 / 429 / 403 / 503
+FormSubmitted --> Pending : valid form + rate limits ok\ncaptcha valid, token generated
+
+Pending : Aggregate root: PendingPublicSubmission
+Pending : status = PENDING_CONFIRMATION
+Pending : token is the single-use confirmation handle
+
+Pending --> Invalid : confirm with unknown token
+Invalid --> [*] : return 200 INVALID
+
+Pending --> Expired : confirm after token TTL
+Expired --> [*] : return 200 EXPIRED\nstored row remains PENDING_CONFIRMATION
+
+Pending --> Confirmed : confirm fresh token\nmaterialise proposal
+Confirmed : status = CONFIRMED
+Confirmed : confirmed_at is set
+Confirmed : proposal_reference is set
+
+Confirmed --> AlreadyConfirmed : confirm same token again
+AlreadyConfirmed --> [*] : return 200 ALREADY_CONFIRMED\nwith stored proposal_reference
+
+Confirmed --> [*] : return 200 CONFIRMED\nwith proposal_reference
+
+note right of Pending
+  Expiry is not a persisted status.
+  The application derives EXPIRED by comparing
+  now - created_at with PUBLIC_CONFIRM_TOKEN_TTL_HOURS.
+end note
+
+note right of Confirmed
+  CONFIRMED is terminal for this context.
+  The materialized proposal belongs to Use of Collections;
+  Public Submission keeps only proposal_reference.
+end note
+
+legend bottom
+  Persisted statuses come from PendingSubmissionStatus:
+  PENDING_CONFIRMATION and CONFIRMED.
+
+  INVALID, EXPIRED, and ALREADY_CONFIRMED are API confirmation outcomes,
+  not stored enum values on PendingPublicSubmission.
+endlegend
+
+@enduml
