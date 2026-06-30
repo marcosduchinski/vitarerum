@@ -29,6 +29,7 @@ export class IdentityServiceImpl implements IdentityService {
       permissions: response.permissions,
       availableGroups: response.permissions.map((permission) => permission.group),
       group: response.permissions[0]?.group ?? null,
+      institution: response.institution,
     });
   }
 

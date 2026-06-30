@@ -1,5 +1,5 @@
 import { IdentityUser } from './identity-user.model';
-import { SessionPermission } from './identity-session.model';
+import { SessionInstitution, SessionPermission } from './identity-session.model';
 
 export interface LoginRequest {
   email: string;
@@ -10,4 +10,5 @@ export interface LoginResponse {
   accessToken: string;
   user: IdentityUser;
   permissions: readonly SessionPermission[];
+  institution?: SessionInstitution;
 }

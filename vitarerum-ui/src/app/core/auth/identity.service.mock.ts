@@ -2,7 +2,11 @@ import { computed, Injectable, signal } from '@angular/core';
 
 import { IdentityService } from './identity.service';
 import { GroupName } from './models/group-name.enum';
-import { IdentitySession, SessionPermission } from './models/identity-session.model';
+import {
+  IdentitySession,
+  SessionInstitution,
+  SessionPermission,
+} from './models/identity-session.model';
 import { LoginRequest } from './models/login.model';
 import { md5 } from './mock-password.util';
 import { clearSession, readSession, writeSession } from './session-storage.util';
@@ -69,6 +73,11 @@ const MOCK_ACCOUNTS: Record<string, MockAccount> = {
 
 const UNKNOWN_ACCOUNT: MockAccount = { id: 'mock-user', name: '', groups: ['EXTERNAL'] };
 
+const MOCK_INSTITUTION: SessionInstitution = {
+  id: 'inst-muhnac',
+  name: 'MUHNAC - Museu Nacional de História Natural e da Ciência de Lisboa',
+};
+
 @Injectable()
 export class IdentityServiceMock implements IdentityService {
   private readonly sessionState = signal<IdentitySession | null>(readSession());
@@ -98,6 +107,7 @@ export class IdentityServiceMock implements IdentityService {
       group: availableGroups[0],
       availableGroups,
       permissions: mockPermissions(account.id, availableGroups),
+      institution: MOCK_INSTITUTION,
     });
   }
 
