@@ -10,6 +10,16 @@ from app.shared.kernel import PermissionId as PermissionId
 
 UserId = NewType("UserId", str)
 GroupId = NewType("GroupId", str)
+InstitutionId = NewType("InstitutionId", str)
+
+
+@dataclass(slots=True)
+class Institution:
+    id: InstitutionId
+    name: str = ""
+    email: str = ""
+    address: str = ""
+    phone: str = ""
 
 
 @dataclass(slots=True)
@@ -24,6 +34,7 @@ class User:
 class Group:
     id: GroupId
     name: GroupName
+    institution_id: InstitutionId
 
 
 @dataclass(slots=True)

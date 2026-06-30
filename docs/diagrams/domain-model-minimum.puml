@@ -56,6 +56,14 @@ package "Shared Kernel" <<Shared Kernel>> {
 
 package "Identity & Access" <<Bounded Context>> {
 
+        class Institution <<Aggregate Root>> #87bdd8 {
+        - id: InstitutionId
+        - name: String
+        - email: String
+        - address: String
+        - phone: String
+        }
+
         class User <<Aggregate Root>> #87bdd8 {
         - id: UserId
         - name: String
@@ -66,6 +74,7 @@ package "Identity & Access" <<Bounded Context>> {
         class Group <<Aggregate Root>> #87bdd8 {
         - id: GroupId
         - name: GroupName
+        - institutionId: InstitutionId
         }
 
         class Permission <<Aggregate Root>> #87bdd8 {
@@ -86,6 +95,7 @@ package "Identity & Access" <<Bounded Context>> {
 
         Permission ..> User : userId
         Permission ..> Group : groupId
+        Group ..> Institution : institutionId
 }
 
 

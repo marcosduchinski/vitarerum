@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from app.identity.application.ports import (
     GroupRepository,
+    InstitutionRepository,
     PasswordHasher,
     PermissionRepository,
     UserFilters,
@@ -14,6 +15,8 @@ from app.identity.application.read_models import Actor
 from app.identity.domain.enums import GroupName
 from app.identity.domain.models import (
     GroupId,
+    Institution,
+    InstitutionId,
     Permission,
     PermissionId,
     User,
@@ -23,6 +26,10 @@ from app.identity.domain.models import (
 
 class InvalidCredentials(Exception):
     """Raised when login fails: unknown email, bad password, or no permissions."""
+
+
+class InstitutionInUse(Exception):
+    """Raised when deleting an institution that still owns groups."""
 
 
 def _new_id() -> str:
@@ -213,3 +220,86 @@ class RemoveUserFromGroup:
                 f"User {user_id} is not a member of group {group_id}"
             )
         await self._permission_repo.delete(existing.id)
+
+
+class CreateInstitution:
+    def __init__(self, repo: InstitutionRepository) -> None:
+        self._repo = repo
+
+    async def execute(
+        self,
+        name: str,
+        email: str = "",
+        address: str = "",
+        phone: str = "",
+    ) -> Institution:
+        institution = Institution(
+            id=InstitutionId(_new_id()),
+            name=name,
+            email=email,
+            address=address,
+            phone=phone,
+        )
+        await self._repo.add(institution)
+        return institution
+
+
+class ListInstitutions:
+    def __init__(self, repo: InstitutionRepository) -> None:
+        self._repo = repo
+
+    async def execute(
+        self, page: int, size: int
+    ) -> tuple[list[Institution], int]:
+        return await self._repo.list(page, size)
+
+
+class GetInstitution:
+    def __init__(self, repo: InstitutionRepository) -> None:
+        self._repo = repo
+
+    async def execute(self, institution_id: InstitutionId) -> Institution | None:
+        return await self._repo.get_by_id(institution_id)
+
+
+class UpdateInstitution:
+    def __init__(self, repo: InstitutionRepository) -> None:
+        self._repo = repo
+
+    async def execute(
+        self,
+        institution_id: InstitutionId,
+        name: str,
+        email: str = "",
+        address: str = "",
+        phone: str = "",
+    ) -> Institution:
+        institution = await self._repo.get_by_id(institution_id)
+        if institution is None:
+            raise LookupError(f"No institution found with id {institution_id}")
+        institution.name = name
+        institution.email = email
+        institution.address = address
+        institution.phone = phone
+        await self._repo.update(institution)
+        return institution
+
+
+class DeleteInstitution:
+    def __init__(
+        self,
+        repo: InstitutionRepository,
+        group_repo: GroupRepository,
+    ) -> None:
+        self._repo = repo
+        self._group_repo = group_repo
+
+    async def execute(self, institution_id: InstitutionId) -> None:
+        institution = await self._repo.get_by_id(institution_id)
+        if institution is None:
+            raise LookupError(f"No institution found with id {institution_id}")
+        if await self._group_repo.count_by_institution(institution_id) > 0:
+            raise InstitutionInUse(
+                f"Institution {institution_id} still owns groups"
+            )
+        await self._repo.delete(institution_id)

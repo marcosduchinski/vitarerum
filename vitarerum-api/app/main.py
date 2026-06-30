@@ -12,7 +12,11 @@ from app.cidoc_crm.in_situ_visit_mapping.presentation.routes import (
 )
 from app.config import settings
 from app.identity.presentation.auth_routes import auth_router
-from app.identity.presentation.routes import groups_router, users_router
+from app.identity.presentation.routes import (
+    groups_router,
+    institutions_router,
+    users_router,
+)
 from app.public_submission.presentation.routes import router as public_proposals_router
 from app.reports.in_situ_visit.presentation.routes import reports_router
 from app.shared.exceptions import AccessDenied, InsufficientGroup
@@ -97,6 +101,7 @@ app.include_router(proposals_router, prefix=prefix)
 app.include_router(projects_router, prefix=prefix)
 app.include_router(users_router, prefix=prefix)
 app.include_router(groups_router, prefix=prefix)
+app.include_router(institutions_router, prefix=prefix)
 app.include_router(public_proposals_router, prefix=prefix)
 app.include_router(in_situ_visit_router, prefix=prefix)
 app.include_router(project_export_router, prefix=prefix)

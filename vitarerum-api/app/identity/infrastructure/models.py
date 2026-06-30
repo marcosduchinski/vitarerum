@@ -11,6 +11,16 @@ from app.database import Base
 from app.identity.domain.enums import GroupName
 
 
+class InstitutionRecord(Base):
+    __tablename__ = "identity_institutions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), default="", unique=True)
+    email: Mapped[str] = mapped_column(String(255), default="")
+    address: Mapped[str] = mapped_column(String(512), default="")
+    phone: Mapped[str] = mapped_column(String(64), default="")
+
+
 class UserRecord(Base):
     __tablename__ = "identity_users"
 
@@ -29,6 +39,11 @@ class GroupRecord(Base):
     name: Mapped[GroupName] = mapped_column(
         SAEnum(GroupName, name="identity_group_name")
     )
+    institution_id: Mapped[str] = mapped_column(
+        ForeignKey("identity_institutions.id"), index=True
+    )
+
+    institution: Mapped[InstitutionRecord] = relationship()
 
 
 class PermissionRecord(Base):

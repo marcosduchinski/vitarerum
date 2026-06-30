@@ -11,27 +11,38 @@ from app.database import get_async_session
 from app.identity.application.ports import UserFilters
 from app.identity.application.use_cases import (
     AssignUserToGroup,
+    CreateInstitution,
     CreateUser,
+    DeleteInstitution,
+    GetInstitution,
     GetUser,
+    InstitutionInUse,
+    ListInstitutions,
     ListUsers,
     RemoveUserFromGroup,
+    UpdateInstitution,
 )
 from app.identity.domain.enums import GroupName
-from app.identity.domain.models import GroupId, UserId
+from app.identity.domain.models import GroupId, InstitutionId, UserId
 from app.identity.infrastructure.repositories import (
     SqlAlchemyGroupRepository,
+    SqlAlchemyInstitutionRepository,
     SqlAlchemyPermissionRepository,
     SqlAlchemyUserRepository,
 )
 from app.identity.infrastructure.security import BcryptPasswordHasher
 from app.identity.presentation.schemas import (
+    CreateInstitutionRequest,
     CreateUserRequest,
     GroupMemberResponse,
     GroupResponse,
     GroupsListResponse,
+    InstitutionResponse,
     PaginatedGroupMembersResponse,
+    PaginatedInstitutionsResponse,
     PaginatedUsersResponse,
     PermissionDetail,
+    UpdateInstitutionRequest,
     UserDetailResponse,
     UserListItemResponse,
     UserPermissionsResponse,
@@ -42,6 +53,7 @@ from app.shared.dependencies import CallerPermission
 
 users_router = APIRouter(prefix="/users", tags=["identity"])
 groups_router = APIRouter(prefix="/groups", tags=["identity"])
+institutions_router = APIRouter(prefix="/institutions", tags=["identity"])
 
 DBSession = Annotated[AsyncSession, Depends(get_async_session)]
 
@@ -260,7 +272,10 @@ async def list_groups(
     group_repo = SqlAlchemyGroupRepository(session)
     groups = await group_repo.list()
     return GroupsListResponse(
-        groups=[GroupResponse(id=g.id, name=g.name) for g in groups]
+        groups=[
+            GroupResponse(id=g.id, name=g.name, institutionId=g.institution_id)
+            for g in groups
+        ]
     )
 
 
@@ -288,7 +303,9 @@ async def list_group_users(
 
     perms, total = await perm_repo.get_by_group_id(GroupId(group_id), page, size)
     return PaginatedGroupMembersResponse(
-        group=GroupResponse(id=group.id, name=group.name),
+        group=GroupResponse(
+            id=group.id, name=group.name, institutionId=group.institution_id
+        ),
         content=[
             GroupMemberResponse(
                 permissionId=p.id,
@@ -305,3 +322,153 @@ async def list_group_users(
         totalElements=total,
         totalPages=math.ceil(total / size) if size > 0 else 0,
     )
+
+
+def _institution_response(institution: object) -> InstitutionResponse:
+    from app.identity.domain.models import Institution
+    inst: Institution = institution  # type: ignore[assignment]
+    return InstitutionResponse(
+        id=inst.id,
+        name=inst.name,
+        email=inst.email,
+        address=inst.address,
+        phone=inst.phone,
+    )
+
+
+@institutions_router.post(
+    "",
+    status_code=status.HTTP_201_CREATED,
+    response_model=InstitutionResponse,
+)
+async def create_institution(
+    body: CreateInstitutionRequest,
+    caller: CallerPermission,
+    session: DBSession,
+) -> InstitutionResponse:
+    require_group(caller, GroupName.SYS_ADMIN)
+    repo = SqlAlchemyInstitutionRepository(session)
+    try:
+        institution = await CreateInstitution(repo).execute(
+            name=body.name,
+            email=body.email,
+            address=body.address,
+            phone=body.phone,
+        )
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error": "INSTITUTION_NAME_ALREADY_EXISTS",
+                "message": "An institution with this name already exists",
+            },
+        ) from exc
+    return _institution_response(institution)
+
+
+@institutions_router.get("", response_model=PaginatedInstitutionsResponse)
+async def list_institutions(
+    caller: CallerPermission,
+    session: DBSession,
+    page: Annotated[int, Query(ge=0)] = 0,
+    size: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> PaginatedInstitutionsResponse:
+    require_group(caller, GroupName.SYS_ADMIN)
+    repo = SqlAlchemyInstitutionRepository(session)
+    institutions, total = await ListInstitutions(repo).execute(page, size)
+    return PaginatedInstitutionsResponse(
+        content=[_institution_response(i) for i in institutions],
+        page=page,
+        size=size,
+        totalElements=total,
+        totalPages=math.ceil(total / size) if size > 0 else 0,
+    )
+
+
+@institutions_router.get("/{institution_id}", response_model=InstitutionResponse)
+async def get_institution(
+    institution_id: str,
+    caller: CallerPermission,
+    session: DBSession,
+) -> InstitutionResponse:
+    require_group(caller, GroupName.SYS_ADMIN)
+    repo = SqlAlchemyInstitutionRepository(session)
+    institution = await GetInstitution(repo).execute(
+        InstitutionId(institution_id)
+    )
+    if institution is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "error": "INSTITUTION_NOT_FOUND",
+                "message": f"No institution found with id {institution_id}",
+            },
+        )
+    return _institution_response(institution)
+
+
+@institutions_router.put("/{institution_id}", response_model=InstitutionResponse)
+async def update_institution(
+    institution_id: str,
+    body: UpdateInstitutionRequest,
+    caller: CallerPermission,
+    session: DBSession,
+) -> InstitutionResponse:
+    require_group(caller, GroupName.SYS_ADMIN)
+    repo = SqlAlchemyInstitutionRepository(session)
+    try:
+        institution = await UpdateInstitution(repo).execute(
+            InstitutionId(institution_id),
+            name=body.name,
+            email=body.email,
+            address=body.address,
+            phone=body.phone,
+        )
+        await session.commit()
+    except LookupError as exc:
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": "INSTITUTION_NOT_FOUND", "message": str(exc)},
+        ) from exc
+    except IntegrityError as exc:
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error": "INSTITUTION_NAME_ALREADY_EXISTS",
+                "message": "An institution with this name already exists",
+            },
+        ) from exc
+    return _institution_response(institution)
+
+
+@institutions_router.delete(
+    "/{institution_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_institution(
+    institution_id: str,
+    caller: CallerPermission,
+    session: DBSession,
+) -> None:
+    require_group(caller, GroupName.SYS_ADMIN)
+    repo = SqlAlchemyInstitutionRepository(session)
+    group_repo = SqlAlchemyGroupRepository(session)
+    try:
+        await DeleteInstitution(repo, group_repo).execute(
+            InstitutionId(institution_id)
+        )
+    except LookupError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": "INSTITUTION_NOT_FOUND", "message": str(exc)},
+        ) from exc
+    except InstitutionInUse as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"error": "INSTITUTION_IN_USE", "message": str(exc)},
+        ) from exc
+    await session.commit()

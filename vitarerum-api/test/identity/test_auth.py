@@ -13,6 +13,7 @@ from app.identity.domain.enums import GroupName
 from app.identity.domain.models import (
     Group,
     GroupId,
+    InstitutionId,
     Permission,
     PermissionId,
     User,
@@ -79,7 +80,9 @@ def _perm(user: User, group: GroupName) -> Permission:
         user_id=UserId("u1"),
         group_id=GroupId("g1"),
         user=user,
-        group=Group(id=GroupId("g1"), name=group),
+        group=Group(
+            id=GroupId("g1"), name=group, institution_id=InstitutionId("inst-1")
+        ),
     )
 
 

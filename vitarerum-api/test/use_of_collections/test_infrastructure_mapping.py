@@ -4,6 +4,7 @@ from app.identity.domain.enums import GroupName
 from app.identity.domain.models import (
     Group,
     GroupId,
+    InstitutionId,
     Permission,
     User,
     UserId,
@@ -407,7 +408,11 @@ def test_conversation_roundtrip_preserves_messages_and_attachments() -> None:
 
 def test_identity_roundtrip_preserves_group_and_permission() -> None:
     user = User(id=UserId("user-1"), name="Test User", email="test@example.org")
-    group = Group(id=GroupId("group-1"), name=GroupName.CURATORIAL)
+    group = Group(
+        id=GroupId("group-1"),
+        name=GroupName.CURATORIAL,
+        institution_id=InstitutionId("institution-1"),
+    )
     permission = Permission(
         id=PermissionId("permission-1"),
         user_id=user.id,
@@ -417,4 +422,5 @@ def test_identity_roundtrip_preserves_group_and_permission() -> None:
     assert user_to_domain(user_to_record(user)).id == user.id
     assert user_to_domain(user_to_record(user)).email == "test@example.org"
     assert group_to_domain(group_to_record(group)).name == GroupName.CURATORIAL
+    assert group_to_domain(group_to_record(group)).institution_id == "institution-1"
     assert permission_to_domain(permission_to_record(permission)).group_id == group.id

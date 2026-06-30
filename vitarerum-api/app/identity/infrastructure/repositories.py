@@ -10,6 +10,8 @@ from app.identity.domain.enums import GroupName
 from app.identity.domain.models import (
     Group,
     GroupId,
+    Institution,
+    InstitutionId,
     Permission,
     PermissionId,
     User,
@@ -17,6 +19,7 @@ from app.identity.domain.models import (
 )
 from app.identity.infrastructure.models import (
     GroupRecord,
+    InstitutionRecord,
     PermissionRecord,
     UserRecord,
 )
@@ -49,11 +52,39 @@ def user_to_domain(record: UserRecord) -> User:
 
 
 def group_to_record(group: Group) -> GroupRecord:
-    return GroupRecord(id=group.id, name=group.name)
+    return GroupRecord(
+        id=group.id,
+        name=group.name,
+        institution_id=group.institution_id,
+    )
 
 
 def group_to_domain(record: GroupRecord) -> Group:
-    return Group(id=GroupId(record.id), name=record.name)
+    return Group(
+        id=GroupId(record.id),
+        name=record.name,
+        institution_id=InstitutionId(record.institution_id),
+    )
+
+
+def institution_to_record(institution: Institution) -> InstitutionRecord:
+    return InstitutionRecord(
+        id=institution.id,
+        name=institution.name,
+        email=institution.email,
+        address=institution.address,
+        phone=institution.phone,
+    )
+
+
+def institution_to_domain(record: InstitutionRecord) -> Institution:
+    return Institution(
+        id=InstitutionId(record.id),
+        name=record.name,
+        email=record.email,
+        address=record.address,
+        phone=record.phone,
+    )
 
 
 def permission_to_record(permission: Permission) -> PermissionRecord:
@@ -169,6 +200,67 @@ class SqlAlchemyGroupRepository:
         stmt = select(GroupRecord).order_by(GroupRecord.name)
         result = await self._session.execute(stmt)
         return [group_to_domain(r) for r in result.scalars().all()]
+
+    async def count_by_institution(self, institution_id: InstitutionId) -> int:
+        stmt = select(func.count()).where(
+            GroupRecord.institution_id == institution_id
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar_one()
+
+
+class SqlAlchemyInstitutionRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def add(self, institution: Institution) -> None:
+        self._session.add(institution_to_record(institution))
+        await self._session.flush()
+
+    async def get_by_id(
+        self, institution_id: InstitutionId
+    ) -> Institution | None:
+        record = await self._session.get(InstitutionRecord, institution_id)
+        return institution_to_domain(record) if record else None
+
+    async def get_by_name(self, name: str) -> Institution | None:
+        stmt = select(InstitutionRecord).where(InstitutionRecord.name == name)
+        result = await self._session.execute(stmt)
+        record = result.scalar_one_or_none()
+        return institution_to_domain(record) if record else None
+
+    async def list(
+        self, page: int, size: int
+    ) -> tuple[list[Institution], int]:
+        base_stmt = select(InstitutionRecord)
+        count_stmt = select(func.count()).select_from(base_stmt.subquery())
+        total_result = await self._session.execute(count_stmt)
+        total = total_result.scalar_one()
+
+        data_stmt = (
+            base_stmt.order_by(InstitutionRecord.name)
+            .offset(page * size)
+            .limit(size)
+        )
+        data_result = await self._session.execute(data_stmt)
+        records = data_result.scalars().all()
+        return [institution_to_domain(r) for r in records], total
+
+    async def update(self, institution: Institution) -> None:
+        record = await self._session.get(InstitutionRecord, institution.id)
+        if record is None:
+            return
+        record.name = institution.name
+        record.email = institution.email
+        record.address = institution.address
+        record.phone = institution.phone
+        await self._session.flush()
+
+    async def delete(self, institution_id: InstitutionId) -> None:
+        record = await self._session.get(InstitutionRecord, institution_id)
+        if record:
+            await self._session.delete(record)
+            await self._session.flush()
 
 
 class SqlAlchemyPermissionRepository:

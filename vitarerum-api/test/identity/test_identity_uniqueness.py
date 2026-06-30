@@ -10,7 +10,7 @@ from app.database import Base
 from app.identity.application.use_cases import CreateUser
 from app.identity.domain.enums import GroupName
 from app.identity.domain.models import GroupId, Permission, PermissionId, UserId
-from app.identity.infrastructure.models import GroupRecord
+from app.identity.infrastructure.models import GroupRecord, InstitutionRecord
 from app.identity.infrastructure.repositories import (
     SqlAlchemyPermissionRepository,
     SqlAlchemyUserRepository,
@@ -41,7 +41,12 @@ async def test_duplicate_email_is_rejected_case_insensitively() -> None:
 async def test_duplicate_permission_is_rejected() -> None:
     factory = await _session()
     async with factory() as session:
-        session.add(GroupRecord(id="g1", name=GroupName.CURATORIAL))
+        session.add(
+            InstitutionRecord(id="i1", name="MUHNAC", email="", address="", phone="")
+        )
+        session.add(
+            GroupRecord(id="g1", name=GroupName.CURATORIAL, institution_id="i1")
+        )
         user_repo = SqlAlchemyUserRepository(session)
         await CreateUser(user_repo).execute(name="Bob", email="bob@example.org")
         user = await user_repo.get_by_email("bob@example.org")

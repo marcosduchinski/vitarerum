@@ -68,10 +68,41 @@ class PaginatedUsersResponse(BaseModel):
 class GroupResponse(BaseModel):
     id: str
     name: GroupName
+    institutionId: str
 
 
 class GroupsListResponse(BaseModel):
     groups: list[GroupResponse]
+
+
+class CreateInstitutionRequest(BaseModel):
+    name: str
+    email: str = ""
+    address: str = ""
+    phone: str = ""
+
+
+class UpdateInstitutionRequest(BaseModel):
+    name: str
+    email: str = ""
+    address: str = ""
+    phone: str = ""
+
+
+class InstitutionResponse(BaseModel):
+    id: str
+    name: str
+    email: str
+    address: str
+    phone: str
+
+
+class PaginatedInstitutionsResponse(BaseModel):
+    content: list[InstitutionResponse]
+    page: int
+    size: int
+    totalElements: int
+    totalPages: int
 
 
 class UserPermissionsResponse(BaseModel):

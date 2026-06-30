@@ -24,30 +24,36 @@ INSERT INTO identity_users (id, name, email, password_hash) VALUES
   ('c03639c9-ebf3-44ed-89d3-e067f70de917', 'Collection Manager',        'manager@museum.pt', '$2b$12$MviuKDF31uPO5VtEfHQj9urZuNTC9XPB3Jp3Aj79wvniHOtfI/x8a')
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO identity_groups (id, name)
-SELECT 'grp-ext', 'EXTERNAL'
+-- Every group belongs to an institution (see migration 0001_add_institutions).
+-- This id matches DEFAULT_INSTITUTION_ID in that migration.
+INSERT INTO identity_institutions (id, name, email, address, phone)
+VALUES ('a0000000-0000-0000-0000-000000000001', 'MUHNAC', '', '', '')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO identity_groups (id, name, institution_id)
+SELECT 'grp-ext', 'EXTERNAL', 'a0000000-0000-0000-0000-000000000001'
 WHERE NOT EXISTS (SELECT 1 FROM identity_groups WHERE name = 'EXTERNAL')
 ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
 
-INSERT INTO identity_groups (id, name)
-SELECT 'grp-cur', 'CURATORIAL'
+INSERT INTO identity_groups (id, name, institution_id)
+SELECT 'grp-cur', 'CURATORIAL', 'a0000000-0000-0000-0000-000000000001'
 WHERE NOT EXISTS (SELECT 1 FROM identity_groups WHERE name = 'CURATORIAL')
 ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
 
-INSERT INTO identity_groups (id, name)
-SELECT 'grp-col', 'COLLECTIONS_MANAGEMENT'
+INSERT INTO identity_groups (id, name, institution_id)
+SELECT 'grp-col', 'COLLECTIONS_MANAGEMENT', 'a0000000-0000-0000-0000-000000000001'
 WHERE NOT EXISTS (
   SELECT 1 FROM identity_groups WHERE name = 'COLLECTIONS_MANAGEMENT'
 )
 ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
 
-INSERT INTO identity_groups (id, name)
-SELECT 'grp-dir', 'DIRECTION'
+INSERT INTO identity_groups (id, name, institution_id)
+SELECT 'grp-dir', 'DIRECTION', 'a0000000-0000-0000-0000-000000000001'
 WHERE NOT EXISTS (SELECT 1 FROM identity_groups WHERE name = 'DIRECTION')
 ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
 
-INSERT INTO identity_groups (id, name)
-SELECT 'grp-sys-admin', 'SYS_ADMIN'
+INSERT INTO identity_groups (id, name, institution_id)
+SELECT 'grp-sys-admin', 'SYS_ADMIN', 'a0000000-0000-0000-0000-000000000001'
 WHERE NOT EXISTS (SELECT 1 FROM identity_groups WHERE name = 'SYS_ADMIN')
 ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
 
