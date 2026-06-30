@@ -21,6 +21,7 @@ import { authInterceptor } from '@core/auth/auth.interceptor';
 import { sessionExpiredInterceptor } from '@core/auth/session-expired.interceptor';
 import { provideCollectionUse } from '@core/providers/provide-collection-use';
 import { provideIdentity } from '@core/providers/provide-identity';
+import { provideInstitutionManagement } from '@core/providers/provide-institution-management';
 import { provideUserManagement } from '@core/providers/provide-user-management';
 import { providePrimeNG } from 'primeng/config';
 
@@ -96,5 +97,6 @@ export const appConfig: ApplicationConfig = {
     provideIdentity(),
     provideCollectionUse(),
     provideUserManagement(),
+    provideInstitutionManagement(),
   ],
 };

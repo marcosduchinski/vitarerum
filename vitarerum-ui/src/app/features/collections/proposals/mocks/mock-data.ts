@@ -1,5 +1,6 @@
 import { inject, Injectable, InjectionToken } from '@angular/core';
 import { Group } from '@core/auth/models/group.model';
+import { Institution } from '@core/auth/models/institution.model';
 import { GroupMembership, PermissionPrincipal } from '@core/auth/models/permission.model';
 import { UserDetail } from '@core/auth/models/user.model';
 import { Page, PageQuery } from '@shared/models/page.model';
@@ -22,12 +23,22 @@ import {
   ProposalProjectSummary,
 } from '../models/proposal.model';
 
+export const MOCK_INSTITUTIONS: Institution[] = [
+  {
+    id: 'inst-muhnac',
+    name: 'MUHNAC',
+    email: 'geral@museus.ulisboa.pt',
+    address: 'Rua da Escola Politécnica 56, Lisboa',
+    phone: '+351 213 921 800',
+  },
+];
+
 export const MOCK_GROUPS: Group[] = [
-  { id: 'g-external', name: 'EXTERNAL' },
-  { id: 'g-collections', name: 'COLLECTIONS_MANAGEMENT' },
-  { id: 'g-curatorial', name: 'CURATORIAL' },
-  { id: 'g-direction', name: 'DIRECTION' },
-  { id: 'g-admin', name: 'SYS_ADMIN' },
+  { id: 'g-external', name: 'EXTERNAL', institutionId: 'inst-muhnac' },
+  { id: 'g-collections', name: 'COLLECTIONS_MANAGEMENT', institutionId: 'inst-muhnac' },
+  { id: 'g-curatorial', name: 'CURATORIAL', institutionId: 'inst-muhnac' },
+  { id: 'g-direction', name: 'DIRECTION', institutionId: 'inst-muhnac' },
+  { id: 'g-admin', name: 'SYS_ADMIN', institutionId: 'inst-muhnac' },
 ];
 
 export const MOCK_USERS: UserDetail[] = [

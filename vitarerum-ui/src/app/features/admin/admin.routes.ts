@@ -26,4 +26,28 @@ export const ADMIN_ROUTES: Routes = [
     loadComponent: () =>
       import('./groups/group-detail.component').then(m => m.GroupDetailComponent),
   },
+  {
+    path: 'institutions',
+    title: 'Institutions',
+    loadComponent: () =>
+      import('./institutions/institutions-page.component').then(
+        m => m.InstitutionsPageComponent,
+      ),
+  },
+  {
+    path: 'institutions/new',
+    title: 'New institution',
+    loadComponent: () =>
+      import('./institutions/institution-detail.component').then(
+        m => m.InstitutionDetailComponent,
+      ),
+  },
+  {
+    path: 'institutions/:id',
+    title: 'Institution',
+    loadComponent: () =>
+      import('./institutions/institution-detail.component').then(
+        m => m.InstitutionDetailComponent,
+      ),
+  },
 ];
