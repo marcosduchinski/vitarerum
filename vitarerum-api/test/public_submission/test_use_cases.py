@@ -1,4 +1,4 @@
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -202,9 +202,11 @@ def _confirm_use_case(
     )
 
 
-async def _seed_pending(repo: FakeRepo, *, created_at: datetime = _NOW) -> str:
+async def _seed_pending(
+    repo: FakeRepo, *, created_at: datetime = _NOW, **overrides: object
+) -> str:
     use_case = _submit_use_case(repo)
-    await use_case.execute(_submit_input())
+    await use_case.execute(_submit_input(**overrides))
     submission = next(iter(repo.by_token.values()))
     submission.created_at = created_at
     return submission.token
@@ -219,7 +221,11 @@ async def test_confirm_unknown_token_is_invalid() -> None:
 
 async def test_confirm_materialises_proposal() -> None:
     repo = FakeRepo()
-    token = await _seed_pending(repo)
+    token = await _seed_pending(
+        repo,
+        proposed_begin_date=date(2026, 7, 1),
+        proposed_end_date=date(2026, 7, 15),
+    )
     submit = FakeSubmitProposal(reference="VRP-20260626-0009")
 
     result = await _confirm_use_case(repo, submit).execute(token, "203.0.113.1")
@@ -229,6 +235,9 @@ async def test_confirm_materialises_proposal() -> None:
     assert len(submit.calls) == 1
     # The citizen's intended use is carried into the materialised proposal.
     assert submit.calls[0].intended_use == IntendedUse(use_type=UseType.IN_SITU_VISIT)
+    # As are the dates the citizen proposed.
+    assert submit.calls[0].begin_date == date(2026, 7, 1)
+    assert submit.calls[0].end_date == date(2026, 7, 15)
     assert repo.by_token[token].status is PendingSubmissionStatus.CONFIRMED
 
 

@@ -99,6 +99,76 @@ describe('PublicSubmitProposalPageComponent', () => {
     expect(compiled.textContent).toContain('Consent is required to submit.');
   });
 
+  it('submits the optional proposed dates when provided', async () => {
+    await setup('');
+    const fixture = TestBed.createComponent(PublicSubmitProposalPageComponent);
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    setInputValue(compiled, '#name', 'Pedro Silva');
+    setInputValue(compiled, '#email', 'pedro@example.test');
+    setInputValue(compiled, '#subject', 'Access request');
+    setInputValue(compiled, '#body', 'Details about my request.');
+    setSelectValue(compiled, '#useType', 'IN_SITU_VISIT');
+    setInputValue(compiled, '#proposedBeginDate', '2026-07-01');
+    setInputValue(compiled, '#proposedEndDate', '2026-07-15');
+    setChecked(compiled, '.consent input[type="checkbox"]', true);
+
+    submitForm(compiled);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(api.submitCalls).toHaveLength(1);
+    expect(api.submitCalls[0]).toMatchObject({
+      proposedBeginDate: '2026-07-01',
+      proposedEndDate: '2026-07-15',
+    });
+  });
+
+  it('sends null proposed dates when none are entered', async () => {
+    await setup('');
+    const fixture = TestBed.createComponent(PublicSubmitProposalPageComponent);
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    setInputValue(compiled, '#name', 'Pedro Silva');
+    setInputValue(compiled, '#email', 'pedro@example.test');
+    setInputValue(compiled, '#subject', 'Access request');
+    setInputValue(compiled, '#body', 'Details about my request.');
+    setSelectValue(compiled, '#useType', 'OTHER');
+    setChecked(compiled, '.consent input[type="checkbox"]', true);
+
+    submitForm(compiled);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(api.submitCalls).toHaveLength(1);
+    expect(api.submitCalls[0].proposedBeginDate).toBeNull();
+    expect(api.submitCalls[0].proposedEndDate).toBeNull();
+  });
+
+  it('blocks submission when the end date precedes the start date', async () => {
+    await setup('');
+    const fixture = TestBed.createComponent(PublicSubmitProposalPageComponent);
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    setInputValue(compiled, '#name', 'Pedro Silva');
+    setInputValue(compiled, '#email', 'pedro@example.test');
+    setInputValue(compiled, '#subject', 'Access request');
+    setInputValue(compiled, '#body', 'Details about my request.');
+    setSelectValue(compiled, '#useType', 'IN_SITU_VISIT');
+    setInputValue(compiled, '#proposedBeginDate', '2026-07-15');
+    setInputValue(compiled, '#proposedEndDate', '2026-07-01');
+    setChecked(compiled, '.consent input[type="checkbox"]', true);
+
+    submitForm(compiled);
+    fixture.detectChanges();
+
+    expect(api.submitCalls).toHaveLength(0);
+    expect(compiled.textContent).toContain("The end date can't be before the start date.");
+  });
+
   it('blocks submission until an intended use is selected', async () => {
     await setup('');
     const fixture = TestBed.createComponent(PublicSubmitProposalPageComponent);

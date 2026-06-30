@@ -8,9 +8,9 @@ string (no cross-context FK), matching the convention used elsewhere.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import Boolean, DateTime, String, Text
+from sqlalchemy import Boolean, Date, DateTime, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -26,6 +26,8 @@ class PublicProposalSubmissionRecord(Base):
     subject: Mapped[str] = mapped_column(String(160))
     body: Mapped[str] = mapped_column(Text)
     use_type: Mapped[str] = mapped_column(String(32))
+    proposed_begin_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    proposed_end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     consent: Mapped[bool] = mapped_column(Boolean)
     status: Mapped[str] = mapped_column(String(32), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)

@@ -10,7 +10,7 @@ human-readable reference number once materialised.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from enum import StrEnum
 
 from app.shared.kernel import UseType
@@ -44,6 +44,10 @@ class PendingPublicSubmission:
     use_type: UseType
     consent: bool
     created_at: datetime
+    # Optional dates the citizen proposes for the use; seed the materialised
+    # proposal's begin/end on confirm (the staff may refine them later).
+    proposed_begin_date: date | None = None
+    proposed_end_date: date | None = None
     status: PendingSubmissionStatus = PendingSubmissionStatus.PENDING_CONFIRMATION
     confirmed_at: datetime | None = None
     proposal_reference: str | None = None

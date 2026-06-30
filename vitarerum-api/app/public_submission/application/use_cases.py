@@ -13,7 +13,7 @@ from __future__ import annotations
 import secrets
 import uuid
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import date, timedelta
 from typing import Literal
 
 from app.identity.public import ProvisionExternalRequester
@@ -66,6 +66,8 @@ class SubmitPublicProposalInput:
     captcha_token: str
     website: str
     remote_ip: str
+    proposed_begin_date: date | None = None
+    proposed_end_date: date | None = None
 
 
 @dataclass(slots=True)
@@ -126,6 +128,8 @@ class SubmitPublicProposal:
             use_type=data.use_type,
             consent=data.consent,
             created_at=self._clock.now(),
+            proposed_begin_date=data.proposed_begin_date,
+            proposed_end_date=data.proposed_end_date,
         )
         await self._repo.add(submission)
         # The route sends the confirmation e-mail only after it commits, so the
@@ -205,8 +209,8 @@ class ConfirmPublicProposal:
                 title=None,
                 intended_use=IntendedUse(use_type=submission.use_type),
                 purpose=None,
-                begin_date=None,
-                end_date=None,
+                begin_date=submission.proposed_begin_date,
+                end_date=submission.proposed_end_date,
                 requested_by=provisioned.actor,
                 initial_message_subject=submission.subject,
                 initial_message_body=submission.body,

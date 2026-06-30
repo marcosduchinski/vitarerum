@@ -38,6 +38,24 @@
   gap: 0.375rem;
 }
 
+/* Proposed-period row: two date inputs sharing a line with inline labels. */
+.field__row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+
+  .field__input {
+    width: auto;
+    flex: 1 1 8rem;
+  }
+}
+
+.field__sublabel {
+  font-size: 0.8rem;
+  color: var(--color-muted);
+}
+
 .field__label {
   font-size: 0.875rem;
   font-weight: 600;

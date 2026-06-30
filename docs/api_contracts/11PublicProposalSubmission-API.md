@@ -46,6 +46,8 @@ visible to staff until the citizen confirms.**
 | `subject` | string | ✅ | 1–160 chars |
 | `body` | string | ✅ | 1–4000 chars |
 | `useType` | string (enum) | ✅ | one of `EXHIBITION`, `IN_SITU_VISIT`, `OTHER` — the citizen's intended use of the collection |
+| `proposedBeginDate` | string (date) | — | ISO 8601 `YYYY-MM-DD`; date the citizen proposes the use to begin. Seeds the proposal's begin date (staff may refine it) |
+| `proposedEndDate` | string (date) | — | ISO 8601 `YYYY-MM-DD`; date the citizen proposes the use to end. Seeds the proposal's end date |
 | `consent` | boolean | ✅ | **must be `true`** (RGPD) |
 | `captchaToken` | string | ✅ | Turnstile response token; server verifies via `siteverify` |
 | `website` | string | — | **honeypot** — should be empty (≤255 chars accepted); non-empty ⇒ silent accept-and-drop (`202`, no work). Not schema-rejected, so a bot cannot tell the field is monitored. |
@@ -57,6 +59,8 @@ visible to staff until the citizen confirms.**
   "subject": "Acesso à Coleção de Zoologia",
   "body": "Gostaria de estudar um espécime para a minha tese de mestrado.",
   "useType": "IN_SITU_VISIT",
+  "proposedBeginDate": "2026-07-01",
+  "proposedEndDate": "2026-07-15",
   "consent": true,
   "captchaToken": "0.AbC...turnstile-response-token",
   "website": ""

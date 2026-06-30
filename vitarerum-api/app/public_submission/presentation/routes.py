@@ -74,6 +74,8 @@ async def submit_public_proposal(
                 captcha_token=body.captchaToken,
                 website=body.website,
                 remote_ip=_client_ip(request),
+                proposed_begin_date=body.proposedBeginDate,
+                proposed_end_date=body.proposedEndDate,
             )
         )
     except RateLimitExceeded as exc:

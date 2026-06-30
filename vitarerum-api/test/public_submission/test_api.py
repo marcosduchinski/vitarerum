@@ -1,6 +1,6 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -163,6 +163,27 @@ async def test_submit_returns_202_receipt() -> None:
     }
     assert len(repo.by_token) == 1
     assert len(email.sent) == 1
+
+
+async def test_submit_persists_proposed_dates() -> None:
+    async with _client() as (client, repo, _):
+        resp = await client.post(
+            _SUBMIT_URL,
+            json=_payload(proposedBeginDate="2026-07-01", proposedEndDate="2026-07-15"),
+        )
+    assert resp.status_code == 202
+    submission = next(iter(repo.by_token.values()))
+    assert submission.proposed_begin_date == date(2026, 7, 1)
+    assert submission.proposed_end_date == date(2026, 7, 15)
+
+
+async def test_submit_without_proposed_dates_leaves_them_unset() -> None:
+    async with _client() as (client, repo, _):
+        resp = await client.post(_SUBMIT_URL, json=_payload())
+    assert resp.status_code == 202
+    submission = next(iter(repo.by_token.values()))
+    assert submission.proposed_begin_date is None
+    assert submission.proposed_end_date is None
 
 
 async def test_submit_honeypot_returns_202_no_work() -> None:

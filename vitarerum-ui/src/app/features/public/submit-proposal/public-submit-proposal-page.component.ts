@@ -44,6 +44,9 @@ export class PublicSubmitProposalPageComponent {
   protected readonly body = signal('');
   // Empty until the citizen picks one of USE_TYPE_OPTIONS; '' is invalid.
   protected readonly useType = signal<UseType | ''>('');
+  // Optional proposed period (ISO YYYY-MM-DD); empty means "not specified".
+  protected readonly proposedBeginDate = signal('');
+  protected readonly proposedEndDate = signal('');
   protected readonly consent = signal(false);
   // Honeypot: bound to a visually hidden field. Real users leave it empty.
   protected readonly website = signal('');
@@ -61,6 +64,11 @@ export class PublicSubmitProposalPageComponent {
   protected readonly subjectError = computed(() => this.submitted() && !this.subject().trim());
   protected readonly bodyError = computed(() => this.submitted() && !this.body().trim());
   protected readonly useTypeError = computed(() => this.submitted() && !this.useType());
+  // Both dates are optional, but if both are given the end must not precede the
+  // begin (ISO YYYY-MM-DD strings compare lexicographically).
+  protected readonly dateRangeError = computed(
+    () => this.submitted() && this.hasInvalidDateRange(),
+  );
   protected readonly consentError = computed(() => this.submitted() && !this.consent());
   protected readonly captchaError = computed(
     () => this.submitted() && this.captchaRequired() && !this.captchaToken(),
@@ -77,11 +85,23 @@ export class PublicSubmitProposalPageComponent {
       !!this.subject().trim() &&
       !!this.body().trim() &&
       !!this.useType() &&
+      !this.hasInvalidDateRange() &&
       this.consent() &&
       (!this.captchaRequired() || !!this.captchaToken()),
   );
 
-  protected onInput(field: 'name' | 'email' | 'subject' | 'body' | 'website', event: Event): void {
+  // Submission-independent variant of dateRangeError, used to gate submit.
+  private readonly hasInvalidDateRange = computed(
+    () =>
+      !!this.proposedBeginDate() &&
+      !!this.proposedEndDate() &&
+      this.proposedEndDate() < this.proposedBeginDate(),
+  );
+
+  protected onInput(
+    field: 'name' | 'email' | 'subject' | 'body' | 'website' | 'proposedBeginDate' | 'proposedEndDate',
+    event: Event,
+  ): void {
     const value = (event.target as HTMLInputElement | HTMLTextAreaElement).value;
     switch (field) {
       case 'name':
@@ -98,6 +118,12 @@ export class PublicSubmitProposalPageComponent {
         break;
       case 'website':
         this.website.set(value);
+        break;
+      case 'proposedBeginDate':
+        this.proposedBeginDate.set(value);
+        break;
+      case 'proposedEndDate':
+        this.proposedEndDate.set(value);
         break;
     }
   }
@@ -135,6 +161,9 @@ export class PublicSubmitProposalPageComponent {
           body: this.body().trim(),
           // isValid() guarantees a non-empty selection before we get here.
           useType: this.useType() as UseType,
+          // Send null (not '') for an unspecified date so the server omits it.
+          proposedBeginDate: this.proposedBeginDate() || null,
+          proposedEndDate: this.proposedEndDate() || null,
           consent: this.consent(),
           captchaToken: this.captchaToken(),
           website: this.website(),

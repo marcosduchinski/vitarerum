@@ -26,6 +26,8 @@ def _to_domain(record: PublicProposalSubmissionRecord) -> PendingPublicSubmissio
         use_type=UseType(record.use_type),
         consent=record.consent,
         created_at=record.created_at,
+        proposed_begin_date=record.proposed_begin_date,
+        proposed_end_date=record.proposed_end_date,
         status=PendingSubmissionStatus(record.status),
         confirmed_at=record.confirmed_at,
         proposal_reference=record.proposal_reference,
@@ -40,6 +42,8 @@ def _apply(record: PublicProposalSubmissionRecord, s: PendingPublicSubmission) -
     record.subject = s.subject
     record.body = s.body
     record.use_type = s.use_type.value
+    record.proposed_begin_date = s.proposed_begin_date
+    record.proposed_end_date = s.proposed_end_date
     record.consent = s.consent
     record.status = s.status.value
     record.created_at = s.created_at
