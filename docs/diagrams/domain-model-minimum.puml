@@ -445,6 +445,7 @@ package "Public Submission" <<Bounded Context>> {
         - citizenEmail: String
         - subject: String
         - body: String
+        - useType: UseType
         - consent: Boolean
         - status: PendingSubmissionStatus
         - createdAt: DateTime
@@ -457,6 +458,8 @@ package "Public Submission" <<Bounded Context>> {
 
     PendingPublicSubmission *-- PendingSubmissionStatus
 }
+
+PendingPublicSubmission ..> UseType : useType
 
 ' --- cross-context integration ---
 PendingPublicSubmission ..> Proposal : materialises on confirm (SubmitProposal)

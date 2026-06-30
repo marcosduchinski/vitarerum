@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
 
+from app.shared.kernel import UseType
+
 
 class InvalidTransition(Exception):
     """Raised on an illegal state change of a pending submission."""
@@ -39,6 +41,7 @@ class PendingPublicSubmission:
     citizen_email: str
     subject: str
     body: str
+    use_type: UseType
     consent: bool
     created_at: datetime
     status: PendingSubmissionStatus = PendingSubmissionStatus.PENDING_CONFIRMATION

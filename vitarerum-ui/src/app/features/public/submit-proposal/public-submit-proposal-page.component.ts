@@ -6,11 +6,19 @@ import { TURNSTILE_SITE_KEY } from '@core/config/app-config.model';
 import { ApiError, toApiError } from '@core/http/api-error.model';
 import { ErrorMessageComponent } from '@shared/components/error-message/error-message.component';
 import { PageHeaderComponent } from '@shared/components/page-header/page-header.component';
+import { UseType } from '@shared/models/collection-use-status.model';
 
 import { TurnstileComponent } from '../components/turnstile/turnstile.component';
 import { PUBLIC_PROPOSAL_API_SERVICE } from '../services/public-proposal-api.service';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** The intended-use options offered to a citizen, in display order. */
+const USE_TYPE_OPTIONS: readonly { readonly value: UseType; readonly label: string }[] = [
+  { value: 'IN_SITU_VISIT', label: 'In-situ visit (study the objects on site)' },
+  { value: 'EXHIBITION', label: 'Exhibition (display the objects)' },
+  { value: 'OTHER', label: 'Other' },
+];
 
 @Component({
   selector: 'app-public-submit-proposal-page',
@@ -28,10 +36,14 @@ export class PublicSubmitProposalPageComponent {
 
   private readonly turnstile = viewChild(TurnstileComponent);
 
+  protected readonly useTypeOptions = USE_TYPE_OPTIONS;
+
   protected readonly name = signal('');
   protected readonly email = signal('');
   protected readonly subject = signal('');
   protected readonly body = signal('');
+  // Empty until the citizen picks one of USE_TYPE_OPTIONS; '' is invalid.
+  protected readonly useType = signal<UseType | ''>('');
   protected readonly consent = signal(false);
   // Honeypot: bound to a visually hidden field. Real users leave it empty.
   protected readonly website = signal('');
@@ -48,6 +60,7 @@ export class PublicSubmitProposalPageComponent {
   );
   protected readonly subjectError = computed(() => this.submitted() && !this.subject().trim());
   protected readonly bodyError = computed(() => this.submitted() && !this.body().trim());
+  protected readonly useTypeError = computed(() => this.submitted() && !this.useType());
   protected readonly consentError = computed(() => this.submitted() && !this.consent());
   protected readonly captchaError = computed(
     () => this.submitted() && this.captchaRequired() && !this.captchaToken(),
@@ -63,6 +76,7 @@ export class PublicSubmitProposalPageComponent {
       EMAIL_PATTERN.test(this.email().trim()) &&
       !!this.subject().trim() &&
       !!this.body().trim() &&
+      !!this.useType() &&
       this.consent() &&
       (!this.captchaRequired() || !!this.captchaToken()),
   );
@@ -86,6 +100,10 @@ export class PublicSubmitProposalPageComponent {
         this.website.set(value);
         break;
     }
+  }
+
+  protected onUseTypeChange(event: Event): void {
+    this.useType.set((event.target as HTMLSelectElement).value as UseType | '');
   }
 
   protected onConsentChange(event: Event): void {
@@ -115,6 +133,8 @@ export class PublicSubmitProposalPageComponent {
           citizenEmail: this.email().trim(),
           subject: this.subject().trim(),
           body: this.body().trim(),
+          // isValid() guarantees a non-empty selection before we get here.
+          useType: this.useType() as UseType,
           consent: this.consent(),
           captchaToken: this.captchaToken(),
           website: this.website(),

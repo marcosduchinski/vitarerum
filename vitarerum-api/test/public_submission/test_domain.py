@@ -7,6 +7,7 @@ from app.public_submission.domain.models import (
     PendingPublicSubmission,
     PendingSubmissionStatus,
 )
+from app.shared.kernel import UseType
 
 
 def _pending(created_at: datetime) -> PendingPublicSubmission:
@@ -17,6 +18,7 @@ def _pending(created_at: datetime) -> PendingPublicSubmission:
         citizen_email="pedro@example.test",
         subject="Acesso à coleção",
         body="Gostaria de estudar um espécime.",
+        use_type=UseType.IN_SITU_VISIT,
         consent=True,
         created_at=created_at,
     )

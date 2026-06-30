@@ -66,6 +66,25 @@
         Your proposal opens a conversation with the collections team. Describe what you'd like to access and why.
       </p>
 
+      <div class="field" [class.field--error]="useTypeError()">
+        <label class="field__label" for="useType">Intended use <span aria-hidden="true">*</span></label>
+        <select
+          id="useType"
+          class="field__input"
+          [value]="useType()"
+          (change)="onUseTypeChange($event)"
+          [attr.aria-invalid]="useTypeError() || null"
+        >
+          <option value="" disabled>Select how you'll use the collection…</option>
+          @for (option of useTypeOptions; track option.value) {
+            <option [value]="option.value">{{ option.label }}</option>
+          }
+        </select>
+        @if (useTypeError()) {
+          <p class="field__error" role="alert">Please choose how you'll use the collection.</p>
+        }
+      </div>
+
       <div class="field" [class.field--error]="subjectError()">
         <label class="field__label" for="subject">Subject <span aria-hidden="true">*</span></label>
         <input

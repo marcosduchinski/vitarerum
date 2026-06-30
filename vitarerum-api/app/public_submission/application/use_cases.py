@@ -25,6 +25,7 @@ from app.public_submission.application.ports import (
     UniqueRetryRunner,
 )
 from app.public_submission.domain.models import PendingPublicSubmission
+from app.shared.kernel import IntendedUse, UseType
 from app.use_of_collections.application.use_cases import (
     SubmitProposal,
     SubmitProposalInput,
@@ -60,6 +61,7 @@ class SubmitPublicProposalInput:
     citizen_email: str
     subject: str
     body: str
+    use_type: UseType
     consent: bool
     captcha_token: str
     website: str
@@ -121,6 +123,7 @@ class SubmitPublicProposal:
             citizen_email=data.citizen_email,
             subject=data.subject,
             body=data.body,
+            use_type=data.use_type,
             consent=data.consent,
             created_at=self._clock.now(),
         )
@@ -200,7 +203,7 @@ class ConfirmPublicProposal:
         output = await self._submit.execute(
             SubmitProposalInput(
                 title=None,
-                intended_use=None,
+                intended_use=IntendedUse(use_type=submission.use_type),
                 purpose=None,
                 begin_date=None,
                 end_date=None,

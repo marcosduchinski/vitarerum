@@ -1,3 +1,5 @@
+import { UseType } from '@shared/models/collection-use-status.model';
+
 /**
  * Payload a citizen submits from the public (unauthenticated) proposal page.
  *
@@ -11,6 +13,8 @@ export interface PublicProposalSubmission {
   readonly citizenEmail: string;
   readonly subject: string;
   readonly body: string;
+  /** How the citizen intends to use the collection; seeds the proposal's intended use. */
+  readonly useType: UseType;
   /** RGPD consent — the citizen agreed to their data being processed. */
   readonly consent: boolean;
   /** Cloudflare Turnstile token; the server must verify it via siteverify. */

@@ -16,6 +16,7 @@ from app.public_submission.domain.models import (
     PendingPublicSubmission,
     PendingSubmissionStatus,
 )
+from app.shared.kernel import IntendedUse, UseType
 
 _NOW = datetime(2026, 6, 26, 12, 0, tzinfo=UTC)
 
@@ -78,6 +79,7 @@ def _submit_input(**overrides: object) -> SubmitPublicProposalInput:
         "citizen_email": "pedro@example.test",
         "subject": "Acesso à coleção",
         "body": "Gostaria de estudar um espécime.",
+        "use_type": UseType.IN_SITU_VISIT,
         "consent": True,
         "captcha_token": "tok",
         "website": "",
@@ -225,6 +227,8 @@ async def test_confirm_materialises_proposal() -> None:
     assert result.status == "CONFIRMED"
     assert result.reference_number == "VRP-20260626-0009"
     assert len(submit.calls) == 1
+    # The citizen's intended use is carried into the materialised proposal.
+    assert submit.calls[0].intended_use == IntendedUse(use_type=UseType.IN_SITU_VISIT)
     assert repo.by_token[token].status is PendingSubmissionStatus.CONFIRMED
 
 

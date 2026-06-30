@@ -59,6 +59,7 @@ describe('PublicSubmitProposalPageComponent', () => {
     setInputValue(compiled, '#email', 'pedro@example.test');
     setInputValue(compiled, '#subject', 'Access to the zoology collection');
     setInputValue(compiled, '#body', 'I would like to study a specimen for my thesis.');
+    setSelectValue(compiled, '#useType', 'IN_SITU_VISIT');
     setChecked(compiled, '.consent input[type="checkbox"]', true);
 
     submitForm(compiled);
@@ -70,6 +71,7 @@ describe('PublicSubmitProposalPageComponent', () => {
       citizenName: 'Pedro Silva',
       citizenEmail: 'pedro@example.test',
       subject: 'Access to the zoology collection',
+      useType: 'IN_SITU_VISIT',
       consent: true,
       website: '', // honeypot stayed empty
     });
@@ -97,6 +99,26 @@ describe('PublicSubmitProposalPageComponent', () => {
     expect(compiled.textContent).toContain('Consent is required to submit.');
   });
 
+  it('blocks submission until an intended use is selected', async () => {
+    await setup('');
+    const fixture = TestBed.createComponent(PublicSubmitProposalPageComponent);
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    setInputValue(compiled, '#name', 'Pedro Silva');
+    setInputValue(compiled, '#email', 'pedro@example.test');
+    setInputValue(compiled, '#subject', 'Access request');
+    setInputValue(compiled, '#body', 'Details about my request.');
+    setChecked(compiled, '.consent input[type="checkbox"]', true);
+    // intended use intentionally left unselected
+
+    submitForm(compiled);
+    fixture.detectChanges();
+
+    expect(api.submitCalls).toHaveLength(0);
+    expect(compiled.textContent).toContain("Please choose how you'll use the collection.");
+  });
+
   it('rejects an invalid e-mail address', async () => {
     await setup('');
     const fixture = TestBed.createComponent(PublicSubmitProposalPageComponent);
@@ -122,6 +144,13 @@ function setInputValue(root: HTMLElement, selector: string, value: string): void
   expect(field).not.toBeNull();
   field!.value = value;
   field!.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function setSelectValue(root: HTMLElement, selector: string, value: string): void {
+  const select = root.querySelector<HTMLSelectElement>(selector);
+  expect(select).not.toBeNull();
+  select!.value = value;
+  select!.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
 function setChecked(root: HTMLElement, selector: string, checked: boolean): void {

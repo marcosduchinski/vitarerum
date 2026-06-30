@@ -25,6 +25,7 @@ class PublicProposalSubmissionRecord(Base):
     citizen_email: Mapped[str] = mapped_column(String(180), index=True)
     subject: Mapped[str] = mapped_column(String(160))
     body: Mapped[str] = mapped_column(Text)
+    use_type: Mapped[str] = mapped_column(String(32))
     consent: Mapped[bool] = mapped_column(Boolean)
     status: Mapped[str] = mapped_column(String(32), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)

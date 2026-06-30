@@ -69,6 +69,7 @@ async def submit_public_proposal(
                 citizen_email=str(body.citizenEmail),
                 subject=body.subject,
                 body=body.body,
+                use_type=body.useType,
                 consent=body.consent,
                 captcha_token=body.captchaToken,
                 website=body.website,

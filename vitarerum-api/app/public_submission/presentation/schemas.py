@@ -12,6 +12,8 @@ from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
+from app.shared.kernel import UseType
+
 _CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 _CRLF = re.compile(r"[\r\n]")
 
@@ -21,6 +23,9 @@ class PublicProposalSubmission(BaseModel):
     citizenEmail: EmailStr = Field(max_length=180)
     subject: str = Field(min_length=1, max_length=160)
     body: str = Field(min_length=1, max_length=4000)
+    # The citizen's intended use of the collection. One of the shared UseType
+    # values; an unknown/missing value is a 422 (enforced by the enum).
+    useType: UseType
     consent: Literal[True]  # RGPD consent; must be exactly true
     captchaToken: str = Field(min_length=1, max_length=2048)
     # Honeypot. The YAML caps this at length 0, but enforcing that at the schema

@@ -144,6 +144,7 @@ def _payload(**overrides: object) -> dict:
         "citizenEmail": "pedro@example.org",
         "subject": "Acesso à Coleção de Zoologia",
         "body": "Gostaria de estudar um espécime para a minha tese.",
+        "useType": "IN_SITU_VISIT",
         "consent": True,
         "captchaToken": "0.AbC-token",
         "website": "",
@@ -190,6 +191,13 @@ async def test_submit_rate_limited_429_with_retry_after() -> None:
 async def test_submit_missing_consent_is_rejected() -> None:
     async with _client() as (client, repo, _):
         resp = await client.post(_SUBMIT_URL, json=_payload(consent=False))
+    assert resp.status_code == 422
+    assert repo.by_token == {}
+
+
+async def test_submit_invalid_use_type_is_rejected() -> None:
+    async with _client() as (client, repo, _):
+        resp = await client.post(_SUBMIT_URL, json=_payload(useType="WHATEVER"))
     assert resp.status_code == 422
     assert repo.by_token == {}
 

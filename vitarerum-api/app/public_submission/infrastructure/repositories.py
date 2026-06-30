@@ -12,6 +12,7 @@ from app.public_submission.domain.models import (
 from app.public_submission.infrastructure.models import (
     PublicProposalSubmissionRecord,
 )
+from app.shared.kernel import UseType
 
 
 def _to_domain(record: PublicProposalSubmissionRecord) -> PendingPublicSubmission:
@@ -22,6 +23,7 @@ def _to_domain(record: PublicProposalSubmissionRecord) -> PendingPublicSubmissio
         citizen_email=record.citizen_email,
         subject=record.subject,
         body=record.body,
+        use_type=UseType(record.use_type),
         consent=record.consent,
         created_at=record.created_at,
         status=PendingSubmissionStatus(record.status),
@@ -37,6 +39,7 @@ def _apply(record: PublicProposalSubmissionRecord, s: PendingPublicSubmission) -
     record.citizen_email = s.citizen_email
     record.subject = s.subject
     record.body = s.body
+    record.use_type = s.use_type.value
     record.consent = s.consent
     record.status = s.status.value
     record.created_at = s.created_at

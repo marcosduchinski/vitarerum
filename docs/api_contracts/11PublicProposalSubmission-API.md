@@ -1,16 +1,5 @@
 # Public Proposal Submission — API Contract
 
-Human-readable companion to the machine spec
-[`public-proposals.openapi.yaml`](./public-proposals.openapi.yaml) (OpenAPI 3.1) and the
-runnable reference [`public-proposals-reference-impl.py`](./public-proposals-reference-impl.py)
-(FastAPI). If the three ever disagree, **the YAML is the source of truth.**
-
-These endpoints let **any citizen** open a collection-use proposal without an account.
-They back the public frontend at `/submit-proposal`
-(`src/app/features/public/`).
-
----
-
 ## Trust model (read first)
 
 Every field is **untrusted input from the open internet**. The frontend's client-side
@@ -56,6 +45,7 @@ visible to staff until the citizen confirms.**
 | `citizenEmail` | string (email) | ✅ | ≤180 chars; confirmation link sent here |
 | `subject` | string | ✅ | 1–160 chars |
 | `body` | string | ✅ | 1–4000 chars |
+| `useType` | string (enum) | ✅ | one of `EXHIBITION`, `IN_SITU_VISIT`, `OTHER` — the citizen's intended use of the collection |
 | `consent` | boolean | ✅ | **must be `true`** (RGPD) |
 | `captchaToken` | string | ✅ | Turnstile response token; server verifies via `siteverify` |
 | `website` | string | — | **honeypot** — should be empty (≤255 chars accepted); non-empty ⇒ silent accept-and-drop (`202`, no work). Not schema-rejected, so a bot cannot tell the field is monitored. |
@@ -66,6 +56,7 @@ visible to staff until the citizen confirms.**
   "citizenEmail": "pedro@example.test",
   "subject": "Acesso à Coleção de Zoologia",
   "body": "Gostaria de estudar um espécime para a minha tese de mestrado.",
+  "useType": "IN_SITU_VISIT",
   "consent": true,
   "captchaToken": "0.AbC...turnstile-response-token",
   "website": ""
