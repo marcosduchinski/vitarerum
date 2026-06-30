@@ -15,8 +15,8 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** The intended-use options offered to a citizen, in display order. */
 const USE_TYPE_OPTIONS: readonly { readonly value: UseType; readonly label: string }[] = [
-  { value: 'IN_SITU_VISIT', label: 'In-situ visit (study the objects on site)' },
-  { value: 'EXHIBITION', label: 'Exhibition (display the objects)' },
+  { value: 'IN_SITU_VISIT', label: 'In-situ visit' },
+  { value: 'EXHIBITION', label: 'Exhibition' },
   { value: 'OTHER', label: 'Other' },
 ];
 
