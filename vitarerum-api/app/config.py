@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     turnstile_verify_url: str = (
         "https://challenges.cloudflare.com/turnstile/v0/siteverify"
     )
-    public_origin: str = "http://localhost:4321"
+    public_origin: str = "http://localhost:4200"
     public_confirm_token_ttl_hours: int = 24
     # SMTP for confirmation e-mails. Empty smtp_host ⇒ confirmation links are
     # logged instead of sent (local/dev).

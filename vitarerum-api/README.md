@@ -60,21 +60,49 @@ Settings are read from environment variables (or a local `.env` file) by
 `app/config.py`. Variable names are the upper-cased field names; unknown
 variables are ignored. Defaults are tuned for local development.
 
-| Variable                   | Default                                  | Description                                                                 |
-| -------------------------- | ---------------------------------------- | --------------------------------------------------------------------------- |
-| `APP_NAME`                 | `vitarerum-api`                          | Service name reported by the health endpoint and OpenAPI title.             |
-| `APP_ENV`                  | `local`                                  | Environment name. Values `local`/`test`/`development` relax the security checks below; any other value (e.g. `production`) enforces them. |
-| `API_V1_PREFIX`            | `/api/v1`                                | URL prefix for all routers and the health endpoint.                         |
+| Variable                   | Default                                                             | Description                                                                 |
+| -------------------------- |---------------------------------------------------------------------| --------------------------------------------------------------------------- |
+| `APP_NAME`                 | `vitarerum-api`                                                     | Service name reported by the health endpoint and OpenAPI title.             |
+| `APP_ENV`                  | `local`                                                             | Environment name. Values `local`/`test`/`development` relax the security checks below; any other value (e.g. `production`) enforces them. |
+| `API_V1_PREFIX`            | `/api/v1`                                                           | URL prefix for all routers and the health endpoint.                         |
 | `DATABASE_URL`             | `postgresql+asyncpg://vitarerum:vitarerum@localhost:5432/vitarerum` | Async SQLAlchemy connection string (asyncpg driver). |
-| `DATA_DIR`                 | `./data`                                 | Base directory for uploaded files, organised into readable subfolders (`proposals/`, `log-entries/`, `occurrence-entries/`, `publication-entries/`). |
-| `INSTITUTION_NAME`         | `Museum`                                 | Institution name used as `placeName` when exporting an in-situ visit record from a project. |
-| `MAX_UPLOAD_BYTES`         | `26214400` (25 MiB)                      | Maximum accepted upload size; larger uploads return `413 FILE_TOO_LARGE`. |
-| `CORS_ORIGINS`             | `["*"]`                                  | JSON list of allowed CORS origins, e.g. `["https://app.example.com"]`.      |
-| `JWT_SECRET`               | `change-me-too-local-dev-secret-32b`     | Signing key for access tokens.                                              |
-| `JWT_ALGORITHM`            | `HS256`                                  | JWT signing algorithm.                                                      |
-| `ACCESS_TOKEN_TTL_MINUTES` | `720`                                    | Access-token lifetime in minutes (default 12 hours).                        |
-| `OLLAMA_BASE_URL`          | `http://localhost:11434`                 | Base URL of the Ollama server. For Ollama Cloud use `https://ollama.com`.    |
-| `OLLAMA_API_KEY`           | _(empty)_                                | Bearer token for Ollama Cloud; leave empty for a local/self-hosted server.   |
+| `DATA_DIR`                 | `./data`                                                            | Base directory for uploaded files, organised into readable subfolders (`proposals/`, `log-entries/`, `occurrence-entries/`, `publication-entries/`). |
+| `INSTITUTION_NAME`         | `Museum`                                                            | Institution name used as `placeName` when exporting an in-situ visit record from a project. |
+| `MAX_UPLOAD_BYTES`         | `26214400` (25 MiB)                                                 | Maximum accepted upload size; larger uploads return `413 FILE_TOO_LARGE`. |
+| `CORS_ORIGINS`             | `["*"]`                                                             | JSON list of allowed CORS origins, e.g. `["https://app.example.com"]`.      |
+| `JWT_SECRET`               | `change-me-too-local-dev-secret-32b`                                | Signing key for access tokens.                                              |
+| `JWT_ALGORITHM`            | `HS256`                                                             | JWT signing algorithm.                                                      |
+| `ACCESS_TOKEN_TTL_MINUTES` | `720`                                                               | Access-token lifetime in minutes (default 12 hours).                        |
+| `OLLAMA_BASE_URL`          | `http://localhost:11434`                                            | Base URL of the Ollama server. For Ollama Cloud use `https://ollama.com`.    |
+| `OLLAMA_API_KEY`           | _(empty)_                                                           | Bearer token for Ollama Cloud; leave empty for a local/self-hosted server.   |
+| `TURNSTILE_SECRET_KEY`     | _(always-pass test key)_                                            | Cloudflare Turnstile secret for the public submission captcha; must be set outside local/test. |
+| `PUBLIC_ORIGIN`            | `http://localhost:4200`                                             | Base URL of the public SPA; used to build the confirmation link `<PUBLIC_ORIGIN>/submit-proposal/confirm?token=…`. |
+| `PUBLIC_CONFIRM_TOKEN_TTL_HOURS` | `24`                                                                | Validity window of a confirmation token before it is reported `EXPIRED`.    |
+| `SMTP_HOST`                | _(empty)_                                                           | SMTP host for confirmation e-mails. Empty ⇒ the link is **logged**, not sent (local/dev). **Required** outside local/test. |
+| `SMTP_PORT`                | `587`                                                               | SMTP port. The sender uses STARTTLS; implicit TLS (465) is not supported.    |
+| `SMTP_USERNAME`            | _(empty)_                                                           | SMTP auth username (omit for an unauthenticated relay).                      |
+| `SMTP_PASSWORD`            | _(empty)_                                                           | SMTP auth password. For Gmail this is a 16-char App Password, not the account password. |
+| `SMTP_FROM_ADDRESS`        | `no-reply@vitarerum.example`                                        | `From` header. For Gmail it must match the authenticated account or a verified "send mail as" alias. |
+| `SMTP_USE_TLS`             | `true`                                                              | Use STARTTLS (port 587).                                                     |
+
+#### Using a Gmail account as the sender (e.g. from localhost)
+
+Gmail's SMTP works with the built-in sender. Selection is based on `SMTP_HOST`
+alone (independent of `APP_ENV`), so setting these locally sends real e-mail:
+
+```dotenv
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=youraccount@gmail.com
+SMTP_PASSWORD=your-16-char-app-password
+SMTP_FROM_ADDRESS=youraccount@gmail.com
+SMTP_USE_TLS=true
+```
+
+Requires **2-Step Verification** on the Google account plus an **App Password**
+(Account → Security → App passwords); the normal password will not authenticate.
+Use port **587 (STARTTLS)** — implicit TLS on 465 is not supported by the
+sender. Keep the App Password in `.env` only (never commit it).
 
 ### Security validation outside local environments
 
@@ -82,6 +110,8 @@ When `APP_ENV` is **not** `local`/`test`/`development`, startup fails fast
 (`validate_non_local_security`) unless:
 
 - `JWT_SECRET` is changed from its default **and** is at least 32 bytes;
+- `TURNSTILE_SECRET_KEY` is set to a real key (not the always-pass test key);
+- `SMTP_HOST` is set (otherwise confirmation e-mails would only be logged);
 - `CORS_ORIGINS` does not contain `"*"`.
 
 This prevents shipping development defaults to a real deployment. See the
