@@ -36,12 +36,19 @@ the principal's identity and group permissions.
   "permissions": [
     { "permissionId": "uuid", "group": "COLLECTIONS_MANAGEMENT" },
     { "permissionId": "uuid", "group": "CURATORIAL" }
-  ]
+  ],
+  "institution": { "id": "uuid", "name": "MUHNAC" }
 }
 ```
 
-All fields are required and `permissions` is **non-empty** — a user with no group
-membership cannot log in (treated as invalid credentials).
+`accessToken`, `user`, and `permissions` are required and `permissions` is **non-empty** —
+a user with no group membership cannot log in (treated as invalid credentials).
+
+`institution` is the institution the principal acts within, resolved at login via their
+group (`Group → institutionId → Institution`). It is **nullable** — if the acting group's
+institution cannot be resolved it is omitted/`null` — so clients must treat it as optional.
+Today the system is single-institution, so every group resolves to the same one. Clients
+use this to display the active institution (e.g. in the top bar) without a separate request.
 
 > ⚠️ **`group` is a flat enum string here, not an object.** This matches the embedded
 > `PermissionDetail` shape returned by the read endpoints (`GET /users`,
@@ -103,14 +110,16 @@ for each request; the group is never inferred from the token alone.
 
 ### Bootstrap
 
-User and group **administration** endpoints — `POST /users`,
+User, group, and institution **administration** endpoints — `POST /users`,
 `POST`/`DELETE /users/{user_id}/groups/{group_id}`,
-`GET /users/{user_id}/permissions`, and `GET /groups/{group_id}/users` — require a caller
-permission in the `SYS_ADMIN` group. The **read** endpoints `GET /users`,
-`GET /users/{user_id}`, and `GET /groups` are open to any authenticated caller (no
-`SYS_ADMIN` requirement). A clean database therefore needs one out-of-band bootstrap step
-after migrations: run `scripts/seed.sql` to create the fixed groups and an initial
-`SYS_ADMIN` permission (`perm-sys-admin`) for local development and smoke testing.
+`GET /users/{user_id}/permissions`, `GET /groups/{group_id}/users`, and all
+`/institutions` endpoints — require a caller permission in the `SYS_ADMIN` group. The
+**read** endpoints `GET /users`, `GET /users/{user_id}`, and `GET /groups` are open to any
+authenticated caller (no `SYS_ADMIN` requirement). A clean database therefore needs one
+out-of-band bootstrap step after migrations: run `scripts/seed.sql` to create the default
+institution, the fixed groups (each linked to that institution via `institution_id`), and
+an initial `SYS_ADMIN` permission (`perm-sys-admin`) for local development and smoke
+testing.
 
 ---
 
@@ -357,8 +366,9 @@ an empty list.
 ### `GET /groups`
 
 **Description** — List all groups. Since groups are defined by the `GroupName` enum they
-are fixed — this endpoint returns the institutional groups and their IDs. Open to any
-authenticated caller (no `SYS_ADMIN` requirement).
+are fixed — this endpoint returns the institutional groups, their IDs, and the institution
+each belongs to (`institutionId`). Open to any authenticated caller (no `SYS_ADMIN`
+requirement).
 
 **Response `200 OK`**
 ```json
@@ -366,23 +376,28 @@ authenticated caller (no `SYS_ADMIN` requirement).
   "groups": [
     {
       "id": "uuid",
-      "name": "EXTERNAL"
+      "name": "EXTERNAL",
+      "institutionId": "uuid"
     },
     {
       "id": "uuid",
-      "name": "CURATORIAL"
+      "name": "CURATORIAL",
+      "institutionId": "uuid"
     },
     {
       "id": "uuid",
-      "name": "COLLECTIONS_MANAGEMENT"
+      "name": "COLLECTIONS_MANAGEMENT",
+      "institutionId": "uuid"
     },
     {
       "id": "uuid",
-      "name": "DIRECTION"
+      "name": "DIRECTION",
+      "institutionId": "uuid"
     },
     {
       "id": "uuid",
-      "name": "SYS_ADMIN"
+      "name": "SYS_ADMIN",
+      "institutionId": "uuid"
     }
   ]
 }
@@ -412,7 +427,8 @@ Requires `SYS_ADMIN`. `page` is zero-based. `size` must be between 1 and 100.
 {
   "group": {
     "id": "uuid",
-    "name": "CURATORIAL"
+    "name": "CURATORIAL",
+    "institutionId": "uuid"
   },
   "content": [
     {
@@ -441,9 +457,166 @@ Requires `SYS_ADMIN`. `page` is zero-based. `size` must be between 1 and 100.
 
 ---
 
+## Institutions
+
+An `Institution` is the organisation a `Group` belongs to (`Group → institutionId →
+Institution`). All `/institutions` endpoints require a caller permission in the `SYS_ADMIN`
+group. The institution payload is `{ id, name, email, address, phone }`; `name` is required
+and unique, the other fields default to an empty string.
+
+### `POST /institutions`
+
+**Description** — Create an institution.
+
+**Request body**
+```json
+{
+  "name": "string",
+  "email": "string",
+  "address": "string",
+  "phone": "string"
+}
+```
+
+`name` is required; `email`, `address`, and `phone` are optional (default `""`).
+
+**Response `201 Created`**
+```json
+{
+  "id": "uuid",
+  "name": "string",
+  "email": "string",
+  "address": "string",
+  "phone": "string"
+}
+```
+
+**Response `409 Conflict`** — name already in use.
+```json
+{
+  "error": "INSTITUTION_NAME_ALREADY_EXISTS",
+  "message": "An institution with this name already exists"
+}
+```
+
+---
+
+### `GET /institutions`
+
+**Description** — List institutions, ordered by name.
+
+**Query parameters**
+```
+page : Integer (default 0)
+size : Integer (default 20)
+```
+
+`page` is zero-based. `size` must be between 1 and 100.
+
+**Response `200 OK`**
+```json
+{
+  "content": [
+    {
+      "id": "uuid",
+      "name": "string",
+      "email": "string",
+      "address": "string",
+      "phone": "string"
+    }
+  ],
+  "page": 0,
+  "size": 20,
+  "totalElements": 1,
+  "totalPages": 1
+}
+```
+
+---
+
+### `GET /institutions/{institution_id}`
+
+**Description** — Get a single institution.
+
+**Path parameters**
+```
+institution_id : UUID (required)
+```
+
+**Response `200 OK`**
+```json
+{
+  "id": "uuid",
+  "name": "string",
+  "email": "string",
+  "address": "string",
+  "phone": "string"
+}
+```
+
+**Response `404 Not Found`**
+```json
+{
+  "error": "INSTITUTION_NOT_FOUND",
+  "message": "No institution found with id uuid"
+}
+```
+
+---
+
+### `PUT /institutions/{institution_id}`
+
+**Description** — Replace an institution's editable fields. The request shape and
+constraints match `POST /institutions` (`name` required and unique).
+
+**Path parameters**
+```
+institution_id : UUID (required)
+```
+
+**Request body** — same as `POST /institutions`.
+
+**Response `200 OK`** — the updated institution (same shape as `GET /institutions/{id}`).
+
+**Response `404 Not Found`** — `INSTITUTION_NOT_FOUND`.
+
+**Response `409 Conflict`** — `INSTITUTION_NAME_ALREADY_EXISTS`.
+
+---
+
+### `DELETE /institutions/{institution_id}`
+
+**Description** — Delete an institution. Blocked while the institution still owns groups
+(an institution can only be removed once no group references it).
+
+**Path parameters**
+```
+institution_id : UUID (required)
+```
+
+**Response `204 No Content`**
+
+**Response `404 Not Found`**
+```json
+{
+  "error": "INSTITUTION_NOT_FOUND",
+  "message": "No institution found with id uuid"
+}
+```
+
+**Response `409 Conflict`** — the institution still owns one or more groups.
+```json
+{
+  "error": "INSTITUTION_IN_USE",
+  "message": "Institution uuid still owns groups"
+}
+```
+
+---
+
 A few conventions applied consistently across all contracts:
 
-**IDs are UUIDs** throughout, matching the model. **Enum values are returned as strings** (`"CURATORIAL"` not `1`) for readability. **The embedded permission shape (`PermissionDetail`)** used across all contexts is `{ "permissionId", "user": { "id", "name", "email" }, "group": "<GROUP_NAME>" }` — the group is a flat enum string, not a nested object. The one exception is the `POST /users/{user_id}/groups/{group_id}` response, which returns the group as a nested `{ "id", "name" }` object. **Pagination** follows a consistent envelope with `content`, `page`, `size`, `totalElements`, and `totalPages`.
+**IDs are UUIDs** throughout, matching the model. **Enum values are returned as strings** (`"CURATORIAL"` not `1`) for readability. **The embedded permission shape (`PermissionDetail`)** used across all contexts is `{ "permissionId", "user": { "id", "name", "email" }, "group": "<GROUP_NAME>" }` — the group is a flat enum string, not a nested object. The one exception is the `POST /users/{user_id}/groups/{group_id}` response, which returns the group as a nested `{ "id", "name" }` object. **Group objects** elsewhere — the `GET /groups` list entries and the `group` envelope of `GET /groups/{group_id}/users` — are `{ "id", "name", "institutionId" }`; note the assign response's nested group is the only group object that omits `institutionId`. **Pagination** follows a consistent envelope with `content`, `page`, `size`, `totalElements`, and `totalPages`.
 
 **Authentication** — except for `POST /auth/login`, every endpoint here and in the other contexts requires `Authorization: Bearer <accessToken>` and `X-Permission-Id: <permission id>` headers; see [Authenticated requests](#authenticated-requests). `401` is reserved for authentication failure (and logs the client out); `403` for authorization failure.
 
