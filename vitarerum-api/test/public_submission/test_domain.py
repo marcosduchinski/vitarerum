@@ -6,6 +6,7 @@ from app.public_submission.domain.models import (
     InvalidTransition,
     PendingPublicSubmission,
     PendingSubmissionStatus,
+    PublicDocumentSubmission,
 )
 from app.shared.kernel import UseType
 
@@ -23,6 +24,14 @@ def _pending(created_at: datetime) -> PendingPublicSubmission:
         created_at=created_at,
         proposed_begin_date=date(2026, 7, 1),
         proposed_end_date=date(2026, 7, 15),
+        documents=[
+            PublicDocumentSubmission(
+                id="doc-1",
+                file_name="support.pdf",
+                file_reference="public-submissions/sub-1/support.pdf",
+                submitted_at=created_at,
+            )
+        ],
     )
 
 
@@ -70,3 +79,23 @@ def test_confirmed_submission_never_expires() -> None:
     long_after = created + timedelta(days=365)
 
     assert submission.is_expired(long_after, timedelta(hours=24)) is False
+
+
+def test_pending_submission_requires_at_least_one_document() -> None:
+    now = datetime(2026, 6, 26, tzinfo=UTC)
+
+    with pytest.raises(ValueError, match="At least one"):
+        PendingPublicSubmission(
+            id="sub-1",
+            token="tok-1",
+            citizen_name="Pedro Silva",
+            citizen_email="pedro@example.test",
+            subject="Acesso à coleção",
+            body="Gostaria de estudar um espécime.",
+            use_type=UseType.IN_SITU_VISIT,
+            consent=True,
+            created_at=now,
+            proposed_begin_date=date(2026, 7, 1),
+            proposed_end_date=date(2026, 7, 15),
+            documents=[],
+        )

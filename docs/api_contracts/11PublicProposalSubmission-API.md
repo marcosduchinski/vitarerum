@@ -13,7 +13,7 @@ real protection MUST be enforced server-side:
 | 3 | **Validate & sanitise**: length caps, strip control chars, reject CR/LF in e-mail-bound fields, escape on render in the staff UI (stored-XSS defence) | both |
 | 4 | **Double opt-in**: create a *pending, unverified* record + e-mail a single-use signed TTL token; materialise the proposal only on confirm; discard unconfirmed after TTL | both |
 | 5 | **Honeypot** `website`: if non-empty, `202` with **no work** (accept-and-drop) | `POST /public/proposals` |
-| 6 | **No file uploads; no cookies/credentials**; CORS locked to the public origin; WAF/bot-management at the edge | both |
+| 6 | **Constrained file uploads; no cookies/credentials**: 1-5 files, PDF/JPG/PNG/DOCX only, <=10 MB each, magic-byte sniffed, stored outside any web root. AV scanning is a deployment concern; CORS locked to the public origin; WAF/bot-management at the edge | `POST /public/proposals` |
 
 > Distinct from the authenticated `POST /proposals` (which needs a session + `X-Permission-Id`).
 > A public submission has no account, so it captures the citizen's own name + e-mail.
@@ -39,6 +39,9 @@ visible to staff until the citizen confirms.**
 
 ### Request body
 
+Content type: `multipart/form-data`. Text fields are regular form parts.
+Supporting files are sent as repeated `documents` file parts.
+
 | Field | Type | Required | Constraints |
 |---|---|---|---|
 | `citizenName` | string | ✅ | 1–120 chars |
@@ -51,20 +54,24 @@ visible to staff until the citizen confirms.**
 | `consent` | boolean | ✅ | **must be `true`** (RGPD) |
 | `captchaToken` | string | ✅ | Turnstile response token; server verifies via `siteverify` |
 | `website` | string | — | **honeypot** — should be empty (≤255 chars accepted); non-empty ⇒ silent accept-and-drop (`202`, no work). Not schema-rejected, so a bot cannot tell the field is monitored. |
+| `documents` | file[] | ✅ | 1-5 files; each <=10 MB; allowed real formats: PDF, JPG/JPEG, PNG, DOCX. The server validates content signatures, not only names/extensions. |
 
-```json
-{
-  "citizenName": "Pedro Silva",
-  "citizenEmail": "pedro@example.test",
-  "subject": "Acesso à Coleção de Zoologia",
-  "body": "Gostaria de estudar um espécime para a minha tese de mestrado.",
-  "useType": "IN_SITU_VISIT",
-  "proposedBeginDate": "2026-07-01",
-  "proposedEndDate": "2026-07-15",
-  "consent": true,
-  "captchaToken": "0.AbC...turnstile-response-token",
-  "website": ""
-}
+```http
+POST /api/v1/public/proposals
+Content-Type: multipart/form-data
+
+citizenName=Pedro Silva
+citizenEmail=pedro@example.test
+subject=Acesso à Coleção de Zoologia
+body=Gostaria de estudar um espécime para a minha tese de mestrado.
+useType=IN_SITU_VISIT
+proposedBeginDate=2026-07-01
+proposedEndDate=2026-07-15
+consent=true
+captchaToken=0.AbC...turnstile-response-token
+website=
+documents=@supporting-letter.pdf
+documents=@image.jpg
 ```
 
 ### Responses
@@ -72,8 +79,10 @@ visible to staff until the citizen confirms.**
 | Status | Meaning | Body |
 |---|---|---|
 | `202` | Accepted; confirmation e-mail sent (or honeypot drop) | `PublicSubmissionReceipt` |
-| `422` | Validation failed (missing/invalid fields, consent not given) | `ServerError` |
+| `422` | Validation failed (missing/invalid fields, consent not given, missing documents, or more than 5 documents) | `ServerError` |
 | `403` | Turnstile verification failed (missing/invalid/expired) | `ServerError` |
+| `413` | One file exceeds 10 MB | `ServerError` |
+| `415` | Unsupported uploaded file type | `ServerError` |
 | `429` | Rate limit exceeded (`Retry-After` header) | `ServerError` |
 | `503` | Captcha provider unreachable | `ServerError` |
 
@@ -110,7 +119,7 @@ so the public page can render a friendly message. Reserve non-2xx for unexpected
 |---|---|
 | `CONFIRMED` | Proposal created and forwarded to staff (`referenceNumber` present) |
 | `ALREADY_CONFIRMED` | Link already used; proposal already exists |
-| `EXPIRED` | Token past its TTL; citizen must resubmit |
+| `EXPIRED` | Token past its TTL; citizen must resubmit. Confirming an expired link also reclaims that submission's uploaded files and pending row (a second click then reads `INVALID`). |
 | `INVALID` | Token malformed/unknown |
 
 ```json

@@ -1,5 +1,6 @@
 from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 from sqlalchemy.exc import IntegrityError
@@ -11,6 +12,7 @@ from app.public_submission.application.use_cases import (
     RateLimitExceeded,
     SubmitPublicProposal,
     SubmitPublicProposalInput,
+    UploadedDocument,
 )
 from app.public_submission.domain.models import (
     PendingPublicSubmission,
@@ -38,6 +40,9 @@ class FakeRepo:
 
     async def save(self, submission: PendingPublicSubmission) -> None:
         self.by_token[submission.token] = submission
+
+    async def delete(self, submission: PendingPublicSubmission) -> None:
+        self.by_token.pop(submission.token, None)
 
 
 async def _passthrough_retry(op):  # type: ignore[no-untyped-def]
@@ -73,6 +78,23 @@ class FakeClock:
         return self._now
 
 
+class FakeStorage:
+    def __init__(self, fail_on_save: bool = False) -> None:
+        self.fail_on_save = fail_on_save
+        self.saved: dict[str, bytes] = {}
+        self.deleted: list[str] = []
+
+    async def save(self, content: bytes, file_reference: str) -> str:
+        if self.fail_on_save:
+            raise RuntimeError("storage failed")
+        self.saved[file_reference] = content
+        return file_reference
+
+    async def delete(self, file_reference: str) -> None:
+        self.deleted.append(file_reference)
+        self.saved.pop(file_reference, None)
+
+
 def _submit_input(**overrides: object) -> SubmitPublicProposalInput:
     data = {
         "citizen_name": "Pedro Silva",
@@ -86,6 +108,7 @@ def _submit_input(**overrides: object) -> SubmitPublicProposalInput:
         "remote_ip": "203.0.113.1",
         "proposed_begin_date": date(2026, 7, 1),
         "proposed_end_date": date(2026, 7, 15),
+        "documents": [UploadedDocument(file_name="support.pdf", content=b"%PDF-1.4\n")],
     }
     data.update(overrides)
     return SubmitPublicProposalInput(**data)  # type: ignore[arg-type]
@@ -96,12 +119,14 @@ def _submit_use_case(
     *,
     captcha: FakeCaptcha | None = None,
     limiter: FakeRateLimiter | None = None,
+    storage: FakeStorage | None = None,
 ) -> SubmitPublicProposal:
     return SubmitPublicProposal(
         repository=repo,
         captcha=captcha or FakeCaptcha(),
         rate_limiter=limiter or FakeRateLimiter(),
         clock=FakeClock(),
+        file_storage=storage or FakeStorage(),
     )
 
 
@@ -118,6 +143,9 @@ async def test_happy_path_stores_pending_and_returns_token() -> None:
     assert len(repo.by_token) == 1
     submission = next(iter(repo.by_token.values()))
     assert submission.status is PendingSubmissionStatus.PENDING_CONFIRMATION
+    assert len(submission.documents) == 1
+    assert submission.documents[0].file_name == "support.pdf"
+    assert submission.documents[0].file_reference.startswith("public-submissions/")
     # The use case no longer sends e-mail itself; it returns the token + name so
     # the route can dispatch the confirmation only after it commits (bug #2).
     assert out.token == submission.token
@@ -126,13 +154,15 @@ async def test_happy_path_stores_pending_and_returns_token() -> None:
 
 async def test_honeypot_accepts_and_drops() -> None:
     repo = FakeRepo()
-    use_case = _submit_use_case(repo)
+    storage = FakeStorage()
+    use_case = _submit_use_case(repo, storage=storage)
 
     out = await use_case.execute(_submit_input(website="http://spam.example"))
 
     assert out.email == "pedro@example.test"
     assert out.token is None  # nothing to send
     assert repo.by_token == {}  # no work
+    assert storage.saved == {}
 
 
 async def test_rate_limited_raises() -> None:
@@ -165,6 +195,21 @@ async def test_captcha_unavailable_raises() -> None:
     assert repo.by_token == {}
 
 
+async def test_submit_deletes_saved_files_when_persistence_fails() -> None:
+    class FailingRepo(FakeRepo):
+        async def add(self, submission: PendingPublicSubmission) -> None:
+            raise RuntimeError("database failed")
+
+    storage = FakeStorage()
+    use_case = _submit_use_case(FailingRepo(), storage=storage)
+
+    with pytest.raises(RuntimeError, match="database failed"):
+        await use_case.execute(_submit_input())
+
+    assert storage.saved == {}
+    assert len(storage.deleted) == 1
+
+
 # ── confirm ────────────────────────────────────────────────────────────────────
 
 
@@ -178,7 +223,7 @@ class FakeProvision:
 class FakeSubmitProposal:
     def __init__(self, reference: str = "VRP-20260626-0007") -> None:
         self._reference = reference
-        self.calls: list[object] = []
+        self.calls: list[Any] = []
 
     async def execute(self, data: object) -> SimpleNamespace:
         self.calls.append(data)
@@ -191,7 +236,10 @@ class FakeSubmitProposal:
 
 
 def _confirm_use_case(
-    repo: FakeRepo, submit: FakeSubmitProposal | None = None
+    repo: FakeRepo,
+    submit: FakeSubmitProposal | None = None,
+    *,
+    storage: FakeStorage | None = None,
 ) -> ConfirmPublicProposal:
     return ConfirmPublicProposal(
         repository=repo,
@@ -201,6 +249,7 @@ def _confirm_use_case(
         clock=FakeClock(),
         token_ttl=timedelta(hours=24),
         retry_runner=_passthrough_retry,
+        file_storage=storage or FakeStorage(),
     )
 
 
@@ -240,6 +289,10 @@ async def test_confirm_materialises_proposal() -> None:
     # As are the dates the citizen proposed.
     assert submit.calls[0].begin_date == date(2026, 7, 1)
     assert submit.calls[0].end_date == date(2026, 7, 15)
+    assert len(submit.calls[0].documents) == 1
+    assert submit.calls[0].documents[0].type.value == "PUBLIC_SUBMISSION"
+    assert submit.calls[0].documents[0].file_name == "support.pdf"
+    assert submit.calls[0].documents[0].submitted_by == "perm-ext"
     assert repo.by_token[token].status is PendingSubmissionStatus.CONFIRMED
 
 
@@ -256,14 +309,21 @@ async def test_confirm_twice_is_already_confirmed() -> None:
     assert second.reference_number == first.reference_number
 
 
-async def test_confirm_expired_token() -> None:
+async def test_confirm_expired_token_reclaims_files_and_row() -> None:
     repo = FakeRepo()
     token = await _seed_pending(repo, created_at=_NOW - timedelta(hours=25))
+    file_reference = repo.by_token[token].documents[0].file_reference
+    storage = FakeStorage()
 
-    result = await _confirm_use_case(repo).execute(token, "203.0.113.1")
+    result = await _confirm_use_case(repo, storage=storage).execute(
+        token, "203.0.113.1"
+    )
 
     assert result.status == "EXPIRED"
-    assert repo.by_token[token].status is PendingSubmissionStatus.PENDING_CONFIRMATION
+    # The dead link's files and pending row are reclaimed on discovery, rather
+    # than lingering until a (still-needed) bulk purge job runs.
+    assert token not in repo.by_token
+    assert storage.deleted == [file_reference]
 
 
 async def test_confirm_rate_limited_raises() -> None:
@@ -277,6 +337,7 @@ async def test_confirm_rate_limited_raises() -> None:
         clock=FakeClock(),
         token_ttl=timedelta(hours=24),
         retry_runner=_passthrough_retry,
+        file_storage=FakeStorage(),
     )
 
     with pytest.raises(RateLimitExceeded):
@@ -297,7 +358,7 @@ async def test_confirm_uses_locking_read() -> None:
     async def _blind(_token: str) -> None:
         raise AssertionError("confirm must use get_by_token_for_update")
 
-    repo.get_by_token = _blind  # type: ignore[method-assign]
+    repo.get_by_token = _blind  # type: ignore[assignment,method-assign]
 
     result = await _confirm_use_case(repo).execute(token, "203.0.113.1")
     assert result.status == "CONFIRMED"
@@ -346,7 +407,8 @@ async def test_confirm_retries_reference_number_conflict() -> None:
         rate_limiter=FakeRateLimiter(),
         clock=FakeClock(),
         token_ttl=timedelta(hours=24),
-        retry_runner=_retry_on_integrity,
+        retry_runner=_retry_on_integrity,  # type: ignore[arg-type]
+        file_storage=FakeStorage(),
     )
 
     result = await use_case.execute(token, "203.0.113.1")

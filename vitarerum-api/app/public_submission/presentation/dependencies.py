@@ -49,6 +49,7 @@ from app.public_submission.infrastructure.repositories import (
 )
 from app.shared.persistence import run_with_unique_retry
 from app.use_of_collections.application.use_cases import SubmitProposal
+from app.use_of_collections.infrastructure.file_storage import LocalDiskFileStorage
 from app.use_of_collections.infrastructure.repositories import (
     SqlAlchemyConversationRepository,
     SqlAlchemyProposalRepository,
@@ -92,6 +93,7 @@ def get_submit_use_case(session: DBSession) -> SubmitPublicProposal:
         captcha=_captcha_verifier(),
         rate_limiter=_rate_limiter,
         clock=_clock,
+        file_storage=LocalDiskFileStorage(settings.data_dir),
     )
 
 
@@ -121,6 +123,7 @@ def get_confirm_use_case(session: DBSession) -> ConfirmPublicProposal:
         clock=_clock,
         token_ttl=timedelta(hours=settings.public_confirm_token_ttl_hours),
         retry_runner=retry_runner,
+        file_storage=LocalDiskFileStorage(settings.data_dir),
     )
 
 

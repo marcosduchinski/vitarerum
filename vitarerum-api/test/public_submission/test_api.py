@@ -4,7 +4,7 @@ from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
-from httpx import ASGITransport, AsyncClient
+from httpx import ASGITransport, AsyncClient, Response
 
 from app.database import get_async_session
 from app.main import app
@@ -72,6 +72,20 @@ class _Clock:
         return _NOW
 
 
+class _Storage:
+    def __init__(self) -> None:
+        self.saved: dict[str, bytes] = {}
+        self.deleted: list[str] = []
+
+    async def save(self, content: bytes, file_reference: str) -> str:
+        self.saved[file_reference] = content
+        return file_reference
+
+    async def delete(self, file_reference: str) -> None:
+        self.deleted.append(file_reference)
+        self.saved.pop(file_reference, None)
+
+
 class _Provision:
     async def execute(self, email: str, name: str) -> SimpleNamespace:
         return SimpleNamespace(actor=SimpleNamespace(id="perm-ext", email=email))
@@ -105,15 +119,17 @@ async def _passthrough_retry(op):  # type: ignore[no-untyped-def]
 @asynccontextmanager
 async def _client(
     *, captcha_ok: bool = True, rate_limited: bool = False, fail_commit: bool = False
-) -> AsyncIterator[tuple[AsyncClient, _Repo, _Email]]:
+) -> AsyncIterator[tuple[AsyncClient, _Repo, _Email, _Storage]]:
     repo = _Repo()
     email = _Email()
+    storage = _Storage()
     limiter = _Limiter(block=rate_limited)
     submit_uc = SubmitPublicProposal(
         repository=repo,
         captcha=_Captcha(ok=captcha_ok),
         rate_limiter=limiter,
         clock=_Clock(),
+        file_storage=storage,
     )
     confirm_uc = ConfirmPublicProposal(
         repository=repo,
@@ -123,6 +139,7 @@ async def _client(
         clock=_Clock(),
         token_ttl=timedelta(hours=24),
         retry_runner=_passthrough_retry,
+        file_storage=storage,
     )
     app.dependency_overrides[get_submit_use_case] = lambda: submit_uc
     app.dependency_overrides[get_confirm_use_case] = lambda: confirm_uc
@@ -133,12 +150,12 @@ async def _client(
     transport = ASGITransport(app=app)
     try:
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            yield client, repo, email
+            yield client, repo, email, storage
     finally:
         app.dependency_overrides.clear()
 
 
-def _payload(**overrides: object) -> dict:
+def _payload(**overrides: str) -> dict[str, str]:
     data = {
         "citizenName": "Pedro Silva",
         "citizenEmail": "pedro@example.org",
@@ -147,7 +164,7 @@ def _payload(**overrides: object) -> dict:
         "useType": "IN_SITU_VISIT",
         "proposedBeginDate": "2026-07-01",
         "proposedEndDate": "2026-07-15",
-        "consent": True,
+        "consent": "true",
         "captchaToken": "0.AbC-token",
         "website": "",
     }
@@ -155,23 +172,46 @@ def _payload(**overrides: object) -> dict:
     return data
 
 
+def _files(
+    *items: tuple[str, bytes, str],
+) -> list[tuple[str, tuple[str, bytes, str]]]:
+    source = items or (("support.pdf", b"%PDF-1.4\n", "application/pdf"),)
+    return [("documents", item) for item in source]
+
+
+async def _post_submit(
+    client: AsyncClient,
+    *,
+    data: dict[str, str] | None = None,
+    files: list[tuple[str, tuple[str, bytes, str]]] | None = None,
+) -> Response:
+    return await client.post(
+        _SUBMIT_URL,
+        data=_payload() if data is None else data,
+        files=_files() if files is None else files,
+    )
+
+
 async def test_submit_returns_202_receipt() -> None:
-    async with _client() as (client, repo, email):
-        resp = await client.post(_SUBMIT_URL, json=_payload())
+    async with _client() as (client, repo, email, _):
+        resp = await _post_submit(client)
     assert resp.status_code == 202
     assert resp.json() == {
         "status": "PENDING_CONFIRMATION",
         "email": "pedro@example.org",
     }
     assert len(repo.by_token) == 1
+    submission = next(iter(repo.by_token.values()))
+    assert len(submission.documents) == 1
+    assert submission.documents[0].file_name == "support.pdf"
     assert len(email.sent) == 1
 
 
 async def test_submit_persists_proposed_dates() -> None:
-    async with _client() as (client, repo, _):
-        resp = await client.post(
-            _SUBMIT_URL,
-            json=_payload(proposedBeginDate="2026-08-01", proposedEndDate="2026-08-15"),
+    async with _client() as (client, repo, _, _):
+        resp = await _post_submit(
+            client,
+            data=_payload(proposedBeginDate="2026-08-01", proposedEndDate="2026-08-15"),
         )
     assert resp.status_code == 202
     submission = next(iter(repo.by_token.values()))
@@ -180,55 +220,134 @@ async def test_submit_persists_proposed_dates() -> None:
 
 
 async def test_submit_missing_proposed_dates_is_rejected() -> None:
-    async with _client() as (client, repo, _):
+    async with _client() as (client, repo, _, _):
         payload = _payload()
         del payload["proposedBeginDate"]
         del payload["proposedEndDate"]
-        resp = await client.post(_SUBMIT_URL, json=payload)
+        resp = await _post_submit(client, data=payload)
     assert resp.status_code == 422
     assert repo.by_token == {}
 
 
 async def test_submit_honeypot_returns_202_no_work() -> None:
-    async with _client() as (client, repo, email):
-        resp = await client.post(_SUBMIT_URL, json=_payload(website="http://spam"))
+    async with _client() as (client, repo, email, _):
+        resp = await _post_submit(client, data=_payload(website="http://spam"))
+    assert resp.status_code == 202
+    assert repo.by_token == {}
+    assert email.sent == []
+
+
+async def test_submit_honeypot_skips_document_validation() -> None:
+    async with _client() as (client, repo, email, _):
+        resp = await _post_submit(
+            client,
+            data=_payload(website="http://spam"),
+            files=[],
+        )
     assert resp.status_code == 202
     assert repo.by_token == {}
     assert email.sent == []
 
 
 async def test_submit_captcha_failure_403() -> None:
-    async with _client(captcha_ok=False) as (client, repo, _):
-        resp = await client.post(_SUBMIT_URL, json=_payload())
+    async with _client(captcha_ok=False) as (client, repo, _, _):
+        resp = await _post_submit(client)
     assert resp.status_code == 403
     assert resp.json()["message"] == "Captcha verification failed."
     assert repo.by_token == {}
 
 
 async def test_submit_rate_limited_429_with_retry_after() -> None:
-    async with _client(rate_limited=True) as (client, _, _):
-        resp = await client.post(_SUBMIT_URL, json=_payload())
+    async with _client(rate_limited=True) as (client, _, _, _):
+        resp = await _post_submit(client)
     assert resp.status_code == 429
     assert resp.headers["Retry-After"] == "60"
 
 
+async def test_submit_rate_limited_before_reading_uploads() -> None:
+    # The rate-limit / captcha gates must run BEFORE the route buffers and
+    # validates uploads, so abusive traffic is shed without the server first
+    # reading files into memory. A rate-limited request with no documents must
+    # therefore surface 429 (admission), not 422 (document validation).
+    async with _client(rate_limited=True) as (client, repo, _, storage):
+        resp = await _post_submit(client, files=[])
+    assert resp.status_code == 429
+    assert repo.by_token == {}
+    assert storage.saved == {}
+
+
+async def test_submit_captcha_checked_before_reading_uploads() -> None:
+    async with _client(captcha_ok=False) as (client, repo, _, storage):
+        resp = await _post_submit(client, files=[])
+    assert resp.status_code == 403
+    assert storage.saved == {}
+
+
 async def test_submit_missing_consent_is_rejected() -> None:
-    async with _client() as (client, repo, _):
-        resp = await client.post(_SUBMIT_URL, json=_payload(consent=False))
+    async with _client() as (client, repo, _, _):
+        resp = await _post_submit(client, data=_payload(consent="false"))
     assert resp.status_code == 422
     assert repo.by_token == {}
 
 
 async def test_submit_invalid_use_type_is_rejected() -> None:
-    async with _client() as (client, repo, _):
-        resp = await client.post(_SUBMIT_URL, json=_payload(useType="WHATEVER"))
+    async with _client() as (client, repo, _, _):
+        resp = await _post_submit(client, data=_payload(useType="WHATEVER"))
     assert resp.status_code == 422
     assert repo.by_token == {}
 
 
+async def test_submit_missing_documents_is_rejected() -> None:
+    async with _client() as (client, repo, _, _):
+        resp = await _post_submit(client, files=[])
+    assert resp.status_code == 422
+    assert repo.by_token == {}
+
+
+async def test_submit_too_many_documents_is_rejected() -> None:
+    files = _files(
+        ("one.pdf", b"%PDF-1.4\n", "application/pdf"),
+        ("two.pdf", b"%PDF-1.4\n", "application/pdf"),
+        ("three.pdf", b"%PDF-1.4\n", "application/pdf"),
+        ("four.pdf", b"%PDF-1.4\n", "application/pdf"),
+        ("five.pdf", b"%PDF-1.4\n", "application/pdf"),
+        ("six.pdf", b"%PDF-1.4\n", "application/pdf"),
+    )
+    async with _client() as (client, repo, _, _):
+        resp = await _post_submit(client, files=files)
+    assert resp.status_code == 422
+    assert repo.by_token == {}
+
+
+async def test_submit_oversized_document_is_rejected() -> None:
+    async with _client() as (client, repo, _, _):
+        resp = await _post_submit(
+            client,
+            files=_files(
+                (
+                    "large.pdf",
+                    b"%PDF-1.4\n" + b"x" * (10 * 1024 * 1024),
+                    "application/pdf",
+                )
+            ),
+        )
+    assert resp.status_code == 413
+    assert repo.by_token == {}
+
+
+async def test_submit_unsupported_document_is_rejected() -> None:
+    async with _client() as (client, repo, _, _):
+        resp = await _post_submit(
+            client,
+            files=_files(("notes.txt", b"plain text", "text/plain")),
+        )
+    assert resp.status_code == 415
+    assert repo.by_token == {}
+
+
 async def test_submit_then_confirm_flow() -> None:
-    async with _client() as (client, repo, email):
-        submitted = await client.post(_SUBMIT_URL, json=_payload())
+    async with _client() as (client, repo, email, _):
+        submitted = await _post_submit(client)
         assert submitted.status_code == 202
         token = email.sent[0][2]
 
@@ -245,7 +364,7 @@ async def test_submit_then_confirm_flow() -> None:
 
 
 async def test_confirm_unknown_token_returns_200_invalid() -> None:
-    async with _client() as (client, _, _):
+    async with _client() as (client, _, _, _):
         resp = await client.post(_CONFIRM_URL, json={"token": "nope"})
     assert resp.status_code == 200
     assert resp.json() == {"status": "INVALID", "referenceNumber": None}
@@ -255,7 +374,9 @@ async def test_submit_does_not_email_when_commit_fails() -> None:
     # Bug #2: the confirmation e-mail must be sent only after the pending row is
     # durably committed. If the commit fails, the citizen must not receive a link
     # whose token was rolled back.
-    async with _client(fail_commit=True) as (client, repo, email):
+    async with _client(fail_commit=True) as (client, repo, email, storage):
         with pytest.raises(RuntimeError):
-            await client.post(_SUBMIT_URL, json=_payload())
+            await _post_submit(client)
         assert email.sent == []
+        assert storage.saved == {}
+        assert len(storage.deleted) == 1

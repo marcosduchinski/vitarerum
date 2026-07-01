@@ -62,6 +62,9 @@ describe('PublicSubmitProposalPageComponent', () => {
     setSelectValue(compiled, '#useType', 'IN_SITU_VISIT');
     setInputValue(compiled, '#proposedBeginDate', '2026-07-01');
     setInputValue(compiled, '#proposedEndDate', '2026-07-15');
+    setFiles(compiled, '#documents', [
+      new File(['%PDF-1.4\n'], 'support.pdf', { type: 'application/pdf' }),
+    ]);
     setChecked(compiled, '.consent input[type="checkbox"]', true);
 
     submitForm(compiled);
@@ -79,6 +82,8 @@ describe('PublicSubmitProposalPageComponent', () => {
       consent: true,
       website: '', // honeypot stayed empty
     });
+    expect(api.submitCalls[0].documents).toHaveLength(1);
+    expect(api.submitCalls[0].documents[0].name).toBe('support.pdf');
     expect(router.navigate).toHaveBeenCalledWith(['/submit-proposal/received'], {
       queryParams: { email: 'pedro@example.test' },
     });
@@ -116,6 +121,9 @@ describe('PublicSubmitProposalPageComponent', () => {
     setSelectValue(compiled, '#useType', 'IN_SITU_VISIT');
     setInputValue(compiled, '#proposedBeginDate', '2026-07-01');
     setInputValue(compiled, '#proposedEndDate', '2026-07-15');
+    setFiles(compiled, '#documents', [
+      new File(['%PDF-1.4\n'], 'support.pdf', { type: 'application/pdf' }),
+    ]);
     setChecked(compiled, '.consent input[type="checkbox"]', true);
 
     submitForm(compiled);
@@ -148,6 +156,85 @@ describe('PublicSubmitProposalPageComponent', () => {
 
     expect(api.submitCalls).toHaveLength(0);
     expect(compiled.textContent).toContain('Please give both a start and an end date.');
+  });
+
+  it('blocks submission until a supporting document is attached', async () => {
+    await setup('');
+    const fixture = TestBed.createComponent(PublicSubmitProposalPageComponent);
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    setInputValue(compiled, '#name', 'Pedro Silva');
+    setInputValue(compiled, '#email', 'pedro@example.test');
+    setInputValue(compiled, '#subject', 'Access request');
+    setInputValue(compiled, '#body', 'Details about my request.');
+    setSelectValue(compiled, '#useType', 'IN_SITU_VISIT');
+    setInputValue(compiled, '#proposedBeginDate', '2026-07-01');
+    setInputValue(compiled, '#proposedEndDate', '2026-07-15');
+    setChecked(compiled, '.consent input[type="checkbox"]', true);
+
+    submitForm(compiled);
+    fixture.detectChanges();
+
+    expect(api.submitCalls).toHaveLength(0);
+    expect(compiled.textContent).toContain('Attach at least one supporting document.');
+  });
+
+  it('blocks more than five supporting documents', async () => {
+    await setup('');
+    const fixture = TestBed.createComponent(PublicSubmitProposalPageComponent);
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    setInputValue(compiled, '#name', 'Pedro Silva');
+    setInputValue(compiled, '#email', 'pedro@example.test');
+    setInputValue(compiled, '#subject', 'Access request');
+    setInputValue(compiled, '#body', 'Details about my request.');
+    setSelectValue(compiled, '#useType', 'IN_SITU_VISIT');
+    setInputValue(compiled, '#proposedBeginDate', '2026-07-01');
+    setInputValue(compiled, '#proposedEndDate', '2026-07-15');
+    setChecked(compiled, '.consent input[type="checkbox"]', true);
+    setFiles(
+      compiled,
+      '#documents',
+      Array.from(
+        { length: 6 },
+        (_, index) => new File(['%PDF-1.4\n'], `support-${index}.pdf`, { type: 'application/pdf' }),
+      ),
+    );
+
+    submitForm(compiled);
+    fixture.detectChanges();
+
+    expect(api.submitCalls).toHaveLength(0);
+    expect(compiled.textContent).toContain('Attach no more than five supporting documents.');
+  });
+
+  it('blocks oversized supporting documents', async () => {
+    await setup('');
+    const fixture = TestBed.createComponent(PublicSubmitProposalPageComponent);
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    setInputValue(compiled, '#name', 'Pedro Silva');
+    setInputValue(compiled, '#email', 'pedro@example.test');
+    setInputValue(compiled, '#subject', 'Access request');
+    setInputValue(compiled, '#body', 'Details about my request.');
+    setSelectValue(compiled, '#useType', 'IN_SITU_VISIT');
+    setInputValue(compiled, '#proposedBeginDate', '2026-07-01');
+    setInputValue(compiled, '#proposedEndDate', '2026-07-15');
+    setChecked(compiled, '.consent input[type="checkbox"]', true);
+    setFiles(compiled, '#documents', [
+      new File([new Uint8Array(10 * 1024 * 1024 + 1)], 'large.pdf', {
+        type: 'application/pdf',
+      }),
+    ]);
+
+    submitForm(compiled);
+    fixture.detectChanges();
+
+    expect(api.submitCalls).toHaveLength(0);
+    expect(compiled.textContent).toContain('large.pdf is larger than 10 MB.');
   });
 
   it('blocks submission when the end date precedes the start date', async () => {
@@ -231,6 +318,16 @@ function setChecked(root: HTMLElement, selector: string, checked: boolean): void
   expect(box).not.toBeNull();
   box!.checked = checked;
   box!.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+function setFiles(root: HTMLElement, selector: string, files: File[]): void {
+  const input = root.querySelector<HTMLInputElement>(selector);
+  expect(input).not.toBeNull();
+  Object.defineProperty(input!, 'files', {
+    value: files,
+    configurable: true,
+  });
+  input!.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
 function submitForm(root: HTMLElement): void {

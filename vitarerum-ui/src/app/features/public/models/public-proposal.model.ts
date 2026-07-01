@@ -19,6 +19,8 @@ export interface PublicProposalSubmission {
   readonly proposedBeginDate: string;
   /** Date (ISO 8601, YYYY-MM-DD) the citizen proposes the use to end. */
   readonly proposedEndDate: string;
+  /** Supporting documents required for public submissions (1-5 files). */
+  readonly documents: readonly File[];
   /** RGPD consent — the citizen agreed to their data being processed. */
   readonly consent: boolean;
   /** Cloudflare Turnstile token; the server must verify it via siteverify. */

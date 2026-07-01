@@ -32,7 +32,21 @@ export class PublicProposalApiService implements PublicProposalApi {
   private readonly apiBaseUrl = inject(API_BASE_URL);
 
   submit(submission: PublicProposalSubmission): Observable<PublicSubmissionReceipt> {
-    return this.http.post<PublicSubmissionReceipt>(this.url('/public/proposals'), submission);
+    const form = new FormData();
+    form.append('citizenName', submission.citizenName);
+    form.append('citizenEmail', submission.citizenEmail);
+    form.append('subject', submission.subject);
+    form.append('body', submission.body);
+    form.append('useType', submission.useType);
+    form.append('proposedBeginDate', submission.proposedBeginDate);
+    form.append('proposedEndDate', submission.proposedEndDate);
+    form.append('consent', String(submission.consent));
+    form.append('captchaToken', submission.captchaToken);
+    form.append('website', submission.website ?? '');
+    for (const document of submission.documents) {
+      form.append('documents', document, document.name);
+    }
+    return this.http.post<PublicSubmissionReceipt>(this.url('/public/proposals'), form);
   }
 
   confirm(token: string): Observable<PublicConfirmationResult> {

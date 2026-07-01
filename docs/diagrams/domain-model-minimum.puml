@@ -456,9 +456,17 @@ package "Public Submission" <<Bounded Context>> {
         + isExpired(now, ttl): Boolean
         + confirm(proposalReference, occurredAt)
         }
+
+        class PublicDocumentSubmission <<Entity>> #b5ead7 {
+        - id: String
+        - fileName: String
+        - fileReference: String
+        - submittedAt: DateTime
+        }
     }
 
     PendingPublicSubmission *-- PendingSubmissionStatus
+    PendingPublicSubmission *-- "1..*" PublicDocumentSubmission
 }
 
 PendingPublicSubmission ..> UseType : useType
@@ -466,12 +474,14 @@ PendingPublicSubmission ..> UseType : useType
 ' --- cross-context integration ---
 PendingPublicSubmission ..> Proposal : materialises on confirm (SubmitProposal)
 PendingPublicSubmission ..> Permission : provisions EXTERNAL requester (by e-mail)
+PublicDocumentSubmission ..> Document : materialises as (on confirm)
 
 note as N_PublicSubmission
   Unauthenticated citizen intake (double opt-in). Step 1 stores a pending,
   unverified submission and e-mails a single-use token; step 2 confirms it,
   materialising a Proposal via the published ProvisionExternalRequester
-  (Identity) + SubmitProposal (Use of Collections). No account, no file uploads.
+  (Identity) + SubmitProposal (Use of Collections). No account; uploads are
+  allowlisted, capped, and materialised as proposal documents on confirm.
 end note
 N_PublicSubmission .. PendingPublicSubmission
 

@@ -30,6 +30,11 @@ class PendingSubmissionRepository(Protocol):
 
     async def save(self, submission: PendingPublicSubmission) -> None: ...
 
+    async def delete(self, submission: PendingPublicSubmission) -> None:
+        """Remove the pending row (and its document rows) — used to reclaim an
+        expired, never-confirmed submission on the confirm attempt that finds it."""
+        ...
+
 
 class UniqueRetryRunner(Protocol):
     """Runs an operation that allocates a unique value (e.g. a sequential
@@ -51,6 +56,16 @@ class CaptchaVerifier(Protocol):
 class ConfirmationEmailSender(Protocol):
     async def send(self, to_email: str, citizen_name: str, token: str) -> None:
         """Deliver the confirmation link (built from ``token``) to the citizen."""
+        ...
+
+
+class FileStorage(Protocol):
+    async def save(self, content: bytes, file_reference: str) -> str:
+        """Persist bytes and return the durable file reference."""
+        ...
+
+    async def delete(self, file_reference: str) -> None:
+        """Delete a previously persisted file reference if it exists."""
         ...
 
 

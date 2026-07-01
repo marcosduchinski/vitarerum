@@ -42,7 +42,9 @@
         @if (emailError()) {
           <p class="field__error" role="alert">A valid e-mail address is required.</p>
         }
-        <p class="field__hint">We'll send a confirmation link here. Your request is only forwarded after you confirm.</p>
+        <p class="field__hint">
+          We'll send a confirmation link here. Your request is only forwarded after you confirm.
+        </p>
       </div>
 
       <!-- Honeypot: hidden from real users, irresistible to bots. Kept out of the
@@ -63,11 +65,14 @@
     <fieldset class="submit-form__section">
       <legend class="submit-form__section-title">Your request</legend>
       <p class="submit-form__section-hint">
-        Your proposal opens a conversation with the collections team. Describe what you'd like to access and why.
+        Your proposal opens a conversation with the collections team. Describe what you'd like to
+        access and why.
       </p>
 
       <div class="field" [class.field--error]="useTypeError()">
-        <label class="field__label" for="useType">Intended use <span aria-hidden="true">*</span></label>
+        <label class="field__label" for="useType"
+          >Intended use <span aria-hidden="true">*</span></label
+        >
         <select
           id="useType"
           class="field__input"
@@ -150,6 +155,41 @@
         ></textarea>
         @if (bodyError()) {
           <p class="field__error" role="alert">Message body is required.</p>
+        }
+      </div>
+
+      <div class="field" [class.field--error]="documentsError()">
+        <label class="field__label" for="documents"
+          >Supporting documents <span aria-hidden="true">*</span></label
+        >
+        <input
+          id="documents"
+          type="file"
+          class="field__input"
+          multiple
+          accept=".pdf,.jpg,.jpeg,.png,.docx"
+          (change)="onDocumentsSelected($event)"
+          [attr.aria-invalid]="documentsError() || null"
+        />
+        @if (documents().length) {
+          <ul class="document-list" aria-label="Selected supporting documents">
+            @for (document of documents(); track document.name + document.size; let i = $index) {
+              <li class="document-list__item">
+                <span class="document-list__name">{{ document.name }}</span>
+                <span class="document-list__size">{{ formatFileSize(document.size) }}</span>
+                <button type="button" class="document-list__remove" (click)="removeDocument(i)">
+                  Remove
+                </button>
+              </li>
+            }
+          </ul>
+        }
+        @if (documentsError()) {
+          <p class="field__error" role="alert">{{ documentValidationMessage() }}</p>
+        } @else {
+          <p class="field__hint">
+            Attach 1-5 files. PDF, JPG, PNG, and DOCX are accepted, up to 10 MB each.
+          </p>
         }
       </div>
     </fieldset>

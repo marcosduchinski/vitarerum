@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal, viewChild } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 
@@ -12,6 +19,15 @@ import { TurnstileComponent } from '../components/turnstile/turnstile.component'
 import { PUBLIC_PROPOSAL_API_SERVICE } from '../services/public-proposal-api.service';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MAX_DOCUMENTS = 5;
+const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
+const ALLOWED_DOCUMENT_EXTENSIONS = new Set(['pdf', 'jpg', 'jpeg', 'png', 'docx']);
+const ALLOWED_DOCUMENT_MIME_TYPES = new Set([
+  'application/pdf',
+  'image/jpeg',
+  'image/png',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+]);
 
 /** The intended-use options offered to a citizen, in display order. */
 const USE_TYPE_OPTIONS: readonly { readonly value: UseType; readonly label: string }[] = [
@@ -47,6 +63,7 @@ export class PublicSubmitProposalPageComponent {
   // Required proposed period (ISO YYYY-MM-DD); empty is invalid.
   protected readonly proposedBeginDate = signal('');
   protected readonly proposedEndDate = signal('');
+  protected readonly documents = signal<readonly File[]>([]);
   protected readonly consent = signal(false);
   // Honeypot: bound to a visually hidden field. Real users leave it empty.
   protected readonly website = signal('');
@@ -56,6 +73,33 @@ export class PublicSubmitProposalPageComponent {
   protected readonly submitted = signal(false);
   protected readonly submitting = signal(false);
   protected readonly submitError = signal<ApiError | null>(null);
+
+  // Submission-independent variant of dateRangeError, used to gate submit.
+  private readonly hasInvalidDateRange = computed(
+    () =>
+      !!this.proposedBeginDate() &&
+      !!this.proposedEndDate() &&
+      this.proposedEndDate() < this.proposedBeginDate(),
+  );
+
+  private readonly documentValidationError = computed(() => {
+    const documents = this.documents();
+    if (documents.length === 0) {
+      return 'Attach at least one supporting document.';
+    }
+    if (documents.length > MAX_DOCUMENTS) {
+      return 'Attach no more than five supporting documents.';
+    }
+    const oversized = documents.find((document) => document.size > MAX_DOCUMENT_BYTES);
+    if (oversized) {
+      return `${oversized.name} is larger than 10 MB.`;
+    }
+    const unsupported = documents.find((document) => !this.isAllowedDocument(document));
+    if (unsupported) {
+      return `${unsupported.name} is not a supported file type.`;
+    }
+    return null;
+  });
 
   protected readonly nameError = computed(() => this.submitted() && !this.name().trim());
   protected readonly emailError = computed(
@@ -71,6 +115,10 @@ export class PublicSubmitProposalPageComponent {
   protected readonly dateRangeError = computed(
     () => this.submitted() && this.hasInvalidDateRange(),
   );
+  protected readonly documentsError = computed(
+    () => this.submitted() && this.documentValidationError() !== null,
+  );
+  protected readonly documentValidationMessage = computed(() => this.documentValidationError());
   protected readonly consentError = computed(() => this.submitted() && !this.consent());
   protected readonly captchaError = computed(
     () => this.submitted() && this.captchaRequired() && !this.captchaToken(),
@@ -90,20 +138,20 @@ export class PublicSubmitProposalPageComponent {
       !!this.proposedBeginDate() &&
       !!this.proposedEndDate() &&
       !this.hasInvalidDateRange() &&
+      this.documentValidationError() === null &&
       this.consent() &&
       (!this.captchaRequired() || !!this.captchaToken()),
   );
 
-  // Submission-independent variant of dateRangeError, used to gate submit.
-  private readonly hasInvalidDateRange = computed(
-    () =>
-      !!this.proposedBeginDate() &&
-      !!this.proposedEndDate() &&
-      this.proposedEndDate() < this.proposedBeginDate(),
-  );
-
   protected onInput(
-    field: 'name' | 'email' | 'subject' | 'body' | 'website' | 'proposedBeginDate' | 'proposedEndDate',
+    field:
+      | 'name'
+      | 'email'
+      | 'subject'
+      | 'body'
+      | 'website'
+      | 'proposedBeginDate'
+      | 'proposedEndDate',
     event: Event,
   ): void {
     const value = (event.target as HTMLInputElement | HTMLTextAreaElement).value;
@@ -140,6 +188,22 @@ export class PublicSubmitProposalPageComponent {
     this.consent.set((event.target as HTMLInputElement).checked);
   }
 
+  protected onDocumentsSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    this.documents.set(Array.from(input.files ?? []));
+  }
+
+  protected removeDocument(index: number): void {
+    this.documents.update((files) => files.filter((_, current) => current !== index));
+  }
+
+  protected formatFileSize(size: number): string {
+    if (size < 1024 * 1024) {
+      return `${Math.max(1, Math.round(size / 1024))} KB`;
+    }
+    return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
   protected onVerified(token: string): void {
     this.captchaToken.set(token);
   }
@@ -168,6 +232,7 @@ export class PublicSubmitProposalPageComponent {
           // isValid() guarantees both dates are present and in order here.
           proposedBeginDate: this.proposedBeginDate(),
           proposedEndDate: this.proposedEndDate(),
+          documents: this.documents(),
           consent: this.consent(),
           captchaToken: this.captchaToken(),
           website: this.website(),
@@ -185,5 +250,13 @@ export class PublicSubmitProposalPageComponent {
     } finally {
       this.submitting.set(false);
     }
+  }
+
+  private isAllowedDocument(document: File): boolean {
+    const extension = document.name.split('.').pop()?.toLowerCase() ?? '';
+    return (
+      ALLOWED_DOCUMENT_EXTENSIONS.has(extension) ||
+      (!!document.type && ALLOWED_DOCUMENT_MIME_TYPES.has(document.type))
+    );
   }
 }

@@ -4,12 +4,15 @@ from __future__ import annotations
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.public_submission.domain.models import (
     PendingPublicSubmission,
     PendingSubmissionStatus,
+    PublicDocumentSubmission,
 )
 from app.public_submission.infrastructure.models import (
+    PublicDocumentSubmissionRecord,
     PublicProposalSubmissionRecord,
 )
 from app.shared.kernel import UseType
@@ -28,6 +31,15 @@ def _to_domain(record: PublicProposalSubmissionRecord) -> PendingPublicSubmissio
         created_at=record.created_at,
         proposed_begin_date=record.proposed_begin_date,
         proposed_end_date=record.proposed_end_date,
+        documents=[
+            PublicDocumentSubmission(
+                id=document.id,
+                file_name=document.file_name,
+                file_reference=document.file_reference,
+                submitted_at=document.submitted_at,
+            )
+            for document in record.documents
+        ],
         status=PendingSubmissionStatus(record.status),
         confirmed_at=record.confirmed_at,
         proposal_reference=record.proposal_reference,
@@ -49,6 +61,15 @@ def _apply(record: PublicProposalSubmissionRecord, s: PendingPublicSubmission) -
     record.created_at = s.created_at
     record.confirmed_at = s.confirmed_at
     record.proposal_reference = s.proposal_reference
+    record.documents = [
+        PublicDocumentSubmissionRecord(
+            id=document.id,
+            file_name=document.file_name,
+            file_reference=document.file_reference,
+            submitted_at=document.submitted_at,
+        )
+        for document in s.documents
+    ]
 
 
 class SqlAlchemyPendingSubmissionRepository:
@@ -65,9 +86,9 @@ class SqlAlchemyPendingSubmissionRepository:
 
     async def get_by_token(self, token: str) -> PendingPublicSubmission | None:
         result = await self._session.execute(
-            select(PublicProposalSubmissionRecord).where(
-                PublicProposalSubmissionRecord.token == token
-            )
+            select(PublicProposalSubmissionRecord)
+            .options(selectinload(PublicProposalSubmissionRecord.documents))
+            .where(PublicProposalSubmissionRecord.token == token)
         )
         record = result.scalar_one_or_none()
         return _to_domain(record) if record is not None else None
@@ -80,6 +101,7 @@ class SqlAlchemyPendingSubmissionRepository:
         # a proposal; the loser re-reads the row as CONFIRMED.
         result = await self._session.execute(
             select(PublicProposalSubmissionRecord)
+            .options(selectinload(PublicProposalSubmissionRecord.documents))
             .where(PublicProposalSubmissionRecord.token == token)
             .with_for_update()
         )
@@ -88,9 +110,21 @@ class SqlAlchemyPendingSubmissionRepository:
 
     async def save(self, submission: PendingPublicSubmission) -> None:
         result = await self._session.execute(
-            select(PublicProposalSubmissionRecord).where(
-                PublicProposalSubmissionRecord.id == submission.id
-            )
+            select(PublicProposalSubmissionRecord)
+            .options(selectinload(PublicProposalSubmissionRecord.documents))
+            .where(PublicProposalSubmissionRecord.id == submission.id)
         )
         record = result.scalar_one()
         _apply(record, submission)
+
+    async def delete(self, submission: PendingPublicSubmission) -> None:
+        # Load the document collection so the ORM cascades the child-row deletes
+        # (the FK has no DB-level ON DELETE CASCADE).
+        result = await self._session.execute(
+            select(PublicProposalSubmissionRecord)
+            .options(selectinload(PublicProposalSubmissionRecord.documents))
+            .where(PublicProposalSubmissionRecord.id == submission.id)
+        )
+        record = result.scalar_one_or_none()
+        if record is not None:
+            await self._session.delete(record)

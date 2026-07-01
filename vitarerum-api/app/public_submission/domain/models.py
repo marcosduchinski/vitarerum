@@ -25,6 +25,21 @@ class PendingSubmissionStatus(StrEnum):
     CONFIRMED = "CONFIRMED"
 
 
+# How many supporting documents a citizen must attach. Enforced here as an
+# aggregate invariant and reused by the presentation layer's upload validation so
+# the count cap lives in exactly one place.
+MIN_PUBLIC_DOCUMENTS = 1
+MAX_PUBLIC_DOCUMENTS = 5
+
+
+@dataclass(slots=True)
+class PublicDocumentSubmission:
+    id: str
+    file_name: str
+    file_reference: str
+    submitted_at: datetime
+
+
 @dataclass(slots=True)
 class PendingPublicSubmission:
     """Aggregate root — a citizen's unverified proposal request.
@@ -48,9 +63,19 @@ class PendingPublicSubmission:
     # proposal's begin/end on confirm (staff may refine them later).
     proposed_begin_date: date
     proposed_end_date: date
+    documents: list[PublicDocumentSubmission]
     status: PendingSubmissionStatus = PendingSubmissionStatus.PENDING_CONFIRMATION
     confirmed_at: datetime | None = None
     proposal_reference: str | None = None
+
+    def __post_init__(self) -> None:
+        if len(self.documents) < MIN_PUBLIC_DOCUMENTS:
+            raise ValueError("At least one public submission document is required")
+        if len(self.documents) > MAX_PUBLIC_DOCUMENTS:
+            raise ValueError(
+                f"At most {MAX_PUBLIC_DOCUMENTS} public submission documents "
+                "are allowed"
+            )
 
     @property
     def is_confirmed(self) -> bool:

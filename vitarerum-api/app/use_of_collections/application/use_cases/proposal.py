@@ -63,6 +63,7 @@ class SubmitProposalInput:
     initial_message_subject: str = ""
     initial_message_body: str = ""
     initial_message_external_id: str | None = None
+    documents: list[Document] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -107,6 +108,7 @@ class SubmitProposal:
             requested_by=data.requested_by.id,
             submitted_at=now,
         )
+        proposal.documents = list(data.documents)
         proposal.record_submitted(occurred_at=now, triggered_by=data.requested_by.id)
 
         sender_email = _actor_email(data.requested_by)
