@@ -74,6 +74,7 @@ async def test_golden_submit_proposal_response_shape() -> None:
             "proposal.intendedUse.description",
             "proposal.beginDate",
             "proposal.endDate",
+            "proposal.requesterContact",
             "proposal.assignedTo",
             "proposal.submittedAt",
         }
@@ -108,6 +109,7 @@ async def test_golden_proposal_detail_response_shape() -> None:
             "intendedUse.description",
             "beginDate",
             "endDate",
+            "requesterContact",
             "assignedTo",
             "collectionUseProject.id",
             "collectionUseProject.referenceNumber",
@@ -151,6 +153,7 @@ async def test_golden_paginated_proposals_envelope_shape() -> None:
             "content[].intendedUse.description",
             "content[].beginDate",
             "content[].endDate",
+            "content[].requesterContact",
             "content[].assignedTo",
             "content[].submittedAt",
         }
