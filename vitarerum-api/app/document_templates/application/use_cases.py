@@ -211,9 +211,11 @@ class GetDocumentTemplateFile:
         self._repo = repository
         self._storage = file_storage
 
-    async def execute(self, template_id: DocumentTemplateId) -> DownloadedTemplate:
+    async def execute(
+        self, template_id: DocumentTemplateId, active_only: bool = False
+    ) -> DownloadedTemplate:
         template = await self._repo.get_by_id(template_id)
-        if template is None:
+        if template is None or (active_only and not template.active):
             raise DocumentTemplateNotFound(template_id)
         content = await self._storage.read(template.file_reference)
         return DownloadedTemplate(content=content, file_name=template.file_name)

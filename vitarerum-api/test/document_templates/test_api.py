@@ -215,6 +215,32 @@ async def test_public_download_missing_returns_404() -> None:
     assert response.json()["error"] == "DOCUMENT_TEMPLATE_NOT_FOUND"
 
 
+async def test_public_download_hides_inactive_template() -> None:
+    async with _client() as (client, repo, storage):
+        _seed(repo, storage, template_id="t1", active=False)
+        response = await client.get(
+            "/api/v1/public/document-templates/t1/file"
+        )
+    # Deactivated templates are 404 to the public even with a known id.
+    assert response.status_code == 404
+    assert response.json()["error"] == "DOCUMENT_TEMPLATE_NOT_FOUND"
+
+
+async def test_staff_download_serves_inactive_template() -> None:
+    async with _client() as (client, repo, storage):
+        _seed(repo, storage, template_id="t1", active=False)
+        response = await client.get("/api/v1/document-templates/t1/file")
+    assert response.status_code == 200
+    assert response.content == _docx_bytes("t1")
+
+
+async def test_staff_download_forbidden_for_external() -> None:
+    async with _client(caller=_EXTERNAL) as (client, repo, storage):
+        _seed(repo, storage, template_id="t1")
+        response = await client.get("/api/v1/document-templates/t1/file")
+    assert response.status_code == 403
+
+
 # ── Staff endpoints ───────────────────────────────────────────────────────────
 
 

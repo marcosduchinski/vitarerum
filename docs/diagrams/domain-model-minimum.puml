@@ -490,4 +490,35 @@ note as N_PublicSubmission
 end note
 N_PublicSubmission .. PendingPublicSubmission
 
+package "Document Templates" <<Bounded Context>> {
+    package "domain" {
+        class DocumentTemplate <<Aggregate Root>> #c7ceea {
+        - id: String
+        - useType: UseType
+        - title: String
+        - description: String
+        - mandatory: Boolean
+        - active: Boolean
+        - displayOrder: Integer
+        - fileName: String
+        - fileReference: String
+        - uploadedBy: PermissionId
+        - uploadedAt: DateTime
+        + updateMetadata(...)
+        + replaceFile(fileName, fileReference)
+        }
+    }
+}
+
+DocumentTemplate ..> UseType : useType
+
+note as N_DocumentTemplates
+  Staff-curated .docx templates offered per UseType on the public submission
+  screen. Public read-only endpoints list active templates and stream the file;
+  staff endpoints manage the catalog (upload/edit/activate/reorder/delete).
+  `mandatory` is display-only for now; enforcing attachment of mandatory
+  templates is deferred (matched later by a fulfillsTemplateId on upload).
+end note
+N_DocumentTemplates .. DocumentTemplate
+
 @enduml

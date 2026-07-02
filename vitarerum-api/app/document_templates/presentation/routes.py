@@ -21,6 +21,7 @@ from fastapi import (
 
 from app.document_templates.application.use_cases import (
     DeleteDocumentTemplate,
+    DownloadedTemplate,
     GetDocumentTemplateFile,
     ListDocumentTemplates,
     PublishDocumentTemplate,
@@ -89,6 +90,16 @@ def _not_found(template_id: str) -> HTTPException:
     )
 
 
+def _file_response(downloaded: DownloadedTemplate) -> Response:
+    return Response(
+        content=downloaded.content,
+        media_type=guess_content_type(downloaded.file_name),
+        headers={
+            "Content-Disposition": content_disposition_attachment(downloaded.file_name)
+        },
+    )
+
+
 # ── Public endpoints ──────────────────────────────────────────────────────────
 
 
@@ -121,20 +132,16 @@ async def download_public_document_template(
     file_storage: TemplateFileStorage,
 ) -> Response:
     try:
+        # Public callers only ever see active templates — a deactivated one is
+        # 404 even to someone who knows its id.
         downloaded = await GetDocumentTemplateFile(repo, file_storage).execute(
-            DocumentTemplateId(template_id)
+            DocumentTemplateId(template_id), active_only=True
         )
     except DocumentTemplateNotFound as exc:
         raise _not_found(template_id) from exc
     except FileNotFoundError as exc:
         raise _not_found(template_id) from exc
-    return Response(
-        content=downloaded.content,
-        media_type=guess_content_type(downloaded.file_name),
-        headers={
-            "Content-Disposition": content_disposition_attachment(downloaded.file_name)
-        },
-    )
+    return _file_response(downloaded)
 
 
 # ── Staff management endpoints ────────────────────────────────────────────────
@@ -151,6 +158,27 @@ async def list_document_templates(
         use_type=use_type, active_only=False
     )
     return [_to_response(t) for t in templates]
+
+
+@document_templates_router.get("/{template_id}/file")
+async def download_document_template(
+    template_id: str,
+    caller: CallerPermission,
+    repo: TemplateRepo,
+    file_storage: TemplateFileStorage,
+) -> Response:
+    # Staff may download any template, including inactive ones (to review before
+    # re-activating or replacing).
+    require_staff(caller)
+    try:
+        downloaded = await GetDocumentTemplateFile(repo, file_storage).execute(
+            DocumentTemplateId(template_id)
+        )
+    except DocumentTemplateNotFound as exc:
+        raise _not_found(template_id) from exc
+    except FileNotFoundError as exc:
+        raise _not_found(template_id) from exc
+    return _file_response(downloaded)
 
 
 @document_templates_router.post(

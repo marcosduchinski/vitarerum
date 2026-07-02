@@ -59,13 +59,16 @@ Lists the **active** templates for the given use type, ordered by `displayOrder`
 
 ### `GET /public/document-templates/{id}/file`
 
-Streams the template's `.docx`.
+Streams the template's `.docx`. Serves **active templates only** — a deactivated template is `404`
+even to a caller who knows its id (deactivation removes it from public reach, not just from the
+list).
 
 **Response `200`** — body is the file; `Content-Type` is the DOCX MIME type and
-`Content-Disposition: attachment; filename="…"` carries a sanitised file name.
+`Content-Disposition: attachment; filename="…"` carries a sanitised file name (basename only; no
+path separators; header-injection safe).
 
 **Response `404`** — `{ "error": "DOCUMENT_TEMPLATE_NOT_FOUND", "message": "No document template with id …" }`
-(unknown id or missing stored file).
+(unknown id, inactive template, or missing stored file).
 
 ---
 
@@ -77,6 +80,14 @@ Lists **all** templates (active and inactive). `useType` is optional; omit it to
 type, grouped by `useType` then `displayOrder`.
 
 **Response `200`** — array of staff items.
+
+### `GET /document-templates/{id}/file`
+
+Streams the template's `.docx`. Unlike the public download, this serves templates in **any state**
+(including inactive), so staff can review a deactivated template before re-activating or replacing
+it. Same safe `Content-Disposition` handling as the public download.
+
+**Response `200`** — the file. **`404`** — unknown id / missing stored file. **`403`** — non-staff.
 
 ### `POST /document-templates`
 
