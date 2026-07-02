@@ -25,7 +25,6 @@ from app.use_of_collections.domain.models import (
     DocumentId,
     DocumentType,
     EmailAddress,
-    IntendedUse,
     Message,
     MessageAttachment,
     MessageId,
@@ -88,8 +87,7 @@ def project_to_record(project: CollectionUseProject) -> CollectionUseProjectReco
         note=project.note,
         request_note=project.request_note,
         proposal_id=project.proposal_id,
-        type=project.intended_use.use_type,
-        intended_use_description=project.intended_use.description,
+        type=project.intended_use,
         status=project.status,
         result=project.result,
         authorised_by=project.authorised_by,
@@ -132,9 +130,7 @@ def project_to_domain(record: CollectionUseProjectRecord) -> CollectionUseProjec
         note=record.note,
         request_note=record.request_note,
         proposal_id=ProposalId(record.proposal_id) if record.proposal_id else None,
-        intended_use=IntendedUse(
-            use_type=record.type, description=record.intended_use_description
-        ),
+        intended_use=record.type,
         status=record.status,
         result=record.result,
         authorised_by=PermissionId(record.authorised_by)
@@ -372,10 +368,7 @@ def proposal_to_record(proposal: Proposal) -> ProposalRecord:
         reference_number=proposal.reference_number.value,
         title=proposal.title,
         collection_use_project_id=proposal.collection_use_project_id,
-        type=proposal.intended_use.use_type if proposal.intended_use else None,
-        intended_use_description=(
-            proposal.intended_use.description if proposal.intended_use else ""
-        ),
+        type=proposal.intended_use,
         begin_date=proposal.begin_date,
         end_date=proposal.end_date,
         status=proposal.status,
@@ -447,13 +440,7 @@ def proposal_to_domain(record: ProposalRecord) -> Proposal:
             if record.collection_use_project_id is not None
             else None
         ),
-        intended_use=(
-            IntendedUse(
-                use_type=record.type, description=record.intended_use_description
-            )
-            if record.type is not None
-            else None
-        ),
+        intended_use=record.type,
         begin_date=record.begin_date,
         end_date=record.end_date,
         status=record.status,

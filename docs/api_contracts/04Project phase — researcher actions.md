@@ -9,7 +9,7 @@
 **Query parameters**
 ```
 status      : UseStatus    (optional) CREATED | IN_PROGRESS | COMPLETED | CANCELLED
-type        : UseType      (optional) EXHIBITION | IN_SITU_VISIT | OTHER — filters intendedUse.useType
+type        : UseType      (optional) EXHIBITION | IN_SITU_VISIT | OTHER — filters intendedUse
 requestedBy : PermissionId (optional) staff-only; ignored for non-staff callers
 dateFrom    : LocalDate    (optional) filter by begin date ≥ dateFrom
 dateTo      : LocalDate    (optional) filter by begin date ≤ dateTo
@@ -31,10 +31,7 @@ size        : Integer       (default 20)
       "title": "string",
       "purpose": "string",
       "note": null,
-      "intendedUse": {
-        "useType": "IN_SITU_VISIT",
-        "description": "string"
-      },
+      "intendedUse": "IN_SITU_VISIT",
       "status": "CREATED",
       "result": null,
       "beginDate": "2025-06-01",
@@ -80,10 +77,7 @@ project_id : UUID (required)
   "title": "string",
   "purpose": "string",
   "note": null,
-  "intendedUse": {
-    "useType": "IN_SITU_VISIT",
-    "description": "string"
-  },
+  "intendedUse": "IN_SITU_VISIT",
   "status": "IN_PROGRESS",
   "result": null,
   "beginDate": "2025-06-01",

@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Protocol
 
-from app.shared.kernel import IntendedUse
+from app.shared.kernel import UseType
 
 # ── Project export read-view (consumed by the CIDOC-CRM mapping context) ───────
 
@@ -56,7 +56,7 @@ class ProjectExportView:
     reference_number: str
     begin_date: date
     end_date: date
-    intended_use: IntendedUse
+    intended_use: UseType
     visitor_name: str
     requested_objects: list[ExportObjectView] = field(default_factory=list)
     in_situ_occurrences: list[ExportEntryView] = field(default_factory=list)

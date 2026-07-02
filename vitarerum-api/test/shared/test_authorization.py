@@ -16,7 +16,6 @@ from app.use_of_collections.application.authorization import (
 from app.use_of_collections.domain.enums import ProposalStatus, UseType
 from app.use_of_collections.domain.models import (
     CollectionUseProjectId,
-    IntendedUse,
     Proposal,
     ProposalId,
     ReferenceNumber,
@@ -33,7 +32,7 @@ def _proposal(requested_by: PermissionId) -> Proposal:
         reference_number=ReferenceNumber("VRP-20260601-0001"),
         title="Proposal title",
         collection_use_project_id=CollectionUseProjectId("project-1"),
-        intended_use=IntendedUse(use_type=UseType.IN_SITU_VISIT),
+        intended_use=UseType.IN_SITU_VISIT,
         begin_date=date(2026, 6, 1),
         end_date=date(2026, 6, 7),
         status=ProposalStatus.SUBMITTED,

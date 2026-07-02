@@ -40,7 +40,6 @@ from app.use_of_collections.domain.models import (
     Conversation,
     ConversationId,
     EmailAddress,
-    IntendedUse,
     Message,
     MessageId,
     ObjectAccessLog,
@@ -282,7 +281,7 @@ def _make_project(
         reference_number=ReferenceNumber("CUP-LOG00001"),
         title="Collection study",
         purpose="To study the collection",
-        intended_use=IntendedUse(use_type=UseType.IN_SITU_VISIT),
+        intended_use=UseType.IN_SITU_VISIT,
         status=status,
         begin_date=date(2026, 6, 1),
         end_date=date(2026, 6, 7),
@@ -302,7 +301,7 @@ async def test_submit_proposal_persists_proposal_and_conversation() -> None:
     result = await use_case.execute(
         SubmitProposalInput(
             title="Collection study",
-            intended_use=IntendedUse(use_type=UseType.IN_SITU_VISIT),
+            intended_use=UseType.IN_SITU_VISIT,
             purpose="To study the collection",
             begin_date=date(2026, 6, 1),
             end_date=date(2026, 6, 7),
@@ -315,7 +314,7 @@ async def test_submit_proposal_persists_proposal_and_conversation() -> None:
     saved_proposal = await proposal_repository.get_by_id(result.proposal.id)
     assert saved_proposal is not None
     assert saved_proposal.status == ProposalStatus.SUBMITTED
-    assert saved_proposal.intended_use.use_type == UseType.IN_SITU_VISIT
+    assert saved_proposal.intended_use == UseType.IN_SITU_VISIT
     assert saved_proposal.title == "Collection study"
     assert saved_proposal.begin_date == date(2026, 6, 1)
     assert saved_proposal.end_date == date(2026, 6, 7)
@@ -340,7 +339,7 @@ async def test_submit_proposal_accepts_other_use_type() -> None:
     result = await use_case.execute(
         SubmitProposalInput(
             title="Unclassified use",
-            intended_use=IntendedUse(use_type=UseType.OTHER),
+            intended_use=UseType.OTHER,
             purpose="Other purpose",
             begin_date=date(2026, 6, 1),
             end_date=date(2026, 6, 7),
@@ -350,7 +349,7 @@ async def test_submit_proposal_accepts_other_use_type() -> None:
 
     saved_proposal = await proposal_repository.get_by_id(result.proposal.id)
     assert saved_proposal is not None
-    assert saved_proposal.intended_use.use_type == UseType.OTHER
+    assert saved_proposal.intended_use == UseType.OTHER
 
 
 async def test_submit_proposal_generates_daily_sequential_reference_number() -> None:
@@ -364,7 +363,7 @@ async def test_submit_proposal_generates_daily_sequential_reference_number() -> 
     first = await use_case.execute(
         SubmitProposalInput(
             title="Collection study",
-            intended_use=IntendedUse(use_type=UseType.IN_SITU_VISIT),
+            intended_use=UseType.IN_SITU_VISIT,
             purpose="To study the collection",
             begin_date=date(2026, 6, 1),
             end_date=date(2026, 6, 7),
@@ -374,7 +373,7 @@ async def test_submit_proposal_generates_daily_sequential_reference_number() -> 
     second = await use_case.execute(
         SubmitProposalInput(
             title="Collection study 2",
-            intended_use=IntendedUse(use_type=UseType.IN_SITU_VISIT),
+            intended_use=UseType.IN_SITU_VISIT,
             purpose="To study the collection again",
             begin_date=date(2026, 6, 1),
             end_date=date(2026, 6, 7),
@@ -399,7 +398,7 @@ async def test_submit_proposal_uses_valid_sender_fallback_without_user_email() -
     result = await use_case.execute(
         SubmitProposalInput(
             title="Collection study",
-            intended_use=IntendedUse(use_type=UseType.IN_SITU_VISIT),
+            intended_use=UseType.IN_SITU_VISIT,
             purpose="To study the collection",
             begin_date=date(2026, 6, 1),
             end_date=date(2026, 6, 7),
@@ -423,7 +422,7 @@ async def test_submit_public_contact_proposal_without_requester_or_project() -> 
     result = await use_case.execute(
         SubmitProposalInput(
             title=None,
-            intended_use=IntendedUse(use_type=UseType.IN_SITU_VISIT),
+            intended_use=UseType.IN_SITU_VISIT,
             purpose=None,
             begin_date=date(2026, 6, 1),
             end_date=date(2026, 6, 7),
@@ -467,7 +466,7 @@ async def test_approve_proposal_creates_requested_project() -> None:
         reference_number=ReferenceNumber("VRP-20260601-0001"),
         title="Proposal title",
         collection_use_project_id="project-1",
-        intended_use=IntendedUse(use_type=UseType.IN_SITU_VISIT),
+        intended_use=UseType.IN_SITU_VISIT,
         begin_date=date(2026, 6, 1),
         end_date=date(2026, 6, 7),
         status=ProposalStatus.PENDING,
@@ -491,7 +490,7 @@ async def test_approve_proposal_creates_requested_project() -> None:
 
     assert result.proposal.status == ProposalStatus.APPROVED
     assert result.project.status == UseStatus.CREATED
-    assert result.project.intended_use.use_type == UseType.IN_SITU_VISIT
+    assert result.project.intended_use == UseType.IN_SITU_VISIT
     assert result.project.reference_number.value.startswith("CUP-")
 
     saved_project = await project_repository.get_by_id("project-1")
@@ -511,7 +510,7 @@ async def test_reject_proposal_sends_reason_message_to_requester() -> None:
         reference_number=ReferenceNumber("VRP-20260601-0001"),
         title="Proposal title",
         collection_use_project_id="project-1",
-        intended_use=IntendedUse(use_type=UseType.IN_SITU_VISIT),
+        intended_use=UseType.IN_SITU_VISIT,
         begin_date=date(2026, 6, 1),
         end_date=date(2026, 6, 7),
         status=ProposalStatus.PENDING,
@@ -565,7 +564,7 @@ async def test_send_message_uses_valid_sender_fallback_without_user_email() -> N
         reference_number=ReferenceNumber("VRP-20260601-0001"),
         title="Proposal title",
         collection_use_project_id="project-1",
-        intended_use=IntendedUse(use_type=UseType.IN_SITU_VISIT),
+        intended_use=UseType.IN_SITU_VISIT,
         begin_date=date(2026, 6, 1),
         end_date=date(2026, 6, 7),
         status=ProposalStatus.PENDING,

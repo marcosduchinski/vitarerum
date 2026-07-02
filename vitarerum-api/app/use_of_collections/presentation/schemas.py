@@ -28,19 +28,6 @@ class PermissionDetail(BaseModel):
     group: GroupName
 
 
-# ── Intended use (use type + free-text description) ──────────────────────────
-
-
-class IntendedUseRequest(BaseModel):
-    useType: UseType
-    description: str = ""
-
-
-class IntendedUseResponse(BaseModel):
-    useType: UseType
-    description: str
-
-
 # ── Proposal request/response schemas ────────────────────────────────────────
 
 
@@ -48,7 +35,7 @@ class SubmitProposalRequest(BaseModel):
     # All proposal-defining fields are optional: a proposal can be created as a
     # stub and completed in a later step. See SubmitProposal use case.
     title: str | None = None
-    intendedUse: IntendedUseRequest | None = None
+    intendedUse: UseType | None = None
     purpose: str | None = None
     beginDate: date | None = None
     endDate: date | None = None
@@ -60,9 +47,9 @@ class SubmitProposalRequest(BaseModel):
 class UpdateProposalRequest(BaseModel):
     # Partial update: an omitted key leaves the field unchanged, while an
     # explicit null clears it. The route distinguishes the two via
-    # ``model_fields_set``. ``intendedUse`` is replaced as a whole object.
+    # ``model_fields_set``. ``intendedUse`` is replaced whole when present.
     title: str | None = None
-    intendedUse: IntendedUseRequest | None = None
+    intendedUse: UseType | None = None
     beginDate: date | None = None
     endDate: date | None = None
 
@@ -77,7 +64,7 @@ class ProposalSummary(BaseModel):
     referenceNumber: str
     title: str | None = None
     status: ProposalStatus
-    intendedUse: IntendedUseResponse | None = None
+    intendedUse: UseType | None = None
     beginDate: date | None = None
     endDate: date | None = None
     requestedBy: PermissionDetail | None = None
@@ -92,7 +79,7 @@ class CollectionUseProjectSummary(BaseModel):
     title: str
     purpose: str
     note: str | None
-    intendedUse: IntendedUseResponse
+    intendedUse: UseType
     status: UseStatus
     beginDate: date
     endDate: date
@@ -153,7 +140,7 @@ class ProposalDetailResponse(BaseModel):
     referenceNumber: str
     title: str | None = None
     status: ProposalStatus
-    intendedUse: IntendedUseResponse | None = None
+    intendedUse: UseType | None = None
     beginDate: date | None = None
     endDate: date | None = None
     requestedBy: PermissionDetail | None = None
@@ -179,7 +166,7 @@ class ProposalListItemResponse(BaseModel):
     referenceNumber: str
     title: str | None = None
     status: ProposalStatus
-    intendedUse: IntendedUseResponse | None = None
+    intendedUse: UseType | None = None
     beginDate: date | None = None
     endDate: date | None = None
     requestedBy: PermissionDetail | None = None
@@ -481,7 +468,7 @@ class ProjectListItemResponse(BaseModel):
     title: str
     purpose: str
     note: str | None
-    intendedUse: IntendedUseResponse
+    intendedUse: UseType
     status: UseStatus
     result: UseResult | None
     beginDate: date
@@ -509,7 +496,7 @@ class ProjectDetailResponse(BaseModel):
     title: str
     purpose: str
     note: str | None
-    intendedUse: IntendedUseResponse
+    intendedUse: UseType
     status: UseStatus
     result: UseResult | None
     beginDate: date

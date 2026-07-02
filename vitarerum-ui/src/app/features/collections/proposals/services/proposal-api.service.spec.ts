@@ -31,7 +31,7 @@ describe('ProposalApiService', () => {
   it('creates a proposal with the documented body', () => {
     const body = {
       title: 'Specimen study',
-      intendedUse: { useType: 'IN_SITU_VISIT' as const, description: 'Research' },
+      intendedUse: 'IN_SITU_VISIT' as const,
       purpose: 'Research',
       beginDate: '2026-06-01',
       endDate: '2026-06-30',
@@ -47,7 +47,7 @@ describe('ProposalApiService', () => {
       proposal: {
         id: 'proposal-1',
         status: 'SUBMITTED',
-        intendedUse: { useType: 'IN_SITU_VISIT', description: 'Research' },
+        intendedUse: 'IN_SITU_VISIT',
         requestedBy: {
           permissionId: 'permission-1',
           user: { id: 'user-1', name: 'Ana', email: 'ana@example.test' },
@@ -61,7 +61,7 @@ describe('ProposalApiService', () => {
         referenceNumber: 'CUP-2026-0001',
         title: 'Specimen study',
         purpose: 'Research',
-        intendedUse: { useType: 'IN_SITU_VISIT', description: 'Research' },
+        intendedUse: 'IN_SITU_VISIT',
         status: 'CREATED',
         beginDate: '2026-06-01',
         endDate: '2026-06-30',
@@ -152,7 +152,7 @@ describe('ProposalApiService', () => {
             referenceNumber: 'VRP-20260101-0001',
             title: 'Proposal',
             status: 'PENDING',
-            intendedUse: { useType: 'IN_SITU_VISIT', description: 'Comparative study' },
+            intendedUse: 'IN_SITU_VISIT',
           },
         ],
         page: 0,
@@ -169,7 +169,7 @@ describe('ProposalApiService', () => {
       referenceNumber: 'VRP-20260101-0001',
       title: 'Proposal',
       status: 'PENDING',
-      intendedUse: { useType: 'EXHIBITION', description: 'Show' },
+      intendedUse: 'EXHIBITION',
     });
     expect(detailType).toBe('EXHIBITION');
   });
@@ -309,10 +309,7 @@ describe('ProposalApiService', () => {
   it('partially updates proposal metadata and preserves explicit null values', () => {
     const body: UpdateProposalRequest = {
       title: null,
-      intendedUse: {
-        useType: 'EXHIBITION',
-        description: 'Public display of selected collection objects.',
-      },
+      intendedUse: 'EXHIBITION',
       endDate: null,
     };
     let updatedTitle: string | null | undefined;

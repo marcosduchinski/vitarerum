@@ -12,10 +12,7 @@
 ```json
 {
   "title": "string | null",
-  "intendedUse": {
-    "useType": "EXHIBITION | IN_SITU_VISIT | OTHER",
-    "description": "string"
-  },
+  "intendedUse": "EXHIBITION | IN_SITU_VISIT | OTHER",
   "purpose": "string | null",
   "beginDate": "2025-06-01 | null",
   "endDate": "2025-06-30 | null",
@@ -25,7 +22,7 @@
 }
 ```
 
-`title`, `intendedUse`, `purpose`, `beginDate`, and `endDate` are all optional and default to `null` when omitted. `intendedUse`, when present, describes how the collection will be used: a categorised `useType` (`EXHIBITION` · `IN_SITU_VISIT` · `OTHER`) and a free-text `description` (optional, defaults to an empty string); when omitted the whole `intendedUse` is `null`. `initialMessageRecipient` defaults to `collections@museum.pt` when omitted or blank. `initialMessageSubject` falls back to `title` (and `title`, when omitted, falls back to `initialMessageSubject`); `initialMessageBody` falls back to `purpose`; both default to an empty string when neither is given. The sender of the seeded message is resolved from the authenticated caller. The `endDate`-after-`beginDate` rule is only enforced when both dates are present.
+`title`, `intendedUse`, `purpose`, `beginDate`, and `endDate` are all optional and default to `null` when omitted. `intendedUse`, when present, is the categorised use type — one of `EXHIBITION`, `IN_SITU_VISIT`, or `OTHER`; when omitted it is `null`. `initialMessageRecipient` defaults to `collections@museum.pt` when omitted or blank. `initialMessageSubject` falls back to `title` (and `title`, when omitted, falls back to `initialMessageSubject`); `initialMessageBody` falls back to `purpose`; both default to an empty string when neither is given. The sender of the seeded message is resolved from the authenticated caller. The `endDate`-after-`beginDate` rule is only enforced when both dates are present.
 
 **A proposal is always created object-free.** The collection objects a researcher wants are described in prose in the initial message; they are attached as structured `RequestedObject` entries only later, once the researcher has searched the catalog and selected the matches, via `POST /proposals/{proposal_id}/requested-objects`. This endpoint accepts no `requestedObjects` field — any such field in the body is ignored.
 
@@ -37,10 +34,7 @@
     "referenceNumber": "VRP-20250115-0001",
     "title": "string | null",
     "status": "SUBMITTED",
-    "intendedUse": {
-      "useType": "IN_SITU_VISIT",
-      "description": "string"
-    },
+    "intendedUse": "IN_SITU_VISIT",
     "beginDate": "2025-06-01 | null",
     "endDate": "2025-06-30 | null",
     "requestedBy": {
@@ -102,10 +96,7 @@ permission id. `page` is zero-based. `size` must be between 1 and 100.
       "referenceNumber": "VRP-20250115-0001",
       "title": "string | null",
       "status": "SUBMITTED",
-      "intendedUse": {
-        "useType": "IN_SITU_VISIT",
-        "description": "string"
-      },
+      "intendedUse": "IN_SITU_VISIT",
       "beginDate": "2025-06-01 | null",
       "endDate": "2025-06-30 | null",
       "requestedBy": {
@@ -188,10 +179,7 @@ proposal_id : UUID (required)
   "referenceNumber": "VRP-20250115-0001",
   "title": "string | null",
   "status": "PENDING",
-  "intendedUse": {
-    "useType": "IN_SITU_VISIT",
-    "description": "string"
-  },
+  "intendedUse": "IN_SITU_VISIT",
   "beginDate": "2025-06-01 | null",
   "endDate": "2025-06-30 | null",
   "requestedBy": {

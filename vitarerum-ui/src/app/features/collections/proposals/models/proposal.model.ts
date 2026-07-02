@@ -3,7 +3,6 @@ import { Page, PageQuery } from '@shared/models/page.model';
 import { ObjectReference } from '@shared/models/object-reference.model';
 
 import {
-  IntendedUse,
   ProposalEventType,
   ProposalStatus,
   UseStatus,
@@ -37,9 +36,9 @@ export interface ProposalSummary {
   readonly title: string;
   readonly status: ProposalStatus;
   readonly type: UseType;
-  // Backend source for `type` — the service normalizes `intendedUse.useType`
-  // into the flat `type` above.
-  readonly intendedUse?: IntendedUse | null;
+  // Backend source for `type` — the service normalizes the bare `intendedUse`
+  // use type into the flat `type` above.
+  readonly intendedUse?: UseType | null;
   // Requested use period (YYYY-MM-DD). Optional during contract rollout; the
   // backend now returns these on every proposal shape.
   readonly beginDate?: string;
@@ -126,7 +125,7 @@ export interface Conversation {
 
 export interface CreateProposalRequest {
   readonly title?: string | null;
-  readonly intendedUse?: IntendedUse | null;
+  readonly intendedUse?: UseType | null;
   readonly purpose?: string | null;
   readonly beginDate?: string | null;
   readonly endDate?: string | null;

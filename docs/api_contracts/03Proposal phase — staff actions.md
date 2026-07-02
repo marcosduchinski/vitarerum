@@ -9,7 +9,7 @@
 **Query parameters**
 ```
 status      : ProposalStatus[] (optional, repeatable) SUBMITTED | PENDING | APPROVED | REJECTED | CANCELLED
-type        : UseType          (optional) EXHIBITION | IN_SITU_VISIT | OTHER — filters intendedUse.useType
+type        : UseType          (optional) EXHIBITION | IN_SITU_VISIT | OTHER — filters intendedUse
 requested_by: UUID             (optional) filter by researcher (honoured for staff only)
 assigned_to : UUID             (optional) filter by attendant permissionId
 date_from   : LocalDate        (optional) filter by requested begin date range
@@ -32,10 +32,7 @@ Repeat `status` to match any of several statuses (OR semantics), for example
       "referenceNumber": "VRP-20250115-0001",
       "title": "string | null",
       "status": "PENDING",
-      "intendedUse": {
-        "useType": "IN_SITU_VISIT",
-        "description": "string"
-      },
+      "intendedUse": "IN_SITU_VISIT",
       "beginDate": "2025-06-01 | null",
       "endDate": "2025-06-30 | null",
       "requestedBy": {
@@ -75,7 +72,7 @@ List items carry the proposal summary only, including the proposal `referenceNum
 
 ### `PATCH /proposals/{proposal_id}`
 
-**Description** — Staff correct a proposal's defining metadata: `title`, `intendedUse`, `beginDate`, and `endDate`. Partial update — an omitted key leaves the field unchanged, while an explicit `null` clears it (`title`, `beginDate`, `endDate` are nullable). `intendedUse` is replaced as a whole object when supplied. Records **no** `ProposalEvent` and does **not** change the proposal status. Allowed only while the proposal is in a non-terminal status (`SUBMITTED` or `PENDING`); editing a decided or cancelled proposal returns `409`. The caller must belong to a staff group.
+**Description** — Staff correct a proposal's defining metadata: `title`, `intendedUse`, `beginDate`, and `endDate`. Partial update — an omitted key leaves the field unchanged, while an explicit `null` clears it (`title`, `beginDate`, `endDate` are nullable). `intendedUse` is replaced when supplied. Records **no** `ProposalEvent` and does **not** change the proposal status. Allowed only while the proposal is in a non-terminal status (`SUBMITTED` or `PENDING`); editing a decided or cancelled proposal returns `409`. The caller must belong to a staff group.
 
 **Path parameters**
 ```
@@ -86,10 +83,7 @@ proposal_id : UUID (required)
 ```json
 {
   "title": "string | null",
-  "intendedUse": {
-    "useType": "IN_SITU_VISIT",
-    "description": "string"
-  },
+  "intendedUse": "IN_SITU_VISIT",
   "beginDate": "2025-06-01 | null",
   "endDate": "2025-06-30 | null"
 }

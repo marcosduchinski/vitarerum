@@ -65,12 +65,3 @@ class UseType(StrEnum):
     EXHIBITION = "EXHIBITION"
     IN_SITU_VISIT = "IN_SITU_VISIT"
     OTHER = "OTHER"
-
-
-@dataclass(frozen=True, slots=True)
-class IntendedUse:
-    """How the collection is intended to be used: a categorised use type plus a
-    free-text description. Shared by Proposal and CollectionUseProject."""
-
-    use_type: UseType
-    description: str = ""

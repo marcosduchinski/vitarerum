@@ -43,11 +43,11 @@ export interface ProjectTransitionResult {
   readonly lastEvent: UseEvent;
 }
 
-// The backend returns the use type wrapped as `intendedUse: { useType, description }`.
-// Bridge it to the flat `type` the app reads, tolerating either shape.
+// The backend returns the use type as the bare `intendedUse` enum. Bridge it to
+// the flat `type` the app reads, tolerating either shape.
 function normalizeProjectType<T extends CollectionUseProjectSummary>(p: T): T {
   if (p.type) return p;
-  const useType = p.intendedUse?.useType;
+  const useType = p.intendedUse;
   return useType ? { ...p, type: useType } : p;
 }
 

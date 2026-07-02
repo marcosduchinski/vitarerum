@@ -37,7 +37,6 @@ from app.use_of_collections.domain.models import (
     CollectionUseProjectId,
     Document,
     InsufficientGroup,
-    IntendedUse,
     InvalidTransition,
     Message,
     ObjectAccessLog,
@@ -60,7 +59,6 @@ from app.use_of_collections.presentation.permissions import (
 from app.use_of_collections.presentation.schemas import (
     AttachmentResponse,
     DocumentResponse,
-    IntendedUseResponse,
     MessageAttachmentResponse,
     MessageResponse,
     ObjectAccessLogResponse,
@@ -279,15 +277,6 @@ def _guess_content_type(file_name: str) -> str:
     return guessed or "application/octet-stream"
 
 
-def _intended_use_response(
-    intended_use: IntendedUse | None,
-) -> IntendedUseResponse | None:
-    if intended_use is None:
-        return None
-    return IntendedUseResponse(
-        useType=intended_use.use_type,
-        description=intended_use.description,
-    )
 
 
 async def _build_proposal_event(

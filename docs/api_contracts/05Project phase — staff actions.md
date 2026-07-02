@@ -9,7 +9,7 @@
 **Query parameters**
 ```
 status      : UseStatus    (optional) CREATED | IN_PROGRESS | COMPLETED | CANCELLED
-type        : UseType      (optional) EXHIBITION | IN_SITU_VISIT | OTHER — filters intendedUse.useType
+type        : UseType      (optional) EXHIBITION | IN_SITU_VISIT | OTHER — filters intendedUse
 requestedBy : PermissionId (optional) scope to projects requested by this permission
 dateFrom    : LocalDate    (optional) filter by begin date ≥ dateFrom
 dateTo      : LocalDate    (optional) filter by begin date ≤ dateTo
@@ -31,10 +31,7 @@ size        : Integer       (default 20)
       "title": "string",
       "purpose": "string",
       "note": null,
-      "intendedUse": {
-        "useType": "IN_SITU_VISIT",
-        "description": "string"
-      },
+      "intendedUse": "IN_SITU_VISIT",
       "status": "IN_PROGRESS",
       "result": null,
       "beginDate": "2025-06-01",
@@ -94,10 +91,7 @@ project_id : UUID (required)
   "title": "string",
   "purpose": "string",
   "note": null,
-  "intendedUse": {
-    "useType": "IN_SITU_VISIT",
-    "description": "string"
-  },
+  "intendedUse": "IN_SITU_VISIT",
   "status": "IN_PROGRESS",
   "result": null,
   "beginDate": "2025-06-01",
@@ -410,7 +404,7 @@ size : Integer      (default 20)
 ### `POST /collection-use-projects/{project_id}/export-in-situ-visit-record`
 
 **Description** — Staff-only. Generates and persists an `InSituVisitRecord`
-(the CIDOC-CRM mapping snapshot) from a project whose `intendedUse.useType` is
+(the CIDOC-CRM mapping snapshot) from a project whose `intendedUse` is
 `IN_SITU_VISIT`. There is no request body; it reads the project, its proposal's
 requested objects, and the three journals, and returns the stored record
 (`201 Created`). Errors: `404 PROJECT_NOT_FOUND`, `409 INVALID_USE_TYPE`,

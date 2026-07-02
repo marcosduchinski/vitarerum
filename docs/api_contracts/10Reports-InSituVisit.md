@@ -30,7 +30,7 @@ by id, and fetch one with its narrative and record embedded).
 Exports the project, generates a narrative from the resulting record, and
 persists an `InSituVisitReport` tying them together. Staff-only.
 
-The `project_id` must reference a project whose `intendedUse.useType` is
+The `project_id` must reference a project whose `intendedUse` is
 `IN_SITU_VISIT` (same precondition as the underlying export).
 
 **Path parameters**

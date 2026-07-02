@@ -23,9 +23,6 @@ from app.shared.kernel import (
     EmailAddress as EmailAddress,
 )
 from app.shared.kernel import (
-    IntendedUse as IntendedUse,
-)
-from app.shared.kernel import (
     MessageAttachment as MessageAttachment,
 )
 from app.shared.kernel import (
@@ -41,6 +38,7 @@ from app.use_of_collections.domain.enums import (
     UseEventType,
     UseResult,
     UseStatus,
+    UseType,
 )
 
 CollectionUseProjectId = NewType("CollectionUseProjectId", str)
@@ -297,7 +295,7 @@ class CollectionUseProject:
     reference_number: ReferenceNumber
     title: str
     purpose: str
-    intended_use: IntendedUse
+    intended_use: UseType
     status: UseStatus
     begin_date: date
     end_date: date
@@ -467,7 +465,7 @@ class Proposal:
     # and completed in a later step.
     title: str | None
     collection_use_project_id: CollectionUseProjectId | None
-    intended_use: IntendedUse | None
+    intended_use: UseType | None
     begin_date: date | None
     end_date: date | None
     status: ProposalStatus
@@ -507,7 +505,7 @@ class Proposal:
         *,
         title: str | None,
         update_title: bool,
-        intended_use: IntendedUse | None,
+        intended_use: UseType | None,
         update_intended_use: bool,
         begin_date: date | None,
         update_begin_date: bool,

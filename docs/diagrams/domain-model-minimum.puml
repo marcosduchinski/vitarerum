@@ -35,18 +35,11 @@ package "Shared Kernel" <<Shared Kernel>> {
         - fileName: String
         }
 
-        class IntendedUse <<Value Object>> #e0afea {
-        - useType: UseType
-        - description: String
-        }
-
         enum UseType #e0afea {
         EXHIBITION
         IN_SITU_VISIT
         OTHER
         }
-
-        IntendedUse ..> UseType : useType
 }
 
 
@@ -110,7 +103,7 @@ package "User Request" <<Bounded Context>> {
         - referenceNumber: ReferenceNumber
         - title: String?
         - collectionUseProjectId: CollectionUseProjectId?
-        - intendedUse: IntendedUse?
+        - intendedUse: UseType?
         - beginDate: LocalDate?
         - endDate: LocalDate?
         - status: ProposalStatus
@@ -215,7 +208,7 @@ package "User Request" <<Bounded Context>> {
         - attachments: List<MessageAttachment>
         }
 
-        Proposal *-- "0..1" IntendedUse
+        Proposal ..> UseType : intendedUse
         Proposal *-- "0..1" RequesterContact
         Proposal *-- "0..*" ProposalEvent
         Proposal *-- "0..*" RequestedDocument
@@ -254,7 +247,7 @@ package "Collection Use" <<Bounded Context>> {
         - referenceNumber: ReferenceNumber
         - title: String
         - purpose: String
-        - intendedUse: IntendedUse
+        - intendedUse: UseType
         - status: UseStatus
         - beginDate: LocalDate
         - endDate: LocalDate
@@ -401,7 +394,7 @@ package "Collection Use" <<Bounded Context>> {
 
 
         CollectionUseProject *-- ReferenceNumber
-        CollectionUseProject *-- "1..1" IntendedUse
+        CollectionUseProject ..> UseType : intendedUse
         CollectionUseProject *-- "0..*" UseEvent
         CollectionUseProject *-- "0..*" CollectionUseObject
         CollectionUseProject ..> Proposal : proposalId

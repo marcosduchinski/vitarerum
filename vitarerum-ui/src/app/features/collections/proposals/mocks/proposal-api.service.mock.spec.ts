@@ -137,10 +137,7 @@ describe('ProposalApiServiceMock', () => {
     const result = await firstValueFrom(
       service.updateProposal('prop-1', {
         title: null,
-        intendedUse: {
-          useType: 'EXHIBITION',
-          description: 'Public exhibition of zoology catalogues.',
-        },
+        intendedUse: 'EXHIBITION',
         endDate: null,
       }),
     );
@@ -155,10 +152,7 @@ describe('ProposalApiServiceMock', () => {
     const updated = await firstValueFrom(service.getProposal('prop-1'));
     expect(updated.title).toBeNull();
     expect(updated.type).toBe('EXHIBITION');
-    expect(updated.intendedUse).toEqual({
-      useType: 'EXHIBITION',
-      description: 'Public exhibition of zoology catalogues.',
-    });
+    expect(updated.intendedUse).toBe('EXHIBITION');
     expect(updated.beginDate).toBe('2026-06-01');
     expect(updated.endDate).toBeNull();
 
@@ -341,7 +335,7 @@ describe('ProposalApiServiceMock', () => {
     const created = await firstValueFrom(
       service.createProposal({
         title: 'New study',
-        intendedUse: { useType: 'IN_SITU_VISIT', description: 'Test' },
+        intendedUse: 'IN_SITU_VISIT',
         purpose: 'Test',
         beginDate: '2026-07-01',
         endDate: '2026-12-31',
@@ -364,7 +358,7 @@ describe('ProposalApiServiceMock', () => {
     const created = await firstValueFrom(
       service.createProposal({
         title: 'New study',
-        intendedUse: { useType: 'IN_SITU_VISIT', description: 'Test' },
+        intendedUse: 'IN_SITU_VISIT',
         purpose: 'Test',
         beginDate: '2026-07-01',
         endDate: '2026-12-31',
@@ -405,7 +399,7 @@ describe('ProposalApiServiceMock', () => {
     const created = await firstValueFrom(
       service.createProposal({
         title: 'Rejected study',
-        intendedUse: { useType: 'OTHER', description: 'Test' },
+        intendedUse: 'OTHER',
         purpose: 'Test',
         beginDate: '2026-07-01',
         endDate: '2026-12-31',
@@ -428,7 +422,7 @@ describe('ProposalApiServiceMock', () => {
     const created = await firstValueFrom(
       service.createProposal({
         title: 'New study',
-        intendedUse: { useType: 'IN_SITU_VISIT', description: 'Test' },
+        intendedUse: 'IN_SITU_VISIT',
         purpose: 'Test',
         beginDate: '2026-07-01',
         endDate: '2026-12-31',
@@ -463,10 +457,7 @@ describe('ProposalApiServiceMock', () => {
     expect(detail).toMatchObject({
       title: 'Archive access request',
       type: 'OTHER',
-      intendedUse: {
-        useType: 'OTHER',
-        description: 'I would like to discuss access to archive materials.',
-      },
+      intendedUse: 'OTHER',
     });
     expect(detail.beginDate).toBeUndefined();
     expect(detail.endDate).toBeUndefined();
@@ -482,7 +473,7 @@ describe('ProposalApiServiceMock', () => {
     const created = await firstValueFrom(
       service.createProposal({
         title: 'Fallback study',
-        intendedUse: { useType: 'IN_SITU_VISIT', description: 'Fallback purpose text' },
+        intendedUse: 'IN_SITU_VISIT',
         purpose: 'Fallback purpose text',
         beginDate: '2026-07-01',
         endDate: '2026-12-31',

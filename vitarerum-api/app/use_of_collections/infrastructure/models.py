@@ -35,9 +35,6 @@ class CollectionUseProjectRecord(Base):
         String(36), index=True, nullable=True
     )
     type: Mapped[UseType] = mapped_column(SAEnum(UseType, name="use_type"))
-    intended_use_description: Mapped[str] = mapped_column(
-        Text, nullable=False, server_default=""
-    )
     status: Mapped[UseStatus] = mapped_column(SAEnum(UseStatus, name="use_status"))
     result: Mapped[UseResult | None] = mapped_column(
         SAEnum(UseResult, name="use_result"),
@@ -305,9 +302,6 @@ class ProposalRecord(Base):
     )
     type: Mapped[UseType | None] = mapped_column(
         SAEnum(UseType, name="proposal_use_type"), nullable=True
-    )
-    intended_use_description: Mapped[str] = mapped_column(
-        Text, nullable=False, server_default=""
     )
     begin_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     end_date: Mapped[date | None] = mapped_column(Date, nullable=True)

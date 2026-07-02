@@ -59,14 +59,14 @@ export class ProposalApiServiceMock {
     const convId = `conv-${id}`;
     const title = request.title?.trim() || request.initialMessageSubject?.trim() || proposalRef;
     const purpose = request.purpose?.trim() || request.initialMessageBody?.trim() || '';
-    const intendedUse = request.intendedUse ?? { useType: 'OTHER', description: purpose };
+    const intendedUse = request.intendedUse ?? 'OTHER';
 
     const proposal: ProposalDetail = {
       id,
       referenceNumber: proposalRef,
       title,
       status: 'SUBMITTED',
-      type: intendedUse.useType,
+      type: intendedUse,
       intendedUse,
       beginDate: request.beginDate ?? undefined,
       endDate: request.endDate ?? undefined,
@@ -202,7 +202,7 @@ export class ProposalApiServiceMock {
       beginDate,
       endDate,
       intendedUse,
-      type: request.intendedUse?.useType ?? proposal.type,
+      type: request.intendedUse ?? proposal.type,
     };
 
     // ProposalDetail still models rollout-era nullable fields as optional. The

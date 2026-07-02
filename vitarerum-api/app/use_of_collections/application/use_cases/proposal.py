@@ -24,7 +24,7 @@ from app.use_of_collections.application.use_cases._shared import (
     _new_id,
     _now,
 )
-from app.use_of_collections.domain.enums import ProposalStatus
+from app.use_of_collections.domain.enums import ProposalStatus, UseType
 from app.use_of_collections.domain.models import (
     Conversation,
     ConversationId,
@@ -32,7 +32,6 @@ from app.use_of_collections.domain.models import (
     DocumentId,
     DocumentType,
     EmailAddress,
-    IntendedUse,
     Message,
     MessageAttachment,
     MessageId,
@@ -54,7 +53,7 @@ class SubmitProposalInput:
     # title/intended_use/purpose/dates are optional: a proposal may be created
     # as a stub and completed in a later step.
     title: str | None
-    intended_use: IntendedUse | None
+    intended_use: UseType | None
     purpose: str | None
     begin_date: date | None
     end_date: date | None
@@ -216,7 +215,7 @@ class EditProposalDetailsInput:
     caller: Actor
     title: str | None = None
     update_title: bool = False
-    intended_use: IntendedUse | None = None
+    intended_use: UseType | None = None
     update_intended_use: bool = False
     begin_date: date | None = None
     update_begin_date: bool = False

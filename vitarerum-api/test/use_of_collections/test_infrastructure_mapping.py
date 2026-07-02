@@ -37,7 +37,6 @@ from app.use_of_collections.domain.models import (
     DocumentId,
     DocumentType,
     EmailAddress,
-    IntendedUse,
     Message,
     MessageAttachment,
     MessageId,
@@ -92,7 +91,7 @@ def test_collection_use_project_roundtrip_preserves_key_data() -> None:
         reference_number=ReferenceNumber("CUP-1234ABCD"),
         title="Collection study",
         purpose="To study the collection",
-        intended_use=IntendedUse(use_type=UseType.IN_SITU_VISIT),
+        intended_use=UseType.IN_SITU_VISIT,
         status=UseStatus.IN_PROGRESS,
         begin_date=date(2026, 6, 1),
         end_date=date(2026, 6, 7),
@@ -318,9 +317,7 @@ def test_proposal_roundtrip_preserves_key_data() -> None:
         reference_number=ReferenceNumber("VRP-20260601-0001"),
         title="Proposal title",
         collection_use_project_id=CollectionUseProjectId("project-1"),
-        intended_use=IntendedUse(
-            use_type=UseType.OTHER, description="ad-hoc loan for filming"
-        ),
+        intended_use=UseType.OTHER,
         begin_date=date(2026, 6, 1),
         end_date=date(2026, 6, 7),
         status=ProposalStatus.SUBMITTED,
@@ -362,8 +359,7 @@ def test_proposal_roundtrip_preserves_key_data() -> None:
     assert rebuilt.id == proposal.id
     assert rebuilt.collection_use_project_id == proposal.collection_use_project_id
     assert rebuilt.title == "Proposal title"
-    assert rebuilt.intended_use.use_type == UseType.OTHER
-    assert rebuilt.intended_use.description == "ad-hoc loan for filming"
+    assert rebuilt.intended_use == UseType.OTHER
     assert rebuilt.begin_date == date(2026, 6, 1)
     assert rebuilt.end_date == date(2026, 6, 7)
     assert rebuilt.submitted_at == now
@@ -381,7 +377,7 @@ def test_public_contact_proposal_roundtrip_without_requester_or_project() -> Non
         reference_number=ReferenceNumber("VRP-20260601-0001"),
         title="Public proposal",
         collection_use_project_id=None,
-        intended_use=IntendedUse(use_type=UseType.IN_SITU_VISIT),
+        intended_use=UseType.IN_SITU_VISIT,
         begin_date=date(2026, 6, 1),
         end_date=date(2026, 6, 7),
         status=ProposalStatus.SUBMITTED,

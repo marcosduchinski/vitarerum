@@ -69,7 +69,7 @@ describe('ProjectApiService', () => {
             status: 'IN_PROGRESS',
             beginDate: '2026-06-01',
             endDate: '2026-06-30',
-            intendedUse: { useType: 'IN_SITU_VISIT', description: 'Comparative study' },
+            intendedUse: 'IN_SITU_VISIT',
             proposal: { id: 'pr1', status: 'APPROVED' },
           },
         ],
@@ -90,7 +90,7 @@ describe('ProjectApiService', () => {
       status: 'IN_PROGRESS',
       beginDate: '2026-06-01',
       endDate: '2026-06-30',
-      intendedUse: { useType: 'EXHIBITION', description: 'Show' },
+      intendedUse: 'EXHIBITION',
       proposal: { id: 'pr1', status: 'APPROVED' },
     });
     expect(detailType).toBe('EXHIBITION');

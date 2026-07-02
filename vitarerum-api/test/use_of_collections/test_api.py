@@ -35,7 +35,6 @@ from app.use_of_collections.domain.models import (
     DocumentId,
     DocumentType,
     EmailAddress,
-    IntendedUse,
     Message,
     MessageId,
     ObjectAccessLog,
@@ -109,7 +108,7 @@ def _proposal(
         reference_number=ReferenceNumber("VRP-20260601-0001"),
         title="Proposal title",
         collection_use_project_id=CollectionUseProjectId("proj-1"),
-        intended_use=IntendedUse(use_type=UseType.IN_SITU_VISIT),
+        intended_use=UseType.IN_SITU_VISIT,
         begin_date=date(2026, 6, 1),
         end_date=date(2026, 6, 7),
         status=status,
@@ -144,7 +143,7 @@ def _project(
         reference_number=ReferenceNumber("CUP-ABCDEFG1"),
         title="Project title",
         purpose="Use collection",
-        intended_use=IntendedUse(use_type=UseType.IN_SITU_VISIT),
+        intended_use=UseType.IN_SITU_VISIT,
         status=status,
         begin_date=date(2026, 6, 1),
         end_date=date(2026, 6, 7),
@@ -180,7 +179,7 @@ class InMemoryProjectRepository:
             items = [
                 item
                 for item in items
-                if item.intended_use.use_type == filters.use_type
+                if item.intended_use == filters.use_type
             ]
         if filters.requested_by:
             items = [
@@ -498,7 +497,7 @@ async def test_submit_proposal_returns_201() -> None:
             "/api/v1/proposals",
             json={
                 "title": "Collection study",
-                "intendedUse": {"useType": "IN_SITU_VISIT", "description": "study"},
+                "intendedUse": "IN_SITU_VISIT",
                 "purpose": "To study the collection",
                 "beginDate": "2026-06-01",
                 "endDate": "2026-06-07",
@@ -522,10 +521,7 @@ async def test_submit_proposal_carries_intended_use_through_to_detail() -> None:
             "/api/v1/proposals",
             json={
                 "title": "Collection study",
-                "intendedUse": {
-                    "useType": "EXHIBITION",
-                    "description": "Spring ceramics exhibition",
-                },
+                "intendedUse": "EXHIBITION",
                 "purpose": "To exhibit the collection",
                 "beginDate": "2026-06-01",
                 "endDate": "2026-06-07",
@@ -539,38 +535,10 @@ async def test_submit_proposal_carries_intended_use_through_to_detail() -> None:
         )
 
     assert created.status_code == 201
-    created_use = created.json()["proposal"]["intendedUse"]
-    assert created_use == {
-        "useType": "EXHIBITION",
-        "description": "Spring ceramics exhibition",
-    }
-    # The value object survives the round-trip through the repository.
+    assert created.json()["proposal"]["intendedUse"] == "EXHIBITION"
+    # The use type survives the round-trip through the repository.
     assert detail.status_code == 200
-    assert detail.json()["intendedUse"] == {
-        "useType": "EXHIBITION",
-        "description": "Spring ceramics exhibition",
-    }
-
-
-async def test_submit_proposal_intended_use_description_defaults_empty() -> None:
-    async with client_with_repos() as (client, _, _, _):
-        created = await client.post(
-            "/api/v1/proposals",
-            json={
-                "title": "Collection study",
-                "intendedUse": {"useType": "IN_SITU_VISIT"},
-                "purpose": "To study the collection",
-                "beginDate": "2026-06-01",
-                "endDate": "2026-06-07",
-            },
-            headers={"X-Permission-Id": "permission-1"},
-        )
-
-    assert created.status_code == 201
-    assert created.json()["proposal"]["intendedUse"] == {
-        "useType": "IN_SITU_VISIT",
-        "description": "",
-    }
+    assert detail.json()["intendedUse"] == "EXHIBITION"
 
 
 async def test_submit_proposal_invalid_date_range_returns_422() -> None:
@@ -579,7 +547,7 @@ async def test_submit_proposal_invalid_date_range_returns_422() -> None:
             "/api/v1/proposals",
             json={
                 "title": "Collection study",
-                "intendedUse": {"useType": "IN_SITU_VISIT", "description": "study"},
+                "intendedUse": "IN_SITU_VISIT",
                 "purpose": "To study the collection",
                 "beginDate": "2026-06-07",
                 "endDate": "2026-06-01",
@@ -599,7 +567,7 @@ async def test_list_proposals_serializes_populated_item() -> None:
                 reference_number=ReferenceNumber("VRP-20260601-0001"),
                 title="Proposal title",
                 collection_use_project_id="proj-1",
-                intended_use=IntendedUse(use_type=UseType.IN_SITU_VISIT),
+                intended_use=UseType.IN_SITU_VISIT,
                 begin_date=date(2026, 6, 1),
                 end_date=date(2026, 6, 7),
                 status=ProposalStatus.SUBMITTED,
@@ -621,7 +589,7 @@ async def test_list_proposals_serializes_populated_item() -> None:
     assert item["referenceNumber"] == "VRP-20260601-0001"
     assert item["title"] == "Proposal title"
     assert item["status"] == "SUBMITTED"
-    assert item["intendedUse"]["useType"] == "IN_SITU_VISIT"
+    assert item["intendedUse"] == "IN_SITU_VISIT"
 
 
 async def test_list_proposals_paginates_results() -> None:
@@ -637,7 +605,7 @@ async def test_list_proposals_paginates_results() -> None:
                     collection_use_project_id=CollectionUseProjectId(
                         f"proj-{index + 1}"
                     ),
-                    intended_use=IntendedUse(use_type=UseType.IN_SITU_VISIT),
+                    intended_use=UseType.IN_SITU_VISIT,
                     begin_date=date(2026, 6, 1),
                     end_date=date(2026, 6, 7),
                     status=ProposalStatus.SUBMITTED,
@@ -706,7 +674,7 @@ async def test_relate_searched_objects_surfaces_them_on_detail() -> None:
             "/api/v1/proposals",
             json={
                 "title": "Manuscript study",
-                "intendedUse": {"useType": "IN_SITU_VISIT", "description": "study"},
+                "intendedUse": "IN_SITU_VISIT",
                 "purpose": "To study the manuscript",
                 "beginDate": "2026-06-01",
                 "endDate": "2026-06-07",
@@ -757,7 +725,7 @@ async def test_external_user_cannot_read_other_proposal_events() -> None:
                 reference_number=ReferenceNumber("VRP-20260601-0001"),
                 title="Proposal title",
                 collection_use_project_id=CollectionUseProjectId("proj-foreign"),
-                intended_use=IntendedUse(use_type=UseType.IN_SITU_VISIT),
+                intended_use=UseType.IN_SITU_VISIT,
                 begin_date=date(2026, 6, 1),
                 end_date=date(2026, 6, 7),
                 status=ProposalStatus.SUBMITTED,
@@ -783,7 +751,7 @@ async def test_external_user_cannot_read_other_proposal_documents() -> None:
                 reference_number=ReferenceNumber("VRP-20260601-0001"),
                 title="Proposal title",
                 collection_use_project_id=CollectionUseProjectId("proj-foreign"),
-                intended_use=IntendedUse(use_type=UseType.IN_SITU_VISIT),
+                intended_use=UseType.IN_SITU_VISIT,
                 begin_date=date(2026, 6, 1),
                 end_date=date(2026, 6, 7),
                 status=ProposalStatus.SUBMITTED,
@@ -809,7 +777,7 @@ async def test_external_user_cannot_read_other_project_events() -> None:
                 reference_number=ReferenceNumber("CUP-ABCDEFG1"),
                 title="Foreign project",
                 purpose="Restricted",
-                intended_use=IntendedUse(use_type=UseType.IN_SITU_VISIT),
+                intended_use=UseType.IN_SITU_VISIT,
                 status=UseStatus.CREATED,
                 begin_date=date(2026, 6, 1),
                 end_date=date(2026, 6, 7),
@@ -822,7 +790,7 @@ async def test_external_user_cannot_read_other_project_events() -> None:
                 reference_number=ReferenceNumber("VRP-20260601-0001"),
                 title="Proposal title",
                 collection_use_project_id=CollectionUseProjectId("proj-foreign"),
-                intended_use=IntendedUse(use_type=UseType.IN_SITU_VISIT),
+                intended_use=UseType.IN_SITU_VISIT,
                 begin_date=date(2026, 6, 1),
                 end_date=date(2026, 6, 7),
                 status=ProposalStatus.APPROVED,
@@ -853,7 +821,7 @@ async def test_list_projects_applies_search_filter() -> None:
                 reference_number=ReferenceNumber("CUP-ALPHA001"),
                 title="Alpha manuscripts",
                 purpose="Visible",
-                intended_use=IntendedUse(use_type=UseType.IN_SITU_VISIT),
+                intended_use=UseType.IN_SITU_VISIT,
                 status=UseStatus.CREATED,
                 begin_date=date(2026, 6, 1),
                 end_date=date(2026, 6, 7),
@@ -866,7 +834,7 @@ async def test_list_projects_applies_search_filter() -> None:
                 reference_number=ReferenceNumber("CUP-BETA0001"),
                 title="Beta paintings",
                 purpose="Hidden by search",
-                intended_use=IntendedUse(use_type=UseType.IN_SITU_VISIT),
+                intended_use=UseType.IN_SITU_VISIT,
                 status=UseStatus.CREATED,
                 begin_date=date(2026, 6, 1),
                 end_date=date(2026, 6, 7),
@@ -953,7 +921,7 @@ async def test_list_projects_applies_date_filters() -> None:
                 reference_number=ReferenceNumber("CUP-JUNE0001"),
                 title="June project",
                 purpose="Visible",
-                intended_use=IntendedUse(use_type=UseType.IN_SITU_VISIT),
+                intended_use=UseType.IN_SITU_VISIT,
                 status=UseStatus.CREATED,
                 begin_date=date(2026, 6, 10),
                 end_date=date(2026, 6, 12),
@@ -966,7 +934,7 @@ async def test_list_projects_applies_date_filters() -> None:
                 reference_number=ReferenceNumber("CUP-JULY0001"),
                 title="July project",
                 purpose="Hidden by dates",
-                intended_use=IntendedUse(use_type=UseType.IN_SITU_VISIT),
+                intended_use=UseType.IN_SITU_VISIT,
                 status=UseStatus.CREATED,
                 begin_date=date(2026, 7, 10),
                 end_date=date(2026, 7, 12),
@@ -992,7 +960,7 @@ async def test_external_owner_cannot_assign_proposal() -> None:
                 reference_number=ReferenceNumber("VRP-20260601-0001"),
                 title="Proposal title",
                 collection_use_project_id=CollectionUseProjectId("proj-1"),
-                intended_use=IntendedUse(use_type=UseType.IN_SITU_VISIT),
+                intended_use=UseType.IN_SITU_VISIT,
                 begin_date=date(2026, 6, 1),
                 end_date=date(2026, 6, 7),
                 status=ProposalStatus.SUBMITTED,
@@ -1019,7 +987,7 @@ async def test_external_owner_cannot_request_documents() -> None:
                 reference_number=ReferenceNumber("VRP-20260601-0001"),
                 title="Proposal title",
                 collection_use_project_id=CollectionUseProjectId("proj-1"),
-                intended_use=IntendedUse(use_type=UseType.IN_SITU_VISIT),
+                intended_use=UseType.IN_SITU_VISIT,
                 begin_date=date(2026, 6, 1),
                 end_date=date(2026, 6, 7),
                 status=ProposalStatus.PENDING,
@@ -1055,7 +1023,7 @@ async def test_assign_proposal_rejects_unknown_target_permission() -> None:
                 reference_number=ReferenceNumber("VRP-20260601-0001"),
                 title="Proposal title",
                 collection_use_project_id=CollectionUseProjectId("proj-1"),
-                intended_use=IntendedUse(use_type=UseType.IN_SITU_VISIT),
+                intended_use=UseType.IN_SITU_VISIT,
                 begin_date=date(2026, 6, 1),
                 end_date=date(2026, 6, 7),
                 status=ProposalStatus.SUBMITTED,
@@ -1088,7 +1056,7 @@ async def test_assign_proposal_rejects_external_target_permission() -> None:
                 reference_number=ReferenceNumber("VRP-20260601-0001"),
                 title="Proposal title",
                 collection_use_project_id=CollectionUseProjectId("proj-1"),
-                intended_use=IntendedUse(use_type=UseType.IN_SITU_VISIT),
+                intended_use=UseType.IN_SITU_VISIT,
                 begin_date=date(2026, 6, 1),
                 end_date=date(2026, 6, 7),
                 status=ProposalStatus.SUBMITTED,
@@ -1121,7 +1089,7 @@ async def test_forward_proposal_rejects_external_target_permission() -> None:
                 reference_number=ReferenceNumber("VRP-20260601-0001"),
                 title="Proposal title",
                 collection_use_project_id=CollectionUseProjectId("proj-1"),
-                intended_use=IntendedUse(use_type=UseType.IN_SITU_VISIT),
+                intended_use=UseType.IN_SITU_VISIT,
                 begin_date=date(2026, 6, 1),
                 end_date=date(2026, 6, 7),
                 status=ProposalStatus.PENDING,
@@ -1151,7 +1119,7 @@ async def test_reject_proposal_creates_message_to_requester() -> None:
             reference_number=ReferenceNumber("VRP-20260601-0001"),
             title="Proposal title",
             collection_use_project_id=CollectionUseProjectId("proj-1"),
-            intended_use=IntendedUse(use_type=UseType.IN_SITU_VISIT),
+            intended_use=UseType.IN_SITU_VISIT,
             begin_date=date(2026, 6, 1),
             end_date=date(2026, 6, 7),
             status=ProposalStatus.PENDING,
@@ -1205,7 +1173,7 @@ async def test_staff_can_assign_proposal_to_staff_target() -> None:
                 reference_number=ReferenceNumber("VRP-20260601-0001"),
                 title="Proposal title",
                 collection_use_project_id=CollectionUseProjectId("proj-1"),
-                intended_use=IntendedUse(use_type=UseType.IN_SITU_VISIT),
+                intended_use=UseType.IN_SITU_VISIT,
                 begin_date=date(2026, 6, 1),
                 end_date=date(2026, 6, 7),
                 status=ProposalStatus.SUBMITTED,
@@ -1242,7 +1210,7 @@ async def test_staff_can_forward_proposal_to_staff_target() -> None:
                 reference_number=ReferenceNumber("VRP-20260601-0001"),
                 title="Proposal title",
                 collection_use_project_id=CollectionUseProjectId("proj-1"),
-                intended_use=IntendedUse(use_type=UseType.IN_SITU_VISIT),
+                intended_use=UseType.IN_SITU_VISIT,
                 begin_date=date(2026, 6, 1),
                 end_date=date(2026, 6, 7),
                 status=ProposalStatus.PENDING,
@@ -1278,7 +1246,7 @@ async def test_forward_proposal_rejects_non_pending_proposal() -> None:
                 reference_number=ReferenceNumber("VRP-20260601-0001"),
                 title="Proposal title",
                 collection_use_project_id=CollectionUseProjectId("proj-1"),
-                intended_use=IntendedUse(use_type=UseType.IN_SITU_VISIT),
+                intended_use=UseType.IN_SITU_VISIT,
                 begin_date=date(2026, 6, 1),
                 end_date=date(2026, 6, 7),
                 status=ProposalStatus.APPROVED,
@@ -1361,7 +1329,7 @@ async def test_patch_proposal_omitted_fields_left_unchanged() -> None:
     # Dates and intended use untouched by a title-only patch.
     assert proposal.begin_date == date(2026, 6, 1)
     assert proposal.end_date == date(2026, 6, 7)
-    assert proposal.intended_use == IntendedUse(use_type=UseType.IN_SITU_VISIT)
+    assert proposal.intended_use == UseType.IN_SITU_VISIT
 
 
 async def test_patch_proposal_replaces_intended_use() -> None:
@@ -1375,21 +1343,13 @@ async def test_patch_proposal_replaces_intended_use() -> None:
 
         response = await client.patch(
             "/api/v1/proposals/prop-1",
-            json={
-                "intendedUse": {
-                    "useType": "IN_SITU_VISIT",
-                    "description": "On-site study of the manuscripts",
-                }
-            },
+            json={"intendedUse": "IN_SITU_VISIT"},
         )
         proposal = await proposal_repo.get_by_id(ProposalId("prop-1"))
 
     assert response.status_code == 200
     assert proposal is not None
-    assert proposal.intended_use == IntendedUse(
-        use_type=UseType.IN_SITU_VISIT,
-        description="On-site study of the manuscripts",
-    )
+    assert proposal.intended_use == UseType.IN_SITU_VISIT
 
 
 async def test_patch_proposal_clears_dates() -> None:
@@ -1501,7 +1461,7 @@ async def test_approve_proposal_invalid_date_range_returns_422() -> None:
                 reference_number=ReferenceNumber("VRP-20260601-0001"),
                 title="Proposal title",
                 collection_use_project_id=CollectionUseProjectId("proj-1"),
-                intended_use=IntendedUse(use_type=UseType.IN_SITU_VISIT),
+                intended_use=UseType.IN_SITU_VISIT,
                 begin_date=date(2026, 6, 1),
                 end_date=date(2026, 6, 7),
                 status=ProposalStatus.PENDING,
@@ -1609,7 +1569,7 @@ async def test_submit_document_empty_document_type_returns_422() -> None:
                 reference_number=ReferenceNumber("VRP-20260601-0001"),
                 title="Proposal title",
                 collection_use_project_id=CollectionUseProjectId("proj-1"),
-                intended_use=IntendedUse(use_type=UseType.IN_SITU_VISIT),
+                intended_use=UseType.IN_SITU_VISIT,
                 begin_date=date(2026, 6, 1),
                 end_date=date(2026, 6, 7),
                 status=ProposalStatus.PENDING,
@@ -1635,7 +1595,7 @@ def _pending_proposal() -> "Proposal":
         reference_number=ReferenceNumber("VRP-20260601-0001"),
         title="Proposal title",
         collection_use_project_id=CollectionUseProjectId("proj-1"),
-        intended_use=IntendedUse(use_type=UseType.IN_SITU_VISIT),
+        intended_use=UseType.IN_SITU_VISIT,
         begin_date=date(2026, 6, 1),
         end_date=date(2026, 6, 7),
         status=ProposalStatus.PENDING,
@@ -1758,7 +1718,7 @@ async def test_log_entry_attachment_invalid_media_type_returns_422() -> None:
                 reference_number=ReferenceNumber("CUP-ABCDEFG1"),
                 title="Project",
                 purpose="Use collection",
-                intended_use=IntendedUse(use_type=UseType.IN_SITU_VISIT),
+                intended_use=UseType.IN_SITU_VISIT,
                 status=UseStatus.CREATED,
                 begin_date=date(2026, 6, 1),
                 end_date=date(2026, 6, 7),
@@ -1771,7 +1731,7 @@ async def test_log_entry_attachment_invalid_media_type_returns_422() -> None:
                 reference_number=ReferenceNumber("VRP-20260601-0001"),
                 title="Proposal title",
                 collection_use_project_id=project_id,
-                intended_use=IntendedUse(use_type=UseType.IN_SITU_VISIT),
+                intended_use=UseType.IN_SITU_VISIT,
                 begin_date=date(2026, 6, 1),
                 end_date=date(2026, 6, 7),
                 status=ProposalStatus.APPROVED,

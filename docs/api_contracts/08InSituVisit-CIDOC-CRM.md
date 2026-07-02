@@ -319,7 +319,7 @@ child/attachment ids and `generatedAt` are server-assigned.
 
 Staff-only, same auth and error shape as the rest of the context.
 
-**Pre-condition** — the project's `intendedUse.useType` must be `IN_SITU_VISIT`.
+**Pre-condition** — the project's `intendedUse` must be `IN_SITU_VISIT`.
 
 **Field mapping (project → record)**
 

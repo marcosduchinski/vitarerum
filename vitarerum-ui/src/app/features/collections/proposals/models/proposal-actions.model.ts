@@ -1,6 +1,6 @@
 import { PermissionPrincipal } from '@core/auth/models/permission.model';
 
-import { IntendedUse, ProposalStatus, UseStatus } from '@shared/models/collection-use-status.model';
+import { ProposalStatus, UseStatus, UseType } from '@shared/models/collection-use-status.model';
 import { ProposalEvent, ProposalProjectSummary } from './proposal.model';
 
 export interface AssignProposalRequest {
@@ -14,10 +14,10 @@ export interface ForwardProposalRequest {
 }
 
 // Omitted properties are left unchanged by the backend. Explicit null clears
-// only the nullable metadata fields; intendedUse is replaced as a whole.
+// only the nullable metadata fields; intendedUse is replaced when present.
 export interface UpdateProposalRequest {
   readonly title?: string | null;
-  readonly intendedUse?: IntendedUse;
+  readonly intendedUse?: UseType;
   readonly beginDate?: string | null;
   readonly endDate?: string | null;
 }

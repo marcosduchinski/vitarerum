@@ -19,7 +19,7 @@ import {
   StatusChipComponent,
   WorkflowStatus,
 } from '@shared/components/status-chip/status-chip.component';
-import { IntendedUse, UseType } from '@shared/models/collection-use-status.model';
+import { UseType } from '@shared/models/collection-use-status.model';
 
 import { UpdateProposalRequest } from '../../models/proposal-actions.model';
 import { ProposalDetail } from '../../models/proposal.model';
@@ -28,14 +28,13 @@ import { PROPOSAL_API_SERVICE } from '../../services/proposal-api.service';
 interface ProposalEditFormModel {
   readonly title: string;
   readonly useType: UseType | '';
-  readonly intendedUseDescription: string;
   readonly beginDate: string;
   readonly endDate: string;
 }
 
 interface ProposalEditSnapshot {
   readonly title: string | null;
-  readonly intendedUse: IntendedUse | null;
+  readonly intendedUse: UseType | null;
   readonly beginDate: string | null;
   readonly endDate: string | null;
 }
@@ -43,7 +42,6 @@ interface ProposalEditSnapshot {
 const EMPTY_FORM: ProposalEditFormModel = {
   title: '',
   useType: '',
-  intendedUseDescription: '',
   beginDate: '',
   endDate: '',
 };
@@ -86,12 +84,6 @@ export class ProposalEditPageComponent {
   // Signal Forms is experimental in Angular 21. It is kept local to this
   // route-level editor so future API changes have a contained migration surface.
   protected readonly editForm = form(this.formModel, (path) => {
-    validate(path.useType, ({ value, valueOf }) => {
-      const description = valueOf(path.intendedUseDescription).trim();
-      return description && !value()
-        ? { kind: 'missing-use-type', message: 'Select an intended-use type.' }
-        : undefined;
-    });
     validate(path.endDate, ({ value, valueOf }) => {
       const beginDate = valueOf(path.beginDate);
       const endDate = value();
@@ -127,8 +119,7 @@ export class ProposalEditPageComponent {
     this.original.set(snapshot);
     this.formModel.set({
       title: snapshot.title ?? '',
-      useType: snapshot.intendedUse?.useType ?? '',
-      intendedUseDescription: snapshot.intendedUse?.description ?? '',
+      useType: snapshot.intendedUse ?? '',
       beginDate: snapshot.beginDate ?? '',
       endDate: snapshot.endDate ?? '',
     });
@@ -171,13 +162,13 @@ export class ProposalEditPageComponent {
     const current = this.currentSnapshot();
     const request: {
       title?: string | null;
-      intendedUse?: IntendedUse;
+      intendedUse?: UseType;
       beginDate?: string | null;
       endDate?: string | null;
     } = {};
 
     if (current.title !== original.title) request.title = current.title;
-    if (!this.intendedUsesEqual(current.intendedUse, original.intendedUse) && current.intendedUse) {
+    if (current.intendedUse !== original.intendedUse && current.intendedUse) {
       request.intendedUse = current.intendedUse;
     }
     if (current.beginDate !== original.beginDate) request.beginDate = current.beginDate;
@@ -190,9 +181,7 @@ export class ProposalEditPageComponent {
     const value = this.formModel();
     return {
       title: value.title.trim() || null,
-      intendedUse: value.useType
-        ? { useType: value.useType, description: value.intendedUseDescription.trim() }
-        : null,
+      intendedUse: value.useType || null,
       beginDate: value.beginDate || null,
       endDate: value.endDate || null,
     };
@@ -201,12 +190,7 @@ export class ProposalEditPageComponent {
   private snapshotFromProposal(proposal: ProposalDetail): ProposalEditSnapshot {
     return {
       title: proposal.title?.trim() || null,
-      intendedUse: proposal.intendedUse
-        ? {
-            useType: proposal.intendedUse.useType,
-            description: proposal.intendedUse.description.trim(),
-          }
-        : null,
+      intendedUse: proposal.intendedUse ?? null,
       beginDate: proposal.beginDate ?? null,
       endDate: proposal.endDate ?? null,
     };
@@ -215,14 +199,10 @@ export class ProposalEditPageComponent {
   private snapshotsEqual(a: ProposalEditSnapshot, b: ProposalEditSnapshot): boolean {
     return (
       a.title === b.title &&
-      this.intendedUsesEqual(a.intendedUse, b.intendedUse) &&
+      a.intendedUse === b.intendedUse &&
       a.beginDate === b.beginDate &&
       a.endDate === b.endDate
     );
-  }
-
-  private intendedUsesEqual(a: IntendedUse | null, b: IntendedUse | null): boolean {
-    return a?.useType === b?.useType && a?.description === b?.description;
   }
 
   private navigateToDetail(): Promise<boolean> {

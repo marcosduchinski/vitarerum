@@ -28,7 +28,7 @@ from app.public_submission.domain.models import (
     PendingPublicSubmission,
     PublicDocumentSubmission,
 )
-from app.shared.kernel import IntendedUse, UseType
+from app.shared.kernel import UseType
 from app.use_of_collections.application.use_cases import (
     SubmitProposal,
     SubmitProposalInput,
@@ -308,7 +308,7 @@ class ConfirmPublicProposal:
         output = await self._submit.execute(
             SubmitProposalInput(
                 title=None,
-                intended_use=IntendedUse(use_type=submission.use_type),
+                intended_use=submission.use_type,
                 purpose=None,
                 begin_date=submission.proposed_begin_date,
                 end_date=submission.proposed_end_date,

@@ -18,7 +18,7 @@ from app.public_submission.domain.models import (
     PendingPublicSubmission,
     PendingSubmissionStatus,
 )
-from app.shared.kernel import IntendedUse, UseType
+from app.shared.kernel import UseType
 
 _NOW = datetime(2026, 6, 26, 12, 0, tzinfo=UTC)
 
@@ -277,7 +277,7 @@ async def test_confirm_materialises_proposal() -> None:
     assert result.reference_number == "VRP-20260626-0009"
     assert len(submit.calls) == 1
     # The citizen's intended use is carried into the materialised proposal.
-    assert submit.calls[0].intended_use == IntendedUse(use_type=UseType.IN_SITU_VISIT)
+    assert submit.calls[0].intended_use == UseType.IN_SITU_VISIT
     # As are the dates the citizen proposed.
     assert submit.calls[0].begin_date == date(2026, 7, 1)
     assert submit.calls[0].end_date == date(2026, 7, 15)

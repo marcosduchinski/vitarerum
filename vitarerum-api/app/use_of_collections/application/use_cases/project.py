@@ -30,7 +30,6 @@ from app.use_of_collections.domain.models import (
     CollectionUseObjectId,
     CollectionUseProject,
     CollectionUseProjectId,
-    IntendedUse,
     ObjectAccessLog,
     ObjectAccessLogId,
     ObjectLogEntry,
@@ -91,7 +90,7 @@ class ApproveProposal:
             purpose=data.purpose,
             # A project always has an intended use; a stub proposal may not yet,
             # in which case it defaults to the OTHER (unclassified) category.
-            intended_use=proposal.intended_use or IntendedUse(use_type=UseType.OTHER),
+            intended_use=proposal.intended_use or UseType.OTHER,
             status=UseStatus.CREATED,
             begin_date=data.begin_date,
             end_date=data.end_date,

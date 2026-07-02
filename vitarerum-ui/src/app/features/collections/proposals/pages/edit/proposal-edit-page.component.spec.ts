@@ -28,10 +28,7 @@ const PROPOSAL: ProposalDetail = {
   title: 'Atlantic forest catalogue study',
   status: 'PENDING',
   type: 'IN_SITU_VISIT',
-  intendedUse: {
-    useType: 'IN_SITU_VISIT',
-    description: 'On-site research using specimen catalogues.',
-  },
+  intendedUse: 'IN_SITU_VISIT',
   beginDate: '2026-07-01',
   endDate: '2026-12-31',
   requestedBy: {
@@ -102,7 +99,6 @@ describe('ProposalEditPageComponent', () => {
 
     expect(input(compiled, 'proposal-edit-title').value).toBe('Atlantic forest catalogue study');
     expect(select(compiled, 'proposal-edit-use-type').value).toBe('IN_SITU_VISIT');
-    expect(textarea(compiled, 'proposal-edit-use-description').value).toContain('On-site research');
     expect(input(compiled, 'proposal-edit-begin-date').value).toBe('2026-07-01');
     expect(button(compiled, 'Save changes').disabled).toBe(true);
   });
@@ -145,7 +141,6 @@ describe('ProposalEditPageComponent', () => {
     const compiled = await render();
 
     change(select(compiled, 'proposal-edit-use-type'), 'EXHIBITION');
-    change(textarea(compiled, 'proposal-edit-use-description'), 'Public exhibition.');
     change(input(compiled, 'proposal-edit-end-date'), '2026-01-01');
     fixture.detectChanges();
 
@@ -159,7 +154,7 @@ describe('ProposalEditPageComponent', () => {
     await fixture.whenStable();
 
     expect(service.updateCalls[0]?.request).toEqual({
-      intendedUse: { useType: 'EXHIBITION', description: 'Public exhibition.' },
+      intendedUse: 'EXHIBITION',
       endDate: '2026-10-01',
     });
   });
@@ -195,10 +190,6 @@ function input(root: HTMLElement, id: string): HTMLInputElement {
 
 function select(root: HTMLElement, id: string): HTMLSelectElement {
   return root.querySelector<HTMLSelectElement>(`#${id}`)!;
-}
-
-function textarea(root: HTMLElement, id: string): HTMLTextAreaElement {
-  return root.querySelector<HTMLTextAreaElement>(`#${id}`)!;
 }
 
 function button(root: HTMLElement, text: string): HTMLButtonElement {

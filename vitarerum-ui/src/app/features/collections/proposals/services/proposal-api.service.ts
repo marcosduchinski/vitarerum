@@ -48,10 +48,10 @@ function principalFromContact(contact?: RequesterContact | null): PermissionPrin
 }
 
 // Normalizes a proposal summary into the shape the app reads:
-//  - the use type wrapped as `intendedUse: { useType, description }` → flat `type`;
+//  - the bare `intendedUse` use type → flat `type`;
 //  - null `requestedBy` (public, pre-approval) → principal from `requesterContact`.
 function normalizeProposal<T extends ProposalSummary>(p: T): T {
-  const type = p.type ?? p.intendedUse?.useType ?? 'OTHER';
+  const type = p.type ?? p.intendedUse ?? 'OTHER';
   const requestedBy = p.requestedBy ?? principalFromContact(p.requesterContact);
   return { ...p, type, requestedBy };
 }

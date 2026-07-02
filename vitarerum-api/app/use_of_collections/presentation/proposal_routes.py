@@ -68,7 +68,6 @@ from app.use_of_collections.domain.enums import (
     UseType,
 )
 from app.use_of_collections.domain.models import (
-    IntendedUse,
     PermissionId,
     ProposalId,
 )
@@ -80,7 +79,6 @@ from app.use_of_collections.presentation.common import (
     _detail_or_stub_or_none,
     _guess_content_type,
     _handle_domain_errors,
-    _intended_use_response,
     _load_permission_detail,
     _message_response,
     _not_found,
@@ -168,14 +166,7 @@ async def submit_proposal(
     use_case = SubmitProposal(proposal_repo, conversation_repo)
     submit_input = SubmitProposalInput(
         title=request.title,
-        intended_use=(
-            IntendedUse(
-                use_type=request.intendedUse.useType,
-                description=request.intendedUse.description,
-            )
-            if request.intendedUse is not None
-            else None
-        ),
+        intended_use=request.intendedUse,
         purpose=request.purpose,
         begin_date=request.beginDate,
         end_date=request.endDate,
@@ -210,7 +201,7 @@ async def submit_proposal(
             referenceNumber=output.proposal.reference_number.value,
             title=output.proposal.title,
             status=output.proposal.status,
-            intendedUse=_intended_use_response(output.proposal.intended_use),
+            intendedUse=output.proposal.intended_use,
             beginDate=output.proposal.begin_date,
             endDate=output.proposal.end_date,
             requestedBy=requested_by_detail,
@@ -258,7 +249,7 @@ async def list_proposals(
             referenceNumber=item.proposal.reference_number.value,
             title=item.proposal.title,
             status=item.proposal.status,
-            intendedUse=_intended_use_response(item.proposal.intended_use),
+            intendedUse=item.proposal.intended_use,
             beginDate=item.proposal.begin_date,
             endDate=item.proposal.end_date,
             requestedBy=_detail_or_stub_or_none(
@@ -339,7 +330,7 @@ async def get_proposal(
         referenceNumber=proposal.reference_number.value,
         title=proposal.title,
         status=proposal.status,
-        intendedUse=_intended_use_response(proposal.intended_use),
+        intendedUse=proposal.intended_use,
         beginDate=proposal.begin_date,
         endDate=proposal.end_date,
         requestedBy=_detail_or_stub_or_none(
@@ -410,14 +401,7 @@ async def edit_proposal(
                 caller=caller,
                 title=body.title,
                 update_title="title" in fields_set,
-                intended_use=(
-                    IntendedUse(
-                        use_type=body.intendedUse.useType,
-                        description=body.intendedUse.description,
-                    )
-                    if body.intendedUse is not None
-                    else None
-                ),
+                intended_use=body.intendedUse,
                 update_intended_use="intendedUse" in fields_set,
                 begin_date=body.beginDate,
                 update_begin_date=update_begin,

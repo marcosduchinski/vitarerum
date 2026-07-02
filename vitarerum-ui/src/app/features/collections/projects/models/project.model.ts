@@ -4,7 +4,6 @@ import { Page, PageQuery } from '@shared/models/page.model';
 import { ObjectReference } from '@shared/models/object-reference.model';
 
 import {
-  IntendedUse,
   MediaType,
   ProposalStatus,
   UseEventType,
@@ -27,9 +26,9 @@ export interface CollectionUseProjectSummary {
   readonly purpose: string;
   readonly note?: string | null;
   readonly type: UseType;
-  // Backend source for `type` — the service normalizes `intendedUse.useType`
-  // into the flat `type` above.
-  readonly intendedUse?: IntendedUse | null;
+  // Backend source for `type` — the service normalizes the bare `intendedUse`
+  // use type into the flat `type` above.
+  readonly intendedUse?: UseType | null;
   readonly status: UseStatus;
   // COMPLETED or CANCELLED once the project reaches a terminal outcome, otherwise null.
   readonly result?: UseResult | null;

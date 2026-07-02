@@ -25,10 +25,7 @@ const PROPOSAL: ProposalDetail = {
   title: 'Photographic history of Rio de Janeiro port, 1890-1930',
   status: 'PENDING',
   type: 'IN_SITU_VISIT',
-  intendedUse: {
-    useType: 'IN_SITU_VISIT',
-    description: 'Research visit to consult photographic records on site.',
-  },
+  intendedUse: 'IN_SITU_VISIT',
   beginDate: '2026-07-01',
   endDate: '2026-12-31',
   requestedBy: {
@@ -182,7 +179,7 @@ class ProposalApiServiceStub {
     this.updateProposalCalls.push({ proposalId, request });
     this.proposal = {
       ...this.proposal,
-      type: request.intendedUse?.useType ?? this.proposal.type,
+      type: request.intendedUse ?? this.proposal.type,
       intendedUse: request.intendedUse ?? this.proposal.intendedUse,
     };
     return of({

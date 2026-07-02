@@ -40,7 +40,7 @@ def _to_export_data(view: ProjectExportView) -> ProjectExportData:
         reference_number=view.reference_number,
         begin_date=view.begin_date,
         end_date=view.end_date,
-        use_type=view.intended_use.use_type,
+        use_type=view.intended_use,
         visitor_name=view.visitor_name,
         requested_objects=[_object(ro) for ro in view.requested_objects],
         in_situ_occurrences=[_entry(e) for e in view.in_situ_occurrences],
