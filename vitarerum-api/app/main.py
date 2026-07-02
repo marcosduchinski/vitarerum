@@ -11,6 +11,10 @@ from app.cidoc_crm.in_situ_visit_mapping.presentation.routes import (
     project_export_router,
 )
 from app.config import settings
+from app.document_templates.presentation.routes import (
+    document_templates_router,
+    public_document_templates_router,
+)
 from app.identity.presentation.auth_routes import auth_router
 from app.identity.presentation.routes import (
     groups_router,
@@ -107,6 +111,8 @@ app.include_router(in_situ_visit_router, prefix=prefix)
 app.include_router(project_export_router, prefix=prefix)
 app.include_router(museum_narrative_router, prefix=prefix)
 app.include_router(reports_router, prefix=prefix)
+app.include_router(document_templates_router, prefix=prefix)
+app.include_router(public_document_templates_router, prefix=prefix)
 
 
 @app.get(f"{prefix}/health")

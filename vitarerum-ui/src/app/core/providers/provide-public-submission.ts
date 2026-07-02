@@ -1,6 +1,11 @@
 import { inject, Provider } from '@angular/core';
 import { USE_MOCK_API } from '@core/config/app-config.model';
+import { PublicDocumentTemplateApiServiceMock } from '@features/public/mocks/public-document-template-api.service.mock';
 import { PublicProposalApiServiceMock } from '@features/public/mocks/public-proposal-api.service.mock';
+import {
+  PUBLIC_DOCUMENT_TEMPLATE_API_SERVICE,
+  PublicDocumentTemplateApiService,
+} from '@features/public/services/public-document-template-api.service';
 import {
   PUBLIC_PROPOSAL_API_SERVICE,
   PublicProposalApiService,
@@ -22,6 +27,15 @@ export function providePublicSubmission(): Provider[] {
         inject(USE_MOCK_API)
           ? inject(PublicProposalApiServiceMock)
           : inject(PublicProposalApiService),
+    },
+    PublicDocumentTemplateApiService,
+    PublicDocumentTemplateApiServiceMock,
+    {
+      provide: PUBLIC_DOCUMENT_TEMPLATE_API_SERVICE,
+      useFactory: () =>
+        inject(USE_MOCK_API)
+          ? inject(PublicDocumentTemplateApiServiceMock)
+          : inject(PublicDocumentTemplateApiService),
     },
   ];
 }

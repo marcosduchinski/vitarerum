@@ -4,7 +4,10 @@ import { of } from 'rxjs';
 
 import { TURNSTILE_SITE_KEY } from '@core/config/app-config.model';
 
+import { UseType } from '@shared/models/collection-use-status.model';
+
 import { PublicProposalSubmission } from '../models/public-proposal.model';
+import { PUBLIC_DOCUMENT_TEMPLATE_API_SERVICE } from '../services/public-document-template-api.service';
 import { PUBLIC_PROPOSAL_API_SERVICE } from '../services/public-proposal-api.service';
 import { PublicSubmitProposalPageComponent } from './public-submit-proposal-page.component';
 
@@ -21,18 +24,38 @@ class PublicProposalApiStub {
   }
 }
 
+class PublicDocumentTemplateApiStub {
+  readonly listCalls: UseType[] = [];
+
+  listTemplates(useType: UseType) {
+    this.listCalls.push(useType);
+    return of(
+      useType === 'IN_SITU_VISIT'
+        ? [{ id: 'tpl-1', title: 'Safety form', description: 'Fill in.', mandatory: true }]
+        : [],
+    );
+  }
+
+  downloadUrl(id: string) {
+    return `/api/v1/public/document-templates/${id}/file`;
+  }
+}
+
 describe('PublicSubmitProposalPageComponent', () => {
   let api: PublicProposalApiStub;
+  let templates: PublicDocumentTemplateApiStub;
   let router: Router;
 
   async function setup(siteKey = ''): Promise<void> {
     api = new PublicProposalApiStub();
+    templates = new PublicDocumentTemplateApiStub();
 
     await TestBed.configureTestingModule({
       imports: [PublicSubmitProposalPageComponent],
       providers: [
         provideRouter([]),
         { provide: PUBLIC_PROPOSAL_API_SERVICE, useValue: api },
+        { provide: PUBLIC_DOCUMENT_TEMPLATE_API_SERVICE, useValue: templates },
         { provide: TURNSTILE_SITE_KEY, useValue: siteKey },
       ],
     }).compileComponents();
@@ -47,6 +70,30 @@ describe('PublicSubmitProposalPageComponent', () => {
     fixture.detectChanges();
 
     expect((fixture.nativeElement as HTMLElement).querySelector('app-turnstile')).toBeNull();
+  });
+
+  it('shows required document templates when a use type is selected', async () => {
+    await setup('');
+    const fixture = TestBed.createComponent(PublicSubmitProposalPageComponent);
+    fixture.detectChanges();
+    const compiled = fixture.nativeElement as HTMLElement;
+
+    expect(compiled.querySelector('.templates')).toBeNull();
+
+    setSelectValue(compiled, '#useType', 'IN_SITU_VISIT');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(templates.listCalls).toContain('IN_SITU_VISIT');
+    const section = compiled.querySelector('.templates');
+    expect(section).not.toBeNull();
+    const link = section?.querySelector<HTMLAnchorElement>('.templates__download');
+    expect(link?.textContent).toContain('Safety form');
+    expect(link?.getAttribute('href')).toBe(
+      '/api/v1/public/document-templates/tpl-1/file',
+    );
+    expect(section?.querySelector('.templates__badge')?.textContent).toContain('Mandatory');
   });
 
   it('submits citizen details and routes to the confirmation screen', async () => {

@@ -20,6 +20,7 @@ import { AppConfigService } from '@core/config/app-config.service';
 import { authInterceptor } from '@core/auth/auth.interceptor';
 import { sessionExpiredInterceptor } from '@core/auth/session-expired.interceptor';
 import { provideCollectionUse } from '@core/providers/provide-collection-use';
+import { provideDocumentTemplateManagement } from '@core/providers/provide-document-template-management';
 import { provideIdentity } from '@core/providers/provide-identity';
 import { provideInstitutionManagement } from '@core/providers/provide-institution-management';
 import { provideUserManagement } from '@core/providers/provide-user-management';
@@ -98,5 +99,6 @@ export const appConfig: ApplicationConfig = {
     provideCollectionUse(),
     provideUserManagement(),
     provideInstitutionManagement(),
+    provideDocumentTemplateManagement(),
   ],
 };

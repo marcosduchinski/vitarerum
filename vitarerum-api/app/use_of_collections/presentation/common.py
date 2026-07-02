@@ -6,25 +6,28 @@ common.py and composition in dependencies.py. Paths and contracts unchanged.
 
 from __future__ import annotations
 
-import io
-import mimetypes
-import zipfile
-
 from fastapi import (
     APIRouter,
     HTTPException,
-    UploadFile,
     status,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.identity.public import Actor, GroupName
 from app.shared.authorization import (
     STAFF_GROUPS,
 )
 from app.shared.authorization import (
     is_staff as caller_is_staff,
+)
+from app.shared.uploads import (
+    ensure_docx as ensure_docx,
+)
+from app.shared.uploads import (
+    guess_content_type,
+)
+from app.shared.uploads import (
+    read_upload_capped as read_upload_capped,
 )
 from app.use_of_collections.application.authorization import (
     assert_project_access,
@@ -223,58 +226,9 @@ def _not_found(resource: str, resource_id: str) -> HTTPException:
     )
 
 
-_UPLOAD_CHUNK = 1024 * 1024
-
-
-async def read_upload_capped(file: UploadFile) -> bytes:
-    """Read an upload in chunks, rejecting anything over ``max_upload_bytes``
-    (413) before the whole body is buffered."""
-    limit = settings.max_upload_bytes
-    chunks: list[bytes] = []
-    total = 0
-    while True:
-        chunk = await file.read(_UPLOAD_CHUNK)
-        if not chunk:
-            break
-        total += len(chunk)
-        if total > limit:
-            raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail={
-                    "error": "FILE_TOO_LARGE",
-                    "message": f"File exceeds the {limit}-byte limit",
-                },
-            )
-        chunks.append(chunk)
-    return b"".join(chunks)
-
-
-def ensure_docx(content: bytes) -> None:
-    """Reject anything that is not a real DOCX — a ZIP carrying the OOXML
-    ``[Content_Types].xml`` part — rather than trusting the file extension."""
-    try:
-        with zipfile.ZipFile(io.BytesIO(content)) as archive:
-            names = set(archive.namelist())
-    except zipfile.BadZipFile:
-        names = set()
-    if "[Content_Types].xml" not in names:
-        raise HTTPException(
-            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail={
-                "error": "INVALID_FILE_FORMAT",
-                "message": "Only valid .docx files are accepted",
-            },
-        )
-
-
-def _guess_content_type(file_name: str) -> str:
-    """Best-effort MIME type for a download, from the file name's extension.
-
-    Stored `mediaType` is only a coarse category (DOCUMENT/IMAGE/…), not a real
-    MIME type, so it can't be used as a Content-Type. Falls back to a generic
-    binary type when the extension is unknown."""
-    guessed, _ = mimetypes.guess_type(file_name)
-    return guessed or "application/octet-stream"
+# Upload/download helpers live in the shared layer so other bounded contexts can
+# reuse them; kept re-exported here for existing call sites in this context.
+_guess_content_type = guess_content_type
 
 
 

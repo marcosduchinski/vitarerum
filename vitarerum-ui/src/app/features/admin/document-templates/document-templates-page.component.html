@@ -1,0 +1,193 @@
+<section class="page">
+  <app-page-header
+    eyebrow="Administration"
+    title="Document templates"
+    description="Curate the .docx templates offered to citizens per use type on the public submission screen."
+  />
+
+  <form class="create-card" (submit)="$event.preventDefault(); create()">
+    <h2 class="create-card__title">Add a template</h2>
+    <div class="create-card__grid">
+      <label class="field">
+        <span class="field__label">Use type</span>
+        <select class="field__input" [value]="newUseType()" (change)="setNewUseType($event)">
+          @for (option of useTypeOptions; track option.value) {
+            <option [value]="option.value">{{ option.label }}</option>
+          }
+        </select>
+      </label>
+
+      <label class="field">
+        <span class="field__label">Title</span>
+        <input
+          class="field__input"
+          type="text"
+          [value]="newTitle()"
+          (input)="newTitle.set($any($event.target).value)"
+        />
+      </label>
+
+      <label class="field field--wide">
+        <span class="field__label">Description</span>
+        <textarea
+          class="field__input"
+          rows="2"
+          [value]="newDescription()"
+          (input)="newDescription.set($any($event.target).value)"
+        ></textarea>
+      </label>
+
+      <label class="field">
+        <span class="field__label">Display order</span>
+        <input
+          class="field__input"
+          type="number"
+          [value]="newDisplayOrder()"
+          (input)="newDisplayOrder.set(+$any($event.target).value)"
+        />
+      </label>
+
+      <label class="field">
+        <span class="field__label">File (.docx)</span>
+        <input class="field__input" type="file" accept=".docx" (change)="setNewFile($event)" />
+      </label>
+
+      <label class="field field--check">
+        <input
+          type="checkbox"
+          [checked]="newMandatory()"
+          (change)="newMandatory.set($any($event.target).checked)"
+        />
+        <span>Mandatory</span>
+      </label>
+
+      <label class="field field--check">
+        <input
+          type="checkbox"
+          [checked]="newActive()"
+          (change)="newActive.set($any($event.target).checked)"
+        />
+        <span>Active</span>
+      </label>
+    </div>
+
+    <div class="create-card__footer">
+      <button class="btn btn--primary" type="submit" [disabled]="!canCreate()">
+        Add template
+      </button>
+    </div>
+  </form>
+
+  @if (actionError()) {
+    <app-error-message [apiError]="actionError()!" />
+  }
+
+  @if (loading()) {
+    <app-loading-state />
+  } @else if (loadError()) {
+    <app-error-message [apiError]="loadError()!" (retry)="templatesResource.reload()" />
+  } @else if (groups().length === 0) {
+    <p class="empty">No templates yet. Add one above.</p>
+  } @else {
+    @for (group of groups(); track group.useType) {
+      <section class="group">
+        <h2 class="group__title">{{ group.label }}</h2>
+        <ul class="group__list">
+          @for (template of group.templates; track template.id) {
+            <li class="template" [class.template--inactive]="!template.active">
+              @if (editingId() === template.id && editModel(); as model) {
+                <div class="template__edit">
+                  <input
+                    class="field__input"
+                    type="text"
+                    [value]="model.title"
+                    (input)="patchEdit('title', $any($event.target).value)"
+                  />
+                  <textarea
+                    class="field__input"
+                    rows="2"
+                    [value]="model.description"
+                    (input)="patchEdit('description', $any($event.target).value)"
+                  ></textarea>
+                  <div class="template__edit-row">
+                    <label class="field">
+                      <span class="field__label">Order</span>
+                      <input
+                        class="field__input field__input--sm"
+                        type="number"
+                        [value]="model.displayOrder"
+                        (input)="patchEdit('displayOrder', +$any($event.target).value)"
+                      />
+                    </label>
+                    <label class="field--check">
+                      <input
+                        type="checkbox"
+                        [checked]="model.mandatory"
+                        (change)="patchEdit('mandatory', $any($event.target).checked)"
+                      />
+                      <span>Mandatory</span>
+                    </label>
+                    <label class="field--check">
+                      <input
+                        type="checkbox"
+                        [checked]="model.active"
+                        (change)="patchEdit('active', $any($event.target).checked)"
+                      />
+                      <span>Active</span>
+                    </label>
+                  </div>
+                  <div class="template__actions">
+                    <button
+                      class="btn btn--primary"
+                      type="button"
+                      [disabled]="busy()"
+                      (click)="saveEdit(template.id)"
+                    >
+                      Save
+                    </button>
+                    <button class="btn" type="button" (click)="cancelEdit()">Cancel</button>
+                  </div>
+                </div>
+              } @else {
+                <div class="template__head">
+                  <span class="template__name">{{ template.title }}</span>
+                  @if (template.mandatory) {
+                    <span class="tag tag--mandatory">Mandatory</span>
+                  }
+                  @if (!template.active) {
+                    <span class="tag tag--inactive">Inactive</span>
+                  }
+                </div>
+                @if (template.description) {
+                  <p class="template__desc">{{ template.description }}</p>
+                }
+                <p class="template__file">{{ template.fileName }}</p>
+                <div class="template__actions">
+                  <button class="btn" type="button" (click)="startEdit(template)">Edit</button>
+                  <button class="btn" type="button" (click)="download(template)">Download</button>
+                  <label class="btn btn--file">
+                    Replace file
+                    <input
+                      type="file"
+                      accept=".docx"
+                      hidden
+                      (change)="replaceFile(template.id, $event)"
+                    />
+                  </label>
+                  <button
+                    class="btn btn--danger"
+                    type="button"
+                    [disabled]="busy()"
+                    (click)="remove(template)"
+                  >
+                    Delete
+                  </button>
+                </div>
+              }
+            </li>
+          }
+        </ul>
+      </section>
+    }
+  }
+</section>

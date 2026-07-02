@@ -112,6 +112,11 @@ const SYS_ADMIN_MENU: MenuNode = {
     { label: 'Users', icon: 'pi pi-users', routerLink: '/p/admin/users' },
     { label: 'Groups', icon: 'pi pi-sitemap', routerLink: '/p/admin/groups' },
     { label: 'Institutions', icon: 'pi pi-building', routerLink: '/p/admin/institutions' },
+    {
+      label: 'Document templates',
+      icon: 'pi pi-file-word',
+      routerLink: '/p/admin/document-templates',
+    },
   ],
 };
 

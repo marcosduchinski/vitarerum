@@ -41,6 +41,14 @@ export const ADMIN_ROUTES: Routes = [
       ),
   },
   {
+    path: 'document-templates',
+    title: 'Document templates',
+    loadComponent: () =>
+      import('./document-templates/document-templates-page.component').then(
+        m => m.DocumentTemplatesPageComponent,
+      ),
+  },
+  {
     path: 'institutions/new',
     title: 'New institution',
     loadComponent: () =>

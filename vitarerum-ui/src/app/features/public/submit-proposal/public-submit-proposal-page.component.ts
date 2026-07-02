@@ -3,6 +3,7 @@ import {
   Component,
   computed,
   inject,
+  resource,
   signal,
   viewChild,
 } from '@angular/core';
@@ -16,6 +17,7 @@ import { PageHeaderComponent } from '@shared/components/page-header/page-header.
 import { UseType } from '@shared/models/collection-use-status.model';
 
 import { TurnstileComponent } from '../components/turnstile/turnstile.component';
+import { PUBLIC_DOCUMENT_TEMPLATE_API_SERVICE } from '../services/public-document-template-api.service';
 import { PUBLIC_PROPOSAL_API_SERVICE } from '../services/public-proposal-api.service';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -46,6 +48,7 @@ const USE_TYPE_OPTIONS: readonly { readonly value: UseType; readonly label: stri
 })
 export class PublicSubmitProposalPageComponent {
   private readonly publicProposals = inject(PUBLIC_PROPOSAL_API_SERVICE);
+  private readonly documentTemplates = inject(PUBLIC_DOCUMENT_TEMPLATE_API_SERVICE);
   private readonly router = inject(Router);
 
   protected readonly siteKey = inject(TURNSTILE_SITE_KEY);
@@ -69,6 +72,21 @@ export class PublicSubmitProposalPageComponent {
   protected readonly website = signal('');
 
   protected readonly captchaToken = signal('');
+
+  // Document templates offered for the currently selected use type. Reloads
+  // whenever the citizen changes the selection; empty until one is chosen.
+  private readonly templatesResource = resource({
+    params: () => this.useType(),
+    loader: async ({ params }) => {
+      if (!params) return [];
+      return firstValueFrom(this.documentTemplates.listTemplates(params));
+    },
+  });
+  protected readonly templates = computed(() => this.templatesResource.value() ?? []);
+
+  protected templateDownloadUrl(id: string): string {
+    return this.documentTemplates.downloadUrl(id);
+  }
 
   protected readonly submitted = signal(false);
   protected readonly submitting = signal(false);

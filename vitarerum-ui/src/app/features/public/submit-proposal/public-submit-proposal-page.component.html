@@ -90,6 +90,37 @@
         }
       </div>
 
+      @if (useType() && templates().length > 0) {
+        <section class="templates" aria-labelledby="templates-heading">
+          <h2 id="templates-heading" class="templates__title">Required documents</h2>
+          <p class="templates__intro">
+            Download the template(s) below, fill them in and attach the completed files to your
+            request.
+          </p>
+          <ul class="templates__list">
+            @for (template of templates(); track template.id) {
+              <li class="templates__item">
+                <div class="templates__item-head">
+                  <a
+                    class="templates__download"
+                    [href]="templateDownloadUrl(template.id)"
+                    target="_blank"
+                    rel="noopener"
+                    >{{ template.title }}</a
+                  >
+                  @if (template.mandatory) {
+                    <span class="templates__badge">Mandatory</span>
+                  }
+                </div>
+                @if (template.description) {
+                  <p class="templates__desc">{{ template.description }}</p>
+                }
+              </li>
+            }
+          </ul>
+        </section>
+      }
+
       <div
         class="field"
         [class.field--error]="beginDateError() || endDateError() || dateRangeError()"

@@ -204,3 +204,61 @@
     cursor: not-allowed;
   }
 }
+
+.templates {
+  margin: 0.5rem 0 1.5rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--color-border, #e2e5ef);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted, #f7f8fc);
+}
+
+.templates__title {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.templates__intro {
+  margin: 0 0 0.75rem;
+  font-size: 0.875rem;
+  color: var(--color-text-muted, #5b6070);
+}
+
+.templates__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.templates__item-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.templates__download {
+  font-weight: 600;
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+
+.templates__badge {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  background: var(--status-rejected-bg, #fdecec);
+  color: var(--status-rejected-text, #b3261e);
+}
+
+.templates__desc {
+  margin: 0.25rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted, #5b6070);
+}

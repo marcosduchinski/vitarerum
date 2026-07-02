@@ -176,6 +176,44 @@ ignore_imports = [
 ]
 
 [[tool.importlinter.contracts]]
+name = "Document templates layers (presentation > infrastructure > application > domain)"
+type = "layers"
+layers = [
+    "app.document_templates.presentation",
+    "app.document_templates.infrastructure",
+    "app.document_templates.application",
+    "app.document_templates.domain",
+]
+
+[[tool.importlinter.contracts]]
+name = "Document templates may not depend on other contexts"
+type = "forbidden"
+source_modules = ["app.document_templates"]
+forbidden_modules = [
+    "app.use_of_collections",
+    "app.cidoc_crm",
+    "app.ai",
+    "app.public_submission",
+]
+ignore_imports = [
+    # Composition-root only: reuse the shared local-disk file storage adapter.
+    # Own FileStorage port keeps the domain/application free of this coupling.
+    "app.document_templates.presentation.dependencies -> app.use_of_collections.infrastructure.file_storage",
+]
+
+[[tool.importlinter.contracts]]
+name = "Document templates may import Identity only via identity.public"
+type = "forbidden"
+source_modules = ["app.document_templates"]
+forbidden_modules = ["app.identity"]
+ignore_imports = [
+    # Permanent: identity.public is the published language, reached through the
+    # shared staff-auth helpers (CallerPermission / require_staff).
+    "app.shared.authorization -> app.identity.public",
+    "app.shared.dependencies -> app.identity.public",
+]
+
+[[tool.importlinter.contracts]]
 name = "Domain purity (no frameworks in domain)"
 type = "forbidden"
 source_modules = [
@@ -184,6 +222,7 @@ source_modules = [
     "app.cidoc_crm.in_situ_visit_mapping.domain",
     "app.reports.in_situ_visit.domain",
     "app.public_submission.domain",
+    "app.document_templates.domain",
 ]
 forbidden_modules = ["fastapi", "sqlalchemy", "pydantic"]
 
@@ -197,6 +236,7 @@ source_modules = [
     "app.cidoc_crm.in_situ_visit_mapping.application",
     "app.reports.in_situ_visit.application",
     "app.public_submission.application",
+    "app.document_templates.application",
 ]
 forbidden_modules = ["fastapi", "sqlalchemy"]
 ignore_imports = [
