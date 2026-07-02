@@ -119,7 +119,11 @@ def _stub_perm(
 
 
 def _detail_or_none(view: object) -> PermissionDetail | None:
-    return permission_detail_from_view(view) if view else None  # type: ignore[arg-type]
+    if not view:
+        return None
+    if isinstance(view, PermissionDetail):
+        return view
+    return permission_detail_from_view(view)  # type: ignore[arg-type]
 
 
 def _detail_or_stub(
@@ -127,9 +131,7 @@ def _detail_or_stub(
     permission_id: str,
     group: GroupName = GroupName.EXTERNAL,
 ) -> PermissionDetail:
-    if view:
-        return permission_detail_from_view(view)  # type: ignore[arg-type]
-    return _stub_perm(permission_id, group)
+    return _detail_or_none(view) or _stub_perm(permission_id, group)
 
 
 def _detail_or_stub_or_none(

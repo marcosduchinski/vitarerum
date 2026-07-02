@@ -1162,6 +1162,9 @@ async def test_staff_can_assign_proposal_to_staff_target() -> None:
     async with client_with_repos(
         caller=_STAFF_CALLER,
         permission_records={
+            "permission-staff": _permission_record(
+                "permission-staff", GroupName.CURATORIAL
+            ),
             "permission-target": _permission_record(
                 "permission-target", GroupName.COLLECTIONS_MANAGEMENT
             )
@@ -1189,7 +1192,9 @@ async def test_staff_can_assign_proposal_to_staff_target() -> None:
         proposal = await proposal_repo.get_by_id(ProposalId("prop-1"))
 
     assert response.status_code == 200
-    assert response.json()["assignedTo"]["permissionId"] == "permission-target"
+    body = response.json()
+    assert body["assignedTo"]["permissionId"] == "permission-target"
+    assert body["lastEvent"]["triggeredBy"]["permissionId"] == "permission-staff"
     assert proposal is not None
     assert proposal.assigned_to == "permission-target"
     assert proposal.status == ProposalStatus.PENDING
