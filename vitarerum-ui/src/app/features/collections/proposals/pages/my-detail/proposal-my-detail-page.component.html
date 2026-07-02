@@ -123,6 +123,18 @@
       </button>
       <button
         type="button"
+        id="documents-tab"
+        class="proposal-detail__tab"
+        [class.proposal-detail__tab--active]="activePanel() === 'documents'"
+        role="tab"
+        aria-controls="documents-panel"
+        [attr.aria-selected]="activePanel() === 'documents'"
+        (click)="selectPanel('documents')"
+      >
+        Documents
+      </button>
+      <button
+        type="button"
         id="conversation-tab"
         class="proposal-detail__tab"
         [class.proposal-detail__tab--active]="activePanel() === 'conversation'"
@@ -157,6 +169,19 @@
         >
           <app-proposal-overview-section [proposal]="proposal()!" />
           <app-proposal-events-section [events]="events()" [loading]="eventsResource.isLoading()" />
+        </section>
+      }
+      @case ('documents') {
+        <section
+          id="documents-panel"
+          class="proposal-detail__panel"
+          role="tabpanel"
+          aria-labelledby="documents-tab"
+        >
+          <app-proposal-documents-section
+            [proposalId]="id()"
+            [documents]="proposal()!.documents"
+          />
         </section>
       }
       @case ('conversation') {

@@ -29,11 +29,12 @@ import {
   ProposalConversationSectionComponent,
   ReplyComposerPayload,
 } from '../../components/proposal-conversation-section/proposal-conversation-section.component';
+import { ProposalDocumentsSectionComponent } from '../../components/proposal-documents-section/proposal-documents-section.component';
 import { ProposalEventsSectionComponent } from '../../components/proposal-events-section/proposal-events-section.component';
 import { ProposalOverviewSectionComponent } from '../../components/proposal-overview-section/proposal-overview-section.component';
 import { PROPOSAL_DETAIL_GROUP_LABELS, StaffOption } from '../../proposal-detail.presentation';
 
-type MyDetailPanel = 'overview' | 'conversation' | 'actions';
+type MyDetailPanel = 'overview' | 'documents' | 'conversation' | 'actions';
 
 @Component({
   selector: 'app-proposal-my-detail-page',
@@ -48,6 +49,7 @@ type MyDetailPanel = 'overview' | 'conversation' | 'actions';
     TypeChipComponent,
     ConfirmModalComponent,
     ProposalOverviewSectionComponent,
+    ProposalDocumentsSectionComponent,
     ProposalConversationSectionComponent,
     ProposalEventsSectionComponent,
   ],
@@ -191,7 +193,9 @@ export class ProposalMyDetailPageComponent {
   }
 
   private normalizeTab(tab: string | undefined): MyDetailPanel {
-    return tab === 'conversation' || tab === 'actions' ? tab : 'overview';
+    return tab === 'documents' || tab === 'conversation' || tab === 'actions'
+      ? tab
+      : 'overview';
   }
 
   /** Reflects the current view state into the URL query string. A null value drops

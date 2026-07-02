@@ -1,0 +1,98 @@
+<section class="documents">
+  @if (downloadError()) {
+    <app-error-message [apiError]="downloadError()!" />
+  }
+
+  @if (documents().length === 0) {
+    <p class="documents__empty">No documents have been attached to this proposal yet.</p>
+  } @else {
+    <ul class="documents__list">
+      @for (doc of documents(); track doc.id) {
+        <li class="document">
+          <span class="document__icon" aria-hidden="true">
+            <span class="pi pi-file"></span>
+          </span>
+          <div class="document__body">
+            <p class="document__name">{{ doc.fileName }}</p>
+            <p class="document__meta">
+              <span class="document__type">{{ typeLabel(doc.type) }}</span>
+              <span aria-hidden="true">·</span>
+              <span>{{ formatDate(doc.submittedAt) }}</span>
+              @if (doc.submittedBy.user.name) {
+                <span aria-hidden="true">·</span>
+                <span>{{ doc.submittedBy.user.name }}</span>
+              }
+            </p>
+          </div>
+          <div class="document__actions">
+            <button type="button" class="document__btn" (click)="openPreview(doc)">Preview</button>
+            <button
+              type="button"
+              class="document__btn document__btn--primary"
+              [disabled]="downloadingId() === doc.id"
+              (click)="download(doc)"
+            >
+              {{ downloadingId() === doc.id ? 'Downloading…' : 'Download' }}
+            </button>
+          </div>
+        </li>
+      }
+    </ul>
+  }
+
+  @if (previewOpen()) {
+    <div class="preview" role="presentation" (keydown.escape)="closePreview()">
+      <button
+        type="button"
+        class="preview__backdrop"
+        aria-label="Close preview"
+        (click)="closePreview()"
+      ></button>
+      <section
+        class="preview__dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="preview-title"
+        tabindex="-1"
+      >
+        <header class="preview__header">
+          <h2 id="preview-title" class="preview__title">{{ previewDoc()?.fileName }}</h2>
+          <button type="button" class="preview__close" aria-label="Close" (click)="closePreview()">
+            <span class="pi pi-times" aria-hidden="true"></span>
+          </button>
+        </header>
+
+        <div class="preview__body">
+          @if (previewError()) {
+            <app-error-message [apiError]="previewError()!" />
+          } @else if (loadingPreview()) {
+            <p class="preview__hint">Loading preview…</p>
+          } @else if (previewKind() === 'pdf' && previewUrl()) {
+            <iframe
+              class="preview__frame"
+              [src]="previewUrl()"
+              [title]="previewDoc()?.fileName ?? 'Document preview'"
+            ></iframe>
+          } @else if (previewKind() === 'image' && previewUrl()) {
+            <img class="preview__image" [src]="previewUrl()" [alt]="previewDoc()?.fileName ?? ''" />
+          } @else {
+            <div class="preview__unsupported">
+              <span class="pi pi-file" aria-hidden="true"></span>
+              <p>Preview isn't available for this file type.</p>
+              @if (previewDoc(); as doc) {
+                <button
+                  type="button"
+                  class="document__btn document__btn--primary"
+                  [disabled]="downloadingId() === doc.id"
+                  (click)="download(doc)"
+                >
+                  {{ downloadingId() === doc.id ? 'Downloading…' : 'Download' }}
+                </button>
+              }
+            </div>
+          }
+        </div>
+      </section>
+    </div>
+  }
+</section>
