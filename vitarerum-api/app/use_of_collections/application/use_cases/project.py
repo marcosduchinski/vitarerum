@@ -77,10 +77,15 @@ class ApproveProposal:
         proposal = await self._proposal_repo.get_by_id(data.proposal_id)
         if proposal is None:
             raise LookupError(f"No proposal found with id {data.proposal_id}")
+        if proposal.requested_by is None:
+            raise ValueError("proposal requester must be resolved before approval")
 
         now = _now()
+        project_id = proposal.collection_use_project_id or CollectionUseProjectId(
+            _new_id()
+        )
         project = CollectionUseProject(
-            id=proposal.collection_use_project_id,
+            id=project_id,
             reference_number=ReferenceNumber(_new_reference_number()),
             title=data.title,
             purpose=data.purpose,
@@ -114,6 +119,7 @@ class ApproveProposal:
             occurred_at=now, triggered_by=data.caller.id, note=data.note
         )
 
+        proposal.collection_use_project_id = project_id
         proposal.approve(occurred_at=now, triggered_by=data.caller.id, note=data.note)
         await self._project_repo.add(project)
         await self._proposal_repo.save(proposal)
@@ -157,7 +163,11 @@ class CancelProposal:
             occurred_at=now, triggered_by=data.caller.id, reason=data.reason
         )
 
-        project = await self._project_repo.get_by_id(proposal.collection_use_project_id)
+        project = (
+            await self._project_repo.get_by_id(proposal.collection_use_project_id)
+            if proposal.collection_use_project_id is not None
+            else None
+        )
         if project is not None:
             project.record_cancelled_from_proposal(
                 occurred_at=now,

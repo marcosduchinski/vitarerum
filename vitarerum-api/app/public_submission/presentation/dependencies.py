@@ -1,10 +1,10 @@
 """Composition root for the public submission inbound adapter.
 
 Wires the SQLAlchemy repo with the captcha verifier, e-mail sender, rate limiter
-and clock — selecting local/dev stand-ins (always-pass captcha, logging mailer)
-when ``app_env`` is local or when SMTP is not configured. The confirm flow reuses
-the published ``ProvisionExternalRequester`` (Identity) and ``SubmitProposal``
-(Use of Collections), exactly as the legacy e-mail intake did.
+    and clock — selecting local/dev stand-ins (always-pass captcha, logging mailer)
+    when ``app_env`` is local or when SMTP is not configured. The confirm flow reuses
+    ``SubmitProposal`` (Use of Collections), while Identity provisioning is deferred
+    to proposal approval.
 """
 
 from __future__ import annotations
@@ -18,12 +18,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import get_async_session
-from app.identity.infrastructure.repositories import (
-    SqlAlchemyGroupRepository,
-    SqlAlchemyPermissionRepository,
-    SqlAlchemyUserRepository,
-)
-from app.identity.public import ProvisionExternalRequester
 from app.public_submission.application.ports import (
     CaptchaVerifier,
     ConfirmationEmailSender,
@@ -102,11 +96,6 @@ def get_email_sender() -> ConfirmationEmailSender:
 
 
 def get_confirm_use_case(session: DBSession) -> ConfirmPublicProposal:
-    provision = ProvisionExternalRequester(
-        user_repo=SqlAlchemyUserRepository(session),
-        group_repo=SqlAlchemyGroupRepository(session),
-        permission_repo=SqlAlchemyPermissionRepository(session),
-    )
     submit = SubmitProposal(
         SqlAlchemyProposalRepository(session),
         SqlAlchemyConversationRepository(session),
@@ -117,7 +106,6 @@ def get_confirm_use_case(session: DBSession) -> ConfirmPublicProposal:
 
     return ConfirmPublicProposal(
         repository=SqlAlchemyPendingSubmissionRepository(session),
-        provision_requester=provision,
         submit_proposal=submit,
         rate_limiter=_rate_limiter,
         clock=_clock,

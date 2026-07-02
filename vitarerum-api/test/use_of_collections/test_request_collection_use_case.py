@@ -58,6 +58,7 @@ from app.use_of_collections.domain.models import (
     PublicationLogEntryId,
     PublicationLogId,
     ReferenceNumber,
+    RequesterContact,
 )
 
 
@@ -409,6 +410,45 @@ async def test_submit_proposal_uses_valid_sender_fallback_without_user_email() -
     saved_conv = await conversation_repository.get_by_proposal_id(result.proposal.id)
     assert saved_conv is not None
     assert saved_conv.messages[0].sender.value == "permission-1@unknown.local"
+
+
+async def test_submit_public_contact_proposal_without_requester_or_project() -> None:
+    proposal_repository = InMemoryProposalRepository()
+    conversation_repository = InMemoryConversationRepository()
+    use_case = SubmitProposal(
+        proposal_repository=proposal_repository,
+        conversation_repository=conversation_repository,
+    )
+
+    result = await use_case.execute(
+        SubmitProposalInput(
+            title=None,
+            intended_use=IntendedUse(use_type=UseType.IN_SITU_VISIT),
+            purpose=None,
+            begin_date=date(2026, 6, 1),
+            end_date=date(2026, 6, 7),
+            requested_by=None,
+            requester_contact=RequesterContact(
+                name="Pedro Silva",
+                email=EmailAddress("pedro@example.test"),
+            ),
+            initial_message_subject="Acesso a colecao",
+            initial_message_body="Gostaria de estudar um especime.",
+        )
+    )
+
+    saved_proposal = await proposal_repository.get_by_id(result.proposal.id)
+    assert saved_proposal is not None
+    assert saved_proposal.requested_by is None
+    assert saved_proposal.collection_use_project_id is None
+    assert saved_proposal.requester_contact is not None
+    assert saved_proposal.requester_contact.name == "Pedro Silva"
+    assert saved_proposal.requester_contact.email.value == "pedro@example.test"
+    assert saved_proposal.events[0].triggered_by is None
+
+    saved_conv = await conversation_repository.get_by_proposal_id(result.proposal.id)
+    assert saved_conv is not None
+    assert saved_conv.messages[0].sender.value == "pedro@example.test"
 
 
 def _make_curator() -> Actor:

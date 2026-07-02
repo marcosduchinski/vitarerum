@@ -3,9 +3,9 @@
 ``SubmitPublicProposal`` (step 1) enforces the server-side defences — honeypot,
 rate limits, captcha verification — and stores a pending record, e-mailing a
 single-use confirmation token. ``ConfirmPublicProposal`` (step 2) consumes the
-token and materialises the real proposal by composing the published
-``ProvisionExternalRequester`` (Identity OHS) and ``SubmitProposal`` (Use of
-Collections) use cases — the same composition the legacy e-mail intake used.
+token and materialises the real proposal through ``SubmitProposal`` (Use of
+Collections), carrying the citizen as requester contact until approval provisions
+an Identity user/permission.
 """
 
 from __future__ import annotations
@@ -16,7 +16,6 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Literal
 
-from app.identity.public import ProvisionExternalRequester
 from app.public_submission.application.ports import (
     CaptchaVerifier,
     Clock,
@@ -34,7 +33,13 @@ from app.use_of_collections.application.use_cases import (
     SubmitProposal,
     SubmitProposalInput,
 )
-from app.use_of_collections.domain.models import Document, DocumentId, DocumentType
+from app.use_of_collections.domain.models import (
+    Document,
+    DocumentId,
+    DocumentType,
+    EmailAddress,
+    RequesterContact,
+)
 
 # Rate limits as (max_requests, window_seconds), mirroring the reference impl.
 RATE_LIMIT_PER_IP = (5, 60 * 60)
@@ -250,7 +255,6 @@ class ConfirmPublicProposal:
     def __init__(
         self,
         repository: PendingSubmissionRepository,
-        provision_requester: ProvisionExternalRequester,
         submit_proposal: SubmitProposal,
         rate_limiter: RateLimiter,
         clock: Clock,
@@ -259,7 +263,6 @@ class ConfirmPublicProposal:
         file_storage: FileStorage,
     ) -> None:
         self._repo = repository
-        self._provision = provision_requester
         self._submit = submit_proposal
         self._rate_limiter = rate_limiter
         self._clock = clock
@@ -302,9 +305,6 @@ class ConfirmPublicProposal:
         )
 
     async def _materialise(self, submission: PendingPublicSubmission) -> str:
-        provisioned = await self._provision.execute(
-            email=submission.citizen_email, name=submission.citizen_name
-        )
         output = await self._submit.execute(
             SubmitProposalInput(
                 title=None,
@@ -312,7 +312,12 @@ class ConfirmPublicProposal:
                 purpose=None,
                 begin_date=submission.proposed_begin_date,
                 end_date=submission.proposed_end_date,
-                requested_by=provisioned.actor,
+                requested_by=None,
+                requester_contact=RequesterContact(
+                    name=submission.citizen_name,
+                    email=EmailAddress(submission.citizen_email),
+                ),
+                initial_message_sender=submission.citizen_email,
                 initial_message_subject=submission.subject,
                 initial_message_body=submission.body,
                 documents=[
@@ -322,7 +327,7 @@ class ConfirmPublicProposal:
                         file_name=document.file_name,
                         file_reference=document.file_reference,
                         submitted_at=document.submitted_at,
-                        submitted_by=provisioned.actor.id,
+                        submitted_by=None,
                     )
                     for document in submission.documents
                 ],

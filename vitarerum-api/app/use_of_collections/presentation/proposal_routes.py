@@ -77,12 +77,14 @@ from app.use_of_collections.presentation.common import (
     _build_proposal_event,
     _detail_or_none,
     _detail_or_stub,
+    _detail_or_stub_or_none,
     _guess_content_type,
     _handle_domain_errors,
     _intended_use_response,
     _load_permission_detail,
     _message_response,
     _not_found,
+    _requester_contact_response,
     _require_staff_permission_target,
     _stub_perm,
     ensure_docx,
@@ -191,6 +193,7 @@ async def submit_proposal(
     )
     await session.commit()
 
+    assert output.proposal.requested_by is not None
     requested_by_detail = await hydrate_permission(
         output.proposal.requested_by, session
     )
@@ -211,6 +214,7 @@ async def submit_proposal(
             beginDate=output.proposal.begin_date,
             endDate=output.proposal.end_date,
             requestedBy=requested_by_detail,
+            requesterContact=_requester_contact_response(output.proposal),
             assignedTo=None,
             submittedAt=output.proposal.submitted_at,
         ),
@@ -257,7 +261,10 @@ async def list_proposals(
             intendedUse=_intended_use_response(item.proposal.intended_use),
             beginDate=item.proposal.begin_date,
             endDate=item.proposal.end_date,
-            requestedBy=_detail_or_stub(item.requested_by, item.proposal.requested_by),
+            requestedBy=_detail_or_stub_or_none(
+                item.requested_by, item.proposal.requested_by
+            ),
+            requesterContact=_requester_contact_response(item.proposal),
             assignedTo=_detail_or_none(item.assigned_to),
             submittedAt=item.proposal.submitted_at,
         )
@@ -292,7 +299,9 @@ async def get_proposal(
             fileName=d.file_name,
             fileReference=d.file_reference,
             submittedAt=d.submitted_at,
-            submittedBy=_detail_or_stub(detail.view(d.submitted_by), d.submitted_by),
+            submittedBy=_detail_or_stub_or_none(
+                detail.view(d.submitted_by), d.submitted_by
+            ),
         )
         for d in proposal.documents
     ]
@@ -333,9 +342,10 @@ async def get_proposal(
         intendedUse=_intended_use_response(proposal.intended_use),
         beginDate=proposal.begin_date,
         endDate=proposal.end_date,
-        requestedBy=_detail_or_stub(
+        requestedBy=_detail_or_stub_or_none(
             detail.view(proposal.requested_by), proposal.requested_by
         ),
+        requesterContact=_requester_contact_response(proposal),
         assignedTo=_detail_or_none(detail.view(proposal.assigned_to)),
         collectionUseProject=ProposalDetailProjectSummary(
             id=project.id if project else "",
@@ -808,14 +818,33 @@ async def reject_proposal(
     if proposal_before is None:
         raise _not_found("proposal", proposal_id)
     assert_proposal_access(caller, proposal_before)
-    requester = await _load_permission_detail(proposal_before.requested_by, session)
+    requester = (
+        await _load_permission_detail(proposal_before.requested_by, session)
+        if proposal_before.requested_by is not None
+        else None
+    )
+    requester_email = (
+        requester.user.email
+        if requester is not None
+        else proposal_before.requester_contact.email.value
+        if proposal_before.requester_contact is not None
+        else None
+    )
+    if requester_email is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error": "MISSING_REQUESTER_CONTACT",
+                "message": "Proposal has no requester contact.",
+            },
+        )
     try:
         output = await RejectProposal(proposal_repo, conversation_repo).execute(
             RejectProposalInput(
                 proposal_id=ProposalId(proposal_id),
                 caller=caller,
                 reason=body.reason,
-                requester_email=requester.user.email,
+                requester_email=requester_email,
             )
         )
     except Exception as exc:
@@ -991,4 +1020,3 @@ async def send_message(
         raise
     await session.commit()
     return _message_response(message)
-

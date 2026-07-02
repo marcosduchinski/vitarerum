@@ -50,6 +50,7 @@ from app.use_of_collections.domain.models import (
     RequestedDocumentId,
     RequestedObject,
     RequestedObjectId,
+    RequesterContact,
     UseEvent,
 )
 from app.use_of_collections.infrastructure.models import (
@@ -379,6 +380,14 @@ def proposal_to_record(proposal: Proposal) -> ProposalRecord:
         end_date=proposal.end_date,
         status=proposal.status,
         requested_by=proposal.requested_by,
+        requester_name=(
+            proposal.requester_contact.name if proposal.requester_contact else None
+        ),
+        requester_email=(
+            proposal.requester_contact.email.value
+            if proposal.requester_contact
+            else None
+        ),
         assigned_to=proposal.assigned_to,
         submitted_at=proposal.submitted_at,
         events=[
@@ -433,8 +442,10 @@ def proposal_to_domain(record: ProposalRecord) -> Proposal:
         id=ProposalId(record.id),
         reference_number=ReferenceNumber(record.reference_number),
         title=record.title,
-        collection_use_project_id=CollectionUseProjectId(
-            record.collection_use_project_id
+        collection_use_project_id=(
+            CollectionUseProjectId(record.collection_use_project_id)
+            if record.collection_use_project_id is not None
+            else None
         ),
         intended_use=(
             IntendedUse(
@@ -446,14 +457,26 @@ def proposal_to_domain(record: ProposalRecord) -> Proposal:
         begin_date=record.begin_date,
         end_date=record.end_date,
         status=record.status,
-        requested_by=PermissionId(record.requested_by),
+        requested_by=PermissionId(record.requested_by)
+        if record.requested_by is not None
+        else None,
         assigned_to=PermissionId(record.assigned_to) if record.assigned_to else None,
         submitted_at=record.submitted_at,
+        requester_contact=(
+            RequesterContact(
+                name=record.requester_name,
+                email=EmailAddress(record.requester_email),
+            )
+            if record.requester_name is not None and record.requester_email is not None
+            else None
+        ),
         events=[
             ProposalEvent(
                 occurred_at=event.occurred_at,
                 type=event.type,
-                triggered_by=PermissionId(event.triggered_by),
+                triggered_by=PermissionId(event.triggered_by)
+                if event.triggered_by is not None
+                else None,
                 note=event.note,
             )
             for event in record.events

@@ -26,7 +26,6 @@ from app.use_of_collections.application.use_cases._shared import (
 )
 from app.use_of_collections.domain.enums import ProposalStatus
 from app.use_of_collections.domain.models import (
-    CollectionUseProjectId,
     Conversation,
     ConversationId,
     Document,
@@ -44,6 +43,7 @@ from app.use_of_collections.domain.models import (
     RequestedDocumentId,
     RequestedObject,
     RequestedObjectId,
+    RequesterContact,
 )
 
 # ── Submit Proposal ───────────────────────────────────────────────────────────
@@ -58,7 +58,9 @@ class SubmitProposalInput:
     purpose: str | None
     begin_date: date | None
     end_date: date | None
-    requested_by: Actor
+    requested_by: Actor | None
+    requester_contact: RequesterContact | None = None
+    initial_message_sender: str | None = None
     initial_message_recipient: str = "collections@museum.pt"
     initial_message_subject: str = ""
     initial_message_body: str = ""
@@ -86,8 +88,9 @@ class SubmitProposal:
         self._conversation_repo = conversation_repository
 
     async def execute(self, data: SubmitProposalInput) -> SubmitProposalOutput:
+        if data.requested_by is None and data.requester_contact is None:
+            raise ValueError("requester_contact is required without requested_by")
         now = _now()
-        project_id = CollectionUseProjectId(_new_id())
         proposal_id = ProposalId(_new_id())
         conversation_id = ConversationId(_new_id())
         reference_number = await self._proposal_repo.next_reference_number_for(
@@ -100,18 +103,32 @@ class SubmitProposal:
             title=(
                 data.title if data.title is not None else data.initial_message_subject
             ),
-            collection_use_project_id=project_id,
+            collection_use_project_id=None,
             intended_use=data.intended_use,
             begin_date=data.begin_date,
             end_date=data.end_date,
             status=ProposalStatus.SUBMITTED,
-            requested_by=data.requested_by.id,
+            requested_by=(
+                data.requested_by.id if data.requested_by is not None else None
+            ),
             submitted_at=now,
+            requester_contact=data.requester_contact,
         )
         proposal.documents = list(data.documents)
-        proposal.record_submitted(occurred_at=now, triggered_by=data.requested_by.id)
+        proposal.record_submitted(
+            occurred_at=now,
+            triggered_by=(
+                data.requested_by.id if data.requested_by is not None else None
+            ),
+        )
 
-        sender_email = _actor_email(data.requested_by)
+        if data.initial_message_sender is not None:
+            sender_email = data.initial_message_sender
+        elif data.requested_by is not None:
+            sender_email = _actor_email(data.requested_by)
+        else:
+            assert data.requester_contact is not None
+            sender_email = data.requester_contact.email.value
         initial_message = Message(
             id=MessageId(_new_id()),
             sent_at=now,

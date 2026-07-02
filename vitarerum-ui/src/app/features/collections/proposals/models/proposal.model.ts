@@ -19,6 +19,14 @@ export interface ProposalProjectSummary {
   readonly status: UseStatus;
 }
 
+// A citizen who submitted a public proposal but has no system user/permission
+// yet — Identity provisioning is deferred to approval. Present (with
+// `requestedBy` null on the wire) until then.
+export interface RequesterContact {
+  readonly name: string;
+  readonly email: string;
+}
+
 export interface ProposalSummary {
   readonly id: string;
   // Proposal reference (VRP-YYYYMMDD-XXXX), distinct from the project's
@@ -36,7 +44,13 @@ export interface ProposalSummary {
   // backend now returns these on every proposal shape.
   readonly beginDate?: string;
   readonly endDate?: string;
+  // Always populated after the service normalizes the response: for public
+  // proposals not yet approved the backend sends `requestedBy: null` +
+  // `requesterContact`, and the service synthesizes a display principal from it.
   readonly requestedBy: PermissionPrincipal;
+  // Set for public proposals awaiting approval; null once a system requester is
+  // provisioned. Carries the citizen's submitted name/email.
+  readonly requesterContact?: RequesterContact | null;
   readonly assignedTo: PermissionPrincipal | null;
   // Materialised only on approval — absent on proposals that have not yet been
   // approved, and the backend list may omit it. Always guard before dereferencing.

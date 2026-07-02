@@ -1,5 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable, InjectionToken } from '@angular/core';
+import { PermissionPrincipal } from '@core/auth/models/permission.model';
 import { API_BASE_URL } from '@core/config/app-config.model';
 import { buildApiUrl } from '@core/http/api-url.util';
 import { buildHttpParams } from '@core/http/http-params.util';
@@ -28,16 +29,43 @@ import {
   ProposalEventsPage,
   ProposalListQuery,
   ProposalSummary,
+  RequesterContact,
   SendMessageRequest,
   UpdateProposalResult,
 } from '../models/proposal.model';
 
-// The backend returns the use type wrapped as `intendedUse: { useType, description }`.
-// Bridge it to the flat `type` the app reads, tolerating either shape.
-function normalizeProposalType<T extends ProposalSummary>(p: T): T {
-  if (p.type) return p;
-  const useType = p.intendedUse?.useType;
-  return { ...p, type: useType ?? 'OTHER' };
+// Public proposals awaiting approval have no system user/permission yet: the
+// backend sends `requestedBy`/`submittedBy`/`triggeredBy` as null. Synthesize a
+// display-only EXTERNAL principal so templates keep rendering the requester.
+function externalPrincipal(name: string, email: string): PermissionPrincipal {
+  return { permissionId: '', user: { id: '', name, email }, group: 'EXTERNAL' };
+}
+
+const GENERIC_EXTERNAL = externalPrincipal('External requester', '');
+
+function principalFromContact(contact?: RequesterContact | null): PermissionPrincipal {
+  return contact ? externalPrincipal(contact.name, contact.email) : GENERIC_EXTERNAL;
+}
+
+// Normalizes a proposal summary into the shape the app reads:
+//  - the use type wrapped as `intendedUse: { useType, description }` → flat `type`;
+//  - null `requestedBy` (public, pre-approval) → principal from `requesterContact`.
+function normalizeProposal<T extends ProposalSummary>(p: T): T {
+  const type = p.type ?? p.intendedUse?.useType ?? 'OTHER';
+  const requestedBy = p.requestedBy ?? principalFromContact(p.requesterContact);
+  return { ...p, type, requestedBy };
+}
+
+// Detail additionally backfills document uploaders: public submissions arrive
+// with `submittedBy: null` until Identity provisions a requester at approval.
+function normalizeProposalDetail(p: ProposalDetail): ProposalDetail {
+  const fallback = principalFromContact(p.requesterContact);
+  return {
+    ...normalizeProposal(p),
+    documents: (p.documents ?? []).map((d) =>
+      d.submittedBy ? d : { ...d, submittedBy: fallback },
+    ),
+  };
 }
 
 export const PROPOSAL_API_SERVICE = new InjectionToken<ProposalApiService>('PROPOSAL_API_SERVICE');
@@ -79,14 +107,14 @@ export class ProposalApiService {
         params,
       })
       .pipe(
-        map((page) => ({ ...page, content: page.content.map((p) => normalizeProposalType(p)) })),
+        map((page) => ({ ...page, content: page.content.map((p) => normalizeProposal(p)) })),
       );
   }
 
   getProposal(proposalId: string): Observable<ProposalDetail> {
     return this.http
       .get<ProposalDetail>(this.url(`/proposals/${proposalId}`))
-      .pipe(map((p) => normalizeProposalType(p)));
+      .pipe(map((p) => normalizeProposalDetail(p)));
   }
 
   updateProposal(
@@ -100,10 +128,9 @@ export class ProposalApiService {
     proposalId: string,
     request: AddRequestedObjectsRequest,
   ): Observable<ProposalDetail> {
-    return this.http.post<ProposalDetail>(
-      this.url(`/proposals/${proposalId}/requested-objects`),
-      request,
-    );
+    return this.http
+      .post<ProposalDetail>(this.url(`/proposals/${proposalId}/requested-objects`), request)
+      .pipe(map((p) => normalizeProposalDetail(p)));
   }
 
   uploadDocument(proposalId: string, file: File, documentType: string): Observable<Document> {
@@ -128,9 +155,20 @@ export class ProposalApiService {
   }
 
   listEvents(proposalId: string, query: PageQuery = {}): Observable<ProposalEventsPage> {
-    return this.http.get<ProposalEventsPage>(this.url(`/proposals/${proposalId}/events`), {
-      params: buildHttpParams(query),
-    });
+    return this.http
+      .get<ProposalEventsPage>(this.url(`/proposals/${proposalId}/events`), {
+        params: buildHttpParams(query),
+      })
+      .pipe(
+        // Public-submission events (e.g. SUBMITTED) come with a null actor until
+        // Identity provisions one at approval; render a generic external actor.
+        map((page) => ({
+          ...page,
+          content: page.content.map((event) =>
+            event.triggeredBy ? event : { ...event, triggeredBy: GENERIC_EXTERNAL },
+          ),
+        })),
+      );
   }
 
   getConversation(proposalId: string, query: PageQuery = {}): Observable<Conversation> {

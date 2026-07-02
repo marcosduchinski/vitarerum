@@ -213,13 +213,6 @@ async def test_submit_deletes_saved_files_when_persistence_fails() -> None:
 # ── confirm ────────────────────────────────────────────────────────────────────
 
 
-class FakeProvision:
-    async def execute(self, email: str, name: str) -> SimpleNamespace:
-        return SimpleNamespace(
-            actor=SimpleNamespace(id="perm-ext", email=email), user_created=True
-        )
-
-
 class FakeSubmitProposal:
     def __init__(self, reference: str = "VRP-20260626-0007") -> None:
         self._reference = reference
@@ -240,10 +233,9 @@ def _confirm_use_case(
     submit: FakeSubmitProposal | None = None,
     *,
     storage: FakeStorage | None = None,
-) -> ConfirmPublicProposal:
+    ) -> ConfirmPublicProposal:
     return ConfirmPublicProposal(
         repository=repo,
-        provision_requester=FakeProvision(),  # type: ignore[arg-type]
         submit_proposal=submit or FakeSubmitProposal(),  # type: ignore[arg-type]
         rate_limiter=FakeRateLimiter(),
         clock=FakeClock(),
@@ -289,10 +281,14 @@ async def test_confirm_materialises_proposal() -> None:
     # As are the dates the citizen proposed.
     assert submit.calls[0].begin_date == date(2026, 7, 1)
     assert submit.calls[0].end_date == date(2026, 7, 15)
+    assert submit.calls[0].requested_by is None
+    assert submit.calls[0].requester_contact.name == "Pedro Silva"
+    assert submit.calls[0].requester_contact.email.value == "pedro@example.test"
+    assert submit.calls[0].initial_message_sender == "pedro@example.test"
     assert len(submit.calls[0].documents) == 1
     assert submit.calls[0].documents[0].type.value == "PUBLIC_SUBMISSION"
     assert submit.calls[0].documents[0].file_name == "support.pdf"
-    assert submit.calls[0].documents[0].submitted_by == "perm-ext"
+    assert submit.calls[0].documents[0].submitted_by is None
     assert repo.by_token[token].status is PendingSubmissionStatus.CONFIRMED
 
 
@@ -331,7 +327,6 @@ async def test_confirm_rate_limited_raises() -> None:
     token = await _seed_pending(repo)
     use_case = ConfirmPublicProposal(
         repository=repo,
-        provision_requester=FakeProvision(),  # type: ignore[arg-type]
         submit_proposal=FakeSubmitProposal(),  # type: ignore[arg-type]
         rate_limiter=FakeRateLimiter(block_prefix="confirm-ip:"),
         clock=FakeClock(),
@@ -402,7 +397,6 @@ async def test_confirm_retries_reference_number_conflict() -> None:
     submit = FlakySubmitProposal()
     use_case = ConfirmPublicProposal(
         repository=repo,
-        provision_requester=FakeProvision(),  # type: ignore[arg-type]
         submit_proposal=submit,  # type: ignore[arg-type]
         rate_limiter=FakeRateLimiter(),
         clock=FakeClock(),

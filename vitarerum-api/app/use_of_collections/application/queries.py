@@ -99,7 +99,7 @@ class ListProposals:
         items = [
             ProposalListItemView(
                 proposal=p,
-                requested_by=views.get(p.requested_by),
+                requested_by=views.get(p.requested_by) if p.requested_by else None,
                 assigned_to=views.get(p.assigned_to) if p.assigned_to else None,
             )
             for p in proposals
@@ -140,8 +140,10 @@ class GetProposalDetail:
         if proposal is None:
             return None
         assert_proposal_access(caller, proposal)
-        project = await self._project_repo.get_by_id(
-            proposal.collection_use_project_id
+        project = (
+            await self._project_repo.get_by_id(proposal.collection_use_project_id)
+            if proposal.collection_use_project_id is not None
+            else None
         )
         conversation = await self._conversation_repo.get_by_proposal_id(proposal_id)
 

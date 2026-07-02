@@ -86,11 +86,6 @@ class _Storage:
         self.saved.pop(file_reference, None)
 
 
-class _Provision:
-    async def execute(self, email: str, name: str) -> SimpleNamespace:
-        return SimpleNamespace(actor=SimpleNamespace(id="perm-ext", email=email))
-
-
 class _Submit:
     async def execute(self, data: object) -> SimpleNamespace:
         return SimpleNamespace(
@@ -133,7 +128,6 @@ async def _client(
     )
     confirm_uc = ConfirmPublicProposal(
         repository=repo,
-        provision_requester=_Provision(),  # type: ignore[arg-type]
         submit_proposal=_Submit(),  # type: ignore[arg-type]
         rate_limiter=limiter,
         clock=_Clock(),

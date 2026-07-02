@@ -298,9 +298,10 @@ class ProposalRecord(Base):
     # title/type/dates are nullable: a proposal may be created as a stub and
     # completed in a later step (see SubmitProposalRequest).
     title: Mapped[str | None] = mapped_column(String(255), nullable=True, default="")
-    collection_use_project_id: Mapped[str] = mapped_column(
+    collection_use_project_id: Mapped[str | None] = mapped_column(
         String(36),
         index=True,
+        nullable=True,
     )
     type: Mapped[UseType | None] = mapped_column(
         SAEnum(UseType, name="proposal_use_type"), nullable=True
@@ -313,7 +314,11 @@ class ProposalRecord(Base):
     status: Mapped[ProposalStatus] = mapped_column(
         SAEnum(ProposalStatus, name="proposal_status")
     )
-    requested_by: Mapped[str] = mapped_column(String(36), index=True)
+    requested_by: Mapped[str | None] = mapped_column(
+        String(36), index=True, nullable=True
+    )
+    requester_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    requester_email: Mapped[str | None] = mapped_column(String(180), nullable=True)
     assigned_to: Mapped[str | None] = mapped_column(
         String(36), index=True, nullable=True
     )
@@ -346,7 +351,9 @@ class ProposalEventRecord(Base):
     type: Mapped[ProposalEventType] = mapped_column(
         SAEnum(ProposalEventType, name="proposal_event_type")
     )
-    triggered_by: Mapped[str] = mapped_column(String(36), index=True)
+    triggered_by: Mapped[str | None] = mapped_column(
+        String(36), index=True, nullable=True
+    )
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     proposal: Mapped[ProposalRecord] = relationship(back_populates="events")

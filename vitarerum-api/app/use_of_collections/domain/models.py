@@ -407,7 +407,7 @@ class CollectionUseProject:
 class ProposalEvent:
     occurred_at: datetime
     type: ProposalEventType
-    triggered_by: PermissionId
+    triggered_by: PermissionId | None
     note: str | None = None
 
 
@@ -443,6 +443,12 @@ class RequestedObject:
             raise ValueError("inventoryNumber is required.")
 
 
+@dataclass(frozen=True, slots=True)
+class RequesterContact:
+    name: str
+    email: EmailAddress
+
+
 @dataclass(slots=True)
 class Document:
     id: DocumentId
@@ -450,7 +456,7 @@ class Document:
     file_name: str
     file_reference: str
     submitted_at: datetime
-    submitted_by: PermissionId
+    submitted_by: PermissionId | None
 
 
 @dataclass(slots=True)
@@ -460,23 +466,30 @@ class Proposal:
     # title/intended_use/dates are optional: a proposal may be created as a stub
     # and completed in a later step.
     title: str | None
-    collection_use_project_id: CollectionUseProjectId
+    collection_use_project_id: CollectionUseProjectId | None
     intended_use: IntendedUse | None
     begin_date: date | None
     end_date: date | None
     status: ProposalStatus
-    requested_by: PermissionId
+    requested_by: PermissionId | None
     submitted_at: datetime
+    requester_contact: RequesterContact | None = None
     assigned_to: PermissionId | None = None
     events: list[ProposalEvent] = field(default_factory=list)
     requested_documents: list[RequestedDocument] = field(default_factory=list)
     requested_objects: list[RequestedObject] = field(default_factory=list)
     documents: list[Document] = field(default_factory=list)
 
+    def __post_init__(self) -> None:
+        if self.requested_by is None and self.requester_contact is None:
+            raise ValueError(
+                "Proposal must have either requested_by or requester_contact"
+            )
+
     def record_submitted(
         self,
         occurred_at: datetime,
-        triggered_by: PermissionId,
+        triggered_by: PermissionId | None,
         note: str | None = None,
     ) -> None:
         self.status = ProposalStatus.SUBMITTED

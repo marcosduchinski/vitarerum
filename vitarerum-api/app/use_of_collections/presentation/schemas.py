@@ -67,6 +67,11 @@ class UpdateProposalRequest(BaseModel):
     endDate: date | None = None
 
 
+class RequesterContactResponse(BaseModel):
+    name: str
+    email: str
+
+
 class ProposalSummary(BaseModel):
     id: str
     referenceNumber: str
@@ -75,7 +80,8 @@ class ProposalSummary(BaseModel):
     intendedUse: IntendedUseResponse | None = None
     beginDate: date | None = None
     endDate: date | None = None
-    requestedBy: PermissionDetail
+    requestedBy: PermissionDetail | None = None
+    requesterContact: RequesterContactResponse | None = None
     assignedTo: PermissionDetail | None
     submittedAt: datetime
 
@@ -101,7 +107,7 @@ class SubmitProposalResponse(BaseModel):
 class ProposalEventResponse(BaseModel):
     occurredAt: datetime
     type: ProposalEventType
-    triggeredBy: PermissionDetail
+    triggeredBy: PermissionDetail | None = None
     note: str | None
 
 
@@ -131,7 +137,7 @@ class DocumentResponse(BaseModel):
     fileName: str
     fileReference: str
     submittedAt: datetime
-    submittedBy: PermissionDetail
+    submittedBy: PermissionDetail | None = None
 
 
 class ProposalDetailProjectSummary(BaseModel):
@@ -150,7 +156,8 @@ class ProposalDetailResponse(BaseModel):
     intendedUse: IntendedUseResponse | None = None
     beginDate: date | None = None
     endDate: date | None = None
-    requestedBy: PermissionDetail
+    requestedBy: PermissionDetail | None = None
+    requesterContact: RequesterContactResponse | None = None
     assignedTo: PermissionDetail | None
     collectionUseProject: ProposalDetailProjectSummary
     conversationId: str | None
@@ -175,7 +182,8 @@ class ProposalListItemResponse(BaseModel):
     intendedUse: IntendedUseResponse | None = None
     beginDate: date | None = None
     endDate: date | None = None
-    requestedBy: PermissionDetail
+    requestedBy: PermissionDetail | None = None
+    requesterContact: RequesterContactResponse | None = None
     assignedTo: PermissionDetail | None
     submittedAt: datetime
 

@@ -109,18 +109,20 @@ package "User Request" <<Bounded Context>> {
         - id: ProposalId
         - referenceNumber: ReferenceNumber
         - title: String?
-        - collectionUseProjectId: CollectionUseProjectId
+        - collectionUseProjectId: CollectionUseProjectId?
         - intendedUse: IntendedUse?
         - beginDate: LocalDate?
         - endDate: LocalDate?
         - status: ProposalStatus
-        - requestedBy: PermissionId
+        - requestedBy: PermissionId?
+        - requesterContact: RequesterContact?
         - submittedAt: DateTime
         - assignedTo: PermissionId?
         - events: List<ProposalEvent>
         - requestedDocuments: List<RequestedDocument>
         - requestedObjects: List<RequestedObject>
         - documents: List<Document>
+        + __postInit__()
         + recordSubmitted(...)
         + assign(...)
         + requestDocuments(...)
@@ -129,6 +131,11 @@ package "User Request" <<Bounded Context>> {
         + forward(...)
         + approve(...)
         + reject(...)
+        }
+
+        class RequesterContact <<Value Object>> #ffeead {
+        - name: String
+        - email: EmailAddress
         }
 
         enum ProposalStatus #ffeead {
@@ -142,7 +149,7 @@ package "User Request" <<Bounded Context>> {
         class ProposalEvent <<Value Object>> #ffeead {
         - occurredAt: DateTime
         - type: ProposalEventType
-        - triggeredBy: PermissionId
+        - triggeredBy: PermissionId?
         - note: String?
         }
 
@@ -186,7 +193,7 @@ package "User Request" <<Bounded Context>> {
         - fileName: String
         - fileReference: String
         - submittedAt: DateTime
-        - submittedBy: PermissionId
+        - submittedBy: PermissionId?
         }
 
         class Conversation <<Aggregate Root>> #96ceb4 {
@@ -209,6 +216,7 @@ package "User Request" <<Bounded Context>> {
         }
 
         Proposal *-- "0..1" IntendedUse
+        Proposal *-- "0..1" RequesterContact
         Proposal *-- "0..*" ProposalEvent
         Proposal *-- "0..*" RequestedDocument
         Proposal *-- "0..*" RequestedObject
@@ -216,14 +224,15 @@ package "User Request" <<Bounded Context>> {
 
         RequestedDocument *-- DocumentType
         Document *-- DocumentType
+        RequesterContact *-- EmailAddress
 
-        Proposal ..> Permission : requestedBy
+        Proposal ..> Permission : requestedBy (system identity)
         Proposal ..> Permission : assignedTo
-        Proposal ..> CollectionUseProject : collectionUseProjectId
-        ProposalEvent ..> Permission : triggeredBy
+        Proposal ..> CollectionUseProject : collectionUseProjectId (after approval)
+        ProposalEvent ..> Permission : triggeredBy?
         RequestedDocument ..> Permission : requestedBy
         RequestedObject ..> Permission : requestedBy
-        Document ..> Permission : submittedBy
+        Document ..> Permission : submittedBy?
 
         Conversation *-- "1..*" Message
         Conversation ..> Proposal : proposalId
@@ -473,15 +482,18 @@ PendingPublicSubmission ..> UseType : useType
 
 ' --- cross-context integration ---
 PendingPublicSubmission ..> Proposal : materialises on confirm (SubmitProposal)
-PendingPublicSubmission ..> Permission : provisions EXTERNAL requester (by e-mail)
-PublicDocumentSubmission ..> Document : materialises as (on confirm)
+PendingPublicSubmission ..> RequesterContact : captured as requesterContact
+RequesterContact ..> Permission : provisioned as EXTERNAL requester on approval
+PublicDocumentSubmission ..> Document : materialises as (submittedBy null)
 
 note as N_PublicSubmission
   Unauthenticated citizen intake (double opt-in). Step 1 stores a pending,
   unverified submission and e-mails a single-use token; step 2 confirms it,
-  materialising a Proposal via the published ProvisionExternalRequester
-  (Identity) + SubmitProposal (Use of Collections). No account; uploads are
-  allowlisted, capped, and materialised as proposal documents on confirm.
+  materialising a Proposal through SubmitProposal (Use of Collections) with
+  requesterContact instead of a system Permission. Identity user/permission
+  provisioning and CollectionUseProject creation are deferred to approval.
+  Uploads are allowlisted, capped, and materialised as proposal documents
+  on confirm with submittedBy null.
 end note
 N_PublicSubmission .. PendingPublicSubmission
 

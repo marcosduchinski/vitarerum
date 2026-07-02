@@ -72,6 +72,7 @@ from app.use_of_collections.presentation.schemas import (
     PublicationLogEntryResponse,
     PublicationLogResponse,
     RequestedObjectResponse,
+    RequesterContactResponse,
     UseEventResponse,
     UserSummary,
 )
@@ -128,6 +129,27 @@ def _detail_or_stub(
     if view:
         return permission_detail_from_view(view)  # type: ignore[arg-type]
     return _stub_perm(permission_id, group)
+
+
+def _detail_or_stub_or_none(
+    view: object,
+    permission_id: str | None,
+    group: GroupName = GroupName.EXTERNAL,
+) -> PermissionDetail | None:
+    if permission_id is None:
+        return None
+    return _detail_or_stub(view, permission_id, group)
+
+
+def _requester_contact_response(
+    proposal: Proposal,
+) -> RequesterContactResponse | None:
+    if proposal.requester_contact is None:
+        return None
+    return RequesterContactResponse(
+        name=proposal.requester_contact.name,
+        email=proposal.requester_contact.email.value,
+    )
 
 
 async def _load_permission_detail(
@@ -271,8 +293,9 @@ def _intended_use_response(
 async def _build_proposal_event(
     event: ProposalEvent, session: AsyncSession
 ) -> ProposalEventResponse:
-    triggered = await hydrate_permission(event.triggered_by, session) or _stub_perm(
-        event.triggered_by
+    triggered = _detail_or_stub_or_none(
+        await hydrate_permission_or_stub(event.triggered_by, session),
+        event.triggered_by,
     )
     return ProposalEventResponse(
         occurredAt=event.occurred_at,
@@ -297,8 +320,9 @@ async def _build_use_event(event: UseEvent, session: AsyncSession) -> UseEventRe
 async def _build_document_response(
     doc: Document, session: AsyncSession
 ) -> DocumentResponse:
-    submitted = await hydrate_permission(doc.submitted_by, session) or _stub_perm(
-        doc.submitted_by
+    submitted = _detail_or_stub_or_none(
+        await hydrate_permission_or_stub(doc.submitted_by, session),
+        doc.submitted_by,
     )
     return DocumentResponse(
         id=doc.id,
@@ -475,5 +499,3 @@ def _message_response(message: Message) -> MessageResponse:
             for att in message.attachments
         ],
     )
-
-

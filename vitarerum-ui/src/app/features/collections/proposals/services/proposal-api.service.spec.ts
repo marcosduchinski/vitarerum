@@ -228,6 +228,84 @@ describe('ProposalApiService', () => {
     expect(listType).toBe('OTHER');
   });
 
+  it('synthesizes an EXTERNAL requester from requesterContact when requestedBy is null', () => {
+    let requestedBy: { user: { name: string; email: string }; group: string } | undefined;
+    service
+      .listProposals()
+      .subscribe((page) => (requestedBy = page.content[0]?.requestedBy));
+    http
+      .expectOne((r) => r.url === 'https://api.example.test/proposals')
+      .flush({
+        content: [
+          {
+            id: 'pr1',
+            referenceNumber: 'VRP-20260101-0001',
+            title: 'Public proposal',
+            status: 'SUBMITTED',
+            type: 'EXHIBITION',
+            requestedBy: null,
+            requesterContact: { name: 'Ada Citizen', email: 'ada@example.test' },
+          },
+        ],
+        page: 0,
+        size: 20,
+        totalElements: 1,
+        totalPages: 1,
+      });
+
+    expect(requestedBy?.user.name).toBe('Ada Citizen');
+    expect(requestedBy?.user.email).toBe('ada@example.test');
+    expect(requestedBy?.group).toBe('EXTERNAL');
+  });
+
+  it('backfills a null document uploader and event actor for public proposals', () => {
+    let submittedByName: string | undefined;
+    service
+      .getProposal('pr1')
+      .subscribe((p) => (submittedByName = p.documents[0]?.submittedBy.user.name));
+    http.expectOne('https://api.example.test/proposals/pr1').flush({
+      id: 'pr1',
+      referenceNumber: 'VRP-20260101-0001',
+      title: 'Public proposal',
+      status: 'SUBMITTED',
+      type: 'EXHIBITION',
+      requestedBy: null,
+      requesterContact: { name: 'Ada Citizen', email: 'ada@example.test' },
+      documents: [
+        {
+          id: 'doc-1',
+          type: 'ID',
+          fileName: 'id.pdf',
+          submittedAt: '2026-06-01T10:00:00Z',
+          submittedBy: null,
+        },
+      ],
+      requestedObjects: [],
+    });
+    expect(submittedByName).toBe('Ada Citizen');
+
+    let actorName: string | undefined;
+    service
+      .listEvents('pr1')
+      .subscribe((page) => (actorName = page.content[0]?.triggeredBy.user.name));
+    http.expectOne((r) => r.url === 'https://api.example.test/proposals/pr1/events').flush({
+      proposalId: 'pr1',
+      content: [
+        {
+          occurredAt: '2026-06-01T10:00:00Z',
+          type: 'SUBMITTED',
+          triggeredBy: null,
+          note: null,
+        },
+      ],
+      page: 0,
+      size: 20,
+      totalElements: 1,
+      totalPages: 1,
+    });
+    expect(actorName).toBe('External requester');
+  });
+
   it('partially updates proposal metadata and preserves explicit null values', () => {
     const body: UpdateProposalRequest = {
       title: null,

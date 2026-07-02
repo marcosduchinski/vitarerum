@@ -60,6 +60,7 @@ from app.use_of_collections.domain.models import (
     ReferenceNumber,
     RequestedObject,
     RequestedObjectId,
+    RequesterContact,
     UseEvent,
 )
 from app.use_of_collections.infrastructure.repositories import (
@@ -371,6 +372,43 @@ def test_proposal_roundtrip_preserves_key_data() -> None:
     assert rebuilt.requested_objects[0].category == "manuscript"
     assert rebuilt.documents[0].type.value == "request-form"
     assert rebuilt.documents[0].file_name == "request.pdf"
+
+
+def test_public_contact_proposal_roundtrip_without_requester_or_project() -> None:
+    now = datetime(2026, 5, 28, 10, 30, tzinfo=UTC)
+    proposal = Proposal(
+        id=ProposalId("proposal-1"),
+        reference_number=ReferenceNumber("VRP-20260601-0001"),
+        title="Public proposal",
+        collection_use_project_id=None,
+        intended_use=IntendedUse(use_type=UseType.IN_SITU_VISIT),
+        begin_date=date(2026, 6, 1),
+        end_date=date(2026, 6, 7),
+        status=ProposalStatus.SUBMITTED,
+        requested_by=None,
+        requester_contact=RequesterContact(
+            name="Pedro Silva",
+            email=EmailAddress("pedro@example.test"),
+        ),
+        submitted_at=now,
+        events=[
+            ProposalEvent(
+                occurred_at=now,
+                type=ProposalEventType.SUBMITTED,
+                triggered_by=None,
+                note="Submitted publicly",
+            )
+        ],
+    )
+
+    rebuilt = proposal_to_domain(proposal_to_record(proposal))
+
+    assert rebuilt.collection_use_project_id is None
+    assert rebuilt.requested_by is None
+    assert rebuilt.requester_contact is not None
+    assert rebuilt.requester_contact.name == "Pedro Silva"
+    assert rebuilt.requester_contact.email.value == "pedro@example.test"
+    assert rebuilt.events[0].triggered_by is None
 
 
 def test_conversation_roundtrip_preserves_messages_and_attachments() -> None:
