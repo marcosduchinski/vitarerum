@@ -40,6 +40,14 @@ export const PUBLIC_ROUTES: Routes = [
             (m) => m.PublicSubmissionConfirmPageComponent,
           ),
       },
+      {
+        path: 'edit',
+        title: 'Correct your documents',
+        loadComponent: () =>
+          import('./submit-proposal/public-submission-edit-page.component').then(
+            (m) => m.PublicSubmissionEditPageComponent,
+          ),
+      },
     ],
   },
 ];

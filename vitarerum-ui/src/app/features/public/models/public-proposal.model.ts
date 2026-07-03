@@ -51,3 +51,29 @@ export interface PublicConfirmationResult {
   /** Present once a proposal has been created, for staff-side reference. */
   readonly referenceNumber?: string;
 }
+
+export interface PublicAmendmentCorrectionItem {
+  readonly id: string;
+  readonly documentType: string;
+  readonly reason: string;
+  readonly status: 'REQUESTED' | 'RESOLVED' | string;
+  readonly documentId?: string | null;
+}
+
+export interface PublicAmendmentDocument {
+  readonly id: string;
+  readonly type: string;
+  readonly fileName: string;
+}
+
+export interface PublicAmendmentView {
+  readonly referenceNumber: string;
+  readonly status: string;
+  readonly expiresAt: string;
+  readonly correctionItems: readonly PublicAmendmentCorrectionItem[];
+  readonly documents: readonly PublicAmendmentDocument[];
+}
+
+export interface PublicAmendmentSubmitResult {
+  readonly status: 'SUBMITTED';
+}

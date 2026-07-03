@@ -1,0 +1,141 @@
+<div class="public-edit">
+  @if (state() === 'loading') {
+    <app-loading-state label="Loading your correction request..." />
+  } @else if (state() === 'submitted') {
+    <app-feedback-message
+      tone="success"
+      title="Documents submitted"
+      message="Thank you. The collections team has received your corrected documents."
+    />
+  } @else if (state() === 'conflict') {
+    <app-feedback-message
+      tone="warning"
+      title="This request is no longer editable"
+      message="The proposal has already moved forward. Please contact the collections team if you have questions."
+    />
+  } @else if (state() === 'invalid') {
+    <app-feedback-message
+      tone="danger"
+      title="Invalid or expired link"
+      message="This correction link is invalid, expired or already used."
+    />
+    @if (loadingError()) {
+      <app-error-message [apiError]="loadingError()" />
+    }
+    <p class="public-edit__note">
+      <a routerLink="/submit-proposal">Start a new request</a>
+    </p>
+  } @else if (amendment(); as current) {
+    <app-page-header
+      eyebrow="Document correction"
+      title="Correct your documents"
+      [description]="
+        'Proposal ' +
+        current.referenceNumber +
+        ' is waiting for the document changes requested below.'
+      "
+    />
+
+    <section class="edit-summary" aria-label="Correction request summary">
+      <span>Status: {{ current.status }}</span>
+      <span>Link expires: {{ formatDate(current.expiresAt) }}</span>
+    </section>
+
+    @if (actionError()) {
+      <app-error-message [apiError]="actionError()" />
+    }
+
+    <div class="correction-list">
+      @for (item of pendingItems(); track item.id) {
+        <article class="correction-item">
+          <header class="correction-item__header">
+            <div>
+              <p class="correction-item__type">{{ item.documentType }}</p>
+              <h2>{{ item.documentId ? 'Replace document' : 'Attach missing document' }}</h2>
+            </div>
+            <span class="correction-item__status">{{ item.status }}</span>
+          </header>
+
+          <p class="correction-item__reason">{{ item.reason }}</p>
+
+          @if (documentFor(item); as document) {
+            <div class="document-row">
+              <span class="document-row__name">{{ document.fileName }}</span>
+              <button
+                type="button"
+                class="document-row__remove"
+                [disabled]="busyKey() === 'delete:' + document.id || submitting()"
+                (click)="removeDocument(document)"
+              >
+                {{ busyKey() === 'delete:' + document.id ? 'Removing...' : 'Remove' }}
+              </button>
+            </div>
+          }
+
+          @if (!documentFor(item)) {
+            @for (document of documentsForType(item.documentType); track document.id) {
+              <div class="document-row">
+                <span class="document-row__name">{{ document.fileName }}</span>
+                <span class="document-row__tag">Uploaded</span>
+              </div>
+            }
+          }
+
+          <div class="field">
+            <label class="field__label" [for]="'amendment-file-' + item.id">
+              {{ item.documentId ? 'Replacement file' : 'Document file' }}
+            </label>
+            <input
+              class="field__input"
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png,.docx"
+              [id]="'amendment-file-' + item.id"
+              [disabled]="submitting()"
+              (change)="onFileSelected(item.id, $event)"
+            />
+            @if (fileValidationMessage(selectedFile(item.id)); as message) {
+              <p class="field__error" role="alert">{{ message }}</p>
+            } @else {
+              <p class="field__hint">Accepted formats: PDF, JPG, PNG or DOCX, up to 10 MB.</p>
+            }
+          </div>
+
+          <footer class="correction-item__actions">
+            <button
+              type="button"
+              class="edit-button"
+              [disabled]="
+                !selectedFile(item.id) ||
+                !!fileValidationMessage(selectedFile(item.id)) ||
+                busyKey() === 'upload:' + item.id ||
+                submitting()
+              "
+              (click)="upload(item)"
+            >
+              {{ busyKey() === 'upload:' + item.id ? 'Uploading...' : 'Upload file' }}
+            </button>
+          </footer>
+        </article>
+      }
+    </div>
+
+    @if (!hasPendingItems()) {
+      <app-feedback-message
+        tone="success"
+        title="No pending document corrections"
+        message="There are no open document corrections for this link."
+      />
+    }
+
+    <footer class="public-edit__actions">
+      <button
+        type="button"
+        class="edit-button edit-button--primary"
+        [disabled]="submitting() || busyKey() !== null"
+        (click)="submit()"
+      >
+        {{ submitting() ? 'Submitting...' : 'Submit corrected documents' }}
+      </button>
+    </footer>
+  }
+</div>

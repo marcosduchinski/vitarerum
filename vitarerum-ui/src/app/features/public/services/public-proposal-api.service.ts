@@ -5,6 +5,9 @@ import { buildApiUrl } from '@core/http/api-url.util';
 import { Observable } from 'rxjs';
 
 import {
+  PublicAmendmentDocument,
+  PublicAmendmentSubmitResult,
+  PublicAmendmentView,
   PublicConfirmationResult,
   PublicProposalSubmission,
   PublicSubmissionReceipt,
@@ -15,6 +18,18 @@ export interface PublicProposalApi {
   submit(submission: PublicProposalSubmission): Observable<PublicSubmissionReceipt>;
   /** Finalises a submission from the single-use token in the e-mailed link. */
   confirm(token: string): Observable<PublicConfirmationResult>;
+  /** Loads the token-scoped document correction screen. */
+  getAmendment(token: string): Observable<PublicAmendmentView>;
+  /** Uploads a replacement or missing document within the token scope. */
+  addAmendmentDocument(
+    token: string,
+    documentType: string,
+    file: File,
+  ): Observable<PublicAmendmentDocument>;
+  /** Removes a token-scoped document that staff marked for replacement. */
+  deleteAmendmentDocument(token: string, documentId: string): Observable<void>;
+  /** Marks the amendment complete and burns the single-use token. */
+  submitAmendment(token: string): Observable<PublicAmendmentSubmitResult>;
 }
 
 export const PUBLIC_PROPOSAL_API_SERVICE = new InjectionToken<PublicProposalApi>(
@@ -53,6 +68,41 @@ export class PublicProposalApiService implements PublicProposalApi {
     return this.http.post<PublicConfirmationResult>(this.url('/public/proposals/confirm'), {
       token,
     });
+  }
+
+  getAmendment(token: string): Observable<PublicAmendmentView> {
+    return this.http.get<PublicAmendmentView>(
+      this.url(`/public/proposals/amendments/${encodeURIComponent(token)}`),
+    );
+  }
+
+  addAmendmentDocument(
+    token: string,
+    documentType: string,
+    file: File,
+  ): Observable<PublicAmendmentDocument> {
+    const form = new FormData();
+    form.append('documentType', documentType);
+    form.append('file', file, file.name);
+    return this.http.post<PublicAmendmentDocument>(
+      this.url(`/public/proposals/amendments/${encodeURIComponent(token)}/documents`),
+      form,
+    );
+  }
+
+  deleteAmendmentDocument(token: string, documentId: string): Observable<void> {
+    return this.http.delete<void>(
+      this.url(
+        `/public/proposals/amendments/${encodeURIComponent(token)}/documents/${encodeURIComponent(documentId)}`,
+      ),
+    );
+  }
+
+  submitAmendment(token: string): Observable<PublicAmendmentSubmitResult> {
+    return this.http.post<PublicAmendmentSubmitResult>(
+      this.url(`/public/proposals/amendments/${encodeURIComponent(token)}/submit`),
+      {},
+    );
   }
 
   private url(path: string): string {

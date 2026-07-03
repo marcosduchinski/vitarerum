@@ -2,6 +2,9 @@ import { Injectable } from '@angular/core';
 import { delay, Observable, of } from 'rxjs';
 
 import {
+  PublicAmendmentDocument,
+  PublicAmendmentSubmitResult,
+  PublicAmendmentView,
   PublicConfirmationResult,
   PublicProposalSubmission,
   PublicSubmissionReceipt,
@@ -31,5 +34,65 @@ export class PublicProposalApiServiceMock implements PublicProposalApi {
       status,
       referenceNumber: status === 'CONFIRMED' ? 'VRP-PUBLIC-DEMO-0001' : undefined,
     }).pipe(delay(400));
+  }
+
+  getAmendment(token: string): Observable<PublicAmendmentView> {
+    if (!token.trim()) {
+      return of({
+        referenceNumber: '',
+        status: 'INVALID',
+        expiresAt: new Date().toISOString(),
+        correctionItems: [],
+        documents: [],
+      }).pipe(delay(400));
+    }
+    return of<PublicAmendmentView>({
+      referenceNumber: 'VRP-PUBLIC-DEMO-0001',
+      status: 'PENDING',
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      correctionItems: [
+        {
+          id: 'corr-1',
+          documentType: 'SUPPORTING_DOCUMENT',
+          reason: 'Please replace this file with a readable copy.',
+          status: 'REQUESTED',
+          documentId: 'doc-1',
+        },
+        {
+          id: 'corr-2',
+          documentType: 'AUTHORIZATION_FORM',
+          reason: 'Please attach the missing authorization form.',
+          status: 'REQUESTED',
+          documentId: null,
+        },
+      ],
+      documents: [
+        {
+          id: 'doc-1',
+          type: 'SUPPORTING_DOCUMENT',
+          fileName: 'blurred-scan.pdf',
+        },
+      ],
+    }).pipe(delay(400));
+  }
+
+  addAmendmentDocument(
+    _token: string,
+    documentType: string,
+    file: File,
+  ): Observable<PublicAmendmentDocument> {
+    return of<PublicAmendmentDocument>({
+      id: crypto.randomUUID(),
+      type: documentType,
+      fileName: file.name,
+    }).pipe(delay(400));
+  }
+
+  deleteAmendmentDocument(): Observable<void> {
+    return of(undefined).pipe(delay(200));
+  }
+
+  submitAmendment(): Observable<PublicAmendmentSubmitResult> {
+    return of({ status: 'SUBMITTED' as const }).pipe(delay(400));
   }
 }
