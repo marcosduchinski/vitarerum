@@ -41,12 +41,15 @@ from app.use_of_collections.application.use_cases import (
     AssignProposalInput,
     CancelProposal,
     CancelProposalInput,
+    DocumentCorrectionInput,
     EditProposalDetails,
     EditProposalDetailsInput,
     ForwardProposal,
     ForwardProposalInput,
     RejectProposal,
     RejectProposalInput,
+    RequestDocumentCorrections,
+    RequestDocumentCorrectionsInput,
     RequestDocuments,
     RequestDocumentsInput,
     SendMessage,
@@ -90,6 +93,7 @@ from app.use_of_collections.presentation.common import (
     read_upload_capped,
 )
 from app.use_of_collections.presentation.dependencies import (
+    AmendmentInvitation,
     ConvRepo,
     DBSession,
     FileStorage,
@@ -108,6 +112,7 @@ from app.use_of_collections.presentation.schemas import (
     AssignProposalRequest,
     CancelProposalResponse,
     ConversationResponse,
+    DocumentCorrectionItemResponse,
     DocumentResponse,
     DocumentsListResponse,
     DualAggregateResponse,
@@ -122,6 +127,7 @@ from app.use_of_collections.presentation.schemas import (
     ProposalListItemResponse,
     ProposalSummary,
     ReasonRequest,
+    RequestDocumentCorrectionsRequest,
     RequestDocumentsRequest,
     RequestedDocumentResponse,
     RequestedObjectResponse,
@@ -324,6 +330,23 @@ async def get_proposal(
         )
         for ro in proposal.requested_objects
     ]
+    correction_items = [
+        DocumentCorrectionItemResponse(
+            id=ci.id,
+            documentType=ci.document_type.value,
+            reason=ci.reason,
+            status=ci.status.value,
+            requestedAt=ci.requested_at,
+            requestedBy=_detail_or_stub(
+                detail.view(ci.requested_by),
+                ci.requested_by,
+                GroupName.COLLECTIONS_MANAGEMENT,
+            ),
+            documentId=ci.document_id,
+            resolvedAt=ci.resolved_at,
+        )
+        for ci in proposal.correction_items
+    ]
 
     return ProposalDetailResponse(
         id=proposal.id,
@@ -353,6 +376,7 @@ async def get_proposal(
         documents=documents,
         requestedDocuments=requested_docs,
         requestedObjects=requested_objects,
+        correctionItems=correction_items,
         submittedAt=proposal.submitted_at,
     )
 
@@ -835,6 +859,98 @@ async def reject_proposal(
         _handle_domain_errors(exc)
         raise
     await session.commit()
+    last_event = (
+        await _build_proposal_event(output.proposal.events[-1], session)
+        if output.proposal.events
+        else None
+    )
+    return ProposalCommandResponse(
+        id=output.proposal.id,
+        referenceNumber=output.proposal.reference_number.value,
+        title=output.proposal.title,
+        status=output.proposal.status,
+        beginDate=output.proposal.begin_date,
+        endDate=output.proposal.end_date,
+        lastEvent=last_event,
+    )
+
+
+@proposals_router.post(
+    "/{proposal_id}/request-document-corrections",
+    response_model=ProposalCommandResponse,
+)
+async def request_document_corrections(
+    proposal_id: str,
+    body: RequestDocumentCorrectionsRequest,
+    caller: CallerPermission,
+    proposal_repo: ProposalRepo,
+    invitation: AmendmentInvitation,
+    session: DBSession,
+) -> ProposalCommandResponse:
+    proposal_before = await proposal_repo.get_by_id(ProposalId(proposal_id))
+    if proposal_before is None:
+        raise _not_found("proposal", proposal_id)
+    assert_proposal_access(caller, proposal_before)
+    require_staff(caller)
+    if not body.items:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={
+                "error": "NO_CORRECTION_ITEMS",
+                "message": "At least one correction item is required.",
+            },
+        )
+    # Resolve the requester's name/e-mail: an authenticated requester via their
+    # permission, otherwise the public requester contact (same order as reject).
+    requester = (
+        await _load_permission_detail(proposal_before.requested_by, session)
+        if proposal_before.requested_by is not None
+        else None
+    )
+    if requester is not None:
+        requester_email = requester.user.email
+        requester_name = requester.user.name
+    elif proposal_before.requester_contact is not None:
+        requester_email = proposal_before.requester_contact.email.value
+        requester_name = proposal_before.requester_contact.name
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error": "MISSING_REQUESTER_CONTACT",
+                "message": "Proposal has no requester contact.",
+            },
+        )
+    try:
+        output = await RequestDocumentCorrections(proposal_repo).execute(
+            RequestDocumentCorrectionsInput(
+                proposal_id=ProposalId(proposal_id),
+                caller=caller,
+                items=[
+                    DocumentCorrectionInput(
+                        document_type=item.documentType,
+                        reason=item.reason,
+                        document_id=item.documentId,
+                    )
+                    for item in body.items
+                ],
+                requester_email=requester_email,
+                requester_name=requester_name,
+                note=body.note,
+            )
+        )
+    except Exception as exc:
+        _handle_domain_errors(exc)
+        raise
+    await session.commit()
+    # Dispatch the tokenised e-mail invitation only after the correction items are
+    # durably committed, so the citizen never gets a link to items that rolled back.
+    await invitation.invite_document_corrections(
+        proposal_id=ProposalId(proposal_id),
+        requester_email=output.requester_email,
+        requester_name=output.requester_name,
+        correction_item_ids=output.correction_item_ids,
+    )
     last_event = (
         await _build_proposal_event(output.proposal.events[-1], session)
         if output.proposal.events

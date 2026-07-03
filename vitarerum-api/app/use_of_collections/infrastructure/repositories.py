@@ -13,6 +13,7 @@ from app.use_of_collections.application.context_views import (
     ProjectExportView,
 )
 from app.use_of_collections.application.ports import ProjectFilters, ProposalFilters
+from app.use_of_collections.domain.enums import DocumentCorrectionStatus
 from app.use_of_collections.domain.models import (
     Attachment,
     CollectionUseObject,
@@ -22,6 +23,8 @@ from app.use_of_collections.domain.models import (
     Conversation,
     ConversationId,
     Document,
+    DocumentCorrectionItem,
+    DocumentCorrectionItemId,
     DocumentId,
     DocumentType,
     EmailAddress,
@@ -56,6 +59,7 @@ from app.use_of_collections.infrastructure.models import (
     CollectionUseObjectRecord,
     CollectionUseProjectRecord,
     ConversationRecord,
+    DocumentCorrectionItemRecord,
     DocumentRecord,
     LogEntryAttachmentRecord,
     MessageAttachmentRecord,
@@ -427,6 +431,19 @@ def proposal_to_record(proposal: Proposal) -> ProposalRecord:
             )
             for document in proposal.documents
         ],
+        correction_items=[
+            DocumentCorrectionItemRecord(
+                id=item.id,
+                document_id=item.document_id,
+                document_type=item.document_type.value,
+                reason=item.reason,
+                status=item.status.value,
+                requested_at=item.requested_at,
+                requested_by=item.requested_by,
+                resolved_at=item.resolved_at,
+            )
+            for item in proposal.correction_items
+        ],
     )
 
 
@@ -499,9 +516,26 @@ def proposal_to_domain(record: ProposalRecord) -> Proposal:
                 file_name=document.file_name,
                 file_reference=document.file_reference,
                 submitted_at=document.submitted_at,
-                submitted_by=PermissionId(document.submitted_by),
+                submitted_by=PermissionId(document.submitted_by)
+                if document.submitted_by is not None
+                else None,
             )
             for document in record.documents
+        ],
+        correction_items=[
+            DocumentCorrectionItem(
+                id=DocumentCorrectionItemId(item.id),
+                document_type=DocumentType(item.document_type),
+                reason=item.reason,
+                requested_at=item.requested_at,
+                requested_by=PermissionId(item.requested_by),
+                document_id=DocumentId(item.document_id)
+                if item.document_id is not None
+                else None,
+                status=DocumentCorrectionStatus(item.status),
+                resolved_at=item.resolved_at,
+            )
+            for item in record.correction_items
         ],
     )
 
@@ -570,6 +604,7 @@ _PROPOSAL_EAGER = [
     selectinload(ProposalRecord.requested_documents),
     selectinload(ProposalRecord.requested_objects),
     selectinload(ProposalRecord.documents),
+    selectinload(ProposalRecord.correction_items),
 ]
 
 _LOG_ENTRY_EAGER = [

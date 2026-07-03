@@ -127,6 +127,17 @@ class DocumentResponse(BaseModel):
     submittedBy: PermissionDetail | None = None
 
 
+class DocumentCorrectionItemResponse(BaseModel):
+    id: str
+    documentType: str
+    reason: str
+    status: str
+    requestedAt: datetime
+    requestedBy: PermissionDetail
+    documentId: str | None = None
+    resolvedAt: datetime | None = None
+
+
 class ProposalDetailProjectSummary(BaseModel):
     id: str
     referenceNumber: str
@@ -151,6 +162,7 @@ class ProposalDetailResponse(BaseModel):
     documents: list[DocumentResponse]
     requestedDocuments: list[RequestedDocumentResponse]
     requestedObjects: list[RequestedObjectResponse]
+    correctionItems: list[DocumentCorrectionItemResponse] = []
     submittedAt: datetime
 
 
@@ -241,6 +253,18 @@ class RequestedDocumentInput(BaseModel):
 
 class RequestDocumentsRequest(BaseModel):
     requiredDocuments: list[RequestedDocumentInput]
+    note: str | None = None
+
+
+class DocumentCorrectionItemInput(BaseModel):
+    documentType: str
+    reason: str
+    # None ⇒ a missing document is requested (documentType is the scope).
+    documentId: str | None = None
+
+
+class RequestDocumentCorrectionsRequest(BaseModel):
+    items: list[DocumentCorrectionItemInput]
     note: str | None = None
 
 

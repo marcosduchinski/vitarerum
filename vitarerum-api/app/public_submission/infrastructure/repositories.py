@@ -9,9 +9,11 @@ from sqlalchemy.orm import selectinload
 from app.public_submission.domain.models import (
     PendingPublicSubmission,
     PendingSubmissionStatus,
+    ProposalAmendmentToken,
     PublicDocumentSubmission,
 )
 from app.public_submission.infrastructure.models import (
+    ProposalAmendmentTokenRecord,
     PublicDocumentSubmissionRecord,
     PublicProposalSubmissionRecord,
 )
@@ -128,3 +130,56 @@ class SqlAlchemyPendingSubmissionRepository:
         record = result.scalar_one_or_none()
         if record is not None:
             await self._session.delete(record)
+
+
+def _token_to_domain(record: ProposalAmendmentTokenRecord) -> ProposalAmendmentToken:
+    return ProposalAmendmentToken(
+        id=record.id,
+        proposal_id=record.proposal_id,
+        token_hash=record.token_hash,
+        requester_email=record.requester_email,
+        correction_item_ids=list(record.correction_item_ids),
+        created_at=record.created_at,
+        expires_at=record.expires_at,
+        used_at=record.used_at,
+    )
+
+
+class SqlAlchemyAmendmentTokenRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def add(self, token: ProposalAmendmentToken) -> None:
+        record = ProposalAmendmentTokenRecord(
+            id=token.id,
+            proposal_id=token.proposal_id,
+            token_hash=token.token_hash,
+            requester_email=token.requester_email,
+            correction_item_ids=list(token.correction_item_ids),
+            created_at=token.created_at,
+            expires_at=token.expires_at,
+            used_at=token.used_at,
+        )
+        self._session.add(record)
+        await self._session.flush()
+
+    async def get_by_hash(self, token_hash: str) -> ProposalAmendmentToken | None:
+        result = await self._session.execute(
+            select(ProposalAmendmentTokenRecord).where(
+                ProposalAmendmentTokenRecord.token_hash == token_hash
+            )
+        )
+        record = result.scalar_one_or_none()
+        return _token_to_domain(record) if record is not None else None
+
+    async def save(self, token: ProposalAmendmentToken) -> None:
+        result = await self._session.execute(
+            select(ProposalAmendmentTokenRecord).where(
+                ProposalAmendmentTokenRecord.id == token.id
+            )
+        )
+        record = result.scalar_one()
+        record.requester_email = token.requester_email
+        record.correction_item_ids = list(token.correction_item_ids)
+        record.expires_at = token.expires_at
+        record.used_at = token.used_at

@@ -95,3 +95,40 @@ class PendingPublicSubmission:
         self.status = PendingSubmissionStatus.CONFIRMED
         self.proposal_reference = proposal_reference
         self.confirmed_at = occurred_at
+
+
+@dataclass(slots=True)
+class ProposalAmendmentToken:
+    """Narrow, single-use authorisation for a citizen to correct documents.
+
+    Not access to the proposal — it only names the ``correction_item_ids`` the
+    citizen may act on (the concrete document ids/types are read from the
+    proposal's :class:`DocumentCorrectionItem`s at request time). ``token_hash``
+    is a SHA-256 of the opaque raw token; the raw value only ever lives in the
+    e-mailed link. Dies on the final resubmit (``used_at``) or once past
+    ``expires_at`` — and the routes additionally require the proposal to still be
+    PENDING."""
+
+    id: str
+    proposal_id: str
+    token_hash: str
+    requester_email: str
+    correction_item_ids: list[str]
+    created_at: datetime
+    expires_at: datetime
+    used_at: datetime | None = None
+
+    @property
+    def is_used(self) -> bool:
+        return self.used_at is not None
+
+    def is_expired(self, now: datetime) -> bool:
+        return not self.is_used and now >= self.expires_at
+
+    def is_active(self, now: datetime) -> bool:
+        return not self.is_used and not self.is_expired(now)
+
+    def mark_used(self, occurred_at: datetime) -> None:
+        if self.is_used:
+            raise InvalidTransition("Amendment token has already been used")
+        self.used_at = occurred_at

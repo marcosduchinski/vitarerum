@@ -32,6 +32,7 @@ from app.shared.kernel import (
     ReferenceNumber as ReferenceNumber,
 )
 from app.use_of_collections.domain.enums import (
+    DocumentCorrectionStatus,
     MediaType,
     ProposalEventType,
     ProposalStatus,
@@ -51,6 +52,7 @@ PublicationLogId = NewType("PublicationLogId", str)
 PublicationLogEntryId = NewType("PublicationLogEntryId", str)
 ProposalId = NewType("ProposalId", str)
 RequestedDocumentId = NewType("RequestedDocumentId", str)
+DocumentCorrectionItemId = NewType("DocumentCorrectionItemId", str)
 RequestedObjectId = NewType("RequestedObjectId", str)
 ConversationId = NewType("ConversationId", str)
 MessageId = NewType("MessageId", str)
@@ -63,6 +65,12 @@ _PROPOSAL_TERMINAL_STATUSES = {
 
 
 class InvalidTransition(ValueError):
+    pass
+
+
+class UnsatisfiedCorrection(ValueError):
+    """A correction item was submitted without a document that satisfies it."""
+
     pass
 
 
@@ -458,6 +466,26 @@ class Document:
 
 
 @dataclass(slots=True)
+class DocumentCorrectionItem:
+    """Staff-issued request to correct/replace or supply a specific document.
+
+    ``document_id`` points at the offending :class:`Document` when the item is a
+    correction/replacement; it is ``None`` when the item asks for a *missing*
+    document, in which case ``document_type`` is the only scope. This is the
+    durable audit record of what was asked — the amendment token (public
+    submission context) merely references these items by id."""
+
+    id: DocumentCorrectionItemId
+    document_type: DocumentType
+    reason: str
+    requested_at: datetime
+    requested_by: PermissionId
+    document_id: DocumentId | None = None
+    status: DocumentCorrectionStatus = DocumentCorrectionStatus.REQUESTED
+    resolved_at: datetime | None = None
+
+
+@dataclass(slots=True)
 class Proposal:
     id: ProposalId
     reference_number: ReferenceNumber
@@ -477,6 +505,7 @@ class Proposal:
     requested_documents: list[RequestedDocument] = field(default_factory=list)
     requested_objects: list[RequestedObject] = field(default_factory=list)
     documents: list[Document] = field(default_factory=list)
+    correction_items: list[DocumentCorrectionItem] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if self.requested_by is None and self.requester_contact is None:
@@ -591,7 +620,7 @@ class Proposal:
     def submit_documents(
         self,
         occurred_at: datetime,
-        triggered_by: PermissionId,
+        triggered_by: PermissionId | None,
         document: Document,
     ) -> None:
         if self.status != ProposalStatus.PENDING:
@@ -601,6 +630,118 @@ class Proposal:
             ProposalEvent(
                 occurred_at=occurred_at,
                 type=ProposalEventType.DOCUMENTS_SUBMITTED,
+                triggered_by=triggered_by,
+            )
+        )
+
+    def request_document_corrections(
+        self,
+        occurred_at: datetime,
+        triggered_by: PermissionId,
+        items: list[DocumentCorrectionItem],
+        note: str | None = None,
+    ) -> None:
+        """Staff flags documents needing correction/replacement or supply.
+
+        Keeps the proposal PENDING (this is instructory, not a decision). Each
+        item referencing an existing document must match one on this proposal;
+        items with ``document_id is None`` request a missing document."""
+        if self.status != ProposalStatus.PENDING:
+            raise InvalidTransition(
+                "Document corrections can only be requested when proposal is "
+                "in PENDING status"
+            )
+        if not items:
+            raise ValueError("At least one correction item is required")
+        existing_ids = {d.id for d in self.documents}
+        for item in items:
+            if item.document_id is not None and item.document_id not in existing_ids:
+                raise ValueError(
+                    f"Document {item.document_id} not found on this proposal"
+                )
+        self.correction_items.extend(items)
+        self.events.append(
+            ProposalEvent(
+                occurred_at=occurred_at,
+                type=ProposalEventType.DOCUMENT_CORRECTIONS_REQUESTED,
+                triggered_by=triggered_by,
+                note=note,
+            )
+        )
+
+    def remove_document(
+        self,
+        document_id: DocumentId,
+        *,
+        allowed_ids: set[DocumentId],
+    ) -> Document:
+        """Remove a document that is within the correction scope.
+
+        ``allowed_ids`` is the caller-authorised set (e.g. the amendment token's
+        scope). The file itself is deleted by the caller — the aggregate only
+        detaches the reference. Returns the removed :class:`Document`."""
+        if self.status != ProposalStatus.PENDING:
+            raise InvalidTransition(
+                "Documents can only be removed when proposal is in PENDING status"
+            )
+        if document_id not in allowed_ids:
+            raise InvalidTransition("Document is not within the correction scope")
+        document = next((d for d in self.documents if d.id == document_id), None)
+        if document is None:
+            raise ValueError(f"Document {document_id} not found on this proposal")
+        self.documents.remove(document)
+        return document
+
+    def _is_correction_satisfied(self, item: DocumentCorrectionItem) -> bool:
+        """A correction is satisfied when a document of its type is present that
+        is not the flagged one: for a *missing* document (``document_id is None``)
+        any document of that type; for a *replacement* a document of that type
+        other than the one flagged (so a fresh upload is required)."""
+        return any(
+            document.type == item.document_type
+            and document.id != item.document_id
+            for document in self.documents
+        )
+
+    def submit_document_corrections(
+        self,
+        occurred_at: datetime,
+        triggered_by: PermissionId | None,
+        item_ids: list[DocumentCorrectionItemId] | None = None,
+    ) -> None:
+        """Citizen (or staff) marks correction work done; resolves the items.
+
+        ``item_ids`` narrows which items are resolved; ``None`` resolves every
+        still-``REQUESTED`` item. Every item being resolved must be *satisfied*
+        by a present document (see :meth:`_is_correction_satisfied`) — otherwise
+        the whole submission is rejected and nothing is resolved. Records
+        ``DOCUMENT_CORRECTIONS_SUBMITTED``."""
+        if self.status != ProposalStatus.PENDING:
+            raise InvalidTransition(
+                "Corrections can only be submitted when proposal is in PENDING status"
+            )
+        target = set(item_ids) if item_ids is not None else None
+        to_resolve = [
+            item
+            for item in self.correction_items
+            if item.status == DocumentCorrectionStatus.REQUESTED
+            and (target is None or item.id in target)
+        ]
+        unsatisfied = [
+            item for item in to_resolve if not self._is_correction_satisfied(item)
+        ]
+        if unsatisfied:
+            types = ", ".join(
+                sorted({item.document_type.value for item in unsatisfied})
+            )
+            raise UnsatisfiedCorrection(f"Missing a corrected document for: {types}")
+        for item in to_resolve:
+            item.status = DocumentCorrectionStatus.RESOLVED
+            item.resolved_at = occurred_at
+        self.events.append(
+            ProposalEvent(
+                occurred_at=occurred_at,
+                type=ProposalEventType.DOCUMENT_CORRECTIONS_SUBMITTED,
                 triggered_by=triggered_by,
             )
         )

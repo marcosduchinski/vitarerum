@@ -334,6 +334,10 @@ class ProposalRecord(Base):
         back_populates="proposal",
         cascade="all, delete-orphan",
     )
+    correction_items: Mapped[list[DocumentCorrectionItemRecord]] = relationship(
+        back_populates="proposal",
+        cascade="all, delete-orphan",
+    )
 
 
 class ProposalEventRecord(Base):
@@ -394,9 +398,33 @@ class DocumentRecord(Base):
     file_name: Mapped[str] = mapped_column(String(255), default="")
     file_reference: Mapped[str] = mapped_column(String(255))
     submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    submitted_by: Mapped[str] = mapped_column(String(36), index=True)
+    # Nullable since migration 00000006: public-submission documents carry no
+    # PermissionId (the citizen has no account).
+    submitted_by: Mapped[str | None] = mapped_column(
+        String(36), index=True, nullable=True
+    )
 
     proposal: Mapped[ProposalRecord] = relationship(back_populates="documents")
+
+
+class DocumentCorrectionItemRecord(Base):
+    __tablename__ = "document_correction_items"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    proposal_id: Mapped[str] = mapped_column(ForeignKey("proposals.id"), index=True)
+    document_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    document_type: Mapped[str] = mapped_column(String(128))
+    reason: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(32), default="REQUESTED")
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    requested_by: Mapped[str] = mapped_column(String(36), index=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    proposal: Mapped[ProposalRecord] = relationship(
+        back_populates="correction_items"
+    )
 
 
 class ConversationRecord(Base):

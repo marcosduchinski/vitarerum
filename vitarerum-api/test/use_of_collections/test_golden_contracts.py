@@ -117,6 +117,7 @@ async def test_golden_proposal_detail_response_shape() -> None:
             "documents.[]",
             "requestedDocuments.[]",
             "requestedObjects.[]",
+            "correctionItems.[]",
             "submittedAt",
         }
         | _nested("requestedBy", _PERMISSION_DETAIL)

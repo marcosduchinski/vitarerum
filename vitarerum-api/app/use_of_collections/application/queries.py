@@ -154,6 +154,7 @@ class GetProposalDetail:
             *(d.submitted_by for d in proposal.documents),
             *(rd.requested_by for rd in proposal.requested_documents),
             *(ro.requested_by for ro in proposal.requested_objects),
+            *(ci.requested_by for ci in proposal.correction_items),
         ]
         views = await _resolve_views(self._reader, permission_ids)
         return ProposalDetailView(

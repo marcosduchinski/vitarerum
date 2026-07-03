@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, String, Text
+from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -55,4 +55,19 @@ class PublicDocumentSubmissionRecord(Base):
 
     submission: Mapped[PublicProposalSubmissionRecord] = relationship(
         back_populates="documents"
+    )
+
+
+class ProposalAmendmentTokenRecord(Base):
+    __tablename__ = "proposal_amendment_tokens"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    proposal_id: Mapped[str] = mapped_column(String(36), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    requester_email: Mapped[str] = mapped_column(String(180))
+    correction_item_ids: Mapped[list[str]] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    used_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )

@@ -11,7 +11,32 @@ from collections.abc import Awaitable, Callable
 from datetime import datetime
 from typing import Protocol
 
-from app.public_submission.domain.models import PendingPublicSubmission
+from app.public_submission.domain.models import (
+    PendingPublicSubmission,
+    ProposalAmendmentToken,
+)
+
+
+class AmendmentTokenRepository(Protocol):
+    async def add(self, token: ProposalAmendmentToken) -> None: ...
+
+    async def get_by_hash(
+        self, token_hash: str
+    ) -> ProposalAmendmentToken | None: ...
+
+    async def save(self, token: ProposalAmendmentToken) -> None: ...
+
+
+class AmendmentInviteEmailSender(Protocol):
+    async def send_amendment_invite(
+        self,
+        to_email: str,
+        citizen_name: str,
+        token: str,
+        reasons: list[str],
+    ) -> None:
+        """Deliver the amendment link (built from ``token``) to the citizen."""
+        ...
 
 
 class PendingSubmissionRepository(Protocol):
@@ -57,6 +82,15 @@ class ConfirmationEmailSender(Protocol):
     async def send(self, to_email: str, citizen_name: str, token: str) -> None:
         """Deliver the confirmation link (built from ``token``) to the citizen."""
         ...
+
+
+class PublicEmailSender(
+    ConfirmationEmailSender, AmendmentInviteEmailSender, Protocol
+):
+    """Combined public-submission mailer: confirmation + amendment invites.
+
+    The concrete senders (SMTP / logging) implement both, so a single instance
+    serves both flows."""
 
 
 class FileStorage(Protocol):

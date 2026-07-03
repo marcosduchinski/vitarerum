@@ -19,12 +19,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import get_async_session
 from app.public_submission.application.ports import (
+    AmendmentTokenRepository,
     CaptchaVerifier,
     ConfirmationEmailSender,
+    PublicEmailSender,
 )
 from app.public_submission.application.use_cases import (
     ConfirmPublicProposal,
     SubmitPublicProposal,
+)
+from app.public_submission.infrastructure.amendment import (
+    PublicAmendmentInvitationAdapter,
 )
 from app.public_submission.infrastructure.captcha import (
     AlwaysPassVerifier,
@@ -39,10 +44,17 @@ from app.public_submission.infrastructure.rate_limiter import (
     InMemorySlidingWindowRateLimiter,
 )
 from app.public_submission.infrastructure.repositories import (
+    SqlAlchemyAmendmentTokenRepository,
     SqlAlchemyPendingSubmissionRepository,
 )
 from app.shared.persistence import run_with_unique_retry
-from app.use_of_collections.application.use_cases import SubmitProposal
+from app.use_of_collections.application.ports import ProposalRepository
+from app.use_of_collections.application.use_cases import (
+    RemoveAmendmentDocument,
+    SubmitAmendmentCorrections,
+    SubmitAmendmentDocument,
+    SubmitProposal,
+)
 from app.use_of_collections.infrastructure.file_storage import LocalDiskFileStorage
 from app.use_of_collections.infrastructure.repositories import (
     SqlAlchemyConversationRepository,
@@ -67,7 +79,7 @@ def _captcha_verifier() -> CaptchaVerifier:
     )
 
 
-def _email_sender() -> ConfirmationEmailSender:
+def _email_sender() -> PublicEmailSender:
     if not settings.smtp_host:
         return LoggingConfirmationEmailSender(settings.public_origin)
     return SmtpConfirmationEmailSender(
@@ -115,6 +127,72 @@ def get_confirm_use_case(session: DBSession) -> ConfirmPublicProposal:
     )
 
 
+def get_amendment_token_repo(session: DBSession) -> AmendmentTokenRepository:
+    return SqlAlchemyAmendmentTokenRepository(session)
+
+
+def get_uoc_proposal_repo(session: DBSession) -> ProposalRepository:
+    return SqlAlchemyProposalRepository(session)
+
+
+def get_submit_amendment_document(session: DBSession) -> SubmitAmendmentDocument:
+    return SubmitAmendmentDocument(
+        SqlAlchemyProposalRepository(session),
+        LocalDiskFileStorage(settings.data_dir),
+    )
+
+
+def get_remove_amendment_document(session: DBSession) -> RemoveAmendmentDocument:
+    return RemoveAmendmentDocument(
+        SqlAlchemyProposalRepository(session),
+        LocalDiskFileStorage(settings.data_dir),
+    )
+
+
+def get_submit_amendment_corrections(session: DBSession) -> SubmitAmendmentCorrections:
+    return SubmitAmendmentCorrections(SqlAlchemyProposalRepository(session))
+
+
+def get_amendment_invitation_adapter(
+    session: DBSession,
+) -> PublicAmendmentInvitationAdapter:
+    """Real invitation adapter — installed over the ``use_of_collections`` default
+    at the composition root (``app.main``) via ``dependency_overrides``."""
+    return PublicAmendmentInvitationAdapter(
+        session=session,
+        token_repository=SqlAlchemyAmendmentTokenRepository(session),
+        proposal_repository=SqlAlchemyProposalRepository(session),
+        email_sender=_email_sender(),
+        clock=_clock,
+        token_ttl=timedelta(hours=settings.public_confirm_token_ttl_hours),
+    )
+
+
+def get_amendment_clock() -> SystemClock:
+    return _clock
+
+
+def get_amendment_rate_limiter() -> InMemorySlidingWindowRateLimiter:
+    return _rate_limiter
+
+
 SubmitUseCase = Annotated[SubmitPublicProposal, Depends(get_submit_use_case)]
 EmailSender = Annotated[ConfirmationEmailSender, Depends(get_email_sender)]
 ConfirmUseCase = Annotated[ConfirmPublicProposal, Depends(get_confirm_use_case)]
+AmendmentTokenRepo = Annotated[
+    AmendmentTokenRepository, Depends(get_amendment_token_repo)
+]
+AmendmentProposalRepo = Annotated[ProposalRepository, Depends(get_uoc_proposal_repo)]
+SubmitAmendmentDoc = Annotated[
+    SubmitAmendmentDocument, Depends(get_submit_amendment_document)
+]
+RemoveAmendmentDoc = Annotated[
+    RemoveAmendmentDocument, Depends(get_remove_amendment_document)
+]
+SubmitAmendmentCorr = Annotated[
+    SubmitAmendmentCorrections, Depends(get_submit_amendment_corrections)
+]
+AmendmentClock = Annotated[SystemClock, Depends(get_amendment_clock)]
+AmendmentRateLimiter = Annotated[
+    InMemorySlidingWindowRateLimiter, Depends(get_amendment_rate_limiter)
+]

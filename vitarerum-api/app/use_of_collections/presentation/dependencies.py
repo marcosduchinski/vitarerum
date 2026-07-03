@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_async_session
 from app.identity.public import PermissionReader, get_permission_reader
 from app.use_of_collections.application.ports import (
+    AmendmentInvitationPort,
     CollectionUseProjectRepository,
     ConversationRepository,
     FileStoragePort,
@@ -26,6 +27,9 @@ from app.use_of_collections.application.queries import (
     GetProposalDetail,
     ListProjects,
     ListProposals,
+)
+from app.use_of_collections.infrastructure.amendment_invitation import (
+    LoggingAmendmentInvitation,
 )
 from app.use_of_collections.infrastructure.file_storage import LocalDiskFileStorage
 from app.use_of_collections.infrastructure.repositories import (
@@ -70,6 +74,14 @@ def get_file_storage() -> FileStoragePort:
     return LocalDiskFileStorage(settings.data_dir)
 
 
+def get_amendment_invitation() -> AmendmentInvitationPort:
+    """Default (logging) invitation adapter.
+
+    Overridden at the composition root (``app.main``) with the real
+    token-minting / e-mailing adapter from the public-submission context."""
+    return LoggingAmendmentInvitation()
+
+
 def get_reader(session: DBSession) -> PermissionReader:
     return get_permission_reader(session)
 
@@ -85,6 +97,9 @@ PublicationLogRepo = Annotated[
     PublicationLogRepository, Depends(get_publication_log_repo)
 ]
 FileStorage = Annotated[FileStoragePort, Depends(get_file_storage)]
+AmendmentInvitation = Annotated[
+    AmendmentInvitationPort, Depends(get_amendment_invitation)
+]
 PermReader = Annotated[PermissionReader, Depends(get_reader)]
 
 

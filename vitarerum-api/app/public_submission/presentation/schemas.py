@@ -8,7 +8,7 @@ escaped on render in the staff UI (defence in depth against stored XSS).
 from __future__ import annotations
 
 import re
-from datetime import date
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
@@ -63,3 +63,40 @@ class PublicConfirmationRequest(BaseModel):
 class PublicConfirmationResult(BaseModel):
     status: Literal["CONFIRMED", "ALREADY_CONFIRMED", "EXPIRED", "INVALID"]
     referenceNumber: str | None = None
+
+
+# ── Amendment (document correction) channel ────────────────────────────────────
+
+
+class AmendmentCorrectionItem(BaseModel):
+    id: str
+    documentType: str
+    reason: str
+    status: str
+    documentId: str | None = None
+
+
+class AmendmentDocument(BaseModel):
+    id: str
+    type: str
+    fileName: str
+
+
+class AmendmentView(BaseModel):
+    """Read model for the public edit screen — a narrow, safe subset."""
+
+    referenceNumber: str
+    status: str
+    expiresAt: datetime
+    correctionItems: list[AmendmentCorrectionItem]
+    documents: list[AmendmentDocument]
+
+
+class AmendmentDocumentResponse(BaseModel):
+    id: str
+    type: str
+    fileName: str
+
+
+class AmendmentSubmitResult(BaseModel):
+    status: Literal["SUBMITTED"] = "SUBMITTED"

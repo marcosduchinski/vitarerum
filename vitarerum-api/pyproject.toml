@@ -116,6 +116,17 @@ ignore_imports = [
     "app.public_submission.presentation.dependencies -> app.use_of_collections.application.use_cases",
     "app.public_submission.presentation.dependencies -> app.use_of_collections.infrastructure.file_storage",
     "app.public_submission.presentation.dependencies -> app.use_of_collections.infrastructure.repositories",
+    # Amendment (document-correction) channel: the public context owns the token
+    # + e-mail and drives the Use of Collections amendment use cases; its adapter
+    # structurally implements AmendmentInvitationPort (defined in Use of
+    # Collections) and references its ProposalRepository/ProposalId. Same
+    # composition-root coupling as the intake path above.
+    "app.public_submission.infrastructure.amendment -> app.use_of_collections.application.ports",
+    "app.public_submission.infrastructure.amendment -> app.use_of_collections.domain.models",
+    "app.public_submission.presentation.dependencies -> app.use_of_collections.application.ports",
+    "app.public_submission.presentation.routes -> app.use_of_collections.application.use_cases",
+    "app.public_submission.presentation.routes -> app.use_of_collections.domain.enums",
+    "app.public_submission.presentation.routes -> app.use_of_collections.domain.models",
 ]
 
 [[tool.importlinter.contracts]]

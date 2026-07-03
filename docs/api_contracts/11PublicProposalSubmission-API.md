@@ -172,3 +172,28 @@ behaviour below is authoritative for these two points:
   (`src/config/environment.json`). The **secret key** lives only on the server.
 - Dev uses Cloudflare's always-passing test keys
   (site `1x00000000000000000000AA`, secret `1x0000000000000000000000000000000AA`).
+
+---
+
+## Amendment (document correction) channel
+
+When staff need corrected/missing documents **without rejecting** the proposal, they call
+the authenticated `POST /proposals/{id}/request-document-corrections` (Use of Collections).
+That records durable `DocumentCorrectionItem`s (keeping the proposal `PENDING`) and — after
+commit — e-mails the requester a link to the SPA route `/submit-proposal/edit?token=…`
+backed by a **scoped, single-use, expiring** token. The public endpoints below are
+unauthenticated and gated only by that token; each also re-checks the proposal is still
+`PENDING` and rejects anything outside the token's correction-item scope.
+
+| # | Method & path | Purpose |
+|---|---|---|
+| 1 | `GET /public/proposals/amendments/{token}` | Hydrate the edit screen: reference, status, the in-scope correction items (reason/type) and their current documents. |
+| 2 | `POST /public/proposals/amendments/{token}/documents` | Upload a replacement/missing document (multipart `file` + `documentType`). `documentType` must match a still-`REQUESTED` item, else `403`. Same file-type/size rules as intake (PDF/JPG/PNG/DOCX, ≤10 MB). |
+| 3 | `DELETE /public/proposals/amendments/{token}/documents/{documentId}` | Remove a wrong document. Allowed only for a `documentId` named by an in-scope item (`403` otherwise); reclaims the stored file. |
+| 4 | `POST /public/proposals/amendments/{token}/submit` | Finalise: resolves the correction items, records `DOCUMENT_CORRECTIONS_SUBMITTED`, notifies staff, and **burns the token** (single-use). |
+
+- **Opaque failures**: an invalid/expired/used token returns `404 AMENDMENT_UNAVAILABLE`
+  (no distinction, so probing leaks nothing). A proposal that has left `PENDING` returns
+  `409 PROPOSAL_NOT_PENDING`.
+- **Token at rest**: only the SHA-256 of the raw token is stored; the raw value lives only
+  in the e-mailed link. Rate-limited per IP like the intake endpoints.

@@ -21,9 +21,13 @@ from app.identity.presentation.routes import (
     institutions_router,
     users_router,
 )
+from app.public_submission.presentation.dependencies import (
+    get_amendment_invitation_adapter,
+)
 from app.public_submission.presentation.routes import router as public_proposals_router
 from app.reports.in_situ_visit.presentation.routes import reports_router
 from app.shared.exceptions import AccessDenied, InsufficientGroup
+from app.use_of_collections.presentation.dependencies import get_amendment_invitation
 from app.use_of_collections.presentation.routes import projects_router, proposals_router
 
 app = FastAPI(title=settings.app_name)
@@ -113,6 +117,13 @@ app.include_router(museum_narrative_router, prefix=prefix)
 app.include_router(reports_router, prefix=prefix)
 app.include_router(document_templates_router, prefix=prefix)
 app.include_router(public_document_templates_router, prefix=prefix)
+
+
+# Composition root: bind the staff endpoint's AmendmentInvitationPort (defaulted
+# to a logging no-op inside use_of_collections) to the real token-minting /
+# e-mailing adapter that lives in the public-submission context. main.py is the
+# only module allowed to import both contexts, so the wiring lives here.
+app.dependency_overrides[get_amendment_invitation] = get_amendment_invitation_adapter
 
 
 @app.get(f"{prefix}/health")

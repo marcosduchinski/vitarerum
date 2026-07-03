@@ -195,6 +195,26 @@ class PublicationLogRepository(Protocol):
     ) -> tuple[list[PublicationLogEntry], int]: ...
 
 
+class AmendmentInvitationPort(Protocol):
+    """Driven port: invite a proposal's requester to correct documents.
+
+    Implemented by the public-submission context (which owns the tokenised,
+    unauthenticated amendment channel and the e-mail infra). Defined here and
+    published via ``use_of_collections.public`` so the dependency direction stays
+    ``public_submission → use_of_collections``. Scope is carried by
+    ``correction_item_ids`` — the concrete document ids/types are derived from the
+    referenced :class:`DocumentCorrectionItem`s, not duplicated here."""
+
+    async def invite_document_corrections(
+        self,
+        *,
+        proposal_id: ProposalId,
+        requester_email: str,
+        requester_name: str,
+        correction_item_ids: list[str],
+    ) -> None: ...
+
+
 class FileStoragePort(Protocol):
     async def save(self, content: bytes, filename: str) -> str:
         """Persist file bytes and return a fileReference string."""

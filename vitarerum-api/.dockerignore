@@ -19,3 +19,4 @@ data
 Dockerfile
 .dockerignore
 docker-compose.yml
+docs/plans/*

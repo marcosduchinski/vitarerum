@@ -3,6 +3,7 @@ from datetime import UTC, date, datetime
 import pytest
 
 from app.use_of_collections.domain.enums import (
+    DocumentCorrectionStatus,
     ProposalEventType,
     ProposalStatus,
     UseEventType,
@@ -12,12 +13,18 @@ from app.use_of_collections.domain.enums import (
 from app.use_of_collections.domain.models import (
     CollectionUseProject,
     CollectionUseProjectId,
+    Document,
+    DocumentCorrectionItem,
+    DocumentCorrectionItemId,
+    DocumentId,
+    DocumentType,
     EmailAddress,
     InvalidTransition,
     PermissionId,
     Proposal,
     ProposalId,
     ReferenceNumber,
+    UnsatisfiedCorrection,
 )
 
 
@@ -200,3 +207,154 @@ def test_reference_number_validation_accepts_proposal_format() -> None:
 def test_email_address_validation_rejects_invalid_values() -> None:
     with pytest.raises(ValueError, match="Invalid email address"):
         EmailAddress("not-an-email")
+
+
+# ── Document corrections ──────────────────────────────────────────────────────
+
+
+def _make_document(doc_id: str = "doc-1", doc_type: str = "ID_CARD") -> Document:
+    return Document(
+        id=DocumentId(doc_id),
+        type=DocumentType(doc_type),
+        file_name=f"{doc_id}.pdf",
+        file_reference=f"proposals/prop/{doc_id}.pdf",
+        submitted_at=_now(),
+        submitted_by=None,
+    )
+
+
+def _make_correction_item(
+    item_id: str = "ci-1",
+    doc_type: str = "ID_CARD",
+    document_id: str | None = "doc-1",
+) -> DocumentCorrectionItem:
+    return DocumentCorrectionItem(
+        id=DocumentCorrectionItemId(item_id),
+        document_type=DocumentType(doc_type),
+        reason="Illegible scan",
+        requested_at=_now(),
+        requested_by=PermissionId("staff-1"),
+        document_id=DocumentId(document_id) if document_id is not None else None,
+    )
+
+
+def test_request_document_corrections_records_items_and_event() -> None:
+    proposal = _make_proposal(status=ProposalStatus.PENDING)
+    proposal.documents = [_make_document()]
+    proposal.request_document_corrections(
+        occurred_at=_now(),
+        triggered_by=PermissionId("staff-1"),
+        items=[_make_correction_item()],
+        note="Please resend",
+    )
+    assert len(proposal.correction_items) == 1
+    assert (
+        proposal.events[-1].type == ProposalEventType.DOCUMENT_CORRECTIONS_REQUESTED
+    )
+    assert proposal.status == ProposalStatus.PENDING  # stays open
+
+
+def test_request_document_corrections_requires_pending() -> None:
+    proposal = _make_proposal(status=ProposalStatus.APPROVED)
+    with pytest.raises(InvalidTransition):
+        proposal.request_document_corrections(
+            occurred_at=_now(),
+            triggered_by=PermissionId("staff-1"),
+            items=[_make_correction_item()],
+        )
+
+
+def test_request_document_corrections_unknown_document_id_raises() -> None:
+    proposal = _make_proposal(status=ProposalStatus.PENDING)
+    proposal.documents = []
+    with pytest.raises(ValueError, match="not found"):
+        proposal.request_document_corrections(
+            occurred_at=_now(),
+            triggered_by=PermissionId("staff-1"),
+            items=[_make_correction_item(document_id="ghost")],
+        )
+
+
+def test_request_document_corrections_missing_document_needs_no_document_id() -> None:
+    proposal = _make_proposal(status=ProposalStatus.PENDING)
+    proposal.documents = []
+    proposal.request_document_corrections(
+        occurred_at=_now(),
+        triggered_by=PermissionId("staff-1"),
+        items=[_make_correction_item(document_id=None)],
+    )
+    assert proposal.correction_items[0].document_id is None
+
+
+def test_remove_document_within_scope_returns_and_detaches() -> None:
+    proposal = _make_proposal(status=ProposalStatus.PENDING)
+    document = _make_document()
+    proposal.documents = [document]
+    removed = proposal.remove_document(
+        DocumentId("doc-1"), allowed_ids={DocumentId("doc-1")}
+    )
+    assert removed is document
+    assert proposal.documents == []
+
+
+def test_remove_document_out_of_scope_raises() -> None:
+    proposal = _make_proposal(status=ProposalStatus.PENDING)
+    proposal.documents = [_make_document()]
+    with pytest.raises(InvalidTransition, match="scope"):
+        proposal.remove_document(DocumentId("doc-1"), allowed_ids=set())
+    assert len(proposal.documents) == 1  # untouched
+
+
+def test_remove_document_requires_pending() -> None:
+    proposal = _make_proposal(status=ProposalStatus.APPROVED)
+    proposal.documents = [_make_document()]
+    with pytest.raises(InvalidTransition):
+        proposal.remove_document(
+            DocumentId("doc-1"), allowed_ids={DocumentId("doc-1")}
+        )
+
+
+def test_submit_document_corrections_resolves_satisfied_missing_item() -> None:
+    # Missing-document item (document_id=None) satisfied by a present doc of type.
+    proposal = _make_proposal(status=ProposalStatus.PENDING)
+    proposal.documents = [_make_document(doc_id="doc-cv", doc_type="CV")]
+    item = _make_correction_item(doc_type="CV", document_id=None)
+    proposal.correction_items = [item]
+    proposal.submit_document_corrections(
+        occurred_at=_now(), triggered_by=None, item_ids=[item.id]
+    )
+    assert proposal.correction_items[0].status == DocumentCorrectionStatus.RESOLVED
+    assert proposal.correction_items[0].resolved_at == _now()
+    assert (
+        proposal.events[-1].type == ProposalEventType.DOCUMENT_CORRECTIONS_SUBMITTED
+    )
+
+
+def test_submit_document_corrections_rejects_unsatisfied_item() -> None:
+    # No document of the requested type present → cannot finalise.
+    proposal = _make_proposal(status=ProposalStatus.PENDING)
+    proposal.documents = []
+    item = _make_correction_item(doc_type="CV", document_id=None)
+    proposal.correction_items = [item]
+    with pytest.raises(UnsatisfiedCorrection, match="CV"):
+        proposal.submit_document_corrections(
+            occurred_at=_now(), triggered_by=None, item_ids=[item.id]
+        )
+    # Nothing resolved, no event recorded.
+    assert proposal.correction_items[0].status == DocumentCorrectionStatus.REQUESTED
+    assert not proposal.events
+
+
+def test_submit_document_corrections_replacement_needs_fresh_document() -> None:
+    # A replacement item is satisfied only by a *different* doc of the same type.
+    proposal = _make_proposal(status=ProposalStatus.PENDING)
+    old = _make_document(doc_id="doc-1", doc_type="ID_CARD")
+    proposal.documents = [old]
+    item = _make_correction_item(doc_type="ID_CARD", document_id="doc-1")
+    proposal.correction_items = [item]
+    with pytest.raises(UnsatisfiedCorrection):
+        proposal.submit_document_corrections(occurred_at=_now(), triggered_by=None)
+
+    proposal.documents.append(_make_document(doc_id="doc-2", doc_type="ID_CARD"))
+    proposal.submit_document_corrections(occurred_at=_now(), triggered_by=None)
+    assert proposal.correction_items[0].status == DocumentCorrectionStatus.RESOLVED

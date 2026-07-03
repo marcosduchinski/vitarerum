@@ -6,9 +6,56 @@ from app.public_submission.domain.models import (
     InvalidTransition,
     PendingPublicSubmission,
     PendingSubmissionStatus,
+    ProposalAmendmentToken,
     PublicDocumentSubmission,
 )
 from app.shared.kernel import UseType
+
+_TOKEN_NOW = datetime(2026, 7, 3, 12, 0, tzinfo=UTC)
+
+
+def _amendment_token(**kwargs: object) -> ProposalAmendmentToken:
+    defaults = dict(
+        id="amt-1",
+        proposal_id="prop-1",
+        token_hash="hash",
+        requester_email="pedro@example.test",
+        correction_item_ids=["ci-1"],
+        created_at=_TOKEN_NOW,
+        expires_at=_TOKEN_NOW + timedelta(hours=24),
+    )
+    defaults.update(kwargs)
+    return ProposalAmendmentToken(**defaults)  # type: ignore[arg-type]
+
+
+def test_amendment_token_is_active_when_fresh() -> None:
+    token = _amendment_token()
+    assert token.is_active(_TOKEN_NOW) is True
+    assert token.is_expired(_TOKEN_NOW) is False
+    assert token.is_used is False
+
+
+def test_amendment_token_expires_after_ttl() -> None:
+    token = _amendment_token()
+    later = _TOKEN_NOW + timedelta(hours=25)
+    assert token.is_expired(later) is True
+    assert token.is_active(later) is False
+
+
+def test_amendment_token_mark_used_is_single_use() -> None:
+    token = _amendment_token()
+    token.mark_used(_TOKEN_NOW)
+    assert token.is_used is True
+    assert token.is_active(_TOKEN_NOW) is False
+    with pytest.raises(InvalidTransition):
+        token.mark_used(_TOKEN_NOW)
+
+
+def test_amendment_token_used_is_not_expired() -> None:
+    # A used token is inactive but not reported as "expired" (it was consumed).
+    token = _amendment_token()
+    token.mark_used(_TOKEN_NOW)
+    assert token.is_expired(_TOKEN_NOW + timedelta(hours=48)) is False
 
 
 def _pending(created_at: datetime) -> PendingPublicSubmission:

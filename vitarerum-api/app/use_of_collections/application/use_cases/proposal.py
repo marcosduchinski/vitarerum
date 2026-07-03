@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from datetime import date
 
 from app.identity.public import Actor, GroupName
-from app.shared.authorization import require_group
+from app.shared.authorization import require_group, require_staff
 from app.use_of_collections.application.ports import (
     ConversationRepository,
     FileStoragePort,
@@ -29,6 +29,8 @@ from app.use_of_collections.domain.models import (
     Conversation,
     ConversationId,
     Document,
+    DocumentCorrectionItem,
+    DocumentCorrectionItemId,
     DocumentId,
     DocumentType,
     EmailAddress,
@@ -456,6 +458,210 @@ class RejectProposal:
         await self._proposal_repo.save(proposal)
         await self._conversation_repo.save(conversation)
         return RejectProposalOutput(proposal=proposal)
+
+
+# ── Document Corrections ──────────────────────────────────────────────────────
+
+
+@dataclass(slots=True)
+class DocumentCorrectionInput:
+    document_type: str
+    reason: str
+    # None ⇒ a missing document is requested (document_type is the only scope).
+    document_id: str | None = None
+
+
+@dataclass(slots=True)
+class RequestDocumentCorrectionsInput:
+    proposal_id: ProposalId
+    caller: Actor
+    items: list[DocumentCorrectionInput]
+    requester_email: str
+    requester_name: str
+    note: str | None = None
+
+
+@dataclass(slots=True)
+class RequestDocumentCorrectionsOutput:
+    proposal: Proposal
+    correction_item_ids: list[str]
+    requester_email: str
+    requester_name: str
+
+
+class RequestDocumentCorrections:
+    """Staff asks the requester to correct/replace or supply documents.
+
+    Instructory action — keeps the proposal PENDING (unlike ``reject``). Records
+    the durable :class:`DocumentCorrectionItem`s + event. The tokenised e-mail
+    invitation is dispatched by the route AFTER commit via
+    :class:`AmendmentInvitationPort`, so the citizen never gets a link whose token
+    (or items) failed to persist."""
+
+    def __init__(self, proposal_repository: ProposalRepository) -> None:
+        self._repo = proposal_repository
+
+    async def execute(
+        self, data: RequestDocumentCorrectionsInput
+    ) -> RequestDocumentCorrectionsOutput:
+        require_staff(data.caller)
+        proposal = await self._repo.get_by_id(data.proposal_id)
+        if proposal is None:
+            raise LookupError(f"No proposal found with id {data.proposal_id}")
+        now = _now()
+        items = [
+            DocumentCorrectionItem(
+                id=DocumentCorrectionItemId(_new_id()),
+                document_type=DocumentType(item.document_type),
+                reason=item.reason,
+                requested_at=now,
+                requested_by=data.caller.id,
+                document_id=DocumentId(item.document_id)
+                if item.document_id is not None
+                else None,
+            )
+            for item in data.items
+        ]
+        proposal.request_document_corrections(
+            occurred_at=now,
+            triggered_by=data.caller.id,
+            items=items,
+            note=data.note,
+        )
+        await self._repo.save(proposal)
+        return RequestDocumentCorrectionsOutput(
+            proposal=proposal,
+            correction_item_ids=[item.id for item in items],
+            requester_email=data.requester_email,
+            requester_name=data.requester_name,
+        )
+
+
+class CorrectionScopeError(Exception):
+    """An amendment upload/removal fell outside the token's authorised scope."""
+
+
+@dataclass(slots=True)
+class SubmitAmendmentDocumentInput:
+    proposal_id: ProposalId
+    file_content: bytes
+    file_name: str
+    document_type: str
+    # Document types the amendment token authorises (derived from its still-open
+    # correction items). Enforced here so the scope rule lives in the use case,
+    # mirroring how RemoveAmendmentDocument delegates ``allowed_ids``.
+    allowed_document_types: set[str]
+
+
+class SubmitAmendmentDocument:
+    """Public (unauthenticated) document upload during an amendment.
+
+    Mirrors :class:`SubmitDocuments` but carries no ``Actor`` — the citizen has no
+    account, so ``submitted_by`` is ``None``. Enforces the token-derived
+    ``allowed_document_types`` scope before persisting."""
+
+    def __init__(
+        self,
+        proposal_repository: ProposalRepository,
+        file_storage: FileStoragePort,
+    ) -> None:
+        self._repo = proposal_repository
+        self._storage = file_storage
+
+    async def execute(self, data: SubmitAmendmentDocumentInput) -> Document:
+        if data.document_type not in data.allowed_document_types:
+            raise CorrectionScopeError(
+                f"Document type {data.document_type} is not being requested "
+                "for correction."
+            )
+        proposal = await self._repo.get_by_id(data.proposal_id)
+        if proposal is None:
+            raise LookupError(f"No proposal found with id {data.proposal_id}")
+        now = _now()
+        reference = _file_reference("proposals", str(data.proposal_id), data.file_name)
+        file_reference = await self._storage.save(data.file_content, reference)
+        try:
+            document = Document(
+                id=DocumentId(_new_id()),
+                type=DocumentType(data.document_type),
+                file_name=data.file_name,
+                file_reference=file_reference,
+                submitted_at=now,
+                submitted_by=None,
+            )
+            proposal.submit_documents(
+                occurred_at=now,
+                triggered_by=None,
+                document=document,
+            )
+            await self._repo.save(proposal)
+        except BaseException:
+            await self._storage.delete(file_reference)
+            raise
+        return document
+
+
+@dataclass(slots=True)
+class RemoveAmendmentDocumentInput:
+    proposal_id: ProposalId
+    document_id: DocumentId
+    allowed_ids: set[DocumentId]
+
+
+class RemoveAmendmentDocument:
+    """Remove a document that is within the amendment token's scope.
+
+    ``allowed_ids`` is the token-authorised set; the aggregate enforces the
+    PENDING + scope guards. The stored file is reclaimed after the aggregate is
+    persisted."""
+
+    def __init__(
+        self,
+        proposal_repository: ProposalRepository,
+        file_storage: FileStoragePort,
+    ) -> None:
+        self._repo = proposal_repository
+        self._storage = file_storage
+
+    async def execute(self, data: RemoveAmendmentDocumentInput) -> None:
+        proposal = await self._repo.get_by_id(data.proposal_id)
+        if proposal is None:
+            raise LookupError(f"No proposal found with id {data.proposal_id}")
+        document = proposal.remove_document(
+            data.document_id, allowed_ids=data.allowed_ids
+        )
+        await self._repo.save(proposal)
+        await self._storage.delete(document.file_reference)
+
+
+@dataclass(slots=True)
+class SubmitAmendmentCorrectionsInput:
+    proposal_id: ProposalId
+    item_ids: list[str] | None = None
+
+
+class SubmitAmendmentCorrections:
+    """Citizen signals the amendment is complete; resolves the correction items."""
+
+    def __init__(self, proposal_repository: ProposalRepository) -> None:
+        self._repo = proposal_repository
+
+    async def execute(self, data: SubmitAmendmentCorrectionsInput) -> Proposal:
+        proposal = await self._repo.get_by_id(data.proposal_id)
+        if proposal is None:
+            raise LookupError(f"No proposal found with id {data.proposal_id}")
+        item_ids = (
+            [DocumentCorrectionItemId(i) for i in data.item_ids]
+            if data.item_ids is not None
+            else None
+        )
+        proposal.submit_document_corrections(
+            occurred_at=_now(),
+            triggered_by=None,
+            item_ids=item_ids,
+        )
+        await self._repo.save(proposal)
+        return proposal
 
 
 # ── Send Message ──────────────────────────────────────────────────────────────
