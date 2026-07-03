@@ -16,7 +16,11 @@ import {
   SendMessageRequest,
 } from '../../models/proposal.model';
 import { PROPOSAL_API_SERVICE } from '../../services/proposal-api.service';
-import { ApproveProposalRequest, UpdateProposalRequest } from '../../models/proposal-actions.model';
+import {
+  ApproveProposalRequest,
+  RequestDocumentCorrectionsRequest,
+  UpdateProposalRequest,
+} from '../../models/proposal-actions.model';
 import { ProposalMyDetailPageComponent } from './proposal-my-detail-page.component';
 
 const PROPOSAL: ProposalDetail = {
@@ -154,6 +158,10 @@ class ProposalApiServiceStub {
     readonly proposalId: string;
     readonly payload: SendMessageRequest;
   }[] = [];
+  readonly requestCorrectionsCalls: {
+    readonly proposalId: string;
+    readonly payload: RequestDocumentCorrectionsRequest;
+  }[] = [];
   private nextDocumentId = 1;
   private proposal = PROPOSAL;
 
@@ -254,6 +262,11 @@ class ProposalApiServiceStub {
       },
     });
   }
+
+  requestDocumentCorrections(proposalId: string, payload: RequestDocumentCorrectionsRequest) {
+    this.requestCorrectionsCalls.push({ proposalId, payload });
+    return of({ id: proposalId, status: this.proposal.status, lastEvent: EVENTS.content[0] });
+  }
 }
 
 class UserManagementServiceStub {
@@ -264,7 +277,7 @@ class UserManagementServiceStub {
 
 async function selectPanel(
   fixture: ComponentFixture<ProposalMyDetailPageComponent>,
-  name: 'Overview' | 'Conversation' | 'Actions',
+  name: 'Overview' | 'Documents' | 'Conversation' | 'Actions',
 ): Promise<void> {
   const compiled = fixture.nativeElement as HTMLElement;
   const tab = Array.from(compiled.querySelectorAll<HTMLButtonElement>('[role="tab"]')).find(
@@ -703,5 +716,45 @@ describe('ProposalMyDetailPageComponent', () => {
       },
     ]);
     expect(navigateSpy).toHaveBeenCalledWith(['/p/collections/proposals/rejected']);
+  });
+
+  it('requests document corrections, reloads the detail/timeline, and bumps the reset version', async () => {
+    const fixture = TestBed.createComponent(ProposalMyDetailPageComponent);
+    fixture.componentRef.setInput('id', 'proposal-1');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // The detail + events load once on init.
+    expect(proposalService.getProposalCalls).toEqual(['proposal-1']);
+    expect(proposalService.listEventsCalls).toEqual(['proposal-1']);
+
+    const component = fixture.componentInstance as unknown as {
+      onRequestCorrections: (payload: RequestDocumentCorrectionsRequest) => Promise<void>;
+      correctionResetVersion: () => number;
+    };
+    expect(component.correctionResetVersion()).toBe(0);
+
+    const payload: RequestDocumentCorrectionsRequest = {
+      items: [
+        { documentType: 'REQUESTER_ATTACHMENT', reason: 'Illegible', documentId: 'doc-1' },
+        { documentType: 'INSURANCE_CERTIFICATE', reason: 'Missing certificate' },
+      ],
+      note: 'Please fix these.',
+    };
+
+    await component.onRequestCorrections(payload);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // The container owns the call.
+    expect(proposalService.requestCorrectionsCalls).toEqual([
+      { proposalId: 'proposal-1', payload },
+    ]);
+    // It reloads the detail (correctionItems) and the timeline (recorded event).
+    expect(proposalService.getProposalCalls).toEqual(['proposal-1', 'proposal-1']);
+    expect(proposalService.listEventsCalls).toEqual(['proposal-1', 'proposal-1']);
+    // It bumps the reset version so the section clears its local draft.
+    expect(component.correctionResetVersion()).toBe(1);
   });
 });

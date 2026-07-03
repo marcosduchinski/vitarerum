@@ -8,7 +8,12 @@
   } @else {
     <ul class="documents__list">
       @for (doc of documents(); track doc.id) {
-        <li class="document">
+        <li
+          class="document"
+          [id]="'doc-row-' + doc.id"
+          [class.document--flagged]="pendingByDocId().has(doc.id)"
+          [class.document--highlighted]="highlightedDocId() === doc.id"
+        >
           <span class="document__icon" aria-hidden="true">
             <span class="pi pi-file"></span>
           </span>
@@ -23,6 +28,16 @@
                 <span>{{ doc.submittedBy.user.name }}</span>
               }
             </p>
+            @if (pendingByDocId().get(doc.id); as flagged) {
+              <p class="document__flag">
+                <span class="badge badge--requested">Marked for correction</span>
+                <span class="document__flag-reason">{{ flagged.reason }}</span>
+              </p>
+            } @else if (stagedForDoc(doc.id)) {
+              <p class="document__flag">
+                <span class="badge badge--staged">Correction staged</span>
+              </p>
+            }
           </div>
           <div class="document__actions">
             <button type="button" class="document__btn" (click)="openPreview(doc)">Preview</button>
@@ -34,10 +49,204 @@
             >
               {{ downloadingId() === doc.id ? 'Downloading…' : 'Download' }}
             </button>
+            @if (canReview() && !pendingByDocId().has(doc.id) && !stagedForDoc(doc.id)) {
+              <button
+                type="button"
+                class="document__btn document__btn--warn"
+                (click)="openCorrectionForm(doc)"
+              >
+                Request correction
+              </button>
+            }
           </div>
+
+          @if (correctionFormDocId() === doc.id) {
+            <div class="correction-form">
+              <label [attr.for]="'correction-reason-' + doc.id">
+                Why does this document need correcting?
+              </label>
+              <textarea
+                [id]="'correction-reason-' + doc.id"
+                rows="2"
+                placeholder="e.g. the scan is illegible; please re-upload a clear copy"
+                [value]="correctionReason()"
+                (input)="onCorrectionReasonInput($event)"
+              ></textarea>
+              <div class="correction-form__actions">
+                <button type="button" class="btn btn--ghost" (click)="cancelCorrectionForm()">
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  class="btn btn--primary"
+                  [disabled]="!correctionReason().trim()"
+                  (click)="addCorrection(doc)"
+                >
+                  Add to request
+                </button>
+              </div>
+            </div>
+          }
         </li>
       }
     </ul>
+  }
+
+  @if (canReview()) {
+    <div class="review">
+      <div class="review__missing">
+        @if (!missingFormOpen()) {
+          <button type="button" class="btn btn--ghost" (click)="openMissingForm()">
+            <span class="pi pi-plus" aria-hidden="true"></span> Request a missing document
+          </button>
+        } @else {
+          <div class="correction-form">
+            <label for="missing-type">Document type</label>
+            <input
+              id="missing-type"
+              list="missing-type-suggestions"
+              placeholder="e.g. INSURANCE_CERTIFICATE"
+              [value]="missingType()"
+              (input)="onMissingTypeInput($event)"
+            />
+            <datalist id="missing-type-suggestions">
+              @for (suggestion of typeSuggestions; track suggestion) {
+                <option [value]="suggestion"></option>
+              }
+            </datalist>
+            <label for="missing-reason">Why is it needed?</label>
+            <textarea
+              id="missing-reason"
+              rows="2"
+              placeholder="e.g. please attach the insurance certificate for the loaned objects"
+              [value]="missingReason()"
+              (input)="onMissingReasonInput($event)"
+            ></textarea>
+            <div class="correction-form__actions">
+              <button type="button" class="btn btn--ghost" (click)="cancelMissingForm()">
+                Cancel
+              </button>
+              <button
+                type="button"
+                class="btn btn--primary"
+                [disabled]="!missingType().trim() || !missingReason().trim()"
+                (click)="addMissing()"
+              >
+                Add to request
+              </button>
+            </div>
+          </div>
+        }
+      </div>
+
+      @if (hasStaged()) {
+        <div class="staging">
+          <h4 class="staging__title">Correction request ({{ stagedItems().length }})</h4>
+          <ul class="staging__list">
+            @for (item of stagedItems(); track item.key) {
+              <li class="staging__item">
+                <div class="staging__body">
+                  <p class="staging__head">
+                    <span class="badge badge--staged">{{ typeLabel(item.documentType) }}</span>
+                    @if (item.documentName) {
+                      <span class="staging__doc">Replace: {{ item.documentName }}</span>
+                    } @else {
+                      <span class="staging__doc">Missing document</span>
+                    }
+                  </p>
+                  <p class="staging__reason">{{ item.reason }}</p>
+                </div>
+                <button
+                  type="button"
+                  class="staging__remove"
+                  aria-label="Remove from request"
+                  (click)="removeStaged(item.key)"
+                >
+                  <span class="pi pi-times" aria-hidden="true"></span>
+                </button>
+              </li>
+            }
+          </ul>
+
+          <label for="correction-note" class="staging__note-label">
+            Note to the requester (optional)
+          </label>
+          <textarea
+            id="correction-note"
+            class="staging__note"
+            rows="2"
+            placeholder="Optional message included with the correction request"
+            [value]="note()"
+            (input)="onNoteInput($event)"
+          ></textarea>
+
+          @if (correctionError()) {
+            <app-error-message [apiError]="correctionError()!" />
+          }
+
+          <div class="staging__actions">
+            <button
+              type="button"
+              class="btn btn--primary"
+              [disabled]="submittingCorrections()"
+              (click)="send()"
+            >
+              {{ submittingCorrections() ? 'Sending…' : 'Send correction request' }}
+            </button>
+          </div>
+        </div>
+      }
+    </div>
+  }
+
+  @if (sortedCorrections().length > 0) {
+    <section class="corrections">
+      <h4 class="corrections__title">Correction requests</h4>
+      <ul class="corrections__list">
+        @for (item of sortedCorrections(); track item.id) {
+          <li class="corrections__item">
+            <span
+              class="badge"
+              [class.badge--requested]="item.status === 'REQUESTED'"
+              [class.badge--resolved]="item.status === 'RESOLVED'"
+            >
+              {{ item.status === 'RESOLVED' ? 'Resolved' : 'Requested' }}
+            </span>
+            <div class="corrections__body">
+              <p class="corrections__head">
+                <span class="corrections__type">{{ typeLabel(item.documentType) }}</span>
+                <span class="corrections__kind">
+                  {{ item.documentId ? 'Replacement' : 'Missing document' }}
+                </span>
+                @if (item.documentId; as documentId) {
+                  @if (documentNameFor(documentId); as documentName) {
+                    <button
+                      type="button"
+                      class="corrections__document-link"
+                      (click)="showDocument(documentId)"
+                    >
+                      Show document: {{ documentName }}
+                    </button>
+                  } @else {
+                    <span class="corrections__missing-document">Original document unavailable</span>
+                  }
+                }
+              </p>
+              <p class="corrections__reason">{{ item.reason }}</p>
+              <p class="corrections__meta">
+                Requested {{ formatDate(item.requestedAt) }}
+                @if (item.requestedBy.user.name) {
+                  · {{ item.requestedBy.user.name }}
+                }
+                @if (item.resolvedAt) {
+                  · resolved {{ formatDate(item.resolvedAt) }}
+                }
+              </p>
+            </div>
+          </li>
+        }
+      </ul>
+    </section>
   }
 
   @if (previewOpen()) {

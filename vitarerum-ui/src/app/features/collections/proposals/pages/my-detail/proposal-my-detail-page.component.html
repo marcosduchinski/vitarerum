@@ -181,6 +181,12 @@
           <app-proposal-documents-section
             [proposalId]="id()"
             [documents]="proposal()!.documents"
+            [status]="proposal()!.status"
+            [correctionItems]="proposal()!.correctionItems ?? []"
+            [submittingCorrections]="requestingCorrections()"
+            [correctionError]="correctionError()"
+            [correctionResetVersion]="correctionResetVersion()"
+            (correctionRequestSubmitted)="onRequestCorrections($event)"
           />
         </section>
       }

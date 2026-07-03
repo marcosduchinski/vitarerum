@@ -204,6 +204,7 @@ export const SEED_PROPOSALS: ProposalDetail[] = [
       },
     ],
     requestedObjects: [],
+    correctionItems: [],
   },
   // prop-2: PENDING — iris, exhibition, assigned to greg
   {
@@ -225,8 +226,36 @@ export const SEED_PROPOSALS: ProposalDetail[] = [
     submittedAt: '2026-06-01T09:30:00Z',
     conversationId: 'conv-2',
     intendedUse: 'EXHIBITION',
-    documents: [],
+    documents: [
+      {
+        id: 'doc-prop-2-permit',
+        type: 'REQUESTER_ATTACHMENT',
+        fileName: 'exhibition-loan-permit.pdf',
+        fileReference: 'mock-proposal-file/exhibition-loan-permit.pdf',
+        submittedAt: '2026-06-01T09:30:00Z',
+        submittedBy: P['iris'],
+      },
+    ],
     requestedObjects: [],
+    correctionItems: [
+      {
+        id: 'corr-prop-2-permit',
+        documentType: 'REQUESTER_ATTACHMENT',
+        reason: 'The loan permit scan is illegible — please re-upload a clear copy.',
+        status: 'REQUESTED',
+        requestedAt: '2026-06-02T11:00:00Z',
+        requestedBy: P['greg'],
+        documentId: 'doc-prop-2-permit',
+      },
+      {
+        id: 'corr-prop-2-insurance',
+        documentType: 'INSURANCE_CERTIFICATE',
+        reason: 'Please attach the insurance certificate for the loaned objects.',
+        status: 'REQUESTED',
+        requestedAt: '2026-06-02T11:00:00Z',
+        requestedBy: P['greg'],
+      },
+    ],
   },
   // prop-3: APPROVED — hugo, research; fran took it, forwarded to carol; eve watches; project in progress
   {
@@ -250,6 +279,7 @@ export const SEED_PROPOSALS: ProposalDetail[] = [
     intendedUse: 'IN_SITU_VISIT',
     documents: [],
     requestedObjects: [],
+    correctionItems: [],
   },
   // prop-4: APPROVED — alice, lab instruments exhibition, bob assigned and approved; project ready to start
   {
@@ -290,6 +320,7 @@ export const SEED_PROPOSALS: ProposalDetail[] = [
       },
     ],
     requestedObjects: [],
+    correctionItems: [],
   },
   // prop-5: REJECTED — iris, expedition photography exhibition, greg assigned and rejected
   {
@@ -313,6 +344,7 @@ export const SEED_PROPOSALS: ProposalDetail[] = [
     intendedUse: 'EXHIBITION',
     documents: [],
     requestedObjects: [],
+    correctionItems: [],
   },
   // prop-6: REJECTED — hugo, botanical herbarium; bob assigned and rejected (scope too broad)
   {
@@ -336,6 +368,7 @@ export const SEED_PROPOSALS: ProposalDetail[] = [
     intendedUse: 'IN_SITU_VISIT',
     documents: [],
     requestedObjects: [],
+    correctionItems: [],
   },
   // prop-7: APPROVED — hugo, port photography research; bob forwarded to dan who approved; project completed
   {
@@ -359,6 +392,7 @@ export const SEED_PROPOSALS: ProposalDetail[] = [
     intendedUse: 'IN_SITU_VISIT',
     documents: [],
     requestedObjects: [],
+    correctionItems: [],
   },
 ];
 

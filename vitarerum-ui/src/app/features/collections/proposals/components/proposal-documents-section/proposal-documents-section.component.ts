@@ -2,8 +2,11 @@ import { DOCUMENT, isPlatformBrowser } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
+  computed,
+  effect,
   inject,
   input,
+  output,
   PLATFORM_ID,
   signal,
 } from '@angular/core';
@@ -11,15 +14,37 @@ import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { firstValueFrom } from 'rxjs';
 
 import { ApiError, toApiError } from '@core/http/api-error.model';
+import { ProposalStatus } from '@shared/models/collection-use-status.model';
 import { ErrorMessageComponent } from '@shared/components/error-message/error-message.component';
 
-import { Document } from '../../models/proposal.model';
+import { RequestDocumentCorrectionsRequest } from '../../models/proposal-actions.model';
+import { Document, DocumentCorrectionItem } from '../../models/proposal.model';
 import { formatProposalDetailDateTime } from '../../proposal-detail.presentation';
 import { PROPOSAL_API_SERVICE } from '../../services/proposal-api.service';
 
 type PreviewKind = 'pdf' | 'image' | 'unsupported';
 
+// A correction staged locally before the batch is sent. `documentId` set means a
+// flagged existing document; absent means a missing document being requested.
+interface CorrectionDraftItem {
+  readonly key: string;
+  readonly documentType: string;
+  readonly reason: string;
+  readonly documentId?: string;
+  readonly documentName?: string;
+}
+
 const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp']);
+
+// Suggestions only: the backend DocumentType is free-form, so staff may type
+// any value (shown via a <datalist>).
+const MISSING_TYPE_SUGGESTIONS = [
+  'REQUESTER_ATTACHMENT',
+  'ID_DOCUMENT',
+  'INSURANCE_CERTIFICATE',
+  'LOAN_AGREEMENT',
+  'AUTHORIZATION_LETTER',
+];
 
 @Component({
   selector: 'app-proposal-documents-section',
@@ -37,6 +62,15 @@ export class ProposalDocumentsSectionComponent {
 
   readonly proposalId = input.required<string>();
   readonly documents = input.required<readonly Document[]>();
+  readonly status = input.required<ProposalStatus>();
+  readonly correctionItems = input<readonly DocumentCorrectionItem[]>([]);
+  // Mutation state is owned by the container (the my-detail page), mirroring the
+  // conversation section's sendingMessage / messageError / replyResetVersion.
+  readonly submittingCorrections = input<boolean>(false);
+  readonly correctionError = input<ApiError | null>(null);
+  readonly correctionResetVersion = input<number>(0);
+
+  readonly correctionRequestSubmitted = output<RequestDocumentCorrectionsRequest>();
 
   protected readonly downloadingId = signal<string | null>(null);
   protected readonly downloadError = signal<ApiError | null>(null);
@@ -47,6 +81,45 @@ export class ProposalDocumentsSectionComponent {
   protected readonly previewUrl = signal<SafeResourceUrl | string | null>(null);
   protected readonly loadingPreview = signal(false);
   protected readonly previewError = signal<ApiError | null>(null);
+
+  // Correction analysis (local draft)
+  protected readonly typeSuggestions = MISSING_TYPE_SUGGESTIONS;
+  protected readonly stagedItems = signal<readonly CorrectionDraftItem[]>([]);
+  protected readonly note = signal('');
+  // Which document's inline "request correction" form is open (its id), and the
+  // reason being typed there.
+  protected readonly correctionFormDocId = signal<string | null>(null);
+  protected readonly correctionReason = signal('');
+  protected readonly missingFormOpen = signal(false);
+  protected readonly missingType = signal('');
+  protected readonly missingReason = signal('');
+  // The document row currently highlighted from a "Show document" click in the
+  // corrections panel.
+  protected readonly highlightedDocId = signal<string | null>(null);
+
+  protected readonly canReview = computed(() => this.status() === 'PENDING');
+  protected readonly hasStaged = computed(() => this.stagedItems().length > 0);
+
+  // documentId -> its still-open (REQUESTED) correction, for the row badge.
+  protected readonly pendingByDocId = computed(() => {
+    const map = new Map<string, DocumentCorrectionItem>();
+    for (const item of this.correctionItems()) {
+      if (item.status === 'REQUESTED' && item.documentId) map.set(item.documentId, item);
+    }
+    return map;
+  });
+
+  // The full correction history, newest first. The panel is the source of
+  // truth (missing requests have no row; a resolved replacement may point at a
+  // document the requester has since removed).
+  protected readonly sortedCorrections = computed(() =>
+    [...this.correctionItems()].sort((a, b) => b.requestedAt.localeCompare(a.requestedAt)),
+  );
+
+  // Reset the local draft after the container reports a successful send.
+  private readonly resetDraftOnVersionChange = effect(() => {
+    if (this.correctionResetVersion() > 0) this.clearDraft();
+  });
 
   // The raw object URL, kept separately so it can be revoked (the sanitized
   // SafeResourceUrl can't be passed back to URL.revokeObjectURL).
@@ -60,6 +133,118 @@ export class ProposalDocumentsSectionComponent {
   protected formatDate(value: string): string {
     return formatProposalDetailDateTime(value);
   }
+
+  protected stagedForDoc(documentId: string): boolean {
+    return this.stagedItems().some((item) => item.documentId === documentId);
+  }
+
+  // The referenced document's file name, if it still exists on the proposal (a
+  // resolved replacement may point at a document the requester has since removed).
+  protected documentNameFor(documentId: string | undefined): string | null {
+    if (!documentId) return null;
+    return this.documents().find((doc) => doc.id === documentId)?.fileName ?? null;
+  }
+
+  // Highlight + scroll to the document row a correction item points at.
+  protected showDocument(documentId: string): void {
+    this.highlightedDocId.set(documentId);
+    if (!isPlatformBrowser(this.platformId)) return;
+    this.document
+      .getElementById(`doc-row-${documentId}`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  // Correction draft actions
+
+  protected openCorrectionForm(doc: Document): void {
+    this.correctionFormDocId.set(doc.id);
+    this.correctionReason.set('');
+  }
+
+  protected cancelCorrectionForm(): void {
+    this.correctionFormDocId.set(null);
+    this.correctionReason.set('');
+  }
+
+  protected onCorrectionReasonInput(event: Event): void {
+    this.correctionReason.set((event.target as HTMLTextAreaElement).value);
+  }
+
+  protected addCorrection(doc: Document): void {
+    const reason = this.correctionReason().trim();
+    if (!reason) return;
+    this.stagedItems.update((items) => [
+      ...items,
+      {
+        key: `${doc.id}:${Date.now()}`,
+        documentType: doc.type,
+        reason,
+        documentId: doc.id,
+        documentName: doc.fileName,
+      },
+    ]);
+    this.cancelCorrectionForm();
+  }
+
+  protected openMissingForm(): void {
+    this.missingFormOpen.set(true);
+    this.missingType.set('');
+    this.missingReason.set('');
+  }
+
+  protected cancelMissingForm(): void {
+    this.missingFormOpen.set(false);
+    this.missingType.set('');
+    this.missingReason.set('');
+  }
+
+  protected onMissingTypeInput(event: Event): void {
+    this.missingType.set((event.target as HTMLInputElement).value);
+  }
+
+  protected onMissingReasonInput(event: Event): void {
+    this.missingReason.set((event.target as HTMLTextAreaElement).value);
+  }
+
+  protected addMissing(): void {
+    const documentType = this.missingType().trim();
+    const reason = this.missingReason().trim();
+    if (!documentType || !reason) return;
+    this.stagedItems.update((items) => [
+      ...items,
+      { key: `missing:${Date.now()}`, documentType, reason },
+    ]);
+    this.cancelMissingForm();
+  }
+
+  protected removeStaged(key: string): void {
+    this.stagedItems.update((items) => items.filter((item) => item.key !== key));
+  }
+
+  protected onNoteInput(event: Event): void {
+    this.note.set((event.target as HTMLTextAreaElement).value);
+  }
+
+  protected send(): void {
+    if (!this.hasStaged() || this.submittingCorrections()) return;
+    this.correctionRequestSubmitted.emit({
+      items: this.stagedItems().map(({ documentType, reason, documentId }) => ({
+        documentType,
+        reason,
+        documentId,
+      })),
+      note: this.note().trim() || undefined,
+    });
+  }
+
+  private clearDraft(): void {
+    this.stagedItems.set([]);
+    this.note.set('');
+    this.cancelCorrectionForm();
+    this.cancelMissingForm();
+  }
+
+  // Preview / download (read-only)
 
   protected async download(doc: Document): Promise<void> {
     if (this.downloadingId()) return;

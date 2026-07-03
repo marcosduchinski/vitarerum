@@ -24,6 +24,7 @@ import {
 } from '@shared/components/status-chip/status-chip.component';
 import { TypeChipComponent } from '@shared/components/type-chip/type-chip.component';
 
+import { RequestDocumentCorrectionsRequest } from '../../models/proposal-actions.model';
 import { PROPOSAL_API_SERVICE } from '../../services/proposal-api.service';
 import {
   ProposalConversationSectionComponent,
@@ -125,6 +126,11 @@ export class ProposalMyDetailPageComponent {
   protected readonly sendingMessage = signal(false);
   protected readonly actionError = signal<ApiError | null>(null);
   protected readonly messageError = signal<ApiError | null>(null);
+  // Document-correction request state (Documents tab). Container owns the call;
+  // the section stays presentational and clears its draft on the reset bump.
+  protected readonly requestingCorrections = signal(false);
+  protected readonly correctionError = signal<ApiError | null>(null);
+  protected readonly correctionResetVersion = signal(0);
   protected readonly temporaryExternalUserEmail = linkedSignal<string | null>(() => {
     this.id();
     return null;
@@ -136,7 +142,7 @@ export class ProposalMyDetailPageComponent {
     return status === 'SUBMITTED' || status === 'PENDING';
   });
 
-  // Negative terminal outcome — drawn as a red off-shoot on the lifecycle rail,
+  // Negative terminal outcome: drawn as a red off-shoot on the lifecycle rail,
   // mirroring the cancelled step on the project detail page.
   protected readonly closedOutcome = computed<string | null>(() => {
     switch (this.proposal()?.status) {
@@ -270,6 +276,28 @@ export class ProposalMyDetailPageComponent {
       this.actionError.set(toApiError(err));
     } finally {
       this.forwarding.set(false);
+    }
+  }
+
+  protected async onRequestCorrections(
+    payload: RequestDocumentCorrectionsRequest,
+  ): Promise<void> {
+    if (this.requestingCorrections()) return;
+
+    this.requestingCorrections.set(true);
+    this.correctionError.set(null);
+
+    try {
+      await firstValueFrom(this.proposalService.requestDocumentCorrections(this.id(), payload));
+      // Bump the reset version so the section clears its local draft, then refresh
+      // the detail (correctionItems) and the timeline (the recorded event).
+      this.correctionResetVersion.update((version) => version + 1);
+      this.proposalResource.reload();
+      this.eventsResource.reload();
+    } catch (err) {
+      this.correctionError.set(toApiError(err));
+    } finally {
+      this.requestingCorrections.set(false);
     }
   }
 

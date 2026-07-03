@@ -26,6 +26,28 @@ export interface ProposalReasonRequest {
   readonly reason: string;
 }
 
+// A single document correction: replace a flagged document (`documentId` set) or
+// supply a missing one (`documentId` omitted — `documentType` is the scope).
+export interface DocumentCorrectionInputItem {
+  readonly documentType: string;
+  readonly reason: string;
+  readonly documentId?: string;
+}
+
+export interface RequestDocumentCorrectionsRequest {
+  readonly items: readonly DocumentCorrectionInputItem[];
+  readonly note?: string;
+}
+
+// Minimal command echo returned by instructory proposal actions (e.g. request
+// document corrections). The page reloads the detail, so only the lifecycle
+// fields are surfaced here.
+export interface ProposalCommandResult {
+  readonly id: string;
+  readonly status: ProposalStatus;
+  readonly lastEvent: ProposalEvent;
+}
+
 // Approve materialises the project: the curator confirms/adjusts its parameters here.
 export interface ApproveProposalRequest {
   readonly title: string;

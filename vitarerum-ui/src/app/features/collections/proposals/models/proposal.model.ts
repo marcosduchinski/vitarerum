@@ -83,12 +83,32 @@ export interface Document {
   readonly submittedBy: PermissionPrincipal;
 }
 
+export type DocumentCorrectionStatus = 'REQUESTED' | 'RESOLVED';
+
+// A staff-issued request to correct/replace a document or supply a missing one.
+// `documentId` points at the flagged document for a replacement; it is absent
+// when a missing document is requested (then `documentType` is the only scope).
+export interface DocumentCorrectionItem {
+  readonly id: string;
+  readonly documentType: DocumentType;
+  readonly reason: string;
+  readonly status: DocumentCorrectionStatus;
+  readonly requestedAt: string;
+  readonly requestedBy: PermissionPrincipal;
+  readonly documentId?: string;
+  readonly resolvedAt?: string;
+}
+
 export interface ProposalDetail extends ProposalSummary {
   readonly conversationId: string;
   readonly documents: readonly Document[];
   // Optional during migration; populated by mocks/contract and made required in the contract step.
   readonly requestedDocuments?: readonly RequestedDocument[];
   readonly requestedObjects: readonly RequestedObject[];
+  // Document corrections requested by staff; populated by the detail endpoint.
+  // Optional on the wire (like requestedDocuments); the service normalizer
+  // defaults it to [] so consumers can read it directly after a fetch.
+  readonly correctionItems?: readonly DocumentCorrectionItem[];
 }
 
 export interface ProposalEvent {

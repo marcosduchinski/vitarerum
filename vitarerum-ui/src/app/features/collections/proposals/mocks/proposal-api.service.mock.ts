@@ -11,8 +11,10 @@ import {
   ForwardProposalRequest,
   ProposalAssignmentResult,
   ProposalCancellationResult,
+  ProposalCommandResult,
   ProposalDecisionResult,
   ProposalReasonRequest,
+  RequestDocumentCorrectionsRequest,
   UpdateProposalRequest,
 } from '../models/proposal-actions.model';
 import {
@@ -20,6 +22,7 @@ import {
   CreateProposalRequest,
   CreateProposalResponse,
   Document,
+  DocumentCorrectionItem,
   Message,
   MessageAttachment,
   ProposalDetail,
@@ -76,6 +79,7 @@ export class ProposalApiServiceMock {
       conversationId: convId,
       documents: [],
       requestedObjects: [],
+      correctionItems: [],
     };
 
     this.proposals.set(id, proposal);
@@ -287,6 +291,38 @@ export class ProposalApiServiceMock {
     const proposal = this.proposals.get(proposalId);
     if (!proposal) return throwError(() => ({ status: 404, error: 'NOT_FOUND' }));
     return of({ proposalId, documents: proposal.documents });
+  }
+
+  requestDocumentCorrections(
+    proposalId: string,
+    request: RequestDocumentCorrectionsRequest,
+  ): Observable<ProposalCommandResult> {
+    const proposal = this.proposals.get(proposalId);
+    if (!proposal) return throwError(() => ({ status: 404, error: 'NOT_FOUND' }));
+    const now = new Date().toISOString();
+    const requestedBy = this.currentPrincipal();
+    const newItems: DocumentCorrectionItem[] = request.items.map((item, index) => ({
+      id: `corr-${this.nextId++}-${index}`,
+      documentType: item.documentType,
+      reason: item.reason,
+      status: 'REQUESTED',
+      requestedAt: now,
+      requestedBy,
+      documentId: item.documentId,
+    }));
+    const updated: ProposalDetail = {
+      ...proposal,
+      correctionItems: [...(proposal.correctionItems ?? []), ...newItems],
+    };
+    this.proposals.set(proposalId, updated);
+    const evt: ProposalEvent = {
+      occurredAt: now,
+      type: 'DOCUMENT_CORRECTIONS_REQUESTED',
+      triggeredBy: requestedBy,
+      note: request.note || null,
+    };
+    this.pushEvent(proposalId, evt);
+    return of({ id: proposalId, status: proposal.status, lastEvent: evt });
   }
 
   downloadDocument(proposalId: string, documentId: string): Observable<Blob> {

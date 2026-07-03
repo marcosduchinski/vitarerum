@@ -14,8 +14,10 @@ import {
   ForwardProposalRequest,
   ProposalAssignmentResult,
   ProposalCancellationResult,
+  ProposalCommandResult,
   ProposalDecisionResult,
   ProposalReasonRequest,
+  RequestDocumentCorrectionsRequest,
   UpdateProposalRequest,
 } from '../models/proposal-actions.model';
 import {
@@ -48,8 +50,8 @@ function principalFromContact(contact?: RequesterContact | null): PermissionPrin
 }
 
 // Normalizes a proposal summary into the shape the app reads:
-//  - the bare `intendedUse` use type → flat `type`;
-//  - null `requestedBy` (public, pre-approval) → principal from `requesterContact`.
+//  - the bare `intendedUse` use type becomes flat `type`;
+//  - null `requestedBy` (public, pre-approval) becomes principal from `requesterContact`.
 function normalizeProposal<T extends ProposalSummary>(p: T): T {
   const type = p.type ?? p.intendedUse ?? 'OTHER';
   const requestedBy = p.requestedBy ?? principalFromContact(p.requesterContact);
@@ -65,6 +67,7 @@ function normalizeProposalDetail(p: ProposalDetail): ProposalDetail {
     documents: (p.documents ?? []).map((d) =>
       d.submittedBy ? d : { ...d, submittedBy: fallback },
     ),
+    correctionItems: p.correctionItems ?? [],
   };
 }
 
@@ -143,6 +146,19 @@ export class ProposalApiService {
 
   listDocuments(proposalId: string): Observable<ProposalDocumentsResponse> {
     return this.http.get<ProposalDocumentsResponse>(this.url(`/proposals/${proposalId}/documents`));
+  }
+
+  // Staff asks the requester to correct/replace documents or supply missing ones.
+  // Instructory: keeps the proposal PENDING (unlike reject) and e-mails the
+  // requester a scoped amendment link. One call carries every staged item.
+  requestDocumentCorrections(
+    proposalId: string,
+    request: RequestDocumentCorrectionsRequest,
+  ): Observable<ProposalCommandResult> {
+    return this.http.post<ProposalCommandResult>(
+      this.url(`/proposals/${proposalId}/request-document-corrections`),
+      request,
+    );
   }
 
   // Downloads a single document's binary content. The endpoint streams the file
