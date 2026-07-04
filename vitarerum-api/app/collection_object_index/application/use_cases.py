@@ -25,6 +25,8 @@ from app.collection_object_index.application.ports import (
     Clock,
     CollectionObjectIndexPort,
     CollectionObjectParserPort,
+    CollectionObjectSearchQuery,
+    CollectionObjectSearchResult,
     CollectionRepository,
     FileStorage,
     InvalidSpreadsheet,
@@ -33,6 +35,7 @@ from app.collection_object_index.application.ports import (
 from app.collection_object_index.application.read_models import CollectionView
 from app.collection_object_index.domain.enums import SourceDocumentStatus, SourceKind
 from app.collection_object_index.domain.models import (
+    Collection,
     CollectionId,
     CollectionNotFound,
     CuratorAssignment,
@@ -41,6 +44,7 @@ from app.collection_object_index.domain.models import (
     SourceDocumentNotFound,
 )
 from app.identity.public import Actor, GroupName
+from app.shared.authorization import require_staff
 from app.shared.kernel import PermissionId
 
 # Synchronous indexing happens inside the upload request; cap the row count so
@@ -355,3 +359,33 @@ class RemoveCollectionCurator:
         if await self._collections.get_by_id(collection_id) is None:
             raise CollectionNotFound(collection_id)
         await self._collections.remove_curator(collection_id, permission_id)
+
+
+# ── Objects -> Search (read side) ────────────────────────────────────────────
+#
+# Search is deliberately broad: any authenticated staff member searches across
+# every indexed collection (see docs/plans/plano-objects-search.md). This
+# avoids row-level ACLs in the index; the per-collection management scope
+# above governs who may *change* the index, not who may search it.
+
+
+class ListSearchableCollections:
+    """The active collections, for the search screen's facet."""
+
+    def __init__(self, collections: CollectionRepository) -> None:
+        self._collections = collections
+
+    async def execute(self, caller: Actor) -> list[Collection]:
+        require_staff(caller)
+        return [c for c in await self._collections.list_all() if c.active]
+
+
+class SearchCollectionObjects:
+    def __init__(self, index: CollectionObjectIndexPort) -> None:
+        self._index = index
+
+    async def execute(
+        self, caller: Actor, query: CollectionObjectSearchQuery
+    ) -> CollectionObjectSearchResult:
+        require_staff(caller)
+        return await self._index.search(query)

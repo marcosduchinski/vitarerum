@@ -12,6 +12,7 @@ from app.cidoc_crm.in_situ_visit_mapping.presentation.routes import (
 )
 from app.collection_object_index.presentation.routes import (
     collection_data_sources_router,
+    object_search_router,
 )
 from app.config import settings
 from app.document_templates.presentation.routes import (
@@ -121,6 +122,7 @@ app.include_router(reports_router, prefix=prefix)
 app.include_router(document_templates_router, prefix=prefix)
 app.include_router(public_document_templates_router, prefix=prefix)
 app.include_router(collection_data_sources_router, prefix=prefix)
+app.include_router(object_search_router, prefix=prefix)
 
 
 # Composition root: bind the staff endpoint's AmendmentInvitationPort (defaulted

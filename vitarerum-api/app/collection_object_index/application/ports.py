@@ -38,6 +38,32 @@ class ParsedRow:
     cells: Mapping[str, str]
 
 
+@dataclass(frozen=True, slots=True)
+class CollectionObjectSearchQuery:
+    q: str
+    collection_id: CollectionId | None
+    page: int
+    size: int
+
+
+@dataclass(frozen=True, slots=True)
+class SearchHit:
+    collection_id: CollectionId
+    collection_name: str
+    source_document_id: SourceDocumentId
+    file_name: str
+    sheet: str
+    row_number: int
+    cells: Mapping[str, str]
+    highlight: str
+
+
+@dataclass(frozen=True, slots=True)
+class CollectionObjectSearchResult:
+    total: int
+    items: list[SearchHit]
+
+
 class CollectionRepository(Protocol):
     async def list_all(self) -> list[Collection]: ...
 
@@ -83,8 +109,9 @@ class SourceDocumentRepository(Protocol):
 
 
 class CollectionObjectIndexPort(Protocol):
-    """Write side of the searchable object index. The read side (``search``)
-    is added by the Objects -> Search plan on the same port."""
+    """The searchable object index: write side (index/remove) feeds the
+    Collection Data Sources admin flow; ``search`` is the read side consumed by
+    Objects -> Search."""
 
     async def index(
         self,
@@ -96,6 +123,13 @@ class CollectionObjectIndexPort(Protocol):
         ...
 
     async def remove_document(self, source_document_id: SourceDocumentId) -> None: ...
+
+    async def search(
+        self, query: CollectionObjectSearchQuery
+    ) -> CollectionObjectSearchResult:
+        """Full-text + trigram search over live (non-deleted-source) objects,
+        optionally scoped to one collection."""
+        ...
 
 
 class CollectionObjectParserPort(Protocol):

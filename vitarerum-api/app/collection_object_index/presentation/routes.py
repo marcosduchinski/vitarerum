@@ -9,16 +9,22 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, File, HTTPException, Response, UploadFile, status
+from fastapi import APIRouter, File, HTTPException, Query, Response, UploadFile, status
 
+from app.collection_object_index.application.ports import (
+    CollectionObjectSearchQuery,
+    SearchHit,
+)
 from app.collection_object_index.application.read_models import CollectionView
 from app.collection_object_index.application.use_cases import (
     AssignCollectionCurator,
     DeleteSourceDocument,
     ListCollectionSourceDocuments,
     ListManageableCollections,
+    ListSearchableCollections,
     ReindexSourceDocument,
     RemoveCollectionCurator,
+    SearchCollectionObjects,
     UploadSourceDocument,
     UploadSourceDocumentInput,
 )
@@ -42,6 +48,9 @@ from app.collection_object_index.presentation.schemas import (
     AssignCuratorRequest,
     CollectionResponse,
     CuratorResponse,
+    SearchableCollectionResponse,
+    SearchHitResponse,
+    SearchResultResponse,
     SourceDocumentResponse,
 )
 from app.identity.public import PermissionId as IdentityPermissionId
@@ -54,6 +63,11 @@ from app.shared.uploads import ensure_xlsx, read_upload_capped, safe_basename
 collection_data_sources_router = APIRouter(
     prefix="/admin/collection-data-sources", tags=["collection-data-sources"]
 )
+
+# Read-only, broadly staff-accessible search over indexed collection objects —
+# a separate router (and top-level path) from the admin management one above,
+# matching the "Objects -> Search" menu entry.
+object_search_router = APIRouter(prefix="/objects", tags=["objects-search"])
 
 
 def _not_found(resource: str, code: str, resource_id: str) -> HTTPException:
@@ -298,3 +312,56 @@ async def remove_collection_curator(
         raise _not_found("collection", "COLLECTION_NOT_FOUND", collection_id) from exc
     await session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# ── Objects -> Search (read side) ────────────────────────────────────────────
+
+
+def _search_hit_response(hit: SearchHit) -> SearchHitResponse:
+    return SearchHitResponse(
+        collectionId=hit.collection_id,
+        collectionName=hit.collection_name,
+        sourceDocumentId=hit.source_document_id,
+        fileName=hit.file_name,
+        sheet=hit.sheet,
+        rowNumber=hit.row_number,
+        cells=dict(hit.cells),
+        highlight=hit.highlight,
+    )
+
+
+@object_search_router.get(
+    "/search/collections", response_model=list[SearchableCollectionResponse]
+)
+async def list_searchable_collections(
+    caller: CallerPermission,
+    collections: CollectionRepo,
+) -> list[SearchableCollectionResponse]:
+    results = await ListSearchableCollections(collections).execute(caller)
+    return [SearchableCollectionResponse(id=c.id, name=c.name) for c in results]
+
+
+@object_search_router.get("/search", response_model=SearchResultResponse)
+async def search_collection_objects(
+    caller: CallerPermission,
+    index: ObjectIndex,
+    q: Annotated[str, Query(min_length=1)],
+    collectionId: Annotated[str | None, Query()] = None,
+    page: Annotated[int, Query(ge=0)] = 0,
+    size: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> SearchResultResponse:
+    result = await SearchCollectionObjects(index).execute(
+        caller,
+        CollectionObjectSearchQuery(
+            q=q,
+            collection_id=CollectionId(collectionId) if collectionId else None,
+            page=page,
+            size=size,
+        ),
+    )
+    return SearchResultResponse(
+        total=result.total,
+        page=page,
+        size=size,
+        items=[_search_hit_response(hit) for hit in result.items],
+    )

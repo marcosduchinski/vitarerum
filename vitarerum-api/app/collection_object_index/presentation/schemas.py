@@ -37,3 +37,26 @@ class SourceDocumentResponse(BaseModel):
 
 class AssignCuratorRequest(BaseModel):
     permissionId: str
+
+
+class SearchableCollectionResponse(BaseModel):
+    id: str
+    name: str
+
+
+class SearchHitResponse(BaseModel):
+    collectionId: str
+    collectionName: str
+    sourceDocumentId: str
+    fileName: str
+    sheet: str
+    rowNumber: int
+    cells: dict[str, str]
+    highlight: str
+
+
+class SearchResultResponse(BaseModel):
+    total: int
+    page: int
+    size: int
+    items: list[SearchHitResponse]

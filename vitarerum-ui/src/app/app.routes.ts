@@ -14,8 +14,7 @@ export const routes: Routes = [
   {
     // Public, unauthenticated proposal submission for any citizen — no authGuard.
     path: 'submit-proposal',
-    loadChildren: () =>
-      import('@features/public/public.routes').then((m) => m.PUBLIC_ROUTES),
+    loadChildren: () => import('@features/public/public.routes').then((m) => m.PUBLIC_ROUTES),
   },
   {
     path: 'p',
@@ -38,17 +37,21 @@ export const routes: Routes = [
           {
             path: 'proposals',
             loadChildren: () =>
-              import('./features/collections/proposals/proposals.routes').then(m => m.PROPOSALS_ROUTES),
+              import('./features/collections/proposals/proposals.routes').then(
+                (m) => m.PROPOSALS_ROUTES,
+              ),
           },
           {
             path: 'projects',
             loadChildren: () =>
-              import('./features/collections/projects/projects.routes').then(m => m.PROJECTS_ROUTES),
+              import('./features/collections/projects/projects.routes').then(
+                (m) => m.PROJECTS_ROUTES,
+              ),
           },
           {
             path: 'reports',
             loadChildren: () =>
-              import('./features/collections/reports/reports.routes').then(m => m.REPORTS_ROUTES),
+              import('./features/collections/reports/reports.routes').then((m) => m.REPORTS_ROUTES),
           },
         ],
       },
@@ -57,9 +60,14 @@ export const routes: Routes = [
       { path: 'projects', redirectTo: 'collections/projects', pathMatch: 'prefix' },
 
       {
-        path: 'admin',
+        path: 'objects',
         loadChildren: () =>
-          import('@features/admin/admin.routes').then(m => m.ADMIN_ROUTES),
+          import('./features/objects/objects.routes').then((m) => m.OBJECTS_ROUTES),
+      },
+
+      {
+        path: 'admin',
+        loadChildren: () => import('@features/admin/admin.routes').then((m) => m.ADMIN_ROUTES),
       },
     ],
   },

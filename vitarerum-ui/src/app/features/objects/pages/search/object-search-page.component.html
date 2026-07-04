@@ -1,0 +1,85 @@
+<div class="object-search">
+  <app-page-header
+    eyebrow="Objects"
+    title="Search"
+    description="Search across every indexed collection's spreadsheet objects by text or code."
+  />
+
+  <form class="search-bar" (submit)="$event.preventDefault(); search()">
+    <input
+      class="search-bar__input"
+      type="search"
+      name="q"
+      placeholder="Search inventory numbers, names, codes..."
+      [value]="queryDraft()"
+      (input)="onQueryInput($event)"
+    />
+    <select
+      class="search-bar__collection"
+      aria-label="Filter by collection"
+      [value]="collectionFilter()"
+      (change)="onCollectionChange($event)"
+    >
+      <option value="">All collections</option>
+      @for (collection of collections(); track collection.id) {
+        <option [value]="collection.id">{{ collection.name }}</option>
+      }
+    </select>
+    <button type="submit" class="search-bar__button" [disabled]="!queryDraft().trim()">
+      Search
+    </button>
+  </form>
+
+  @if (searchError()) {
+    <app-error-message [apiError]="searchError()!" />
+  } @else if (loading()) {
+    <app-loading-state label="Searching..." />
+  } @else if (!hasSearched()) {
+    <app-empty-state
+      title="Search for an object"
+      message="Type an inventory number, name or code and press Search."
+    />
+  } @else if (items().length === 0) {
+    <app-empty-state
+      title="No objects found"
+      message="Try a different term, or clear the collection filter."
+    />
+  } @else {
+    <p class="results-summary">{{ rangeStart() }}–{{ rangeEnd() }} of {{ total() }} objects</p>
+
+    <ul class="results">
+      @for (hit of items(); track hit.collectionId + hit.sourceDocumentId + hit.rowNumber) {
+        <li class="result">
+          <div class="result__breadcrumb">
+            <span class="result__collection">{{ hit.collectionName }}</span>
+            <span aria-hidden="true">›</span>
+            <span class="result__file">{{ hit.fileName }}</span>
+            <span aria-hidden="true">›</span>
+            <span class="result__sheet">{{ hit.sheet }}</span>
+            <span aria-hidden="true">›</span>
+            <span class="result__row">row {{ hit.rowNumber }}</span>
+          </div>
+          <p class="result__highlight" [innerHTML]="highlightHtml(hit)"></p>
+          <dl class="result__cells">
+            @for (entry of cellEntries(hit); track entry[0]) {
+              <div class="result__cell">
+                <dt>{{ entry[0] }}</dt>
+                <dd>{{ entry[1] }}</dd>
+              </div>
+            }
+          </dl>
+        </li>
+      }
+    </ul>
+
+    <nav class="pagination" aria-label="Search results pagination">
+      <button type="button" [disabled]="currentPage() === 0" (click)="prevPage()">Previous</button>
+      <span class="pagination__page" aria-live="polite">
+        Page {{ currentPage() + 1 }} of {{ totalPages() }}
+      </span>
+      <button type="button" [disabled]="currentPage() >= totalPages() - 1" (click)="nextPage()">
+        Next
+      </button>
+    </nav>
+  }
+</div>
