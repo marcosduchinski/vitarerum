@@ -1,0 +1,132 @@
+<div class="data-sources">
+  <app-page-header
+    eyebrow="Administration"
+    title="Collection Data Sources"
+    description="Manage the .xlsx files that feed the searchable object index, per scientific collection."
+  />
+
+  @if (loadError()) {
+    <app-error-message [apiError]="loadError()!" />
+  } @else if (loading()) {
+    <app-loading-state label="Loading collections..." />
+  } @else {
+    @if (actionError()) {
+      <app-error-message [apiError]="actionError()!" />
+    }
+
+    <ul class="collections">
+      @for (collection of collections(); track collection.id) {
+        <li class="collection" [class.collection--open]="selectedId() === collection.id">
+          <button
+            type="button"
+            class="collection__header"
+            [attr.aria-expanded]="selectedId() === collection.id"
+            (click)="toggle(collection)"
+          >
+            <span
+              class="collection__chevron pi"
+              [class.pi-chevron-right]="selectedId() !== collection.id"
+              [class.pi-chevron-down]="selectedId() === collection.id"
+              aria-hidden="true"
+            ></span>
+            <span class="collection__name">{{ collection.name }}</span>
+            <span class="collection__meta">
+              <span class="collection__curators">{{ curatorLabel(collection) }}</span>
+              <span class="collection__count">
+                {{ collection.documentCount }}
+                {{ collection.documentCount === 1 ? 'file' : 'files' }}
+              </span>
+              @if (!collection.manageable) {
+                <span class="badge badge--muted">Read only</span>
+              }
+            </span>
+          </button>
+
+          @if (selectedId() === collection.id) {
+            <div class="collection__body">
+              @if (collection.manageable) {
+                <label class="upload">
+                  <input
+                    type="file"
+                    accept=".xlsx"
+                    [disabled]="busy()"
+                    (change)="upload(collection, $event)"
+                  />
+                  <span class="pi pi-upload" aria-hidden="true"></span>
+                  Upload .xlsx
+                </label>
+              }
+
+              @if (documentsLoading()) {
+                <app-loading-state label="Loading files..." />
+              } @else if (documents().length === 0) {
+                <p class="collection__empty">No files have been uploaded to this collection yet.</p>
+              } @else {
+                <table class="documents">
+                  <thead>
+                    <tr>
+                      <th scope="col">File</th>
+                      <th scope="col">Status</th>
+                      <th scope="col">Rows</th>
+                      <th scope="col">Uploaded</th>
+                      <th scope="col">Indexed</th>
+                      @if (collection.manageable) {
+                        <th scope="col" class="documents__actions-col">
+                          <span class="visually-hidden">Actions</span>
+                        </th>
+                      }
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (doc of documents(); track doc.id) {
+                      <tr>
+                        <td class="documents__name">{{ doc.fileName }}</td>
+                        <td>
+                          <span
+                            class="badge"
+                            [class.badge--indexed]="doc.status === 'INDEXED'"
+                            [class.badge--error]="doc.status === 'ERROR'"
+                            [class.badge--uploaded]="doc.status === 'UPLOADED'"
+                            [attr.title]="doc.errorMessage"
+                          >
+                            {{ doc.status }}
+                          </span>
+                          @if (doc.status === 'ERROR' && doc.errorMessage) {
+                            <p class="documents__error">{{ doc.errorMessage }}</p>
+                          }
+                        </td>
+                        <td>{{ doc.rowCount ?? '—' }}</td>
+                        <td>{{ formatDate(doc.uploadedAt) }}</td>
+                        <td>{{ formatDate(doc.indexedAt) }}</td>
+                        @if (collection.manageable) {
+                          <td class="documents__actions">
+                            <button
+                              type="button"
+                              class="doc-btn"
+                              [disabled]="busy()"
+                              (click)="reindex(doc)"
+                            >
+                              Reindex
+                            </button>
+                            <button
+                              type="button"
+                              class="doc-btn doc-btn--danger"
+                              [disabled]="busy()"
+                              (click)="remove(doc)"
+                            >
+                              Delete
+                            </button>
+                          </td>
+                        }
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              }
+            </div>
+          }
+        </li>
+      }
+    </ul>
+  }
+</div>

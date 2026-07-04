@@ -1,0 +1,300 @@
+"""Collection Data Sources management endpoints.
+
+Staff-only: SYS_ADMIN / COLLECTIONS_MANAGEMENT manage any collection and its
+curators; CURATORIAL manages only assigned collections (scope enforced by the
+use cases — the frontend menu is not a security boundary).
+"""
+
+from __future__ import annotations
+
+from typing import Annotated
+
+from fastapi import APIRouter, File, HTTPException, Response, UploadFile, status
+
+from app.collection_object_index.application.read_models import CollectionView
+from app.collection_object_index.application.use_cases import (
+    AssignCollectionCurator,
+    DeleteSourceDocument,
+    ListCollectionSourceDocuments,
+    ListManageableCollections,
+    ReindexSourceDocument,
+    RemoveCollectionCurator,
+    UploadSourceDocument,
+    UploadSourceDocumentInput,
+)
+from app.collection_object_index.domain.models import (
+    CollectionId,
+    CollectionNotFound,
+    SourceDocument,
+    SourceDocumentId,
+    SourceDocumentNotFound,
+)
+from app.collection_object_index.presentation.dependencies import (
+    CollectionRepo,
+    DBSession,
+    IndexClock,
+    ObjectIndex,
+    SourceDocumentRepo,
+    SourceFileStorage,
+    SourceParser,
+)
+from app.collection_object_index.presentation.schemas import (
+    AssignCuratorRequest,
+    CollectionResponse,
+    CuratorResponse,
+    SourceDocumentResponse,
+)
+from app.identity.public import PermissionId as IdentityPermissionId
+from app.identity.public import get_permission_reader
+from app.shared.authorization import require_staff
+from app.shared.dependencies import CallerPermission
+from app.shared.kernel import PermissionId
+from app.shared.uploads import ensure_xlsx, read_upload_capped, safe_basename
+
+collection_data_sources_router = APIRouter(
+    prefix="/admin/collection-data-sources", tags=["collection-data-sources"]
+)
+
+
+def _not_found(resource: str, code: str, resource_id: str) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail={
+            "error": code,
+            "message": f"No {resource} found with id {resource_id}",
+        },
+    )
+
+
+def _document_response(document: SourceDocument) -> SourceDocumentResponse:
+    return SourceDocumentResponse(
+        id=document.id,
+        collectionId=document.collection_id,
+        fileName=document.file_name,
+        sourceKind=document.source_kind.value,
+        status=document.status.value,
+        errorMessage=document.error_message,
+        rowCount=document.row_count,
+        uploadedAt=document.uploaded_at,
+        indexedAt=document.indexed_at,
+    )
+
+
+async def _collection_response(
+    view: CollectionView, session: DBSession
+) -> CollectionResponse:
+    # Curator names/e-mails come from Identity's published reader; a curator
+    # whose permission no longer resolves still lists by permission id.
+    reader = get_permission_reader(session)
+    curators = []
+    for assignment in view.curators:
+        detail = await reader.get_detail(IdentityPermissionId(assignment.permission_id))
+        curators.append(
+            CuratorResponse(
+                permissionId=assignment.permission_id,
+                name=detail.user.name if detail else None,
+                email=detail.user.email if detail else None,
+                assignedAt=assignment.assigned_at,
+            )
+        )
+    return CollectionResponse(
+        id=view.collection.id,
+        name=view.collection.name,
+        active=view.collection.active,
+        curators=curators,
+        documentCount=view.document_count,
+        manageable=view.manageable,
+    )
+
+
+@collection_data_sources_router.get(
+    "/collections", response_model=list[CollectionResponse]
+)
+async def list_collections(
+    caller: CallerPermission,
+    collections: CollectionRepo,
+    session: DBSession,
+) -> list[CollectionResponse]:
+    require_staff(caller)
+    views = await ListManageableCollections(collections).execute(caller)
+    return [await _collection_response(view, session) for view in views]
+
+
+@collection_data_sources_router.get(
+    "/collections/{collection_id}/documents",
+    response_model=list[SourceDocumentResponse],
+)
+async def list_collection_documents(
+    collection_id: str,
+    caller: CallerPermission,
+    collections: CollectionRepo,
+    documents: SourceDocumentRepo,
+) -> list[SourceDocumentResponse]:
+    require_staff(caller)
+    try:
+        result = await ListCollectionSourceDocuments(collections, documents).execute(
+            caller, CollectionId(collection_id)
+        )
+    except CollectionNotFound as exc:
+        raise _not_found("collection", "COLLECTION_NOT_FOUND", collection_id) from exc
+    return [_document_response(d) for d in result]
+
+
+@collection_data_sources_router.post(
+    "/collections/{collection_id}/documents",
+    status_code=status.HTTP_201_CREATED,
+    response_model=SourceDocumentResponse,
+)
+async def upload_collection_document(
+    collection_id: str,
+    caller: CallerPermission,
+    collections: CollectionRepo,
+    documents: SourceDocumentRepo,
+    storage: SourceFileStorage,
+    parser: SourceParser,
+    index: ObjectIndex,
+    clock: IndexClock,
+    session: DBSession,
+    file: Annotated[UploadFile, File()],
+) -> SourceDocumentResponse:
+    require_staff(caller)
+    content = await read_upload_capped(file)
+    ensure_xlsx(content)
+    try:
+        result = await UploadSourceDocument(
+            collections, documents, storage, parser, index, clock
+        ).execute(
+            UploadSourceDocumentInput(
+                caller=caller,
+                collection_id=CollectionId(collection_id),
+                file_name=safe_basename(file.filename or "", default="objects.xlsx"),
+                content=content,
+            )
+        )
+    except CollectionNotFound as exc:
+        raise _not_found("collection", "COLLECTION_NOT_FOUND", collection_id) from exc
+    try:
+        await session.commit()
+    except Exception:
+        if result.created:
+            await storage.delete(result.document.file_reference)
+        raise
+    # Committed: a replaced previous version's file is now safe to reclaim.
+    if result.replaced_file_reference is not None:
+        await storage.delete(result.replaced_file_reference)
+    return _document_response(result.document)
+
+
+@collection_data_sources_router.delete(
+    "/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT
+)
+async def delete_collection_document(
+    document_id: str,
+    caller: CallerPermission,
+    collections: CollectionRepo,
+    documents: SourceDocumentRepo,
+    index: ObjectIndex,
+    clock: IndexClock,
+    storage: SourceFileStorage,
+    session: DBSession,
+) -> Response:
+    require_staff(caller)
+    try:
+        file_reference = await DeleteSourceDocument(
+            collections, documents, index, clock
+        ).execute(caller, SourceDocumentId(document_id))
+    except SourceDocumentNotFound as exc:
+        raise _not_found(
+            "source document", "SOURCE_DOCUMENT_NOT_FOUND", document_id
+        ) from exc
+    await session.commit()
+    # Remove the file only after the soft-delete is durable.
+    await storage.delete(file_reference)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@collection_data_sources_router.post(
+    "/documents/{document_id}/reindex", response_model=SourceDocumentResponse
+)
+async def reindex_collection_document(
+    document_id: str,
+    caller: CallerPermission,
+    collections: CollectionRepo,
+    documents: SourceDocumentRepo,
+    storage: SourceFileStorage,
+    parser: SourceParser,
+    index: ObjectIndex,
+    clock: IndexClock,
+    session: DBSession,
+) -> SourceDocumentResponse:
+    require_staff(caller)
+    try:
+        document = await ReindexSourceDocument(
+            collections, documents, storage, parser, index, clock
+        ).execute(caller, SourceDocumentId(document_id))
+    except SourceDocumentNotFound as exc:
+        raise _not_found(
+            "source document", "SOURCE_DOCUMENT_NOT_FOUND", document_id
+        ) from exc
+    except FileNotFoundError as exc:
+        raise _not_found(
+            "source document file", "SOURCE_DOCUMENT_NOT_FOUND", document_id
+        ) from exc
+    await session.commit()
+    return _document_response(document)
+
+
+@collection_data_sources_router.post(
+    "/collections/{collection_id}/curators",
+    status_code=status.HTTP_201_CREATED,
+    response_model=CuratorResponse,
+)
+async def assign_collection_curator(
+    collection_id: str,
+    body: AssignCuratorRequest,
+    caller: CallerPermission,
+    collections: CollectionRepo,
+    clock: IndexClock,
+    session: DBSession,
+) -> CuratorResponse:
+    require_staff(caller)
+    # The target must resolve to an existing permission.
+    reader = get_permission_reader(session)
+    detail = await reader.get_detail(IdentityPermissionId(body.permissionId))
+    if detail is None:
+        raise _not_found("permission", "PERMISSION_NOT_FOUND", body.permissionId)
+    try:
+        assignment = await AssignCollectionCurator(collections, clock).execute(
+            caller, CollectionId(collection_id), PermissionId(body.permissionId)
+        )
+    except CollectionNotFound as exc:
+        raise _not_found("collection", "COLLECTION_NOT_FOUND", collection_id) from exc
+    await session.commit()
+    return CuratorResponse(
+        permissionId=assignment.permission_id,
+        name=detail.user.name,
+        email=detail.user.email,
+        assignedAt=assignment.assigned_at,
+    )
+
+
+@collection_data_sources_router.delete(
+    "/collections/{collection_id}/curators/{permission_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def remove_collection_curator(
+    collection_id: str,
+    permission_id: str,
+    caller: CallerPermission,
+    collections: CollectionRepo,
+    session: DBSession,
+) -> Response:
+    require_staff(caller)
+    try:
+        await RemoveCollectionCurator(collections).execute(
+            caller, CollectionId(collection_id), PermissionId(permission_id)
+        )
+    except CollectionNotFound as exc:
+        raise _not_found("collection", "COLLECTION_NOT_FOUND", collection_id) from exc
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

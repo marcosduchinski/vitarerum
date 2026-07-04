@@ -13,6 +13,7 @@ dependencies = [
     "fastapi>=0.115.0",
     "httpx>=0.28.1",
     "langchain-ollama>=1.1.0",
+    "openpyxl>=3.1.0",
     "owlrl>=7.1.4",
     "pydantic-settings>=2.6.0",
     "pyjwt>=2.9.0",
@@ -34,6 +35,7 @@ dev = [
     "pytest>=8.3.0",
     "pytest-asyncio>=0.24.0",
     "ruff>=0.7.0",
+    "types-openpyxl>=3.1.5.20260518",
 ]
 
 [tool.pytest.ini_options]
@@ -225,6 +227,33 @@ ignore_imports = [
 ]
 
 [[tool.importlinter.contracts]]
+name = "Collection object index layers (presentation > infrastructure > application > domain)"
+type = "layers"
+layers = [
+    "app.collection_object_index.presentation",
+    "app.collection_object_index.infrastructure",
+    "app.collection_object_index.application",
+    "app.collection_object_index.domain",
+]
+
+[[tool.importlinter.contracts]]
+name = "Collection object index may not depend on other contexts"
+type = "forbidden"
+source_modules = ["app.collection_object_index"]
+forbidden_modules = [
+    "app.use_of_collections",
+    "app.cidoc_crm",
+    "app.ai",
+    "app.public_submission",
+    "app.document_templates",
+]
+ignore_imports = [
+    # Composition-root only: reuse the shared local-disk file storage adapter.
+    # Own FileStorage port keeps the domain/application free of this coupling.
+    "app.collection_object_index.presentation.dependencies -> app.use_of_collections.infrastructure.file_storage",
+]
+
+[[tool.importlinter.contracts]]
 name = "Domain purity (no frameworks in domain)"
 type = "forbidden"
 source_modules = [
@@ -234,6 +263,7 @@ source_modules = [
     "app.reports.in_situ_visit.domain",
     "app.public_submission.domain",
     "app.document_templates.domain",
+    "app.collection_object_index.domain",
 ]
 forbidden_modules = ["fastapi", "sqlalchemy", "pydantic"]
 
@@ -248,6 +278,7 @@ source_modules = [
     "app.reports.in_situ_visit.application",
     "app.public_submission.application",
     "app.document_templates.application",
+    "app.collection_object_index.application",
 ]
 forbidden_modules = ["fastapi", "sqlalchemy"]
 ignore_imports = [

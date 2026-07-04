@@ -106,6 +106,12 @@ const USE_OF_COLLECTIONS_STAFF: MenuNode = {
   items: [COLLECTION_PROPOSALS_STAFF, COLLECTION_PROJECTS_STAFF, COLLECTION_REPORTS_STAFF],
 };
 
+const COLLECTION_DATA_SOURCES_ITEM: MenuNode = {
+  label: 'Collection Data Sources',
+  icon: 'pi pi-database',
+  routerLink: '/p/admin/collection-data-sources',
+};
+
 const SYS_ADMIN_MENU: MenuNode = {
   label: 'Administration',
   items: [
@@ -117,13 +123,22 @@ const SYS_ADMIN_MENU: MenuNode = {
       icon: 'pi pi-file-word',
       routerLink: '/p/admin/document-templates',
     },
+    COLLECTION_DATA_SOURCES_ITEM,
   ],
+};
+
+// Curators and collections management also reach the data-sources screen; the
+// backend limits what each caller may manage (the menu is not a security
+// boundary — /p/admin routes carry no route guard).
+const STAFF_ADMIN_MENU: MenuNode = {
+  label: 'Administration',
+  items: [COLLECTION_DATA_SOURCES_ITEM],
 };
 
 const MENUS: Record<GroupName, readonly MenuNode[]> = {
   EXTERNAL: [HOME, USE_OF_COLLECTIONS_EXTERNAL],
-  COLLECTIONS_MANAGEMENT: [HOME, USE_OF_COLLECTIONS_STAFF],
-  CURATORIAL: [HOME, USE_OF_COLLECTIONS_STAFF],
+  COLLECTIONS_MANAGEMENT: [HOME, USE_OF_COLLECTIONS_STAFF, STAFF_ADMIN_MENU],
+  CURATORIAL: [HOME, USE_OF_COLLECTIONS_STAFF, STAFF_ADMIN_MENU],
   DIRECTION: [HOME, USE_OF_COLLECTIONS_STAFF],
   SYS_ADMIN: [HOME, SYS_ADMIN_MENU],
 };

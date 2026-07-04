@@ -89,6 +89,25 @@ def ensure_docx(content: bytes) -> None:
         )
 
 
+def ensure_xlsx(content: bytes) -> None:
+    """Reject anything that is not a real XLSX — a ZIP carrying the OOXML
+    ``[Content_Types].xml`` part and the ``xl/workbook.xml`` workbook — rather
+    than trusting the file extension."""
+    try:
+        with zipfile.ZipFile(io.BytesIO(content)) as archive:
+            names = set(archive.namelist())
+    except zipfile.BadZipFile:
+        names = set()
+    if "[Content_Types].xml" not in names or "xl/workbook.xml" not in names:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail={
+                "error": "INVALID_FILE_FORMAT",
+                "message": "Only valid .xlsx files are accepted",
+            },
+        )
+
+
 def guess_content_type(file_name: str) -> str:
     """Best-effort MIME type for a download, from the file name's extension.
 
