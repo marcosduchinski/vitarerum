@@ -569,9 +569,12 @@ class SubmitAmendmentDocument:
         self._storage = file_storage
 
     async def execute(self, data: SubmitAmendmentDocumentInput) -> Document:
-        if data.document_type not in data.allowed_document_types:
+        # Normalise first (trim/length via the value object) so the scope check
+        # compares the same trimmed form that ``allowed_document_types`` holds.
+        document_type = DocumentType(data.document_type)
+        if document_type.value not in data.allowed_document_types:
             raise CorrectionScopeError(
-                f"Document type {data.document_type} is not being requested "
+                f"Document type {document_type.value} is not being requested "
                 "for correction."
             )
         proposal = await self._repo.get_by_id(data.proposal_id)
@@ -583,7 +586,7 @@ class SubmitAmendmentDocument:
         try:
             document = Document(
                 id=DocumentId(_new_id()),
-                type=DocumentType(data.document_type),
+                type=document_type,
                 file_name=data.file_name,
                 file_reference=file_reference,
                 submitted_at=now,

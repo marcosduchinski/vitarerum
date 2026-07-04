@@ -239,7 +239,7 @@ to a non-staff group.
 
 ### `POST /proposals/{proposal_id}/request-documents`
 
-**Description** — Staff formally request supplementary documents from the researcher. Records a `DOCUMENTS_REQUESTED` `ProposalEvent` and appends the requested document types. The proposal must be in `PENDING` status; the status is unchanged. Each requested document carries a `type` and a `description`.
+**Description** — Staff formally request supplementary documents from the researcher. Records a `DOCUMENTS_REQUESTED` `ProposalEvent` and appends the requested document types. The proposal must be in `PENDING` status; the status is unchanged. Each requested document carries a `type` and a `description`. `type` is **free-form text**, not a fixed catalogue: staff name the document in their own words. The server trims surrounding whitespace and requires a non-empty value of at most **128 characters** (else `422 VALIDATION_ERROR`).
 
 **Path parameters**
 ```
@@ -251,7 +251,7 @@ proposal_id : UUID (required)
 {
   "requiredDocuments": [
     {
-      "type": "RESEARCH_FORM",
+      "type": "Research form",
       "description": "string"
     }
   ],
@@ -292,6 +292,66 @@ proposal_id : UUID (required)
   "message": "Documents can only be requested when proposal is in PENDING status"
 }
 ```
+
+**Response `403 Forbidden`**
+```json
+{
+  "error": "INSUFFICIENT_GROUP",
+  "message": "Only CURATORIAL or COLLECTIONS_MANAGEMENT or DIRECTION or SYS_ADMIN members can perform this action"
+}
+```
+
+---
+
+### `POST /proposals/{proposal_id}/request-document-corrections`
+
+**Description** — Staff flag already-submitted documents for correction/replacement and/or request missing ones. Appends the items as `DocumentCorrectionItem`s (status `REQUESTED`), records a `DOCUMENT_CORRECTIONS_REQUESTED` `ProposalEvent`, and e-mails the requester a scoped, single-use amendment link (the public flow in file 11). This is **instructory**: the proposal stays in `PENDING` (unlike `reject`). The proposal must be in `PENDING` status.
+
+Each item carries a **free-form** `documentType` (not a fixed catalogue): the server trims surrounding whitespace and requires a non-empty value of at most **128 characters**. When `documentId` is present it flags that existing document for replacement (the id must belong to the proposal); when `documentId` is omitted/`null` a *missing* document is requested and `documentType` is the only scope. The public amendment upload must re-send this `documentType` **exactly as received**.
+
+**Path parameters**
+```
+proposal_id : UUID (required)
+```
+
+**Request body**
+```json
+{
+  "items": [
+    {
+      "documentType": "Insurance certificate",
+      "reason": "The scan is illegible; please re-upload a clear copy.",
+      "documentId": "uuid"
+    },
+    {
+      "documentType": "Authorization letter",
+      "reason": "Please attach the signed authorization letter.",
+      "documentId": null
+    }
+  ],
+  "note": "string (optional)"
+}
+```
+
+**Response `200 OK`** — the updated `Proposal` command view (same shape as the other staff commands: `id`, `referenceNumber`, `title`, `status` `= PENDING`, `beginDate`, `endDate`, `lastEvent` `= DOCUMENT_CORRECTIONS_REQUESTED`).
+
+**Response `422 Unprocessable Content`**
+```json
+{
+  "error": "NO_CORRECTION_ITEMS",
+  "message": "At least one correction item is required."
+}
+```
+`VALIDATION_ERROR` is returned instead when a `documentType` is blank or exceeds 128 characters, or when a `documentId` does not belong to the proposal.
+
+**Response `409 Conflict`**
+```json
+{
+  "error": "INVALID_TRANSITION",
+  "message": "Document corrections can only be requested when proposal is in PENDING status"
+}
+```
+`MISSING_REQUESTER_CONTACT` (also `409`) is returned when the proposal has no requester to e-mail the amendment link to.
 
 **Response `403 Forbidden`**
 ```json

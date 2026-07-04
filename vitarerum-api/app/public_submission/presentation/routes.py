@@ -421,6 +421,12 @@ async def add_amendment_document(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={"error": "OUT_OF_SCOPE", "message": str(exc)},
         ) from exc
+    except ValueError as exc:
+        # Free-form document type failed normalisation (empty / over 128 chars).
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={"error": "VALIDATION_ERROR", "message": str(exc)},
+        ) from exc
     await session.commit()
     return AmendmentDocumentResponse(
         id=document.id, type=document.type.value, fileName=document.file_name

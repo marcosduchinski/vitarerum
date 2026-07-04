@@ -104,16 +104,11 @@
             <label for="missing-type">Document type</label>
             <input
               id="missing-type"
-              list="missing-type-suggestions"
-              placeholder="e.g. INSURANCE_CERTIFICATE"
+              [attr.maxlength]="maxTypeLength"
+              placeholder="e.g. Insurance certificate"
               [value]="missingType()"
               (input)="onMissingTypeInput($event)"
             />
-            <datalist id="missing-type-suggestions">
-              @for (suggestion of typeSuggestions; track suggestion) {
-                <option [value]="suggestion"></option>
-              }
-            </datalist>
             <label for="missing-reason">Why is it needed?</label>
             <textarea
               id="missing-reason"

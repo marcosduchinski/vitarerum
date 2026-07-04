@@ -238,6 +238,70 @@ async def test_amendment_upload_out_of_scope_is_rejected() -> None:
     assert storage.saved == {}  # scope checked before any file write
 
 
+async def test_amendment_upload_free_text_type_trims_and_matches_scope() -> None:
+    factory = await _session_factory()
+    storage = _FakeStorage()
+    async with factory() as session:
+        repo = SqlAlchemyProposalRepository(session)
+        await repo.add(_pending_proposal(with_document=False))
+        await RequestDocumentCorrections(repo).execute(
+            RequestDocumentCorrectionsInput(
+                proposal_id=ProposalId("prop-1"),
+                caller=_STAFF,
+                items=[
+                    DocumentCorrectionInput(
+                        document_type="  Insurance certificate  ", reason="Missing"
+                    )
+                ],
+                requester_email="pedro@example.test",
+                requester_name="Pedro Silva",
+            )
+        )
+        await session.commit()
+
+    # The scope is derived from the stored (now trimmed) correction item type.
+    async with factory() as session:
+        repo = SqlAlchemyProposalRepository(session)
+        proposal = await repo.get_by_id(ProposalId("prop-1"))
+        assert proposal is not None
+        allowed = {ci.document_type.value for ci in proposal.correction_items}
+    assert allowed == {"Insurance certificate"}
+
+    # Even if the re-sent type carries stray spaces, normalisation makes it match.
+    async with factory() as session:
+        repo = SqlAlchemyProposalRepository(session)
+        document = await SubmitAmendmentDocument(repo, storage).execute(
+            SubmitAmendmentDocumentInput(
+                proposal_id=ProposalId("prop-1"),
+                file_content=b"%PDF-1.4 x",
+                file_name="cert.pdf",
+                document_type="  Insurance certificate  ",
+                allowed_document_types=allowed,
+            )
+        )
+        await session.commit()
+    assert document.type.value == "Insurance certificate"
+
+
+async def test_amendment_upload_blank_type_rejected() -> None:
+    factory = await _session_factory()
+    storage = _FakeStorage()
+    await _seed_missing_cv_correction(factory)
+    async with factory() as session:
+        repo = SqlAlchemyProposalRepository(session)
+        with pytest.raises(ValueError, match="Document type is required"):
+            await SubmitAmendmentDocument(repo, storage).execute(
+                SubmitAmendmentDocumentInput(
+                    proposal_id=ProposalId("prop-1"),
+                    file_content=b"%PDF-1.4 x",
+                    file_name="blank.pdf",
+                    document_type="   ",
+                    allowed_document_types={"CV"},
+                )
+            )
+    assert storage.saved == {}  # invalid type rejected before any file write
+
+
 async def test_amendment_remove_reclaims_file() -> None:
     factory = await _session_factory()
     storage = _FakeStorage()

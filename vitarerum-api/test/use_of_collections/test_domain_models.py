@@ -209,6 +209,24 @@ def test_email_address_validation_rejects_invalid_values() -> None:
         EmailAddress("not-an-email")
 
 
+def test_document_type_accepts_free_text_and_trims() -> None:
+    assert DocumentType("  Insurance certificate  ").value == "Insurance certificate"
+
+
+def test_document_type_rejects_blank() -> None:
+    with pytest.raises(ValueError, match="Document type is required"):
+        DocumentType("   ")
+
+
+def test_document_type_rejects_over_128_characters() -> None:
+    with pytest.raises(ValueError, match="at most 128 characters"):
+        DocumentType("x" * 129)
+
+
+def test_document_type_accepts_exactly_128_characters() -> None:
+    assert DocumentType("x" * 128).value == "x" * 128
+
+
 # ── Document corrections ──────────────────────────────────────────────────────
 
 
@@ -248,9 +266,7 @@ def test_request_document_corrections_records_items_and_event() -> None:
         note="Please resend",
     )
     assert len(proposal.correction_items) == 1
-    assert (
-        proposal.events[-1].type == ProposalEventType.DOCUMENT_CORRECTIONS_REQUESTED
-    )
+    assert proposal.events[-1].type == ProposalEventType.DOCUMENT_CORRECTIONS_REQUESTED
     assert proposal.status == ProposalStatus.PENDING  # stays open
 
 
@@ -309,9 +325,7 @@ def test_remove_document_requires_pending() -> None:
     proposal = _make_proposal(status=ProposalStatus.APPROVED)
     proposal.documents = [_make_document()]
     with pytest.raises(InvalidTransition):
-        proposal.remove_document(
-            DocumentId("doc-1"), allowed_ids={DocumentId("doc-1")}
-        )
+        proposal.remove_document(DocumentId("doc-1"), allowed_ids={DocumentId("doc-1")})
 
 
 def test_submit_document_corrections_resolves_satisfied_missing_item() -> None:
@@ -325,9 +339,7 @@ def test_submit_document_corrections_resolves_satisfied_missing_item() -> None:
     )
     assert proposal.correction_items[0].status == DocumentCorrectionStatus.RESOLVED
     assert proposal.correction_items[0].resolved_at == _now()
-    assert (
-        proposal.events[-1].type == ProposalEventType.DOCUMENT_CORRECTIONS_SUBMITTED
-    )
+    assert proposal.events[-1].type == ProposalEventType.DOCUMENT_CORRECTIONS_SUBMITTED
 
 
 def test_submit_document_corrections_rejects_unsatisfied_item() -> None:

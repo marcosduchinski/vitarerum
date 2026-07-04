@@ -36,15 +36,9 @@ interface CorrectionDraftItem {
 
 const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp']);
 
-// Suggestions only: the backend DocumentType is free-form, so staff may type
-// any value (shown via a <datalist>).
-const MISSING_TYPE_SUGGESTIONS = [
-  'REQUESTER_ATTACHMENT',
-  'ID_DOCUMENT',
-  'INSURANCE_CERTIFICATE',
-  'LOAN_AGREEMENT',
-  'AUTHORIZATION_LETTER',
-];
+// The document type is free-form text. Mirrors the String(128) column the
+// backend persists it into, so the field can't stage a value the API rejects.
+const MAX_DOCUMENT_TYPE_LENGTH = 128;
 
 @Component({
   selector: 'app-proposal-documents-section',
@@ -83,7 +77,7 @@ export class ProposalDocumentsSectionComponent {
   protected readonly previewError = signal<ApiError | null>(null);
 
   // Correction analysis (local draft)
-  protected readonly typeSuggestions = MISSING_TYPE_SUGGESTIONS;
+  protected readonly maxTypeLength = MAX_DOCUMENT_TYPE_LENGTH;
   protected readonly stagedItems = signal<readonly CorrectionDraftItem[]>([]);
   protected readonly note = signal('');
   // Which document's inline "request correction" form is open (its id), and the
@@ -126,6 +120,11 @@ export class ProposalDocumentsSectionComponent {
   private rawPreviewUrl: string | null = null;
 
   protected typeLabel(type: string): string {
+    // Legacy codes are ALL_CAPS_UNDERSCORE (e.g. PUBLIC_SUBMISSION,
+    // REQUESTER_ATTACHMENT) — humanise only those. Free-form text is shown
+    // verbatim, including short all-caps like "CV" or "RG" that carry no
+    // underscore and must not be lower-cased to "Cv" / "Rg".
+    if (!type.includes('_')) return type;
     const words = type.toLowerCase().split('_').filter(Boolean).join(' ');
     return words ? words.charAt(0).toUpperCase() + words.slice(1) : type;
   }
@@ -209,7 +208,7 @@ export class ProposalDocumentsSectionComponent {
   protected addMissing(): void {
     const documentType = this.missingType().trim();
     const reason = this.missingReason().trim();
-    if (!documentType || !reason) return;
+    if (!documentType || documentType.length > MAX_DOCUMENT_TYPE_LENGTH || !reason) return;
     this.stagedItems.update((items) => [
       ...items,
       { key: `missing:${Date.now()}`, documentType, reason },

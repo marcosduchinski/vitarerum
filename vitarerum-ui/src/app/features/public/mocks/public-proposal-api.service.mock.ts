@@ -53,14 +53,14 @@ export class PublicProposalApiServiceMock implements PublicProposalApi {
       correctionItems: [
         {
           id: 'corr-1',
-          documentType: 'SUPPORTING_DOCUMENT',
+          documentType: 'Supporting document',
           reason: 'Please replace this file with a readable copy.',
           status: 'REQUESTED',
           documentId: 'doc-1',
         },
         {
           id: 'corr-2',
-          documentType: 'AUTHORIZATION_FORM',
+          documentType: 'Authorization form',
           reason: 'Please attach the missing authorization form.',
           status: 'REQUESTED',
           documentId: null,
@@ -69,7 +69,7 @@ export class PublicProposalApiServiceMock implements PublicProposalApi {
       documents: [
         {
           id: 'doc-1',
-          type: 'SUPPORTING_DOCUMENT',
+          type: 'Supporting document',
           fileName: 'blurred-scan.pdf',
         },
       ],

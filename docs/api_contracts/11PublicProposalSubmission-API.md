@@ -187,8 +187,8 @@ unauthenticated and gated only by that token; each also re-checks the proposal i
 
 | # | Method & path | Purpose |
 |---|---|---|
-| 1 | `GET /public/proposals/amendments/{token}` | Hydrate the edit screen: reference, status, the in-scope correction items (reason/type) and their current documents. |
-| 2 | `POST /public/proposals/amendments/{token}/documents` | Upload a replacement/missing document (multipart `file` + `documentType`). `documentType` must match a still-`REQUESTED` item, else `403`. Same file-type/size rules as intake (PDF/JPG/PNG/DOCX, ≤10 MB). |
+| 1 | `GET /public/proposals/amendments/{token}` | Hydrate the edit screen: reference, status, the in-scope correction items (reason/`documentType`) and their current documents. `documentType` is **free-form text** (whatever the reviewer typed), not a fixed code — render it verbatim. |
+| 2 | `POST /public/proposals/amendments/{token}/documents` | Upload a replacement/missing document (multipart `file` + `documentType`). Re-send the correction item's `documentType` **exactly as received** — the server trims it and matches it against a still-`REQUESTED` item; a value outside scope returns `403`, and an empty/over-128-character value returns `422`. Same file-type/size rules as intake (PDF/JPG/PNG/DOCX, ≤10 MB). |
 | 3 | `DELETE /public/proposals/amendments/{token}/documents/{documentId}` | Remove a wrong document. Allowed only for a `documentId` named by an in-scope item (`403` otherwise); reclaims the stored file. |
 | 4 | `POST /public/proposals/amendments/{token}/submit` | Finalise: resolves the correction items, records `DOCUMENT_CORRECTIONS_SUBMITTED`, notifies staff, and **burns the token** (single-use). |
 

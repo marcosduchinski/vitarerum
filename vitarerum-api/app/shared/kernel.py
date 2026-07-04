@@ -20,6 +20,11 @@ REFERENCE_NUMBER_PATTERN = re.compile(
 )
 EMAIL_ADDRESS_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
+# The document type is free-form text (no fixed catalogue). The bound mirrors the
+# String(128) column it is persisted into, so an over-long value is rejected at
+# the edge with a 422 rather than surfacing as a database error.
+MAX_DOCUMENT_TYPE_LENGTH = 128
+
 
 @dataclass(frozen=True, slots=True)
 class ReferenceNumber:
@@ -44,11 +49,21 @@ class EmailAddress:
 
 @dataclass(frozen=True, slots=True)
 class DocumentType:
+    """Free-form document type. Normalised to a trimmed, non-empty string of at
+    most MAX_DOCUMENT_TYPE_LENGTH characters. Kept as a value object (not an enum)
+    so staff and citizens can name documents in their own words."""
+
     value: str
 
     def __post_init__(self) -> None:
-        if not self.value:
+        normalized = self.value.strip()
+        if not normalized:
             raise ValueError("Document type is required.")
+        if len(normalized) > MAX_DOCUMENT_TYPE_LENGTH:
+            raise ValueError(
+                f"Document type must be at most {MAX_DOCUMENT_TYPE_LENGTH} characters."
+            )
+        object.__setattr__(self, "value", normalized)
 
 
 @dataclass(frozen=True, slots=True)

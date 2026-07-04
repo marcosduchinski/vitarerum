@@ -100,6 +100,18 @@ describe('ProposalDocumentsSectionComponent', () => {
     expect(el.querySelector('.document__type')?.textContent).toContain('Requester attachment');
   });
 
+  it('shows a free-text document type verbatim', async () => {
+    const el = await setup([makeDoc({ type: 'Insurance certificate for loan' })]);
+    expect(el.querySelector('.document__type')?.textContent).toContain(
+      'Insurance certificate for loan',
+    );
+  });
+
+  it('does not lower-case a short all-caps free-text type', async () => {
+    const el = await setup([makeDoc({ type: 'CV' })]);
+    expect(el.querySelector('.document__type')?.textContent?.trim()).toBe('CV');
+  });
+
   it('shows an empty state when there are no documents', async () => {
     const el = await setup([]);
     expect(el.querySelector('.documents__empty')).not.toBeNull();
@@ -176,7 +188,7 @@ describe('ProposalDocumentsSectionComponent', () => {
     // 2) Request a missing document.
     byText(el, '.btn', 'Request a missing document')!.click();
     fixture.detectChanges();
-    type(el, '#missing-type', 'INSURANCE_CERTIFICATE');
+    type(el, '#missing-type', 'Insurance certificate');
     type(el, '#missing-reason', 'Need the insurance certificate');
     byText(el, '.btn', 'Add to request')!.click();
     fixture.detectChanges();
@@ -190,7 +202,7 @@ describe('ProposalDocumentsSectionComponent', () => {
     expect(emitted[0].items).toEqual([
       { documentType: 'REQUESTER_ATTACHMENT', reason: 'Blurry scan', documentId: 'doc-1' },
       {
-        documentType: 'INSURANCE_CERTIFICATE',
+        documentType: 'Insurance certificate',
         reason: 'Need the insurance certificate',
         documentId: undefined,
       },
