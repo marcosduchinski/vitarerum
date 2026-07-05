@@ -144,6 +144,36 @@
   color: var(--color-subtle, #6b7280);
 }
 
+.remove-confirm {
+  border-top: 1px solid var(--color-danger, #b3261e);
+  background: color-mix(in srgb, var(--color-danger, #b3261e) 6%, transparent);
+  padding: 0.85rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.remove-confirm__warning {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--color-danger, #b3261e);
+}
+
+.remove-confirm__row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.remove-confirm__input {
+  flex: 1;
+  max-width: 20rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--color-danger, #b3261e);
+  border-radius: var(--radius-sm, 8px);
+  font: inherit;
+}
+
 .collection__body {
   border-top: 1px solid var(--color-border, #e2e5ef);
   padding: 1rem;

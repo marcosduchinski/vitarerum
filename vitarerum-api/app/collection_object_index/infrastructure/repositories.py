@@ -38,7 +38,6 @@ def _to_collection(record: CollectionRecord) -> Collection:
     return Collection(
         id=CollectionId(record.id),
         name=record.name,
-        active=record.active,
         created_at=record.created_at,
         updated_at=record.updated_at,
     )
@@ -73,7 +72,6 @@ def _to_document(record: SourceDocumentRecord) -> SourceDocument:
 
 def _apply_collection(record: CollectionRecord, collection: Collection) -> None:
     record.name = collection.name
-    record.active = collection.active
     record.updated_at = collection.updated_at
 
 
@@ -94,7 +92,6 @@ class SqlAlchemyCollectionRepository:
             CollectionRecord(
                 id=str(collection.id),
                 name=collection.name,
-                active=collection.active,
                 created_at=collection.created_at,
                 updated_at=collection.updated_at,
             )
@@ -107,6 +104,11 @@ class SqlAlchemyCollectionRepository:
             raise LookupError(f"No collection found with id {collection.id}")
         _apply_collection(record, collection)
         await self._session.flush()
+
+    async def delete(self, collection_id: CollectionId) -> None:
+        await self._session.execute(
+            delete(CollectionRecord).where(CollectionRecord.id == str(collection_id))
+        )
 
     async def list_all(self) -> list[Collection]:
         result = await self._session.execute(
@@ -155,6 +157,13 @@ class SqlAlchemyCollectionRepository:
             delete(CuratorRecord).where(
                 CuratorRecord.collection_id == str(collection_id),
                 CuratorRecord.permission_id == str(permission_id),
+            )
+        )
+
+    async def remove_all_curators(self, collection_id: CollectionId) -> None:
+        await self._session.execute(
+            delete(CuratorRecord).where(
+                CuratorRecord.collection_id == str(collection_id)
             )
         )
 
@@ -211,6 +220,16 @@ class SqlAlchemySourceDocumentRepository:
         )
         return [_to_document(r) for r in result.scalars()]
 
+    async def list_all_by_collection(
+        self, collection_id: CollectionId
+    ) -> list[SourceDocument]:
+        result = await self._session.execute(
+            select(SourceDocumentRecord)
+            .where(SourceDocumentRecord.collection_id == str(collection_id))
+            .order_by(SourceDocumentRecord.uploaded_at.desc())
+        )
+        return [_to_document(r) for r in result.scalars()]
+
     async def find_live_by_hash(
         self, collection_id: CollectionId, content_hash: str
     ) -> SourceDocument | None:
@@ -244,6 +263,13 @@ class SqlAlchemySourceDocumentRepository:
         _apply_document(record, document)
         await self._session.flush()
 
+    async def delete_all_by_collection(self, collection_id: CollectionId) -> None:
+        await self._session.execute(
+            delete(SourceDocumentRecord).where(
+                SourceDocumentRecord.collection_id == str(collection_id)
+            )
+        )
+
 
 # word_similarity() computed value (not the `<%` operator's default 0.6 GUC
 # threshold, which is too strict for a short code embedded in a long row — see
@@ -257,11 +283,6 @@ _WORD_SIMILARITY_THRESHOLD = 0.4
 # trigram word-similarity (catches a hyphenated code inside a long row).
 _SEARCH_MATCH_SQL = """
     sd.deleted_at IS NULL
-    -- A deactivated collection is out of the operational catalogue: its rows
-    -- are preserved but drop out of the broad staff search (not just the
-    -- collection facet), same as source documents whose collection was never
-    -- indexed in the first place.
-    AND col.active = true
     -- Explicit CAST: asyncpg's extended query protocol can't infer a bind
     -- parameter's type when it's NULL and only ever compared with `IS NULL OR
     -- ... = $n` (AmbiguousParameterError without it). A bare `::varchar`
@@ -349,6 +370,13 @@ class SqlAlchemyCollectionObjectIndex:
         await self._session.execute(
             delete(CollectionObjectRecord).where(
                 CollectionObjectRecord.source_document_id == str(source_document_id)
+            )
+        )
+
+    async def remove_collection(self, collection_id: CollectionId) -> None:
+        await self._session.execute(
+            delete(CollectionObjectRecord).where(
+                CollectionObjectRecord.collection_id == str(collection_id)
             )
         )
 

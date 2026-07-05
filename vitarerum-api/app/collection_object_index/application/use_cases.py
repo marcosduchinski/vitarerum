@@ -1,10 +1,11 @@
 """Use cases for the Collection Object Index context.
 
-Commands manage the collection catalog itself (create/rename/activate/
-deactivate, SYS_ADMIN only), a collection's source documents (upload / delete
-/ reindex), and curator assignments; queries back the management UI. Indexing
-is synchronous in the MVP: the upload request parses the spreadsheet and
-writes the object rows before returning.
+Commands manage the collection catalog itself (create/rename/remove,
+SYS_ADMIN only — removal is permanent, taking curators/documents/index/files
+with it), a collection's source documents (upload / delete / reindex), and
+curator assignments; queries back the management UI. Indexing is synchronous
+in the MVP: the upload request parses the spreadsheet and writes the object
+rows before returning.
 
 File-cleanup protocol (mirrors Document Templates): commands never delete
 stored files themselves — they return the affected file references so the
@@ -38,7 +39,6 @@ from app.collection_object_index.domain.enums import SourceDocumentStatus, Sourc
 from app.collection_object_index.domain.models import (
     Collection,
     CollectionId,
-    CollectionInactive,
     CollectionNotFound,
     CuratorAssignment,
     SourceDocument,
@@ -80,7 +80,8 @@ async def _curated_ids(
 
 
 class ListManageableCollections:
-    """Every active collection, flagged with whether the caller may manage it.
+    """Every collection in the catalogue, flagged with whether the caller may
+    manage it.
 
     Staff outside the management groups and without assignments (e.g.
     DIRECTION) still see the catalogue, with nothing manageable."""
@@ -176,16 +177,13 @@ class UploadSourceDocument:
     async def execute(
         self, data: UploadSourceDocumentInput
     ) -> UploadSourceDocumentResult:
-        collection = await self._collections.get_by_id(data.collection_id)
-        if collection is None:
+        if await self._collections.get_by_id(data.collection_id) is None:
             raise CollectionNotFound(data.collection_id)
         require_collection_scope(
             data.caller,
             data.collection_id,
             await _curated_ids(data.caller, self._collections),
         )
-        if not collection.active:
-            raise CollectionInactive(data.collection_id)
 
         content_hash = _content_hash(data.content)
         existing = await self._documents.find_live_by_hash(
@@ -310,9 +308,6 @@ class ReindexSourceDocument:
             document.collection_id,
             await _curated_ids(caller, self._collections),
         )
-        collection = await self._collections.get_by_id(document.collection_id)
-        if collection is not None and not collection.active:
-            raise CollectionInactive(document.collection_id)
         content = await self._storage.read(document.file_reference)
         await self._index.remove_document(document.id)
         try:
@@ -389,7 +384,6 @@ class CreateCollection:
         collection = Collection(
             id=CollectionId(_new_id()),
             name=data.name,
-            active=True,
             created_at=now,
             updated_at=now,
         )
@@ -426,14 +420,11 @@ class GetCollection:
 class UpdateCollectionInput:
     caller: Actor
     collection_id: CollectionId
-    name: str | None = None
-    active: bool | None = None
+    name: str
 
 
 class UpdateCollection:
-    """Renames and/or (de)activates a collection. A ``DELETE`` from the API is
-    just this use case with ``active=False`` — collections are never hard
-    deleted, to preserve their documents/index/history."""
+    """Renames a collection."""
 
     def __init__(self, collections: CollectionRepository, clock: Clock) -> None:
         self._collections = collections
@@ -444,14 +435,7 @@ class UpdateCollection:
         collection = await self._collections.get_by_id(data.collection_id)
         if collection is None:
             raise CollectionNotFound(data.collection_id)
-        now = self._clock.now()
-        if data.name is not None:
-            collection.rename(data.name, updated_at=now)
-        if data.active is not None:
-            if data.active:
-                collection.activate(updated_at=now)
-            else:
-                collection.deactivate(updated_at=now)
+        collection.rename(data.name, updated_at=self._clock.now())
         await self._collections.save(collection)
         return collection
 
@@ -468,6 +452,43 @@ class ListCuratorCandidates:
         return await self._permission_reader.list_by_group(GroupName.CURATORIAL)
 
 
+class RemoveCollection:
+    """Permanently removes a collection and everything under it: indexed
+    rows, source documents (live or already soft-deleted), curator
+    assignments, and the collection row itself. Irreversible.
+
+    Deletion order respects FKs: indexed rows -> source documents ->
+    curators -> collection. Returns every source document's file reference
+    (live or already soft-deleted) for the caller to reclaim from storage
+    only *after* its transaction commits — ``FileStorage.delete`` is
+    idempotent, so attempting all of them (not just the still-live ones) is
+    safe and covers any document whose file wasn't already cleaned up."""
+
+    def __init__(
+        self,
+        collections: CollectionRepository,
+        documents: SourceDocumentRepository,
+        index: CollectionObjectIndexPort,
+    ) -> None:
+        self._collections = collections
+        self._documents = documents
+        self._index = index
+
+    async def execute(self, caller: Actor, collection_id: CollectionId) -> list[str]:
+        require_catalog_admin(caller)
+        if await self._collections.get_by_id(collection_id) is None:
+            raise CollectionNotFound(collection_id)
+
+        documents = await self._documents.list_all_by_collection(collection_id)
+        file_references = [document.file_reference for document in documents]
+
+        await self._index.remove_collection(collection_id)
+        await self._documents.delete_all_by_collection(collection_id)
+        await self._collections.remove_all_curators(collection_id)
+        await self._collections.delete(collection_id)
+        return file_references
+
+
 # ── Objects -> Search (read side) ────────────────────────────────────────────
 #
 # Search is deliberately broad: any authenticated staff member searches across
@@ -477,14 +498,14 @@ class ListCuratorCandidates:
 
 
 class ListSearchableCollections:
-    """The active collections, for the search screen's facet."""
+    """The collection catalogue, for the search screen's facet."""
 
     def __init__(self, collections: CollectionRepository) -> None:
         self._collections = collections
 
     async def execute(self, caller: Actor) -> list[Collection]:
         require_staff(caller)
-        return [c for c in await self._collections.list_all() if c.active]
+        return await self._collections.list_all()
 
 
 class SearchCollectionObjects:

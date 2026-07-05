@@ -18,7 +18,6 @@ function makeCollection(overrides: Partial<CollectionDataSource> = {}): Collecti
   return {
     id: 'col-zoo',
     name: 'Zoology',
-    active: true,
     curators: [
       {
         permissionId: 'perm-1',
@@ -96,8 +95,8 @@ class ServiceStub {
   readonly removeCalls: string[] = [];
   readonly reindexCalls: string[] = [];
   readonly createCollectionCalls: string[] = [];
-  readonly updateCollectionCalls: [string, { name?: string; active?: boolean }][] = [];
-  readonly deactivateCollectionCalls: string[] = [];
+  readonly updateCollectionCalls: [string, { name: string }][] = [];
+  readonly removeCollectionCalls: string[] = [];
   readonly assignCuratorCalls: [string, string][] = [];
   readonly removeCuratorCalls: [string, string][] = [];
 
@@ -110,14 +109,14 @@ class ServiceStub {
     return of(makeCollection({ id: 'col-new', name, curators: [], documentCount: 0 }));
   }
 
-  updateCollection(collectionId: string, changes: { name?: string; active?: boolean }) {
+  updateCollection(collectionId: string, changes: { name: string }) {
     this.updateCollectionCalls.push([collectionId, changes]);
     return of(makeCollection({ id: collectionId, ...changes }));
   }
 
-  deactivateCollection(collectionId: string) {
-    this.deactivateCollectionCalls.push(collectionId);
-    return of(makeCollection({ id: collectionId, active: false }));
+  removeCollection(collectionId: string) {
+    this.removeCollectionCalls.push(collectionId);
+    return of(undefined);
   }
 
   listDocuments(_collectionId: string) {
@@ -254,16 +253,6 @@ describe('CollectionDataSourcesPageComponent', () => {
     expect(el.querySelector('.doc-btn')).toBeNull();
   });
 
-  it('hides upload and reindex but keeps delete for an inactive collection', async () => {
-    const el = await setup([makeCollection({ active: false })]);
-    await expand(el);
-    expect(el.textContent).toContain('Inactive');
-    expect(el.querySelector('.upload')).toBeNull();
-    const docButtons = Array.from(el.querySelectorAll<HTMLButtonElement>('.doc-btn'));
-    expect(docButtons.some((b) => b.textContent?.includes('Reindex'))).toBe(false);
-    expect(docButtons.some((b) => b.textContent?.includes('Delete'))).toBe(true);
-  });
-
   it('reindexes a document', async () => {
     const el = await setup();
     await expand(el);
@@ -312,26 +301,49 @@ describe('CollectionDataSourcesPageComponent', () => {
       expect(service.updateCollectionCalls).toEqual([['col-zoo', { name: 'Zoology Renamed' }]]);
     });
 
-    it('deactivates a collection after confirmation', async () => {
+    it('requires typing the exact collection name before removing', async () => {
       const el = await setup(undefined, undefined, 'SYS_ADMIN');
-      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
       Array.from(el.querySelectorAll<HTMLButtonElement>('.admin-btn'))
-        .find((b) => b.textContent?.includes('Deactivate'))!
+        .find((b) => b.textContent?.trim() === 'Remove')!
         .click();
-      await fixture.whenStable();
+      fixture.detectChanges();
 
-      expect(confirmSpy).toHaveBeenCalled();
-      expect(service.deactivateCollectionCalls).toEqual(['col-zoo']);
+      expect(el.textContent).toContain('cannot be undone');
+      const removeButton = Array.from(
+        el.querySelectorAll<HTMLButtonElement>('.remove-confirm .admin-btn'),
+      ).find((b) => b.textContent?.includes('Remove permanently'))!;
+      expect(removeButton.disabled).toBe(true);
+
+      const input = el.querySelector<HTMLInputElement>('.remove-confirm__input')!;
+      input.value = 'not the name';
+      input.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      expect(removeButton.disabled).toBe(true);
+
+      input.value = 'Zoology';
+      input.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      expect(removeButton.disabled).toBe(false);
+
+      removeButton.click();
+      await fixture.whenStable();
+      expect(service.removeCollectionCalls).toEqual(['col-zoo']);
     });
 
-    it('reactivates an inactive collection without confirmation', async () => {
-      const el = await setup([makeCollection({ active: false })], undefined, 'SYS_ADMIN');
+    it('cancels the remove confirmation without calling the service', async () => {
+      const el = await setup(undefined, undefined, 'SYS_ADMIN');
       Array.from(el.querySelectorAll<HTMLButtonElement>('.admin-btn'))
-        .find((b) => b.textContent?.includes('Reactivate'))!
+        .find((b) => b.textContent?.trim() === 'Remove')!
         .click();
-      await fixture.whenStable();
+      fixture.detectChanges();
 
-      expect(service.updateCollectionCalls).toEqual([['col-zoo', { active: true }]]);
+      Array.from(el.querySelectorAll<HTMLButtonElement>('.remove-confirm .admin-btn'))
+        .find((b) => b.textContent?.includes('Cancel'))!
+        .click();
+      fixture.detectChanges();
+
+      expect(el.querySelector('.remove-confirm')).toBeNull();
+      expect(service.removeCollectionCalls).toEqual([]);
     });
 
     it('assigns and removes a curator from the picker', async () => {

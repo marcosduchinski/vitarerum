@@ -133,21 +133,12 @@ async def _client(
                 CollectionRecord(
                     id="col-zoo",
                     name="Zoology",
-                    active=True,
                     created_at=_NOW,
                     updated_at=_NOW,
                 ),
                 CollectionRecord(
                     id="col-bot",
                     name="Botany",
-                    active=True,
-                    created_at=_NOW,
-                    updated_at=_NOW,
-                ),
-                CollectionRecord(
-                    id="col-old",
-                    name="Retired Collection",
-                    active=False,
                     created_at=_NOW,
                     updated_at=_NOW,
                 ),
@@ -226,7 +217,7 @@ async def test_search_rejects_non_staff() -> None:
     assert response.status_code == 403
 
 
-async def test_searchable_collections_lists_only_active() -> None:
+async def test_searchable_collections_lists_full_catalogue() -> None:
     async with _client() as (client, _):
         response = await client.get("/objects/search/collections")
     assert response.status_code == 200

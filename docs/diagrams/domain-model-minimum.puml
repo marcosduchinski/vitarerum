@@ -438,12 +438,9 @@ package "Collection Object Index" <<Bounded Context>> {
         class Collection <<Aggregate Root>> #c3b1e1 {
         - id: CollectionId
         - name: String
-        - active: Boolean
         - createdAt: DateTime
         - updatedAt: DateTime
         + rename(name)
-        + activate()
-        + deactivate()
         }
 
         class CuratorAssignment <<Value Object>> #c3b1e1 {
@@ -510,13 +507,13 @@ note as N_CollectionObjectIndex
   exists only as an infrastructure/read-side concern (parser + pg_index), shown
   here to complete the data flow: collection -> source document (.xlsx) -> indexed
   row. `tsv` is a generated tsvector (config 'simple') backing full-text search.
-  Staff search is broad across all *active* indexed collections; collection
-  filtering is a convenience, not row-level ACL. SourceDocument.deletedAt
-  soft-deletes the document record and hard-removes its rows from the index.
-  Collection catalog administration (create/rename/activate/deactivate, and
-  curator assign/remove) is exclusive to SYS_ADMIN; a deactivated collection
-  blocks new uploads/reindex and drops out of search, but its documents/index
-  stay intact (never hard deleted).
+  Staff search is broad across all indexed collections; collection filtering is
+  a convenience, not row-level ACL. SourceDocument.deletedAt soft-deletes the
+  document record and hard-removes its rows from the index.
+  Collection catalog administration (create/rename/remove) and curator
+  assign/remove are exclusive to SYS_ADMIN. There is no "inactive" state:
+  removing a collection is permanent and cascades — its curator assignments,
+  source documents, indexed rows, and files are all deleted, in that order.
 end note
 N_CollectionObjectIndex .. Collection
 

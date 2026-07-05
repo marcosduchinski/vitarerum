@@ -14,7 +14,6 @@ export interface CollectionCurator {
 export interface CollectionDataSource {
   readonly id: string;
   readonly name: string;
-  readonly active: boolean;
   readonly curators: readonly CollectionCurator[];
   readonly documentCount: number;
   /** Whether the caller may manage this collection (server-decided). */
@@ -33,10 +32,8 @@ export interface SourceDocument {
   readonly indexedAt: string | null;
 }
 
-/** Partial update: only the fields provided are changed. */
 export interface UpdateCollectionRequest {
-  readonly name?: string;
-  readonly active?: boolean;
+  readonly name: string;
 }
 
 /** A permission in the CURATORIAL group, eligible to be assigned as a curator. */

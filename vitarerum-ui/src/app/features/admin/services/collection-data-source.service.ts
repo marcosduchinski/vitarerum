@@ -19,7 +19,9 @@ export interface CollectionDataSourceApi {
     collectionId: string,
     changes: UpdateCollectionRequest,
   ): Observable<CollectionDataSource>;
-  deactivateCollection(collectionId: string): Observable<CollectionDataSource>;
+  /** Permanently removes the collection and everything under it — curators,
+   * source documents, indexed rows, and their files. Cannot be undone. */
+  removeCollection(collectionId: string): Observable<void>;
   listDocuments(collectionId: string): Observable<SourceDocument[]>;
   upload(collectionId: string, file: File): Observable<SourceDocument>;
   remove(documentId: string): Observable<void>;
@@ -53,8 +55,8 @@ export class CollectionDataSourceService implements CollectionDataSourceApi {
     return this.http.patch<CollectionDataSource>(this.url(`/collections/${collectionId}`), changes);
   }
 
-  deactivateCollection(collectionId: string): Observable<CollectionDataSource> {
-    return this.http.delete<CollectionDataSource>(this.url(`/collections/${collectionId}`));
+  removeCollection(collectionId: string): Observable<void> {
+    return this.http.delete<void>(this.url(`/collections/${collectionId}`));
   }
 
   listDocuments(collectionId: string): Observable<SourceDocument[]> {

@@ -94,6 +94,11 @@ export class CollectionDataSourcesPageComponent {
   /** Curator picker selection per expanded collection. */
   protected readonly selectedCandidateId = signal('');
 
+  /** Collection currently showing the "type the name to confirm" remove
+   * control (one at a time). */
+  protected readonly removingId = signal<string | null>(null);
+  protected readonly removeConfirmText = signal('');
+
   protected toggle(collection: CollectionDataSource): void {
     this.actionError.set(null);
     this.selectedCandidateId.set('');
@@ -133,18 +138,31 @@ export class CollectionDataSourcesPageComponent {
     await this.run(() => firstValueFrom(this.service.updateCollection(collection.id, { name })));
   }
 
-  protected async toggleActive(collection: CollectionDataSource): Promise<void> {
-    if (collection.active) {
-      const confirmed = this.document.defaultView?.confirm(
-        `Deactivate "${collection.name}"? Its documents and index stay intact and it can be reactivated later.`,
-      );
-      if (!confirmed) return;
-      await this.run(() => firstValueFrom(this.service.deactivateCollection(collection.id)));
-    } else {
-      await this.run(
-        () => firstValueFrom(this.service.updateCollection(collection.id, { active: true })),
-      );
-    }
+  protected startRemove(collection: CollectionDataSource): void {
+    this.removingId.set(collection.id);
+    this.removeConfirmText.set('');
+  }
+
+  protected cancelRemove(): void {
+    this.removingId.set(null);
+    this.removeConfirmText.set('');
+  }
+
+  protected removeConfirmMatches(collection: CollectionDataSource): boolean {
+    return this.removeConfirmText().trim() === collection.name;
+  }
+
+  /** Permanent — cannot be undone. Only enabled once the typed text matches
+   * the collection's exact name (see removeConfirmMatches). */
+  protected async confirmRemove(collection: CollectionDataSource): Promise<void> {
+    if (!this.removeConfirmMatches(collection)) return;
+    await this.run(async () => {
+      await firstValueFrom(this.service.removeCollection(collection.id));
+      if (this.selectedId() === collection.id) this.selectedId.set(null);
+      if (this.editingId() === collection.id) this.editingId.set(null);
+      this.removingId.set(null);
+      this.removeConfirmText.set('');
+    });
   }
 
   protected async assignCurator(collection: CollectionDataSource): Promise<void> {

@@ -17,7 +17,6 @@ class CuratorResponse(BaseModel):
 class CollectionResponse(BaseModel):
     id: str
     name: str
-    active: bool
     curators: list[CuratorResponse]
     documentCount: int
     manageable: bool
@@ -28,8 +27,7 @@ class CreateCollectionRequest(BaseModel):
 
 
 class UpdateCollectionRequest(BaseModel):
-    name: str | None = Field(default=None, min_length=1, max_length=255)
-    active: bool | None = None
+    name: str = Field(min_length=1, max_length=255)
 
 
 class CuratorCandidateResponse(BaseModel):

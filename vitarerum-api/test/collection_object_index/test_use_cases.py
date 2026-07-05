@@ -25,6 +25,7 @@ from app.collection_object_index.application.use_cases import (
     ListManageableCollections,
     ListSearchableCollections,
     ReindexSourceDocument,
+    RemoveCollection,
     RemoveCollectionCurator,
     UpdateCollection,
     UpdateCollectionInput,
@@ -34,7 +35,6 @@ from app.collection_object_index.application.use_cases import (
 from app.collection_object_index.domain.enums import SourceDocumentStatus
 from app.collection_object_index.domain.models import (
     CollectionId,
-    CollectionInactive,
     CollectionNotFound,
 )
 from app.collection_object_index.infrastructure.models import (
@@ -120,14 +120,12 @@ async def _session_factory() -> async_sessionmaker:
                 CollectionRecord(
                     id=str(_ZOOLOGY),
                     name="Zoology",
-                    active=True,
                     created_at=_NOW,
                     updated_at=_NOW,
                 ),
                 CollectionRecord(
                     id=str(_BOTANY),
                     name="Botany",
-                    active=True,
                     created_at=_NOW,
                     updated_at=_NOW,
                 ),
@@ -402,7 +400,6 @@ async def test_create_collection_as_sys_admin() -> None:
             CreateCollectionInput(caller=_ADMIN, name="Mineralogy")
         )
         await session.commit()
-    assert collection.active is True
     assert collection.created_at == _NOW
 
     async with factory() as session:
@@ -467,7 +464,7 @@ async def test_create_collection_blocked_for_non_sys_admin(caller: Actor) -> Non
             )
 
 
-async def test_update_collection_renames_and_toggles_active() -> None:
+async def test_update_collection_renames() -> None:
     factory = await _session_factory()
     async with factory() as session:
         repo = SqlAlchemyCollectionRepository(session)
@@ -476,9 +473,6 @@ async def test_update_collection_renames_and_toggles_active() -> None:
                 caller=_ADMIN, collection_id=_ZOOLOGY, name="Zoology Renamed"
             )
         )
-        await UpdateCollection(repo, _FakeClock()).execute(
-            UpdateCollectionInput(caller=_ADMIN, collection_id=_ZOOLOGY, active=False)
-        )
         await session.commit()
 
     async with factory() as session:
@@ -486,17 +480,6 @@ async def test_update_collection_renames_and_toggles_active() -> None:
         collection = await repo.get_by_id(_ZOOLOGY)
     assert collection is not None
     assert collection.name == "Zoology Renamed"
-    assert collection.active is False
-
-    async with factory() as session:
-        repo = SqlAlchemyCollectionRepository(session)
-        await UpdateCollection(repo, _FakeClock()).execute(
-            UpdateCollectionInput(caller=_ADMIN, collection_id=_ZOOLOGY, active=True)
-        )
-        await session.commit()
-    async with factory() as session:
-        collection = await SqlAlchemyCollectionRepository(session).get_by_id(_ZOOLOGY)
-    assert collection is not None and collection.active is True
 
 
 @pytest.mark.parametrize("caller", [_MANAGER, _CURATOR])
@@ -507,98 +490,105 @@ async def test_update_collection_blocked_for_non_sys_admin(caller: Actor) -> Non
         with pytest.raises(InsufficientGroup):
             await UpdateCollection(repo, _FakeClock()).execute(
                 UpdateCollectionInput(
-                    caller=caller, collection_id=_ZOOLOGY, active=False
+                    caller=caller, collection_id=_ZOOLOGY, name="Whatever"
                 )
             )
 
 
-async def test_deactivating_collection_preserves_documents() -> None:
+async def test_remove_collection_deletes_everything() -> None:
     factory = await _session_factory()
     storage = _FakeStorage()
-    uploaded = await _upload(factory, storage)
+    uploaded = await _upload(factory, storage, rows=[["ZOO-1", "Jaguar"]])
 
     async with factory() as session:
         repo = SqlAlchemyCollectionRepository(session)
-        await UpdateCollection(repo, _FakeClock()).execute(
-            UpdateCollectionInput(caller=_ADMIN, collection_id=_ZOOLOGY, active=False)
-        )
-        await session.commit()
-
-    async with factory() as session:
-        documents = await SqlAlchemySourceDocumentRepository(
-            session
-        ).list_live_by_collection(_ZOOLOGY)
-    assert [d.id for d in documents] == [uploaded.document.id]
-    async with factory() as session:
-        assert len(await _object_rows(session)) == 1
-
-
-async def test_deactivated_collection_excluded_from_searchable_facet() -> None:
-    factory = await _session_factory()
-    async with factory() as session:
-        repo = SqlAlchemyCollectionRepository(session)
-        await UpdateCollection(repo, _FakeClock()).execute(
-            UpdateCollectionInput(caller=_ADMIN, collection_id=_ZOOLOGY, active=False)
-        )
-        await session.commit()
-
-    async with factory() as session:
-        repo = SqlAlchemyCollectionRepository(session)
-        names = {c.name for c in await ListSearchableCollections(repo).execute(_ADMIN)}
-    assert names == {"Botany"}
-
-
-async def test_upload_blocked_when_collection_inactive() -> None:
-    factory = await _session_factory()
-    storage = _FakeStorage()
-    async with factory() as session:
-        repo = SqlAlchemyCollectionRepository(session)
-        await UpdateCollection(repo, _FakeClock()).execute(
-            UpdateCollectionInput(caller=_ADMIN, collection_id=_ZOOLOGY, active=False)
-        )
-        await session.commit()
-
-    with pytest.raises(CollectionInactive):
-        await _upload(factory, storage)
-    assert storage.saved == {}
-
-
-async def test_reindex_blocked_when_collection_inactive() -> None:
-    factory = await _session_factory()
-    storage = _FakeStorage()
-    uploaded = await _upload(factory, storage)
-
-    async with factory() as session:
-        repo = SqlAlchemyCollectionRepository(session)
-        await UpdateCollection(repo, _FakeClock()).execute(
-            UpdateCollectionInput(caller=_ADMIN, collection_id=_ZOOLOGY, active=False)
-        )
-        await session.commit()
-
-    async with factory() as session:
-        with pytest.raises(CollectionInactive):
-            await ReindexSourceDocument(
-                SqlAlchemyCollectionRepository(session),
-                SqlAlchemySourceDocumentRepository(session),
-                storage,
-                OpenpyxlCollectionObjectParser(),
-                SqlAlchemyCollectionObjectIndex(session),
-                _FakeClock(),
-            ).execute(_ADMIN, uploaded.document.id)
-
-
-async def test_assign_curator_allowed_even_when_collection_inactive() -> None:
-    factory = await _session_factory()
-    async with factory() as session:
-        repo = SqlAlchemyCollectionRepository(session)
-        await UpdateCollection(repo, _FakeClock()).execute(
-            UpdateCollectionInput(caller=_ADMIN, collection_id=_ZOOLOGY, active=False)
-        )
-        assignment = await AssignCollectionCurator(repo, _FakeClock()).execute(
+        await AssignCollectionCurator(repo, _FakeClock()).execute(
             _ADMIN, _ZOOLOGY, _CURATOR.id
         )
         await session.commit()
-    assert assignment.collection_id == _ZOOLOGY
+
+    async with factory() as session:
+        file_references = await RemoveCollection(
+            SqlAlchemyCollectionRepository(session),
+            SqlAlchemySourceDocumentRepository(session),
+            SqlAlchemyCollectionObjectIndex(session),
+        ).execute(_ADMIN, _ZOOLOGY)
+        await session.commit()
+
+    assert file_references == [uploaded.document.file_reference]
+
+    async with factory() as session:
+        repo = SqlAlchemyCollectionRepository(session)
+        # The collection itself is gone.
+        assert await repo.get_by_id(_ZOOLOGY) is None
+        # Botany, untouched, is still there.
+        assert (await repo.get_by_id(_BOTANY)) is not None
+        # Its curator assignment is gone.
+        assert await repo.list_curated_collection_ids(_CURATOR.id) == set()
+        # Its source document row (live or not) is gone.
+        documents = SqlAlchemySourceDocumentRepository(session)
+        assert await documents.list_all_by_collection(_ZOOLOGY) == []
+        # Its indexed rows are gone.
+        assert await _object_rows(session) == []
+
+
+async def test_remove_collection_deletes_already_soft_deleted_documents_too() -> None:
+    """A document soft-deleted before the collection is removed (its file
+    already reclaimed) must still be purged from the database."""
+    factory = await _session_factory()
+    storage = _FakeStorage()
+    uploaded = await _upload(factory, storage)
+    async with factory() as session:
+        await DeleteSourceDocument(
+            SqlAlchemyCollectionRepository(session),
+            SqlAlchemySourceDocumentRepository(session),
+            SqlAlchemyCollectionObjectIndex(session),
+            _FakeClock(),
+        ).execute(_ADMIN, uploaded.document.id)
+        await session.commit()
+
+    async with factory() as session:
+        await RemoveCollection(
+            SqlAlchemyCollectionRepository(session),
+            SqlAlchemySourceDocumentRepository(session),
+            SqlAlchemyCollectionObjectIndex(session),
+        ).execute(_ADMIN, _ZOOLOGY)
+        await session.commit()
+
+    async with factory() as session:
+        documents = SqlAlchemySourceDocumentRepository(session)
+        assert await documents.list_all_by_collection(_ZOOLOGY) == []
+
+
+async def test_remove_collection_raises_not_found_for_unknown_id() -> None:
+    factory = await _session_factory()
+    async with factory() as session:
+        with pytest.raises(CollectionNotFound):
+            await RemoveCollection(
+                SqlAlchemyCollectionRepository(session),
+                SqlAlchemySourceDocumentRepository(session),
+                SqlAlchemyCollectionObjectIndex(session),
+            ).execute(_ADMIN, CollectionId("nope"))
+
+
+@pytest.mark.parametrize("caller", [_MANAGER, _CURATOR])
+async def test_remove_collection_blocked_for_non_sys_admin(caller: Actor) -> None:
+    factory = await _session_factory()
+    async with factory() as session:
+        with pytest.raises(InsufficientGroup):
+            await RemoveCollection(
+                SqlAlchemyCollectionRepository(session),
+                SqlAlchemySourceDocumentRepository(session),
+                SqlAlchemyCollectionObjectIndex(session),
+            ).execute(caller, _ZOOLOGY)
+
+
+async def test_list_searchable_collections_returns_full_catalogue() -> None:
+    factory = await _session_factory()
+    async with factory() as session:
+        repo = SqlAlchemyCollectionRepository(session)
+        names = {c.name for c in await ListSearchableCollections(repo).execute(_ADMIN)}
+    assert names == {"Zoology", "Botany"}
 
 
 @pytest.mark.parametrize("caller", [_MANAGER, _CURATOR])

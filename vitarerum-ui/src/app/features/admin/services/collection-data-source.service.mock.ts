@@ -58,7 +58,6 @@ export class CollectionDataSourceServiceMock implements CollectionDataSourceApi 
   private collections: CollectionDataSource[] = COLLECTION_NAMES.map((name, i) => ({
     id: `col-${i}`,
     name,
-    active: true,
     curators:
       `col-${i}` === 'col-13'
         ? [
@@ -82,7 +81,6 @@ export class CollectionDataSourceServiceMock implements CollectionDataSourceApi 
     const collection: CollectionDataSource = {
       id: `col-new-${++_seq}`,
       name,
-      active: true,
       curators: [],
       documentCount: 0,
       manageable: true,
@@ -99,17 +97,15 @@ export class CollectionDataSourceServiceMock implements CollectionDataSourceApi 
     if (index === -1) {
       return throwError(() => ({ status: 404, error: { message: 'Not found' } }));
     }
-    const updated: CollectionDataSource = {
-      ...this.collections[index],
-      ...(changes.name !== undefined ? { name: changes.name } : {}),
-      ...(changes.active !== undefined ? { active: changes.active } : {}),
-    };
+    const updated: CollectionDataSource = { ...this.collections[index], name: changes.name };
     this.collections = this.collections.map((c, i) => (i === index ? updated : c));
     return of(updated).pipe(delay(200));
   }
 
-  deactivateCollection(collectionId: string): Observable<CollectionDataSource> {
-    return this.updateCollection(collectionId, { active: false });
+  removeCollection(collectionId: string): Observable<void> {
+    this.collections = this.collections.filter((c) => c.id !== collectionId);
+    this.documents.delete(collectionId);
+    return of(undefined).pipe(delay(300));
   }
 
   listDocuments(collectionId: string): Observable<SourceDocument[]> {

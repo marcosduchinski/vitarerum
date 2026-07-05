@@ -2,7 +2,7 @@
 
 Two rules (see docs/plans/plano-collection-data-sources-admin.md §6):
 - SYS_ADMIN alone administers the collection catalog itself — create, rename,
-  activate/deactivate a collection, and assign/remove its curators.
+  remove a collection (permanent), and assign/remove its curators.
 - SYS_ADMIN and COLLECTIONS_MANAGEMENT manage any collection's source
   documents; CURATORIAL manages only collections assigned to them.
 """
@@ -23,7 +23,7 @@ def can_manage_all_collections(caller: Actor) -> bool:
 
 def require_catalog_admin(caller: Actor) -> None:
     """Guard for administering the collection catalog itself: create/rename/
-    activate/deactivate a collection, and assign/remove its curators."""
+    remove a collection (permanent), and assign/remove its curators."""
     if caller.group is not None and caller.group in CATALOG_ADMIN_GROUPS:
         return
     raise InsufficientGroup("Only SYS_ADMIN members can manage the collection catalog")

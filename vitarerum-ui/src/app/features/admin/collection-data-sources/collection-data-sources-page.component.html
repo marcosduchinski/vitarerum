@@ -76,9 +76,6 @@
                     {{ collection.documentCount }}
                     {{ collection.documentCount === 1 ? 'file' : 'files' }}
                   </span>
-                  @if (!collection.active) {
-                    <span class="badge badge--muted">Inactive</span>
-                  }
                   @if (!collection.manageable) {
                     <span class="badge badge--muted">Read only</span>
                   }
@@ -97,21 +94,50 @@
                   </button>
                   <button
                     type="button"
-                    class="admin-btn"
-                    [class.admin-btn--danger]="collection.active"
+                    class="admin-btn admin-btn--danger"
                     [disabled]="busy()"
-                    (click)="toggleActive(collection)"
+                    (click)="startRemove(collection)"
                   >
-                    {{ collection.active ? 'Deactivate' : 'Reactivate' }}
+                    Remove
                   </button>
                 </div>
               }
             }
           </div>
 
+          @if (removingId() === collection.id) {
+            <div class="remove-confirm">
+              <p class="remove-confirm__warning">
+                <strong>This cannot be undone.</strong> Removing "{{ collection.name }}" permanently
+                deletes its curators, source documents, indexed rows, and their files.
+              </p>
+              <div class="remove-confirm__row">
+                <input
+                  type="text"
+                  class="remove-confirm__input"
+                  placeholder="Type the collection name to confirm"
+                  [value]="removeConfirmText()"
+                  (input)="removeConfirmText.set($any($event.target).value)"
+                  [disabled]="busy()"
+                />
+                <button
+                  type="button"
+                  class="admin-btn admin-btn--danger"
+                  [disabled]="busy() || !removeConfirmMatches(collection)"
+                  (click)="confirmRemove(collection)"
+                >
+                  Remove permanently
+                </button>
+                <button type="button" class="admin-btn" [disabled]="busy()" (click)="cancelRemove()">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          }
+
           @if (selectedId() === collection.id) {
             <div class="collection__body">
-              @if (collection.manageable && collection.active) {
+              @if (collection.manageable) {
                 <label class="upload">
                   <input
                     type="file"
@@ -167,16 +193,14 @@
                         <td>{{ formatDate(doc.indexedAt) }}</td>
                         @if (collection.manageable) {
                           <td class="documents__actions">
-                            @if (collection.active) {
-                              <button
-                                type="button"
-                                class="doc-btn"
-                                [disabled]="busy()"
-                                (click)="reindex(doc)"
-                              >
-                                Reindex
-                              </button>
-                            }
+                            <button
+                              type="button"
+                              class="doc-btn"
+                              [disabled]="busy()"
+                              (click)="reindex(doc)"
+                            >
+                              Reindex
+                            </button>
                             <button
                               type="button"
                               class="doc-btn doc-btn--danger"

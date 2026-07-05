@@ -92,14 +92,12 @@ async def _client(
                 CollectionRecord(
                     id=_ZOOLOGY_ID,
                     name="Zoology",
-                    active=True,
                     created_at=_NOW,
                     updated_at=_NOW,
                 ),
                 CollectionRecord(
                     id=_BOTANY_ID,
                     name="Botany",
-                    active=True,
                     created_at=_NOW,
                     updated_at=_NOW,
                 ),
@@ -231,7 +229,6 @@ async def test_assign_curator_rejects_non_curatorial_permission() -> None:
             CollectionRecord(
                 id=_ZOOLOGY_ID,
                 name="Zoology",
-                active=True,
                 created_at=_NOW,
                 updated_at=_NOW,
             )
@@ -316,14 +313,13 @@ async def test_reindex_returns_updated_document() -> None:
 # ── Collection catalog admin (SYS_ADMIN only) ───────────────────────────────
 
 
-async def test_create_get_update_and_deactivate_collection() -> None:
+async def test_create_get_and_update_collection() -> None:
     async with _client(_ADMIN) as (client, _):
         created = await client.post(
             "/admin/collection-data-sources/collections", json={"name": "Mineralogy"}
         )
         assert created.status_code == 201, created.text
         collection_id = created.json()["id"]
-        assert created.json()["active"] is True
 
         fetched = await client.get(
             f"/admin/collection-data-sources/collections/{collection_id}"
@@ -337,19 +333,6 @@ async def test_create_get_update_and_deactivate_collection() -> None:
         )
         assert renamed.status_code == 200
         assert renamed.json()["name"] == "Mineralogy & Petrology"
-
-        deactivated = await client.delete(
-            f"/admin/collection-data-sources/collections/{collection_id}"
-        )
-        assert deactivated.status_code == 200
-        assert deactivated.json()["active"] is False
-
-        reactivated = await client.patch(
-            f"/admin/collection-data-sources/collections/{collection_id}",
-            json={"active": True},
-        )
-        assert reactivated.status_code == 200
-        assert reactivated.json()["active"] is True
 
 
 async def test_create_collection_duplicate_name_is_409() -> None:
@@ -388,31 +371,48 @@ async def test_get_unknown_collection_is_404() -> None:
     assert response.json()["error"] == "COLLECTION_NOT_FOUND"
 
 
-async def test_upload_and_reindex_blocked_for_inactive_collection() -> None:
-    async with _client(_ADMIN) as (client, _):
+async def test_remove_collection_deletes_everything_and_reclaims_files() -> None:
+    async with _client(_ADMIN) as (client, storage):
         uploaded = await client.post(
             f"/admin/collection-data-sources/collections/{_ZOOLOGY_ID}/documents",
             files=_upload_files(),
         )
-        document_id = uploaded.json()["id"]
+        assert uploaded.status_code == 201, uploaded.text
+        assert len(storage.saved) == 1
 
-        deactivated = await client.delete(
+        removed = await client.delete(
             f"/admin/collection-data-sources/collections/{_ZOOLOGY_ID}"
         )
-        assert deactivated.status_code == 200
+        assert removed.status_code == 204
+        assert removed.content == b""
+        assert storage.saved == {}  # the document's file was reclaimed too
 
-        blocked_upload = await client.post(
-            f"/admin/collection-data-sources/collections/{_ZOOLOGY_ID}/documents",
-            files=_upload_files(rows=[["ZOO-2", "Onça"]]),
+        missing = await client.get(
+            f"/admin/collection-data-sources/collections/{_ZOOLOGY_ID}"
         )
-        assert blocked_upload.status_code == 422
-        assert blocked_upload.json()["error"] == "COLLECTION_INACTIVE"
+        assert missing.status_code == 404
+        assert missing.json()["error"] == "COLLECTION_NOT_FOUND"
 
-        blocked_reindex = await client.post(
-            f"/admin/collection-data-sources/documents/{document_id}/reindex"
+        listing = await client.get("/admin/collection-data-sources/collections")
+        assert "Zoology" not in {c["name"] for c in listing.json()}
+
+
+async def test_remove_unknown_collection_is_404() -> None:
+    async with _client(_ADMIN) as (client, _):
+        response = await client.delete(
+            "/admin/collection-data-sources/collections/nope"
         )
-        assert blocked_reindex.status_code == 422
-        assert blocked_reindex.json()["error"] == "COLLECTION_INACTIVE"
+    assert response.status_code == 404
+    assert response.json()["error"] == "COLLECTION_NOT_FOUND"
+
+
+async def test_remove_collection_blocked_for_curator() -> None:
+    async with _client(_CURATOR) as (client, _):
+        response = await client.delete(
+            f"/admin/collection-data-sources/collections/{_ZOOLOGY_ID}"
+        )
+    assert response.status_code == 403
+    assert response.json()["error"] == "INSUFFICIENT_GROUP"
 
 
 async def test_curator_candidates_blocked_for_non_sys_admin() -> None:

@@ -69,6 +69,11 @@ class CollectionRepository(Protocol):
 
     async def save(self, collection: Collection) -> None: ...
 
+    async def delete(self, collection_id: CollectionId) -> None:
+        """Hard-delete the collection row. Caller must have already removed
+        its curators, source documents and indexed rows."""
+        ...
+
     async def list_all(self) -> list[Collection]: ...
 
     async def get_by_id(self, collection_id: CollectionId) -> Collection | None: ...
@@ -87,6 +92,8 @@ class CollectionRepository(Protocol):
         self, collection_id: CollectionId, permission_id: PermissionId
     ) -> None: ...
 
+    async def remove_all_curators(self, collection_id: CollectionId) -> None: ...
+
     async def count_live_documents(self) -> dict[CollectionId, int]: ...
 
 
@@ -101,6 +108,13 @@ class SourceDocumentRepository(Protocol):
         self, collection_id: CollectionId
     ) -> list[SourceDocument]: ...
 
+    async def list_all_by_collection(
+        self, collection_id: CollectionId
+    ) -> list[SourceDocument]:
+        """Every document of the collection, live or already soft-deleted —
+        used to reclaim files when the collection itself is removed."""
+        ...
+
     async def find_live_by_hash(
         self, collection_id: CollectionId, content_hash: str
     ) -> SourceDocument | None: ...
@@ -110,6 +124,8 @@ class SourceDocumentRepository(Protocol):
     ) -> SourceDocument | None: ...
 
     async def save(self, document: SourceDocument) -> None: ...
+
+    async def delete_all_by_collection(self, collection_id: CollectionId) -> None: ...
 
 
 class CollectionObjectIndexPort(Protocol):
@@ -127,6 +143,11 @@ class CollectionObjectIndexPort(Protocol):
         ...
 
     async def remove_document(self, source_document_id: SourceDocumentId) -> None: ...
+
+    async def remove_collection(self, collection_id: CollectionId) -> None:
+        """Bulk-remove every indexed row of the collection (its source
+        documents are being removed too)."""
+        ...
 
     async def search(
         self, query: CollectionObjectSearchQuery

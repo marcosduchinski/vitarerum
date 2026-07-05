@@ -30,23 +30,15 @@ class SourceDocumentNotFound(Exception):
     """Raised when a source document id does not resolve (or is deleted)."""
 
 
-class CollectionInactive(ValueError):
-    """Raised when an operation requires an active collection (e.g. uploading
-    or reindexing a source document)."""
-
-    def __init__(self, collection_id: CollectionId) -> None:
-        super().__init__(f"Collection {collection_id} is inactive.")
-        self.collection_id = collection_id
-
-
 @dataclass(slots=True)
 class Collection:
     """A curated scientific collection. Administered by SYS_ADMIN (create,
-    rename, activate/deactivate); seeded with a starting catalogue of 14."""
+    rename, remove); seeded with a starting catalogue of 14. There is no
+    "inactive" state — removal is permanent and takes everything under the
+    collection (curators, source documents, indexed rows, files) with it."""
 
     id: CollectionId
     name: str
-    active: bool
     created_at: datetime
     updated_at: datetime
 
@@ -61,14 +53,6 @@ class Collection:
         if not name:
             raise ValueError("Collection name is required.")
         self.name = name
-        self.updated_at = updated_at
-
-    def activate(self, *, updated_at: datetime) -> None:
-        self.active = True
-        self.updated_at = updated_at
-
-    def deactivate(self, *, updated_at: datetime) -> None:
-        self.active = False
         self.updated_at = updated_at
 
 

@@ -2,13 +2,15 @@
 
 Staff-only, with two scopes (enforced by the use cases — the frontend menu is
 not a security boundary): SYS_ADMIN alone administers the collection catalog
-(create/rename/activate/deactivate a collection, assign/remove curators);
-SYS_ADMIN and COLLECTIONS_MANAGEMENT manage any collection's source documents,
-CURATORIAL manages only assigned collections.
+(create/rename/remove a collection, assign/remove curators) — removal is
+permanent, taking curators/documents/index/files with it; SYS_ADMIN and
+COLLECTIONS_MANAGEMENT manage any collection's source documents, CURATORIAL
+manages only assigned collections.
 """
 
 from __future__ import annotations
 
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, File, HTTPException, Query, Response, UploadFile, status
@@ -30,6 +32,7 @@ from app.collection_object_index.application.use_cases import (
     ListManageableCollections,
     ListSearchableCollections,
     ReindexSourceDocument,
+    RemoveCollection,
     RemoveCollectionCurator,
     SearchCollectionObjects,
     UpdateCollection,
@@ -39,7 +42,6 @@ from app.collection_object_index.application.use_cases import (
 )
 from app.collection_object_index.domain.models import (
     CollectionId,
-    CollectionInactive,
     CollectionNotFound,
     SourceDocument,
     SourceDocumentId,
@@ -72,6 +74,8 @@ from app.shared.authorization import require_staff
 from app.shared.dependencies import CallerPermission
 from app.shared.kernel import PermissionId
 from app.shared.uploads import ensure_xlsx, read_upload_capped, safe_basename
+
+logger = logging.getLogger(__name__)
 
 collection_data_sources_router = APIRouter(
     prefix="/admin/collection-data-sources", tags=["collection-data-sources"]
@@ -107,13 +111,6 @@ def _invalid_collection_name(exc: ValueError) -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         detail={"error": "INVALID_COLLECTION_NAME", "message": str(exc)},
-    )
-
-
-def _collection_inactive(exc: CollectionInactive) -> HTTPException:
-    return HTTPException(
-        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-        detail={"error": "COLLECTION_INACTIVE", "message": str(exc)},
     )
 
 
@@ -162,7 +159,6 @@ async def _collection_response(
     return CollectionResponse(
         id=view.collection.id,
         name=view.collection.name,
-        active=view.collection.active,
         curators=curators,
         documentCount=view.document_count,
         manageable=view.manageable,
@@ -244,7 +240,6 @@ async def update_collection(
                 caller=caller,
                 collection_id=CollectionId(collection_id),
                 name=body.name,
-                active=body.active,
             )
         )
     except CollectionNotFound as exc:
@@ -260,29 +255,42 @@ async def update_collection(
 
 
 @collection_data_sources_router.delete(
-    "/collections/{collection_id}", response_model=CollectionResponse
+    "/collections/{collection_id}", status_code=status.HTTP_204_NO_CONTENT
 )
-async def deactivate_collection(
+async def remove_collection(
     collection_id: str,
     caller: CallerPermission,
     collections: CollectionRepo,
-    clock: IndexClock,
+    documents: SourceDocumentRepo,
+    index: ObjectIndex,
+    storage: SourceFileStorage,
     session: DBSession,
-) -> CollectionResponse:
-    """Soft-delete: sets ``active=false``. Collections are never hard deleted
-    — their documents/index/history stay intact and reactivation is a PATCH
-    with ``{"active": true}``."""
+) -> Response:
+    """Permanently removes the collection and everything under it — curator
+    assignments, source documents, indexed rows, and their files. This cannot
+    be undone."""
     try:
-        await UpdateCollection(collections, clock).execute(
-            UpdateCollectionInput(
-                caller=caller, collection_id=CollectionId(collection_id), active=False
-            )
+        file_references = await RemoveCollection(collections, documents, index).execute(
+            caller, CollectionId(collection_id)
         )
     except CollectionNotFound as exc:
         raise _not_found("collection", "COLLECTION_NOT_FOUND", collection_id) from exc
     await session.commit()
-    view = await GetCollection(collections).execute(caller, CollectionId(collection_id))
-    return await _collection_response(view, session)
+    # Best-effort file cleanup after the durable delete: storage.delete() is
+    # idempotent, so attempting every reference (live or already
+    # soft-deleted) is safe; a failure here is logged, not raised — the
+    # collection is already gone from the database either way.
+    for file_reference in file_references:
+        try:
+            await storage.delete(file_reference)
+        except Exception:
+            logger.warning(
+                "Failed to delete file %r after removing collection %s",
+                file_reference,
+                collection_id,
+                exc_info=True,
+            )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @collection_data_sources_router.get(
@@ -355,8 +363,6 @@ async def upload_collection_document(
         )
     except CollectionNotFound as exc:
         raise _not_found("collection", "COLLECTION_NOT_FOUND", collection_id) from exc
-    except CollectionInactive as exc:
-        raise _collection_inactive(exc) from exc
     try:
         await session.commit()
     except Exception:
@@ -424,8 +430,6 @@ async def reindex_collection_document(
         raise _not_found(
             "source document file", "SOURCE_DOCUMENT_NOT_FOUND", document_id
         ) from exc
-    except CollectionInactive as exc:
-        raise _collection_inactive(exc) from exc
     await session.commit()
     return _document_response(document)
 
