@@ -1,8 +1,10 @@
 """Management-scope policy for collection data sources.
 
-Single rule (see docs/plans/plano-collection-data-sources-admin.md §6):
-SYS_ADMIN and COLLECTIONS_MANAGEMENT manage any collection and assign curators;
-CURATORIAL manages only collections assigned to them and cannot assign.
+Two rules (see docs/plans/plano-collection-data-sources-admin.md §6):
+- SYS_ADMIN alone administers the collection catalog itself — create, rename,
+  activate/deactivate a collection, and assign/remove its curators.
+- SYS_ADMIN and COLLECTIONS_MANAGEMENT manage any collection's source
+  documents; CURATORIAL manages only collections assigned to them.
 """
 
 from __future__ import annotations
@@ -12,19 +14,19 @@ from app.identity.public import Actor, GroupName
 from app.shared.exceptions import AccessDenied, InsufficientGroup
 
 MANAGE_ALL_GROUPS = frozenset({GroupName.SYS_ADMIN, GroupName.COLLECTIONS_MANAGEMENT})
+CATALOG_ADMIN_GROUPS = frozenset({GroupName.SYS_ADMIN})
 
 
 def can_manage_all_collections(caller: Actor) -> bool:
     return caller.group is not None and caller.group in MANAGE_ALL_GROUPS
 
 
-def require_curator_admin(caller: Actor) -> None:
-    """Guard for assigning/removing curators: never the curator themselves."""
-    if can_manage_all_collections(caller):
+def require_catalog_admin(caller: Actor) -> None:
+    """Guard for administering the collection catalog itself: create/rename/
+    activate/deactivate a collection, and assign/remove its curators."""
+    if caller.group is not None and caller.group in CATALOG_ADMIN_GROUPS:
         return
-    raise InsufficientGroup(
-        "Only SYS_ADMIN or COLLECTIONS_MANAGEMENT members can manage curators"
-    )
+    raise InsufficientGroup("Only SYS_ADMIN members can manage the collection catalog")
 
 
 def require_collection_scope(

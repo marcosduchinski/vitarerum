@@ -32,3 +32,16 @@ export interface SourceDocument {
   readonly uploadedAt: string;
   readonly indexedAt: string | null;
 }
+
+/** Partial update: only the fields provided are changed. */
+export interface UpdateCollectionRequest {
+  readonly name?: string;
+  readonly active?: boolean;
+}
+
+/** A permission in the CURATORIAL group, eligible to be assigned as a curator. */
+export interface CuratorCandidate {
+  readonly permissionId: string;
+  readonly name: string;
+  readonly email: string;
+}

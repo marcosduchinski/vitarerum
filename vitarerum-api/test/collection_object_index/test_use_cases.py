@@ -16,16 +16,27 @@ from sqlalchemy.pool import StaticPool
 
 from app.collection_object_index.application.use_cases import (
     AssignCollectionCurator,
+    CreateCollection,
+    CreateCollectionInput,
     DeleteSourceDocument,
+    GetCollection,
     ListCollectionSourceDocuments,
+    ListCuratorCandidates,
     ListManageableCollections,
+    ListSearchableCollections,
     ReindexSourceDocument,
     RemoveCollectionCurator,
+    UpdateCollection,
+    UpdateCollectionInput,
     UploadSourceDocument,
     UploadSourceDocumentInput,
 )
 from app.collection_object_index.domain.enums import SourceDocumentStatus
-from app.collection_object_index.domain.models import CollectionId
+from app.collection_object_index.domain.models import (
+    CollectionId,
+    CollectionInactive,
+    CollectionNotFound,
+)
 from app.collection_object_index.infrastructure.models import (
     CollectionObjectRecord,
     CollectionRecord,
@@ -39,6 +50,7 @@ from app.collection_object_index.infrastructure.repositories import (
     SqlAlchemySourceDocumentRepository,
 )
 from app.database import Base
+from app.identity.application.read_models import PermissionView, UserView
 from app.identity.public import Actor, GroupName, PermissionId
 from app.shared.exceptions import AccessDenied, InsufficientGroup
 
@@ -311,10 +323,10 @@ async def test_assign_records_assigned_by_and_remove_revokes() -> None:
     async with factory() as session:
         repo = SqlAlchemyCollectionRepository(session)
         assignment = await AssignCollectionCurator(repo, _FakeClock()).execute(
-            _MANAGER, _ZOOLOGY, _CURATOR.id
+            _ADMIN, _ZOOLOGY, _CURATOR.id
         )
         await session.commit()
-    assert assignment.assigned_by == _MANAGER.id
+    assert assignment.assigned_by == _ADMIN.id
 
     async with factory() as session:
         repo = SqlAlchemyCollectionRepository(session)
@@ -322,7 +334,7 @@ async def test_assign_records_assigned_by_and_remove_revokes() -> None:
         again = await AssignCollectionCurator(repo, _FakeClock()).execute(
             _ADMIN, _ZOOLOGY, _CURATOR.id
         )
-        assert again.assigned_by == _MANAGER.id
+        assert again.assigned_by == _ADMIN.id
         await RemoveCollectionCurator(repo).execute(_ADMIN, _ZOOLOGY, _CURATOR.id)
         await session.commit()
 
@@ -377,3 +389,266 @@ async def test_error_status_when_stored_file_is_not_a_spreadsheet() -> None:
     async with factory() as session:
         count = await session.scalar(select(func.count(CollectionObjectRecord.id)))
     assert count == 0
+
+
+# ── Collection catalog admin (SYS_ADMIN only) ───────────────────────────────
+
+
+async def test_create_collection_as_sys_admin() -> None:
+    factory = await _session_factory()
+    async with factory() as session:
+        repo = SqlAlchemyCollectionRepository(session)
+        collection = await CreateCollection(repo, _FakeClock()).execute(
+            CreateCollectionInput(caller=_ADMIN, name="Mineralogy")
+        )
+        await session.commit()
+    assert collection.active is True
+    assert collection.created_at == _NOW
+
+    async with factory() as session:
+        repo = SqlAlchemyCollectionRepository(session)
+        names = {c.name for c in await repo.list_all()}
+    assert "Mineralogy" in names
+
+
+async def test_create_collection_trims_whitespace_from_name() -> None:
+    factory = await _session_factory()
+    async with factory() as session:
+        repo = SqlAlchemyCollectionRepository(session)
+        collection = await CreateCollection(repo, _FakeClock()).execute(
+            CreateCollectionInput(caller=_ADMIN, name="  Mineralogy  ")
+        )
+        await session.commit()
+    assert collection.name == "Mineralogy"
+
+    async with factory() as session:
+        repo = SqlAlchemyCollectionRepository(session)
+        stored = await repo.get_by_id(collection.id)
+    assert stored is not None
+    assert stored.name == "Mineralogy"
+
+
+async def test_get_collection_returns_enriched_view() -> None:
+    factory = await _session_factory()
+    storage = _FakeStorage()
+    await _upload(factory, storage)
+    async with factory() as session:
+        repo = SqlAlchemyCollectionRepository(session)
+        await AssignCollectionCurator(repo, _FakeClock()).execute(
+            _ADMIN, _ZOOLOGY, _CURATOR.id
+        )
+        await session.commit()
+
+    async with factory() as session:
+        repo = SqlAlchemyCollectionRepository(session)
+        view = await GetCollection(repo).execute(_ADMIN, _ZOOLOGY)
+    assert view.collection.name == "Zoology"
+    assert view.document_count == 1
+    assert [c.permission_id for c in view.curators] == [str(_CURATOR.id)]
+    assert view.manageable is True
+
+
+async def test_get_collection_raises_not_found_for_unknown_id() -> None:
+    factory = await _session_factory()
+    async with factory() as session:
+        repo = SqlAlchemyCollectionRepository(session)
+        with pytest.raises(CollectionNotFound):
+            await GetCollection(repo).execute(_ADMIN, CollectionId("nope"))
+
+
+@pytest.mark.parametrize("caller", [_MANAGER, _CURATOR])
+async def test_create_collection_blocked_for_non_sys_admin(caller: Actor) -> None:
+    factory = await _session_factory()
+    async with factory() as session:
+        repo = SqlAlchemyCollectionRepository(session)
+        with pytest.raises(InsufficientGroup):
+            await CreateCollection(repo, _FakeClock()).execute(
+                CreateCollectionInput(caller=caller, name="Mineralogy")
+            )
+
+
+async def test_update_collection_renames_and_toggles_active() -> None:
+    factory = await _session_factory()
+    async with factory() as session:
+        repo = SqlAlchemyCollectionRepository(session)
+        await UpdateCollection(repo, _FakeClock()).execute(
+            UpdateCollectionInput(
+                caller=_ADMIN, collection_id=_ZOOLOGY, name="Zoology Renamed"
+            )
+        )
+        await UpdateCollection(repo, _FakeClock()).execute(
+            UpdateCollectionInput(caller=_ADMIN, collection_id=_ZOOLOGY, active=False)
+        )
+        await session.commit()
+
+    async with factory() as session:
+        repo = SqlAlchemyCollectionRepository(session)
+        collection = await repo.get_by_id(_ZOOLOGY)
+    assert collection is not None
+    assert collection.name == "Zoology Renamed"
+    assert collection.active is False
+
+    async with factory() as session:
+        repo = SqlAlchemyCollectionRepository(session)
+        await UpdateCollection(repo, _FakeClock()).execute(
+            UpdateCollectionInput(caller=_ADMIN, collection_id=_ZOOLOGY, active=True)
+        )
+        await session.commit()
+    async with factory() as session:
+        collection = await SqlAlchemyCollectionRepository(session).get_by_id(_ZOOLOGY)
+    assert collection is not None and collection.active is True
+
+
+@pytest.mark.parametrize("caller", [_MANAGER, _CURATOR])
+async def test_update_collection_blocked_for_non_sys_admin(caller: Actor) -> None:
+    factory = await _session_factory()
+    async with factory() as session:
+        repo = SqlAlchemyCollectionRepository(session)
+        with pytest.raises(InsufficientGroup):
+            await UpdateCollection(repo, _FakeClock()).execute(
+                UpdateCollectionInput(
+                    caller=caller, collection_id=_ZOOLOGY, active=False
+                )
+            )
+
+
+async def test_deactivating_collection_preserves_documents() -> None:
+    factory = await _session_factory()
+    storage = _FakeStorage()
+    uploaded = await _upload(factory, storage)
+
+    async with factory() as session:
+        repo = SqlAlchemyCollectionRepository(session)
+        await UpdateCollection(repo, _FakeClock()).execute(
+            UpdateCollectionInput(caller=_ADMIN, collection_id=_ZOOLOGY, active=False)
+        )
+        await session.commit()
+
+    async with factory() as session:
+        documents = await SqlAlchemySourceDocumentRepository(
+            session
+        ).list_live_by_collection(_ZOOLOGY)
+    assert [d.id for d in documents] == [uploaded.document.id]
+    async with factory() as session:
+        assert len(await _object_rows(session)) == 1
+
+
+async def test_deactivated_collection_excluded_from_searchable_facet() -> None:
+    factory = await _session_factory()
+    async with factory() as session:
+        repo = SqlAlchemyCollectionRepository(session)
+        await UpdateCollection(repo, _FakeClock()).execute(
+            UpdateCollectionInput(caller=_ADMIN, collection_id=_ZOOLOGY, active=False)
+        )
+        await session.commit()
+
+    async with factory() as session:
+        repo = SqlAlchemyCollectionRepository(session)
+        names = {c.name for c in await ListSearchableCollections(repo).execute(_ADMIN)}
+    assert names == {"Botany"}
+
+
+async def test_upload_blocked_when_collection_inactive() -> None:
+    factory = await _session_factory()
+    storage = _FakeStorage()
+    async with factory() as session:
+        repo = SqlAlchemyCollectionRepository(session)
+        await UpdateCollection(repo, _FakeClock()).execute(
+            UpdateCollectionInput(caller=_ADMIN, collection_id=_ZOOLOGY, active=False)
+        )
+        await session.commit()
+
+    with pytest.raises(CollectionInactive):
+        await _upload(factory, storage)
+    assert storage.saved == {}
+
+
+async def test_reindex_blocked_when_collection_inactive() -> None:
+    factory = await _session_factory()
+    storage = _FakeStorage()
+    uploaded = await _upload(factory, storage)
+
+    async with factory() as session:
+        repo = SqlAlchemyCollectionRepository(session)
+        await UpdateCollection(repo, _FakeClock()).execute(
+            UpdateCollectionInput(caller=_ADMIN, collection_id=_ZOOLOGY, active=False)
+        )
+        await session.commit()
+
+    async with factory() as session:
+        with pytest.raises(CollectionInactive):
+            await ReindexSourceDocument(
+                SqlAlchemyCollectionRepository(session),
+                SqlAlchemySourceDocumentRepository(session),
+                storage,
+                OpenpyxlCollectionObjectParser(),
+                SqlAlchemyCollectionObjectIndex(session),
+                _FakeClock(),
+            ).execute(_ADMIN, uploaded.document.id)
+
+
+async def test_assign_curator_allowed_even_when_collection_inactive() -> None:
+    factory = await _session_factory()
+    async with factory() as session:
+        repo = SqlAlchemyCollectionRepository(session)
+        await UpdateCollection(repo, _FakeClock()).execute(
+            UpdateCollectionInput(caller=_ADMIN, collection_id=_ZOOLOGY, active=False)
+        )
+        assignment = await AssignCollectionCurator(repo, _FakeClock()).execute(
+            _ADMIN, _ZOOLOGY, _CURATOR.id
+        )
+        await session.commit()
+    assert assignment.collection_id == _ZOOLOGY
+
+
+@pytest.mark.parametrize("caller", [_MANAGER, _CURATOR])
+async def test_collections_management_and_curator_cannot_assign_or_remove(
+    caller: Actor,
+) -> None:
+    """Narrowed rule: only SYS_ADMIN administers curators now, not
+    COLLECTIONS_MANAGEMENT (previously allowed)."""
+    factory = await _session_factory()
+    async with factory() as session:
+        repo = SqlAlchemyCollectionRepository(session)
+        with pytest.raises(InsufficientGroup):
+            await AssignCollectionCurator(repo, _FakeClock()).execute(
+                caller, _ZOOLOGY, _CURATOR.id
+            )
+        with pytest.raises(InsufficientGroup):
+            await RemoveCollectionCurator(repo).execute(caller, _ZOOLOGY, _CURATOR.id)
+
+
+class _FakePermissionReader:
+    def __init__(self, views: list[PermissionView]) -> None:
+        self._views = views
+
+    async def get_detail(self, permission_id: object) -> PermissionView | None:
+        raise NotImplementedError
+
+    async def list_by_group(self, group: GroupName) -> list[PermissionView]:
+        return [v for v in self._views if v.group == group]
+
+
+_CURATORIAL_CANDIDATE = PermissionView(
+    permission_id=str(_CURATOR.id),
+    user=UserView(id="u-cur", name="Carla Curadora", email="carla@museum.pt"),
+    group=GroupName.CURATORIAL,
+)
+_MANAGER_VIEW = PermissionView(
+    permission_id=str(_MANAGER.id),
+    user=UserView(id="u-mgr", name="Marco Gestor", email="marco@museum.pt"),
+    group=GroupName.COLLECTIONS_MANAGEMENT,
+)
+
+
+async def test_list_curator_candidates_returns_curatorial_group_only() -> None:
+    reader = _FakePermissionReader([_CURATORIAL_CANDIDATE, _MANAGER_VIEW])
+    candidates = await ListCuratorCandidates(reader).execute(_ADMIN)
+    assert [c.permission_id for c in candidates] == [str(_CURATOR.id)]
+
+
+@pytest.mark.parametrize("caller", [_MANAGER, _CURATOR])
+async def test_list_curator_candidates_blocked_for_non_sys_admin(caller: Actor) -> None:
+    reader = _FakePermissionReader([_CURATORIAL_CANDIDATE])
+    with pytest.raises(InsufficientGroup):
+        await ListCuratorCandidates(reader).execute(caller)

@@ -1,8 +1,10 @@
 """Collection Data Sources management endpoints.
 
-Staff-only: SYS_ADMIN / COLLECTIONS_MANAGEMENT manage any collection and its
-curators; CURATORIAL manages only assigned collections (scope enforced by the
-use cases — the frontend menu is not a security boundary).
+Staff-only, with two scopes (enforced by the use cases — the frontend menu is
+not a security boundary): SYS_ADMIN alone administers the collection catalog
+(create/rename/activate/deactivate a collection, assign/remove curators);
+SYS_ADMIN and COLLECTIONS_MANAGEMENT manage any collection's source documents,
+CURATORIAL manages only assigned collections.
 """
 
 from __future__ import annotations
@@ -10,6 +12,7 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, File, HTTPException, Query, Response, UploadFile, status
+from sqlalchemy.exc import IntegrityError
 
 from app.collection_object_index.application.ports import (
     CollectionObjectSearchQuery,
@@ -18,18 +21,25 @@ from app.collection_object_index.application.ports import (
 from app.collection_object_index.application.read_models import CollectionView
 from app.collection_object_index.application.use_cases import (
     AssignCollectionCurator,
+    CreateCollection,
+    CreateCollectionInput,
     DeleteSourceDocument,
+    GetCollection,
     ListCollectionSourceDocuments,
+    ListCuratorCandidates,
     ListManageableCollections,
     ListSearchableCollections,
     ReindexSourceDocument,
     RemoveCollectionCurator,
     SearchCollectionObjects,
+    UpdateCollection,
+    UpdateCollectionInput,
     UploadSourceDocument,
     UploadSourceDocumentInput,
 )
 from app.collection_object_index.domain.models import (
     CollectionId,
+    CollectionInactive,
     CollectionNotFound,
     SourceDocument,
     SourceDocumentId,
@@ -47,14 +57,17 @@ from app.collection_object_index.presentation.dependencies import (
 from app.collection_object_index.presentation.schemas import (
     AssignCuratorRequest,
     CollectionResponse,
+    CreateCollectionRequest,
+    CuratorCandidateResponse,
     CuratorResponse,
     SearchableCollectionResponse,
     SearchHitResponse,
     SearchResultResponse,
     SourceDocumentResponse,
+    UpdateCollectionRequest,
 )
+from app.identity.public import GroupName, get_permission_reader
 from app.identity.public import PermissionId as IdentityPermissionId
-from app.identity.public import get_permission_reader
 from app.shared.authorization import require_staff
 from app.shared.dependencies import CallerPermission
 from app.shared.kernel import PermissionId
@@ -76,6 +89,41 @@ def _not_found(resource: str, code: str, resource_id: str) -> HTTPException:
         detail={
             "error": code,
             "message": f"No {resource} found with id {resource_id}",
+        },
+    )
+
+
+def _collection_name_conflict() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail={
+            "error": "COLLECTION_NAME_ALREADY_EXISTS",
+            "message": "A collection with this name already exists",
+        },
+    )
+
+
+def _invalid_collection_name(exc: ValueError) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        detail={"error": "INVALID_COLLECTION_NAME", "message": str(exc)},
+    )
+
+
+def _collection_inactive(exc: CollectionInactive) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        detail={"error": "COLLECTION_INACTIVE", "message": str(exc)},
+    )
+
+
+def _permission_not_curatorial() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        detail={
+            "error": "PERMISSION_NOT_CURATORIAL",
+            "message": "Only permissions in the CURATORIAL group can be assigned "
+            "as curators",
         },
     )
 
@@ -134,6 +182,126 @@ async def list_collections(
     return [await _collection_response(view, session) for view in views]
 
 
+@collection_data_sources_router.post(
+    "/collections",
+    status_code=status.HTTP_201_CREATED,
+    response_model=CollectionResponse,
+)
+async def create_collection(
+    body: CreateCollectionRequest,
+    caller: CallerPermission,
+    collections: CollectionRepo,
+    clock: IndexClock,
+    session: DBSession,
+) -> CollectionResponse:
+    try:
+        collection = await CreateCollection(collections, clock).execute(
+            CreateCollectionInput(caller=caller, name=body.name)
+        )
+    except ValueError as exc:
+        raise _invalid_collection_name(exc) from exc
+    except IntegrityError as exc:
+        await session.rollback()
+        raise _collection_name_conflict() from exc
+    await session.commit()
+    view = await GetCollection(collections).execute(caller, collection.id)
+    return await _collection_response(view, session)
+
+
+@collection_data_sources_router.get(
+    "/collections/{collection_id}", response_model=CollectionResponse
+)
+async def get_collection(
+    collection_id: str,
+    caller: CallerPermission,
+    collections: CollectionRepo,
+    session: DBSession,
+) -> CollectionResponse:
+    require_staff(caller)
+    try:
+        view = await GetCollection(collections).execute(
+            caller, CollectionId(collection_id)
+        )
+    except CollectionNotFound as exc:
+        raise _not_found("collection", "COLLECTION_NOT_FOUND", collection_id) from exc
+    return await _collection_response(view, session)
+
+
+@collection_data_sources_router.patch(
+    "/collections/{collection_id}", response_model=CollectionResponse
+)
+async def update_collection(
+    collection_id: str,
+    body: UpdateCollectionRequest,
+    caller: CallerPermission,
+    collections: CollectionRepo,
+    clock: IndexClock,
+    session: DBSession,
+) -> CollectionResponse:
+    try:
+        await UpdateCollection(collections, clock).execute(
+            UpdateCollectionInput(
+                caller=caller,
+                collection_id=CollectionId(collection_id),
+                name=body.name,
+                active=body.active,
+            )
+        )
+    except CollectionNotFound as exc:
+        raise _not_found("collection", "COLLECTION_NOT_FOUND", collection_id) from exc
+    except ValueError as exc:
+        raise _invalid_collection_name(exc) from exc
+    except IntegrityError as exc:
+        await session.rollback()
+        raise _collection_name_conflict() from exc
+    await session.commit()
+    view = await GetCollection(collections).execute(caller, CollectionId(collection_id))
+    return await _collection_response(view, session)
+
+
+@collection_data_sources_router.delete(
+    "/collections/{collection_id}", response_model=CollectionResponse
+)
+async def deactivate_collection(
+    collection_id: str,
+    caller: CallerPermission,
+    collections: CollectionRepo,
+    clock: IndexClock,
+    session: DBSession,
+) -> CollectionResponse:
+    """Soft-delete: sets ``active=false``. Collections are never hard deleted
+    — their documents/index/history stay intact and reactivation is a PATCH
+    with ``{"active": true}``."""
+    try:
+        await UpdateCollection(collections, clock).execute(
+            UpdateCollectionInput(
+                caller=caller, collection_id=CollectionId(collection_id), active=False
+            )
+        )
+    except CollectionNotFound as exc:
+        raise _not_found("collection", "COLLECTION_NOT_FOUND", collection_id) from exc
+    await session.commit()
+    view = await GetCollection(collections).execute(caller, CollectionId(collection_id))
+    return await _collection_response(view, session)
+
+
+@collection_data_sources_router.get(
+    "/curator-candidates", response_model=list[CuratorCandidateResponse]
+)
+async def list_curator_candidates(
+    caller: CallerPermission,
+    session: DBSession,
+) -> list[CuratorCandidateResponse]:
+    reader = get_permission_reader(session)
+    candidates = await ListCuratorCandidates(reader).execute(caller)
+    return [
+        CuratorCandidateResponse(
+            permissionId=c.permission_id, name=c.user.name, email=c.user.email
+        )
+        for c in candidates
+    ]
+
+
 @collection_data_sources_router.get(
     "/collections/{collection_id}/documents",
     response_model=list[SourceDocumentResponse],
@@ -187,6 +355,8 @@ async def upload_collection_document(
         )
     except CollectionNotFound as exc:
         raise _not_found("collection", "COLLECTION_NOT_FOUND", collection_id) from exc
+    except CollectionInactive as exc:
+        raise _collection_inactive(exc) from exc
     try:
         await session.commit()
     except Exception:
@@ -254,6 +424,8 @@ async def reindex_collection_document(
         raise _not_found(
             "source document file", "SOURCE_DOCUMENT_NOT_FOUND", document_id
         ) from exc
+    except CollectionInactive as exc:
+        raise _collection_inactive(exc) from exc
     await session.commit()
     return _document_response(document)
 
@@ -272,11 +444,13 @@ async def assign_collection_curator(
     session: DBSession,
 ) -> CuratorResponse:
     require_staff(caller)
-    # The target must resolve to an existing permission.
+    # The target must resolve to an existing permission in the CURATORIAL group.
     reader = get_permission_reader(session)
     detail = await reader.get_detail(IdentityPermissionId(body.permissionId))
     if detail is None:
         raise _not_found("permission", "PERMISSION_NOT_FOUND", body.permissionId)
+    if detail.group != GroupName.CURATORIAL:
+        raise _permission_not_curatorial()
     try:
         assignment = await AssignCollectionCurator(collections, clock).execute(
             caller, CollectionId(collection_id), PermissionId(body.permissionId)

@@ -7,15 +7,24 @@ import { Observable } from 'rxjs';
 import {
   CollectionCurator,
   CollectionDataSource,
+  CuratorCandidate,
   SourceDocument,
+  UpdateCollectionRequest,
 } from '../models/collection-data-source.model';
 
 export interface CollectionDataSourceApi {
   listCollections(): Observable<CollectionDataSource[]>;
+  createCollection(name: string): Observable<CollectionDataSource>;
+  updateCollection(
+    collectionId: string,
+    changes: UpdateCollectionRequest,
+  ): Observable<CollectionDataSource>;
+  deactivateCollection(collectionId: string): Observable<CollectionDataSource>;
   listDocuments(collectionId: string): Observable<SourceDocument[]>;
   upload(collectionId: string, file: File): Observable<SourceDocument>;
   remove(documentId: string): Observable<void>;
   reindex(documentId: string): Observable<SourceDocument>;
+  listCuratorCandidates(): Observable<CuratorCandidate[]>;
   assignCurator(collectionId: string, permissionId: string): Observable<CollectionCurator>;
   removeCurator(collectionId: string, permissionId: string): Observable<void>;
 }
@@ -31,6 +40,21 @@ export class CollectionDataSourceService implements CollectionDataSourceApi {
 
   listCollections(): Observable<CollectionDataSource[]> {
     return this.http.get<CollectionDataSource[]>(this.url('/collections'));
+  }
+
+  createCollection(name: string): Observable<CollectionDataSource> {
+    return this.http.post<CollectionDataSource>(this.url('/collections'), { name });
+  }
+
+  updateCollection(
+    collectionId: string,
+    changes: UpdateCollectionRequest,
+  ): Observable<CollectionDataSource> {
+    return this.http.patch<CollectionDataSource>(this.url(`/collections/${collectionId}`), changes);
+  }
+
+  deactivateCollection(collectionId: string): Observable<CollectionDataSource> {
+    return this.http.delete<CollectionDataSource>(this.url(`/collections/${collectionId}`));
   }
 
   listDocuments(collectionId: string): Observable<SourceDocument[]> {
@@ -49,6 +73,10 @@ export class CollectionDataSourceService implements CollectionDataSourceApi {
 
   reindex(documentId: string): Observable<SourceDocument> {
     return this.http.post<SourceDocument>(this.url(`/documents/${documentId}/reindex`), {});
+  }
+
+  listCuratorCandidates(): Observable<CuratorCandidate[]> {
+    return this.http.get<CuratorCandidate[]>(this.url('/curator-candidates'));
   }
 
   assignCurator(collectionId: string, permissionId: string): Observable<CollectionCurator> {

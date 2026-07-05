@@ -20,6 +20,12 @@ from app.collection_object_index.presentation.dependencies import (
     get_file_storage,
 )
 from app.database import Base, get_async_session
+from app.identity.infrastructure.models import (
+    GroupRecord,
+    InstitutionRecord,
+    PermissionRecord,
+    UserRecord,
+)
 from app.identity.public import Actor, GroupName, PermissionId
 from app.main import app
 from app.shared.dependencies import get_caller_permission
@@ -209,6 +215,69 @@ async def test_assign_then_curator_manages_and_delete_reclaims_file() -> None:
         assert assign.json()["error"] == "PERMISSION_NOT_FOUND"
 
 
+async def test_assign_curator_rejects_non_curatorial_permission() -> None:
+    """A permission outside CURATORIAL must not be assignable as a curator,
+    even though the caller (SYS_ADMIN) is otherwise authorized."""
+    engine = create_async_engine(
+        "sqlite+aiosqlite://",
+        poolclass=StaticPool,
+        connect_args={"check_same_thread": False},
+    )
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    factory = async_sessionmaker(bind=engine, expire_on_commit=False)
+    async with factory() as session:
+        session.add(
+            CollectionRecord(
+                id=_ZOOLOGY_ID,
+                name="Zoology",
+                active=True,
+                created_at=_NOW,
+                updated_at=_NOW,
+            )
+        )
+        session.add(
+            InstitutionRecord(id="i1", name="MUHNAC", email="", address="", phone="")
+        )
+        session.add(
+            GroupRecord(
+                id="g-mgmt", name=GroupName.COLLECTIONS_MANAGEMENT, institution_id="i1"
+            )
+        )
+        session.add(
+            UserRecord(
+                id="u-mgmt",
+                name="Marco Gestor",
+                email="marco@museum.pt",
+                password_hash="",
+            )
+        )
+        session.add(PermissionRecord(id="p-mgmt", user_id="u-mgmt", group_id="g-mgmt"))
+        await session.commit()
+
+    async def _session_override():
+        async with factory() as session:
+            yield session
+
+    app.dependency_overrides[get_async_session] = _session_override
+    app.dependency_overrides[get_caller_permission] = lambda: _ADMIN
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport, base_url="http://test/api/v1"
+        ) as client:
+            response = await client.post(
+                f"/admin/collection-data-sources/collections/{_ZOOLOGY_ID}/curators",
+                json={"permissionId": "p-mgmt"},
+            )
+    finally:
+        app.dependency_overrides.clear()
+        await engine.dispose()
+
+    assert response.status_code == 422
+    assert response.json()["error"] == "PERMISSION_NOT_CURATORIAL"
+
+
 async def test_delete_document_removes_and_reclaims_after_commit() -> None:
     async with _client(_ADMIN) as (client, storage):
         created = await client.post(
@@ -242,3 +311,185 @@ async def test_reindex_returns_updated_document() -> None:
     assert response.status_code == 200
     assert response.json()["status"] == "INDEXED"
     assert response.json()["rowCount"] == 1
+
+
+# ── Collection catalog admin (SYS_ADMIN only) ───────────────────────────────
+
+
+async def test_create_get_update_and_deactivate_collection() -> None:
+    async with _client(_ADMIN) as (client, _):
+        created = await client.post(
+            "/admin/collection-data-sources/collections", json={"name": "Mineralogy"}
+        )
+        assert created.status_code == 201, created.text
+        collection_id = created.json()["id"]
+        assert created.json()["active"] is True
+
+        fetched = await client.get(
+            f"/admin/collection-data-sources/collections/{collection_id}"
+        )
+        assert fetched.status_code == 200
+        assert fetched.json()["name"] == "Mineralogy"
+
+        renamed = await client.patch(
+            f"/admin/collection-data-sources/collections/{collection_id}",
+            json={"name": "Mineralogy & Petrology"},
+        )
+        assert renamed.status_code == 200
+        assert renamed.json()["name"] == "Mineralogy & Petrology"
+
+        deactivated = await client.delete(
+            f"/admin/collection-data-sources/collections/{collection_id}"
+        )
+        assert deactivated.status_code == 200
+        assert deactivated.json()["active"] is False
+
+        reactivated = await client.patch(
+            f"/admin/collection-data-sources/collections/{collection_id}",
+            json={"active": True},
+        )
+        assert reactivated.status_code == 200
+        assert reactivated.json()["active"] is True
+
+
+async def test_create_collection_duplicate_name_is_409() -> None:
+    async with _client(_ADMIN) as (client, _):
+        response = await client.post(
+            "/admin/collection-data-sources/collections", json={"name": "Zoology"}
+        )
+    assert response.status_code == 409
+    assert response.json()["error"] == "COLLECTION_NAME_ALREADY_EXISTS"
+
+
+async def test_create_collection_duplicate_name_after_trim_is_409() -> None:
+    """Padding whitespace must not bypass the unique constraint via a
+    visually-duplicate name."""
+    async with _client(_ADMIN) as (client, _):
+        response = await client.post(
+            "/admin/collection-data-sources/collections", json={"name": "  Zoology  "}
+        )
+    assert response.status_code == 409
+    assert response.json()["error"] == "COLLECTION_NAME_ALREADY_EXISTS"
+
+
+async def test_create_collection_blocked_for_curator() -> None:
+    async with _client(_CURATOR) as (client, _):
+        response = await client.post(
+            "/admin/collection-data-sources/collections", json={"name": "Mineralogy"}
+        )
+    assert response.status_code == 403
+    assert response.json()["error"] == "INSUFFICIENT_GROUP"
+
+
+async def test_get_unknown_collection_is_404() -> None:
+    async with _client(_ADMIN) as (client, _):
+        response = await client.get("/admin/collection-data-sources/collections/nope")
+    assert response.status_code == 404
+    assert response.json()["error"] == "COLLECTION_NOT_FOUND"
+
+
+async def test_upload_and_reindex_blocked_for_inactive_collection() -> None:
+    async with _client(_ADMIN) as (client, _):
+        uploaded = await client.post(
+            f"/admin/collection-data-sources/collections/{_ZOOLOGY_ID}/documents",
+            files=_upload_files(),
+        )
+        document_id = uploaded.json()["id"]
+
+        deactivated = await client.delete(
+            f"/admin/collection-data-sources/collections/{_ZOOLOGY_ID}"
+        )
+        assert deactivated.status_code == 200
+
+        blocked_upload = await client.post(
+            f"/admin/collection-data-sources/collections/{_ZOOLOGY_ID}/documents",
+            files=_upload_files(rows=[["ZOO-2", "Onça"]]),
+        )
+        assert blocked_upload.status_code == 422
+        assert blocked_upload.json()["error"] == "COLLECTION_INACTIVE"
+
+        blocked_reindex = await client.post(
+            f"/admin/collection-data-sources/documents/{document_id}/reindex"
+        )
+        assert blocked_reindex.status_code == 422
+        assert blocked_reindex.json()["error"] == "COLLECTION_INACTIVE"
+
+
+async def test_curator_candidates_blocked_for_non_sys_admin() -> None:
+    async with _client(_CURATOR) as (client, _):
+        response = await client.get(
+            "/admin/collection-data-sources/curator-candidates"
+        )
+    assert response.status_code == 403
+    assert response.json()["error"] == "INSUFFICIENT_GROUP"
+
+
+async def test_curator_candidates_lists_curatorial_group_only() -> None:
+    engine = create_async_engine(
+        "sqlite+aiosqlite://",
+        poolclass=StaticPool,
+        connect_args={"check_same_thread": False},
+    )
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    factory = async_sessionmaker(bind=engine, expire_on_commit=False)
+    async with factory() as session:
+        session.add(
+            InstitutionRecord(id="i1", name="MUHNAC", email="", address="", phone="")
+        )
+        session.add_all(
+            [
+                GroupRecord(id="g-cur", name=GroupName.CURATORIAL, institution_id="i1"),
+                GroupRecord(id="g-adm", name=GroupName.SYS_ADMIN, institution_id="i1"),
+            ]
+        )
+        session.add_all(
+            [
+                UserRecord(
+                    id="u-cur",
+                    name="Carla Curadora",
+                    email="carla@museum.pt",
+                    password_hash="",
+                ),
+                UserRecord(
+                    id="u-adm",
+                    name="Ana Admin",
+                    email="ana@museum.pt",
+                    password_hash="",
+                ),
+            ]
+        )
+        session.add_all(
+            [
+                PermissionRecord(id="p-cur", user_id="u-cur", group_id="g-cur"),
+                PermissionRecord(id="p-adm", user_id="u-adm", group_id="g-adm"),
+            ]
+        )
+        await session.commit()
+
+    async def _session_override():
+        async with factory() as session:
+            yield session
+
+    app.dependency_overrides[get_async_session] = _session_override
+    app.dependency_overrides[get_caller_permission] = lambda: _ADMIN
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport, base_url="http://test/api/v1"
+        ) as client:
+            response = await client.get(
+                "/admin/collection-data-sources/curator-candidates"
+            )
+    finally:
+        app.dependency_overrides.clear()
+        await engine.dispose()
+
+    assert response.status_code == 200
+    body = response.json()
+    assert [c["permissionId"] for c in body] == ["p-cur"]
+    assert body[0] == {
+        "permissionId": "p-cur",
+        "name": "Carla Curadora",
+        "email": "carla@museum.pt",
+    }

@@ -125,6 +125,13 @@ class _Seed:
             record.deleted_at = _NOW
             await session.commit()
 
+    async def deactivate_collection(self) -> None:
+        async with self._factory() as session:
+            record = await session.get(CollectionRecord, self.collection_id)
+            assert record is not None
+            record.active = False
+            await session.commit()
+
     async def __aexit__(self, *exc_info: object) -> None:
         async with self._factory() as session:
             await session.execute(
@@ -282,6 +289,32 @@ async def test_search_paginates_without_overlap() -> None:
             rows_page0 = {item.cells["Row"] for item in page0.items}
             rows_page1 = {item.cells["Row"] for item in page1.items}
             assert rows_page0.isdisjoint(rows_page1)
+
+
+async def test_search_excludes_rows_of_inactive_collection() -> None:
+    async with _live_session_factory() as factory:
+        async with _Seed(factory) as seed:
+            await seed.add_rows(
+                [("Objects", 2, "vanishing term epsilon", {"Name": "epsilon"})]
+            )
+            scope = CollectionId(seed.collection_id)
+            async with factory() as session:
+                before = await SqlAlchemyCollectionObjectIndex(session).search(
+                    CollectionObjectSearchQuery(
+                        q="epsilon", collection_id=scope, page=0, size=20
+                    )
+                )
+            assert before.total == 1
+
+            await seed.deactivate_collection()
+
+            async with factory() as session:
+                after = await SqlAlchemyCollectionObjectIndex(session).search(
+                    CollectionObjectSearchQuery(
+                        q="epsilon", collection_id=scope, page=0, size=20
+                    )
+                )
+            assert after.total == 0
 
 
 async def test_search_finds_no_match_returns_empty() -> None:

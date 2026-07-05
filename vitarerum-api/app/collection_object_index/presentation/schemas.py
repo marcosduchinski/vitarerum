@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class CuratorResponse(BaseModel):
@@ -21,6 +21,21 @@ class CollectionResponse(BaseModel):
     curators: list[CuratorResponse]
     documentCount: int
     manageable: bool
+
+
+class CreateCollectionRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+
+
+class UpdateCollectionRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    active: bool | None = None
+
+
+class CuratorCandidateResponse(BaseModel):
+    permissionId: str
+    name: str
+    email: str
 
 
 class SourceDocumentResponse(BaseModel):

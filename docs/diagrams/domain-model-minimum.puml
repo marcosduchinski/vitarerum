@@ -433,6 +433,94 @@ package "Collection Use" <<Bounded Context>> {
 }
 
 
+package "Collection Object Index" <<Bounded Context>> {
+
+        class Collection <<Aggregate Root>> #c3b1e1 {
+        - id: CollectionId
+        - name: String
+        - active: Boolean
+        - createdAt: DateTime
+        - updatedAt: DateTime
+        + rename(name)
+        + activate()
+        + deactivate()
+        }
+
+        class CuratorAssignment <<Value Object>> #c3b1e1 {
+        - collectionId: CollectionId
+        - permissionId: PermissionId
+        - assignedAt: DateTime
+        - assignedBy: PermissionId
+        }
+
+        class SourceDocument <<Aggregate Root>> #c3b1e1 {
+        - id: SourceDocumentId
+        - collectionId: CollectionId
+        - fileName: String
+        - fileReference: String
+        - sourceKind: SourceKind
+        - contentHash: String
+        - status: SourceDocumentStatus
+        - errorMessage: String?
+        - rowCount: Int?
+        - uploadedBy: PermissionId
+        - uploadedAt: DateTime
+        - indexedAt: DateTime?
+        - deletedAt: DateTime?
+        + markIndexed(...)
+        + markError(...)
+        + markDeleted(...)
+        }
+
+        class CollectionObject <<Entity>> #c3b1e1 {
+        - id: CollectionObjectId
+        - sourceDocumentId: SourceDocumentId
+        - collectionId: CollectionId
+        - sheet: String
+        - rowNumber: Int
+        - content: String
+        - cells: Map<String, String>
+        - tsv: String
+        }
+
+        enum SourceKind #c3b1e1 {
+        UPLOAD
+        }
+
+        enum SourceDocumentStatus #c3b1e1 {
+        UPLOADED
+        INDEXED
+        ERROR
+        }
+
+        Collection *-- "0..*" CuratorAssignment
+        Collection *-- "0..*" SourceDocument
+        SourceDocument *-- "0..*" CollectionObject
+        CollectionObject ..> Collection : collectionId (denormalized)
+
+        CuratorAssignment ..> Permission : permissionId
+        CuratorAssignment ..> Permission : assignedBy
+        SourceDocument ..> Permission : uploadedBy
+}
+
+note as N_CollectionObjectIndex
+  "Collection" here is the scientific collection (Zoology, Botany, ...), distinct
+  from CollectionUseProject (Collection Use context) — same English word, different
+  concept. CollectionObject has no domain class in `domain/models.py` today; it
+  exists only as an infrastructure/read-side concern (parser + pg_index), shown
+  here to complete the data flow: collection -> source document (.xlsx) -> indexed
+  row. `tsv` is a generated tsvector (config 'simple') backing full-text search.
+  Staff search is broad across all *active* indexed collections; collection
+  filtering is a convenience, not row-level ACL. SourceDocument.deletedAt
+  soft-deletes the document record and hard-removes its rows from the index.
+  Collection catalog administration (create/rename/activate/deactivate, and
+  curator assign/remove) is exclusive to SYS_ADMIN; a deactivated collection
+  blocks new uploads/reindex and drops out of search, but its documents/index
+  stay intact (never hard deleted).
+end note
+N_CollectionObjectIndex .. Collection
+
+
 package "Public Submission" <<Bounded Context>> {
     package "domain" {
         enum PendingSubmissionStatus #b5ead7 {

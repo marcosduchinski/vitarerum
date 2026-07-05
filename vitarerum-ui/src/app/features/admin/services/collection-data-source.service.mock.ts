@@ -4,7 +4,9 @@ import { delay, Observable, of, throwError } from 'rxjs';
 import {
   CollectionCurator,
   CollectionDataSource,
+  CuratorCandidate,
   SourceDocument,
+  UpdateCollectionRequest,
 } from '../models/collection-data-source.model';
 import { CollectionDataSourceApi } from './collection-data-source.service';
 
@@ -48,31 +50,66 @@ export class CollectionDataSourceServiceMock implements CollectionDataSourceApi 
     ],
   ]);
 
-  private curators = new Map<string, CollectionCurator[]>([
-    [
-      'col-13',
-      [
-        {
-          permissionId: 'perm-cur-1',
-          name: 'Grace Curator',
-          email: 'grace@museum.test',
-          assignedAt: '2026-06-01T09:00:00Z',
-        },
-      ],
-    ],
-  ]);
+  private readonly curatorCandidates: CuratorCandidate[] = [
+    { permissionId: 'perm-cur-1', name: 'Grace Curator', email: 'grace@museum.test' },
+    { permissionId: 'perm-cur-2', name: 'Hugo Curator', email: 'hugo@museum.test' },
+  ];
+
+  private collections: CollectionDataSource[] = COLLECTION_NAMES.map((name, i) => ({
+    id: `col-${i}`,
+    name,
+    active: true,
+    curators:
+      `col-${i}` === 'col-13'
+        ? [
+            {
+              permissionId: 'perm-cur-1',
+              name: 'Grace Curator',
+              email: 'grace@museum.test',
+              assignedAt: '2026-06-01T09:00:00Z',
+            },
+          ]
+        : [],
+    documentCount: (this.documents.get(`col-${i}`) ?? []).length,
+    manageable: true,
+  }));
 
   listCollections(): Observable<CollectionDataSource[]> {
-    return of(
-      COLLECTION_NAMES.map((name, i) => ({
-        id: `col-${i}`,
-        name,
-        active: true,
-        curators: this.curators.get(`col-${i}`) ?? [],
-        documentCount: (this.documents.get(`col-${i}`) ?? []).length,
-        manageable: true,
-      })),
-    ).pipe(delay(300));
+    return of([...this.collections]).pipe(delay(300));
+  }
+
+  createCollection(name: string): Observable<CollectionDataSource> {
+    const collection: CollectionDataSource = {
+      id: `col-new-${++_seq}`,
+      name,
+      active: true,
+      curators: [],
+      documentCount: 0,
+      manageable: true,
+    };
+    this.collections = [collection, ...this.collections];
+    return of(collection).pipe(delay(300));
+  }
+
+  updateCollection(
+    collectionId: string,
+    changes: UpdateCollectionRequest,
+  ): Observable<CollectionDataSource> {
+    const index = this.collections.findIndex((c) => c.id === collectionId);
+    if (index === -1) {
+      return throwError(() => ({ status: 404, error: { message: 'Not found' } }));
+    }
+    const updated: CollectionDataSource = {
+      ...this.collections[index],
+      ...(changes.name !== undefined ? { name: changes.name } : {}),
+      ...(changes.active !== undefined ? { active: changes.active } : {}),
+    };
+    this.collections = this.collections.map((c, i) => (i === index ? updated : c));
+    return of(updated).pipe(delay(200));
+  }
+
+  deactivateCollection(collectionId: string): Observable<CollectionDataSource> {
+    return this.updateCollection(collectionId, { active: false });
   }
 
   listDocuments(collectionId: string): Observable<SourceDocument[]> {
@@ -98,15 +135,19 @@ export class CollectionDataSourceServiceMock implements CollectionDataSourceApi 
       indexedAt: new Date().toISOString(),
     };
     this.documents.set(collectionId, [document, ...(this.documents.get(collectionId) ?? [])]);
+    this.bumpDocumentCount(collectionId, 1);
     return of(document).pipe(delay(400));
   }
 
   remove(documentId: string): Observable<void> {
     for (const [collectionId, docs] of this.documents) {
-      this.documents.set(
-        collectionId,
-        docs.filter((d) => d.id !== documentId),
-      );
+      if (docs.some((d) => d.id === documentId)) {
+        this.documents.set(
+          collectionId,
+          docs.filter((d) => d.id !== documentId),
+        );
+        this.bumpDocumentCount(collectionId, -1);
+      }
     }
     return of(undefined).pipe(delay(200));
   }
@@ -119,22 +160,38 @@ export class CollectionDataSourceServiceMock implements CollectionDataSourceApi 
     return throwError(() => ({ status: 404, error: { message: 'Not found' } }));
   }
 
+  listCuratorCandidates(): Observable<CuratorCandidate[]> {
+    return of([...this.curatorCandidates]).pipe(delay(150));
+  }
+
   assignCurator(collectionId: string, permissionId: string): Observable<CollectionCurator> {
+    const candidate = this.curatorCandidates.find((c) => c.permissionId === permissionId);
     const curator: CollectionCurator = {
       permissionId,
-      name: 'New Curator',
-      email: 'curator@museum.test',
+      name: candidate?.name ?? 'New Curator',
+      email: candidate?.email ?? 'curator@museum.test',
       assignedAt: new Date().toISOString(),
     };
-    this.curators.set(collectionId, [...(this.curators.get(collectionId) ?? []), curator]);
+    this.collections = this.collections.map((c) =>
+      c.id === collectionId && !c.curators.some((existing) => existing.permissionId === permissionId)
+        ? { ...c, curators: [...c.curators, curator] }
+        : c,
+    );
     return of(curator).pipe(delay(200));
   }
 
   removeCurator(collectionId: string, permissionId: string): Observable<void> {
-    this.curators.set(
-      collectionId,
-      (this.curators.get(collectionId) ?? []).filter((c) => c.permissionId !== permissionId),
+    this.collections = this.collections.map((c) =>
+      c.id === collectionId
+        ? { ...c, curators: c.curators.filter((curator) => curator.permissionId !== permissionId) }
+        : c,
     );
     return of(undefined).pipe(delay(200));
+  }
+
+  private bumpDocumentCount(collectionId: string, delta: number): void {
+    this.collections = this.collections.map((c) =>
+      c.id === collectionId ? { ...c, documentCount: c.documentCount + delta } : c,
+    );
   }
 }

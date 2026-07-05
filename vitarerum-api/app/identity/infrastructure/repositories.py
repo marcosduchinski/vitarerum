@@ -135,6 +135,18 @@ class SqlAlchemyPermissionReader:
             return None
         return permission_to_view(record)
 
+    async def list_by_group(self, group: GroupName) -> list[PermissionView]:
+        stmt = (
+            select(PermissionRecord)
+            .join(PermissionRecord.group)
+            .join(PermissionRecord.user)
+            .where(GroupRecord.name == group)
+            .options(*_PERMISSION_EAGER)
+            .order_by(UserRecord.name)
+        )
+        result = await self._session.execute(stmt)
+        return [permission_to_view(r) for r in result.scalars().all()]
+
 
 class SqlAlchemyUserRepository:
     def __init__(self, session: AsyncSession) -> None:

@@ -1,9 +1,10 @@
 """Use cases for the Collection Object Index context.
 
-Commands manage a collection's source documents (upload / delete / reindex)
-and curator assignments; queries back the management UI. Indexing is
-synchronous in the MVP: the upload request parses the spreadsheet and writes
-the object rows before returning.
+Commands manage the collection catalog itself (create/rename/activate/
+deactivate, SYS_ADMIN only), a collection's source documents (upload / delete
+/ reindex), and curator assignments; queries back the management UI. Indexing
+is synchronous in the MVP: the upload request parses the spreadsheet and
+writes the object rows before returning.
 
 File-cleanup protocol (mirrors Document Templates): commands never delete
 stored files themselves — they return the affected file references so the
@@ -18,8 +19,8 @@ from uuid import uuid4
 
 from app.collection_object_index.application.authorization import (
     can_manage_all_collections,
+    require_catalog_admin,
     require_collection_scope,
-    require_curator_admin,
 )
 from app.collection_object_index.application.ports import (
     Clock,
@@ -37,13 +38,14 @@ from app.collection_object_index.domain.enums import SourceDocumentStatus, Sourc
 from app.collection_object_index.domain.models import (
     Collection,
     CollectionId,
+    CollectionInactive,
     CollectionNotFound,
     CuratorAssignment,
     SourceDocument,
     SourceDocumentId,
     SourceDocumentNotFound,
 )
-from app.identity.public import Actor, GroupName
+from app.identity.public import Actor, GroupName, PermissionReader, PermissionView
 from app.shared.authorization import require_staff
 from app.shared.kernel import PermissionId
 
@@ -174,13 +176,16 @@ class UploadSourceDocument:
     async def execute(
         self, data: UploadSourceDocumentInput
     ) -> UploadSourceDocumentResult:
-        if await self._collections.get_by_id(data.collection_id) is None:
+        collection = await self._collections.get_by_id(data.collection_id)
+        if collection is None:
             raise CollectionNotFound(data.collection_id)
         require_collection_scope(
             data.caller,
             data.collection_id,
             await _curated_ids(data.caller, self._collections),
         )
+        if not collection.active:
+            raise CollectionInactive(data.collection_id)
 
         content_hash = _content_hash(data.content)
         existing = await self._documents.find_live_by_hash(
@@ -305,6 +310,9 @@ class ReindexSourceDocument:
             document.collection_id,
             await _curated_ids(caller, self._collections),
         )
+        collection = await self._collections.get_by_id(document.collection_id)
+        if collection is not None and not collection.active:
+            raise CollectionInactive(document.collection_id)
         content = await self._storage.read(document.file_reference)
         await self._index.remove_document(document.id)
         try:
@@ -331,7 +339,7 @@ class AssignCollectionCurator:
     async def execute(
         self, caller: Actor, collection_id: CollectionId, permission_id: PermissionId
     ) -> CuratorAssignment:
-        require_curator_admin(caller)
+        require_catalog_admin(caller)
         if await self._collections.get_by_id(collection_id) is None:
             raise CollectionNotFound(collection_id)
         current = await self._collections.list_curators(collection_id)
@@ -355,10 +363,109 @@ class RemoveCollectionCurator:
     async def execute(
         self, caller: Actor, collection_id: CollectionId, permission_id: PermissionId
     ) -> None:
-        require_curator_admin(caller)
+        require_catalog_admin(caller)
         if await self._collections.get_by_id(collection_id) is None:
             raise CollectionNotFound(collection_id)
         await self._collections.remove_curator(collection_id, permission_id)
+
+
+# ── Collection catalog admin (SYS_ADMIN only) ───────────────────────────────
+
+
+@dataclass(frozen=True, slots=True)
+class CreateCollectionInput:
+    caller: Actor
+    name: str
+
+
+class CreateCollection:
+    def __init__(self, collections: CollectionRepository, clock: Clock) -> None:
+        self._collections = collections
+        self._clock = clock
+
+    async def execute(self, data: CreateCollectionInput) -> Collection:
+        require_catalog_admin(data.caller)
+        now = self._clock.now()
+        collection = Collection(
+            id=CollectionId(_new_id()),
+            name=data.name,
+            active=True,
+            created_at=now,
+            updated_at=now,
+        )
+        await self._collections.add(collection)
+        return collection
+
+
+class GetCollection:
+    """A single collection, enriched like the management list (curators,
+    live-document count, whether the caller may manage it)."""
+
+    def __init__(self, collections: CollectionRepository) -> None:
+        self._collections = collections
+
+    async def execute(
+        self, caller: Actor, collection_id: CollectionId
+    ) -> CollectionView:
+        collection = await self._collections.get_by_id(collection_id)
+        if collection is None:
+            raise CollectionNotFound(collection_id)
+        manage_all = can_manage_all_collections(caller)
+        curated = await _curated_ids(caller, self._collections)
+        curators = await self._collections.list_curators(collection_id)
+        counts = await self._collections.count_live_documents()
+        return CollectionView(
+            collection=collection,
+            curators=curators,
+            document_count=counts.get(collection_id, 0),
+            manageable=manage_all or collection_id in curated,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class UpdateCollectionInput:
+    caller: Actor
+    collection_id: CollectionId
+    name: str | None = None
+    active: bool | None = None
+
+
+class UpdateCollection:
+    """Renames and/or (de)activates a collection. A ``DELETE`` from the API is
+    just this use case with ``active=False`` — collections are never hard
+    deleted, to preserve their documents/index/history."""
+
+    def __init__(self, collections: CollectionRepository, clock: Clock) -> None:
+        self._collections = collections
+        self._clock = clock
+
+    async def execute(self, data: UpdateCollectionInput) -> Collection:
+        require_catalog_admin(data.caller)
+        collection = await self._collections.get_by_id(data.collection_id)
+        if collection is None:
+            raise CollectionNotFound(data.collection_id)
+        now = self._clock.now()
+        if data.name is not None:
+            collection.rename(data.name, updated_at=now)
+        if data.active is not None:
+            if data.active:
+                collection.activate(updated_at=now)
+            else:
+                collection.deactivate(updated_at=now)
+        await self._collections.save(collection)
+        return collection
+
+
+class ListCuratorCandidates:
+    """Permissions in the CURATORIAL group, for the collection admin's
+    curator picker — decouples it from the generic identity users API."""
+
+    def __init__(self, permission_reader: PermissionReader) -> None:
+        self._permission_reader = permission_reader
+
+    async def execute(self, caller: Actor) -> list[PermissionView]:
+        require_catalog_admin(caller)
+        return await self._permission_reader.list_by_group(GroupName.CURATORIAL)
 
 
 # ── Objects -> Search (read side) ────────────────────────────────────────────

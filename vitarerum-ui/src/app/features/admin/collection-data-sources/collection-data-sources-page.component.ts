@@ -7,6 +7,7 @@ import {
   resource,
   signal,
 } from '@angular/core';
+import { IDENTITY_SERVICE } from '@core/auth/identity.service';
 import { firstValueFrom } from 'rxjs';
 
 import { ApiError, toApiError } from '@core/http/api-error.model';
@@ -14,7 +15,12 @@ import { ErrorMessageComponent } from '@shared/components/error-message/error-me
 import { LoadingStateComponent } from '@shared/components/loading-state/loading-state.component';
 import { PageHeaderComponent } from '@shared/components/page-header/page-header.component';
 
-import { CollectionDataSource, SourceDocument } from '../models/collection-data-source.model';
+import {
+  CollectionCurator,
+  CollectionDataSource,
+  CuratorCandidate,
+  SourceDocument,
+} from '../models/collection-data-source.model';
 import { COLLECTION_DATA_SOURCE_SERVICE } from '../services/collection-data-source.service';
 
 @Component({
@@ -28,6 +34,11 @@ import { COLLECTION_DATA_SOURCE_SERVICE } from '../services/collection-data-sour
 export class CollectionDataSourcesPageComponent {
   private readonly service = inject(COLLECTION_DATA_SOURCE_SERVICE);
   private readonly document = inject(DOCUMENT);
+  private readonly identity = inject(IDENTITY_SERVICE);
+
+  /** Only SYS_ADMIN administers the collection catalog and its curators;
+   * COLLECTIONS_MANAGEMENT/CURATORIAL keep managing documents via `manageable`. */
+  protected readonly isSysAdmin = computed(() => this.identity.session()?.group === 'SYS_ADMIN');
 
   protected readonly collectionsResource = resource({
     loader: () => firstValueFrom(this.service.listCollections()),
@@ -58,17 +69,98 @@ export class CollectionDataSourcesPageComponent {
   );
   protected readonly documentsLoading = computed(() => this.documentsResource.isLoading());
 
+  /** Curator candidates (CURATORIAL-group permissions) — only SYS_ADMIN may list them. */
+  protected readonly curatorCandidatesResource = resource({
+    params: () => this.isSysAdmin(),
+    loader: ({ params }) =>
+      params
+        ? firstValueFrom(this.service.listCuratorCandidates())
+        : Promise.resolve<CuratorCandidate[]>([]),
+  });
+  protected readonly curatorCandidates = computed<readonly CuratorCandidate[]>(
+    () => this.curatorCandidatesResource.value() ?? [],
+  );
+
   protected readonly actionError = signal<ApiError | null>(null);
   protected readonly busy = signal(false);
 
+  /** New-collection creation form. */
+  protected readonly newCollectionName = signal('');
+
+  /** Collection currently being renamed inline (one at a time). */
+  protected readonly editingId = signal<string | null>(null);
+  protected readonly editName = signal('');
+
+  /** Curator picker selection per expanded collection. */
+  protected readonly selectedCandidateId = signal('');
+
   protected toggle(collection: CollectionDataSource): void {
     this.actionError.set(null);
+    this.selectedCandidateId.set('');
     this.selectedId.update((current) => (current === collection.id ? null : collection.id));
   }
 
   protected curatorLabel(collection: CollectionDataSource): string {
     if (collection.curators.length === 0) return 'No curator assigned';
     return collection.curators.map((curator) => curator.name ?? curator.permissionId).join(', ');
+  }
+
+  protected availableCandidates(collection: CollectionDataSource): readonly CuratorCandidate[] {
+    const assigned = new Set(collection.curators.map((curator) => curator.permissionId));
+    return this.curatorCandidates().filter((candidate) => !assigned.has(candidate.permissionId));
+  }
+
+  protected async createCollection(): Promise<void> {
+    const name = this.newCollectionName().trim();
+    if (!name) return;
+    await this.run(() => firstValueFrom(this.service.createCollection(name)));
+    this.newCollectionName.set('');
+  }
+
+  protected startEdit(collection: CollectionDataSource): void {
+    this.editingId.set(collection.id);
+    this.editName.set(collection.name);
+  }
+
+  protected cancelEdit(): void {
+    this.editingId.set(null);
+  }
+
+  protected async saveEdit(collection: CollectionDataSource): Promise<void> {
+    const name = this.editName().trim();
+    this.editingId.set(null);
+    if (!name || name === collection.name) return;
+    await this.run(() => firstValueFrom(this.service.updateCollection(collection.id, { name })));
+  }
+
+  protected async toggleActive(collection: CollectionDataSource): Promise<void> {
+    if (collection.active) {
+      const confirmed = this.document.defaultView?.confirm(
+        `Deactivate "${collection.name}"? Its documents and index stay intact and it can be reactivated later.`,
+      );
+      if (!confirmed) return;
+      await this.run(() => firstValueFrom(this.service.deactivateCollection(collection.id)));
+    } else {
+      await this.run(
+        () => firstValueFrom(this.service.updateCollection(collection.id, { active: true })),
+      );
+    }
+  }
+
+  protected async assignCurator(collection: CollectionDataSource): Promise<void> {
+    const permissionId = this.selectedCandidateId();
+    if (!permissionId) return;
+    await this.run(() => firstValueFrom(this.service.assignCurator(collection.id, permissionId)));
+    this.selectedCandidateId.set('');
+  }
+
+  protected async removeCurator(
+    collection: CollectionDataSource,
+    curator: CollectionCurator,
+  ): Promise<void> {
+    await this.run(
+      () => firstValueFrom(this.service.removeCurator(collection.id, curator.permissionId)),
+    );
   }
 
   protected async upload(collection: CollectionDataSource, event: Event): Promise<void> {

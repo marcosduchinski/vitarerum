@@ -71,6 +71,12 @@ def _to_document(record: SourceDocumentRecord) -> SourceDocument:
     )
 
 
+def _apply_collection(record: CollectionRecord, collection: Collection) -> None:
+    record.name = collection.name
+    record.active = collection.active
+    record.updated_at = collection.updated_at
+
+
 def _apply_document(record: SourceDocumentRecord, document: SourceDocument) -> None:
     record.status = document.status.value
     record.error_message = document.error_message
@@ -82,6 +88,25 @@ def _apply_document(record: SourceDocumentRecord, document: SourceDocument) -> N
 class SqlAlchemyCollectionRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+
+    async def add(self, collection: Collection) -> None:
+        self._session.add(
+            CollectionRecord(
+                id=str(collection.id),
+                name=collection.name,
+                active=collection.active,
+                created_at=collection.created_at,
+                updated_at=collection.updated_at,
+            )
+        )
+        await self._session.flush()
+
+    async def save(self, collection: Collection) -> None:
+        record = await self._session.get(CollectionRecord, str(collection.id))
+        if record is None:
+            raise LookupError(f"No collection found with id {collection.id}")
+        _apply_collection(record, collection)
+        await self._session.flush()
 
     async def list_all(self) -> list[Collection]:
         result = await self._session.execute(
@@ -232,6 +257,11 @@ _WORD_SIMILARITY_THRESHOLD = 0.4
 # trigram word-similarity (catches a hyphenated code inside a long row).
 _SEARCH_MATCH_SQL = """
     sd.deleted_at IS NULL
+    -- A deactivated collection is out of the operational catalogue: its rows
+    -- are preserved but drop out of the broad staff search (not just the
+    -- collection facet), same as source documents whose collection was never
+    -- indexed in the first place.
+    AND col.active = true
     -- Explicit CAST: asyncpg's extended query protocol can't infer a bind
     -- parameter's type when it's NULL and only ever compared with `IS NULL OR
     -- ... = $n` (AmbiguousParameterError without it). A bare `::varchar`
@@ -279,6 +309,7 @@ _SEARCH_COUNT_SQL = text(
     SELECT count(*)
     FROM collection_index_object co
     JOIN collection_index_source_document sd ON sd.id = co.source_document_id
+    JOIN collection_index_collection col ON col.id = co.collection_id
     WHERE {_SEARCH_MATCH_SQL}
     """
 )
