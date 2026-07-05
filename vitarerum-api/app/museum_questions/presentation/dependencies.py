@@ -16,14 +16,26 @@ from app.config import settings
 from app.database import get_async_session
 from app.museum_questions.application.ports import (
     CaptchaVerifier,
+    MuseumQuestionEmailSender,
     MuseumQuestionRepository,
 )
-from app.museum_questions.application.use_cases import SubmitMuseumQuestion
+from app.museum_questions.application.use_cases import (
+    AnswerMuseumQuestion,
+    CloseMuseumQuestion,
+    GetMuseumQuestion,
+    ListMuseumQuestions,
+    MarkMuseumQuestionOutOfScope,
+    SubmitMuseumQuestion,
+)
 from app.museum_questions.infrastructure.captcha import (
     AlwaysPassVerifier,
     CloudflareTurnstileVerifier,
 )
 from app.museum_questions.infrastructure.clock import SystemClock
+from app.museum_questions.infrastructure.email import (
+    LoggingMuseumQuestionEmailSender,
+    SmtpMuseumQuestionEmailSender,
+)
 from app.museum_questions.infrastructure.rate_limiter import (
     InMemorySlidingWindowRateLimiter,
 )
@@ -49,14 +61,64 @@ def _captcha_verifier() -> CaptchaVerifier:
     )
 
 
+def _email_sender() -> MuseumQuestionEmailSender:
+    if not settings.smtp_host:
+        return LoggingMuseumQuestionEmailSender()
+    return SmtpMuseumQuestionEmailSender(
+        host=settings.smtp_host,
+        port=settings.smtp_port,
+        username=settings.smtp_username,
+        password=settings.smtp_password,
+        from_address=settings.smtp_from_address,
+        use_tls=settings.smtp_use_tls,
+    )
+
+
+def _repository(session: AsyncSession) -> MuseumQuestionRepository:
+    return SqlAlchemyMuseumQuestionRepository(session)
+
+
 def get_submit_use_case(session: DBSession) -> SubmitMuseumQuestion:
-    repository: MuseumQuestionRepository = SqlAlchemyMuseumQuestionRepository(session)
     return SubmitMuseumQuestion(
-        repository=repository,
+        repository=_repository(session),
         captcha=_captcha_verifier(),
         rate_limiter=_rate_limiter,
         clock=_clock,
     )
 
 
+def get_list_use_case(session: DBSession) -> ListMuseumQuestions:
+    return ListMuseumQuestions(_repository(session))
+
+
+def get_get_use_case(session: DBSession) -> GetMuseumQuestion:
+    return GetMuseumQuestion(_repository(session))
+
+
+def get_answer_use_case(session: DBSession) -> AnswerMuseumQuestion:
+    return AnswerMuseumQuestion(_repository(session), _clock)
+
+
+def get_mark_out_of_scope_use_case(
+    session: DBSession,
+) -> MarkMuseumQuestionOutOfScope:
+    return MarkMuseumQuestionOutOfScope(_repository(session), _clock)
+
+
+def get_close_use_case(session: DBSession) -> CloseMuseumQuestion:
+    return CloseMuseumQuestion(_repository(session), _clock)
+
+
+def get_email_sender() -> MuseumQuestionEmailSender:
+    return _email_sender()
+
+
 SubmitUseCase = Annotated[SubmitMuseumQuestion, Depends(get_submit_use_case)]
+ListUseCase = Annotated[ListMuseumQuestions, Depends(get_list_use_case)]
+GetUseCase = Annotated[GetMuseumQuestion, Depends(get_get_use_case)]
+AnswerUseCase = Annotated[AnswerMuseumQuestion, Depends(get_answer_use_case)]
+MarkOutOfScopeUseCase = Annotated[
+    MarkMuseumQuestionOutOfScope, Depends(get_mark_out_of_scope_use_case)
+]
+CloseUseCase = Annotated[CloseMuseumQuestion, Depends(get_close_use_case)]
+EmailSender = Annotated[MuseumQuestionEmailSender, Depends(get_email_sender)]

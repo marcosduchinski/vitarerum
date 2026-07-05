@@ -8,6 +8,7 @@ plan's "conteudo do cidadao e sempre texto puro" decision.
 from __future__ import annotations
 
 import re
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
@@ -47,3 +48,58 @@ class MuseumQuestionSubmission(BaseModel):
 class MuseumQuestionReceipt(BaseModel):
     status: Literal["RECEIVED"] = "RECEIVED"
     email: EmailStr
+
+
+MuseumQuestionStatusValue = Literal["SUBMITTED", "ANSWERED", "OUT_OF_SCOPE", "CLOSED"]
+
+
+class MuseumQuestionResponse(BaseModel):
+    id: str
+    requesterName: str
+    requesterEmail: EmailStr
+    subject: str
+    message: str
+    status: MuseumQuestionStatusValue
+    createdAt: datetime
+    answeredAt: datetime | None = None
+    answeredBy: str | None = None
+    answerBody: str | None = None
+    answerSentAt: datetime | None = None
+    outOfScopeAt: datetime | None = None
+    outOfScopeBy: str | None = None
+    outOfScopeReason: str | None = None
+    outOfScopeEmailSentAt: datetime | None = None
+    closedAt: datetime | None = None
+    closedBy: str | None = None
+
+
+class PaginatedMuseumQuestionsResponse(BaseModel):
+    content: list[MuseumQuestionResponse]
+    page: int
+    size: int
+    totalElements: int
+    totalPages: int
+
+
+class AnswerMuseumQuestionRequest(BaseModel):
+    answerBody: str = Field(min_length=1, max_length=4000)
+
+    @field_validator("answerBody")
+    @classmethod
+    def _strip_answer(cls, v: str) -> str:
+        cleaned = _CONTROL_CHARS.sub("", v).strip()
+        if not cleaned:
+            raise ValueError("must not be empty or only whitespace")
+        return cleaned
+
+
+class MarkOutOfScopeRequest(BaseModel):
+    reason: str | None = Field(default=None, max_length=1000)
+
+    @field_validator("reason")
+    @classmethod
+    def _strip_reason(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        cleaned = _CONTROL_CHARS.sub("", v).strip()
+        return cleaned or None

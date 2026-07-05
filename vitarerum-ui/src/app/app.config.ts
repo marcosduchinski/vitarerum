@@ -24,6 +24,7 @@ import { provideCollectionUse } from '@core/providers/provide-collection-use';
 import { provideDocumentTemplateManagement } from '@core/providers/provide-document-template-management';
 import { provideIdentity } from '@core/providers/provide-identity';
 import { provideInstitutionManagement } from '@core/providers/provide-institution-management';
+import { provideMuseumQuestionManagement } from '@core/providers/provide-museum-question-management';
 import { provideObjectSearch } from '@core/providers/provide-object-search';
 import { provideUserManagement } from '@core/providers/provide-user-management';
 import { providePrimeNG } from 'primeng/config';
@@ -104,5 +105,6 @@ export const appConfig: ApplicationConfig = {
     provideDocumentTemplateManagement(),
     provideCollectionDataSource(),
     provideObjectSearch(),
+    provideMuseumQuestionManagement(),
   ],
 };

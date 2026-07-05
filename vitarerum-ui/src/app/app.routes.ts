@@ -80,6 +80,14 @@ export const routes: Routes = [
       },
 
       {
+        path: 'museum-questions',
+        loadChildren: () =>
+          import('./features/museum-questions/museum-questions.routes').then(
+            (m) => m.MUSEUM_QUESTIONS_ROUTES,
+          ),
+      },
+
+      {
         path: 'admin',
         loadChildren: () => import('@features/admin/admin.routes').then((m) => m.ADMIN_ROUTES),
       },

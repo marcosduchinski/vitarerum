@@ -3,12 +3,7 @@
 A ``MuseumQuestion`` is a citizen's simple question submitted through the
 public "Pergunte ao Museu" channel — a lightweight sibling of the formal
 proposal submission flow (``public_submission``), for enquiries that don't
-warrant a full in-situ visit request. This plan (the public intake page)
-only ever produces ``SUBMITTED`` rows; the ``ANSWERED``/``OUT_OF_SCOPE``/
-``CLOSED`` transitions and their behaviour belong to the internal response
-section (see ``docs/plans/museum-questions-response-section-plan.md``) and
-are intentionally not implemented yet — the fields exist now so the schema
-does not need to change when that plan lands.
+warrant a full in-situ visit request.
 """
 
 from __future__ import annotations
@@ -23,6 +18,14 @@ class MuseumQuestionStatus(StrEnum):
     ANSWERED = "ANSWERED"
     OUT_OF_SCOPE = "OUT_OF_SCOPE"
     CLOSED = "CLOSED"
+
+
+class MuseumQuestionNotFound(Exception):
+    """Raised when a museum question id does not resolve."""
+
+
+class InvalidMuseumQuestionTransition(Exception):
+    """Raised when an action is not valid for the question's current status."""
 
 
 @dataclass(slots=True)
@@ -48,3 +51,55 @@ class MuseumQuestion:
     out_of_scope_email_sent_at: datetime | None = None
     closed_at: datetime | None = None
     closed_by: str | None = None
+
+    def answer(
+        self,
+        *,
+        body: str,
+        answered_by: str,
+        answered_at: datetime,
+        sent_at: datetime,
+    ) -> None:
+        if self.status != MuseumQuestionStatus.SUBMITTED:
+            raise InvalidMuseumQuestionTransition(
+                "Only submitted questions can be answered."
+            )
+        body = body.strip()
+        if not body:
+            raise ValueError("Answer body is required.")
+        self.status = MuseumQuestionStatus.ANSWERED
+        self.answer_body = body
+        self.answered_by = answered_by
+        self.answered_at = answered_at
+        self.answer_sent_at = sent_at
+
+    def mark_out_of_scope(
+        self,
+        *,
+        reason: str | None,
+        by: str,
+        occurred_at: datetime,
+        email_sent_at: datetime,
+    ) -> None:
+        if self.status != MuseumQuestionStatus.SUBMITTED:
+            raise InvalidMuseumQuestionTransition(
+                "Only submitted questions can be marked out of scope."
+            )
+        cleaned_reason = reason.strip() if reason else None
+        self.status = MuseumQuestionStatus.OUT_OF_SCOPE
+        self.out_of_scope_reason = cleaned_reason or None
+        self.out_of_scope_by = by
+        self.out_of_scope_at = occurred_at
+        self.out_of_scope_email_sent_at = email_sent_at
+
+    def close(self, *, by: str, closed_at: datetime) -> None:
+        if self.status not in {
+            MuseumQuestionStatus.ANSWERED,
+            MuseumQuestionStatus.OUT_OF_SCOPE,
+        }:
+            raise InvalidMuseumQuestionTransition(
+                "Only answered or out-of-scope questions can be closed."
+            )
+        self.status = MuseumQuestionStatus.CLOSED
+        self.closed_by = by
+        self.closed_at = closed_at

@@ -112,6 +112,12 @@ const OBJECTS_STAFF: MenuNode = {
   items: [{ label: 'Search', icon: 'pi pi-search', routerLink: '/p/objects/search' }],
 };
 
+const MUSEUM_QUESTIONS_STAFF: MenuNode = {
+  label: 'Museum Questions',
+  icon: 'pi pi-question-circle',
+  routerLink: '/p/museum-questions',
+};
+
 const COLLECTION_DATA_SOURCES_ITEM: MenuNode = {
   label: 'Collection Data Sources',
   icon: 'pi pi-database',
@@ -143,10 +149,22 @@ const STAFF_ADMIN_MENU: MenuNode = {
 
 const MENUS: Record<GroupName, readonly MenuNode[]> = {
   EXTERNAL: [HOME, USE_OF_COLLECTIONS_EXTERNAL],
-  COLLECTIONS_MANAGEMENT: [HOME, USE_OF_COLLECTIONS_STAFF, OBJECTS_STAFF, STAFF_ADMIN_MENU],
-  CURATORIAL: [HOME, USE_OF_COLLECTIONS_STAFF, OBJECTS_STAFF, STAFF_ADMIN_MENU],
-  DIRECTION: [HOME, USE_OF_COLLECTIONS_STAFF, OBJECTS_STAFF],
-  SYS_ADMIN: [HOME, OBJECTS_STAFF, SYS_ADMIN_MENU],
+  COLLECTIONS_MANAGEMENT: [
+    HOME,
+    USE_OF_COLLECTIONS_STAFF,
+    MUSEUM_QUESTIONS_STAFF,
+    OBJECTS_STAFF,
+    STAFF_ADMIN_MENU,
+  ],
+  CURATORIAL: [
+    HOME,
+    USE_OF_COLLECTIONS_STAFF,
+    MUSEUM_QUESTIONS_STAFF,
+    OBJECTS_STAFF,
+    STAFF_ADMIN_MENU,
+  ],
+  DIRECTION: [HOME, USE_OF_COLLECTIONS_STAFF, MUSEUM_QUESTIONS_STAFF, OBJECTS_STAFF],
+  SYS_ADMIN: [HOME, MUSEUM_QUESTIONS_STAFF, OBJECTS_STAFF, SYS_ADMIN_MENU],
 };
 
 @Component({

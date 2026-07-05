@@ -1,0 +1,31 @@
+@startuml museum-questions-response-flow
+title Museum Questions — Internal Response Flow
+
+start
+:Staff opens /p/museum-questions;
+:GET /museum-questions\n(status?, page, size);
+:Staff selects question;
+:GET /museum-questions/{id};
+
+if (Question status?) then (SUBMITTED)
+  if (In scope?) then (yes)
+    :Staff writes answer;
+    :POST /museum-questions/{id}/answer;
+    :Send manual e-mail;
+    :status = ANSWERED;
+  else (no)
+    :Staff confirms out-of-scope action;
+    :POST /museum-questions/{id}/mark-out-of-scope;
+    :Send standard out-of-scope e-mail;
+    :status = OUT_OF_SCOPE;
+  endif
+elseif (ANSWERED or OUT_OF_SCOPE)
+  :Staff may close;
+  :PATCH /museum-questions/{id}/close;
+  :status = CLOSED;
+else (CLOSED)
+  :No further action;
+endif
+
+stop
+@enduml

@@ -1,0 +1,196 @@
+<div class="museum-questions">
+  <app-page-header
+    eyebrow="Staff"
+    title="Museum Questions"
+    description="Review public questions, send replies, mark out-of-scope messages, and close completed items."
+  />
+
+  <section class="toolbar" aria-label="Question filters">
+    <label class="filter">
+      <span>Status</span>
+      <select [value]="statusFilter()" (change)="onStatusFilterChange($event)">
+        @for (option of statusOptions; track option.value) {
+          <option [value]="option.value">{{ option.label }}</option>
+        }
+      </select>
+    </label>
+  </section>
+
+  @if (listError()) {
+    <app-error-message [apiError]="listError()!" />
+  }
+
+  <div class="workspace">
+    <section class="queue" aria-label="Question queue">
+      @if (questionsResource.isLoading()) {
+        <app-loading-state label="Loading questions..." />
+      } @else if (questions().length === 0) {
+        <app-empty-state title="No questions found" message="There are no questions for this filter." />
+      } @else {
+        <ul class="question-list">
+          @for (question of questions(); track question.id) {
+            <li>
+              <button
+                type="button"
+                class="question-row"
+                [class.question-row--selected]="selectedId() === question.id"
+                (click)="select(question)"
+              >
+                <span class="question-row__main">
+                  <span class="question-row__subject">{{ question.subject }}</span>
+                  <span class="question-row__meta">
+                    {{ question.requesterName }} · {{ formatDate(question.createdAt) }}
+                  </span>
+                </span>
+                <span
+                  class="status"
+                  [class.status--submitted]="question.status === 'SUBMITTED'"
+                  [class.status--answered]="question.status === 'ANSWERED'"
+                  [class.status--out-of-scope]="question.status === 'OUT_OF_SCOPE'"
+                  [class.status--closed]="question.status === 'CLOSED'"
+                >
+                  {{ statusLabel(question.status) }}
+                </span>
+              </button>
+            </li>
+          }
+        </ul>
+
+        <app-pagination
+          [page]="currentPage()"
+          [totalPages]="totalPages()"
+          [total]="totalQuestions()"
+          [pageSize]="20"
+          itemLabel="questions"
+          (previous)="previousPage()"
+          (next)="nextPage()"
+        />
+      }
+    </section>
+
+    <section class="detail" aria-label="Question detail">
+      @if (!selectedId()) {
+        <app-empty-state title="Select a question" message="Choose a question from the queue to review it." />
+      } @else if (detailResource.isLoading()) {
+        <app-loading-state label="Loading question..." />
+      } @else if (detailError()) {
+        <app-error-message [apiError]="detailError()!" />
+      } @else if (selectedQuestion(); as question) {
+        <header class="detail__header">
+          <div>
+            <p class="detail__eyebrow">{{ question.requesterName }} · {{ question.requesterEmail }}</p>
+            <h2>{{ question.subject }}</h2>
+          </div>
+          <span
+            class="status"
+            [class.status--submitted]="question.status === 'SUBMITTED'"
+            [class.status--answered]="question.status === 'ANSWERED'"
+            [class.status--out-of-scope]="question.status === 'OUT_OF_SCOPE'"
+            [class.status--closed]="question.status === 'CLOSED'"
+          >
+            {{ statusLabel(question.status) }}
+          </span>
+        </header>
+
+        <dl class="metadata">
+          <div>
+            <dt>Received</dt>
+            <dd>{{ formatDate(question.createdAt) }}</dd>
+          </div>
+          <div>
+            <dt>Answered</dt>
+            <dd>{{ formatDate(question.answeredAt) }}</dd>
+          </div>
+          <div>
+            <dt>Closed</dt>
+            <dd>{{ formatDate(question.closedAt) }}</dd>
+          </div>
+        </dl>
+
+        <section class="text-block">
+          <h3>Original message</h3>
+          <p>{{ question.message }}</p>
+        </section>
+
+        @if (question.answerBody) {
+          <section class="text-block">
+            <h3>Answer sent</h3>
+            <p>{{ question.answerBody }}</p>
+          </section>
+        }
+
+        @if (question.outOfScopeReason) {
+          <section class="text-block">
+            <h3>Out-of-scope reason</h3>
+            <p>{{ question.outOfScopeReason }}</p>
+          </section>
+        }
+
+        @if (actionError()) {
+          <app-error-message [apiError]="actionError()!" />
+        }
+
+        @if (question.status === 'SUBMITTED') {
+          <div class="actions">
+            <label class="field">
+              <span>Reply</span>
+              <textarea
+                rows="5"
+                [value]="answerBody()"
+                (input)="onTextInput('answer', $event)"
+                [disabled]="busy()"
+              ></textarea>
+            </label>
+            <button
+              type="button"
+              class="primary"
+              [disabled]="busy() || !answerBody().trim()"
+              (click)="answer(question)"
+            >
+              Send answer
+            </button>
+
+            <div class="divider"></div>
+
+            <label class="field">
+              <span>Out-of-scope reason (optional)</span>
+              <textarea
+                rows="3"
+                [value]="outOfScopeReason()"
+                (input)="onTextInput('reason', $event)"
+                [disabled]="busy()"
+              ></textarea>
+            </label>
+            @if (confirmOutOfScope()) {
+              <p class="warning">This sends the standard out-of-scope e-mail to the requester.</p>
+            }
+            <div class="button-row">
+              <button type="button" class="danger" [disabled]="busy()" (click)="markOutOfScope(question)">
+                {{ confirmOutOfScope() ? 'Confirm out of scope' : 'Mark out of scope' }}
+              </button>
+              @if (confirmOutOfScope()) {
+                <button type="button" [disabled]="busy()" (click)="cancelConfirmations()">Cancel</button>
+              }
+            </div>
+          </div>
+        } @else if (question.status === 'ANSWERED' || question.status === 'OUT_OF_SCOPE') {
+          <div class="actions actions--compact">
+            @if (confirmClose()) {
+              <p class="warning">Closing archives the question. No e-mail will be sent.</p>
+            }
+            <div class="button-row">
+              <button type="button" class="primary" [disabled]="busy()" (click)="close(question)">
+                {{ confirmClose() ? 'Confirm close' : 'Close question' }}
+              </button>
+              @if (confirmClose()) {
+                <button type="button" [disabled]="busy()" (click)="cancelConfirmations()">Cancel</button>
+              }
+            </div>
+          </div>
+        } @else {
+          <p class="closed-note">This question is closed.</p>
+        }
+      }
+    </section>
+  </div>
+</div>

@@ -14,7 +14,7 @@ citizen questions — a deliberate sibling to the formal `submit-proposal` flow
 
 **Current scope**: only questions related to the use of collections, especially in-situ
 visits for research, receive a manual reply. Anything else is later marked out of scope by
-staff (see `14MuseumQuestions-Internal-API.md`, not yet implemented) and closed with an
+staff (see `14MuseumQuestions-Internal-API.md`) and closed with an
 automatic e-mail — it is **not** rejected at submission time. The public form displays this
 alert:
 
@@ -138,10 +138,9 @@ consumes. Request-validation failures (`422`) carry a field-error array under `e
 
 ---
 
-## Not yet implemented
+## Internal follow-up
 
 The internal staff response section (list, answer, mark out of scope, close) is a separate
-plan — see `docs/plans/museum-questions-response-section-plan.md` and the (future)
-`14MuseumQuestions-Internal-API.md`. The `museum_questions` table already has the columns
-that section needs (`answered_*`, `out_of_scope_*`, `closed_at`/`closed_by`), populated only
-by that future work.
+workflow — see `docs/plans/museum-questions-response-section-plan.md` and
+`14MuseumQuestions-Internal-API.md`. The `museum_questions` table has the columns that
+section uses (`answered_*`, `out_of_scope_*`, `closed_at`/`closed_by`).

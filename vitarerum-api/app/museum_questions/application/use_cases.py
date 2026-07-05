@@ -11,13 +11,20 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
+from app.identity.public import Actor
 from app.museum_questions.application.ports import (
     CaptchaVerifier,
     Clock,
     MuseumQuestionRepository,
     RateLimiter,
 )
-from app.museum_questions.domain.models import MuseumQuestion
+from app.museum_questions.domain.models import (
+    InvalidMuseumQuestionTransition,
+    MuseumQuestion,
+    MuseumQuestionNotFound,
+    MuseumQuestionStatus,
+)
+from app.shared.authorization import require_staff
 
 # Rate limits as (max_requests, window_seconds), mirroring public_submission's
 # reference implementation (same policy, duplicated code — see the plan).
@@ -138,3 +145,137 @@ class SubmitMuseumQuestion:
         ):
             return SubmitMuseumQuestionOutput(email=data.requester_email)
         return await self.persist(data)
+
+
+@dataclass(frozen=True, slots=True)
+class MuseumQuestionPage:
+    content: list[MuseumQuestion]
+    page: int
+    size: int
+    total: int
+
+
+@dataclass(frozen=True, slots=True)
+class AnswerMuseumQuestionInput:
+    caller: Actor
+    question_id: str
+    answer_body: str
+
+
+@dataclass(frozen=True, slots=True)
+class MarkMuseumQuestionOutOfScopeInput:
+    caller: Actor
+    question_id: str
+    reason: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class CloseMuseumQuestionInput:
+    caller: Actor
+    question_id: str
+
+
+class ListMuseumQuestions:
+    def __init__(self, repository: MuseumQuestionRepository) -> None:
+        self._repo = repository
+
+    async def execute(
+        self,
+        caller: Actor,
+        *,
+        status: MuseumQuestionStatus | None,
+        page: int,
+        size: int,
+    ) -> MuseumQuestionPage:
+        require_staff(caller)
+        content, total = await self._repo.list(status=status, page=page, size=size)
+        return MuseumQuestionPage(content=content, page=page, size=size, total=total)
+
+
+class GetMuseumQuestion:
+    def __init__(self, repository: MuseumQuestionRepository) -> None:
+        self._repo = repository
+
+    async def execute(self, caller: Actor, question_id: str) -> MuseumQuestion:
+        require_staff(caller)
+        question = await self._repo.get_by_id(question_id)
+        if question is None:
+            raise MuseumQuestionNotFound(question_id)
+        return question
+
+
+class AnswerMuseumQuestion:
+    """Persists the answer only. The e-mail is sent by the route, after the
+    status change is durably committed — see ``presentation/routes.py``; a
+    citizen must never receive a reply for an update that rolled back."""
+
+    def __init__(self, repository: MuseumQuestionRepository, clock: Clock) -> None:
+        self._repo = repository
+        self._clock = clock
+
+    async def execute(self, data: AnswerMuseumQuestionInput) -> MuseumQuestion:
+        require_staff(data.caller)
+        question = await self._repo.get_by_id(data.question_id)
+        if question is None:
+            raise MuseumQuestionNotFound(data.question_id)
+        if question.status != MuseumQuestionStatus.SUBMITTED:
+            raise InvalidMuseumQuestionTransition(
+                "Only submitted questions can be answered."
+            )
+        answer_body = data.answer_body.strip()
+        if not answer_body:
+            raise ValueError("Answer body is required.")
+        now = self._clock.now()
+        question.answer(
+            body=answer_body,
+            answered_by=str(data.caller.id),
+            answered_at=now,
+            sent_at=now,
+        )
+        await self._repo.save(question)
+        return question
+
+
+class MarkMuseumQuestionOutOfScope:
+    """Persists the out-of-scope status only. The e-mail is sent by the
+    route, after commit — see :class:`AnswerMuseumQuestion`."""
+
+    def __init__(self, repository: MuseumQuestionRepository, clock: Clock) -> None:
+        self._repo = repository
+        self._clock = clock
+
+    async def execute(
+        self, data: MarkMuseumQuestionOutOfScopeInput
+    ) -> MuseumQuestion:
+        require_staff(data.caller)
+        question = await self._repo.get_by_id(data.question_id)
+        if question is None:
+            raise MuseumQuestionNotFound(data.question_id)
+        if question.status != MuseumQuestionStatus.SUBMITTED:
+            raise InvalidMuseumQuestionTransition(
+                "Only submitted questions can be marked out of scope."
+            )
+        now = self._clock.now()
+        question.mark_out_of_scope(
+            reason=data.reason,
+            by=str(data.caller.id),
+            occurred_at=now,
+            email_sent_at=now,
+        )
+        await self._repo.save(question)
+        return question
+
+
+class CloseMuseumQuestion:
+    def __init__(self, repository: MuseumQuestionRepository, clock: Clock) -> None:
+        self._repo = repository
+        self._clock = clock
+
+    async def execute(self, data: CloseMuseumQuestionInput) -> MuseumQuestion:
+        require_staff(data.caller)
+        question = await self._repo.get_by_id(data.question_id)
+        if question is None:
+            raise MuseumQuestionNotFound(data.question_id)
+        question.close(by=str(data.caller.id), closed_at=self._clock.now())
+        await self._repo.save(question)
+        return question

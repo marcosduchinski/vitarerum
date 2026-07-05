@@ -12,7 +12,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Protocol
 
-from app.museum_questions.domain.models import MuseumQuestion
+from app.museum_questions.domain.models import MuseumQuestion, MuseumQuestionStatus
 
 
 class CaptchaVerifier(Protocol):
@@ -35,3 +35,34 @@ class Clock(Protocol):
 
 class MuseumQuestionRepository(Protocol):
     async def add(self, question: MuseumQuestion) -> None: ...
+
+    async def get_by_id(self, question_id: str) -> MuseumQuestion | None: ...
+
+    async def list(
+        self,
+        *,
+        status: MuseumQuestionStatus | None,
+        page: int,
+        size: int,
+    ) -> tuple[list[MuseumQuestion], int]: ...
+
+    async def save(self, question: MuseumQuestion) -> None: ...
+
+
+class MuseumQuestionEmailSender(Protocol):
+    async def send_answer(
+        self,
+        *,
+        to_email: str,
+        requester_name: str,
+        subject: str,
+        answer_body: str,
+    ) -> None: ...
+
+    async def send_out_of_scope(
+        self,
+        *,
+        to_email: str,
+        requester_name: str,
+        subject: str,
+    ) -> None: ...
