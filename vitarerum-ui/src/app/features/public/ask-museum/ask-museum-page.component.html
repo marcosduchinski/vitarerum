@@ -1,0 +1,139 @@
+<div class="ask-museum">
+  <app-page-header
+    eyebrow="Ask the Museum"
+    title="Ask the Museum"
+    description="Have a quick question? Tell us who you are and what you'd like to know — we'll reply by e-mail."
+  />
+
+  <div class="scope-alert" role="note">
+    At this time, Ask the Museum is only available for questions related to the use of collections,
+    especially in-situ visits for research. Questions about exhibitions, loans, events, educational
+    activities, or other museum services will be closed with an automatic e-mail reply.
+  </div>
+
+  <form class="ask-form" (submit)="submit($event)" novalidate>
+    <div class="field" [class.field--error]="nameError()">
+      <label class="field__label" for="name">Full name <span aria-hidden="true">*</span></label>
+      <input
+        id="name"
+        type="text"
+        class="field__input"
+        autocomplete="name"
+        maxlength="120"
+        [value]="name()"
+        (input)="onInput('name', $event)"
+        [attr.aria-invalid]="nameError() || null"
+      />
+      @if (nameError()) {
+        <p class="field__error" role="alert">Your name is required.</p>
+      }
+    </div>
+
+    <div class="field" [class.field--error]="emailError()">
+      <label class="field__label" for="email">E-mail <span aria-hidden="true">*</span></label>
+      <input
+        id="email"
+        type="email"
+        class="field__input"
+        autocomplete="email"
+        maxlength="180"
+        placeholder="you@example.com"
+        [value]="email()"
+        (input)="onInput('email', $event)"
+        [attr.aria-invalid]="emailError() || null"
+      />
+      @if (emailError()) {
+        <p class="field__error" role="alert">A valid e-mail address is required.</p>
+      }
+      <p class="field__hint">We'll send our reply here.</p>
+    </div>
+
+    <!-- Honeypot: hidden from real users, irresistible to bots. -->
+    <div class="ask-form__honeypot" aria-hidden="true">
+      <label for="website">Website</label>
+      <input
+        id="website"
+        type="text"
+        tabindex="-1"
+        autocomplete="off"
+        [value]="website()"
+        (input)="onInput('website', $event)"
+      />
+    </div>
+
+    <div class="field" [class.field--error]="subjectError()">
+      <label class="field__label" for="subject">Subject <span aria-hidden="true">*</span></label>
+      <input
+        id="subject"
+        type="text"
+        class="field__input"
+        maxlength="200"
+        placeholder="Brief subject line"
+        [value]="subject()"
+        (input)="onInput('subject', $event)"
+        [attr.aria-invalid]="subjectError() || null"
+      />
+      @if (subjectError()) {
+        <p class="field__error" role="alert">Subject is required.</p>
+      }
+    </div>
+
+    <div class="field" [class.field--error]="messageError()">
+      <label class="field__label" for="message">Message <span aria-hidden="true">*</span></label>
+      <textarea
+        id="message"
+        class="field__input field__input--textarea"
+        rows="6"
+        maxlength="4000"
+        placeholder="Ask your question…"
+        [value]="message()"
+        (input)="onInput('message', $event)"
+        [attr.aria-invalid]="messageError() || null"
+      ></textarea>
+      @if (messageError()) {
+        <p class="field__error" role="alert">Your question is required.</p>
+      }
+    </div>
+
+    <div class="field field--checkbox" [class.field--error]="consentError()">
+      <label class="consent">
+        <input
+          type="checkbox"
+          [checked]="consent()"
+          (change)="onConsentChange($event)"
+          [attr.aria-invalid]="consentError() || null"
+        />
+        <span>
+          I agree that Vitarerum may process the personal data in this form to handle my question.
+          <span aria-hidden="true">*</span>
+        </span>
+      </label>
+      @if (consentError()) {
+        <p class="field__error" role="alert">Consent is required to submit.</p>
+      }
+    </div>
+
+    @if (captchaRequired()) {
+      <div class="field" [class.field--error]="captchaError()">
+        <app-turnstile
+          [siteKey]="siteKey"
+          (verified)="onVerified($event)"
+          (invalidated)="onCaptchaInvalidated()"
+        />
+        @if (captchaError()) {
+          <p class="field__error" role="alert">Please complete the verification.</p>
+        }
+      </div>
+    }
+
+    @if (submitError()) {
+      <app-error-message [apiError]="submitError()!" />
+    }
+
+    <div class="ask-form__footer">
+      <button type="submit" class="submit-btn" [disabled]="submitting()">
+        {{ submitting() ? 'Sending…' : 'Send question' }}
+      </button>
+    </div>
+  </form>
+</div>

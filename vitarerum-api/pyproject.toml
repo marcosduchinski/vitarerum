@@ -107,7 +107,12 @@ layers = [
 name = "Public submission may import other contexts only via published language"
 type = "forbidden"
 source_modules = ["app.public_submission"]
-forbidden_modules = ["app.identity", "app.use_of_collections", "app.cidoc_crm"]
+forbidden_modules = [
+    "app.identity",
+    "app.use_of_collections",
+    "app.cidoc_crm",
+    "app.museum_questions",
+]
 ignore_imports = [
     # Known composition-root coupling: the public intake adapter wires other
     # contexts' repositories/use cases directly to materialise the proposal.
@@ -165,7 +170,7 @@ layers = [
 name = "Reports may import other contexts only via their published language"
 type = "forbidden"
 source_modules = ["app.reports"]
-forbidden_modules = ["app.cidoc_crm", "app.ai"]
+forbidden_modules = ["app.cidoc_crm", "app.ai", "app.museum_questions"]
 ignore_imports = [
     # Permanent: the published languages are the report aggregator's only doors
     # into the record (CIDOC-CRM) and narrative (KG-RAG) read models.
@@ -207,6 +212,7 @@ forbidden_modules = [
     "app.cidoc_crm",
     "app.ai",
     "app.public_submission",
+    "app.museum_questions",
 ]
 ignore_imports = [
     # Composition-root only: reuse the shared local-disk file storage adapter.
@@ -246,11 +252,49 @@ forbidden_modules = [
     "app.ai",
     "app.public_submission",
     "app.document_templates",
+    "app.museum_questions",
 ]
 ignore_imports = [
     # Composition-root only: reuse the shared local-disk file storage adapter.
     # Own FileStorage port keeps the domain/application free of this coupling.
     "app.collection_object_index.presentation.dependencies -> app.use_of_collections.infrastructure.file_storage",
+]
+
+[[tool.importlinter.contracts]]
+name = "Museum questions layers (presentation > infrastructure > application > domain)"
+type = "layers"
+layers = [
+    "app.museum_questions.presentation",
+    "app.museum_questions.infrastructure",
+    "app.museum_questions.application",
+    "app.museum_questions.domain",
+]
+
+[[tool.importlinter.contracts]]
+name = "Museum questions may not depend on other contexts"
+type = "forbidden"
+source_modules = ["app.museum_questions"]
+forbidden_modules = [
+    "app.use_of_collections",
+    "app.cidoc_crm",
+    "app.ai",
+    "app.public_submission",
+    "app.document_templates",
+    "app.collection_object_index",
+]
+
+[[tool.importlinter.contracts]]
+name = "Museum questions may import Identity only via identity.public"
+type = "forbidden"
+source_modules = ["app.museum_questions"]
+forbidden_modules = ["app.identity"]
+ignore_imports = [
+    # Permanent: identity.public is the published language, reached through the
+    # shared staff-auth helpers (CallerPermission / require_staff) — needed once
+    # the internal response section (museum-questions-response-section-plan.md)
+    # adds its authenticated endpoints.
+    "app.shared.authorization -> app.identity.public",
+    "app.shared.dependencies -> app.identity.public",
 ]
 
 [[tool.importlinter.contracts]]
@@ -264,6 +308,7 @@ source_modules = [
     "app.public_submission.domain",
     "app.document_templates.domain",
     "app.collection_object_index.domain",
+    "app.museum_questions.domain",
 ]
 forbidden_modules = ["fastapi", "sqlalchemy", "pydantic"]
 
@@ -279,6 +324,7 @@ source_modules = [
     "app.public_submission.application",
     "app.document_templates.application",
     "app.collection_object_index.application",
+    "app.museum_questions.application",
 ]
 forbidden_modules = ["fastapi", "sqlalchemy"]
 ignore_imports = [

@@ -606,4 +606,56 @@ note as N_DocumentTemplates
 end note
 N_DocumentTemplates .. DocumentTemplate
 
+
+package "Museum Questions" <<Bounded Context>> {
+
+        class MuseumQuestion <<Aggregate Root>> #f4a261 {
+        - id: String
+        - requesterName: String
+        - requesterEmail: String
+        - subject: String
+        - message: String
+        - status: MuseumQuestionStatus
+        - createdAt: DateTime
+        - answeredAt: DateTime?
+        - answeredBy: PermissionId?
+        - answerBody: String?
+        - answerSentAt: DateTime?
+        - outOfScopeAt: DateTime?
+        - outOfScopeBy: PermissionId?
+        - outOfScopeReason: String?
+        - outOfScopeEmailSentAt: DateTime?
+        - closedAt: DateTime?
+        - closedBy: PermissionId?
+        }
+
+        enum MuseumQuestionStatus #f4a261 {
+        SUBMITTED
+        ANSWERED
+        OUT_OF_SCOPE
+        CLOSED
+        }
+
+        MuseumQuestion ..> Permission : answeredBy?
+        MuseumQuestion ..> Permission : outOfScopeBy?
+        MuseumQuestion ..> Permission : closedBy?
+}
+
+note as N_MuseumQuestions
+  "Pergunte ao Museu" — a lightweight public question channel, deliberately
+  separate from Proposal/Conversation (User Request context): one question,
+  one reply e-mail, no thread, no account. The public intake plan
+  (museum-questions-public-page-plan.md, IMPLEMENTED) only ever produces
+  SUBMITTED rows; the answer/out-of-scope/close behaviour and their audit
+  fields belong to the internal response section
+  (museum-questions-response-section-plan.md, PLANEJADO), whose schema is
+  already present so it needs no migration of its own. CLOSED is reachable
+  only from ANSWERED or OUT_OF_SCOPE, never directly from SUBMITTED — every
+  question gets a real answer or an out-of-scope reply before it can be
+  archived. Catalog administration mirrors Collection Object Index's
+  SYS_ADMIN-only pattern where relevant (curator-style scoping does not
+  apply here — any staff member may answer, per require_staff).
+end note
+N_MuseumQuestions .. MuseumQuestion
+
 @enduml

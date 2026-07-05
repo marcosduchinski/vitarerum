@@ -1,0 +1,45 @@
+.public-landing {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+}
+
+.choice {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1.5rem;
+  border: 1px solid var(--color-border, #e2e5ef);
+  border-radius: var(--radius-md, 12px);
+  text-decoration: none;
+  color: inherit;
+  background: var(--color-surface, #fff);
+  transition: border-color 0.15s ease;
+
+  &:hover,
+  &:focus-visible {
+    border-color: var(--color-primary, #2f6fed);
+  }
+}
+
+.choice__icon {
+  font-size: 1.75rem;
+  color: var(--color-primary, #2f6fed);
+}
+
+.choice__title {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.choice__desc {
+  color: var(--color-subtle, #6b7280);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}

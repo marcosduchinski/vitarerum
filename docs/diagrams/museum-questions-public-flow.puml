@@ -1,0 +1,65 @@
+@startuml museum-questions-public-flow
+title Museum Questions — Public Intake Flow
+
+skinparam shadowing false
+skinparam activity {
+  BackgroundColor #F8FAFC
+  BorderColor #334155
+  FontColor #111827
+}
+skinparam note {
+  BackgroundColor #FFFBEB
+  BorderColor #B45309
+}
+
+start
+:Citizen opens the public landing page (/public);
+
+if (Choice?) then (Ask the Museum)
+  :Citizen fills the /ask-museum form\n(name, e-mail, subject, message, consent, captcha);
+  :POST /public/museum-questions;
+
+  if (Honeypot filled?) then (yes)
+    :Silent accept-and-drop\n202, no work;
+    stop
+  else (no)
+  endif
+
+  if (Rate limit exceeded?) then (yes)
+    :429 Too Many Requests\n(Retry-After);
+    stop
+  else (no)
+  endif
+
+  if (Captcha valid?) then (no)
+    :403 Captcha failed\n(or 503 provider unreachable);
+    stop
+  else (yes)
+  endif
+
+  if (Payload valid?) then (no)
+    :422 Validation failed;
+    stop
+  else (yes)
+  endif
+
+  :Persist MuseumQuestion\nstatus = SUBMITTED;
+  :202 MuseumQuestionReceipt;
+  :Citizen sees /ask-museum/received;
+  stop
+
+else (Request an in-situ visit)
+  :Navigate to /submit-proposal\n(formal flow — see 11PublicProposalSubmission-API.md);
+  stop
+endif
+
+note right
+  This plan only ever produces SUBMITTED rows.
+  ANSWERED / OUT_OF_SCOPE / CLOSED belong to the
+  internal response section (see
+  museum-questions-response-flow.puml, not yet
+  implemented) — staff reply by e-mail; there is
+  no public follow-up, no thread, no status check.
+end note
+
+@enduml
