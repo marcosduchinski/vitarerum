@@ -42,6 +42,7 @@ class MuseumQuestionRepository(Protocol):
         self,
         *,
         status: MuseumQuestionStatus | None,
+        requester_email: str | None,
         page: int,
         size: int,
     ) -> tuple[list[MuseumQuestion], int]: ...

@@ -6,25 +6,28 @@ import {
   resource,
   signal,
 } from '@angular/core';
-import { firstValueFrom, Observable } from 'rxjs';
+import { Router, RouterLink } from '@angular/router';
+import { MenuItem } from 'primeng/api';
+import { firstValueFrom } from 'rxjs';
 
 import { ApiError, toApiError } from '@core/http/api-error.model';
 import { EmptyStateComponent } from '@shared/components/empty-state/empty-state.component';
 import { ErrorMessageComponent } from '@shared/components/error-message/error-message.component';
 import { LoadingStateComponent } from '@shared/components/loading-state/loading-state.component';
 import { PageHeaderComponent } from '@shared/components/page-header/page-header.component';
-import { PaginationComponent } from '@shared/components/pagination/pagination.component';
+import { RowActionsComponent } from '@shared/components/row-actions/row-actions.component';
 
 import { MuseumQuestion, MuseumQuestionStatus } from '../models/museum-question.model';
 import { MUSEUM_QUESTION_MANAGEMENT_SERVICE } from '../services/museum-question-management.service';
 
-const PAGE_SIZE = 20;
+const DEFAULT_PAGE_SIZE = 20;
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
 const STATUS_OPTIONS: readonly { value: MuseumQuestionStatus | ''; label: string }[] = [
-  { value: '', label: 'All statuses' },
   { value: 'SUBMITTED', label: 'Submitted' },
   { value: 'ANSWERED', label: 'Answered' },
   { value: 'OUT_OF_SCOPE', label: 'Out of scope' },
   { value: 'CLOSED', label: 'Closed' },
+  { value: '', label: 'All statuses' },
 ];
 
 const STATUS_LABELS: Record<MuseumQuestionStatus, string> = {
@@ -38,11 +41,12 @@ const STATUS_LABELS: Record<MuseumQuestionStatus, string> = {
   selector: 'app-museum-questions-page',
   standalone: true,
   imports: [
+    RouterLink,
     PageHeaderComponent,
     LoadingStateComponent,
     ErrorMessageComponent,
     EmptyStateComponent,
-    PaginationComponent,
+    RowActionsComponent,
   ],
   templateUrl: './museum-questions-page.component.html',
   styleUrl: './museum-questions-page.component.scss',
@@ -50,19 +54,19 @@ const STATUS_LABELS: Record<MuseumQuestionStatus, string> = {
 })
 export class MuseumQuestionsPageComponent {
   private readonly service = inject(MUSEUM_QUESTION_MANAGEMENT_SERVICE);
+  private readonly router = inject(Router);
 
   protected readonly statusOptions = STATUS_OPTIONS;
   protected readonly currentPage = signal(0);
+  protected readonly pageSize = signal(DEFAULT_PAGE_SIZE);
   protected readonly statusFilter = signal<MuseumQuestionStatus | ''>('SUBMITTED');
-  protected readonly refreshToken = signal(0);
-  protected readonly selectedId = signal<string | null>(null);
+  protected readonly pageSizeOptions = PAGE_SIZE_OPTIONS;
 
   protected readonly questionsResource = resource({
     params: () => ({
       page: this.currentPage(),
-      size: PAGE_SIZE,
+      size: this.pageSize(),
       status: this.statusFilter(),
-      refresh: this.refreshToken(),
     }),
     loader: ({ params }) =>
       firstValueFrom(
@@ -74,47 +78,47 @@ export class MuseumQuestionsPageComponent {
       ),
   });
 
-  protected readonly detailResource = resource({
-    params: () => ({ id: this.selectedId(), refresh: this.refreshToken() }),
-    loader: ({ params }) =>
-      params.id ? firstValueFrom(this.service.get(params.id)) : Promise.resolve(null),
-  });
-
   protected readonly questions = computed(() => this.questionsResource.value()?.content ?? []);
   protected readonly totalQuestions = computed(
     () => this.questionsResource.value()?.totalElements ?? 0,
   );
   protected readonly totalPages = computed(() => this.questionsResource.value()?.totalPages ?? 0);
-  protected readonly selectedQuestion = computed(() => this.detailResource.value());
+  protected readonly rangeStart = computed(() =>
+    this.totalQuestions() === 0 ? 0 : this.currentPage() * this.pageSize() + 1,
+  );
+  protected readonly rangeEnd = computed(() =>
+    Math.min((this.currentPage() + 1) * this.pageSize(), this.totalQuestions()),
+  );
   protected readonly listError = computed<ApiError | null>(() => {
     const err = this.questionsResource.error();
     return err ? toApiError(err) : null;
   });
-  protected readonly detailError = computed<ApiError | null>(() => {
-    const err = this.detailResource.error();
-    return err ? toApiError(err) : null;
-  });
 
-  protected readonly answerBody = signal('');
-  protected readonly outOfScopeReason = signal('');
-  protected readonly confirmOutOfScope = signal(false);
-  protected readonly confirmClose = signal(false);
-  protected readonly busy = signal(false);
-  protected readonly actionError = signal<ApiError | null>(null);
-
-  protected select(question: MuseumQuestion): void {
-    this.selectedId.set(question.id);
-    this.answerBody.set('');
-    this.outOfScopeReason.set('');
-    this.confirmOutOfScope.set(false);
-    this.confirmClose.set(false);
-    this.actionError.set(null);
+  protected actionItemsFor(question: MuseumQuestion): MenuItem[] {
+    const questionId = question.id;
+    return [
+      {
+        label: 'Details',
+        icon: 'pi pi-eye',
+        command: () => {
+          void this.router.navigate(['/p/museum-questions', questionId]);
+        },
+      },
+    ];
   }
 
   protected onStatusFilterChange(event: Event): void {
     this.statusFilter.set((event.target as HTMLSelectElement).value as MuseumQuestionStatus | '');
     this.currentPage.set(0);
-    this.selectedId.set(null);
+  }
+
+  protected onPageSizeChange(event: Event): void {
+    this.pageSize.set(Number((event.target as HTMLSelectElement).value));
+    this.currentPage.set(0);
+  }
+
+  protected firstPage(): void {
+    this.currentPage.set(0);
   }
 
   protected previousPage(): void {
@@ -125,45 +129,8 @@ export class MuseumQuestionsPageComponent {
     this.currentPage.update((page) => Math.min(Math.max(0, this.totalPages() - 1), page + 1));
   }
 
-  protected onTextInput(field: 'answer' | 'reason', event: Event): void {
-    const value = (event.target as HTMLTextAreaElement).value;
-    if (field === 'answer') this.answerBody.set(value);
-    if (field === 'reason') this.outOfScopeReason.set(value);
-  }
-
-  protected async answer(question: MuseumQuestion): Promise<void> {
-    const answerBody = this.answerBody().trim();
-    if (!answerBody) return;
-    await this.run(() => this.service.answer(question.id, { answerBody }));
-    this.answerBody.set('');
-  }
-
-  protected async markOutOfScope(question: MuseumQuestion): Promise<void> {
-    if (!this.confirmOutOfScope()) {
-      this.confirmOutOfScope.set(true);
-      return;
-    }
-    await this.run(() =>
-      this.service.markOutOfScope(question.id, {
-        reason: this.outOfScopeReason().trim() || null,
-      }),
-    );
-    this.outOfScopeReason.set('');
-    this.confirmOutOfScope.set(false);
-  }
-
-  protected async close(question: MuseumQuestion): Promise<void> {
-    if (!this.confirmClose()) {
-      this.confirmClose.set(true);
-      return;
-    }
-    await this.run(() => this.service.close(question.id));
-    this.confirmClose.set(false);
-  }
-
-  protected cancelConfirmations(): void {
-    this.confirmOutOfScope.set(false);
-    this.confirmClose.set(false);
+  protected lastPage(): void {
+    this.currentPage.set(Math.max(0, this.totalPages() - 1));
   }
 
   protected statusLabel(status: MuseumQuestionStatus): string {
@@ -171,23 +138,10 @@ export class MuseumQuestionsPageComponent {
   }
 
   protected formatDate(value: string | null): string {
-    if (!value) return '—';
+    if (!value) return '-';
     return new Intl.DateTimeFormat(undefined, {
       dateStyle: 'medium',
       timeStyle: 'short',
     }).format(new Date(value));
-  }
-
-  private async run(operation: () => Observable<unknown>): Promise<void> {
-    this.busy.set(true);
-    this.actionError.set(null);
-    try {
-      await firstValueFrom(operation());
-      this.refreshToken.update((value) => value + 1);
-    } catch (err) {
-      this.actionError.set(toApiError(err));
-    } finally {
-      this.busy.set(false);
-    }
   }
 }

@@ -1,5 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { Router, provideRouter } from '@angular/router';
 import { of } from 'rxjs';
+import { vi } from 'vitest';
 
 import {
   MuseumQuestion,
@@ -30,62 +32,17 @@ const QUESTION: MuseumQuestion = {
 };
 
 class ServiceStub {
-  question = QUESTION;
   readonly listCalls: MuseumQuestionListQuery[] = [];
-  readonly answerCalls: [string, string][] = [];
-  readonly outOfScopeCalls: [string, string | null][] = [];
-  readonly closeCalls: string[] = [];
 
   list(query: MuseumQuestionListQuery) {
     this.listCalls.push(query);
     return of<MuseumQuestionPage>({
-      content: [this.question],
+      content: [QUESTION],
       page: query.page,
       size: query.size,
-      totalElements: 1,
-      totalPages: 1,
+      totalElements: 45,
+      totalPages: Math.ceil(45 / query.size),
     });
-  }
-
-  get() {
-    return of(this.question);
-  }
-
-  answer(questionId: string, body: { answerBody: string }) {
-    this.answerCalls.push([questionId, body.answerBody]);
-    this.question = {
-      ...this.question,
-      status: 'ANSWERED',
-      answerBody: body.answerBody,
-      answeredAt: '2026-07-05T12:00:00Z',
-      answeredBy: 'perm-staff',
-      answerSentAt: '2026-07-05T12:00:00Z',
-    };
-    return of(this.question);
-  }
-
-  markOutOfScope(questionId: string, body: { reason: string | null }) {
-    this.outOfScopeCalls.push([questionId, body.reason]);
-    this.question = {
-      ...this.question,
-      status: 'OUT_OF_SCOPE',
-      outOfScopeReason: body.reason,
-      outOfScopeAt: '2026-07-05T12:00:00Z',
-      outOfScopeBy: 'perm-staff',
-      outOfScopeEmailSentAt: '2026-07-05T12:00:00Z',
-    };
-    return of(this.question);
-  }
-
-  close(questionId: string) {
-    this.closeCalls.push(questionId);
-    this.question = {
-      ...this.question,
-      status: 'CLOSED',
-      closedAt: '2026-07-05T12:00:00Z',
-      closedBy: 'perm-staff',
-    };
-    return of(this.question);
   }
 }
 
@@ -93,12 +50,14 @@ describe('MuseumQuestionsPageComponent', () => {
   let fixture: ComponentFixture<MuseumQuestionsPageComponent>;
   let service: ServiceStub;
 
-  async function setup(question: MuseumQuestion = QUESTION): Promise<HTMLElement> {
+  async function setup(): Promise<HTMLElement> {
     service = new ServiceStub();
-    service.question = question;
     await TestBed.configureTestingModule({
       imports: [MuseumQuestionsPageComponent],
-      providers: [{ provide: MUSEUM_QUESTION_MANAGEMENT_SERVICE, useValue: service }],
+      providers: [
+        provideRouter([]),
+        { provide: MUSEUM_QUESTION_MANAGEMENT_SERVICE, useValue: service },
+      ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(MuseumQuestionsPageComponent);
@@ -111,82 +70,57 @@ describe('MuseumQuestionsPageComponent', () => {
   it('lists submitted questions by default', async () => {
     const el = await setup();
     expect(el.textContent).toContain('Visit question');
+    expect(el.textContent).toContain('ana@example.org');
     expect(service.listCalls[0]).toMatchObject({ status: 'SUBMITTED', page: 0, size: 20 });
   });
 
-  it('loads detail and keeps citizen content as text', async () => {
+  it('links each question to its detail page', async () => {
     const el = await setup();
-    el.querySelector<HTMLButtonElement>('.question-row')!.click();
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    expect(el.textContent).toContain('<b>Please do not render as HTML</b>');
-    expect(el.querySelector('b')).toBeNull();
+    const link = el.querySelector<HTMLAnchorElement>('a[href="/p/museum-questions/q1"]');
+    expect(link?.textContent).toContain('Visit question');
   });
 
-  it('sends an answer for submitted questions', async () => {
+  it('shows details in the row actions menu', async () => {
     const el = await setup();
-    await selectFirst(el, fixture);
-    const textarea = el.querySelector<HTMLTextAreaElement>('textarea')!;
-    textarea.value = '  Answer body  ';
-    textarea.dispatchEvent(new Event('input'));
+    const navigateSpy = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    el.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')!.click();
     fixture.detectChanges();
-    Array.from(el.querySelectorAll<HTMLButtonElement>('button'))
-      .find((button) => button.textContent?.includes('Send answer'))!
-      .click();
-    await fixture.whenStable();
 
-    expect(service.answerCalls).toEqual([['q1', 'Answer body']]);
+    menuItemByText('Details').click();
+
+    expect(navigateSpy).toHaveBeenCalledWith(['/p/museum-questions', 'q1']);
   });
 
-  it('requires confirmation before marking out of scope', async () => {
+  it('reloads from the first page when the status filter changes', async () => {
     const el = await setup();
-    await selectFirst(el, fixture);
-    const reason = Array.from(el.querySelectorAll<HTMLTextAreaElement>('textarea'))[1];
-    reason.value = ' Exhibition ';
-    reason.dispatchEvent(new Event('input'));
+    const select = el.querySelector<HTMLSelectElement>('#museum-question-status')!;
+    select.value = 'ANSWERED';
+    select.dispatchEvent(new Event('change'));
     fixture.detectChanges();
-    const button = () =>
-      Array.from(el.querySelectorAll<HTMLButtonElement>('button')).find((b) =>
-        b.textContent?.includes('out of scope'),
-      )!;
-
-    button().click();
-    fixture.detectChanges();
-    expect(service.outOfScopeCalls).toEqual([]);
-    expect(el.textContent).toContain('standard out-of-scope e-mail');
-
-    button().click();
     await fixture.whenStable();
-    expect(service.outOfScopeCalls).toEqual([['q1', 'Exhibition']]);
+
+    expect(service.listCalls.at(-1)).toMatchObject({ status: 'ANSWERED', page: 0, size: 20 });
   });
 
-  it('closes answered questions after confirmation', async () => {
-    const el = await setup({ ...QUESTION, status: 'ANSWERED', answerBody: 'Done' });
-    await selectFirst(el, fixture);
-    const button = () =>
-      Array.from(el.querySelectorAll<HTMLButtonElement>('button')).find((b) =>
-        b.textContent?.includes('Close question') || b.textContent?.includes('Confirm close'),
-      )!;
+  it('uses the assignments pagination pattern with configurable rows', async () => {
+    const el = await setup();
+    expect(el.textContent).toContain('1-20 of 45 questions');
+    expect(el.textContent).toContain('Page 1 of 3');
 
-    button().click();
+    const sizeSelect = el.querySelector<HTMLSelectElement>('#questions-page-size')!;
+    sizeSelect.value = '10';
+    sizeSelect.dispatchEvent(new Event('change'));
     fixture.detectChanges();
-    expect(service.closeCalls).toEqual([]);
-    expect(el.textContent).toContain('No e-mail will be sent');
-
-    button().click();
     await fixture.whenStable();
-    expect(service.closeCalls).toEqual(['q1']);
+
+    expect(service.listCalls.at(-1)).toMatchObject({ page: 0, size: 10 });
   });
 });
 
-async function selectFirst(
-  el: HTMLElement,
-  fixture: ComponentFixture<MuseumQuestionsPageComponent>,
-): Promise<void> {
-  el.querySelector<HTMLButtonElement>('.question-row')!.click();
-  fixture.detectChanges();
-  await fixture.whenStable();
-  fixture.detectChanges();
+function menuItemByText(text: string): HTMLElement {
+  const item = Array.from(
+    document.body.querySelectorAll<HTMLElement>('.p-menu a, .p-menu button'),
+  ).find((candidate) => candidate.textContent?.trim().includes(text));
+  if (!item) throw new Error(`Menu item not found: ${text}`);
+  return item;
 }

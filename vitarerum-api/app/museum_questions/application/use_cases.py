@@ -184,11 +184,20 @@ class ListMuseumQuestions:
         caller: Actor,
         *,
         status: MuseumQuestionStatus | None,
+        requester_email: str | None = None,
         page: int,
         size: int,
     ) -> MuseumQuestionPage:
         require_staff(caller)
-        content, total = await self._repo.list(status=status, page=page, size=size)
+        normalized_requester_email = (
+            requester_email.strip().lower() if requester_email else None
+        )
+        content, total = await self._repo.list(
+            status=status,
+            requester_email=normalized_requester_email,
+            page=page,
+            size=size,
+        )
         return MuseumQuestionPage(content=content, page=page, size=size, total=total)
 
 
@@ -244,9 +253,7 @@ class MarkMuseumQuestionOutOfScope:
         self._repo = repository
         self._clock = clock
 
-    async def execute(
-        self, data: MarkMuseumQuestionOutOfScopeInput
-    ) -> MuseumQuestion:
+    async def execute(self, data: MarkMuseumQuestionOutOfScopeInput) -> MuseumQuestion:
         require_staff(data.caller)
         question = await self._repo.get_by_id(data.question_id)
         if question is None:

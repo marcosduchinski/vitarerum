@@ -34,8 +34,10 @@ class IdentityServiceStub implements IdentityService {
 
   getPermissionId(): string | null {
     const session = activeSession();
-    return session?.permissions?.find((permission) => permission.group === session.group)
-      ?.permissionId ?? null;
+    return (
+      session?.permissions?.find((permission) => permission.group === session.group)
+        ?.permissionId ?? null
+    );
   }
 
   setGroup(group: GroupName): void {
@@ -55,10 +57,7 @@ describe('AppMenuComponent', () => {
 
     await TestBed.configureTestingModule({
       imports: [AppMenuComponent],
-      providers: [
-        provideRouter([]),
-        { provide: IDENTITY_SERVICE, useClass: IdentityServiceStub },
-      ],
+      providers: [provideRouter([]), { provide: IDENTITY_SERVICE, useClass: IdentityServiceStub }],
     }).compileComponents();
   });
 
@@ -74,6 +73,17 @@ describe('AppMenuComponent', () => {
     const visitsLink = linkByText(compiled, 'Visits in situ');
     expect(compiled.textContent).toContain('Reports');
     expect(visitsLink.getAttribute('href')).toBe('/p/collections/reports/visits-in-situ');
+  });
+
+  it('shows museum questions inside the messages menu for staff', () => {
+    activeSession.set(sessionForGroup('COLLECTIONS_MANAGEMENT'));
+    const fixture = TestBed.createComponent(AppMenuComponent);
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    const questionsLink = linkByText(compiled, 'Museum Questions');
+    expect(compiled.textContent).toContain('Messages');
+    expect(questionsLink.getAttribute('href')).toBe('/p/museum-questions');
   });
 
   it('does not show reports for external users', () => {
@@ -99,16 +109,16 @@ function sessionForGroup(group: GroupName): IdentitySession {
 }
 
 function buttonByText(root: HTMLElement, text: string): HTMLButtonElement {
-  const button = Array.from(root.querySelectorAll('button')).find(
-    (candidate) => candidate.textContent?.trim().includes(text),
+  const button = Array.from(root.querySelectorAll('button')).find((candidate) =>
+    candidate.textContent?.trim().includes(text),
   );
   if (!(button instanceof HTMLButtonElement)) throw new Error(`Button not found: ${text}`);
   return button;
 }
 
 function linkByText(root: HTMLElement, text: string): HTMLAnchorElement {
-  const link = Array.from(root.querySelectorAll('a')).find(
-    (candidate) => candidate.textContent?.trim().includes(text),
+  const link = Array.from(root.querySelectorAll('a')).find((candidate) =>
+    candidate.textContent?.trim().includes(text),
   );
   if (!(link instanceof HTMLAnchorElement)) throw new Error(`Link not found: ${text}`);
   return link;

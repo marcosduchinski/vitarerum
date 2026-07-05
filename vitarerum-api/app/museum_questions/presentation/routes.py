@@ -161,13 +161,18 @@ async def submit_museum_question(
 async def list_museum_questions(
     caller: CallerPermission,
     use_case: ListUseCase,
-    status_filter: Annotated[
-        MuseumQuestionStatus | None, Query(alias="status")
-    ] = None,
+    status_filter: Annotated[MuseumQuestionStatus | None, Query(alias="status")] = None,
+    requester_email: Annotated[str | None, Query(alias="requesterEmail")] = None,
     page: Annotated[int, Query(ge=0)] = 0,
     size: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> PaginatedMuseumQuestionsResponse:
-    result = await use_case.execute(caller, status=status_filter, page=page, size=size)
+    result = await use_case.execute(
+        caller,
+        status=status_filter,
+        requester_email=requester_email,
+        page=page,
+        size=size,
+    )
     return PaginatedMuseumQuestionsResponse(
         content=[_question_response(q) for q in result.content],
         page=result.page,

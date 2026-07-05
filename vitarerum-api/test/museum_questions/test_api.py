@@ -59,12 +59,19 @@ class _Repo:
         self,
         *,
         status: MuseumQuestionStatus | None,
+        requester_email: str | None,
         page: int,
         size: int,
     ) -> tuple[list[MuseumQuestion], int]:
         rows = sorted(self.questions.values(), key=lambda q: q.created_at)
         if status is not None:
             rows = [q for q in rows if q.status == status]
+        if requester_email:
+            rows = [
+                q
+                for q in rows
+                if q.requester_email.lower() == requester_email.strip().lower()
+            ]
         return rows[page * size : page * size + size], len(rows)
 
     async def save(self, question: MuseumQuestion) -> None:
@@ -156,8 +163,8 @@ async def _client(
     app.dependency_overrides[get_answer_use_case] = lambda: AnswerMuseumQuestion(
         repo, _Clock()
     )
-    app.dependency_overrides[get_mark_out_of_scope_use_case] = (
-        lambda: MarkMuseumQuestionOutOfScope(repo, _Clock())
+    app.dependency_overrides[get_mark_out_of_scope_use_case] = lambda: (
+        MarkMuseumQuestionOutOfScope(repo, _Clock())
     )
     app.dependency_overrides[get_close_use_case] = lambda: CloseMuseumQuestion(
         repo, _Clock()
@@ -191,11 +198,12 @@ def _question(
     question_id: str = "q1",
     status: MuseumQuestionStatus = MuseumQuestionStatus.SUBMITTED,
     created_at: datetime = _NOW,
+    requester_email: str = "ana@example.org",
 ) -> MuseumQuestion:
     return MuseumQuestion(
         id=question_id,
         requester_name="Ana Souza",
-        requester_email="ana@example.org",
+        requester_email=requester_email,
         subject="Duvida sobre visita in situ",
         message="Gostaria de agendar uma visita para pesquisa.",
         created_at=created_at,
@@ -328,6 +336,32 @@ async def test_list_internal_questions_filters_and_paginates() -> None:
     assert [item["id"] for item in body["content"]] == ["q1"]
 
 
+async def test_list_internal_questions_filters_by_requester_email() -> None:
+    questions = [
+        _question("q1", status=MuseumQuestionStatus.ANSWERED),
+        _question(
+            "q2",
+            status=MuseumQuestionStatus.ANSWERED,
+            requester_email="bruno@example.org",
+        ),
+        _question("q3", status=MuseumQuestionStatus.SUBMITTED),
+    ]
+    async with _client(questions=questions) as (client, _, _, _):
+        resp = await client.get(
+            _INTERNAL_URL,
+            params={
+                "status": "ANSWERED",
+                "requesterEmail": "ANA@example.org",
+                "page": 0,
+                "size": 20,
+            },
+        )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["totalElements"] == 1
+    assert [item["id"] for item in body["content"]] == ["q1"]
+
+
 async def test_internal_questions_reject_non_staff() -> None:
     async with _client(caller=_EXTERNAL, questions=[_question()]) as (client, _, _, _):
         resp = await client.get(_INTERNAL_URL)
@@ -396,9 +430,12 @@ async def test_mark_out_of_scope_does_not_email_when_commit_fails() -> None:
 
 
 async def test_answer_internal_question_rejects_already_answered() -> None:
-    async with _client(
-        questions=[_question(status=MuseumQuestionStatus.ANSWERED)]
-    ) as (client, _, sender, _):
+    async with _client(questions=[_question(status=MuseumQuestionStatus.ANSWERED)]) as (
+        client,
+        _,
+        sender,
+        _,
+    ):
         resp = await client.post(
             f"{_INTERNAL_URL}/q1/answer", json={"answerBody": "Again"}
         )

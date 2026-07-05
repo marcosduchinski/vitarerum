@@ -54,10 +54,29 @@ export class MuseumQuestionManagementServiceMock implements MuseumQuestionManage
       closedAt: null,
       closedBy: null,
     },
+    {
+      id: 'q-3',
+      requesterName: 'Ana Souza',
+      requesterEmail: 'ana@example.org',
+      subject: 'Previous collections visit',
+      message: 'Did the museum previously allow visits to the archives?',
+      status: 'ANSWERED',
+      createdAt: '2026-06-22T09:30:00Z',
+      answeredAt: '2026-06-22T15:00:00Z',
+      answeredBy: 'perm-staff',
+      answerBody: 'Yes. Please coordinate the visit with the collections team.',
+      answerSentAt: '2026-06-22T15:00:00Z',
+      outOfScopeAt: null,
+      outOfScopeBy: null,
+      outOfScopeReason: null,
+      outOfScopeEmailSentAt: null,
+      closedAt: null,
+      closedBy: null,
+    },
   ];
 
   list(query: MuseumQuestionListQuery): Observable<MuseumQuestionPage> {
-    const filtered = this.filtered(query.status);
+    const filtered = this.filtered(query.status, query.requesterEmail);
     const start = query.page * query.size;
     const content = filtered.slice(start, start + query.size);
     return of({
@@ -89,10 +108,7 @@ export class MuseumQuestionManagementServiceMock implements MuseumQuestionManage
     ).pipe(delay(250));
   }
 
-  markOutOfScope(
-    questionId: string,
-    body: MarkOutOfScopeRequest,
-  ): Observable<MuseumQuestion> {
+  markOutOfScope(questionId: string, body: MarkOutOfScopeRequest): Observable<MuseumQuestion> {
     const question = this.require(questionId);
     if (question.status !== 'SUBMITTED') return this.invalidTransition();
     return of(
@@ -122,9 +138,21 @@ export class MuseumQuestionManagementServiceMock implements MuseumQuestionManage
     ).pipe(delay(200));
   }
 
-  private filtered(status: MuseumQuestionStatus | '' | undefined): MuseumQuestion[] {
+  private filtered(
+    status: MuseumQuestionStatus | '' | undefined,
+    requesterEmail: string | undefined,
+  ): MuseumQuestion[] {
     const ordered = [...this.questions].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-    return status ? ordered.filter((q) => q.status === status) : ordered;
+    return ordered.filter((q) => {
+      if (status && q.status !== status) return false;
+      if (
+        requesterEmail &&
+        q.requesterEmail.toLowerCase() !== requesterEmail.trim().toLowerCase()
+      ) {
+        return false;
+      }
+      return true;
+    });
   }
 
   private require(questionId: string): MuseumQuestion {

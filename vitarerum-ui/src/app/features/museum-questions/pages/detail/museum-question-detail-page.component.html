@@ -1,0 +1,341 @@
+<div class="question-detail">
+  <a class="question-detail__back" routerLink="/p/museum-questions">Back to museum questions</a>
+
+  @if (questionResource.isLoading()) {
+    <app-loading-state />
+  } @else if (questionError()) {
+    <app-error-message [apiError]="questionError()!" (retry)="questionResource.reload()" />
+  } @else if (question(); as question) {
+    <header class="question-detail__header">
+      <div class="question-detail__header-meta">
+        <p class="question-detail__ref">Museum question</p>
+        <h1 class="question-detail__title">{{ question.subject }}</h1>
+        <div class="question-detail__status-row">
+          <span
+            class="status-chip"
+            [class.status-chip--submitted]="question.status === 'SUBMITTED'"
+            [class.status-chip--answered]="question.status === 'ANSWERED'"
+            [class.status-chip--out-of-scope]="question.status === 'OUT_OF_SCOPE'"
+            [class.status-chip--closed]="question.status === 'CLOSED'"
+          >
+            {{ statusLabel(question.status) }}
+          </span>
+        </div>
+      </div>
+    </header>
+
+    <nav class="question-detail__tabs" aria-label="Museum question sections" role="tablist">
+      <button
+        type="button"
+        id="message-tab"
+        class="question-detail__tab"
+        [class.question-detail__tab--active]="activePanel() === 'message'"
+        role="tab"
+        aria-controls="message-panel"
+        [attr.aria-selected]="activePanel() === 'message'"
+        (click)="selectPanel('message')"
+      >
+        Message
+      </button>
+      <button
+        type="button"
+        id="answered-history-tab"
+        class="question-detail__tab"
+        [class.question-detail__tab--active]="activePanel() === 'answered-history'"
+        role="tab"
+        aria-controls="answered-history-panel"
+        [attr.aria-selected]="activePanel() === 'answered-history'"
+        (click)="selectPanel('answered-history')"
+      >
+        Answered for this email
+      </button>
+    </nav>
+
+    @switch (activePanel()) {
+      @case ('message') {
+        <section
+          id="message-panel"
+          class="question-detail__panel"
+          role="tabpanel"
+          aria-labelledby="message-tab"
+        >
+          <section class="detail-card" aria-labelledby="message-card-title">
+            <h2 id="message-card-title" class="detail-card__title">Conversation</h2>
+            <ol class="message-list" aria-label="Museum question conversation">
+              <li class="message message--requester">
+                <div class="message__avatar" aria-hidden="true">
+                  <span class="pi pi-user"></span>
+                </div>
+                <div class="message__content">
+                  <div class="message__header">
+                    <div>
+                      <span class="message__sender">{{ question.requesterEmail }}</span>
+                      <span class="message__role">Requester</span>
+                    </div>
+                    <span class="message__date">{{ formatDate(question.createdAt) }}</span>
+                  </div>
+                  <p class="message__subject">{{ question.subject }}</p>
+                  <p class="message__body">{{ question.message }}</p>
+                </div>
+              </li>
+
+              @if (question.answerBody) {
+                <li class="message">
+                  <div class="message__avatar" aria-hidden="true">
+                    <span class="pi pi-briefcase"></span>
+                  </div>
+                  <div class="message__content">
+                    <div class="message__header">
+                      <div>
+                        <span class="message__sender">Staff response</span>
+                        <span class="message__role">Staff</span>
+                      </div>
+                      <span class="message__date">{{ formatDate(question.answerSentAt) }}</span>
+                    </div>
+                    <p class="message__subject">Answer sent</p>
+                    <div class="message__body" [innerHTML]="question.answerBody"></div>
+                  </div>
+                </li>
+              }
+
+              @if (question.outOfScopeReason) {
+                <li class="message">
+                  <div class="message__avatar message__avatar--warning" aria-hidden="true">
+                    <span class="pi pi-ban"></span>
+                  </div>
+                  <div class="message__content">
+                    <div class="message__header">
+                      <div>
+                        <span class="message__sender">Out-of-scope notice</span>
+                        <span class="message__role">Staff</span>
+                      </div>
+                      <span class="message__date">{{ formatDate(question.outOfScopeAt) }}</span>
+                    </div>
+                    <p class="message__subject">Out-of-scope reason</p>
+                    <p class="message__body">{{ question.outOfScopeReason }}</p>
+                  </div>
+                </li>
+              }
+            </ol>
+
+            @if (actionError()) {
+              <app-error-message [apiError]="actionError()!" />
+            }
+
+            @if (question.status === 'SUBMITTED') {
+              <form
+                class="reply-composer"
+                aria-label="Reply to requester"
+                (submit)="$event.preventDefault(); answer(question)"
+              >
+                <div class="reply-composer__header">
+                  <div>
+                    <p class="reply-composer__eyebrow">Staff response</p>
+                    <h3>Reply to requester</h3>
+                  </div>
+                  <span class="reply-composer__recipient">To {{ question.requesterEmail }}</span>
+                </div>
+
+                <div class="reply-toolbar" aria-label="Rich text formatting">
+                  <button
+                    type="button"
+                    class="editor-btn"
+                    (click)="applyEditorCommand('bold')"
+                    aria-label="Bold"
+                    title="Bold"
+                  >
+                    <strong>B</strong>
+                  </button>
+                  <button
+                    type="button"
+                    class="editor-btn"
+                    (click)="applyEditorCommand('italic')"
+                    aria-label="Italic"
+                    title="Italic"
+                  >
+                    <em>I</em>
+                  </button>
+                  <button
+                    type="button"
+                    class="editor-btn"
+                    (click)="applyEditorCommand('insertUnorderedList')"
+                    aria-label="Bulleted list"
+                    title="Bulleted list"
+                  >
+                    <span class="pi pi-list" aria-hidden="true"></span>
+                  </button>
+                  <button
+                    type="button"
+                    class="editor-btn"
+                    (click)="clearReplyFormatting()"
+                    aria-label="Clear formatting"
+                    title="Clear formatting"
+                  >
+                    <span class="pi pi-eraser" aria-hidden="true"></span>
+                  </button>
+                </div>
+
+                <div
+                  #replyEditor
+                  class="reply-editor"
+                  contenteditable="true"
+                  role="textbox"
+                  aria-multiline="true"
+                  aria-label="Response message"
+                  data-placeholder="Write the response to the requester..."
+                  (input)="onAnswerInput($event)"
+                ></div>
+
+                <div class="reply-composer__footer">
+                  <button
+                    type="submit"
+                    class="action-btn action-btn--primary"
+                    [disabled]="!canSendAnswer()"
+                  >
+                    <span class="pi pi-send" aria-hidden="true"></span>
+                    {{ busy() ? 'Sending...' : 'Send response' }}
+                  </button>
+                </div>
+              </form>
+
+              <div class="action-group">
+                <p class="action-group__title">Scope</p>
+                <div class="task-row task-row--stacked">
+                  <span class="task-row__icon task-row__icon--danger" aria-hidden="true">
+                    <span class="pi pi-ban"></span>
+                  </span>
+                  <div class="task-row__body">
+                    <h3 class="task-row__title">Mark out of scope</h3>
+                    <p class="task-row__desc">
+                      Send the standard out-of-scope e-mail to the requester.
+                    </p>
+                  </div>
+                  <label class="task-row__field" for="question-out-of-scope-reason">
+                    <span>Reason (optional)</span>
+                    <textarea
+                      id="question-out-of-scope-reason"
+                      rows="3"
+                      [value]="outOfScopeReason()"
+                      (input)="onTextInput('reason', $event)"
+                      [disabled]="busy()"
+                    ></textarea>
+                  </label>
+                  @if (confirmOutOfScope()) {
+                    <p class="task-row__warning">This sends the standard out-of-scope e-mail.</p>
+                  }
+                  <div class="task-row__control">
+                    <button
+                      type="button"
+                      class="action-btn action-btn--danger"
+                      [disabled]="busy()"
+                      (click)="markOutOfScope(question)"
+                    >
+                      {{ confirmOutOfScope() ? 'Confirm out of scope' : 'Mark out of scope' }}
+                    </button>
+                    @if (confirmOutOfScope()) {
+                      <button
+                        type="button"
+                        class="action-btn"
+                        [disabled]="busy()"
+                        (click)="cancelConfirmations()"
+                      >
+                        Cancel
+                      </button>
+                    }
+                  </div>
+                </div>
+              </div>
+            } @else if (question.status === 'ANSWERED' || question.status === 'OUT_OF_SCOPE') {
+              <div class="action-group">
+                <p class="action-group__title">Archive</p>
+                <div class="task-row">
+                  <span class="task-row__icon task-row__icon--accent" aria-hidden="true">
+                    <span class="pi pi-check-circle"></span>
+                  </span>
+                  <div class="task-row__body">
+                    <h3 class="task-row__title">Close question</h3>
+                    <p class="task-row__desc">
+                      Closing archives the question. No e-mail will be sent.
+                    </p>
+                  </div>
+                  <div class="task-row__control">
+                    <button
+                      type="button"
+                      class="action-btn action-btn--primary"
+                      [disabled]="busy()"
+                      (click)="close(question)"
+                    >
+                      {{ confirmClose() ? 'Confirm close' : 'Close question' }}
+                    </button>
+                    @if (confirmClose()) {
+                      <button
+                        type="button"
+                        class="action-btn"
+                        [disabled]="busy()"
+                        (click)="cancelConfirmations()"
+                      >
+                        Cancel
+                      </button>
+                    }
+                  </div>
+                </div>
+              </div>
+            } @else {
+              <p class="detail-card__empty">This question is closed.</p>
+            }
+          </section>
+        </section>
+      }
+      @case ('answered-history') {
+        <section
+          id="answered-history-panel"
+          class="question-detail__panel"
+          role="tabpanel"
+          aria-labelledby="answered-history-tab"
+        >
+          @if (historyResource.isLoading()) {
+            <app-loading-state label="Loading answered messages..." />
+          } @else if (historyError()) {
+            <app-error-message [apiError]="historyError()!" (retry)="historyResource.reload()" />
+          } @else if (!answeredHistory().length) {
+            <app-empty-state
+              title="No answered messages"
+              message="There are no previous answered messages for this e-mail."
+            />
+          } @else {
+            <section class="detail-card" aria-labelledby="history-card-title">
+              <h2 id="history-card-title" class="detail-card__title">Answered for this email</h2>
+              <ul class="message-list">
+                @for (item of answeredHistory(); track item.id) {
+                  <li>
+                    <article class="message">
+                      <div class="message__header">
+                        <a class="message__sender" [routerLink]="['/p/museum-questions', item.id]">
+                          {{ item.subject }}
+                        </a>
+                        <span class="message__date">{{ formatDate(item.answeredAt) }}</span>
+                      </div>
+                      <p class="message__body">{{ item.message }}</p>
+                      @if (item.answerBody) {
+                        <p class="message__answer">{{ item.answerBody }}</p>
+                      }
+                    </article>
+                  </li>
+                }
+              </ul>
+              <app-pagination
+                [page]="historyPage()"
+                [totalPages]="historyTotalPages()"
+                [total]="historyTotal()"
+                [pageSize]="10"
+                itemLabel="answered questions"
+                (previous)="previousHistoryPage()"
+                (next)="nextHistoryPage()"
+              />
+            </section>
+          }
+        </section>
+      }
+    }
+  }
+</div>

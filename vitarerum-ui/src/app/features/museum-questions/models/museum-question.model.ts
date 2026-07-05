@@ -26,6 +26,7 @@ export type MuseumQuestionPage = Page<MuseumQuestion>;
 
 export interface MuseumQuestionListQuery {
   readonly status?: MuseumQuestionStatus | '';
+  readonly requesterEmail?: string;
   readonly page: number;
   readonly size: number;
 }

@@ -86,12 +86,18 @@ class SqlAlchemyMuseumQuestionRepository:
         self,
         *,
         status: MuseumQuestionStatus | None,
+        requester_email: str | None,
         page: int,
         size: int,
     ) -> tuple[list[MuseumQuestion], int]:
         filters = []
         if status is not None:
             filters.append(MuseumQuestionRecord.status == status.value)
+        if requester_email:
+            filters.append(
+                func.lower(MuseumQuestionRecord.requester_email)
+                == requester_email.strip().lower()
+            )
 
         total_stmt = select(func.count()).select_from(MuseumQuestionRecord)
         list_stmt = select(MuseumQuestionRecord)

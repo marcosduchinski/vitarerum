@@ -20,8 +20,9 @@ export interface MuseumQuestionManagementApi {
   close(questionId: string): Observable<MuseumQuestion>;
 }
 
-export const MUSEUM_QUESTION_MANAGEMENT_SERVICE =
-  new InjectionToken<MuseumQuestionManagementApi>('MUSEUM_QUESTION_MANAGEMENT_SERVICE');
+export const MUSEUM_QUESTION_MANAGEMENT_SERVICE = new InjectionToken<MuseumQuestionManagementApi>(
+  'MUSEUM_QUESTION_MANAGEMENT_SERVICE',
+);
 
 @Injectable()
 export class MuseumQuestionManagementService implements MuseumQuestionManagementApi {
@@ -31,6 +32,7 @@ export class MuseumQuestionManagementService implements MuseumQuestionManagement
   list(query: MuseumQuestionListQuery): Observable<MuseumQuestionPage> {
     let params = new HttpParams().set('page', query.page).set('size', query.size);
     if (query.status) params = params.set('status', query.status);
+    if (query.requesterEmail) params = params.set('requesterEmail', query.requesterEmail);
     return this.http.get<MuseumQuestionPage>(this.url('/museum-questions'), { params });
   }
 
@@ -42,10 +44,7 @@ export class MuseumQuestionManagementService implements MuseumQuestionManagement
     return this.http.post<MuseumQuestion>(this.url(`/museum-questions/${questionId}/answer`), body);
   }
 
-  markOutOfScope(
-    questionId: string,
-    body: MarkOutOfScopeRequest,
-  ): Observable<MuseumQuestion> {
+  markOutOfScope(questionId: string, body: MarkOutOfScopeRequest): Observable<MuseumQuestion> {
     return this.http.post<MuseumQuestion>(
       this.url(`/museum-questions/${questionId}/mark-out-of-scope`),
       body,

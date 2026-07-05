@@ -57,12 +57,19 @@ class _Repo:
         self,
         *,
         status: MuseumQuestionStatus | None,
+        requester_email: str | None,
         page: int,
         size: int,
     ) -> tuple[list[MuseumQuestion], int]:
         rows = sorted(self.questions.values(), key=lambda q: q.created_at)
         if status is not None:
             rows = [q for q in rows if q.status == status]
+        if requester_email:
+            rows = [
+                q
+                for q in rows
+                if q.requester_email.lower() == requester_email.strip().lower()
+            ]
         return rows[page * size : page * size + size], len(rows)
 
     async def save(self, question: MuseumQuestion) -> None:
@@ -97,11 +104,12 @@ def _question(
     question_id: str = "q1",
     status: MuseumQuestionStatus = MuseumQuestionStatus.SUBMITTED,
     created_at: datetime = _NOW,
+    requester_email: str = "ana@example.org",
 ) -> MuseumQuestion:
     return MuseumQuestion(
         id=question_id,
         requester_name="Ana Souza",
-        requester_email="ana@example.org",
+        requester_email=requester_email,
         subject="Duvida sobre visita in situ",
         message="Gostaria de agendar uma visita para pesquisa.",
         created_at=created_at,
@@ -179,6 +187,28 @@ async def test_list_questions_filters_and_orders() -> None:
     )
     assert result.total == 1
     assert [q.id for q in result.content] == ["q-old"]
+
+
+async def test_list_questions_filters_by_requester_email() -> None:
+    repo = _Repo(
+        [
+            _question("q-ana", status=MuseumQuestionStatus.ANSWERED),
+            _question(
+                "q-bruno",
+                status=MuseumQuestionStatus.ANSWERED,
+                requester_email="bruno@example.org",
+            ),
+        ]
+    )
+    result = await ListMuseumQuestions(repo).execute(
+        _STAFF,
+        status=MuseumQuestionStatus.ANSWERED,
+        requester_email="ANA@example.org",
+        page=0,
+        size=20,
+    )
+    assert result.total == 1
+    assert [q.id for q in result.content] == ["q-ana"]
 
 
 async def test_list_questions_requires_staff() -> None:
