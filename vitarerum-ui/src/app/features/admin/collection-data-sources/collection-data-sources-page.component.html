@@ -15,6 +15,78 @@
     }
 
     @if (isSysAdmin()) {
+      <section class="area-admin">
+        <h2 class="area-admin__title">Collection areas</h2>
+        <form class="area-admin__new" (submit)="$event.preventDefault(); createArea()">
+          <input
+            type="text"
+            class="area-admin__input"
+            placeholder="New area name"
+            [value]="newAreaName()"
+            (input)="newAreaName.set($any($event.target).value)"
+            [disabled]="busy()"
+          />
+          <button type="submit" class="admin-btn" [disabled]="busy() || !newAreaName().trim()">
+            <span class="pi pi-plus" aria-hidden="true"></span>
+            Create area
+          </button>
+        </form>
+
+        <ul class="area-admin__list">
+          @for (area of areas(); track area.id) {
+            <li class="area-admin__item">
+              @if (editingAreaId() === area.id) {
+                <input
+                  type="text"
+                  class="area-admin__input"
+                  [value]="editAreaName()"
+                  (input)="editAreaName.set($any($event.target).value)"
+                  [disabled]="busy()"
+                />
+                <button
+                  type="button"
+                  class="admin-btn"
+                  [disabled]="busy()"
+                  (click)="saveEditArea(area)"
+                >
+                  Save
+                </button>
+                <button
+                  type="button"
+                  class="admin-btn"
+                  [disabled]="busy()"
+                  (click)="cancelEditArea()"
+                >
+                  Cancel
+                </button>
+              } @else {
+                <span class="area-admin__name">{{ area.name }}</span>
+                <span class="area-admin__count">
+                  {{ area.collectionCount }}
+                  {{ area.collectionCount === 1 ? 'collection' : 'collections' }}
+                </span>
+                <button
+                  type="button"
+                  class="admin-btn"
+                  [disabled]="busy()"
+                  (click)="startEditArea(area)"
+                >
+                  Rename
+                </button>
+                <button
+                  type="button"
+                  class="admin-btn admin-btn--danger"
+                  [disabled]="busy()"
+                  (click)="removeArea(area)"
+                >
+                  Remove
+                </button>
+              }
+            </li>
+          }
+        </ul>
+      </section>
+
       <form class="new-collection" (submit)="$event.preventDefault(); createCollection()">
         <input
           type="text"
@@ -24,253 +96,332 @@
           (input)="newCollectionName.set($any($event.target).value)"
           [disabled]="busy()"
         />
-        <button type="submit" class="new-collection__submit" [disabled]="busy() || !newCollectionName().trim()">
+        <select
+          class="new-collection__area"
+          [value]="newCollectionAreaId()"
+          (change)="newCollectionAreaId.set($any($event.target).value)"
+          [disabled]="busy()"
+        >
+          <option value="">Select an area…</option>
+          @for (area of areas(); track area.id) {
+            <option [value]="area.id">{{ area.name }}</option>
+          }
+        </select>
+        <button
+          type="submit"
+          class="new-collection__submit"
+          [disabled]="busy() || !newCollectionName().trim() || !newCollectionAreaId()"
+        >
           <span class="pi pi-plus" aria-hidden="true"></span>
           Create collection
         </button>
       </form>
     }
 
-    <ul class="collections">
-      @for (collection of collections(); track collection.id) {
-        <li class="collection" [class.collection--open]="selectedId() === collection.id">
-          <div class="collection__row">
-            @if (editingId() === collection.id) {
-              <div class="collection__edit">
-                <input
-                  type="text"
-                  class="collection__name-input"
-                  [value]="editName()"
-                  (input)="editName.set($any($event.target).value)"
-                  [disabled]="busy()"
-                />
-                <button
-                  type="button"
-                  class="admin-btn"
-                  [disabled]="busy()"
-                  (click)="saveEdit(collection)"
-                >
-                  Save
-                </button>
-                <button type="button" class="admin-btn" [disabled]="busy()" (click)="cancelEdit()">
-                  Cancel
-                </button>
-              </div>
-            } @else {
-              <button
-                type="button"
-                class="collection__header"
-                [attr.aria-expanded]="selectedId() === collection.id"
-                (click)="toggle(collection)"
-              >
-                <span
-                  class="collection__chevron pi"
-                  [class.pi-chevron-right]="selectedId() !== collection.id"
-                  [class.pi-chevron-down]="selectedId() === collection.id"
-                  aria-hidden="true"
-                ></span>
-                <span class="collection__name">{{ collection.name }}</span>
-                <span class="collection__meta">
-                  <span class="collection__curators">{{ curatorLabel(collection) }}</span>
-                  <span class="collection__count">
-                    {{ collection.documentCount }}
-                    {{ collection.documentCount === 1 ? 'file' : 'files' }}
-                  </span>
-                  @if (!collection.manageable) {
-                    <span class="badge badge--muted">Read only</span>
-                  }
-                </span>
-              </button>
+    @for (group of groupedCollections(); track group.areaId) {
+      <section class="area-group">
+        <h2 class="area-group__title">
+          {{ group.areaName }}
+          <span class="area-group__count">
+            {{ group.collections.length }}
+            {{ group.collections.length === 1 ? 'collection' : 'collections' }}
+          </span>
+        </h2>
 
-              @if (isSysAdmin()) {
-                <div class="collection__admin-actions">
+        <ul class="collections">
+          @for (collection of group.collections; track collection.id) {
+            <li class="collection" [class.collection--open]="selectedId() === collection.id">
+              <div class="collection__row">
+                @if (editingId() === collection.id) {
+                  <div class="collection__edit">
+                    <input
+                      type="text"
+                      class="collection__name-input"
+                      [value]="editName()"
+                      (input)="editName.set($any($event.target).value)"
+                      [disabled]="busy()"
+                    />
+                    <button
+                      type="button"
+                      class="admin-btn"
+                      [disabled]="busy()"
+                      (click)="saveEdit(collection)"
+                    >
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      class="admin-btn"
+                      [disabled]="busy()"
+                      (click)="cancelEdit()"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                } @else {
                   <button
                     type="button"
-                    class="admin-btn"
-                    [disabled]="busy()"
-                    (click)="startEdit(collection)"
+                    class="collection__header"
+                    [attr.aria-expanded]="selectedId() === collection.id"
+                    (click)="toggle(collection)"
                   >
-                    Rename
+                    <span
+                      class="collection__chevron pi"
+                      [class.pi-chevron-right]="selectedId() !== collection.id"
+                      [class.pi-chevron-down]="selectedId() === collection.id"
+                      aria-hidden="true"
+                    ></span>
+                    <span class="collection__name">{{ collection.name }}</span>
+                    <span class="collection__meta">
+                      <span class="collection__curators">{{ curatorLabel(collection) }}</span>
+                      <span class="collection__count">
+                        {{ collection.documentCount }}
+                        {{ collection.documentCount === 1 ? 'file' : 'files' }}
+                      </span>
+                      @if (!collection.manageable) {
+                        <span class="badge badge--muted">Read only</span>
+                      }
+                    </span>
                   </button>
-                  <button
-                    type="button"
-                    class="admin-btn admin-btn--danger"
-                    [disabled]="busy()"
-                    (click)="startRemove(collection)"
-                  >
-                    Remove
-                  </button>
+
+                  @if (isSysAdmin()) {
+                    <div class="collection__admin-actions">
+                      <button
+                        type="button"
+                        class="admin-btn"
+                        [disabled]="busy()"
+                        (click)="startEdit(collection)"
+                      >
+                        Rename
+                      </button>
+                      <button
+                        type="button"
+                        class="admin-btn admin-btn--danger"
+                        [disabled]="busy()"
+                        (click)="startRemove(collection)"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  }
+                }
+              </div>
+
+              @if (removingId() === collection.id) {
+                <div class="remove-confirm">
+                  <p class="remove-confirm__warning">
+                    <strong>This cannot be undone.</strong> Removing "{{ collection.name }}"
+                    permanently deletes its curators, source documents, indexed rows, and their
+                    files.
+                  </p>
+                  <div class="remove-confirm__row">
+                    <input
+                      type="text"
+                      class="remove-confirm__input"
+                      placeholder="Type the collection name to confirm"
+                      [value]="removeConfirmText()"
+                      (input)="removeConfirmText.set($any($event.target).value)"
+                      [disabled]="busy()"
+                    />
+                    <button
+                      type="button"
+                      class="admin-btn admin-btn--danger"
+                      [disabled]="busy() || !removeConfirmMatches(collection)"
+                      (click)="confirmRemove(collection)"
+                    >
+                      Remove permanently
+                    </button>
+                    <button
+                      type="button"
+                      class="admin-btn"
+                      [disabled]="busy()"
+                      (click)="cancelRemove()"
+                    >
+                      Cancel
+                    </button>
+                  </div>
                 </div>
               }
-            }
-          </div>
 
-          @if (removingId() === collection.id) {
-            <div class="remove-confirm">
-              <p class="remove-confirm__warning">
-                <strong>This cannot be undone.</strong> Removing "{{ collection.name }}" permanently
-                deletes its curators, source documents, indexed rows, and their files.
-              </p>
-              <div class="remove-confirm__row">
-                <input
-                  type="text"
-                  class="remove-confirm__input"
-                  placeholder="Type the collection name to confirm"
-                  [value]="removeConfirmText()"
-                  (input)="removeConfirmText.set($any($event.target).value)"
-                  [disabled]="busy()"
-                />
-                <button
-                  type="button"
-                  class="admin-btn admin-btn--danger"
-                  [disabled]="busy() || !removeConfirmMatches(collection)"
-                  (click)="confirmRemove(collection)"
-                >
-                  Remove permanently
-                </button>
-                <button type="button" class="admin-btn" [disabled]="busy()" (click)="cancelRemove()">
-                  Cancel
-                </button>
-              </div>
-            </div>
-          }
-
-          @if (selectedId() === collection.id) {
-            <div class="collection__body">
-              @if (collection.manageable) {
-                <label class="upload">
-                  <input
-                    type="file"
-                    accept=".xlsx"
-                    [disabled]="busy()"
-                    (change)="upload(collection, $event)"
-                  />
-                  <span class="pi pi-upload" aria-hidden="true"></span>
-                  Upload .xlsx
-                </label>
-              }
-
-              @if (documentsLoading()) {
-                <app-loading-state label="Loading files..." />
-              } @else if (documents().length === 0) {
-                <p class="collection__empty">No files have been uploaded to this collection yet.</p>
-              } @else {
-                <table class="documents">
-                  <thead>
-                    <tr>
-                      <th scope="col">File</th>
-                      <th scope="col">Status</th>
-                      <th scope="col">Rows</th>
-                      <th scope="col">Uploaded</th>
-                      <th scope="col">Indexed</th>
-                      @if (collection.manageable) {
-                        <th scope="col" class="documents__actions-col">
-                          <span class="visually-hidden">Actions</span>
-                        </th>
-                      }
-                    </tr>
-                  </thead>
-                  <tbody>
-                    @for (doc of documents(); track doc.id) {
-                      <tr>
-                        <td class="documents__name">{{ doc.fileName }}</td>
-                        <td>
-                          <span
-                            class="badge"
-                            [class.badge--indexed]="doc.status === 'INDEXED'"
-                            [class.badge--error]="doc.status === 'ERROR'"
-                            [class.badge--uploaded]="doc.status === 'UPLOADED'"
-                            [attr.title]="doc.errorMessage"
-                          >
-                            {{ doc.status }}
-                          </span>
-                          @if (doc.status === 'ERROR' && doc.errorMessage) {
-                            <p class="documents__error">{{ doc.errorMessage }}</p>
-                          }
-                        </td>
-                        <td>{{ doc.rowCount ?? '—' }}</td>
-                        <td>{{ formatDate(doc.uploadedAt) }}</td>
-                        <td>{{ formatDate(doc.indexedAt) }}</td>
-                        @if (collection.manageable) {
-                          <td class="documents__actions">
-                            <button
-                              type="button"
-                              class="doc-btn"
-                              [disabled]="busy()"
-                              (click)="reindex(doc)"
-                            >
-                              Reindex
-                            </button>
-                            <button
-                              type="button"
-                              class="doc-btn doc-btn--danger"
-                              [disabled]="busy()"
-                              (click)="remove(doc)"
-                            >
-                              Delete
-                            </button>
-                          </td>
-                        }
-                      </tr>
-                    }
-                  </tbody>
-                </table>
-              }
-
-              @if (isSysAdmin()) {
-                <div class="curator-admin">
-                  <h3 class="curator-admin__title">Curators</h3>
-                  @if (collection.curators.length === 0) {
-                    <p class="curator-admin__empty">No curator assigned.</p>
-                  } @else {
-                    <ul class="curator-admin__list">
-                      @for (curator of collection.curators; track curator.permissionId) {
-                        <li>
-                          <span>{{ curator.name ?? curator.permissionId }}</span>
-                          <button
-                            type="button"
-                            class="admin-btn admin-btn--danger"
-                            [disabled]="busy()"
-                            (click)="removeCurator(collection, curator)"
-                          >
-                            Remove
-                          </button>
-                        </li>
-                      }
-                    </ul>
-                  }
-
-                  @if (availableCandidates(collection).length > 0) {
-                    <div class="curator-admin__assign">
+              @if (selectedId() === collection.id) {
+                <div class="collection__body">
+                  @if (isSysAdmin() && otherAreas(collection).length > 0) {
+                    <div class="move-area">
+                      <span class="move-area__label">Area: {{ collection.areaName }}</span>
                       <select
-                        class="curator-admin__select"
+                        class="move-area__select"
+                        [value]="moveAreaId()"
+                        (change)="moveAreaId.set($any($event.target).value)"
                         [disabled]="busy()"
-                        [value]="selectedCandidateId()"
-                        (change)="selectedCandidateId.set($any($event.target).value)"
                       >
-                        <option value="">Select a curator…</option>
-                        @for (candidate of availableCandidates(collection); track candidate.permissionId) {
-                          <option [value]="candidate.permissionId">
-                            {{ candidate.name }} ({{ candidate.email }})
-                          </option>
+                        <option value="">Move to…</option>
+                        @for (area of otherAreas(collection); track area.id) {
+                          <option [value]="area.id">{{ area.name }}</option>
                         }
                       </select>
                       <button
                         type="button"
                         class="admin-btn"
-                        [disabled]="busy() || !selectedCandidateId()"
-                        (click)="assignCurator(collection)"
+                        [disabled]="busy() || !moveAreaId()"
+                        (click)="moveToArea(collection)"
                       >
-                        Assign curator
+                        Move
                       </button>
+                    </div>
+                  }
+
+                  @if (collection.manageable) {
+                    <label class="upload">
+                      <input
+                        type="file"
+                        accept=".xlsx"
+                        [disabled]="busy()"
+                        (change)="upload(collection, $event)"
+                      />
+                      <span class="pi pi-upload" aria-hidden="true"></span>
+                      Upload .xlsx
+                    </label>
+                  }
+
+                  @if (documentsLoading()) {
+                    <app-loading-state label="Loading files..." />
+                  } @else if (documents().length === 0) {
+                    <p class="collection__empty">
+                      No files have been uploaded to this collection yet.
+                    </p>
+                  } @else {
+                    <table class="documents">
+                      <thead>
+                        <tr>
+                          <th scope="col">File</th>
+                          <th scope="col">Status</th>
+                          <th scope="col">Rows</th>
+                          <th scope="col">Uploaded</th>
+                          <th scope="col">Indexed</th>
+                          @if (collection.manageable) {
+                            <th scope="col" class="documents__actions-col">
+                              <span class="visually-hidden">Actions</span>
+                            </th>
+                          }
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (doc of documents(); track doc.id) {
+                          <tr>
+                            <td class="documents__name">{{ doc.fileName }}</td>
+                            <td>
+                              <span
+                                class="badge"
+                                [class.badge--indexed]="doc.status === 'INDEXED'"
+                                [class.badge--error]="doc.status === 'ERROR'"
+                                [class.badge--uploaded]="doc.status === 'UPLOADED'"
+                                [attr.title]="doc.errorMessage"
+                              >
+                                {{ doc.status }}
+                              </span>
+                              @if (doc.status === 'ERROR' && doc.errorMessage) {
+                                <p class="documents__error">{{ doc.errorMessage }}</p>
+                              }
+                            </td>
+                            <td>{{ doc.rowCount ?? '—' }}</td>
+                            <td>{{ formatDate(doc.uploadedAt) }}</td>
+                            <td>{{ formatDate(doc.indexedAt) }}</td>
+                            @if (collection.manageable) {
+                              <td class="documents__actions">
+                                <button
+                                  type="button"
+                                  class="doc-btn"
+                                  [disabled]="busy()"
+                                  (click)="reindex(doc)"
+                                >
+                                  Reindex
+                                </button>
+                                <button
+                                  type="button"
+                                  class="doc-btn doc-btn--danger"
+                                  [disabled]="busy()"
+                                  (click)="remove(doc)"
+                                >
+                                  Delete
+                                </button>
+                              </td>
+                            }
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  }
+
+                  @if (isSysAdmin()) {
+                    <div class="curator-admin">
+                      <h3 class="curator-admin__title">Curators</h3>
+                      @if (collection.curators.length === 0) {
+                        <p class="curator-admin__empty">No curator assigned.</p>
+                      } @else {
+                        <ul class="curator-admin__list">
+                          @for (curator of collection.curators; track curator.permissionId) {
+                            <li>
+                              <span>{{ curator.name ?? curator.permissionId }}</span>
+                              <button
+                                type="button"
+                                class="admin-btn admin-btn--danger"
+                                [disabled]="busy()"
+                                (click)="removeCurator(collection, curator)"
+                              >
+                                Remove
+                              </button>
+                            </li>
+                          }
+                        </ul>
+                      }
+
+                      <!-- Independent condition (available candidates), not the
+                           opposite of "curators.length === 0" above: both can be
+                           true at once (e.g. zero curators but candidates to
+                           assign). prefer-at-else mis-detects any adjacent
+                           `length === 0` / `length > 0` pair as opposites without
+                           checking they're the same array — merging into @else
+                           would hide this panel whenever the collection already
+                           has a curator. -->
+                      <!-- eslint-disable-next-line @angular-eslint/template/prefer-at-else -->
+                      @if (availableCandidates(collection).length > 0) {
+                        <div class="curator-admin__assign">
+                          <select
+                            class="curator-admin__select"
+                            [disabled]="busy()"
+                            [value]="selectedCandidateId()"
+                            (change)="selectedCandidateId.set($any($event.target).value)"
+                          >
+                            <option value="">Select a curator…</option>
+                            @for (
+                              candidate of availableCandidates(collection);
+                              track candidate.permissionId
+                            ) {
+                              <option [value]="candidate.permissionId">
+                                {{ candidate.name }} ({{ candidate.email }})
+                              </option>
+                            }
+                          </select>
+                          <button
+                            type="button"
+                            class="admin-btn"
+                            [disabled]="busy() || !selectedCandidateId()"
+                            (click)="assignCurator(collection)"
+                          >
+                            Assign curator
+                          </button>
+                        </div>
+                      }
+
+                      
                     </div>
                   }
                 </div>
               }
-            </div>
+            </li>
           }
-        </li>
-      }
-    </ul>
+        </ul>
+      </section>
+    }
   }
 </div>

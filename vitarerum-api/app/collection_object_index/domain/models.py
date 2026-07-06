@@ -2,8 +2,11 @@
 
 A ``Collection`` is a curated scientific collection (Zoology, Botany, ...);
 each collection has one or more staff-managed source documents (``.xlsx``
-files) whose rows are indexed as searchable collection objects. Pure domain:
-standard library plus the Shared Kernel.
+files) whose rows are indexed as searchable collection objects.
+``CollectionArea`` is an administrative/scientific classification one level
+above ``Collection`` (catalogue organisation only — permissions and ingestion
+stay at the ``Collection`` level). Pure domain: standard library plus the
+Shared Kernel.
 """
 
 from __future__ import annotations
@@ -18,6 +21,7 @@ from app.collection_object_index.domain.enums import (
 )
 from app.shared.kernel import PermissionId
 
+CollectionAreaId = NewType("CollectionAreaId", str)
 CollectionId = NewType("CollectionId", str)
 SourceDocumentId = NewType("SourceDocumentId", str)
 
@@ -26,8 +30,45 @@ class CollectionNotFound(Exception):
     """Raised when a collection id does not resolve."""
 
 
+class CollectionAreaNotFound(Exception):
+    """Raised when a collection area id does not resolve."""
+
+
+class CollectionAreaInUse(Exception):
+    """Raised when removing a collection area that still has collections
+    assigned to it."""
+
+
 class SourceDocumentNotFound(Exception):
     """Raised when a source document id does not resolve (or is deleted)."""
+
+
+@dataclass(slots=True)
+class CollectionArea:
+    """Administrative/scientific classification above `Collection` (e.g.
+    Botany groups the Fungi, Algae, Xylotheque collections). Administered by
+    SYS_ADMIN; a classification only — curator assignment and ingestion stay
+    at the `Collection` level. Removal is blocked while collections are still
+    assigned to the area (see `CollectionAreaInUse`): unlike `Collection`,
+    cascading the removal would take out every collection under it."""
+
+    id: CollectionAreaId
+    name: str
+    created_at: datetime
+    updated_at: datetime
+
+    def __post_init__(self) -> None:
+        name = self.name.strip()
+        if not name:
+            raise ValueError("Collection area name is required.")
+        self.name = name
+
+    def rename(self, name: str, *, updated_at: datetime) -> None:
+        name = name.strip()
+        if not name:
+            raise ValueError("Collection area name is required.")
+        self.name = name
+        self.updated_at = updated_at
 
 
 @dataclass(slots=True)
@@ -38,6 +79,7 @@ class Collection:
     collection (curators, source documents, indexed rows, files) with it."""
 
     id: CollectionId
+    area_id: CollectionAreaId
     name: str
     created_at: datetime
     updated_at: datetime
@@ -53,6 +95,10 @@ class Collection:
         if not name:
             raise ValueError("Collection name is required.")
         self.name = name
+        self.updated_at = updated_at
+
+    def move_to_area(self, area_id: CollectionAreaId, *, updated_at: datetime) -> None:
+        self.area_id = area_id
         self.updated_at = updated_at
 
 

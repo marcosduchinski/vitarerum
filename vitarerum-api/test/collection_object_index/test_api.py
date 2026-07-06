@@ -15,7 +15,10 @@ from openpyxl import Workbook
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
-from app.collection_object_index.infrastructure.models import CollectionRecord
+from app.collection_object_index.infrastructure.models import (
+    CollectionAreaRecord,
+    CollectionRecord,
+)
 from app.collection_object_index.presentation.dependencies import (
     get_file_storage,
 )
@@ -33,6 +36,8 @@ from app.shared.dependencies import get_caller_permission
 _NOW = datetime(2026, 7, 4, 12, 0, tzinfo=UTC)
 _ZOOLOGY_ID = "col-zoo"
 _BOTANY_ID = "col-bot"
+_NATURAL_HISTORY_ID = "area-nat-hist"
+_HUMAN_SCIENCES_ID = "area-hum-sci"
 
 _ADMIN = Actor(
     id=PermissionId("perm-admin"), group=GroupName.SYS_ADMIN, email="a@museum.pt"
@@ -89,14 +94,32 @@ async def _client(
     async with factory() as session:
         session.add_all(
             [
+                CollectionAreaRecord(
+                    id=_NATURAL_HISTORY_ID,
+                    name="Natural History",
+                    created_at=_NOW,
+                    updated_at=_NOW,
+                ),
+                CollectionAreaRecord(
+                    id=_HUMAN_SCIENCES_ID,
+                    name="Human Sciences",
+                    created_at=_NOW,
+                    updated_at=_NOW,
+                ),
+            ]
+        )
+        session.add_all(
+            [
                 CollectionRecord(
                     id=_ZOOLOGY_ID,
+                    area_id=_NATURAL_HISTORY_ID,
                     name="Zoology",
                     created_at=_NOW,
                     updated_at=_NOW,
                 ),
                 CollectionRecord(
                     id=_BOTANY_ID,
+                    area_id=_NATURAL_HISTORY_ID,
                     name="Botany",
                     created_at=_NOW,
                     updated_at=_NOW,
@@ -143,6 +166,8 @@ async def test_list_collections_shows_catalogue_with_scope_flags() -> None:
     assert set(body) == {"Zoology", "Botany"}
     assert body["Zoology"]["manageable"] is False
     assert body["Zoology"]["documentCount"] == 0
+    assert body["Zoology"]["areaId"] == _NATURAL_HISTORY_ID
+    assert body["Zoology"]["areaName"] == "Natural History"
 
 
 async def test_upload_indexes_and_returns_document() -> None:
@@ -226,8 +251,17 @@ async def test_assign_curator_rejects_non_curatorial_permission() -> None:
     factory = async_sessionmaker(bind=engine, expire_on_commit=False)
     async with factory() as session:
         session.add(
+            CollectionAreaRecord(
+                id=_NATURAL_HISTORY_ID,
+                name="Natural History",
+                created_at=_NOW,
+                updated_at=_NOW,
+            )
+        )
+        session.add(
             CollectionRecord(
                 id=_ZOOLOGY_ID,
+                area_id=_NATURAL_HISTORY_ID,
                 name="Zoology",
                 created_at=_NOW,
                 updated_at=_NOW,
@@ -316,9 +350,12 @@ async def test_reindex_returns_updated_document() -> None:
 async def test_create_get_and_update_collection() -> None:
     async with _client(_ADMIN) as (client, _):
         created = await client.post(
-            "/admin/collection-data-sources/collections", json={"name": "Mineralogy"}
+            "/admin/collection-data-sources/collections",
+            json={"name": "Mineralogy", "areaId": _NATURAL_HISTORY_ID},
         )
         assert created.status_code == 201, created.text
+        assert created.json()["areaId"] == _NATURAL_HISTORY_ID
+        assert created.json()["areaName"] == "Natural History"
         collection_id = created.json()["id"]
 
         fetched = await client.get(
@@ -338,7 +375,8 @@ async def test_create_get_and_update_collection() -> None:
 async def test_create_collection_duplicate_name_is_409() -> None:
     async with _client(_ADMIN) as (client, _):
         response = await client.post(
-            "/admin/collection-data-sources/collections", json={"name": "Zoology"}
+            "/admin/collection-data-sources/collections",
+            json={"name": "Zoology", "areaId": _NATURAL_HISTORY_ID},
         )
     assert response.status_code == 409
     assert response.json()["error"] == "COLLECTION_NAME_ALREADY_EXISTS"
@@ -349,16 +387,28 @@ async def test_create_collection_duplicate_name_after_trim_is_409() -> None:
     visually-duplicate name."""
     async with _client(_ADMIN) as (client, _):
         response = await client.post(
-            "/admin/collection-data-sources/collections", json={"name": "  Zoology  "}
+            "/admin/collection-data-sources/collections",
+            json={"name": "  Zoology  ", "areaId": _NATURAL_HISTORY_ID},
         )
     assert response.status_code == 409
     assert response.json()["error"] == "COLLECTION_NAME_ALREADY_EXISTS"
 
 
+async def test_create_collection_unknown_area_is_404() -> None:
+    async with _client(_ADMIN) as (client, _):
+        response = await client.post(
+            "/admin/collection-data-sources/collections",
+            json={"name": "Mineralogy", "areaId": "nope"},
+        )
+    assert response.status_code == 404
+    assert response.json()["error"] == "COLLECTION_AREA_NOT_FOUND"
+
+
 async def test_create_collection_blocked_for_curator() -> None:
     async with _client(_CURATOR) as (client, _):
         response = await client.post(
-            "/admin/collection-data-sources/collections", json={"name": "Mineralogy"}
+            "/admin/collection-data-sources/collections",
+            json={"name": "Mineralogy", "areaId": _NATURAL_HISTORY_ID},
         )
     assert response.status_code == 403
     assert response.json()["error"] == "INSUFFICIENT_GROUP"
@@ -415,11 +465,126 @@ async def test_remove_collection_blocked_for_curator() -> None:
     assert response.json()["error"] == "INSUFFICIENT_GROUP"
 
 
+# ── Collection areas (SYS_ADMIN only) ───────────────────────────────────────
+
+
+async def test_list_collection_areas_shows_counts() -> None:
+    async with _client(_ADMIN) as (client, _):
+        response = await client.get("/admin/collection-data-sources/areas")
+    assert response.status_code == 200
+    body = {a["name"]: a for a in response.json()}
+    assert body["Natural History"]["collectionCount"] == 2  # Zoology + Botany
+    assert body["Human Sciences"]["collectionCount"] == 0
+
+
+async def test_list_collection_areas_blocked_for_curator() -> None:
+    async with _client(_CURATOR) as (client, _):
+        response = await client.get("/admin/collection-data-sources/areas")
+    assert response.status_code == 403
+    assert response.json()["error"] == "INSUFFICIENT_GROUP"
+
+
+async def test_create_rename_and_remove_collection_area() -> None:
+    async with _client(_ADMIN) as (client, _):
+        created = await client.post(
+            "/admin/collection-data-sources/areas", json={"name": "Media"}
+        )
+        assert created.status_code == 201, created.text
+        assert created.json()["collectionCount"] == 0
+        area_id = created.json()["id"]
+
+        renamed = await client.patch(
+            f"/admin/collection-data-sources/areas/{area_id}",
+            json={"name": "Documentation & Media"},
+        )
+        assert renamed.status_code == 200
+        assert renamed.json()["name"] == "Documentation & Media"
+
+        removed = await client.delete(f"/admin/collection-data-sources/areas/{area_id}")
+        assert removed.status_code == 204
+
+        listing = await client.get("/admin/collection-data-sources/areas")
+        assert "Documentation & Media" not in {a["name"] for a in listing.json()}
+
+
+async def test_create_collection_area_duplicate_name_is_409() -> None:
+    async with _client(_ADMIN) as (client, _):
+        response = await client.post(
+            "/admin/collection-data-sources/areas", json={"name": "Natural History"}
+        )
+    assert response.status_code == 409
+    assert response.json()["error"] == "COLLECTION_AREA_NAME_ALREADY_EXISTS"
+
+
+async def test_create_collection_area_blocked_for_curator() -> None:
+    async with _client(_CURATOR) as (client, _):
+        response = await client.post(
+            "/admin/collection-data-sources/areas", json={"name": "Media"}
+        )
+    assert response.status_code == 403
+    assert response.json()["error"] == "INSUFFICIENT_GROUP"
+
+
+async def test_remove_collection_area_in_use_is_409() -> None:
+    async with _client(_ADMIN) as (client, _):
+        response = await client.delete(
+            f"/admin/collection-data-sources/areas/{_NATURAL_HISTORY_ID}"
+        )
+    assert response.status_code == 409
+    assert response.json()["error"] == "COLLECTION_AREA_IN_USE"
+
+
+async def test_remove_unknown_collection_area_is_404() -> None:
+    async with _client(_ADMIN) as (client, _):
+        response = await client.delete("/admin/collection-data-sources/areas/nope")
+    assert response.status_code == 404
+    assert response.json()["error"] == "COLLECTION_AREA_NOT_FOUND"
+
+
+async def test_move_collection_to_area() -> None:
+    async with _client(_ADMIN) as (client, _):
+        response = await client.post(
+            f"/admin/collection-data-sources/collections/{_ZOOLOGY_ID}/move-area",
+            json={"areaId": _HUMAN_SCIENCES_ID},
+        )
+    assert response.status_code == 200, response.text
+    assert response.json()["areaId"] == _HUMAN_SCIENCES_ID
+    assert response.json()["areaName"] == "Human Sciences"
+
+
+async def test_move_collection_to_unknown_area_is_404() -> None:
+    async with _client(_ADMIN) as (client, _):
+        response = await client.post(
+            f"/admin/collection-data-sources/collections/{_ZOOLOGY_ID}/move-area",
+            json={"areaId": "nope"},
+        )
+    assert response.status_code == 404
+    assert response.json()["error"] == "COLLECTION_AREA_NOT_FOUND"
+
+
+async def test_move_unknown_collection_to_area_is_404() -> None:
+    async with _client(_ADMIN) as (client, _):
+        response = await client.post(
+            "/admin/collection-data-sources/collections/nope/move-area",
+            json={"areaId": _HUMAN_SCIENCES_ID},
+        )
+    assert response.status_code == 404
+    assert response.json()["error"] == "COLLECTION_NOT_FOUND"
+
+
+async def test_move_collection_to_area_blocked_for_curator() -> None:
+    async with _client(_CURATOR) as (client, _):
+        response = await client.post(
+            f"/admin/collection-data-sources/collections/{_ZOOLOGY_ID}/move-area",
+            json={"areaId": _HUMAN_SCIENCES_ID},
+        )
+    assert response.status_code == 403
+    assert response.json()["error"] == "INSUFFICIENT_GROUP"
+
+
 async def test_curator_candidates_blocked_for_non_sys_admin() -> None:
     async with _client(_CURATOR) as (client, _):
-        response = await client.get(
-            "/admin/collection-data-sources/curator-candidates"
-        )
+        response = await client.get("/admin/collection-data-sources/curator-candidates")
     assert response.status_code == 403
     assert response.json()["error"] == "INSUFFICIENT_GROUP"
 

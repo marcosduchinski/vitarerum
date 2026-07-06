@@ -16,6 +16,8 @@ class CuratorResponse(BaseModel):
 
 class CollectionResponse(BaseModel):
     id: str
+    areaId: str
+    areaName: str
     name: str
     curators: list[CuratorResponse]
     documentCount: int
@@ -24,9 +26,28 @@ class CollectionResponse(BaseModel):
 
 class CreateCollectionRequest(BaseModel):
     name: str = Field(min_length=1, max_length=255)
+    areaId: str
 
 
 class UpdateCollectionRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+
+
+class MoveCollectionToAreaRequest(BaseModel):
+    areaId: str
+
+
+class CollectionAreaResponse(BaseModel):
+    id: str
+    name: str
+    collectionCount: int
+
+
+class CreateCollectionAreaRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+
+
+class UpdateCollectionAreaRequest(BaseModel):
     name: str = Field(min_length=1, max_length=255)
 
 

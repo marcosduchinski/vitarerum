@@ -435,8 +435,18 @@ package "Collection Use" <<Bounded Context>> {
 
 package "Collection Object Index" <<Bounded Context>> {
 
+        class CollectionArea <<Aggregate Root>> #c3b1e1 {
+          - id: CollectionAreaId
+          - name: String
+          - createdAt: DateTime
+          - updatedAt: DateTime
+          + rename(name)
+          }
+
+
         class Collection <<Aggregate Root>> #c3b1e1 {
         - id: CollectionId
+        - areaId: CollectionAreaId
         - name: String
         - createdAt: DateTime
         - updatedAt: DateTime
@@ -490,10 +500,12 @@ package "Collection Object Index" <<Bounded Context>> {
         ERROR
         }
 
+          CollectionArea "1" o-- "0..*" Collection
         Collection *-- "0..*" CuratorAssignment
         Collection *-- "0..*" SourceDocument
         SourceDocument *-- "0..*" CollectionObject
         CollectionObject ..> Collection : collectionId (denormalized)
+        Collection ..> CollectionArea : areaId
 
         CuratorAssignment ..> Permission : permissionId
         CuratorAssignment ..> Permission : assignedBy
@@ -514,8 +526,21 @@ note as N_CollectionObjectIndex
   assign/remove are exclusive to SYS_ADMIN. There is no "inactive" state:
   removing a collection is permanent and cascades — its curator assignments,
   source documents, indexed rows, and files are all deleted, in that order.
+
+  CollectionArea is a catalogue classification one level above Collection
+  (e.g. "Natural History" groups Zoology, Botany, ...) — administered by
+  SYS_ADMIN (create/rename/remove, plus moving a collection to a different
+  area via a dedicated command, not a side effect of renaming). It does
+  **not** replace Collection: curator assignment, source documents and
+  indexed rows all stay at the Collection level, and an area grants no
+  authorization by itself (that may change later if the business ever needs
+  a curator to manage every collection of an area). Removing an area is
+  blocked while any collection is still assigned to it — unlike Collection's
+  permanent cascade, since cascading an area's removal would take out every
+  collection (and its documents/index/files) under it.
 end note
 N_CollectionObjectIndex .. Collection
+N_CollectionObjectIndex .. CollectionArea
 
 
 package "Public Submission" <<Bounded Context>> {

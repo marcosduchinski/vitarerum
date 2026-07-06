@@ -1,12 +1,14 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { IDENTITY_SERVICE, IdentityService } from '@core/auth/identity.service';
 import { GroupName } from '@core/auth/models/group-name.enum';
 import { IdentitySession } from '@core/auth/models/identity-session.model';
 import { LoginRequest } from '@core/auth/models/login.model';
 import { computed, signal } from '@angular/core';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 
 import {
+  CollectionArea,
   CollectionDataSource,
   CuratorCandidate,
   SourceDocument,
@@ -14,9 +16,20 @@ import {
 import { COLLECTION_DATA_SOURCE_SERVICE } from '../services/collection-data-source.service';
 import { CollectionDataSourcesPageComponent } from './collection-data-sources-page.component';
 
+function makeArea(overrides: Partial<CollectionArea> = {}): CollectionArea {
+  return {
+    id: 'area-nat-hist',
+    name: 'Natural History',
+    collectionCount: 1,
+    ...overrides,
+  };
+}
+
 function makeCollection(overrides: Partial<CollectionDataSource> = {}): CollectionDataSource {
   return {
     id: 'col-zoo',
+    areaId: 'area-nat-hist',
+    areaName: 'Natural History',
     name: 'Zoology',
     curators: [
       {
@@ -87,6 +100,7 @@ class IdentityServiceStub implements IdentityService {
 class ServiceStub {
   collections: CollectionDataSource[] = [makeCollection()];
   documents: SourceDocument[] = [makeDocument()];
+  areas: CollectionArea[] = [makeArea(), makeArea({ id: 'area-media', name: 'Documentation & Media', collectionCount: 0 })];
   curatorCandidates: CuratorCandidate[] = [
     { permissionId: 'perm-1', name: 'Grace Curator', email: 'grace@museum.test' },
     { permissionId: 'perm-2', name: 'Hugo Curator', email: 'hugo@museum.test' },
@@ -94,19 +108,33 @@ class ServiceStub {
   readonly uploadCalls: [string, File][] = [];
   readonly removeCalls: string[] = [];
   readonly reindexCalls: string[] = [];
-  readonly createCollectionCalls: string[] = [];
+  readonly createCollectionCalls: [string, string][] = [];
   readonly updateCollectionCalls: [string, { name: string }][] = [];
   readonly removeCollectionCalls: string[] = [];
   readonly assignCuratorCalls: [string, string][] = [];
   readonly removeCuratorCalls: [string, string][] = [];
+  readonly createAreaCalls: string[] = [];
+  readonly updateAreaCalls: [string, string][] = [];
+  readonly removeAreaCalls: string[] = [];
+  readonly moveCollectionToAreaCalls: [string, string][] = [];
 
   listCollections() {
     return of(this.collections);
   }
 
-  createCollection(name: string) {
-    this.createCollectionCalls.push(name);
-    return of(makeCollection({ id: 'col-new', name, curators: [], documentCount: 0 }));
+  createCollection(name: string, areaId: string) {
+    this.createCollectionCalls.push([name, areaId]);
+    const area = this.areas.find((a) => a.id === areaId);
+    return of(
+      makeCollection({
+        id: 'col-new',
+        name,
+        areaId,
+        areaName: area?.name ?? '',
+        curators: [],
+        documentCount: 0,
+      }),
+    );
   }
 
   updateCollection(collectionId: string, changes: { name: string }) {
@@ -119,7 +147,7 @@ class ServiceStub {
     return of(undefined);
   }
 
-  listDocuments(_collectionId: string) {
+  listDocuments() {
     return of(this.documents);
   }
 
@@ -150,6 +178,43 @@ class ServiceStub {
   removeCurator(collectionId: string, permissionId: string) {
     this.removeCuratorCalls.push([collectionId, permissionId]);
     return of(undefined);
+  }
+
+  listAreas() {
+    return of(this.areas);
+  }
+
+  createArea(name: string) {
+    this.createAreaCalls.push(name);
+    const area = makeArea({ id: 'area-new', name, collectionCount: 0 });
+    this.areas = [...this.areas, area];
+    return of(area);
+  }
+
+  updateArea(areaId: string, name: string) {
+    this.updateAreaCalls.push([areaId, name]);
+    return of(makeArea({ id: areaId, name }));
+  }
+
+  removeArea(areaId: string) {
+    this.removeAreaCalls.push(areaId);
+    const area = this.areas.find((a) => a.id === areaId);
+    if (area && area.collectionCount > 0) {
+      return throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 409,
+            error: { message: 'Collection area still has collections assigned to it' },
+          }),
+      );
+    }
+    return of(undefined);
+  }
+
+  moveCollectionToArea(collectionId: string, areaId: string) {
+    this.moveCollectionToAreaCalls.push([collectionId, areaId]);
+    const area = this.areas.find((a) => a.id === areaId);
+    return of(makeCollection({ id: collectionId, areaId, areaName: area?.name ?? '' }));
   }
 }
 
@@ -268,23 +333,49 @@ describe('CollectionDataSourcesPageComponent', () => {
       const el = await setup(undefined, undefined, 'CURATORIAL');
       expect(el.querySelector('.new-collection')).toBeNull();
       expect(el.querySelector('.collection__admin-actions')).toBeNull();
+      expect(el.querySelector('.area-admin')).toBeNull();
     });
 
-    it('creates a collection', async () => {
+    it('groups collections under their area', async () => {
+      const el = await setup([
+        makeCollection({ id: 'col-zoo', name: 'Zoology', areaName: 'Natural History' }),
+        makeCollection({
+          id: 'col-arch',
+          name: 'Archaeology',
+          areaId: 'area-human',
+          areaName: 'Human Sciences',
+        }),
+      ]);
+      const titles = Array.from(el.querySelectorAll('.area-group__title')).map((t) =>
+        t.textContent?.trim(),
+      );
+      expect(titles.some((t) => t?.startsWith('Human Sciences'))).toBe(true);
+      expect(titles.some((t) => t?.startsWith('Natural History'))).toBe(true);
+    });
+
+    it('requires both a name and an area before creating a collection', async () => {
       const el = await setup(undefined, undefined, 'SYS_ADMIN');
       const input = el.querySelector<HTMLInputElement>('.new-collection__input')!;
       input.value = 'Mineralogy';
       input.dispatchEvent(new Event('input'));
       fixture.detectChanges();
-      el.querySelector<HTMLButtonElement>('.new-collection__submit')!.click();
-      await fixture.whenStable();
+      const submit = el.querySelector<HTMLButtonElement>('.new-collection__submit')!;
+      expect(submit.disabled).toBe(true);
 
-      expect(service.createCollectionCalls).toEqual(['Mineralogy']);
+      const select = el.querySelector<HTMLSelectElement>('.new-collection__area')!;
+      select.value = 'area-nat-hist';
+      select.dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+      expect(submit.disabled).toBe(false);
+
+      submit.click();
+      await fixture.whenStable();
+      expect(service.createCollectionCalls).toEqual([['Mineralogy', 'area-nat-hist']]);
     });
 
     it('renames a collection inline', async () => {
       const el = await setup(undefined, undefined, 'SYS_ADMIN');
-      Array.from(el.querySelectorAll<HTMLButtonElement>('.admin-btn'))
+      Array.from(el.querySelectorAll<HTMLButtonElement>('.collection__admin-actions .admin-btn'))
         .find((b) => b.textContent?.includes('Rename'))!
         .click();
       fixture.detectChanges();
@@ -303,7 +394,7 @@ describe('CollectionDataSourcesPageComponent', () => {
 
     it('requires typing the exact collection name before removing', async () => {
       const el = await setup(undefined, undefined, 'SYS_ADMIN');
-      Array.from(el.querySelectorAll<HTMLButtonElement>('.admin-btn'))
+      Array.from(el.querySelectorAll<HTMLButtonElement>('.collection__admin-actions .admin-btn'))
         .find((b) => b.textContent?.trim() === 'Remove')!
         .click();
       fixture.detectChanges();
@@ -332,7 +423,7 @@ describe('CollectionDataSourcesPageComponent', () => {
 
     it('cancels the remove confirmation without calling the service', async () => {
       const el = await setup(undefined, undefined, 'SYS_ADMIN');
-      Array.from(el.querySelectorAll<HTMLButtonElement>('.admin-btn'))
+      Array.from(el.querySelectorAll<HTMLButtonElement>('.collection__admin-actions .admin-btn'))
         .find((b) => b.textContent?.trim() === 'Remove')!
         .click();
       fixture.detectChanges();
@@ -367,6 +458,70 @@ describe('CollectionDataSourcesPageComponent', () => {
       await fixture.whenStable();
 
       expect(service.removeCuratorCalls).toEqual([['col-zoo', 'perm-1']]);
+    });
+
+    it('creates a collection area', async () => {
+      const el = await setup(undefined, undefined, 'SYS_ADMIN');
+      const input = el.querySelector<HTMLInputElement>('.area-admin__input')!;
+      input.value = 'Media';
+      input.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      Array.from(el.querySelectorAll<HTMLButtonElement>('.area-admin button'))
+        .find((b) => b.textContent?.includes('Create area'))!
+        .click();
+      await fixture.whenStable();
+
+      expect(service.createAreaCalls).toEqual(['Media']);
+    });
+
+    it('renames a collection area inline', async () => {
+      const el = await setup(undefined, undefined, 'SYS_ADMIN');
+      Array.from(el.querySelectorAll<HTMLButtonElement>('.area-admin__item .admin-btn'))
+        .find((b) => b.textContent?.includes('Rename'))!
+        .click();
+      fixture.detectChanges();
+
+      const input = el.querySelector<HTMLInputElement>('.area-admin__item .area-admin__input')!;
+      input.value = 'Natural Sciences';
+      input.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      Array.from(el.querySelectorAll<HTMLButtonElement>('.area-admin__item .admin-btn'))
+        .find((b) => b.textContent?.includes('Save'))!
+        .click();
+      await fixture.whenStable();
+
+      expect(service.updateAreaCalls).toEqual([['area-nat-hist', 'Natural Sciences']]);
+    });
+
+    it('asks for confirmation before removing an area, surfacing an in-use conflict', async () => {
+      const el = await setup(undefined, undefined, 'SYS_ADMIN');
+      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+      Array.from(el.querySelectorAll<HTMLButtonElement>('.area-admin__item'))[0]
+        .querySelector<HTMLButtonElement>('.admin-btn.admin-btn--danger')!
+        .click();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      expect(confirmSpy).toHaveBeenCalled();
+      expect(service.removeAreaCalls).toEqual(['area-nat-hist']);
+      expect(el.textContent).toContain('Action not allowed');
+    });
+
+    it('moves a collection to a different area', async () => {
+      const el = await setup(undefined, undefined, 'SYS_ADMIN');
+      await expand(el);
+
+      const select = el.querySelector<HTMLSelectElement>('.move-area__select')!;
+      select.value = 'area-media';
+      select.dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+      Array.from(el.querySelectorAll<HTMLButtonElement>('.move-area .admin-btn'))
+        .find((b) => b.textContent?.includes('Move'))!
+        .click();
+      await fixture.whenStable();
+
+      expect(service.moveCollectionToAreaCalls).toEqual([['col-zoo', 'area-media']]);
     });
   });
 });

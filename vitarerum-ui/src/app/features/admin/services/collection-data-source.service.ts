@@ -5,6 +5,7 @@ import { buildApiUrl } from '@core/http/api-url.util';
 import { Observable } from 'rxjs';
 
 import {
+  CollectionArea,
   CollectionCurator,
   CollectionDataSource,
   CuratorCandidate,
@@ -14,7 +15,7 @@ import {
 
 export interface CollectionDataSourceApi {
   listCollections(): Observable<CollectionDataSource[]>;
-  createCollection(name: string): Observable<CollectionDataSource>;
+  createCollection(name: string, areaId: string): Observable<CollectionDataSource>;
   updateCollection(
     collectionId: string,
     changes: UpdateCollectionRequest,
@@ -29,6 +30,12 @@ export interface CollectionDataSourceApi {
   listCuratorCandidates(): Observable<CuratorCandidate[]>;
   assignCurator(collectionId: string, permissionId: string): Observable<CollectionCurator>;
   removeCurator(collectionId: string, permissionId: string): Observable<void>;
+  listAreas(): Observable<CollectionArea[]>;
+  createArea(name: string): Observable<CollectionArea>;
+  updateArea(areaId: string, name: string): Observable<CollectionArea>;
+  /** Rejects (409) while any collection is still assigned to the area. */
+  removeArea(areaId: string): Observable<void>;
+  moveCollectionToArea(collectionId: string, areaId: string): Observable<CollectionDataSource>;
 }
 
 export const COLLECTION_DATA_SOURCE_SERVICE = new InjectionToken<CollectionDataSourceApi>(
@@ -44,8 +51,8 @@ export class CollectionDataSourceService implements CollectionDataSourceApi {
     return this.http.get<CollectionDataSource[]>(this.url('/collections'));
   }
 
-  createCollection(name: string): Observable<CollectionDataSource> {
-    return this.http.post<CollectionDataSource>(this.url('/collections'), { name });
+  createCollection(name: string, areaId: string): Observable<CollectionDataSource> {
+    return this.http.post<CollectionDataSource>(this.url('/collections'), { name, areaId });
   }
 
   updateCollection(
@@ -90,6 +97,29 @@ export class CollectionDataSourceService implements CollectionDataSourceApi {
   removeCurator(collectionId: string, permissionId: string): Observable<void> {
     return this.http.delete<void>(
       this.url(`/collections/${collectionId}/curators/${permissionId}`),
+    );
+  }
+
+  listAreas(): Observable<CollectionArea[]> {
+    return this.http.get<CollectionArea[]>(this.url('/areas'));
+  }
+
+  createArea(name: string): Observable<CollectionArea> {
+    return this.http.post<CollectionArea>(this.url('/areas'), { name });
+  }
+
+  updateArea(areaId: string, name: string): Observable<CollectionArea> {
+    return this.http.patch<CollectionArea>(this.url(`/areas/${areaId}`), { name });
+  }
+
+  removeArea(areaId: string): Observable<void> {
+    return this.http.delete<void>(this.url(`/areas/${areaId}`));
+  }
+
+  moveCollectionToArea(collectionId: string, areaId: string): Observable<CollectionDataSource> {
+    return this.http.post<CollectionDataSource>(
+      this.url(`/collections/${collectionId}/move-area`),
+      { areaId },
     );
   }
 

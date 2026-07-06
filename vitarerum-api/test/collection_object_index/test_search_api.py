@@ -21,7 +21,10 @@ from app.collection_object_index.application.ports import (
     SearchHit,
 )
 from app.collection_object_index.domain.models import CollectionId, SourceDocumentId
-from app.collection_object_index.infrastructure.models import CollectionRecord
+from app.collection_object_index.infrastructure.models import (
+    CollectionAreaRecord,
+    CollectionRecord,
+)
 from app.collection_object_index.presentation.dependencies import get_object_index
 from app.database import Base, get_async_session
 from app.identity.public import Actor, GroupName, PermissionId
@@ -128,16 +131,26 @@ async def _client(
         await conn.run_sync(Base.metadata.create_all)
     factory = async_sessionmaker(bind=engine, expire_on_commit=False)
     async with factory() as session:
+        session.add(
+            CollectionAreaRecord(
+                id="area-nat-hist",
+                name="Natural History",
+                created_at=_NOW,
+                updated_at=_NOW,
+            )
+        )
         session.add_all(
             [
                 CollectionRecord(
                     id="col-zoo",
+                    area_id="area-nat-hist",
                     name="Zoology",
                     created_at=_NOW,
                     updated_at=_NOW,
                 ),
                 CollectionRecord(
                     id="col-bot",
+                    area_id="area-nat-hist",
                     name="Botany",
                     created_at=_NOW,
                     updated_at=_NOW,

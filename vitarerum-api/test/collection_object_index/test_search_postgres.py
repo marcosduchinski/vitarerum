@@ -4,10 +4,12 @@ trigram).
 tsvector, ts_headline and pg_trgm's word_similarity have no SQLite
 equivalent, so this is the one part of the codebase tested against a real
 Postgres — the same instance docker-compose.yml brings up for local dev
-(``DATABASE_URL`` in .env), with the Collection Object Index migration
-(0011) already applied. Skips gracefully if that database isn't reachable
-(e.g. in an environment without docker-compose up), since every other test
-in the suite runs against in-memory SQLite and doesn't need it.
+(``DATABASE_URL`` in .env), with the Collection Object Index migrations
+(0011, 0014) already applied — the latter seeds at least one collection
+area, which every seeded test collection borrows (``area_id`` is a required
+FK). Skips gracefully if that database isn't reachable (e.g. in an
+environment without docker-compose up), since every other test in the suite
+runs against in-memory SQLite and doesn't need it.
 
 Each test seeds its own collection/source document/rows (unique ids) and
 tears them down in a ``finally``, so runs don't collide or leave litter in
@@ -22,7 +24,7 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -32,6 +34,7 @@ from sqlalchemy.ext.asyncio import (
 from app.collection_object_index.application.ports import CollectionObjectSearchQuery
 from app.collection_object_index.domain.models import CollectionId
 from app.collection_object_index.infrastructure.models import (
+    CollectionAreaRecord,
     CollectionObjectRecord,
     CollectionRecord,
     SourceDocumentRecord,
@@ -76,9 +79,14 @@ class _Seed:
 
     async def __aenter__(self) -> _Seed:
         async with self._factory() as session:
+            area_id = await session.scalar(select(CollectionAreaRecord.id).limit(1))
+            assert area_id is not None, (
+                "No collection area found — has migration 0014 been applied?"
+            )
             session.add(
                 CollectionRecord(
                     id=self.collection_id,
+                    area_id=area_id,
                     name=f"Test Collection {self.collection_id}",
                     created_at=_NOW,
                     updated_at=_NOW,

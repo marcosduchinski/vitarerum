@@ -20,10 +20,24 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 
 
+class CollectionAreaRecord(Base):
+    __tablename__ = "collection_index_collection_area"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class CollectionRecord(Base):
     __tablename__ = "collection_index_collection"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    area_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("collection_index_collection_area.id"),
+        index=True,
+    )
     name: Mapped[str] = mapped_column(String(255), unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

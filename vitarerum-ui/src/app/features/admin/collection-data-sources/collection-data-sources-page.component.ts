@@ -16,12 +16,20 @@ import { LoadingStateComponent } from '@shared/components/loading-state/loading-
 import { PageHeaderComponent } from '@shared/components/page-header/page-header.component';
 
 import {
+  CollectionArea,
   CollectionCurator,
   CollectionDataSource,
   CuratorCandidate,
   SourceDocument,
 } from '../models/collection-data-source.model';
 import { COLLECTION_DATA_SOURCE_SERVICE } from '../services/collection-data-source.service';
+
+/** Collections grouped under their area, for the hierarchical listing. */
+interface AreaGroup {
+  readonly areaId: string;
+  readonly areaName: string;
+  readonly collections: readonly CollectionDataSource[];
+}
 
 @Component({
   selector: 'app-collection-data-sources-page',
@@ -52,6 +60,36 @@ export class CollectionDataSourcesPageComponent {
   protected readonly collections = computed<readonly CollectionDataSource[]>(
     () => this.collectionsResource.value() ?? [],
   );
+
+  /** Collection areas — the create-collection picker and the area
+   * management panel below are SYS_ADMIN only, but every staff member sees
+   * the area names denormalised on each collection regardless. */
+  protected readonly areasResource = resource({
+    params: () => this.isSysAdmin(),
+    loader: ({ params }) =>
+      params ? firstValueFrom(this.service.listAreas()) : Promise.resolve<CollectionArea[]>([]),
+  });
+  protected readonly areas = computed<readonly CollectionArea[]>(
+    () => this.areasResource.value() ?? [],
+  );
+
+  /** Collections grouped by area (denormalised area name/id on the
+   * collection itself), sorted by area then collection name. */
+  protected readonly groupedCollections = computed<readonly AreaGroup[]>(() => {
+    const byArea = new Map<string, CollectionDataSource[]>();
+    for (const collection of this.collections()) {
+      const bucket = byArea.get(collection.areaId);
+      if (bucket) bucket.push(collection);
+      else byArea.set(collection.areaId, [collection]);
+    }
+    return Array.from(byArea.entries())
+      .map(([areaId, collections]) => ({
+        areaId,
+        areaName: collections[0].areaName,
+        collections: [...collections].sort((a, b) => a.name.localeCompare(b.name)),
+      }))
+      .sort((a, b) => a.areaName.localeCompare(b.areaName));
+  });
 
   /** The collection whose documents panel is expanded (one at a time). */
   protected readonly selectedId = signal<string | null>(null);
@@ -86,6 +124,7 @@ export class CollectionDataSourcesPageComponent {
 
   /** New-collection creation form. */
   protected readonly newCollectionName = signal('');
+  protected readonly newCollectionAreaId = signal('');
 
   /** Collection currently being renamed inline (one at a time). */
   protected readonly editingId = signal<string | null>(null);
@@ -94,14 +133,25 @@ export class CollectionDataSourcesPageComponent {
   /** Curator picker selection per expanded collection. */
   protected readonly selectedCandidateId = signal('');
 
+  /** Target area picker for moving the expanded collection. */
+  protected readonly moveAreaId = signal('');
+
   /** Collection currently showing the "type the name to confirm" remove
    * control (one at a time). */
   protected readonly removingId = signal<string | null>(null);
   protected readonly removeConfirmText = signal('');
 
+  /** New-area creation form. */
+  protected readonly newAreaName = signal('');
+
+  /** Area currently being renamed inline (one at a time). */
+  protected readonly editingAreaId = signal<string | null>(null);
+  protected readonly editAreaName = signal('');
+
   protected toggle(collection: CollectionDataSource): void {
     this.actionError.set(null);
     this.selectedCandidateId.set('');
+    this.moveAreaId.set('');
     this.selectedId.update((current) => (current === collection.id ? null : collection.id));
   }
 
@@ -117,9 +167,11 @@ export class CollectionDataSourcesPageComponent {
 
   protected async createCollection(): Promise<void> {
     const name = this.newCollectionName().trim();
-    if (!name) return;
-    await this.run(() => firstValueFrom(this.service.createCollection(name)));
+    const areaId = this.newCollectionAreaId();
+    if (!name || !areaId) return;
+    await this.run(() => firstValueFrom(this.service.createCollection(name, areaId)));
     this.newCollectionName.set('');
+    this.newCollectionAreaId.set('');
   }
 
   protected startEdit(collection: CollectionDataSource): void {
@@ -136,6 +188,20 @@ export class CollectionDataSourcesPageComponent {
     this.editingId.set(null);
     if (!name || name === collection.name) return;
     await this.run(() => firstValueFrom(this.service.updateCollection(collection.id, { name })));
+  }
+
+  /** Moves the expanded collection to a different area — a dedicated
+   * action, not a side effect of renaming (mirrors the backend's
+   * MoveCollectionToArea use case). */
+  protected async moveToArea(collection: CollectionDataSource): Promise<void> {
+    const areaId = this.moveAreaId();
+    if (!areaId || areaId === collection.areaId) return;
+    await this.run(() => firstValueFrom(this.service.moveCollectionToArea(collection.id, areaId)));
+    this.moveAreaId.set('');
+  }
+
+  protected otherAreas(collection: CollectionDataSource): readonly CollectionArea[] {
+    return this.areas().filter((area) => area.id !== collection.areaId);
   }
 
   protected startRemove(collection: CollectionDataSource): void {
@@ -176,9 +242,43 @@ export class CollectionDataSourcesPageComponent {
     collection: CollectionDataSource,
     curator: CollectionCurator,
   ): Promise<void> {
-    await this.run(
-      () => firstValueFrom(this.service.removeCurator(collection.id, curator.permissionId)),
+    await this.run(() =>
+      firstValueFrom(this.service.removeCurator(collection.id, curator.permissionId)),
     );
+  }
+
+  protected async createArea(): Promise<void> {
+    const name = this.newAreaName().trim();
+    if (!name) return;
+    await this.run(() => firstValueFrom(this.service.createArea(name)));
+    this.newAreaName.set('');
+  }
+
+  protected startEditArea(area: CollectionArea): void {
+    this.editingAreaId.set(area.id);
+    this.editAreaName.set(area.name);
+  }
+
+  protected cancelEditArea(): void {
+    this.editingAreaId.set(null);
+  }
+
+  protected async saveEditArea(area: CollectionArea): Promise<void> {
+    const name = this.editAreaName().trim();
+    this.editingAreaId.set(null);
+    if (!name || name === area.name) return;
+    await this.run(() => firstValueFrom(this.service.updateArea(area.id, name)));
+  }
+
+  /** Rejected (409, COLLECTION_AREA_IN_USE) while any collection is still
+   * assigned to it — surfaced generically via actionError, same as every
+   * other conflict in this page. */
+  protected async removeArea(area: CollectionArea): Promise<void> {
+    const confirmed = this.document.defaultView?.confirm(
+      `Remove the "${area.name}" area? This is only possible while no collection is assigned to it.`,
+    );
+    if (!confirmed) return;
+    await this.run(() => firstValueFrom(this.service.removeArea(area.id)));
   }
 
   protected async upload(collection: CollectionDataSource, event: Event): Promise<void> {
@@ -216,6 +316,7 @@ export class CollectionDataSourcesPageComponent {
       await operation();
       this.documentsResource.reload();
       this.collectionsResource.reload();
+      this.areasResource.reload();
     } catch (err) {
       this.actionError.set(toApiError(err));
     } finally {

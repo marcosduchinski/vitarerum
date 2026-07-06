@@ -21,9 +21,97 @@
   overflow: hidden;
 }
 
+.area-admin {
+  border: 1px solid var(--color-border, #e2e5ef);
+  border-radius: var(--radius-sm, 8px);
+  background: var(--color-surface, #fff);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.area-admin__title {
+  margin: 0;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-subtle, #6b7280);
+}
+
+.area-admin__new {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.area-admin__input {
+  flex: 1;
+  max-width: 20rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--color-border, #e2e5ef);
+  border-radius: var(--radius-sm, 8px);
+  font: inherit;
+}
+
+.area-admin__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.area-admin__item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.9rem;
+}
+
+.area-admin__name {
+  font-weight: 600;
+}
+
+.area-admin__count {
+  margin-right: auto;
+  font-size: 0.8rem;
+  color: var(--color-subtle, #6b7280);
+}
+
+.area-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.area-group__title {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.area-group__count {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--color-subtle, #6b7280);
+}
+
 .new-collection {
   display: flex;
   gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.new-collection__area {
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--color-border, #e2e5ef);
+  border-radius: var(--radius-sm, 8px);
+  font: inherit;
 }
 
 .new-collection__input {
@@ -186,6 +274,25 @@
   margin: 0;
   color: var(--color-subtle, #6b7280);
   font-size: 0.9rem;
+}
+
+.move-area {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.move-area__label {
+  color: var(--color-subtle, #6b7280);
+  margin-right: auto;
+}
+
+.move-area__select {
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--color-border, #e2e5ef);
+  border-radius: var(--radius-sm, 8px);
+  font: inherit;
 }
 
 .upload {

@@ -14,6 +14,8 @@ from typing import Protocol
 
 from app.collection_object_index.domain.models import (
     Collection,
+    CollectionArea,
+    CollectionAreaId,
     CollectionId,
     CuratorAssignment,
     SourceDocument,
@@ -95,6 +97,22 @@ class CollectionRepository(Protocol):
     async def remove_all_curators(self, collection_id: CollectionId) -> None: ...
 
     async def count_live_documents(self) -> dict[CollectionId, int]: ...
+
+    # ── Collection areas (catalogue classification above Collection) ───────
+
+    async def add_area(self, area: CollectionArea) -> None: ...
+
+    async def save_area(self, area: CollectionArea) -> None: ...
+
+    async def delete_area(self, area_id: CollectionAreaId) -> None: ...
+
+    async def list_areas(self) -> list[CollectionArea]: ...
+
+    async def get_area_by_id(
+        self, area_id: CollectionAreaId
+    ) -> CollectionArea | None: ...
+
+    async def count_collections_by_area(self) -> dict[CollectionAreaId, int]: ...
 
 
 class SourceDocumentRepository(Protocol):

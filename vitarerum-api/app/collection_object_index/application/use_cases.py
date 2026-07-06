@@ -34,10 +34,17 @@ from app.collection_object_index.application.ports import (
     InvalidSpreadsheet,
     SourceDocumentRepository,
 )
-from app.collection_object_index.application.read_models import CollectionView
+from app.collection_object_index.application.read_models import (
+    CollectionAreaView,
+    CollectionView,
+)
 from app.collection_object_index.domain.enums import SourceDocumentStatus, SourceKind
 from app.collection_object_index.domain.models import (
     Collection,
+    CollectionArea,
+    CollectionAreaId,
+    CollectionAreaInUse,
+    CollectionAreaNotFound,
     CollectionId,
     CollectionNotFound,
     CuratorAssignment,
@@ -94,12 +101,14 @@ class ListManageableCollections:
         curated = await _curated_ids(caller, self._collections)
         curators = await self._collections.list_curators()
         counts = await self._collections.count_live_documents()
+        area_names = {a.id: a.name for a in await self._collections.list_areas()}
         by_collection: dict[CollectionId, list[CuratorAssignment]] = {}
         for assignment in curators:
             by_collection.setdefault(assignment.collection_id, []).append(assignment)
         return [
             CollectionView(
                 collection=collection,
+                area_name=area_names.get(collection.area_id, ""),
                 curators=by_collection.get(collection.id, []),
                 document_count=counts.get(collection.id, 0),
                 manageable=manage_all or collection.id in curated,
@@ -371,6 +380,7 @@ class RemoveCollectionCurator:
 class CreateCollectionInput:
     caller: Actor
     name: str
+    area_id: CollectionAreaId
 
 
 class CreateCollection:
@@ -380,9 +390,12 @@ class CreateCollection:
 
     async def execute(self, data: CreateCollectionInput) -> Collection:
         require_catalog_admin(data.caller)
+        if await self._collections.get_area_by_id(data.area_id) is None:
+            raise CollectionAreaNotFound(data.area_id)
         now = self._clock.now()
         collection = Collection(
             id=CollectionId(_new_id()),
+            area_id=data.area_id,
             name=data.name,
             created_at=now,
             updated_at=now,
@@ -408,8 +421,10 @@ class GetCollection:
         curated = await _curated_ids(caller, self._collections)
         curators = await self._collections.list_curators(collection_id)
         counts = await self._collections.count_live_documents()
+        area = await self._collections.get_area_by_id(collection.area_id)
         return CollectionView(
             collection=collection,
+            area_name=area.name if area is not None else "",
             curators=curators,
             document_count=counts.get(collection_id, 0),
             manageable=manage_all or collection_id in curated,
@@ -436,6 +451,34 @@ class UpdateCollection:
         if collection is None:
             raise CollectionNotFound(data.collection_id)
         collection.rename(data.name, updated_at=self._clock.now())
+        await self._collections.save(collection)
+        return collection
+
+
+@dataclass(frozen=True, slots=True)
+class MoveCollectionToAreaInput:
+    caller: Actor
+    collection_id: CollectionId
+    area_id: CollectionAreaId
+
+
+class MoveCollectionToArea:
+    """Moves a collection to a different area — a dedicated command (like
+    curator assign/remove) rather than a side effect of the generic rename,
+    since it has its own validation (target area must exist)."""
+
+    def __init__(self, collections: CollectionRepository, clock: Clock) -> None:
+        self._collections = collections
+        self._clock = clock
+
+    async def execute(self, data: MoveCollectionToAreaInput) -> Collection:
+        require_catalog_admin(data.caller)
+        collection = await self._collections.get_by_id(data.collection_id)
+        if collection is None:
+            raise CollectionNotFound(data.collection_id)
+        if await self._collections.get_area_by_id(data.area_id) is None:
+            raise CollectionAreaNotFound(data.area_id)
+        collection.move_to_area(data.area_id, updated_at=self._clock.now())
         await self._collections.save(collection)
         return collection
 
@@ -487,6 +530,92 @@ class RemoveCollection:
         await self._collections.remove_all_curators(collection_id)
         await self._collections.delete(collection_id)
         return file_references
+
+
+# ── Collection areas (catalogue classification, SYS_ADMIN only) ────────────
+
+
+class ListCollectionAreas:
+    """Every collection area with its live collection count — backs the area
+    management screen and the create-collection area picker (both SYS_ADMIN
+    only; other staff see area info denormalised on the collection itself)."""
+
+    def __init__(self, collections: CollectionRepository) -> None:
+        self._collections = collections
+
+    async def execute(self, caller: Actor) -> list[CollectionAreaView]:
+        require_catalog_admin(caller)
+        counts = await self._collections.count_collections_by_area()
+        return [
+            CollectionAreaView(area=area, collection_count=counts.get(area.id, 0))
+            for area in await self._collections.list_areas()
+        ]
+
+
+@dataclass(frozen=True, slots=True)
+class CreateCollectionAreaInput:
+    caller: Actor
+    name: str
+
+
+class CreateCollectionArea:
+    def __init__(self, collections: CollectionRepository, clock: Clock) -> None:
+        self._collections = collections
+        self._clock = clock
+
+    async def execute(self, data: CreateCollectionAreaInput) -> CollectionArea:
+        require_catalog_admin(data.caller)
+        now = self._clock.now()
+        area = CollectionArea(
+            id=CollectionAreaId(_new_id()),
+            name=data.name,
+            created_at=now,
+            updated_at=now,
+        )
+        await self._collections.add_area(area)
+        return area
+
+
+@dataclass(frozen=True, slots=True)
+class UpdateCollectionAreaInput:
+    caller: Actor
+    area_id: CollectionAreaId
+    name: str
+
+
+class UpdateCollectionArea:
+    """Renames a collection area."""
+
+    def __init__(self, collections: CollectionRepository, clock: Clock) -> None:
+        self._collections = collections
+        self._clock = clock
+
+    async def execute(self, data: UpdateCollectionAreaInput) -> CollectionArea:
+        require_catalog_admin(data.caller)
+        area = await self._collections.get_area_by_id(data.area_id)
+        if area is None:
+            raise CollectionAreaNotFound(data.area_id)
+        area.rename(data.name, updated_at=self._clock.now())
+        await self._collections.save_area(area)
+        return area
+
+
+class RemoveCollectionArea:
+    """Blocks removal while any collection is still assigned to the area —
+    unlike ``RemoveCollection``, cascading here would take out every
+    collection (and its documents/index/files) under the area."""
+
+    def __init__(self, collections: CollectionRepository) -> None:
+        self._collections = collections
+
+    async def execute(self, caller: Actor, area_id: CollectionAreaId) -> None:
+        require_catalog_admin(caller)
+        if await self._collections.get_area_by_id(area_id) is None:
+            raise CollectionAreaNotFound(area_id)
+        counts = await self._collections.count_collections_by_area()
+        if counts.get(area_id, 0) > 0:
+            raise CollectionAreaInUse(area_id)
+        await self._collections.delete_area(area_id)
 
 
 # ── Objects -> Search (read side) ────────────────────────────────────────────

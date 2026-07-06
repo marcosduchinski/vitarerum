@@ -11,8 +11,19 @@ export interface CollectionCurator {
   readonly assignedAt: string;
 }
 
+/** A scientific/administrative classification above `Collection` (e.g.
+ * Natural History groups Botany, Zoology, ...). Catalogue organisation
+ * only — curators and documents stay at the `Collection` level. */
+export interface CollectionArea {
+  readonly id: string;
+  readonly name: string;
+  readonly collectionCount: number;
+}
+
 export interface CollectionDataSource {
   readonly id: string;
+  readonly areaId: string;
+  readonly areaName: string;
   readonly name: string;
   readonly curators: readonly CollectionCurator[];
   readonly documentCount: number;

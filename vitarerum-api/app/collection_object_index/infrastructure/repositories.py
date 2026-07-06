@@ -20,12 +20,15 @@ from app.collection_object_index.domain.enums import (
 )
 from app.collection_object_index.domain.models import (
     Collection,
+    CollectionArea,
+    CollectionAreaId,
     CollectionId,
     CuratorAssignment,
     SourceDocument,
     SourceDocumentId,
 )
 from app.collection_object_index.infrastructure.models import (
+    CollectionAreaRecord,
     CollectionObjectRecord,
     CollectionRecord,
     CuratorRecord,
@@ -37,6 +40,16 @@ from app.shared.kernel import PermissionId
 def _to_collection(record: CollectionRecord) -> Collection:
     return Collection(
         id=CollectionId(record.id),
+        area_id=CollectionAreaId(record.area_id),
+        name=record.name,
+        created_at=record.created_at,
+        updated_at=record.updated_at,
+    )
+
+
+def _to_area(record: CollectionAreaRecord) -> CollectionArea:
+    return CollectionArea(
+        id=CollectionAreaId(record.id),
         name=record.name,
         created_at=record.created_at,
         updated_at=record.updated_at,
@@ -71,8 +84,14 @@ def _to_document(record: SourceDocumentRecord) -> SourceDocument:
 
 
 def _apply_collection(record: CollectionRecord, collection: Collection) -> None:
+    record.area_id = str(collection.area_id)
     record.name = collection.name
     record.updated_at = collection.updated_at
+
+
+def _apply_area(record: CollectionAreaRecord, area: CollectionArea) -> None:
+    record.name = area.name
+    record.updated_at = area.updated_at
 
 
 def _apply_document(record: SourceDocumentRecord, document: SourceDocument) -> None:
@@ -91,6 +110,7 @@ class SqlAlchemyCollectionRepository:
         self._session.add(
             CollectionRecord(
                 id=str(collection.id),
+                area_id=str(collection.area_id),
                 name=collection.name,
                 created_at=collection.created_at,
                 updated_at=collection.updated_at,
@@ -177,6 +197,49 @@ class SqlAlchemyCollectionRepository:
             .group_by(SourceDocumentRecord.collection_id)
         )
         return {CollectionId(cid): count for cid, count in result.all()}
+
+    # ── Collection areas ─────────────────────────────────────────────────────
+
+    async def add_area(self, area: CollectionArea) -> None:
+        self._session.add(
+            CollectionAreaRecord(
+                id=str(area.id),
+                name=area.name,
+                created_at=area.created_at,
+                updated_at=area.updated_at,
+            )
+        )
+        await self._session.flush()
+
+    async def save_area(self, area: CollectionArea) -> None:
+        record = await self._session.get(CollectionAreaRecord, str(area.id))
+        if record is None:
+            raise LookupError(f"No collection area found with id {area.id}")
+        _apply_area(record, area)
+        await self._session.flush()
+
+    async def delete_area(self, area_id: CollectionAreaId) -> None:
+        await self._session.execute(
+            delete(CollectionAreaRecord).where(CollectionAreaRecord.id == str(area_id))
+        )
+
+    async def list_areas(self) -> list[CollectionArea]:
+        result = await self._session.execute(
+            select(CollectionAreaRecord).order_by(CollectionAreaRecord.name)
+        )
+        return [_to_area(r) for r in result.scalars()]
+
+    async def get_area_by_id(self, area_id: CollectionAreaId) -> CollectionArea | None:
+        record = await self._session.get(CollectionAreaRecord, str(area_id))
+        return _to_area(record) if record else None
+
+    async def count_collections_by_area(self) -> dict[CollectionAreaId, int]:
+        result = await self._session.execute(
+            select(CollectionRecord.area_id, func.count(CollectionRecord.id)).group_by(
+                CollectionRecord.area_id
+            )
+        )
+        return {CollectionAreaId(aid): count for aid, count in result.all()}
 
 
 class SqlAlchemySourceDocumentRepository:

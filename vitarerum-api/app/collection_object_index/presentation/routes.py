@@ -2,10 +2,12 @@
 
 Staff-only, with two scopes (enforced by the use cases — the frontend menu is
 not a security boundary): SYS_ADMIN alone administers the collection catalog
-(create/rename/remove a collection, assign/remove curators) — removal is
-permanent, taking curators/documents/index/files with it; SYS_ADMIN and
-COLLECTIONS_MANAGEMENT manage any collection's source documents, CURATORIAL
-manages only assigned collections.
+(create/rename/remove a collection, assign/remove curators, and manage
+collection areas — create/rename/remove/move collections between areas) —
+collection removal is permanent, taking curators/documents/index/files with
+it, while area removal is blocked while any collection is still assigned to
+it; SYS_ADMIN and COLLECTIONS_MANAGEMENT manage any collection's source
+documents, CURATORIAL manages only assigned collections.
 """
 
 from __future__ import annotations
@@ -20,27 +22,41 @@ from app.collection_object_index.application.ports import (
     CollectionObjectSearchQuery,
     SearchHit,
 )
-from app.collection_object_index.application.read_models import CollectionView
+from app.collection_object_index.application.read_models import (
+    CollectionAreaView,
+    CollectionView,
+)
 from app.collection_object_index.application.use_cases import (
     AssignCollectionCurator,
     CreateCollection,
+    CreateCollectionArea,
+    CreateCollectionAreaInput,
     CreateCollectionInput,
     DeleteSourceDocument,
     GetCollection,
+    ListCollectionAreas,
     ListCollectionSourceDocuments,
     ListCuratorCandidates,
     ListManageableCollections,
     ListSearchableCollections,
+    MoveCollectionToArea,
+    MoveCollectionToAreaInput,
     ReindexSourceDocument,
     RemoveCollection,
+    RemoveCollectionArea,
     RemoveCollectionCurator,
     SearchCollectionObjects,
     UpdateCollection,
+    UpdateCollectionArea,
+    UpdateCollectionAreaInput,
     UpdateCollectionInput,
     UploadSourceDocument,
     UploadSourceDocumentInput,
 )
 from app.collection_object_index.domain.models import (
+    CollectionAreaId,
+    CollectionAreaInUse,
+    CollectionAreaNotFound,
     CollectionId,
     CollectionNotFound,
     SourceDocument,
@@ -58,14 +74,18 @@ from app.collection_object_index.presentation.dependencies import (
 )
 from app.collection_object_index.presentation.schemas import (
     AssignCuratorRequest,
+    CollectionAreaResponse,
     CollectionResponse,
+    CreateCollectionAreaRequest,
     CreateCollectionRequest,
     CuratorCandidateResponse,
     CuratorResponse,
+    MoveCollectionToAreaRequest,
     SearchableCollectionResponse,
     SearchHitResponse,
     SearchResultResponse,
     SourceDocumentResponse,
+    UpdateCollectionAreaRequest,
     UpdateCollectionRequest,
 )
 from app.identity.public import GroupName, get_permission_reader
@@ -114,6 +134,38 @@ def _invalid_collection_name(exc: ValueError) -> HTTPException:
     )
 
 
+def _collection_area_not_found(area_id: str) -> HTTPException:
+    return _not_found("collection area", "COLLECTION_AREA_NOT_FOUND", area_id)
+
+
+def _collection_area_name_conflict() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail={
+            "error": "COLLECTION_AREA_NAME_ALREADY_EXISTS",
+            "message": "A collection area with this name already exists",
+        },
+    )
+
+
+def _invalid_collection_area_name(exc: ValueError) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        detail={"error": "INVALID_COLLECTION_AREA_NAME", "message": str(exc)},
+    )
+
+
+def _collection_area_in_use(area_id: str) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail={
+            "error": "COLLECTION_AREA_IN_USE",
+            "message": f"Collection area {area_id} still has collections assigned "
+            "to it",
+        },
+    )
+
+
 def _permission_not_curatorial() -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -158,10 +210,18 @@ async def _collection_response(
         )
     return CollectionResponse(
         id=view.collection.id,
+        areaId=view.collection.area_id,
+        areaName=view.area_name,
         name=view.collection.name,
         curators=curators,
         documentCount=view.document_count,
         manageable=view.manageable,
+    )
+
+
+def _area_response(view: CollectionAreaView) -> CollectionAreaResponse:
+    return CollectionAreaResponse(
+        id=view.area.id, name=view.area.name, collectionCount=view.collection_count
     )
 
 
@@ -192,8 +252,14 @@ async def create_collection(
 ) -> CollectionResponse:
     try:
         collection = await CreateCollection(collections, clock).execute(
-            CreateCollectionInput(caller=caller, name=body.name)
+            CreateCollectionInput(
+                caller=caller,
+                name=body.name,
+                area_id=CollectionAreaId(body.areaId),
+            )
         )
+    except CollectionAreaNotFound as exc:
+        raise _collection_area_not_found(body.areaId) from exc
     except ValueError as exc:
         raise _invalid_collection_name(exc) from exc
     except IntegrityError as exc:
@@ -254,6 +320,34 @@ async def update_collection(
     return await _collection_response(view, session)
 
 
+@collection_data_sources_router.post(
+    "/collections/{collection_id}/move-area", response_model=CollectionResponse
+)
+async def move_collection_to_area(
+    collection_id: str,
+    body: MoveCollectionToAreaRequest,
+    caller: CallerPermission,
+    collections: CollectionRepo,
+    clock: IndexClock,
+    session: DBSession,
+) -> CollectionResponse:
+    try:
+        await MoveCollectionToArea(collections, clock).execute(
+            MoveCollectionToAreaInput(
+                caller=caller,
+                collection_id=CollectionId(collection_id),
+                area_id=CollectionAreaId(body.areaId),
+            )
+        )
+    except CollectionNotFound as exc:
+        raise _not_found("collection", "COLLECTION_NOT_FOUND", collection_id) from exc
+    except CollectionAreaNotFound as exc:
+        raise _collection_area_not_found(body.areaId) from exc
+    await session.commit()
+    view = await GetCollection(collections).execute(caller, CollectionId(collection_id))
+    return await _collection_response(view, session)
+
+
 @collection_data_sources_router.delete(
     "/collections/{collection_id}", status_code=status.HTTP_204_NO_CONTENT
 )
@@ -290,6 +384,97 @@ async def remove_collection(
                 collection_id,
                 exc_info=True,
             )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# ── Collection areas (catalogue classification, SYS_ADMIN only) ────────────
+
+
+@collection_data_sources_router.get(
+    "/areas", response_model=list[CollectionAreaResponse]
+)
+async def list_collection_areas(
+    caller: CallerPermission,
+    collections: CollectionRepo,
+) -> list[CollectionAreaResponse]:
+    views = await ListCollectionAreas(collections).execute(caller)
+    return [_area_response(v) for v in views]
+
+
+@collection_data_sources_router.post(
+    "/areas",
+    status_code=status.HTTP_201_CREATED,
+    response_model=CollectionAreaResponse,
+)
+async def create_collection_area(
+    body: CreateCollectionAreaRequest,
+    caller: CallerPermission,
+    collections: CollectionRepo,
+    clock: IndexClock,
+    session: DBSession,
+) -> CollectionAreaResponse:
+    try:
+        area = await CreateCollectionArea(collections, clock).execute(
+            CreateCollectionAreaInput(caller=caller, name=body.name)
+        )
+    except ValueError as exc:
+        raise _invalid_collection_area_name(exc) from exc
+    except IntegrityError as exc:
+        await session.rollback()
+        raise _collection_area_name_conflict() from exc
+    await session.commit()
+    return CollectionAreaResponse(id=area.id, name=area.name, collectionCount=0)
+
+
+@collection_data_sources_router.patch(
+    "/areas/{area_id}", response_model=CollectionAreaResponse
+)
+async def update_collection_area(
+    area_id: str,
+    body: UpdateCollectionAreaRequest,
+    caller: CallerPermission,
+    collections: CollectionRepo,
+    clock: IndexClock,
+    session: DBSession,
+) -> CollectionAreaResponse:
+    try:
+        area = await UpdateCollectionArea(collections, clock).execute(
+            UpdateCollectionAreaInput(
+                caller=caller, area_id=CollectionAreaId(area_id), name=body.name
+            )
+        )
+    except CollectionAreaNotFound as exc:
+        raise _collection_area_not_found(area_id) from exc
+    except ValueError as exc:
+        raise _invalid_collection_area_name(exc) from exc
+    except IntegrityError as exc:
+        await session.rollback()
+        raise _collection_area_name_conflict() from exc
+    await session.commit()
+    counts = await collections.count_collections_by_area()
+    return CollectionAreaResponse(
+        id=area.id, name=area.name, collectionCount=counts.get(area.id, 0)
+    )
+
+
+@collection_data_sources_router.delete(
+    "/areas/{area_id}", status_code=status.HTTP_204_NO_CONTENT
+)
+async def remove_collection_area(
+    area_id: str,
+    caller: CallerPermission,
+    collections: CollectionRepo,
+    session: DBSession,
+) -> Response:
+    try:
+        await RemoveCollectionArea(collections).execute(
+            caller, CollectionAreaId(area_id)
+        )
+    except CollectionAreaNotFound as exc:
+        raise _collection_area_not_found(area_id) from exc
+    except CollectionAreaInUse as exc:
+        raise _collection_area_in_use(area_id) from exc
+    await session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
