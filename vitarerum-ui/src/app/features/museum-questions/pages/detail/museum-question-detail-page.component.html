@@ -409,36 +409,85 @@
                   <p class="message__body">{{ triage.suggestedReply }}</p>
                 </div>
               } @else {
-                @if (!triage.mentionedObjects.length) {
+                @if (!triageObjectResults().length) {
                   <p class="detail-card__empty">
                     General visit request — no specific object identified.
                   </p>
                 } @else {
-                  <ul class="message-list">
-                    @for (match of triage.objectMatches; track match.portuguese) {
+                  <section class="triage-search-summary" aria-labelledby="objects-searched-title">
+                    <div class="triage-section-heading">
+                      <h3 id="objects-searched-title">Objects searched</h3>
+                      <span>{{ triageObjectResults().length }} object(s)</span>
+                    </div>
+                    <ul class="triage-object-list">
+                      @for (item of triageObjectResults(); track item.key) {
+                        <li>
+                          <span class="triage-object-list__name">{{ item.portuguese }}</span>
+                          @if (item.english.toLowerCase() !== item.portuguese.toLowerCase()) {
+                            <span class="triage-object-list__translation">{{ item.english }}</span>
+                          }
+                          <span class="triage-object-list__count">{{ matchCountLabel(item.hits.length) }}</span>
+                        </li>
+                      }
+                    </ul>
+                  </section>
+
+                  <section class="triage-results" aria-labelledby="triage-results-title">
+                    <div class="triage-section-heading">
+                      <h3 id="triage-results-title">Catalogue results</h3>
+                      <div class="triage-section-heading__actions">
+                        <span>{{ selectedTriageHitKeys().size }} selected</span>
+                        <button
+                          type="button"
+                          class="action-btn"
+                          [disabled]="!selectedTriageHitKeys().size"
+                          (click)="insertSelectedHitsIntoReply()"
+                        >
+                          <span class="pi pi-reply" aria-hidden="true"></span>
+                          Add to reply
+                        </button>
+                      </div>
+                    </div>
+                    <ul class="triage-result-list">
+                      @for (item of triageObjectResults(); track item.key) {
                       <li>
-                        <article class="message">
-                          <p class="message__subject">
-                            {{ match.portuguese }}
-                            @if (match.english.toLowerCase() !== match.portuguese.toLowerCase()) {
-                              <span class="message__date">({{ match.english }})</span>
-                            }
-                          </p>
-                          @for (
-                            hit of match.hits;
-                            track hit.collectionId + ':' + hit.fileName + ':' + hit.highlight
-                          ) {
-                            <p class="message__body">
-                              <strong>{{ hit.collectionName }}</strong>
-                              <span [innerHTML]="highlightHtml(hit)"></span>
-                            </p>
+                        <article class="triage-object-result">
+                          <header class="triage-object-result__header">
+                            <p>{{ objectDisplayName(item) }}</p>
+                            <span>{{ matchCountLabel(item.hits.length) }}</span>
+                          </header>
+                          @for (row of item.hits; track row.key) {
+                            <div class="triage-hit-row">
+                              <label class="triage-hit-row__check">
+                                <input
+                                  type="checkbox"
+                                  [checked]="isTriageHitSelected(row.key)"
+                                  (change)="toggleTriageHitSelection(row.key)"
+                                />
+                                <span>Select</span>
+                              </label>
+                              <div class="triage-hit-row__body">
+                                <strong>{{ row.hit.collectionName }}</strong>
+                                <span class="triage-hit-row__file">{{ row.hit.fileName }}</span>
+                                <span [innerHTML]="highlightHtml(row.hit)"></span>
+                              </div>
+                              <button
+                                type="button"
+                                class="triage-hit-row__link"
+                                (click)="openHitDetails(row)"
+                              >
+                                <span class="pi pi-external-link" aria-hidden="true"></span>
+                                Details
+                              </button>
+                            </div>
                           } @empty {
-                            <p class="message__body">Not found in catalogue.</p>
+                            <p class="triage-object-result__empty">Not found in catalogue.</p>
                           }
                         </article>
                       </li>
                     }
                   </ul>
+                  </section>
                 }
               }
 
@@ -460,5 +509,73 @@
         </section>
       }
     }
+  }
+
+  @if (selectedTriageHit(); as row) {
+    <div
+      class="triage-hit-dialog"
+      role="presentation"
+      tabindex="-1"
+      (keydown.escape)="closeHitDetails()"
+    >
+      <button
+        type="button"
+        class="triage-hit-dialog__backdrop"
+        aria-label="Close result details"
+        (click)="closeHitDetails()"
+      ></button>
+      <section
+        class="triage-hit-dialog__panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="triage-hit-dialog-title"
+      >
+        <header class="triage-hit-dialog__header">
+          <div>
+            <p class="triage-hit-dialog__eyebrow">Catalogue result</p>
+            <h2 id="triage-hit-dialog-title">{{ row.hit.collectionName }}</h2>
+          </div>
+          <button
+            type="button"
+            class="editor-btn"
+            aria-label="Close details"
+            title="Close details"
+            (click)="closeHitDetails()"
+          >
+            <span class="pi pi-times" aria-hidden="true"></span>
+          </button>
+        </header>
+
+        <dl class="triage-hit-dialog__dl">
+          <div>
+            <dt>Object searched</dt>
+            <dd>{{ objectDisplayName(row) }}</dd>
+          </div>
+          <div>
+            <dt>File</dt>
+            <dd>{{ row.hit.fileName }}</dd>
+          </div>
+          <div>
+            <dt>Selection</dt>
+            <dd>{{ isTriageHitSelected(row.key) ? 'Selected' : 'Not selected' }}</dd>
+          </div>
+        </dl>
+
+        <section class="triage-hit-dialog__highlight" aria-label="Matched text">
+          <span [innerHTML]="highlightHtml(row.hit)"></span>
+        </section>
+
+        <footer class="triage-hit-dialog__footer">
+          <button type="button" class="action-btn" (click)="closeHitDetails()">Close</button>
+          <button
+            type="button"
+            class="action-btn action-btn--primary"
+            (click)="toggleTriageHitSelection(row.key)"
+          >
+            {{ isTriageHitSelected(row.key) ? 'Unselect result' : 'Select result' }}
+          </button>
+        </footer>
+      </section>
+    </div>
   }
 </div>

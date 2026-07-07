@@ -296,11 +296,97 @@ describe('MuseumQuestionDetailPageComponent', () => {
     fixture.detectChanges();
 
     expect(el.textContent).toContain('In scope');
+    expect(el.textContent).toContain('Objects searched');
+    expect(el.textContent).toContain('Catalogue results');
+    expect(el.textContent).toContain('Meteorito Allende');
     expect(el.textContent).toContain('Allende meteorite');
     expect(el.textContent).toContain('Meteorites');
-    expect(el.textContent).toContain('Ghost object');
+    expect(el.textContent).toContain('Objeto fantasma');
     expect(el.textContent).toContain('Not found in catalogue.');
     expect(el.querySelector('mark')?.textContent).toBe('Allende');
+  });
+
+  it('selects and unselects catalogue hits from the result list', async () => {
+    const el = await setup();
+    service.nextTriage = IN_SCOPE_TRIAGE;
+
+    el.querySelector<HTMLButtonElement>('[aria-label="Run AI triage"]')!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const checkbox = el.querySelector<HTMLInputElement>('.triage-hit-row input[type="checkbox"]')!;
+    expect(checkbox.checked).toBe(false);
+    expect(el.textContent).toContain('0 selected');
+
+    checkbox.click();
+    fixture.detectChanges();
+    expect(checkbox.checked).toBe(true);
+    expect(el.textContent).toContain('1 selected');
+
+    checkbox.click();
+    fixture.detectChanges();
+    expect(checkbox.checked).toBe(false);
+    expect(el.textContent).toContain('0 selected');
+  });
+
+  it('opens catalogue result details in a modal and toggles selection there', async () => {
+    const el = await setup();
+    service.nextTriage = IN_SCOPE_TRIAGE;
+
+    el.querySelector<HTMLButtonElement>('[aria-label="Run AI triage"]')!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    Array.from(el.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.includes('Details'))!
+      .click();
+    fixture.detectChanges();
+
+    const dialog = el.querySelector<HTMLElement>('[role="dialog"]')!;
+    expect(dialog).not.toBeNull();
+    expect(dialog.textContent).toContain('Catalogue result');
+    expect(dialog.textContent).toContain('Meteorito Allende');
+    expect(dialog.textContent).toContain('Allende meteorite');
+    expect(dialog.textContent).toContain('rows.xlsx');
+    expect(dialog.textContent).toContain('Not selected');
+
+    Array.from(dialog.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.includes('Select result'))!
+      .click();
+    fixture.detectChanges();
+
+    expect(el.textContent).toContain('1 selected');
+    expect(el.querySelector<HTMLElement>('[role="dialog"]')?.textContent).toContain('Selected');
+  });
+
+  it('adds selected catalogue hits to the message reply editor', async () => {
+    const el = await setup();
+    service.nextTriage = IN_SCOPE_TRIAGE;
+
+    el.querySelector<HTMLButtonElement>('[aria-label="Run AI triage"]')!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    el.querySelector<HTMLInputElement>('.triage-hit-row input[type="checkbox"]')!.click();
+    fixture.detectChanges();
+
+    Array.from(el.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.includes('Add to reply'))!
+      .click();
+    await new Promise((resolve) => setTimeout(resolve));
+    fixture.detectChanges();
+
+    expect(
+      el.querySelector('#message-tab')?.classList.contains('question-detail__tab--active'),
+    ).toBe(true);
+    const editor = el.querySelector<HTMLElement>('.reply-editor')!;
+    expect(editor.textContent).toContain('Catalogue references found for your request:');
+    expect(editor.textContent).toContain('Meteorito Allende (Allende meteorite)');
+    expect(editor.textContent).toContain('Meteorites - rows.xlsx');
+    expect(editor.textContent).toContain('Allende meteorite');
   });
 
   it('escapes unsafe markup in an object match highlight, keeping only <mark>', async () => {

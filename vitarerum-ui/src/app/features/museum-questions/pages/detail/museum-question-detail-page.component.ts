@@ -23,14 +23,28 @@ import { PaginationComponent } from '@shared/components/pagination/pagination.co
 import { highlightToSafeMarkup } from '@shared/utils/highlight-html.util';
 
 import {
+  MentionedObject,
   MuseumQuestionTriage,
   ObjectTriageHit,
+  ObjectTriageMatch,
 } from '../../models/museum-question-triage.model';
 import { MuseumQuestion, MuseumQuestionStatus } from '../../models/museum-question.model';
 import { MUSEUM_QUESTION_MANAGEMENT_SERVICE } from '../../services/museum-question-management.service';
 
 type QuestionDetailPanel = 'message' | 'answered-history' | 'ai-assistance';
 type ReplyEditorCommand = 'bold' | 'italic' | 'insertUnorderedList' | 'removeFormat';
+
+interface TriageHitRow {
+  readonly key: string;
+  readonly english: string;
+  readonly portuguese: string;
+  readonly hit: ObjectTriageHit;
+}
+
+interface TriageObjectResult extends MentionedObject {
+  readonly key: string;
+  readonly hits: readonly TriageHitRow[];
+}
 
 const HISTORY_PAGE_SIZE = 10;
 const ELEMENT_NODE = 1;
@@ -92,6 +106,8 @@ export class MuseumQuestionDetailPageComponent {
   protected readonly triageRefreshToken = signal(0);
   protected readonly triageBusy = signal(false);
   protected readonly triageError = signal<ApiError | null>(null);
+  protected readonly selectedTriageHitKeys = signal<ReadonlySet<string>>(new Set());
+  protected readonly selectedTriageHit = signal<TriageHitRow | null>(null);
 
   protected readonly questionResource = resource({
     params: () => ({ id: this.id(), refresh: this.detailRefreshToken() }),
@@ -155,6 +171,20 @@ export class MuseumQuestionDetailPageComponent {
   protected readonly triageResourceError = computed<ApiError | null>(() => {
     const err = this.triageResource.error();
     return err ? toApiError(err) : null;
+  });
+  protected readonly triageObjectResults = computed<readonly TriageObjectResult[]>(() =>
+    (this.triage()?.objectMatches ?? []).map((match) => ({
+      key: this.triageObjectKey(match),
+      english: match.english,
+      portuguese: match.portuguese,
+      hits: match.hits.map((hit) => this.triageHitRow(match, hit)),
+    })),
+  );
+  protected readonly selectedTriageHitRows = computed<readonly TriageHitRow[]>(() => {
+    const selectedKeys = this.selectedTriageHitKeys();
+    return this.triageObjectResults()
+      .flatMap((item) => item.hits)
+      .filter((row) => selectedKeys.has(row.key));
   });
 
   protected selectPanel(panel: QuestionDetailPanel): void {
@@ -225,6 +255,8 @@ export class MuseumQuestionDetailPageComponent {
     this.selectPanel('ai-assistance');
     try {
       await firstValueFrom(this.service.runTriage(question.id));
+      this.selectedTriageHitKeys.set(new Set());
+      this.selectedTriageHit.set(null);
       this.triageRefreshToken.update((value) => value + 1);
     } catch (err) {
       this.triageError.set(toApiError(err));
@@ -258,6 +290,56 @@ export class MuseumQuestionDetailPageComponent {
     return this.sanitizer.bypassSecurityTrustHtml(highlightToSafeMarkup(hit.highlight));
   }
 
+  protected objectDisplayName(item: MentionedObject): string {
+    return item.english.toLowerCase() === item.portuguese.toLowerCase()
+      ? item.portuguese
+      : `${item.portuguese} (${item.english})`;
+  }
+
+  protected matchCountLabel(count: number): string {
+    if (count === 0) return 'No matches';
+    if (count === 1) return '1 match';
+    return `${count} matches`;
+  }
+
+  protected isTriageHitSelected(key: string): boolean {
+    return this.selectedTriageHitKeys().has(key);
+  }
+
+  protected toggleTriageHitSelection(key: string): void {
+    this.selectedTriageHitKeys.update((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  protected openHitDetails(row: TriageHitRow): void {
+    this.selectedTriageHit.set(row);
+  }
+
+  protected closeHitDetails(): void {
+    this.selectedTriageHit.set(null);
+  }
+
+  protected insertSelectedHitsIntoReply(): void {
+    const selectedHtml = this.selectedHitsReplyHtml();
+    if (!selectedHtml) return;
+
+    this.selectPanel('message');
+    setTimeout(() => {
+      const editor = this.replyEditor()?.nativeElement;
+      if (!editor) return;
+
+      const current = this.currentSanitizedAnswerBody();
+      const next = current ? `${current}<p><br></p>${selectedHtml}` : selectedHtml;
+      editor.innerHTML = this.sanitizeRichTextHtml(next);
+      this.answerBody.set(this.currentSanitizedAnswerBody());
+      editor.focus();
+    });
+  }
+
   protected formatDate(value: string | null): string {
     if (!value) return '-';
     return new Intl.DateTimeFormat(undefined, {
@@ -284,6 +366,49 @@ export class MuseumQuestionDetailPageComponent {
         replaceUrl: true,
       })
       .catch(() => undefined);
+  }
+
+  private triageObjectKey(match: ObjectTriageMatch): string {
+    return `${match.portuguese}:${match.english}`.toLowerCase();
+  }
+
+  private triageHitRow(match: ObjectTriageMatch, hit: ObjectTriageHit): TriageHitRow {
+    return {
+      key: `${this.triageObjectKey(match)}:${hit.collectionId}:${hit.fileName}:${hit.highlight}`,
+      english: match.english,
+      portuguese: match.portuguese,
+      hit,
+    };
+  }
+
+  private selectedHitsReplyHtml(): string {
+    const rows = this.selectedTriageHitRows();
+    if (!rows.length) return '';
+
+    const items = rows
+      .map(
+        (row) =>
+          `<li><strong>${this.escapeHtml(this.objectDisplayName(row))}</strong><br>` +
+          `${this.escapeHtml(row.hit.collectionName)} - ${this.escapeHtml(row.hit.fileName)}<br>` +
+          `${this.escapeHtml(this.highlightText(row.hit))}</li>`,
+      )
+      .join('');
+    return `<p>Catalogue references found for your request:</p><ul>${items}</ul>`;
+  }
+
+  private highlightText(hit: ObjectTriageHit): string {
+    const template = this.document.createElement('template');
+    template.innerHTML = highlightToSafeMarkup(hit.highlight);
+    return template.content.textContent?.trim() ?? '';
+  }
+
+  private escapeHtml(value: string): string {
+    return value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
   private async run(operation: () => Observable<unknown>): Promise<void> {
