@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     # KG-RAG museum-narrative generation (local Llama via Ollama).
     narrative_model: str = "llama3.1:8b"
     narrative_timeout_seconds: float = 60.0
+    # Museum-question triage (in/out-of-scope classification + object
+    # extraction, local Llama via Ollama).
+    triage_model: str = "llama3.1:8b"
+    triage_timeout_seconds: float = 60.0
     # Public proposal submission (unauthenticated citizen intake, double opt-in).
     # Default is Cloudflare's always-passing test secret key; override in prod.
     turnstile_secret_key: str = "1x0000000000000000000000000000000AA"

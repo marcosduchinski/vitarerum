@@ -12,6 +12,7 @@ import {
 } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { firstValueFrom, Observable } from 'rxjs';
 
 import { ApiError, toApiError } from '@core/http/api-error.model';
@@ -19,11 +20,16 @@ import { EmptyStateComponent } from '@shared/components/empty-state/empty-state.
 import { ErrorMessageComponent } from '@shared/components/error-message/error-message.component';
 import { LoadingStateComponent } from '@shared/components/loading-state/loading-state.component';
 import { PaginationComponent } from '@shared/components/pagination/pagination.component';
+import { highlightToSafeMarkup } from '@shared/utils/highlight-html.util';
 
+import {
+  MuseumQuestionTriage,
+  ObjectTriageHit,
+} from '../../models/museum-question-triage.model';
 import { MuseumQuestion, MuseumQuestionStatus } from '../../models/museum-question.model';
 import { MUSEUM_QUESTION_MANAGEMENT_SERVICE } from '../../services/museum-question-management.service';
 
-type QuestionDetailPanel = 'message' | 'answered-history';
+type QuestionDetailPanel = 'message' | 'answered-history' | 'ai-assistance';
 type ReplyEditorCommand = 'bold' | 'italic' | 'insertUnorderedList' | 'removeFormat';
 
 const HISTORY_PAGE_SIZE = 10;
@@ -66,6 +72,7 @@ export class MuseumQuestionDetailPageComponent {
   private readonly service = inject(MUSEUM_QUESTION_MANAGEMENT_SERVICE);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
+  private readonly sanitizer = inject(DomSanitizer);
   private readonly replyEditor = viewChild<ElementRef<HTMLElement>>('replyEditor');
 
   readonly id = input.required<string>();
@@ -82,6 +89,9 @@ export class MuseumQuestionDetailPageComponent {
   protected readonly confirmClose = signal(false);
   protected readonly busy = signal(false);
   protected readonly actionError = signal<ApiError | null>(null);
+  protected readonly triageRefreshToken = signal(0);
+  protected readonly triageBusy = signal(false);
+  protected readonly triageError = signal<ApiError | null>(null);
 
   protected readonly questionResource = resource({
     params: () => ({ id: this.id(), refresh: this.detailRefreshToken() }),
@@ -131,6 +141,19 @@ export class MuseumQuestionDetailPageComponent {
   );
   protected readonly historyError = computed<ApiError | null>(() => {
     const err = this.historyResource.error();
+    return err ? toApiError(err) : null;
+  });
+
+  protected readonly triageResource = resource({
+    params: () => ({ id: this.id(), refresh: this.triageRefreshToken() }),
+    loader: ({ params }) => firstValueFrom(this.service.getTriage(params.id)),
+  });
+
+  protected readonly triage = computed<MuseumQuestionTriage | null>(
+    () => this.triageResource.value() ?? null,
+  );
+  protected readonly triageResourceError = computed<ApiError | null>(() => {
+    const err = this.triageResource.error();
     return err ? toApiError(err) : null;
   });
 
@@ -195,6 +218,21 @@ export class MuseumQuestionDetailPageComponent {
     this.confirmClose.set(false);
   }
 
+  protected async triggerTriage(question: MuseumQuestion): Promise<void> {
+    if (this.triageBusy()) return;
+    this.triageBusy.set(true);
+    this.triageError.set(null);
+    this.selectPanel('ai-assistance');
+    try {
+      await firstValueFrom(this.service.runTriage(question.id));
+      this.triageRefreshToken.update((value) => value + 1);
+    } catch (err) {
+      this.triageError.set(toApiError(err));
+    } finally {
+      this.triageBusy.set(false);
+    }
+  }
+
   protected cancelConfirmations(): void {
     this.confirmOutOfScope.set(false);
     this.confirmClose.set(false);
@@ -214,6 +252,12 @@ export class MuseumQuestionDetailPageComponent {
     return STATUS_LABELS[status];
   }
 
+  protected highlightHtml(hit: ObjectTriageHit): SafeHtml {
+    // Safe: highlightToSafeMarkup() escapes the whole string and only re-opens
+    // <mark> for the backend's own <b> markers — never trust hit.highlight raw.
+    return this.sanitizer.bypassSecurityTrustHtml(highlightToSafeMarkup(hit.highlight));
+  }
+
   protected formatDate(value: string | null): string {
     if (!value) return '-';
     return new Intl.DateTimeFormat(undefined, {
@@ -223,7 +267,8 @@ export class MuseumQuestionDetailPageComponent {
   }
 
   private normalizeTab(tab: string | undefined): QuestionDetailPanel {
-    return tab === 'answered-history' ? 'answered-history' : 'message';
+    if (tab === 'answered-history' || tab === 'ai-assistance') return tab;
+    return 'message';
   }
 
   private syncUrl(state: { tab?: QuestionDetailPanel }): void {

@@ -1,8 +1,8 @@
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
 import { inject, Injectable, InjectionToken } from '@angular/core';
 import { API_BASE_URL } from '@core/config/app-config.model';
 import { buildApiUrl } from '@core/http/api-url.util';
-import { Observable } from 'rxjs';
+import { catchError, Observable, of, throwError } from 'rxjs';
 
 import {
   AnswerMuseumQuestionRequest,
@@ -11,6 +11,7 @@ import {
   MuseumQuestionListQuery,
   MuseumQuestionPage,
 } from '../models/museum-question.model';
+import { MuseumQuestionTriage } from '../models/museum-question-triage.model';
 
 export interface MuseumQuestionManagementApi {
   list(query: MuseumQuestionListQuery): Observable<MuseumQuestionPage>;
@@ -18,6 +19,8 @@ export interface MuseumQuestionManagementApi {
   answer(questionId: string, body: AnswerMuseumQuestionRequest): Observable<MuseumQuestion>;
   markOutOfScope(questionId: string, body: MarkOutOfScopeRequest): Observable<MuseumQuestion>;
   close(questionId: string): Observable<MuseumQuestion>;
+  getTriage(questionId: string): Observable<MuseumQuestionTriage | null>;
+  runTriage(questionId: string): Observable<MuseumQuestionTriage>;
 }
 
 export const MUSEUM_QUESTION_MANAGEMENT_SERVICE = new InjectionToken<MuseumQuestionManagementApi>(
@@ -53,6 +56,24 @@ export class MuseumQuestionManagementService implements MuseumQuestionManagement
 
   close(questionId: string): Observable<MuseumQuestion> {
     return this.http.patch<MuseumQuestion>(this.url(`/museum-questions/${questionId}/close`), {});
+  }
+
+  getTriage(questionId: string): Observable<MuseumQuestionTriage | null> {
+    return this.http
+      .get<MuseumQuestionTriage>(this.url(`/museum-questions/${questionId}/triage`))
+      .pipe(
+        catchError((err: unknown) => {
+          if (err instanceof HttpErrorResponse && err.status === 404) return of(null);
+          return throwError(() => err);
+        }),
+      );
+  }
+
+  runTriage(questionId: string): Observable<MuseumQuestionTriage> {
+    return this.http.post<MuseumQuestionTriage>(
+      this.url(`/museum-questions/${questionId}/triage`),
+      {},
+    );
   }
 
   private url(path: string): string {

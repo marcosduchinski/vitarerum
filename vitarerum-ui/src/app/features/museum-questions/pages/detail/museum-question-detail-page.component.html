@@ -49,6 +49,18 @@
       >
         Answered for this email
       </button>
+      <button
+        type="button"
+        id="ai-assistance-tab"
+        class="question-detail__tab"
+        [class.question-detail__tab--active]="activePanel() === 'ai-assistance'"
+        role="tab"
+        aria-controls="ai-assistance-panel"
+        [attr.aria-selected]="activePanel() === 'ai-assistance'"
+        (click)="selectPanel('ai-assistance')"
+      >
+        AI assistance
+      </button>
     </nav>
 
     @switch (activePanel()) {
@@ -72,6 +84,16 @@
                       <span class="message__sender">{{ question.requesterEmail }}</span>
                       <span class="message__role">Requester</span>
                     </div>
+                    <button
+                      type="button"
+                      class="editor-btn"
+                      [disabled]="triageBusy()"
+                      (click)="triggerTriage(question)"
+                      aria-label="Run AI triage"
+                      title="Run AI triage"
+                    >
+                      <span class="pi pi-sparkles" aria-hidden="true"></span>
+                    </button>
                     <span class="message__date">{{ formatDate(question.createdAt) }}</span>
                   </div>
                   <p class="message__subject">{{ question.subject }}</p>
@@ -332,6 +354,107 @@
                 (previous)="previousHistoryPage()"
                 (next)="nextHistoryPage()"
               />
+            </section>
+          }
+        </section>
+      }
+      @case ('ai-assistance') {
+        <section
+          id="ai-assistance-panel"
+          class="question-detail__panel"
+          role="tabpanel"
+          aria-labelledby="ai-assistance-tab"
+        >
+          @if (triageError()) {
+            <app-error-message [apiError]="triageError()!" />
+          }
+          @if (triageResource.isLoading() || triageBusy()) {
+            <app-loading-state label="Running AI triage..." />
+          } @else if (triageResourceError()) {
+            <app-error-message
+              [apiError]="triageResourceError()!"
+              (retry)="triageResource.reload()"
+            />
+          } @else if (!triage()) {
+            <app-empty-state
+              title="No AI triage yet"
+              message="Use the sparkle icon on the message to run it."
+            >
+              <button
+                type="button"
+                class="action-btn action-btn--primary"
+                [disabled]="triageBusy()"
+                (click)="triggerTriage(question)"
+              >
+                <span class="pi pi-sparkles" aria-hidden="true"></span>
+                Run AI triage
+              </button>
+            </app-empty-state>
+          } @else if (triage(); as triage) {
+            <section class="detail-card" aria-labelledby="triage-card-title">
+              <h2 id="triage-card-title" class="detail-card__title">AI triage</h2>
+              <div class="question-detail__status-row">
+                <span
+                  class="status-chip"
+                  [class.status-chip--answered]="triage.verdict === 'IN_SCOPE'"
+                  [class.status-chip--out-of-scope]="triage.verdict === 'OUT_OF_SCOPE'"
+                >
+                  {{ triage.verdict === 'IN_SCOPE' ? 'In scope' : 'Out of scope' }}
+                </span>
+              </div>
+
+              @if (triage.verdict === 'OUT_OF_SCOPE') {
+                <div>
+                  <h3 class="detail-card__title">Suggested reply</h3>
+                  <p class="message__body">{{ triage.suggestedReply }}</p>
+                </div>
+              } @else {
+                @if (!triage.mentionedObjects.length) {
+                  <p class="detail-card__empty">
+                    General visit request — no specific object identified.
+                  </p>
+                } @else {
+                  <ul class="message-list">
+                    @for (match of triage.objectMatches; track match.portuguese) {
+                      <li>
+                        <article class="message">
+                          <p class="message__subject">
+                            {{ match.portuguese }}
+                            @if (match.english.toLowerCase() !== match.portuguese.toLowerCase()) {
+                              <span class="message__date">({{ match.english }})</span>
+                            }
+                          </p>
+                          @for (
+                            hit of match.hits;
+                            track hit.collectionId + ':' + hit.fileName + ':' + hit.highlight
+                          ) {
+                            <p class="message__body">
+                              <strong>{{ hit.collectionName }}</strong>
+                              <span [innerHTML]="highlightHtml(hit)"></span>
+                            </p>
+                          } @empty {
+                            <p class="message__body">Not found in catalogue.</p>
+                          }
+                        </article>
+                      </li>
+                    }
+                  </ul>
+                }
+              }
+
+              <div class="question-detail__status-row">
+                <span class="message__date">{{ triage.modelName }} · {{ formatDate(triage.createdAt) }}</span>
+                <button
+                  type="button"
+                  class="editor-btn"
+                  [disabled]="triageBusy()"
+                  (click)="triggerTriage(question)"
+                  aria-label="Re-run AI triage"
+                  title="Re-run AI triage"
+                >
+                  <span class="pi pi-refresh" aria-hidden="true"></span>
+                </button>
+              </div>
             </section>
           }
         </section>

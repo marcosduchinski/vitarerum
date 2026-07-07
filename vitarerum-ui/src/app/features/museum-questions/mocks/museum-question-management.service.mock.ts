@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { delay, Observable, of, throwError } from 'rxjs';
 
+import { MuseumQuestionTriage } from '../models/museum-question-triage.model';
 import {
   AnswerMuseumQuestionRequest,
   MarkOutOfScopeRequest,
@@ -136,6 +137,73 @@ export class MuseumQuestionManagementServiceMock implements MuseumQuestionManage
         closedBy: 'perm-staff',
       }),
     ).pipe(delay(200));
+  }
+
+  private triages: Record<string, MuseumQuestionTriage> = {};
+
+  getTriage(questionId: string): Observable<MuseumQuestionTriage | null> {
+    return of(this.triages[questionId] ?? null).pipe(delay(150));
+  }
+
+  runTriage(questionId: string): Observable<MuseumQuestionTriage> {
+    const question = this.require(questionId);
+    const outOfScope = /exhibition|loan|event|educat/i.test(
+      `${question.subject} ${question.message}`,
+    );
+    const triage: MuseumQuestionTriage = outOfScope
+      ? {
+          id: `triage-${questionId}-${Date.now()}`,
+          questionId,
+          verdict: 'OUT_OF_SCOPE',
+          isVisitRelated: false,
+          mentionedObjects: [],
+          objectMatches: [],
+          suggestedReply:
+            'Thank you for reaching out. This channel handles questions about using the ' +
+            'collection for study or in-situ investigation visits, and your question falls ' +
+            'outside that scope. Please contact the appropriate department for exhibitions, ' +
+            'loans, events, or education, or rephrase your question if it was actually about ' +
+            'the collection.',
+          modelName: 'llama3.1:8b (mock)',
+          createdAt: NOW,
+        }
+      : {
+          id: `triage-${questionId}-${Date.now()}`,
+          questionId,
+          verdict: 'IN_SCOPE',
+          isVisitRelated: true,
+          mentionedObjects: [
+            {
+              english: 'Zoology reference collection',
+              portuguese: 'Coleção de referência de zoologia',
+            },
+            { english: 'Unknown specimen X', portuguese: 'Espécime desconhecido X' },
+          ],
+          objectMatches: [
+            {
+              english: 'Zoology reference collection',
+              portuguese: 'Coleção de referência de zoologia',
+              hits: [
+                {
+                  collectionId: 'zoology',
+                  collectionName: 'Zoology',
+                  fileName: 'zoology-catalogue.xlsx',
+                  highlight: 'Zoology <b>reference collection</b>, drawer 12',
+                },
+              ],
+            },
+            {
+              english: 'Unknown specimen X',
+              portuguese: 'Espécime desconhecido X',
+              hits: [],
+            },
+          ],
+          suggestedReply: null,
+          modelName: 'llama3.1:8b (mock)',
+          createdAt: NOW,
+        };
+    this.triages[questionId] = triage;
+    return of(triage).pipe(delay(400));
   }
 
   private filtered(

@@ -14,26 +14,12 @@ import { EmptyStateComponent } from '@shared/components/empty-state/empty-state.
 import { ErrorMessageComponent } from '@shared/components/error-message/error-message.component';
 import { LoadingStateComponent } from '@shared/components/loading-state/loading-state.component';
 import { PageHeaderComponent } from '@shared/components/page-header/page-header.component';
+import { highlightToSafeMarkup } from '@shared/utils/highlight-html.util';
 
 import { ObjectSearchHit, ObjectSearchQuery } from '../../models/object-search.model';
 import { OBJECT_SEARCH_SERVICE } from '../../services/object-search.service';
 
 const PAGE_SIZE = 20;
-
-// The backend's highlight comes from Postgres ts_headline() over spreadsheet
-// cell content (uploader-controlled), which wraps the matched term in <b>...
-// </b> but does NOT escape the surrounding text. Escape everything first, then
-// re-open only the exact <b>/</b> markers ts_headline inserts (as <mark>) —
-// never trust the raw string as HTML.
-function escapeHtml(text: string): string {
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-function highlightToSafeMarkup(highlight: string): string {
-  return escapeHtml(highlight)
-    .replace(/&lt;b&gt;/g, '<mark>')
-    .replace(/&lt;\/b&gt;/g, '</mark>');
-}
 
 @Component({
   selector: 'app-object-search-page',
@@ -119,6 +105,8 @@ export class ObjectSearchPageComponent {
   }
 
   protected highlightHtml(hit: ObjectSearchHit): SafeHtml {
+    // Safe: highlightToSafeMarkup() escapes the whole string and only re-opens
+    // <mark> for the backend's own <b> markers — never trust hit.highlight raw.
     return this.sanitizer.bypassSecurityTrustHtml(highlightToSafeMarkup(hit.highlight));
   }
 }

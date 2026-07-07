@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { of } from 'rxjs';
 
+import { MuseumQuestionTriage } from '../../models/museum-question-triage.model';
 import {
   MuseumQuestion,
   MuseumQuestionListQuery,
@@ -41,12 +42,66 @@ const ANSWERED: MuseumQuestion = {
   answerSentAt: '2026-07-04T12:00:00Z',
 };
 
+const OUT_OF_SCOPE_TRIAGE: MuseumQuestionTriage = {
+  id: 't1',
+  questionId: 'q1',
+  verdict: 'OUT_OF_SCOPE',
+  isVisitRelated: false,
+  mentionedObjects: [],
+  objectMatches: [],
+  suggestedReply: 'This falls outside the collection-use scope.',
+  modelName: 'llama3.1:8b',
+  createdAt: '2026-07-05T12:00:00Z',
+};
+
+const IN_SCOPE_TRIAGE: MuseumQuestionTriage = {
+  id: 't2',
+  questionId: 'q1',
+  verdict: 'IN_SCOPE',
+  isVisitRelated: true,
+  mentionedObjects: [
+    { english: 'Allende meteorite', portuguese: 'Meteorito Allende' },
+    { english: 'Ghost object', portuguese: 'Objeto fantasma' },
+  ],
+  objectMatches: [
+    {
+      english: 'Allende meteorite',
+      portuguese: 'Meteorito Allende',
+      hits: [
+        {
+          collectionId: 'c1',
+          collectionName: 'Meteorites',
+          fileName: 'rows.xlsx',
+          highlight: '<b>Allende</b> meteorite',
+        },
+      ],
+    },
+    { english: 'Ghost object', portuguese: 'Objeto fantasma', hits: [] },
+  ],
+  suggestedReply: null,
+  modelName: 'llama3.1:8b',
+  createdAt: '2026-07-05T12:00:00Z',
+};
+
 class ServiceStub {
   question = QUESTION;
+  triage: MuseumQuestionTriage | null = null;
+  nextTriage: MuseumQuestionTriage | null = null;
   readonly listCalls: MuseumQuestionListQuery[] = [];
   readonly answerCalls: [string, string][] = [];
   readonly outOfScopeCalls: [string, string | null][] = [];
   readonly closeCalls: string[] = [];
+  readonly triageCalls: string[] = [];
+
+  getTriage() {
+    return of(this.triage);
+  }
+
+  runTriage(questionId: string) {
+    this.triageCalls.push(questionId);
+    this.triage = this.nextTriage;
+    return of(this.triage!);
+  }
 
   list(query: MuseumQuestionListQuery) {
     this.listCalls.push(query);
@@ -201,5 +256,83 @@ describe('MuseumQuestionDetailPageComponent', () => {
     });
     expect(el.textContent).toContain('Previous visit');
     expect(el.textContent).toContain('Previous answer');
+  });
+
+  it('runs AI triage from the message icon and switches to the AI assistance tab', async () => {
+    const el = await setup();
+    service.nextTriage = OUT_OF_SCOPE_TRIAGE;
+
+    el.querySelector<HTMLButtonElement>('[aria-label="Run AI triage"]')!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(service.triageCalls).toEqual(['q1']);
+    expect(
+      el.querySelector('#ai-assistance-tab')?.classList.contains('question-detail__tab--active'),
+    ).toBe(true);
+  });
+
+  it('renders the suggested reply for an out-of-scope triage result', async () => {
+    const el = await setup();
+    service.nextTriage = OUT_OF_SCOPE_TRIAGE;
+
+    el.querySelector<HTMLButtonElement>('[aria-label="Run AI triage"]')!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(el.textContent).toContain('Out of scope');
+    expect(el.textContent).toContain('This falls outside the collection-use scope.');
+  });
+
+  it('renders object matches, including a not-found case, for an in-scope triage result', async () => {
+    const el = await setup();
+    service.nextTriage = IN_SCOPE_TRIAGE;
+
+    el.querySelector<HTMLButtonElement>('[aria-label="Run AI triage"]')!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(el.textContent).toContain('In scope');
+    expect(el.textContent).toContain('Allende meteorite');
+    expect(el.textContent).toContain('Meteorites');
+    expect(el.textContent).toContain('Ghost object');
+    expect(el.textContent).toContain('Not found in catalogue.');
+    expect(el.querySelector('mark')?.textContent).toBe('Allende');
+  });
+
+  it('escapes unsafe markup in an object match highlight, keeping only <mark>', async () => {
+    const el = await setup();
+    service.nextTriage = {
+      ...IN_SCOPE_TRIAGE,
+      mentionedObjects: [
+        { english: 'Allende meteorite', portuguese: 'Meteorito Allende' },
+      ],
+      objectMatches: [
+        {
+          english: 'Allende meteorite',
+          portuguese: 'Meteorito Allende',
+          hits: [
+            {
+              collectionId: 'c1',
+              collectionName: 'Meteorites',
+              fileName: 'rows.xlsx',
+              highlight: '<img src=x onerror=alert(1)> <b>Allende</b>',
+            },
+          ],
+        },
+      ],
+    };
+
+    el.querySelector<HTMLButtonElement>('[aria-label="Run AI triage"]')!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(el.querySelector('img')).toBeNull();
+    expect(el.textContent).toContain('<img');
+    expect(el.querySelector('mark')?.textContent).toBe('Allende');
   });
 });
