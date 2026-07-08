@@ -33,7 +33,10 @@ if TYPE_CHECKING:
     from app.identity.public import Actor
 
 MAX_OBJECT_QUERIES = 3
-SEARCH_LIMIT_PER_QUERY = 5
+# How many hits to fetch per language before merging — not a display cap (the
+# UI paginates client-side over the full merged list); just a sane ceiling so
+# a very common term can't pull in an unbounded number of rows.
+SEARCH_FETCH_LIMIT_PER_LANGUAGE = 100
 
 
 def _normalize_mentioned_objects(
@@ -68,11 +71,13 @@ def _merge_hits(
     primary: list[ObjectHitView], secondary: list[ObjectHitView]
 ) -> list[ObjectHitView]:
     """Merge two search result lists (Portuguese-first), dropping duplicates
-    so a term matched by both languages isn't shown twice, then cap to
-    ``SEARCH_LIMIT_PER_QUERY``. Keyed by collection + file + highlight (not
-    just collection + file) so two distinct rows in the same source file —
-    e.g. one matched by the Portuguese search, another by the English one —
-    aren't mistaken for the same hit."""
+    so a term matched by both languages isn't shown twice. Not truncated
+    further here — each side is already bounded by
+    ``SEARCH_FETCH_LIMIT_PER_LANGUAGE``, and the full merged list is what gets
+    persisted; the UI paginates over it client-side. Keyed by collection +
+    file + highlight (not just collection + file) so two distinct rows in the
+    same source file — e.g. one matched by the Portuguese search, another by
+    the English one — aren't mistaken for the same hit."""
     seen: set[tuple[str, str, str]] = set()
     merged: list[ObjectHitView] = []
     for hit in (*primary, *secondary):
@@ -81,7 +86,7 @@ def _merge_hits(
             continue
         seen.add(key)
         merged.append(hit)
-    return merged[:SEARCH_LIMIT_PER_QUERY]
+    return merged
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,12 +168,12 @@ class TriageMuseumQuestion:
         (e.g. a proper noun the model didn't translate), to avoid a wasted
         query."""
         portuguese_hits = await self._object_search.search(
-            caller, obj.portuguese, SEARCH_LIMIT_PER_QUERY
+            caller, obj.portuguese, SEARCH_FETCH_LIMIT_PER_LANGUAGE
         )
         if obj.english.casefold() == obj.portuguese.casefold():
-            return portuguese_hits[:SEARCH_LIMIT_PER_QUERY]
+            return portuguese_hits
         english_hits = await self._object_search.search(
-            caller, obj.english, SEARCH_LIMIT_PER_QUERY
+            caller, obj.english, SEARCH_FETCH_LIMIT_PER_LANGUAGE
         )
         return _merge_hits(portuguese_hits, english_hits)
 

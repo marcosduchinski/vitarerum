@@ -43,10 +43,19 @@ interface TriageHitRow {
 
 interface TriageObjectResult extends MentionedObject {
   readonly key: string;
+  /** Full merged/deduplicated list — used for the match count and for
+   * "Add to reply" selection, which must work across every page. */
   readonly hits: readonly TriageHitRow[];
+  /** Just the current page's slice of `hits`, for rendering. */
+  readonly pagedHits: readonly TriageHitRow[];
+  readonly page: number;
+  readonly totalPages: number;
 }
 
 const HISTORY_PAGE_SIZE = 10;
+// Backend no longer caps matches (see SEARCH_FETCH_LIMIT_PER_LANGUAGE) — the
+// full list is paginated here instead, at a size that still fits the panel.
+const TRIAGE_HITS_PAGE_SIZE = 5;
 const ELEMENT_NODE = 1;
 const TEXT_NODE = 3;
 const ALLOWED_RICH_TEXT_TAGS = new Set(['B', 'BR', 'EM', 'I', 'LI', 'OL', 'P', 'STRONG', 'UL']);
@@ -108,6 +117,8 @@ export class MuseumQuestionDetailPageComponent {
   protected readonly triageError = signal<ApiError | null>(null);
   protected readonly selectedTriageHitKeys = signal<ReadonlySet<string>>(new Set());
   protected readonly selectedTriageHit = signal<TriageHitRow | null>(null);
+  protected readonly triageHitPages = signal<ReadonlyMap<string, number>>(new Map());
+  protected readonly TRIAGE_HITS_PAGE_SIZE = TRIAGE_HITS_PAGE_SIZE;
 
   protected readonly questionResource = resource({
     params: () => ({ id: this.id(), refresh: this.detailRefreshToken() }),
@@ -172,14 +183,24 @@ export class MuseumQuestionDetailPageComponent {
     const err = this.triageResource.error();
     return err ? toApiError(err) : null;
   });
-  protected readonly triageObjectResults = computed<readonly TriageObjectResult[]>(() =>
-    (this.triage()?.objectMatches ?? []).map((match) => ({
-      key: this.triageObjectKey(match),
-      english: match.english,
-      portuguese: match.portuguese,
-      hits: match.hits.map((hit) => this.triageHitRow(match, hit)),
-    })),
-  );
+  protected readonly triageObjectResults = computed<readonly TriageObjectResult[]>(() => {
+    const pages = this.triageHitPages();
+    return (this.triage()?.objectMatches ?? []).map((match) => {
+      const key = this.triageObjectKey(match);
+      const hits = match.hits.map((hit) => this.triageHitRow(match, hit));
+      const totalPages = Math.max(1, Math.ceil(hits.length / TRIAGE_HITS_PAGE_SIZE));
+      const page = Math.min(pages.get(key) ?? 0, totalPages - 1);
+      return {
+        key,
+        english: match.english,
+        portuguese: match.portuguese,
+        hits,
+        page,
+        totalPages,
+        pagedHits: hits.slice(page * TRIAGE_HITS_PAGE_SIZE, (page + 1) * TRIAGE_HITS_PAGE_SIZE),
+      };
+    });
+  });
   protected readonly selectedTriageHitRows = computed<readonly TriageHitRow[]>(() => {
     const selectedKeys = this.selectedTriageHitKeys();
     return this.triageObjectResults()
@@ -257,6 +278,7 @@ export class MuseumQuestionDetailPageComponent {
       await firstValueFrom(this.service.runTriage(question.id));
       this.selectedTriageHitKeys.set(new Set());
       this.selectedTriageHit.set(null);
+      this.triageHitPages.set(new Map());
       this.triageRefreshToken.update((value) => value + 1);
     } catch (err) {
       this.triageError.set(toApiError(err));
@@ -315,6 +337,14 @@ export class MuseumQuestionDetailPageComponent {
     });
   }
 
+  protected previousTriageHitsPage(item: TriageObjectResult): void {
+    this.setTriageHitsPage(item.key, item.page - 1);
+  }
+
+  protected nextTriageHitsPage(item: TriageObjectResult): void {
+    this.setTriageHitsPage(item.key, item.page + 1);
+  }
+
   protected openHitDetails(row: TriageHitRow): void {
     this.selectedTriageHit.set(row);
   }
@@ -366,6 +396,14 @@ export class MuseumQuestionDetailPageComponent {
         replaceUrl: true,
       })
       .catch(() => undefined);
+  }
+
+  private setTriageHitsPage(key: string, page: number): void {
+    this.triageHitPages.update((current) => {
+      const next = new Map(current);
+      next.set(key, Math.max(0, page));
+      return next;
+    });
   }
 
   private triageObjectKey(match: ObjectTriageMatch): string {

@@ -456,7 +456,7 @@
                             <p>{{ objectDisplayName(item) }}</p>
                             <span>{{ matchCountLabel(item.hits.length) }}</span>
                           </header>
-                          @for (row of item.hits; track row.key) {
+                          @for (row of item.pagedHits; track row.key) {
                             <div class="triage-hit-row">
                               <label class="triage-hit-row__check">
                                 <input
@@ -482,6 +482,17 @@
                             </div>
                           } @empty {
                             <p class="triage-object-result__empty">Not found in catalogue.</p>
+                          }
+                          @if (item.totalPages > 1) {
+                            <app-pagination
+                              [page]="item.page"
+                              [totalPages]="item.totalPages"
+                              [total]="item.hits.length"
+                              [pageSize]="TRIAGE_HITS_PAGE_SIZE"
+                              itemLabel="matches"
+                              (previous)="previousTriageHitsPage(item)"
+                              (next)="nextTriageHitsPage(item)"
+                            />
                           }
                         </article>
                       </li>

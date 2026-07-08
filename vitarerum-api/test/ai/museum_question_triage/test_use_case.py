@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 import pytest
 
 from app.ai.museum_question_triage.application.use_cases import (
+    SEARCH_FETCH_LIMIT_PER_LANGUAGE,
     GetLatestTriage,
     GetLatestTriageInput,
     TriageMuseumQuestion,
@@ -170,10 +171,10 @@ async def test_in_scope_with_objects_searches_each_language() -> None:
 
     # Portuguese searched first, then English, for each of the two objects.
     assert object_search.calls == [
-        (_STAFF, "Meteorito Allende", 5),
-        (_STAFF, "Allende meteorite", 5),
-        (_STAFF, "Objeto fantasma", 5),
-        (_STAFF, "Ghost object", 5),
+        (_STAFF, "Meteorito Allende", SEARCH_FETCH_LIMIT_PER_LANGUAGE),
+        (_STAFF, "Allende meteorite", SEARCH_FETCH_LIMIT_PER_LANGUAGE),
+        (_STAFF, "Objeto fantasma", SEARCH_FETCH_LIMIT_PER_LANGUAGE),
+        (_STAFF, "Ghost object", SEARCH_FETCH_LIMIT_PER_LANGUAGE),
     ]
 
 
@@ -187,7 +188,7 @@ async def test_search_skips_english_when_identical_to_portuguese() -> None:
         )
     )
     await use_case.execute(TriageMuseumQuestionInput(question_id="q1", caller=_STAFF))
-    assert object_search.calls == [(_STAFF, "Allende", 5)]
+    assert object_search.calls == [(_STAFF, "Allende", SEARCH_FETCH_LIMIT_PER_LANGUAGE)]
 
 
 async def test_hits_from_both_languages_are_merged_and_deduplicated() -> None:
@@ -256,6 +257,34 @@ async def test_distinct_rows_in_the_same_file_are_not_deduplicated_away() -> Non
         TriageMuseumQuestionInput(question_id="q1", caller=_STAFF)
     )
     assert result.object_matches[0].hits == [row_five, row_twelve]
+
+
+async def test_merged_hits_are_not_truncated_to_a_small_display_cap() -> None:
+    # Regression: hits used to be capped to 5 for display. The cap is gone —
+    # the full merged/deduplicated list is persisted, and the UI paginates
+    # over it client-side.
+    hits = [
+        ObjectHitView(
+            collection_id="c1",
+            collection_name="Zoology",
+            file_name="zoology.xlsx",
+            highlight=f"row {i}: <b>lagarto</b>",
+        )
+        for i in range(8)
+    ]
+    use_case, _model, _object_search, _repo = _use_case(
+        model=_FakeModel(
+            is_visit_related=True,
+            mentioned_objects=[
+                MentionedObject(english="Lizard", portuguese="Lagarto"),
+            ],
+        ),
+        object_search=_FakeObjectSearch({"Lagarto": hits}),
+    )
+    result = await use_case.execute(
+        TriageMuseumQuestionInput(question_id="q1", caller=_STAFF)
+    )
+    assert result.object_matches[0].hits == hits
 
 
 async def test_mentioned_objects_are_trimmed_deduplicated_and_blanks_dropped() -> None:
