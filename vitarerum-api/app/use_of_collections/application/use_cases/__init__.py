@@ -37,6 +37,7 @@ from app.use_of_collections.application.use_cases.project import (
     CancelProposalOutput,
     CompleteProject,
     CompleteProjectInput,
+    RequesterAccessNotification,
     StartProject,
     StartProjectInput,
 )
@@ -143,6 +144,7 @@ __all__ = [
     "RequestDocumentsInput",
     "RequestedDocumentInput",
     "RequestedObjectSnapshotInput",
+    "RequesterAccessNotification",
     "SendMessage",
     "SendMessageInput",
     "StartProject",

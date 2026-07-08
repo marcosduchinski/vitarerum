@@ -8,7 +8,7 @@ project). Concentrating the bridges here keeps the seam in a single place.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 
 from app.identity.public import Actor, GroupName
@@ -56,9 +56,22 @@ class ApproveProposalInput:
 
 
 @dataclass(slots=True)
+class RequesterAccessNotification:
+    """Pending operational side effect, not a domain event: a newly
+    provisioned external requester needs their login credentials e-mailed.
+    Carried on the output so the route can dispatch it *after* commit (see
+    ``ApproveProposal``)."""
+
+    email: str
+    name: str
+    temporary_password: str = field(repr=False)
+
+
+@dataclass(slots=True)
 class ApproveProposalOutput:
     proposal: Proposal
     project: CollectionUseProject
+    requester_access_notification: RequesterAccessNotification | None = None
 
 
 class ApproveProposal:
@@ -84,6 +97,7 @@ class ApproveProposal:
         # public proposal must never provision a requester for a decision
         # that was never going to succeed.
         proposal.ensure_approvable()
+        requester_access_notification: RequesterAccessNotification | None = None
         if proposal.requested_by is None:
             # Public proposal: Identity provisioning is deferred until this
             # moment, so a rejected/cancelled proposal never creates a user or
@@ -96,7 +110,13 @@ class ApproveProposal:
                 email=proposal.requester_contact.email.value,
                 name=proposal.requester_contact.name,
             )
-            proposal.resolve_requester(provisioned.id)
+            proposal.resolve_requester(provisioned.actor.id)
+            if provisioned.temporary_password is not None:
+                requester_access_notification = RequesterAccessNotification(
+                    email=proposal.requester_contact.email.value,
+                    name=proposal.requester_contact.name,
+                    temporary_password=provisioned.temporary_password,
+                )
         if proposal.requested_by is None:
             raise ValueError("proposal requester must be resolved before approval")
 
@@ -143,7 +163,11 @@ class ApproveProposal:
         proposal.approve(occurred_at=now, triggered_by=data.caller.id, note=data.note)
         await self._project_repo.add(project)
         await self._proposal_repo.save(proposal)
-        return ApproveProposalOutput(proposal=proposal, project=project)
+        return ApproveProposalOutput(
+            proposal=proposal,
+            project=project,
+            requester_access_notification=requester_access_notification,
+        )
 
 
 # ── Cancel Proposal ───────────────────────────────────────────────────────────

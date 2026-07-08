@@ -26,6 +26,7 @@ from app.use_of_collections.application.ports import (
     ObjectOccurrenceLogRepository,
     ProposalRepository,
     PublicationLogRepository,
+    RequesterAccessEmailSender,
 )
 from app.use_of_collections.application.queries import (
     GetProjectDetail,
@@ -47,6 +48,10 @@ from app.use_of_collections.infrastructure.repositories import (
     SqlAlchemyObjectOccurrenceLogRepository,
     SqlAlchemyProposalRepository,
     SqlAlchemyPublicationLogRepository,
+)
+from app.use_of_collections.infrastructure.requester_access_email import (
+    LoggingRequesterAccessEmailSender,
+    SmtpRequesterAccessEmailSender,
 )
 
 from app.config import settings  # isort: skip
@@ -100,6 +105,19 @@ def get_external_requester_provisioner(
     return IdentityExternalRequesterProvisioner(get_requester_provisioner(session))
 
 
+def get_requester_access_email_sender() -> RequesterAccessEmailSender:
+    if not settings.smtp_host:
+        return LoggingRequesterAccessEmailSender()
+    return SmtpRequesterAccessEmailSender(
+        host=settings.smtp_host,
+        port=settings.smtp_port,
+        username=settings.smtp_username,
+        password=settings.smtp_password,
+        from_address=settings.smtp_from_address,
+        use_tls=settings.smtp_use_tls,
+    )
+
+
 ProjectRepo = Annotated[CollectionUseProjectRepository, Depends(get_project_repo)]
 ProposalRepo = Annotated[ProposalRepository, Depends(get_proposal_repo)]
 ConvRepo = Annotated[ConversationRepository, Depends(get_conversation_repo)]
@@ -117,6 +135,9 @@ AmendmentInvitation = Annotated[
 PermReader = Annotated[PermissionReader, Depends(get_reader)]
 RequesterProvisioner = Annotated[
     ExternalRequesterProvisioner, Depends(get_external_requester_provisioner)
+]
+AccessEmailSender = Annotated[
+    RequesterAccessEmailSender, Depends(get_requester_access_email_sender)
 ]
 
 

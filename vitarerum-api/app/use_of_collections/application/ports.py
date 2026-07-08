@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from typing import Protocol
 
@@ -216,6 +216,19 @@ class AmendmentInvitationPort(Protocol):
     ) -> None: ...
 
 
+@dataclass(slots=True)
+class ResolvedExternalRequester:
+    """Minimal local shape of Identity's provisioning result.
+
+    Deliberately narrower than Identity's own ``ProvisionedRequester``: this
+    context only ever needs the resulting ``actor`` and, when a new user was
+    created, the ``temporary_password`` to relay by e-mail — ``user_created``
+    is Identity-internal bookkeeping this context has no use for."""
+
+    actor: Actor
+    temporary_password: str | None = field(default=None, repr=False)
+
+
 class ExternalRequesterProvisioner(Protocol):
     """Driven port: resolve a system requester for a public proposal's contact.
 
@@ -224,7 +237,22 @@ class ExternalRequesterProvisioner(Protocol):
     ``ProvisionExternalRequester`` (Open Host Service), so this context never
     imports Identity internals directly — only ``identity.public``."""
 
-    async def provision(self, email: str, name: str) -> Actor: ...
+    async def provision(self, email: str, name: str) -> ResolvedExternalRequester: ...
+
+
+class RequesterAccessEmailSender(Protocol):
+    """Driven port: notify a newly provisioned external requester of their
+    login credentials. Only called when ``ExternalRequesterProvisioner``
+    actually created a user (see ``ApproveProposal``); an already-existing
+    user's e-mail address never receives a new password."""
+
+    async def send_access_created(
+        self,
+        to_email: str,
+        requester_name: str,
+        login_url: str,
+        temporary_password: str,
+    ) -> None: ...
 
 
 class FileStoragePort(Protocol):

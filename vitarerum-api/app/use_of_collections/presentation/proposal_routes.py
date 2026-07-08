@@ -20,6 +20,7 @@ from fastapi import (
     status,
 )
 
+from app.config import settings
 from app.identity.public import GroupName
 from app.shared.authorization import (
     require_staff,
@@ -93,6 +94,7 @@ from app.use_of_collections.presentation.common import (
     read_upload_capped,
 )
 from app.use_of_collections.presentation.dependencies import (
+    AccessEmailSender,
     AmendmentInvitation,
     ConvRepo,
     DBSession,
@@ -754,6 +756,7 @@ async def approve_proposal(
     proposal_repo: ProposalRepo,
     project_repo: ProjectRepo,
     requester_provisioner: RequesterProvisioner,
+    access_email_sender: AccessEmailSender,
     session: DBSession,
 ) -> DualAggregateResponse:
     proposal_before = await proposal_repo.get_by_id(ProposalId(proposal_id))
@@ -786,6 +789,20 @@ async def approve_proposal(
         _handle_domain_errors(exc)
         raise
     await session.commit()
+    # Only after the approval (and any newly provisioned user) is durably
+    # committed do we hand out its credentials — a citizen must never receive
+    # a password for an account that was rolled back. If sending fails here,
+    # the approval itself is not undone: this is an operational delivery
+    # problem, not a domain failure (mirrors the confirmation-e-mail ordering
+    # in public_submission's SubmitPublicProposal route).
+    notification = output.requester_access_notification
+    if notification is not None:
+        await access_email_sender.send_access_created(
+            to_email=notification.email,
+            requester_name=notification.name,
+            login_url=f"{settings.public_origin}/login",
+            temporary_password=notification.temporary_password,
+        )
     last_event = (
         await _build_proposal_event(output.proposal.events[-1], session)
         if output.proposal.events

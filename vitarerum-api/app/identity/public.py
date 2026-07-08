@@ -28,7 +28,11 @@ from app.identity.domain.models import (
     User,
     UserId,
 )
-from app.identity.infrastructure.security import TokenError, decode_access_token
+from app.identity.infrastructure.security import (
+    BcryptPasswordHasher,
+    TokenError,
+    decode_access_token,
+)
 from app.shared.kernel import PermissionId
 
 if TYPE_CHECKING:
@@ -54,6 +58,7 @@ def get_requester_provisioner(session: AsyncSession) -> ProvisionExternalRequest
         user_repo=SqlAlchemyUserRepository(session),
         group_repo=SqlAlchemyGroupRepository(session),
         permission_repo=SqlAlchemyPermissionRepository(session),
+        hasher=BcryptPasswordHasher(),
     )
 
 

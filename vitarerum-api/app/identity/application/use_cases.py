@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+import secrets
+from dataclasses import dataclass, field
 from uuid import uuid4
 
 from app.identity.application.ports import (
@@ -42,17 +43,38 @@ def _normalize_email(email: str) -> str:
     return email.strip().lower()
 
 
+# Excludes visually-ambiguous characters (0/O, 1/l/I) since this is meant to be
+# read from an e-mail and typed back in, not stored in a password manager.
+_TEMPORARY_PASSWORD_ALPHABET = (
+    "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%"
+)
+_TEMPORARY_PASSWORD_LENGTH = 16
+
+
+def _generate_temporary_password() -> str:
+    return "".join(
+        secrets.choice(_TEMPORARY_PASSWORD_ALPHABET)
+        for _ in range(_TEMPORARY_PASSWORD_LENGTH)
+    )
+
+
 @dataclass(slots=True)
 class ProvisionedRequester:
     actor: Actor
     user_created: bool
+    temporary_password: str | None = field(default=None, repr=False)
 
 
 class ProvisionExternalRequester:
     """Get-or-create a user (by email) with an EXTERNAL permission.
 
     Published use case (Open Host Service): lets inbound orchestrators obtain an
-    acting EXTERNAL requester without touching Identity aggregates.
+    acting EXTERNAL requester without touching Identity aggregates. When the
+    user is newly created, a temporary password is generated and hashed onto
+    it (there is no password-reset/self-service flow yet, so this is the only
+    way a freshly provisioned requester can ever log in) and returned in the
+    clear — once, in this call's result — for the caller to relay by e-mail.
+    An already-existing user's password is never touched.
     """
 
     def __init__(
@@ -60,17 +82,26 @@ class ProvisionExternalRequester:
         user_repo: UserRepository,
         group_repo: GroupRepository,
         permission_repo: PermissionRepository,
+        hasher: PasswordHasher,
     ) -> None:
         self._user_repo = user_repo
         self._group_repo = group_repo
         self._permission_repo = permission_repo
+        self._hasher = hasher
 
     async def execute(self, email: str, name: str) -> ProvisionedRequester:
         email = _normalize_email(email)
         user_created = False
+        temporary_password: str | None = None
         user = await self._user_repo.get_by_email(email)
         if user is None:
-            user = User(id=UserId(_new_id()), name=name, email=email)
+            temporary_password = _generate_temporary_password()
+            user = User(
+                id=UserId(_new_id()),
+                name=name,
+                email=email,
+                password_hash=self._hasher.hash(temporary_password),
+            )
             await self._user_repo.add(user)
             user_created = True
 
@@ -98,6 +129,7 @@ class ProvisionExternalRequester:
                 email=user.email,
             ),
             user_created=user_created,
+            temporary_password=temporary_password,
         )
 
 

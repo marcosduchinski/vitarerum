@@ -3,6 +3,7 @@ from datetime import UTC, date, datetime
 import pytest
 
 from app.identity.public import Actor, GroupName, PermissionId
+from app.use_of_collections.application.ports import ResolvedExternalRequester
 from app.use_of_collections.application.use_cases import (
     AddLogEntryAttachment,
     AddLogEntryAttachmentInput,
@@ -462,19 +463,19 @@ def _make_curator() -> Actor:
 class RecordingRequesterProvisioner:
     """Fake ``ExternalRequesterProvisioner`` recording every call it receives.
 
-    Raises if invoked with no ``actor`` configured, so tests for already-
+    Raises if invoked with no ``resolved`` configured, so tests for already-
     resolved proposals catch an unexpected (unnecessary) provisioning call.
     """
 
-    def __init__(self, actor: Actor | None = None) -> None:
-        self._actor = actor
+    def __init__(self, resolved: ResolvedExternalRequester | None = None) -> None:
+        self._resolved = resolved
         self.calls: list[tuple[str, str]] = []
 
-    async def provision(self, email: str, name: str) -> Actor:
+    async def provision(self, email: str, name: str) -> ResolvedExternalRequester:
         self.calls.append((email, name))
-        if self._actor is None:
+        if self._resolved is None:
             raise AssertionError("provision() should not have been called")
-        return self._actor
+        return self._resolved
 
 
 async def test_approve_proposal_creates_requested_project() -> None:
@@ -545,12 +546,15 @@ async def test_approve_public_proposal_provisions_external_requester() -> None:
         submitted_at=datetime(2026, 6, 1, tzinfo=UTC),
     )
     await proposal_repository.add(proposal)
-    provisioned_actor = Actor(
-        id=PermissionId("permission-external-1"),
-        group=GroupName.EXTERNAL,
-        email="pedro@example.test",
+    resolved = ResolvedExternalRequester(
+        actor=Actor(
+            id=PermissionId("permission-external-1"),
+            group=GroupName.EXTERNAL,
+            email="pedro@example.test",
+        ),
+        temporary_password="Temp-Pw-123!",
     )
-    requester_provisioner = RecordingRequesterProvisioner(provisioned_actor)
+    requester_provisioner = RecordingRequesterProvisioner(resolved)
 
     use_case = ApproveProposal(
         proposal_repository, project_repository, requester_provisioner
@@ -570,9 +574,67 @@ async def test_approve_public_proposal_provisions_external_requester() -> None:
     assert result.proposal.requested_by == "permission-external-1"
     assert result.project.requested_by == "permission-external-1"
 
+    # A new user was provisioned (temporary_password set), so the output
+    # carries a pending access notification for the route to relay by e-mail.
+    notification = result.requester_access_notification
+    assert notification is not None
+    assert notification.email == "pedro@example.test"
+    assert notification.name == "Pedro Silva"
+    assert notification.temporary_password == "Temp-Pw-123!"
+    assert "Temp-Pw-123!" not in repr(notification)
+    assert "Temp-Pw-123!" not in repr(resolved)
+
     saved_proposal = await proposal_repository.get_by_id("proposal-1")
     assert saved_proposal is not None
     assert saved_proposal.requested_by == "permission-external-1"
+
+
+async def test_approve_public_proposal_reused_user_sends_no_notification() -> None:
+    """When the requester's e-mail already has a user, no new password is
+    generated — the approval carries no access notification to send."""
+    proposal_repository = InMemoryProposalRepository()
+    project_repository = InMemoryCollectionUseProjectRepository()
+    proposal = Proposal(
+        id=ProposalId("proposal-1"),
+        reference_number=ReferenceNumber("VRP-20260601-0001"),
+        title="Proposal title",
+        collection_use_project_id="project-1",
+        intended_use=UseType.IN_SITU_VISIT,
+        begin_date=date(2026, 6, 1),
+        end_date=date(2026, 6, 7),
+        status=ProposalStatus.PENDING,
+        requested_by=None,
+        requester_contact=RequesterContact(
+            name="Pedro Silva", email=EmailAddress("pedro@example.test")
+        ),
+        submitted_at=datetime(2026, 6, 1, tzinfo=UTC),
+    )
+    await proposal_repository.add(proposal)
+    resolved = ResolvedExternalRequester(
+        actor=Actor(
+            id=PermissionId("permission-external-1"),
+            group=GroupName.EXTERNAL,
+            email="pedro@example.test",
+        ),
+        temporary_password=None,
+    )
+    requester_provisioner = RecordingRequesterProvisioner(resolved)
+
+    use_case = ApproveProposal(
+        proposal_repository, project_repository, requester_provisioner
+    )
+    result = await use_case.execute(
+        ApproveProposalInput(
+            proposal_id=ProposalId("proposal-1"),
+            caller=_make_curator(),
+            title="Collection study",
+            purpose="To study the collection",
+            begin_date=date(2026, 7, 1),
+            end_date=date(2026, 7, 7),
+        )
+    )
+
+    assert result.requester_access_notification is None
 
 
 async def test_approve_non_pending_public_proposal_never_provisions_requester() -> None:

@@ -6,6 +6,7 @@ from datetime import UTC, date, datetime
 
 from httpx import ASGITransport, AsyncClient
 
+from app.config import settings
 from app.database import get_async_session
 from app.identity.infrastructure.models import (
     GroupRecord,
@@ -18,6 +19,7 @@ from app.shared.dependencies import get_caller_permission
 from app.use_of_collections.application.ports import (
     ProjectFilters,
     ProposalFilters,
+    ResolvedExternalRequester,
 )
 from app.use_of_collections.domain.enums import (
     ProposalStatus,
@@ -48,15 +50,18 @@ from app.use_of_collections.domain.models import (
     PublicationLog,
     PublicationLogEntry,
     ReferenceNumber,
+    RequesterContact,
 )
 from app.use_of_collections.presentation.dependencies import (
     get_access_log_repo,
     get_conversation_repo,
+    get_external_requester_provisioner,
     get_file_storage,
     get_occurrence_log_repo,
     get_project_repo,
     get_proposal_repo,
     get_publication_log_repo,
+    get_requester_access_email_sender,
 )
 
 
@@ -453,10 +458,44 @@ class CommitOnlySession:
         return FakeResult()
 
 
+class RecordingRequesterProvisioner:
+    """Fake ``ExternalRequesterProvisioner``. Raises if invoked with no
+    ``resolved`` configured, so route tests approving an already-resolved
+    proposal catch an unexpected (unnecessary) provisioning call."""
+
+    def __init__(self, resolved: ResolvedExternalRequester | None = None) -> None:
+        self._resolved = resolved
+        self.calls: list[tuple[str, str]] = []
+
+    async def provision(self, email: str, name: str) -> ResolvedExternalRequester:
+        self.calls.append((email, name))
+        if self._resolved is None:
+            raise AssertionError("provision() should not have been called")
+        return self._resolved
+
+
+class RecordingAccessEmailSender:
+    """Fake ``RequesterAccessEmailSender`` recording every call it receives."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str, str, str]] = []
+
+    async def send_access_created(
+        self,
+        to_email: str,
+        requester_name: str,
+        login_url: str,
+        temporary_password: str,
+    ) -> None:
+        self.calls.append((to_email, requester_name, login_url, temporary_password))
+
+
 @asynccontextmanager
 async def client_with_repos(
     caller: Actor = _CALLER,
     permission_records: dict[str, PermissionRecord] | None = None,
+    requester_provisioner: RecordingRequesterProvisioner | None = None,
+    access_email_sender: RecordingAccessEmailSender | None = None,
 ) -> AsyncIterator[
     tuple[
         AsyncClient,
@@ -473,6 +512,8 @@ async def client_with_repos(
     publication_log_repo = InMemoryPublicationLogRepository()
     file_storage = InMemoryFileStorage()
     session = CommitOnlySession(permission_records)
+    requester_provisioner = requester_provisioner or RecordingRequesterProvisioner()
+    access_email_sender = access_email_sender or RecordingAccessEmailSender()
 
     app.dependency_overrides[get_project_repo] = lambda: project_repo
     app.dependency_overrides[get_proposal_repo] = lambda: proposal_repo
@@ -483,6 +524,12 @@ async def client_with_repos(
     app.dependency_overrides[get_file_storage] = lambda: file_storage
     app.dependency_overrides[get_async_session] = lambda: session
     app.dependency_overrides[get_caller_permission] = lambda: caller
+    app.dependency_overrides[get_external_requester_provisioner] = (
+        lambda: requester_provisioner
+    )
+    app.dependency_overrides[get_requester_access_email_sender] = (
+        lambda: access_email_sender
+    )
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -1488,6 +1535,67 @@ async def test_approve_proposal_invalid_date_range_returns_422() -> None:
     assert response.status_code == 422
     assert response.json()["error"] == "INVALID_DATE_RANGE"
     assert response.json()["message"] == "endDate must be after beginDate"
+
+
+async def test_approve_public_proposal_sends_access_email_after_commit() -> None:
+    resolved = ResolvedExternalRequester(
+        actor=Actor(
+            id=PermissionId("permission-external-1"),
+            group=GroupName.EXTERNAL,
+            email="pedro@example.test",
+        ),
+        temporary_password="Temp-Pw-123!",
+    )
+    requester_provisioner = RecordingRequesterProvisioner(resolved)
+    access_email_sender = RecordingAccessEmailSender()
+
+    async with client_with_repos(
+        caller=_STAFF_CALLER,
+        requester_provisioner=requester_provisioner,
+        access_email_sender=access_email_sender,
+    ) as (client, _, proposal_repo, _):
+        await proposal_repo.add(
+            Proposal(
+                id=ProposalId("prop-1"),
+                reference_number=ReferenceNumber("VRP-20260601-0001"),
+                title="Proposal title",
+                collection_use_project_id=None,
+                intended_use=UseType.IN_SITU_VISIT,
+                begin_date=date(2026, 6, 1),
+                end_date=date(2026, 6, 7),
+                status=ProposalStatus.PENDING,
+                requested_by=None,
+                requester_contact=RequesterContact(
+                    name="Pedro Silva", email=EmailAddress("pedro@example.test")
+                ),
+                submitted_at=datetime(2026, 6, 7, tzinfo=UTC),
+            )
+        )
+
+        response = await client.post(
+            "/api/v1/proposals/prop-1/approve",
+            json={
+                "title": "Approved project",
+                "purpose": "Use the collection",
+                "beginDate": "2026-06-07",
+                "endDate": "2026-06-30",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["collectionUseProject"]["requestedBy"]["permissionId"] == (
+        "permission-external-1"
+    )
+    # The credentials e-mail is only ever dispatched once the approval (and
+    # the request that provisioned it) is committed — see approve_proposal.
+    assert access_email_sender.calls == [
+        (
+            "pedro@example.test",
+            "Pedro Silva",
+            f"{settings.public_origin}/login",
+            "Temp-Pw-123!",
+        )
+    ]
 
 
 async def test_cancel_proposal_by_requester_without_project_returns_cancelled() -> None:
