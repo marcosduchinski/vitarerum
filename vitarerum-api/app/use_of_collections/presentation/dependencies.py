@@ -11,11 +11,16 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_session
-from app.identity.public import PermissionReader, get_permission_reader
+from app.identity.public import (
+    PermissionReader,
+    get_permission_reader,
+    get_requester_provisioner,
+)
 from app.use_of_collections.application.ports import (
     AmendmentInvitationPort,
     CollectionUseProjectRepository,
     ConversationRepository,
+    ExternalRequesterProvisioner,
     FileStoragePort,
     ObjectAccessLogRepository,
     ObjectOccurrenceLogRepository,
@@ -30,6 +35,9 @@ from app.use_of_collections.application.queries import (
 )
 from app.use_of_collections.infrastructure.amendment_invitation import (
     LoggingAmendmentInvitation,
+)
+from app.use_of_collections.infrastructure.external_requester import (
+    IdentityExternalRequesterProvisioner,
 )
 from app.use_of_collections.infrastructure.file_storage import LocalDiskFileStorage
 from app.use_of_collections.infrastructure.repositories import (
@@ -86,6 +94,12 @@ def get_reader(session: DBSession) -> PermissionReader:
     return get_permission_reader(session)
 
 
+def get_external_requester_provisioner(
+    session: DBSession,
+) -> ExternalRequesterProvisioner:
+    return IdentityExternalRequesterProvisioner(get_requester_provisioner(session))
+
+
 ProjectRepo = Annotated[CollectionUseProjectRepository, Depends(get_project_repo)]
 ProposalRepo = Annotated[ProposalRepository, Depends(get_proposal_repo)]
 ConvRepo = Annotated[ConversationRepository, Depends(get_conversation_repo)]
@@ -101,6 +115,9 @@ AmendmentInvitation = Annotated[
     AmendmentInvitationPort, Depends(get_amendment_invitation)
 ]
 PermReader = Annotated[PermissionReader, Depends(get_reader)]
+RequesterProvisioner = Annotated[
+    ExternalRequesterProvisioner, Depends(get_external_requester_provisioner)
+]
 
 
 def get_list_proposals_query(

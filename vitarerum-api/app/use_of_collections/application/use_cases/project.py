@@ -15,6 +15,7 @@ from app.identity.public import Actor, GroupName
 from app.shared.authorization import require_group
 from app.use_of_collections.application.ports import (
     CollectionUseProjectRepository,
+    ExternalRequesterProvisioner,
     ObjectAccessLogRepository,
     ProposalRepository,
 )
@@ -65,9 +66,11 @@ class ApproveProposal:
         self,
         proposal_repository: ProposalRepository,
         project_repository: CollectionUseProjectRepository,
+        requester_provisioner: ExternalRequesterProvisioner,
     ) -> None:
         self._proposal_repo = proposal_repository
         self._project_repo = project_repository
+        self._requester_provisioner = requester_provisioner
 
     async def execute(self, data: ApproveProposalInput) -> ApproveProposalOutput:
         require_group(data.caller, GroupName.CURATORIAL)
@@ -76,6 +79,24 @@ class ApproveProposal:
         proposal = await self._proposal_repo.get_by_id(data.proposal_id)
         if proposal is None:
             raise LookupError(f"No proposal found with id {data.proposal_id}")
+        # Fail fast on eligibility before touching Identity: a proposal that
+        # isn't PENDING will be rejected by approve() below regardless, so a
+        # public proposal must never provision a requester for a decision
+        # that was never going to succeed.
+        proposal.ensure_approvable()
+        if proposal.requested_by is None:
+            # Public proposal: Identity provisioning is deferred until this
+            # moment, so a rejected/cancelled proposal never creates a user or
+            # permission for a contact that never becomes a real requester.
+            if proposal.requester_contact is None:
+                raise ValueError(
+                    "proposal requester must be resolved before approval"
+                )
+            provisioned = await self._requester_provisioner.provision(
+                email=proposal.requester_contact.email.value,
+                name=proposal.requester_contact.name,
+            )
+            proposal.resolve_requester(provisioned.id)
         if proposal.requested_by is None:
             raise ValueError("proposal requester must be resolved before approval")
 

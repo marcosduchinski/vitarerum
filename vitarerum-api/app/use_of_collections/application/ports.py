@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Protocol
 
+from app.identity.public import Actor
 from app.use_of_collections.domain.enums import ProposalStatus, UseStatus, UseType
 from app.use_of_collections.domain.models import (
     CollectionUseProject,
@@ -213,6 +214,17 @@ class AmendmentInvitationPort(Protocol):
         requester_name: str,
         correction_item_ids: list[str],
     ) -> None: ...
+
+
+class ExternalRequesterProvisioner(Protocol):
+    """Driven port: resolve a system requester for a public proposal's contact.
+
+    Called by ``ApproveProposal`` when a public proposal (``requested_by is
+    None``) is approved. Implemented by an adapter over Identity's
+    ``ProvisionExternalRequester`` (Open Host Service), so this context never
+    imports Identity internals directly — only ``identity.public``."""
+
+    async def provision(self, email: str, name: str) -> Actor: ...
 
 
 class FileStoragePort(Protocol):

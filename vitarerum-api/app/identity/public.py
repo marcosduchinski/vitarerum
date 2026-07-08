@@ -42,6 +42,21 @@ def get_permission_reader(session: AsyncSession) -> PermissionReader:
     return SqlAlchemyPermissionReader(session)
 
 
+def get_requester_provisioner(session: AsyncSession) -> ProvisionExternalRequester:
+    """Default composition hook: a SQLAlchemy-backed ProvisionExternalRequester."""
+    from app.identity.infrastructure.repositories import (
+        SqlAlchemyGroupRepository,
+        SqlAlchemyPermissionRepository,
+        SqlAlchemyUserRepository,
+    )
+
+    return ProvisionExternalRequester(
+        user_repo=SqlAlchemyUserRepository(session),
+        group_repo=SqlAlchemyGroupRepository(session),
+        permission_repo=SqlAlchemyPermissionRepository(session),
+    )
+
+
 __all__ = [
     "Actor",
     "Group",
@@ -59,4 +74,5 @@ __all__ = [
     "UserView",
     "decode_access_token",
     "get_permission_reader",
+    "get_requester_provisioner",
 ]

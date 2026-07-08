@@ -513,6 +513,18 @@ class Proposal:
                 "Proposal must have either requested_by or requester_contact"
             )
 
+    def resolve_requester(self, permission_id: PermissionId) -> None:
+        """Bind a system requester to a proposal submitted via ``requester_contact``.
+
+        Called once, at approval time, once Identity has provisioned (or
+        reused) a permission for the public requester's contact — see
+        ``ApproveProposal``. Records no event: the requester link is a
+        technical prerequisite for the project, not a lifecycle transition
+        (the ``APPROVED`` event already audits the decision)."""
+        if self.requested_by is not None:
+            raise InvalidTransition("Proposal requester is already resolved")
+        self.requested_by = permission_id
+
     def record_submitted(
         self,
         occurred_at: datetime,
@@ -767,14 +779,24 @@ class Proposal:
             )
         )
 
+    def ensure_approvable(self) -> None:
+        """Non-mutating guard: raise unless this proposal can be approved now.
+
+        Exposed so ``ApproveProposal`` can check eligibility *before* it
+        provisions an Identity requester for a public proposal's contact —
+        a proposal that isn't PENDING will fail here regardless, so there is
+        no reason to touch Identity first. ``approve`` reuses this so the
+        rule has one source of truth."""
+        if self.status != ProposalStatus.PENDING:
+            raise InvalidTransition("Proposal must be PENDING to be approved")
+
     def approve(
         self,
         occurred_at: datetime,
         triggered_by: PermissionId,
         note: str | None = None,
     ) -> None:
-        if self.status != ProposalStatus.PENDING:
-            raise InvalidTransition("Proposal must be PENDING to be approved")
+        self.ensure_approvable()
         self.status = ProposalStatus.APPROVED
         self.events.append(
             ProposalEvent(

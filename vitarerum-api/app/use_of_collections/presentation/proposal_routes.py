@@ -101,6 +101,7 @@ from app.use_of_collections.presentation.dependencies import (
     ProjectRepo,
     ProposalDetailQuery,
     ProposalRepo,
+    RequesterProvisioner,
 )
 from app.use_of_collections.presentation.permissions import (
     hydrate_permission,
@@ -752,6 +753,7 @@ async def approve_proposal(
     caller: CallerPermission,
     proposal_repo: ProposalRepo,
     project_repo: ProjectRepo,
+    requester_provisioner: RequesterProvisioner,
     session: DBSession,
 ) -> DualAggregateResponse:
     proposal_before = await proposal_repo.get_by_id(ProposalId(proposal_id))
@@ -767,7 +769,9 @@ async def approve_proposal(
             },
         )
     try:
-        output = await ApproveProposal(proposal_repo, project_repo).execute(
+        output = await ApproveProposal(
+            proposal_repo, project_repo, requester_provisioner
+        ).execute(
             ApproveProposalInput(
                 proposal_id=ProposalId(proposal_id),
                 caller=caller,

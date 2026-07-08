@@ -446,7 +446,7 @@ group.
 
 ### `POST /proposals/{proposal_id}/approve`
 
-**Description** — Curator approves the proposal and materialises the project. Transitions the proposal from `PENDING` to `APPROVED` and **creates** the linked `CollectionUseProject` in `CREATED` status. Records an `APPROVED` `ProposalEvent` and a `REQUESTED` `UseEvent` on the new project. The project's `title`, `purpose`, `beginDate`, and `endDate` are taken from this request body (the curator confirms/adjusts the project parameters at approval time), and `requestedBy` is copied from the approved proposal. Only available to `CURATORIAL` group members.
+**Description** — Curator approves the proposal and materialises the project. Transitions the proposal from `PENDING` to `APPROVED` and **creates** the linked `CollectionUseProject` in `CREATED` status. Records an `APPROVED` `ProposalEvent` and a `REQUESTED` `UseEvent` on the new project. The project's `title`, `purpose`, `beginDate`, and `endDate` are taken from this request body (the curator confirms/adjusts the project parameters at approval time), and `requestedBy` is copied from the approved proposal. For an authenticated proposal `requestedBy` already exists on the proposal; for a **public** proposal (`requestedBy: null` + `requesterContact` set), this call is the moment Identity provisions — or reuses — a user/permission for the contact's e-mail, and that resolved `requestedBy` is what gets copied onto the project. A proposal rejected or cancelled before approval never reaches this provisioning step. Only available to `CURATORIAL` group members.
 
 **Path parameters**
 ```
@@ -512,7 +512,7 @@ proposal's already stored `title`, `beginDate`, and `endDate`.
 }
 ```
 
-The proposal `referenceNumber` follows `VRP-YYYYMMDD-XXXX`. The project `collectionUseProject.referenceNumber` follows the `CUP-XXXXXXXX` pattern (8 hex chars), and `collectionUseProject.requestedBy` is copied from the approved proposal.
+The proposal `referenceNumber` follows `VRP-YYYYMMDD-XXXX`. The project `collectionUseProject.referenceNumber` follows the `CUP-XXXXXXXX` pattern (8 hex chars), and `collectionUseProject.requestedBy` is copied from the approved proposal (provisioned from `requesterContact` during this call for a public proposal that didn't already have one).
 
 **Response `403 Forbidden`**
 ```json

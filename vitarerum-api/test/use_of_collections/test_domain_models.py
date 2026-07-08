@@ -24,6 +24,7 @@ from app.use_of_collections.domain.models import (
     Proposal,
     ProposalId,
     ReferenceNumber,
+    RequesterContact,
     UnsatisfiedCorrection,
 )
 
@@ -104,6 +105,33 @@ def test_assign_proposal_records_assigned_event() -> None:
     assert proposal.status == ProposalStatus.PENDING
     assert proposal.assigned_to == "permission-2"
     assert proposal.events[-1].type == ProposalEventType.ASSIGNED
+
+
+def test_proposal_requires_requested_by_or_requester_contact() -> None:
+    with pytest.raises(
+        ValueError, match="requested_by or requester_contact"
+    ):
+        _make_proposal(requested_by=None, requester_contact=None)
+
+
+def test_resolve_requester_sets_requested_by() -> None:
+    proposal = _make_proposal(
+        requested_by=None,
+        requester_contact=RequesterContact(
+            name="Pedro Silva", email=EmailAddress("pedro@example.test")
+        ),
+    )
+
+    proposal.resolve_requester(PermissionId("permission-external-1"))
+
+    assert proposal.requested_by == "permission-external-1"
+
+
+def test_resolve_requester_blocks_when_already_resolved() -> None:
+    proposal = _make_proposal(requested_by=PermissionId("permission-1"))
+
+    with pytest.raises(InvalidTransition, match="already resolved"):
+        proposal.resolve_requester(PermissionId("permission-external-1"))
 
 
 def test_cancel_project_blocks_completed_project() -> None:

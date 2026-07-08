@@ -40,6 +40,7 @@ from app.use_of_collections.domain.models import (
     Conversation,
     ConversationId,
     EmailAddress,
+    InvalidTransition,
     Message,
     MessageId,
     ObjectAccessLog,
@@ -458,6 +459,24 @@ def _make_curator() -> Actor:
     )
 
 
+class RecordingRequesterProvisioner:
+    """Fake ``ExternalRequesterProvisioner`` recording every call it receives.
+
+    Raises if invoked with no ``actor`` configured, so tests for already-
+    resolved proposals catch an unexpected (unnecessary) provisioning call.
+    """
+
+    def __init__(self, actor: Actor | None = None) -> None:
+        self._actor = actor
+        self.calls: list[tuple[str, str]] = []
+
+    async def provision(self, email: str, name: str) -> Actor:
+        self.calls.append((email, name))
+        if self._actor is None:
+            raise AssertionError("provision() should not have been called")
+        return self._actor
+
+
 async def test_approve_proposal_creates_requested_project() -> None:
     proposal_repository = InMemoryProposalRepository()
     project_repository = InMemoryCollectionUseProjectRepository()
@@ -474,8 +493,11 @@ async def test_approve_proposal_creates_requested_project() -> None:
         submitted_at=datetime(2026, 6, 1, tzinfo=UTC),
     )
     await proposal_repository.add(proposal)
+    requester_provisioner = RecordingRequesterProvisioner()
 
-    use_case = ApproveProposal(proposal_repository, project_repository)
+    use_case = ApproveProposal(
+        proposal_repository, project_repository, requester_provisioner
+    )
     result = await use_case.execute(
         ApproveProposalInput(
             proposal_id=ProposalId("proposal-1"),
@@ -492,6 +514,8 @@ async def test_approve_proposal_creates_requested_project() -> None:
     assert result.project.status == UseStatus.CREATED
     assert result.project.intended_use == UseType.IN_SITU_VISIT
     assert result.project.reference_number.value.startswith("CUP-")
+    # The requester was already resolved, so the provisioner is never invoked.
+    assert requester_provisioner.calls == []
 
     saved_project = await project_repository.get_by_id("project-1")
     assert saved_project is not None
@@ -500,6 +524,98 @@ async def test_approve_proposal_creates_requested_project() -> None:
     assert saved_project.proposal_id == "proposal-1"
     assert saved_project.events[0].type == UseEventType.REQUESTED
     assert saved_project.events[0].triggered_by == "curator-1"
+
+
+async def test_approve_public_proposal_provisions_external_requester() -> None:
+    proposal_repository = InMemoryProposalRepository()
+    project_repository = InMemoryCollectionUseProjectRepository()
+    proposal = Proposal(
+        id=ProposalId("proposal-1"),
+        reference_number=ReferenceNumber("VRP-20260601-0001"),
+        title="Proposal title",
+        collection_use_project_id="project-1",
+        intended_use=UseType.IN_SITU_VISIT,
+        begin_date=date(2026, 6, 1),
+        end_date=date(2026, 6, 7),
+        status=ProposalStatus.PENDING,
+        requested_by=None,
+        requester_contact=RequesterContact(
+            name="Pedro Silva", email=EmailAddress("pedro@example.test")
+        ),
+        submitted_at=datetime(2026, 6, 1, tzinfo=UTC),
+    )
+    await proposal_repository.add(proposal)
+    provisioned_actor = Actor(
+        id=PermissionId("permission-external-1"),
+        group=GroupName.EXTERNAL,
+        email="pedro@example.test",
+    )
+    requester_provisioner = RecordingRequesterProvisioner(provisioned_actor)
+
+    use_case = ApproveProposal(
+        proposal_repository, project_repository, requester_provisioner
+    )
+    result = await use_case.execute(
+        ApproveProposalInput(
+            proposal_id=ProposalId("proposal-1"),
+            caller=_make_curator(),
+            title="Collection study",
+            purpose="To study the collection",
+            begin_date=date(2026, 7, 1),
+            end_date=date(2026, 7, 7),
+        )
+    )
+
+    assert requester_provisioner.calls == [("pedro@example.test", "Pedro Silva")]
+    assert result.proposal.requested_by == "permission-external-1"
+    assert result.project.requested_by == "permission-external-1"
+
+    saved_proposal = await proposal_repository.get_by_id("proposal-1")
+    assert saved_proposal is not None
+    assert saved_proposal.requested_by == "permission-external-1"
+
+
+async def test_approve_non_pending_public_proposal_never_provisions_requester() -> None:
+    """A proposal that already left PENDING (e.g. a stale double-approve
+    click) must fail eligibility before touching Identity — never provision
+    a requester for a decision that was never going to succeed."""
+    proposal_repository = InMemoryProposalRepository()
+    project_repository = InMemoryCollectionUseProjectRepository()
+    proposal = Proposal(
+        id=ProposalId("proposal-1"),
+        reference_number=ReferenceNumber("VRP-20260601-0001"),
+        title="Proposal title",
+        collection_use_project_id=None,
+        intended_use=UseType.IN_SITU_VISIT,
+        begin_date=date(2026, 6, 1),
+        end_date=date(2026, 6, 7),
+        status=ProposalStatus.REJECTED,
+        requested_by=None,
+        requester_contact=RequesterContact(
+            name="Pedro Silva", email=EmailAddress("pedro@example.test")
+        ),
+        submitted_at=datetime(2026, 6, 1, tzinfo=UTC),
+    )
+    await proposal_repository.add(proposal)
+    requester_provisioner = RecordingRequesterProvisioner()
+
+    use_case = ApproveProposal(
+        proposal_repository, project_repository, requester_provisioner
+    )
+
+    with pytest.raises(InvalidTransition, match="PENDING"):
+        await use_case.execute(
+            ApproveProposalInput(
+                proposal_id=ProposalId("proposal-1"),
+                caller=_make_curator(),
+                title="Collection study",
+                purpose="To study the collection",
+                begin_date=date(2026, 7, 1),
+                end_date=date(2026, 7, 7),
+            )
+        )
+
+    assert requester_provisioner.calls == []
 
 
 async def test_reject_proposal_sends_reason_message_to_requester() -> None:
@@ -553,6 +669,63 @@ async def test_reject_proposal_sends_reason_message_to_requester() -> None:
     assert rejection_message.recipient.value == "alice@example.org"
     assert rejection_message.subject == "Proposal rejected: VRP-20260601-0001"
     assert rejection_message.body == "The request is outside the collection policy."
+
+
+async def test_reject_public_proposal_never_provisions_requester() -> None:
+    proposal_repository = InMemoryProposalRepository()
+    conversation_repository = InMemoryConversationRepository()
+    proposal = Proposal(
+        id=ProposalId("proposal-1"),
+        reference_number=ReferenceNumber("VRP-20260601-0001"),
+        title="Proposal title",
+        collection_use_project_id=None,
+        intended_use=UseType.IN_SITU_VISIT,
+        begin_date=date(2026, 6, 1),
+        end_date=date(2026, 6, 7),
+        status=ProposalStatus.PENDING,
+        requested_by=None,
+        requester_contact=RequesterContact(
+            name="Pedro Silva", email=EmailAddress("pedro@example.test")
+        ),
+        submitted_at=datetime(2026, 6, 1, tzinfo=UTC),
+    )
+    await proposal_repository.add(proposal)
+    await conversation_repository.add(
+        Conversation.start(
+            id=ConversationId("conversation-1"),
+            proposal_id=proposal.id,
+            initial_message=Message(
+                id=MessageId("message-1"),
+                sent_at=datetime(2026, 6, 1, tzinfo=UTC),
+                sender=EmailAddress("pedro@example.test"),
+                recipient=EmailAddress("collections@museum.pt"),
+                subject="Initial",
+                body="Initial message",
+            ),
+        )
+    )
+
+    # RejectProposal takes no ExternalRequesterProvisioner at all — rejection
+    # can never create a user/permission for the citizen's contact.
+    result = await RejectProposal(
+        proposal_repository=proposal_repository,
+        conversation_repository=conversation_repository,
+    ).execute(
+        RejectProposalInput(
+            proposal_id=proposal.id,
+            caller=_make_curator(),
+            reason="Outside the collection policy.",
+            requester_email="pedro@example.test",
+        )
+    )
+
+    assert result.proposal.status == ProposalStatus.REJECTED
+    assert result.proposal.requested_by is None
+    assert result.proposal.requester_contact is not None
+
+    saved_proposal = await proposal_repository.get_by_id("proposal-1")
+    assert saved_proposal is not None
+    assert saved_proposal.requested_by is None
 
 
 async def test_send_message_uses_valid_sender_fallback_without_user_email() -> None:
