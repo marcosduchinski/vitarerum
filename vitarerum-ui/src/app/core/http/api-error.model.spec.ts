@@ -21,6 +21,12 @@ describe('toApiError', () => {
     expect(toApiError(makeHttpError(404)).kind).toBe('not-found');
   });
 
+  it('maps 400 to validation', () => {
+    const result = toApiError(makeHttpError(400, { error: 'WEAK_PASSWORD', message: 'Too short' }));
+    expect(result.kind).toBe('validation');
+    expect(result.serverMessage).toBe('Too short');
+  });
+
   it('maps 409 to conflict', () => {
     expect(toApiError(makeHttpError(409)).kind).toBe('conflict');
   });

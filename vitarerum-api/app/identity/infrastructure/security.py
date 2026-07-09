@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 import bcrypt
@@ -40,8 +41,19 @@ def create_access_token(user_id: str) -> str:
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
 
-def decode_access_token(token: str) -> str:
-    """Return the subject (user id) for a valid token, else raise ``TokenError``."""
+@dataclass(slots=True, frozen=True)
+class DecodedAccessToken:
+    """The claims callers need: who the token is for, and when it was issued
+    (so session invalidation can reject tokens minted before a password
+    change/reset — see ``password_changed_at`` on ``User``)."""
+
+    user_id: str
+    issued_at: datetime
+
+
+def decode_access_token(token: str) -> DecodedAccessToken:
+    """Return the subject and issued-at instant for a valid token, else raise
+    ``TokenError``."""
     try:
         payload = jwt.decode(
             token, settings.jwt_secret, algorithms=[settings.jwt_algorithm]
@@ -51,4 +63,9 @@ def decode_access_token(token: str) -> str:
     subject = payload.get("sub")
     if not isinstance(subject, str) or not subject:
         raise TokenError("Token is missing a subject claim")
-    return subject
+    issued_at = payload.get("iat")
+    if not isinstance(issued_at, int):
+        raise TokenError("Token is missing an iat claim")
+    return DecodedAccessToken(
+        user_id=subject, issued_at=datetime.fromtimestamp(issued_at, tz=UTC)
+    )

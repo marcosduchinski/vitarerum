@@ -6,6 +6,11 @@ import { IdentityService } from './identity.service';
 import { GroupName } from './models/group-name.enum';
 import { IdentitySession } from './models/identity-session.model';
 import { LoginRequest } from './models/login.model';
+import {
+  ChangePasswordRequest,
+  PasswordResetConfirmRequest,
+  PasswordResetRequest,
+} from './models/password.model';
 import { clearSession, readSession, writeSession } from './session-storage.util';
 
 @Injectable()
@@ -60,6 +65,18 @@ export class IdentityServiceImpl implements IdentityService {
   // Available groups come from the login response; no client-side update needed.
   updateAvailableGroups(groups: readonly GroupName[]): void {
     void groups;
+  }
+
+  async changePassword(payload: ChangePasswordRequest): Promise<void> {
+    await firstValueFrom(this.authApi.changePassword(payload));
+  }
+
+  async requestPasswordReset(payload: PasswordResetRequest): Promise<void> {
+    await firstValueFrom(this.authApi.requestPasswordReset(payload));
+  }
+
+  async confirmPasswordReset(payload: PasswordResetConfirmRequest): Promise<void> {
+    await firstValueFrom(this.authApi.confirmPasswordReset(payload));
   }
 
   private setSession(session: IdentitySession | null): void {

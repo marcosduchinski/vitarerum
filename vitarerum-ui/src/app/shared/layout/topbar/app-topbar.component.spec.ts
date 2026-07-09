@@ -1,6 +1,7 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
+import { MenuItem } from 'primeng/api';
 
 import { IDENTITY_SERVICE } from '@core/auth/identity.service';
 import { IdentityServiceMock } from '@core/auth/identity.service.mock';
@@ -73,5 +74,23 @@ describe('AppTopbarComponent role switcher', () => {
     expect(select!.value).toBe('CURATORIAL');
     expect(navigateSpy).toHaveBeenCalledOnce();
     expect(navigateSpy).toHaveBeenCalledWith('/p/dashboard');
+  });
+
+  it('exposes a Change password item that navigates to /p/account/password', async () => {
+    await identity.signIn({ email: 'bob@collections.example.com', password: 'vita2026' });
+    const router = TestBed.inject(Router);
+    const navigateSpy = vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
+
+    const fixture = TestBed.createComponent(AppTopbarComponent);
+    fixture.detectChanges();
+
+    const items = (fixture.componentInstance as unknown as { userMenuItems: () => MenuItem[] })
+      .userMenuItems();
+    const changePasswordItem = items.find((item) => item.label === 'Change password');
+    expect(changePasswordItem).toBeDefined();
+
+    changePasswordItem!.command!({ item: changePasswordItem!, originalEvent: new Event('click') });
+
+    expect(navigateSpy).toHaveBeenCalledWith('/p/account/password');
   });
 });

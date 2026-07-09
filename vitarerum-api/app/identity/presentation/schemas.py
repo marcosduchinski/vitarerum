@@ -26,6 +26,20 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class ChangePasswordRequest(BaseModel):
+    currentPassword: str
+    newPassword: str
+
+
+class PasswordResetRequestBody(BaseModel):
+    email: str
+
+
+class PasswordResetConfirmRequest(BaseModel):
+    token: str
+    newPassword: str
+
+
 class AuthUser(BaseModel):
     id: str
     email: str

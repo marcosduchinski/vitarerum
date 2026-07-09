@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from sqlalchemy import func, select
+from datetime import datetime
+
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -12,6 +14,7 @@ from app.identity.domain.models import (
     GroupId,
     Institution,
     InstitutionId,
+    PasswordResetToken,
     Permission,
     PermissionId,
     User,
@@ -20,6 +23,7 @@ from app.identity.domain.models import (
 from app.identity.infrastructure.models import (
     GroupRecord,
     InstitutionRecord,
+    PasswordResetTokenRecord,
     PermissionRecord,
     UserRecord,
 )
@@ -39,6 +43,7 @@ def user_to_record(user: User) -> UserRecord:
         name=user.name,
         email=user.email,
         password_hash=user.password_hash,
+        password_changed_at=user.password_changed_at,
     )
 
 
@@ -48,6 +53,7 @@ def user_to_domain(record: UserRecord) -> User:
         name=record.name,
         email=record.email,
         password_hash=record.password_hash,
+        password_changed_at=record.password_changed_at,
     )
 
 
@@ -114,6 +120,9 @@ def permission_to_view(record: PermissionRecord) -> PermissionView:
             id=record.user.id if record.user else "",
             name=record.user.name if record.user else "",
             email=record.user.email if record.user else "",
+            password_changed_at=(
+                record.user.password_changed_at if record.user else None
+            ),
         ),
         group=record.group.name if record.group else GroupName.EXTERNAL,
     )
@@ -192,6 +201,16 @@ class SqlAlchemyUserRepository:
         data_result = await self._session.execute(data_stmt)
         records = data_result.scalars().all()
         return [user_to_domain(r) for r in records], total
+
+    async def update(self, user: User) -> None:
+        record = await self._session.get(UserRecord, user.id)
+        if record is None:
+            return
+        record.name = user.name
+        record.email = user.email
+        record.password_hash = user.password_hash
+        record.password_changed_at = user.password_changed_at
+        await self._session.flush()
 
 
 class SqlAlchemyGroupRepository:
@@ -331,3 +350,64 @@ class SqlAlchemyPermissionRepository:
         if record:
             await self._session.delete(record)
             await self._session.flush()
+
+
+def password_reset_token_to_record(
+    token: PasswordResetToken,
+) -> PasswordResetTokenRecord:
+    return PasswordResetTokenRecord(
+        id=token.id,
+        user_id=token.user_id,
+        token_hash=token.token_hash,
+        created_at=token.created_at,
+        expires_at=token.expires_at,
+        used_at=token.used_at,
+    )
+
+
+def password_reset_token_to_domain(
+    record: PasswordResetTokenRecord,
+) -> PasswordResetToken:
+    return PasswordResetToken(
+        id=record.id,
+        user_id=UserId(record.user_id),
+        token_hash=record.token_hash,
+        created_at=record.created_at,
+        expires_at=record.expires_at,
+        used_at=record.used_at,
+    )
+
+
+class SqlAlchemyPasswordResetTokenRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def add(self, token: PasswordResetToken) -> None:
+        self._session.add(password_reset_token_to_record(token))
+        await self._session.flush()
+
+    async def get_by_hash(self, token_hash: str) -> PasswordResetToken | None:
+        stmt = select(PasswordResetTokenRecord).where(
+            PasswordResetTokenRecord.token_hash == token_hash
+        )
+        result = await self._session.execute(stmt)
+        record = result.scalar_one_or_none()
+        return password_reset_token_to_domain(record) if record else None
+
+    async def save(self, token: PasswordResetToken) -> None:
+        record = await self._session.get(PasswordResetTokenRecord, token.id)
+        if record is None:
+            return
+        record.used_at = token.used_at
+        await self._session.flush()
+
+    async def invalidate_active_for_user(self, user_id: UserId, now: datetime) -> None:
+        stmt = (
+            update(PasswordResetTokenRecord)
+            .where(
+                PasswordResetTokenRecord.user_id == user_id,
+                PasswordResetTokenRecord.used_at.is_(None),
+            )
+            .values(used_at=now)
+        )
+        await self._session.execute(stmt)

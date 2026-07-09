@@ -2,7 +2,12 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import { IDENTITY_SERVICE } from '@core/auth/identity.service';
+import { USE_MOCK_AUTH } from '@core/config/app-config.model';
 import { LogoMarkComponent } from '@shared/components/logo-mark/logo-mark.component';
+
+const INFO_MESSAGES: Record<string, string> = {
+  'password-changed': 'Password changed. Sign in again.',
+};
 
 @Component({
   selector: 'app-login',
@@ -16,11 +21,16 @@ export class LoginComponent {
   private readonly identity = inject(IDENTITY_SERVICE);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
+  private readonly useMockAuth = inject(USE_MOCK_AUTH, { optional: true }) ?? false;
 
-  protected readonly email = signal('alice@ext.example.com');
-  protected readonly password = signal('password');
+  // Prefilled credentials are a mock-mode convenience only — never ship
+  // working defaults in the actual login form.
+  protected readonly email = signal(this.useMockAuth ? 'alice@ext.example.com' : '');
+  protected readonly password = signal(this.useMockAuth ? 'password' : '');
   protected readonly loading = signal(false);
   protected readonly loginError = signal(false);
+  protected readonly infoMessage =
+    INFO_MESSAGES[this.route.snapshot.queryParamMap.get('message') ?? ''] ?? null;
   private readonly submitted = signal(false);
   private readonly emailTouched = signal(false);
   private readonly passwordTouched = signal(false);

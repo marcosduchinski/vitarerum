@@ -23,6 +23,9 @@ function createIdentity(session: IdentitySession | null): IdentityService {
     },
     setGroup: (group) => void group,
     updateAvailableGroups: (groups) => void groups.length,
+    changePassword: () => Promise.resolve(),
+    requestPasswordReset: () => Promise.resolve(),
+    confirmPasswordReset: () => Promise.resolve(),
   };
 }
 

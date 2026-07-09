@@ -18,6 +18,13 @@
       </header>
 
       <form (submit)="submit($event)" novalidate class="login-form">
+        @if (infoMessage) {
+          <div class="login-info" role="status">
+            <i class="pi pi-check-circle" aria-hidden="true"></i>
+            <span>{{ infoMessage }}</span>
+          </div>
+        }
+
         <fieldset [disabled]="loading()" class="form-fieldset">
           <div class="form-group">
             <label for="email">Email address</label>
@@ -42,7 +49,10 @@
           </div>
 
           <div class="form-group">
-            <label for="password">Password</label>
+            <div class="form-group__label-row">
+              <label for="password">Password</label>
+              <a class="forgot-password-link" routerLink="/forgot-password">Forgot password?</a>
+            </div>
             <div class="input-wrapper">
               <input
                 id="password"

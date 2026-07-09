@@ -107,4 +107,49 @@ describe('IdentityServiceImpl', () => {
     expect(service.session()).toBeNull();
     expect(readSession()).toBeNull();
   });
+
+  it('delegates changePassword to POST /auth/change-password', async () => {
+    const service = TestBed.inject(IdentityServiceImpl);
+
+    const promise = service.changePassword({
+      currentPassword: 'old-password',
+      newPassword: 'a-strong-new-password',
+    });
+    const req = httpMock.expectOne(`${BASE_URL}/auth/change-password`);
+    expect(req.request.body).toEqual({
+      currentPassword: 'old-password',
+      newPassword: 'a-strong-new-password',
+    });
+    req.flush(null);
+
+    await expect(promise).resolves.toBeUndefined();
+  });
+
+  it('delegates requestPasswordReset to POST /auth/password-reset/request', async () => {
+    const service = TestBed.inject(IdentityServiceImpl);
+
+    const promise = service.requestPasswordReset({ email: 'alice@example.com' });
+    const req = httpMock.expectOne(`${BASE_URL}/auth/password-reset/request`);
+    expect(req.request.body).toEqual({ email: 'alice@example.com' });
+    req.flush(null);
+
+    await expect(promise).resolves.toBeUndefined();
+  });
+
+  it('delegates confirmPasswordReset to POST /auth/password-reset/confirm', async () => {
+    const service = TestBed.inject(IdentityServiceImpl);
+
+    const promise = service.confirmPasswordReset({
+      token: 'raw-token',
+      newPassword: 'a-strong-new-password',
+    });
+    const req = httpMock.expectOne(`${BASE_URL}/auth/password-reset/confirm`);
+    expect(req.request.body).toEqual({
+      token: 'raw-token',
+      newPassword: 'a-strong-new-password',
+    });
+    req.flush(null);
+
+    await expect(promise).resolves.toBeUndefined();
+  });
 });

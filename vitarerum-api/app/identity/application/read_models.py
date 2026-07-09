@@ -7,6 +7,7 @@ these views, never Identity aggregates (Anti-Corruption Layer rule).
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 
 from app.identity.domain.enums import GroupName
 from app.shared.kernel import PermissionId
@@ -17,6 +18,7 @@ class UserView:
     id: str
     name: str
     email: str
+    password_changed_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)

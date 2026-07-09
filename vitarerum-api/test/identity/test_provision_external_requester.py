@@ -1,4 +1,4 @@
-from app.identity.application.ports import PasswordHasher
+from app.identity.application.ports import PasswordHasher, UserFilters
 from app.identity.application.read_models import Actor
 from app.identity.application.use_cases import (
     AuthenticateUser,
@@ -44,6 +44,15 @@ class InMemoryUserRepository:
     async def get_by_id(self, user_id: UserId) -> User | None:
         return next((u for u in self._by_email.values() if u.id == user_id), None)
 
+    async def list(
+        self, filters: UserFilters, page: int, size: int
+    ) -> tuple[list[User], int]:
+        users = list(self._by_email.values())
+        return users, len(users)
+
+    async def update(self, user: User) -> None:
+        self._by_email[user.email] = user
+
 
 class InMemoryGroupRepository:
     def __init__(self, groups: list[Group]) -> None:
@@ -74,6 +83,15 @@ class InMemoryPermissionRepository:
             ),
             None,
         )
+
+    async def get_by_group_id(
+        self, group_id: GroupId, page: int, size: int
+    ) -> tuple[list[Permission], int]:
+        perms = [p for p in self.items if p.group_id == group_id]
+        return perms, len(perms)
+
+    async def delete(self, permission_id: PermissionId) -> None:
+        self.items = [p for p in self.items if p.id != permission_id]
 
 
 def _external_group() -> Group:

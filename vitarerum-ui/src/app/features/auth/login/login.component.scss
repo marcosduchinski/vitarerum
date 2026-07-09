@@ -108,6 +108,30 @@ label {
   color: var(--color-text);
 }
 
+.form-group__label-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.forgot-password-link {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+.forgot-password-link:hover {
+  text-decoration: underline;
+}
+
+.forgot-password-link:focus-visible {
+  border-radius: 4px;
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
 .input-wrapper {
   position: relative;
 }
@@ -164,6 +188,17 @@ input[aria-invalid='true'] {
   border-radius: 10px;
   background: color-mix(in srgb, var(--color-cta) 8%, var(--color-panel));
   color: var(--color-cta);
+  font-size: 0.875rem;
+}
+
+.login-info {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.85rem 0.975rem;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-panel));
+  color: var(--color-accent-strong);
   font-size: 0.875rem;
 }
 

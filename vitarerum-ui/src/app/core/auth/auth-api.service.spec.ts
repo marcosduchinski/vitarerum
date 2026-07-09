@@ -43,4 +43,50 @@ describe('AuthApiService', () => {
 
     await expect(promise).resolves.toEqual(response);
   });
+
+  it('POSTs current/new password to /auth/change-password', async () => {
+    const promise = firstValueFrom(
+      service.changePassword({
+        currentPassword: 'old-password',
+        newPassword: 'a-strong-new-password',
+      }),
+    );
+    const req = httpMock.expectOne(`${BASE_URL}/auth/change-password`);
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({
+      currentPassword: 'old-password',
+      newPassword: 'a-strong-new-password',
+    });
+    req.flush(null);
+
+    await expect(promise).resolves.toBeNull();
+  });
+
+  it('POSTs an email to /auth/password-reset/request', async () => {
+    const promise = firstValueFrom(service.requestPasswordReset({ email: 'a@b.com' }));
+    const req = httpMock.expectOne(`${BASE_URL}/auth/password-reset/request`);
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ email: 'a@b.com' });
+    req.flush(null);
+
+    await expect(promise).resolves.toBeNull();
+  });
+
+  it('POSTs token/newPassword to /auth/password-reset/confirm', async () => {
+    const promise = firstValueFrom(
+      service.confirmPasswordReset({
+        token: 'raw-token',
+        newPassword: 'a-strong-new-password',
+      }),
+    );
+    const req = httpMock.expectOne(`${BASE_URL}/auth/password-reset/confirm`);
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({
+      token: 'raw-token',
+      newPassword: 'a-strong-new-password',
+    });
+    req.flush(null);
+
+    await expect(promise).resolves.toBeNull();
+  });
 });

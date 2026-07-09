@@ -44,6 +44,9 @@ const identityStub: IdentityService = {
     const session = sessionState();
     if (session) sessionState.set({ ...session, availableGroups: [...groups] });
   },
+  changePassword: () => Promise.resolve(),
+  requestPasswordReset: () => Promise.resolve(),
+  confirmPasswordReset: () => Promise.resolve(),
 };
 
 describe('ProposalApiServiceMock', () => {

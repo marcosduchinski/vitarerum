@@ -42,6 +42,11 @@ class Settings(BaseSettings):
     )
     public_origin: str = "http://localhost:4200"
     public_confirm_token_ttl_hours: int = 24
+    # Self-service password reset (identity). Short TTL narrows the attack
+    # window for a leaked link; the path is configurable so the backend isn't
+    # coupled to a fixed frontend route.
+    password_reset_token_ttl_minutes: int = 60
+    password_reset_public_path: str = "/reset-password"
     # SMTP for confirmation e-mails. Empty smtp_host ⇒ confirmation links are
     # logged instead of sent (local/dev).
     smtp_host: str = ""

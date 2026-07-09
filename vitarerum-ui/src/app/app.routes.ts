@@ -12,6 +12,25 @@ export const routes: Routes = [
       import('@features/auth/login/login.component').then((m) => m.LoginComponent),
   },
   {
+    // No authGuard (unauthenticated by nature) and deliberately no
+    // unauthenticatedGuard either: a user with a stale local session must
+    // still be able to request/complete a reset (e.g. suspected compromise).
+    path: 'forgot-password',
+    title: 'Forgot password',
+    loadComponent: () =>
+      import('@features/auth/forgot-password/forgot-password.component').then(
+        (m) => m.ForgotPasswordComponent,
+      ),
+  },
+  {
+    path: 'reset-password',
+    title: 'Reset password',
+    loadComponent: () =>
+      import('@features/auth/reset-password/reset-password.component').then(
+        (m) => m.ResetPasswordComponent,
+      ),
+  },
+  {
     // Public, unauthenticated proposal submission for any citizen — no authGuard.
     path: 'submit-proposal',
     loadChildren: () => import('@features/public/public.routes').then((m) => m.PUBLIC_ROUTES),
@@ -90,6 +109,15 @@ export const routes: Routes = [
       {
         path: 'admin',
         loadChildren: () => import('@features/admin/admin.routes').then((m) => m.ADMIN_ROUTES),
+      },
+
+      {
+        path: 'account/password',
+        title: 'Change password',
+        loadComponent: () =>
+          import('@features/account/change-password/change-password.component').then(
+            (m) => m.ChangePasswordComponent,
+          ),
       },
     ],
   },

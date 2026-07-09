@@ -112,6 +112,18 @@ class IdentityServiceStub implements IdentityService {
     const session = this.sessionState();
     if (session) this.sessionState.set({ ...session, availableGroups: [...groups] });
   }
+
+  changePassword(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  requestPasswordReset(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  confirmPasswordReset(): Promise<void> {
+    return Promise.resolve();
+  }
 }
 
 class ProjectApiServiceStub {

@@ -8,6 +8,11 @@ import {
   SessionPermission,
 } from './models/identity-session.model';
 import { LoginRequest } from './models/login.model';
+import {
+  ChangePasswordRequest,
+  PasswordResetConfirmRequest,
+  PasswordResetRequest,
+} from './models/password.model';
 import { md5 } from './mock-password.util';
 import { clearSession, readSession, writeSession } from './session-storage.util';
 
@@ -81,6 +86,9 @@ const MOCK_INSTITUTION: SessionInstitution = {
 @Injectable()
 export class IdentityServiceMock implements IdentityService {
   private readonly sessionState = signal<IdentitySession | null>(readSession());
+  // Every mock account shares one password (DEFAULT_PASSWORD in e2e/support/auth.ts).
+  // Mutable so change/reset flows can be exercised end-to-end in mock mode.
+  private passwordDigest = MOCK_PASSWORD_DIGEST;
 
   readonly session = this.sessionState.asReadonly();
   readonly isAuthenticated = computed(() => this.session() !== null);
@@ -90,7 +98,7 @@ export class IdentityServiceMock implements IdentityService {
   });
 
   async signIn(credentials: LoginRequest): Promise<void> {
-    if (md5(credentials.password) !== MOCK_PASSWORD_DIGEST) {
+    if (md5(credentials.password) !== this.passwordDigest) {
       throw new Error('Invalid mock credentials');
     }
 
@@ -146,6 +154,25 @@ export class IdentityServiceMock implements IdentityService {
       availableGroups: groups,
       permissions: mockPermissions(session.user.id, groups),
     });
+  }
+
+  async changePassword(payload: ChangePasswordRequest): Promise<void> {
+    if (md5(payload.currentPassword) !== this.passwordDigest) {
+      throw new Error('Incorrect current password');
+    }
+    this.passwordDigest = md5(payload.newPassword);
+  }
+
+  // Always succeeds, known or unknown email — mirrors the backend's
+  // anti-enumeration contract (see plano-gestao-passwords.md).
+  async requestPasswordReset(_payload: PasswordResetRequest): Promise<void> {
+    void _payload;
+  }
+
+  // Any (non-empty) token is accepted in mock mode; there's no real token
+  // store to validate against.
+  async confirmPasswordReset(payload: PasswordResetConfirmRequest): Promise<void> {
+    this.passwordDigest = md5(payload.newPassword);
   }
 
   private setSession(session: IdentitySession | null): void {

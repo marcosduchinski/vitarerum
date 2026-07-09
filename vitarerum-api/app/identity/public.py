@@ -30,6 +30,7 @@ from app.identity.domain.models import (
 )
 from app.identity.infrastructure.security import (
     BcryptPasswordHasher,
+    DecodedAccessToken,
     TokenError,
     decode_access_token,
 )
@@ -64,6 +65,7 @@ def get_requester_provisioner(session: AsyncSession) -> ProvisionExternalRequest
 
 __all__ = [
     "Actor",
+    "DecodedAccessToken",
     "Group",
     "GroupId",
     "GroupName",

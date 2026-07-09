@@ -103,6 +103,7 @@ function statusToKind(status: number): ApiErrorKind {
   if (status === 0) return 'network-error';
   if (status === 403) return 'forbidden';
   if (status === 404) return 'not-found';
+  if (status === 400) return 'validation';
   if (status === 409) return 'conflict';
   if (status === 422) return 'validation';
   if (status >= 500) return 'server-error';

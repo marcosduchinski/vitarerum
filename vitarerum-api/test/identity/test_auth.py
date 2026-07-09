@@ -1,5 +1,6 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi import HTTPException
@@ -7,8 +8,15 @@ from fastapi.security import HTTPAuthorizationCredentials
 from httpx import ASGITransport, AsyncClient
 
 from app.database import get_async_session
+from app.identity.application.password_policy import WeakPassword
+from app.identity.application.ports import UserFilters
 from app.identity.application.read_models import Actor
-from app.identity.application.use_cases import AuthenticateUser, InvalidCredentials
+from app.identity.application.use_cases import (
+    AuthenticateUser,
+    ChangeOwnPassword,
+    IncorrectCurrentPassword,
+    InvalidCredentials,
+)
 from app.identity.domain.enums import GroupName
 from app.identity.domain.models import (
     Group,
@@ -37,6 +45,7 @@ from app.shared.dependencies import get_caller_permission
 
 # ── doubles ───────────────────────────────────────────────────────────────────
 
+
 class PlainHasher:
     """Fast, deterministic stand-in for bcrypt in use-case unit tests."""
 
@@ -51,19 +60,64 @@ class InMemoryUserRepository:
     def __init__(self, users: list[User]) -> None:
         self._by_email = {u.email: u for u in users}
 
+    async def add(self, user: User) -> None:
+        self._by_email[user.email] = user
+
     async def get_by_email(self, email: str) -> User | None:
         return self._by_email.get(email)
 
     async def get_by_id(self, user_id: UserId) -> User | None:
         return next((u for u in self._by_email.values() if u.id == user_id), None)
 
+    async def list(
+        self, filters: UserFilters, page: int, size: int
+    ) -> tuple[list[User], int]:
+        users = list(self._by_email.values())
+        return users, len(users)
+
+    async def update(self, user: User) -> None:
+        self._by_email[user.email] = user
+
+
+class FixedClock:
+    def __init__(self, when: datetime) -> None:
+        self._when = when
+
+    def now(self) -> datetime:
+        return self._when
+
 
 class InMemoryPermissionRepository:
     def __init__(self, by_user: dict[str, list[Permission]]) -> None:
         self._by_user = by_user
 
+    async def add(self, permission: Permission) -> None:
+        self._by_user.setdefault(permission.user_id, []).append(permission)
+
+    async def get_by_user_and_group(
+        self, user_id: UserId, group_id: GroupId
+    ) -> Permission | None:
+        return next(
+            (p for p in self._by_user.get(user_id, []) if p.group_id == group_id), None
+        )
+
     async def get_by_user_id(self, user_id: UserId) -> list[Permission]:
         return self._by_user.get(user_id, [])
+
+    async def get_by_group_id(
+        self, group_id: GroupId, page: int, size: int
+    ) -> tuple[list[Permission], int]:
+        perms = [
+            p
+            for perms in self._by_user.values()
+            for p in perms
+            if p.group_id == group_id
+        ]
+        return perms, len(perms)
+
+    async def delete(self, permission_id: PermissionId) -> None:
+        for perms in self._by_user.values():
+            perms[:] = [p for p in perms if p.id != permission_id]
 
 
 def _user(password_hash: str) -> User:
@@ -88,6 +142,7 @@ def _perm(user: User, group: GroupName) -> Permission:
 
 
 # ── AuthenticateUser (login business logic) ───────────────────────────────────
+
 
 async def test_authenticate_success_returns_user_and_permissions() -> None:
     hasher = PlainHasher()
@@ -143,12 +198,74 @@ async def test_authenticate_user_without_permissions_raises() -> None:
         await uc.execute("alice@x.org", "secret")
 
 
+# ── ChangeOwnPassword ──────────────────────────────────────────────────────────
+
+
+async def test_change_password_success_updates_hash_and_changed_at() -> None:
+    hasher = PlainHasher()
+    user = _user(hasher.hash("old-password"))
+    repo = InMemoryUserRepository([user])
+    changed_at = datetime(2026, 7, 9, 12, 0, tzinfo=UTC)
+    uc = ChangeOwnPassword(repo, hasher, FixedClock(changed_at))
+
+    updated = await uc.execute(
+        email="alice@x.org",
+        current_password="old-password",
+        new_password="a-strong-new-password",
+    )
+
+    assert hasher.verify("a-strong-new-password", updated.password_hash)
+    assert updated.password_changed_at == changed_at
+    stored = await repo.get_by_email("alice@x.org")
+    assert stored is not None
+    assert stored.password_hash == updated.password_hash
+
+
+async def test_change_password_wrong_current_password_raises() -> None:
+    hasher = PlainHasher()
+    user = _user(hasher.hash("old-password"))
+    uc = ChangeOwnPassword(
+        InMemoryUserRepository([user]), hasher, FixedClock(datetime.now(UTC))
+    )
+
+    with pytest.raises(IncorrectCurrentPassword):
+        await uc.execute(
+            email="alice@x.org",
+            current_password="wrong",
+            new_password="a-strong-new-password",
+        )
+
+
+async def test_change_password_weak_new_password_raises() -> None:
+    hasher = PlainHasher()
+    user = _user(hasher.hash("old-password"))
+    uc = ChangeOwnPassword(
+        InMemoryUserRepository([user]), hasher, FixedClock(datetime.now(UTC))
+    )
+
+    with pytest.raises(WeakPassword):
+        await uc.execute(
+            email="alice@x.org",
+            current_password="old-password",
+            new_password="short",
+        )
+
+
 # ── get_caller_permission (401 auth vs 403 authz) ─────────────────────────────
 
-def _perm_record(user_id: str, group: GroupName) -> PermissionRecord:
+
+def _perm_record(
+    user_id: str,
+    group: GroupName,
+    password_changed_at: datetime | None = None,
+) -> PermissionRecord:
     record = PermissionRecord(id="perm-1", user_id=user_id, group_id="g1")
     record.user = UserRecord(
-        id=user_id, name="Alice", email="a@x.org", password_hash=""
+        id=user_id,
+        name="Alice",
+        email="a@x.org",
+        password_hash="",
+        password_changed_at=password_changed_at,
     )
     record.group = GroupRecord(id="g1", name=group)
     return record
@@ -224,7 +341,48 @@ async def test_caller_valid_and_owned_returns_actor() -> None:
     assert actor.email == "a@x.org"
 
 
+async def test_caller_token_issued_before_password_change_is_401() -> None:
+    credentials = _bearer(create_access_token("u1"))
+    changed_at = datetime.now(UTC) + timedelta(seconds=1)
+    record = _perm_record("u1", GroupName.CURATORIAL, password_changed_at=changed_at)
+    with pytest.raises(HTTPException) as exc:
+        await get_caller_permission(
+            FakeSession(record), credentials=credentials, x_permission_id="perm-1"
+        )
+    assert exc.value.status_code == 401
+
+
+async def test_caller_token_issued_after_password_change_is_valid() -> None:
+    changed_at = datetime.now(UTC) - timedelta(hours=1)
+    credentials = _bearer(create_access_token("u1"))
+    record = _perm_record("u1", GroupName.CURATORIAL, password_changed_at=changed_at)
+    actor = await get_caller_permission(
+        FakeSession(record), credentials=credentials, x_permission_id="perm-1"
+    )
+    assert actor.id == "perm-1"
+
+
+async def test_caller_token_issued_same_second_as_change_is_valid() -> None:
+    """Regression: JWT `iat` has whole-second resolution, but
+    password_changed_at keeps microseconds. A fresh login minted in the same
+    wall-clock second as the change (the normal case right after a reset)
+    must not be rejected as stale just because its floored iat sorts before
+    the sub-second change timestamp."""
+    token = create_access_token("u1")
+    credentials = _bearer(token)
+    issued_at = decode_access_token(token).issued_at
+    changed_at = issued_at + timedelta(microseconds=474224)
+    record = _perm_record("u1", GroupName.CURATORIAL, password_changed_at=changed_at)
+
+    actor = await get_caller_permission(
+        FakeSession(record), credentials=credentials, x_permission_id="perm-1"
+    )
+
+    assert actor.id == "perm-1"
+
+
 # ── security primitives ───────────────────────────────────────────────────────
+
 
 def test_bcrypt_hash_is_not_plaintext_and_verifies() -> None:
     hasher = BcryptPasswordHasher()
@@ -236,7 +394,9 @@ def test_bcrypt_hash_is_not_plaintext_and_verifies() -> None:
 
 
 def test_token_roundtrip() -> None:
-    assert decode_access_token(create_access_token("u1")) == "u1"
+    decoded = decode_access_token(create_access_token("u1"))
+    assert decoded.user_id == "u1"
+    assert decoded.issued_at is not None
 
 
 def test_decode_garbage_token_raises() -> None:
@@ -252,6 +412,7 @@ def test_expired_token_raises(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 # ── POST /auth/login (HTTP shape) ─────────────────────────────────────────────
+
 
 class _LoginResult:
     def __init__(self, user_record, perm_records):  # noqa: ANN001
@@ -335,7 +496,7 @@ async def test_login_success_returns_token_user_and_flat_group() -> None:
     assert resp.status_code == 200
     body = resp.json()
     assert body["accessToken"]
-    assert decode_access_token(body["accessToken"]) == "u1"
+    assert decode_access_token(body["accessToken"]).user_id == "u1"
     assert body["user"] == {
         "id": "u1",
         "email": "alice@x.org",
@@ -379,6 +540,113 @@ async def test_login_missing_password_is_422_with_errors() -> None:
     body = resp.json()
     assert body["message"] == "Validation failed"
     assert any(e["field"] == "password" for e in body["errors"])
+
+
+# ── POST /auth/change-password (HTTP shape) ───────────────────────────────────
+
+
+class ChangePasswordSession:
+    """Fake session backing a single UserRecord for both the get_by_email
+    lookup and the update-by-id write the route performs."""
+
+    def __init__(self, user_record: UserRecord) -> None:
+        self._user_record = user_record
+
+    async def execute(self, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003
+        record = self._user_record
+
+        class _Result:
+            def scalar_one_or_none(self) -> UserRecord:
+                return record
+
+        return _Result()
+
+    async def get(self, model, pk, options=None):  # noqa: ANN001
+        return self._user_record if pk == self._user_record.id else None
+
+    async def flush(self) -> None:
+        return None
+
+    async def commit(self) -> None:
+        return None
+
+
+@asynccontextmanager
+async def change_password_client(user_record: UserRecord) -> AsyncIterator[AsyncClient]:
+    actor = Actor(
+        id=PermissionId("perm-1"), group=GroupName.CURATORIAL, email=user_record.email
+    )
+    app.dependency_overrides[get_caller_permission] = lambda: actor
+    app.dependency_overrides[get_async_session] = lambda: ChangePasswordSession(
+        user_record
+    )
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        yield client
+    app.dependency_overrides.clear()
+
+
+def _password_user_record(password: str) -> UserRecord:
+    hasher = BcryptPasswordHasher()
+    return UserRecord(
+        id="u1",
+        name="Alice Ferreira",
+        email="alice@x.org",
+        password_hash=hasher.hash(password),
+    )
+
+
+async def test_change_password_api_success_returns_204() -> None:
+    user_rec = _password_user_record("old-password")
+    async with change_password_client(user_rec) as client:
+        resp = await client.post(
+            "/api/v1/auth/change-password",
+            json={
+                "currentPassword": "old-password",
+                "newPassword": "a-strong-new-password",
+            },
+        )
+
+    assert resp.status_code == 204
+    assert user_rec.password_changed_at is not None
+
+
+async def test_change_password_api_wrong_current_is_400() -> None:
+    user_rec = _password_user_record("old-password")
+    async with change_password_client(user_rec) as client:
+        resp = await client.post(
+            "/api/v1/auth/change-password",
+            json={"currentPassword": "WRONG", "newPassword": "a-strong-new-password"},
+        )
+
+    assert resp.status_code == 400
+    assert resp.json()["error"] == "INCORRECT_CURRENT_PASSWORD"
+
+
+async def test_change_password_api_weak_new_password_is_400() -> None:
+    user_rec = _password_user_record("old-password")
+    async with change_password_client(user_rec) as client:
+        resp = await client.post(
+            "/api/v1/auth/change-password",
+            json={"currentPassword": "old-password", "newPassword": "short"},
+        )
+
+    assert resp.status_code == 400
+    assert resp.json()["error"] == "WEAK_PASSWORD"
+
+
+async def test_change_password_api_requires_authentication() -> None:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.post(
+            "/api/v1/auth/change-password",
+            json={
+                "currentPassword": "old-password",
+                "newPassword": "a-strong-new-password",
+            },
+        )
+
+    assert resp.status_code == 401
 
 
 @asynccontextmanager

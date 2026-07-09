@@ -44,7 +44,7 @@ async def get_caller_permission(
         raise _unauthorized("Missing or malformed Authorization header")
     token = credentials.credentials.strip()
     try:
-        user_id = decode_access_token(token)
+        decoded = decode_access_token(token)
     except TokenError:
         raise _unauthorized("Invalid or expired token") from None
 
@@ -55,8 +55,28 @@ async def get_caller_permission(
     view = await get_permission_reader(session).get_detail(
         PermissionId(x_permission_id)
     )
-    if view is None or view.user.id != user_id:
+    if view is None or view.user.id != decoded.user_id:
         raise _forbidden("Permission does not belong to the authenticated user")
+    # A password change/reset bumps password_changed_at; tokens minted before
+    # that instant are stale sessions, not merely expired ones — same 401 as
+    # an invalid token so a stolen bearer token stops working once the owner
+    # reacts (docs/plans/plano-gestao-passwords.md).
+    #
+    # JWT `iat` only has whole-second resolution (PyJWT truncates it on
+    # encode), while password_changed_at keeps microseconds. Comparing the two
+    # as-is with `<=` made a token minted in the very same wall-clock second
+    # as the change — e.g. the fresh login the client is told to perform right
+    # after a reset — spuriously "stale" until the next second ticked over.
+    # Flooring changed_at to whole seconds before comparing, with a strict
+    # `<`, matches iat's own resolution: a token can't be proven to predate a
+    # change that landed in the same second, so it's treated as valid. That
+    # leaves a sub-second race in principle (an attacker's token minted in
+    # that exact same second would also pass), which is an inherent limit of
+    # second-granularity `iat` — not one this comparison can resolve either
+    # way.
+    changed_at = view.user.password_changed_at
+    if changed_at is not None and decoded.issued_at < changed_at.replace(microsecond=0):
+        raise _unauthorized("Invalid or expired token")
     return Actor(
         id=PermissionId(view.permission_id),
         group=view.group,

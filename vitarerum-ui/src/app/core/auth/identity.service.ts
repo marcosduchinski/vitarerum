@@ -3,6 +3,11 @@ import { InjectionToken, Signal } from '@angular/core';
 import { GroupName } from './models/group-name.enum';
 import { IdentitySession } from './models/identity-session.model';
 import { LoginRequest } from './models/login.model';
+import {
+  ChangePasswordRequest,
+  PasswordResetConfirmRequest,
+  PasswordResetRequest,
+} from './models/password.model';
 
 export interface IdentityService {
   readonly session: Signal<IdentitySession | null>;
@@ -17,6 +22,9 @@ export interface IdentityService {
   getPermissionId(): string | null;
   setGroup(group: GroupName): void;
   updateAvailableGroups(groups: readonly GroupName[]): void;
+  changePassword(payload: ChangePasswordRequest): Promise<void>;
+  requestPasswordReset(payload: PasswordResetRequest): Promise<void>;
+  confirmPasswordReset(payload: PasswordResetConfirmRequest): Promise<void>;
 }
 
 export const IDENTITY_SERVICE = new InjectionToken<IdentityService>('IDENTITY_SERVICE');

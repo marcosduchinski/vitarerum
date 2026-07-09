@@ -1,14 +1,20 @@
 from __future__ import annotations
 
+import hashlib
 import secrets
 from dataclasses import dataclass, field
+from datetime import timedelta
 from uuid import uuid4
 
+from app.identity.application.password_policy import validate_password_policy
 from app.identity.application.ports import (
+    Clock,
     GroupRepository,
     InstitutionRepository,
     PasswordHasher,
+    PasswordResetTokenRepository,
     PermissionRepository,
+    RateLimiter,
     UserFilters,
     UserRepository,
 )
@@ -18,6 +24,7 @@ from app.identity.domain.models import (
     GroupId,
     Institution,
     InstitutionId,
+    PasswordResetToken,
     Permission,
     PermissionId,
     User,
@@ -25,8 +32,45 @@ from app.identity.domain.models import (
 )
 
 
+def _hash_token(raw_token: str) -> str:
+    """SHA-256 of an opaque raw token (password-reset link), so only the hash
+    — never the raw value — is persisted. Mirrors the equivalent helper in
+    ``public_submission``'s amendment-token adapter (same pattern, duplicated
+    per context rather than a cross-context import)."""
+    return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+
+
+# Rate limits as (max_requests, window_seconds), mirroring public_submission's
+# and museum_questions' reference implementation (same policy, duplicated code
+# per context rather than a cross-context import).
+RATE_LIMIT_PER_IP = (5, 60 * 60)
+RATE_LIMIT_PER_EMAIL = (3, 24 * 60 * 60)
+RATE_LIMIT_PER_TOKEN = (10, 60 * 60)
+RETRY_AFTER_SECONDS = 60
+
+
 class InvalidCredentials(Exception):
     """Raised when login fails: unknown email, bad password, or no permissions."""
+
+
+class IncorrectCurrentPassword(Exception):
+    """Raised when change-password's currentPassword does not match the
+    stored hash. Distinct from InvalidCredentials: the caller already holds a
+    valid session, so this must not be surfaced as a 401 (the frontend's
+    session-expired interceptor treats any 401 as "log the user out")."""
+
+
+class RateLimitExceeded(Exception):
+    def __init__(self, retry_after: int = RETRY_AFTER_SECONDS) -> None:
+        super().__init__("Too many requests. Please try again later.")
+        self.retry_after = retry_after
+
+
+class InvalidOrExpiredResetToken(Exception):
+    """Raised for a reset token that is unknown, expired, or already used.
+
+    Deliberately doesn't distinguish which: mirrors public_submission's
+    amendment-token 404 so a probing client can't learn which links exist."""
 
 
 class InstitutionInUse(Exception):
@@ -145,6 +189,7 @@ class CreateUser:
         if password:
             if self._hasher is None:
                 raise ValueError("A PasswordHasher is required to set a password")
+            validate_password_policy(password)
             password_hash = self._hasher.hash(password)
         user = User(
             id=UserId(str(uuid4())),
@@ -178,6 +223,155 @@ class AuthenticateUser:
             # A principal with no group membership cannot establish a session.
             raise InvalidCredentials("Invalid email or password")
         return user, permissions
+
+
+class ChangeOwnPassword:
+    """Self-service password change for an already-authenticated user.
+
+    Bumps ``password_changed_at`` so every bearer token issued before this
+    call — including the one used to call it — stops working; the client is
+    expected to sign the user out and require a fresh login.
+
+    Only writes; it never e-mails. The "password changed" notice (optional,
+    see ``PasswordChangedEmailSender``) must be sent by the caller *after* the
+    transaction commits, the same way ``PublicAmendmentInvitationAdapter``
+    sequences its own token/e-mail — otherwise a rolled-back write could still
+    notify the user of a change that never happened.
+    """
+
+    def __init__(
+        self,
+        user_repo: UserRepository,
+        hasher: PasswordHasher,
+        clock: Clock,
+    ) -> None:
+        self._user_repo = user_repo
+        self._hasher = hasher
+        self._clock = clock
+
+    async def execute(
+        self, email: str, current_password: str, new_password: str
+    ) -> User:
+        user = await self._user_repo.get_by_email(_normalize_email(email))
+        if user is None or not self._hasher.verify(
+            current_password, user.password_hash
+        ):
+            raise IncorrectCurrentPassword("Current password is incorrect")
+        validate_password_policy(new_password)
+        user.password_hash = self._hasher.hash(new_password)
+        user.password_changed_at = self._clock.now()
+        await self._user_repo.update(user)
+        return user
+
+
+@dataclass(slots=True)
+class PasswordResetOutcome:
+    """What the route needs to e-mail the reset link, once it has committed
+    the token write. ``None`` from ``RequestPasswordReset.execute`` means "no
+    such account" — the route must still return 204, but sends no e-mail."""
+
+    email: str
+    display_name: str
+    raw_token: str
+
+
+class RequestPasswordReset:
+    """Pedido de reset: get-or-silently-ignore by e-mail, then mint a fresh
+    single-use token. Never e-mails — like ``ChangeOwnPassword``, the route
+    commits the write first and only then sends the link, so a rolled-back
+    token is never delivered."""
+
+    def __init__(
+        self,
+        user_repo: UserRepository,
+        token_repo: PasswordResetTokenRepository,
+        rate_limiter: RateLimiter,
+        clock: Clock,
+        token_ttl: timedelta,
+    ) -> None:
+        self._user_repo = user_repo
+        self._token_repo = token_repo
+        self._rate_limiter = rate_limiter
+        self._clock = clock
+        self._token_ttl = token_ttl
+
+    async def execute(
+        self, email: str, remote_ip: str
+    ) -> PasswordResetOutcome | None:
+        normalized = _normalize_email(email)
+        if self._rate_limiter.too_many(
+            f"ip:{remote_ip}", *RATE_LIMIT_PER_IP
+        ) or self._rate_limiter.too_many(f"email:{normalized}", *RATE_LIMIT_PER_EMAIL):
+            raise RateLimitExceeded()
+
+        user = await self._user_repo.get_by_email(normalized)
+        if user is None:
+            return None
+
+        now = self._clock.now()
+        # At most one active link per account at a time.
+        await self._token_repo.invalidate_active_for_user(UserId(user.id), now)
+        raw_token = secrets.token_urlsafe(32)
+        await self._token_repo.add(
+            PasswordResetToken(
+                id=str(uuid4()),
+                user_id=UserId(user.id),
+                token_hash=_hash_token(raw_token),
+                created_at=now,
+                expires_at=now + self._token_ttl,
+            )
+        )
+        return PasswordResetOutcome(
+            email=user.email, display_name=user.name, raw_token=raw_token
+        )
+
+
+class ConfirmPasswordReset:
+    """Confirmação de reset: consumes a single-use token to set a new
+    password. Raises ``InvalidOrExpiredResetToken`` uniformly for unknown,
+    expired, or already-used tokens (never distinguishes which — see the
+    exception's docstring)."""
+
+    def __init__(
+        self,
+        user_repo: UserRepository,
+        token_repo: PasswordResetTokenRepository,
+        hasher: PasswordHasher,
+        rate_limiter: RateLimiter,
+        clock: Clock,
+    ) -> None:
+        self._user_repo = user_repo
+        self._token_repo = token_repo
+        self._hasher = hasher
+        self._rate_limiter = rate_limiter
+        self._clock = clock
+
+    async def execute(
+        self, raw_token: str, new_password: str, remote_ip: str
+    ) -> User:
+        token_hash = _hash_token(raw_token)
+        if self._rate_limiter.too_many(
+            f"ip:{remote_ip}", *RATE_LIMIT_PER_IP
+        ) or self._rate_limiter.too_many(f"token:{token_hash}", *RATE_LIMIT_PER_TOKEN):
+            raise RateLimitExceeded()
+
+        now = self._clock.now()
+        token = await self._token_repo.get_by_hash(token_hash)
+        if token is None or not token.is_active(now):
+            raise InvalidOrExpiredResetToken("Invalid, expired, or already used token")
+
+        user = await self._user_repo.get_by_id(token.user_id)
+        if user is None:
+            raise InvalidOrExpiredResetToken("Invalid, expired, or already used token")
+
+        validate_password_policy(new_password)
+        user.password_hash = self._hasher.hash(new_password)
+        user.password_changed_at = now
+        await self._user_repo.update(user)
+
+        token.used_at = now
+        await self._token_repo.save(token)
+        return user
 
 
 class ListUsers:

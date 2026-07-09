@@ -89,4 +89,21 @@ describe('sessionExpiredInterceptor', () => {
     expect(identity.isAuthenticated()).toBe(true);
     expect(navigateSpy).not.toHaveBeenCalled();
   });
+
+  it('does not sign out on a 401 from the public password-reset endpoints', async () => {
+    const identity = TestBed.inject(IDENTITY_SERVICE);
+    await identity.signIn({ email: 'alice@example.com', password: 'vita2026' });
+
+    const navigateSpy = vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
+
+    http.post('/auth/password-reset/confirm', {}).subscribe({ error: (e: unknown) => void e });
+    httpMock
+      .expectOne('/auth/password-reset/confirm')
+      .flush({ message: 'nope' }, { status: 401, statusText: 'Unauthorized' });
+
+    await Promise.resolve();
+
+    expect(identity.isAuthenticated()).toBe(true);
+    expect(navigateSpy).not.toHaveBeenCalled();
+  });
 });

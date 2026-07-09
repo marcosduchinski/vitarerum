@@ -12,6 +12,7 @@ import { ButtonDirective } from 'primeng/button';
 import { ApiError, toApiError } from '@core/http/api-error.model';
 import { USER_MANAGEMENT_SERVICE } from '@features/admin/services/user-management.service';
 import { CreateUserPayload } from '@core/auth/models/user.model';
+import { passwordPolicyError } from '@core/auth/password-policy.util';
 import { ErrorMessageComponent } from '@shared/components/error-message/error-message.component';
 import { FormFieldComponent } from '@shared/components/form-field/form-field.component';
 import { PageHeaderComponent } from '@shared/components/page-header/page-header.component';
@@ -26,7 +27,6 @@ const EMPTY_FORM: UserFormModel = { name: '', email: '', password: '' };
 
 // Permissive client-side check; the server remains the source of truth.
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const MIN_PASSWORD_LENGTH = 8;
 
 @Component({
   selector: 'app-user-new',
@@ -62,13 +62,8 @@ export class UserNewComponent {
     });
     required(path.password, { message: 'Password is required.' });
     validate(path.password, ({ value }) => {
-      const password = value();
-      return password && password.length < MIN_PASSWORD_LENGTH
-        ? {
-            kind: 'short-password',
-            message: `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`,
-          }
-        : undefined;
+      const error = passwordPolicyError(value());
+      return error ? { kind: 'weak-password', message: error } : undefined;
     });
   });
 

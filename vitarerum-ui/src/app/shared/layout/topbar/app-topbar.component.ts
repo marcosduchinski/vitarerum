@@ -45,6 +45,11 @@ export class AppTopbarComponent {
       ...(name ? [{ label: name, disabled: true }] : []),
       { separator: true },
       {
+        label: 'Change password',
+        icon: 'pi pi-key',
+        command: () => void this.router.navigateByUrl('/p/account/password'),
+      },
+      {
         label: 'Sign out',
         icon: 'pi pi-sign-out',
         command: () => this.signOut(),

@@ -135,4 +135,49 @@ describe('IdentityServiceMock', () => {
     service.setGroup('SYS_ADMIN');
     expect(service.session()?.group).toBe('DIRECTION'); // unchanged
   });
+
+  it('changePassword rejects a wrong current password without changing it', async () => {
+    const service = new IdentityServiceMock();
+
+    await expect(
+      service.changePassword({ currentPassword: 'wrong', newPassword: 'a-new-password-1' }),
+    ).rejects.toThrow('Incorrect current password');
+
+    // The old password still works; login only fails on a truly wrong one.
+    await expect(signIn(service, 'alice@ext.example.com')).resolves.toBeUndefined();
+  });
+
+  it('changePassword then requires the new password to sign in', async () => {
+    const service = new IdentityServiceMock();
+
+    await service.changePassword({
+      currentPassword: 'vita2026',
+      newPassword: 'a-new-password-1',
+    });
+
+    await expect(signIn(service, 'alice@ext.example.com')).rejects.toThrow(
+      'Invalid mock credentials',
+    );
+    await expect(
+      service.signIn({ email: 'alice@ext.example.com', password: 'a-new-password-1' }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('requestPasswordReset always resolves, known or unknown email', async () => {
+    const service = new IdentityServiceMock();
+
+    await expect(
+      service.requestPasswordReset({ email: 'ghost@example.com' }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('confirmPasswordReset sets a new password any (mock) token accepts', async () => {
+    const service = new IdentityServiceMock();
+
+    await service.confirmPasswordReset({ token: 'any-token', newPassword: 'a-new-password-1' });
+
+    await expect(
+      service.signIn({ email: 'alice@ext.example.com', password: 'a-new-password-1' }),
+    ).resolves.toBeUndefined();
+  });
 });

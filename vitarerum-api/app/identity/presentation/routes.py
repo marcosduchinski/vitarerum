@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_session
+from app.identity.application.password_policy import WeakPassword
 from app.identity.application.ports import UserFilters
 from app.identity.application.use_cases import (
     AssignUserToGroup,
@@ -89,6 +90,11 @@ async def create_user(
             name=body.name, email=body.email, password=body.password
         )
         await session.commit()
+    except WeakPassword as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "WEAK_PASSWORD", "message": str(exc)},
+        ) from exc
     except IntegrityError as exc:
         await session.rollback()
         raise HTTPException(

@@ -49,6 +49,18 @@ class IdentityServiceStub implements IdentityService {
     const session = activeSession();
     if (session) activeSession.set({ ...session, availableGroups: [...groups] });
   }
+
+  changePassword(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  requestPasswordReset(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  confirmPasswordReset(): Promise<void> {
+    return Promise.resolve();
+  }
 }
 
 describe('AppMenuComponent', () => {

@@ -3,8 +3,10 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
+from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint
 from sqlalchemy import Enum as SAEnum
-from sqlalchemy import ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -30,6 +32,9 @@ class UserRecord(Base):
     # gives case-insensitive uniqueness portably (no functional index needed).
     email: Mapped[str] = mapped_column(String(255), default="", unique=True)
     password_hash: Mapped[str] = mapped_column(String(255), default="")
+    password_changed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None
+    )
 
 
 class GroupRecord(Base):
@@ -58,3 +63,16 @@ class PermissionRecord(Base):
 
     user: Mapped[UserRecord] = relationship()
     group: Mapped[GroupRecord] = relationship()
+
+
+class PasswordResetTokenRecord(Base):
+    __tablename__ = "identity_password_reset_tokens"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("identity_users.id"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    used_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None
+    )

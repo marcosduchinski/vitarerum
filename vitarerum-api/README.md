@@ -84,6 +84,8 @@ variables are ignored. Defaults are tuned for local development.
 | `SMTP_PASSWORD`            | _(empty)_                                                           | SMTP auth password. For Gmail this is a 16-char App Password, not the account password. |
 | `SMTP_FROM_ADDRESS`        | `no-reply@vitarerum.example`                                        | `From` header. For Gmail it must match the authenticated account or a verified "send mail as" alias. |
 | `SMTP_USE_TLS`             | `true`                                                              | Use STARTTLS (port 587).                                                     |
+| `PASSWORD_RESET_TOKEN_TTL_MINUTES` | `60`                                                         | Validity window of a self-service password-reset token before it is rejected. |
+| `PASSWORD_RESET_PUBLIC_PATH` | `/reset-password`                                                 | Frontend path used to build the reset link `<PUBLIC_ORIGIN><PASSWORD_RESET_PUBLIC_PATH>?token=…`. Reuses `SMTP_HOST` above (empty ⇒ logged, not sent). |
 
 #### Using a Gmail account as the sender (e.g. from localhost)
 
