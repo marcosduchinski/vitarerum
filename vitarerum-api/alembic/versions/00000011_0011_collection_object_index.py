@@ -1,4 +1,4 @@
-"""Create the Collection Object Index tables and seed the 14 collections
+"""Create the Collection Object Index tables and seed the initial collections
 
 Backs the Collection Object Index context: staff-managed .xlsx sources per
 scientific collection, indexed row-by-row as searchable collection objects.
@@ -27,20 +27,8 @@ branch_labels: str | None = None
 depends_on: str | None = None
 
 COLLECTION_NAMES = [
-    "Biological Anthropology",
-    "Archaeology",
-    "Animal Sound Archive",
-    "Historical Archives & Libraries",
-    "Biological Banks",
-    "Botany",
-    "Ethnography",
-    "Photography, Film & Audio",
-    "History of Science and Medicine",
-    "Institutional History & Art",
-    "Mineralogy & Petrology",
-    "Natural Objects",
-    "Paleontology",
-    "Zoology",
+    "REPTILES & AMPHIBIANS",
+    "FISH",
 ]
 
 
@@ -142,7 +130,7 @@ def upgrade() -> None:
         "ON collection_index_object USING GIN (content gin_trgm_ops)"
     )
 
-    # Seed the 14 scientific collections (curators are assigned later via the
+    # Seed the initial scientific collections (curators are assigned later via the
     # management API; the permission ids do not exist at migration time).
     collections = sa.table(
         "collection_index_collection",

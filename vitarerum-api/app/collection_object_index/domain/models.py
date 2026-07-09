@@ -1,6 +1,6 @@
 """Collection Object Index domain model.
 
-A ``Collection`` is a curated scientific collection (Zoology, Botany, ...);
+A ``Collection`` is a curated scientific collection (FISH, REPTILES & AMPHIBIANS);
 each collection has one or more staff-managed source documents (``.xlsx``
 files) whose rows are indexed as searchable collection objects.
 ``CollectionArea`` is an administrative/scientific classification one level
@@ -46,7 +46,7 @@ class SourceDocumentNotFound(Exception):
 @dataclass(slots=True)
 class CollectionArea:
     """Administrative/scientific classification above `Collection` (e.g.
-    Botany groups the Fungi, Algae, Xylotheque collections). Administered by
+    Zoology groups the reptile, amphibian, and fish collections). Administered by
     SYS_ADMIN; a classification only — curator assignment and ingestion stay
     at the `Collection` level. Removal is blocked while collections are still
     assigned to the area (see `CollectionAreaInUse`): unlike `Collection`,
@@ -74,7 +74,7 @@ class CollectionArea:
 @dataclass(slots=True)
 class Collection:
     """A curated scientific collection. Administered by SYS_ADMIN (create,
-    rename, remove); seeded with a starting catalogue of 14. There is no
+    rename, remove); seeded with a starting catalogue. There is no
     "inactive" state — removal is permanent and takes everything under the
     collection (curators, source documents, indexed rows, files) with it."""
 

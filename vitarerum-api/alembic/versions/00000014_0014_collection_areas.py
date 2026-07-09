@@ -2,11 +2,11 @@
 
 Adds a catalogue-classification level above `Collection` (docs/plans/
 plano-collection-areas.md): a `CollectionArea` groups several scientific
-collections (e.g. "Natural History" groups Botany, Zoology, ...). Permissions
+collections (e.g. "Zoology" groups reptiles, amphibians, and fish). Permissions
 and ingestion stay unchanged at the `Collection` level.
 
 Sequence for a populated database: create + seed the area table first, add
-`area_id` as nullable, backfill the 14 existing collections into their
+`area_id` as nullable, backfill the existing collections into their
 initial area, then tighten to NOT NULL + FK + index.
 
 Revision ID: 0014_collection_areas
@@ -29,28 +29,14 @@ branch_labels: str | None = None
 depends_on: str | None = None
 
 AREA_NAMES = [
-    "Natural History",
-    "Human Sciences",
-    "Documentation & Media",
+    "Zoology",
 ]
 
-# Initial grouping of the 14 collections seeded by 0011_collection_object_index
-# into the areas above.
+# Initial grouping of the collections seeded by 0011_collection_object_index
+# into the area above.
 COLLECTION_TO_AREA = {
-    "Biological Banks": "Natural History",
-    "Botany": "Natural History",
-    "Mineralogy & Petrology": "Natural History",
-    "Natural Objects": "Natural History",
-    "Paleontology": "Natural History",
-    "Zoology": "Natural History",
-    "Biological Anthropology": "Human Sciences",
-    "Archaeology": "Human Sciences",
-    "Ethnography": "Human Sciences",
-    "History of Science and Medicine": "Human Sciences",
-    "Institutional History & Art": "Human Sciences",
-    "Animal Sound Archive": "Documentation & Media",
-    "Historical Archives & Libraries": "Documentation & Media",
-    "Photography, Film & Audio": "Documentation & Media",
+    "REPTILES & AMPHIBIANS": "Zoology",
+    "FISH": "Zoology",
 }
 
 
@@ -97,7 +83,7 @@ def upgrade() -> None:
         sa.Column("area_id", sa.String(length=36), nullable=True),
     )
 
-    # 2. Backfill the 14 pre-existing collections into their initial area.
+    # 2. Backfill the pre-existing collections into their initial area.
     # Matched by name (unique, stable) rather than the deterministic seed id:
     # a collection may have been removed and recreated by the admin API since
     # 0011 seeded it, which mints a fresh random id but keeps the same name.

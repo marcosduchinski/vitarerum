@@ -67,10 +67,10 @@ from app.identity.public import Actor, GroupName, PermissionId
 from app.shared.exceptions import AccessDenied, InsufficientGroup
 
 _NOW = datetime(2026, 7, 4, 12, 0, tzinfo=UTC)
-_ZOOLOGY = CollectionId("col-zoo")
-_BOTANY = CollectionId("col-bot")
-_NATURAL_HISTORY = CollectionAreaId("area-nat-hist")
-_HUMAN_SCIENCES = CollectionAreaId("area-hum-sci")
+_REPTILES = CollectionId("col-zoo")
+_FISH = CollectionId("col-bot")
+_ZOOLOGY_AREA = CollectionAreaId("area-nat-hist")
+_TEMPORARY_AREA = CollectionAreaId("area-hum-sci")
 
 _ADMIN = Actor(
     id=PermissionId("perm-admin"), group=GroupName.SYS_ADMIN, email="a@museum.pt"
@@ -132,14 +132,14 @@ async def _session_factory() -> async_sessionmaker:
         session.add_all(
             [
                 CollectionAreaRecord(
-                    id=str(_NATURAL_HISTORY),
-                    name="Natural History",
+                    id=str(_ZOOLOGY_AREA),
+                    name="Zoology",
                     created_at=_NOW,
                     updated_at=_NOW,
                 ),
                 CollectionAreaRecord(
-                    id=str(_HUMAN_SCIENCES),
-                    name="Human Sciences",
+                    id=str(_TEMPORARY_AREA),
+                    name="Temporary Area",
                     created_at=_NOW,
                     updated_at=_NOW,
                 ),
@@ -148,16 +148,16 @@ async def _session_factory() -> async_sessionmaker:
         session.add_all(
             [
                 CollectionRecord(
-                    id=str(_ZOOLOGY),
-                    area_id=str(_NATURAL_HISTORY),
-                    name="Zoology",
+                    id=str(_REPTILES),
+                    area_id=str(_ZOOLOGY_AREA),
+                    name="REPTILES & AMPHIBIANS",
                     created_at=_NOW,
                     updated_at=_NOW,
                 ),
                 CollectionRecord(
-                    id=str(_BOTANY),
-                    area_id=str(_NATURAL_HISTORY),
-                    name="Botany",
+                    id=str(_FISH),
+                    area_id=str(_ZOOLOGY_AREA),
+                    name="FISH",
                     created_at=_NOW,
                     updated_at=_NOW,
                 ),
@@ -189,7 +189,7 @@ async def _upload(
     factory: async_sessionmaker,
     storage: _FakeStorage,
     caller: Actor = _ADMIN,
-    collection_id: CollectionId = _ZOOLOGY,
+    collection_id: CollectionId = _REPTILES,
     file_name: str = "zoo.xlsx",
     rows: list[list[str]] | None = None,
 ):
@@ -222,7 +222,7 @@ async def test_upload_indexes_rows_and_marks_indexed() -> None:
         rows = await _object_rows(session)
     assert [(r.sheet, r.row_number) for r in rows] == [("Objects", 2), ("Objects", 3)]
     assert rows[0].cells == {"Inventory No": "ZOO-1", "Name": "Jaguar"}
-    assert rows[0].collection_id == str(_ZOOLOGY)
+    assert rows[0].collection_id == str(_REPTILES)
 
 
 async def test_identical_reupload_dedupes() -> None:
@@ -252,7 +252,7 @@ async def test_new_version_replaces_previous_source_and_rows() -> None:
         repo = SqlAlchemySourceDocumentRepository(session)
         old = await repo.get_by_id(first.document.id)
         assert old is not None and old.is_deleted
-        live = await repo.list_live_by_collection(_ZOOLOGY)
+        live = await repo.list_live_by_collection(_REPTILES)
         assert [d.id for d in live] == [second.document.id]
         rows = await _object_rows(session)
         assert {r.source_document_id for r in rows} == {str(second.document.id)}
@@ -279,7 +279,7 @@ async def test_delete_removes_index_rows_and_soft_deletes() -> None:
         repo = SqlAlchemySourceDocumentRepository(session)
         record = await repo.get_by_id(uploaded.document.id)
         assert record is not None and record.is_deleted
-        assert await repo.list_live_by_collection(_ZOOLOGY) == []
+        assert await repo.list_live_by_collection(_REPTILES) == []
 
 
 async def test_reindex_rebuilds_rows_from_stored_file() -> None:
@@ -308,7 +308,7 @@ async def test_curator_cannot_manage_unassigned_collection() -> None:
     factory = await _session_factory()
     storage = _FakeStorage()
     with pytest.raises(AccessDenied):
-        await _upload(factory, storage, caller=_CURATOR, collection_id=_BOTANY)
+        await _upload(factory, storage, caller=_CURATOR, collection_id=_FISH)
     assert storage.saved == {}  # nothing persisted before the scope check
 
 
@@ -318,7 +318,7 @@ async def test_assigned_curator_manages_their_collection() -> None:
     async with factory() as session:
         await AssignCollectionCurator(
             SqlAlchemyCollectionRepository(session), _FakeClock()
-        ).execute(_ADMIN, _ZOOLOGY, _CURATOR.id)
+        ).execute(_ADMIN, _REPTILES, _CURATOR.id)
         await session.commit()
 
     result = await _upload(factory, storage, caller=_CURATOR)
@@ -328,14 +328,14 @@ async def test_assigned_curator_manages_their_collection() -> None:
         documents = await ListCollectionSourceDocuments(
             SqlAlchemyCollectionRepository(session),
             SqlAlchemySourceDocumentRepository(session),
-        ).execute(_CURATOR, _ZOOLOGY)
+        ).execute(_CURATOR, _REPTILES)
     assert [d.id for d in documents] == [result.document.id]
 
 
 async def test_collections_management_manages_any_collection() -> None:
     factory = await _session_factory()
     storage = _FakeStorage()
-    result = await _upload(factory, storage, caller=_MANAGER, collection_id=_BOTANY)
+    result = await _upload(factory, storage, caller=_MANAGER, collection_id=_FISH)
     assert result.document.status == SourceDocumentStatus.INDEXED
 
 
@@ -345,7 +345,7 @@ async def test_curator_cannot_assign_curators() -> None:
         with pytest.raises(InsufficientGroup):
             await AssignCollectionCurator(
                 SqlAlchemyCollectionRepository(session), _FakeClock()
-            ).execute(_CURATOR, _ZOOLOGY, _CURATOR.id)
+            ).execute(_CURATOR, _REPTILES, _CURATOR.id)
 
 
 async def test_assign_records_assigned_by_and_remove_revokes() -> None:
@@ -353,7 +353,7 @@ async def test_assign_records_assigned_by_and_remove_revokes() -> None:
     async with factory() as session:
         repo = SqlAlchemyCollectionRepository(session)
         assignment = await AssignCollectionCurator(repo, _FakeClock()).execute(
-            _ADMIN, _ZOOLOGY, _CURATOR.id
+            _ADMIN, _REPTILES, _CURATOR.id
         )
         await session.commit()
     assert assignment.assigned_by == _ADMIN.id
@@ -362,10 +362,10 @@ async def test_assign_records_assigned_by_and_remove_revokes() -> None:
         repo = SqlAlchemyCollectionRepository(session)
         # Idempotent: re-assigning returns the existing assignment.
         again = await AssignCollectionCurator(repo, _FakeClock()).execute(
-            _ADMIN, _ZOOLOGY, _CURATOR.id
+            _ADMIN, _REPTILES, _CURATOR.id
         )
         assert again.assigned_by == _ADMIN.id
-        await RemoveCollectionCurator(repo).execute(_ADMIN, _ZOOLOGY, _CURATOR.id)
+        await RemoveCollectionCurator(repo).execute(_ADMIN, _REPTILES, _CURATOR.id)
         await session.commit()
 
     async with factory() as session:
@@ -376,11 +376,11 @@ async def test_assign_records_assigned_by_and_remove_revokes() -> None:
 async def test_list_manageable_collections_flags_scope() -> None:
     factory = await _session_factory()
     storage = _FakeStorage()
-    await _upload(factory, storage)  # one live document in Zoology
+    await _upload(factory, storage)  # one live document in REPTILES & AMPHIBIANS
     async with factory() as session:
         repo = SqlAlchemyCollectionRepository(session)
         await AssignCollectionCurator(repo, _FakeClock()).execute(
-            _ADMIN, _BOTANY, _CURATOR.id
+            _ADMIN, _FISH, _CURATOR.id
         )
         await session.commit()
 
@@ -390,11 +390,11 @@ async def test_list_manageable_collections_flags_scope() -> None:
             v.collection.name: v
             for v in await ListManageableCollections(repo).execute(_CURATOR)
         }
-    assert views["Botany"].manageable is True
-    assert views["Zoology"].manageable is False
-    assert views["Zoology"].document_count == 1
-    assert views["Zoology"].area_name == "Natural History"
-    assert [c.permission_id for c in views["Botany"].curators] == [str(_CURATOR.id)]
+    assert views["FISH"].manageable is True
+    assert views["REPTILES & AMPHIBIANS"].manageable is False
+    assert views["REPTILES & AMPHIBIANS"].document_count == 1
+    assert views["REPTILES & AMPHIBIANS"].area_name == "Zoology"
+    assert [c.permission_id for c in views["FISH"].curators] == [str(_CURATOR.id)]
 
 
 async def test_error_status_when_stored_file_is_not_a_spreadsheet() -> None:
@@ -431,12 +431,12 @@ async def test_create_collection_as_sys_admin() -> None:
         repo = SqlAlchemyCollectionRepository(session)
         collection = await CreateCollection(repo, _FakeClock()).execute(
             CreateCollectionInput(
-                caller=_ADMIN, name="Mineralogy", area_id=_NATURAL_HISTORY
+                caller=_ADMIN, name="Mineralogy", area_id=_ZOOLOGY_AREA
             )
         )
         await session.commit()
     assert collection.created_at == _NOW
-    assert collection.area_id == _NATURAL_HISTORY
+    assert collection.area_id == _ZOOLOGY_AREA
 
     async with factory() as session:
         repo = SqlAlchemyCollectionRepository(session)
@@ -450,7 +450,7 @@ async def test_create_collection_trims_whitespace_from_name() -> None:
         repo = SqlAlchemyCollectionRepository(session)
         collection = await CreateCollection(repo, _FakeClock()).execute(
             CreateCollectionInput(
-                caller=_ADMIN, name="  Mineralogy  ", area_id=_NATURAL_HISTORY
+                caller=_ADMIN, name="  Mineralogy  ", area_id=_ZOOLOGY_AREA
             )
         )
         await session.commit()
@@ -470,15 +470,15 @@ async def test_get_collection_returns_enriched_view() -> None:
     async with factory() as session:
         repo = SqlAlchemyCollectionRepository(session)
         await AssignCollectionCurator(repo, _FakeClock()).execute(
-            _ADMIN, _ZOOLOGY, _CURATOR.id
+            _ADMIN, _REPTILES, _CURATOR.id
         )
         await session.commit()
 
     async with factory() as session:
         repo = SqlAlchemyCollectionRepository(session)
-        view = await GetCollection(repo).execute(_ADMIN, _ZOOLOGY)
-    assert view.collection.name == "Zoology"
-    assert view.area_name == "Natural History"
+        view = await GetCollection(repo).execute(_ADMIN, _REPTILES)
+    assert view.collection.name == "REPTILES & AMPHIBIANS"
+    assert view.area_name == "Zoology"
     assert view.document_count == 1
     assert [c.permission_id for c in view.curators] == [str(_CURATOR.id)]
     assert view.manageable is True
@@ -500,7 +500,7 @@ async def test_create_collection_blocked_for_non_sys_admin(caller: Actor) -> Non
         with pytest.raises(InsufficientGroup):
             await CreateCollection(repo, _FakeClock()).execute(
                 CreateCollectionInput(
-                    caller=caller, name="Mineralogy", area_id=_NATURAL_HISTORY
+                    caller=caller, name="Mineralogy", area_id=_ZOOLOGY_AREA
                 )
             )
 
@@ -511,16 +511,18 @@ async def test_update_collection_renames() -> None:
         repo = SqlAlchemyCollectionRepository(session)
         await UpdateCollection(repo, _FakeClock()).execute(
             UpdateCollectionInput(
-                caller=_ADMIN, collection_id=_ZOOLOGY, name="Zoology Renamed"
+                caller=_ADMIN,
+                collection_id=_REPTILES,
+                name="REPTILES & AMPHIBIANS Renamed",
             )
         )
         await session.commit()
 
     async with factory() as session:
         repo = SqlAlchemyCollectionRepository(session)
-        collection = await repo.get_by_id(_ZOOLOGY)
+        collection = await repo.get_by_id(_REPTILES)
     assert collection is not None
-    assert collection.name == "Zoology Renamed"
+    assert collection.name == "REPTILES & AMPHIBIANS Renamed"
 
 
 @pytest.mark.parametrize("caller", [_MANAGER, _CURATOR])
@@ -531,7 +533,7 @@ async def test_update_collection_blocked_for_non_sys_admin(caller: Actor) -> Non
         with pytest.raises(InsufficientGroup):
             await UpdateCollection(repo, _FakeClock()).execute(
                 UpdateCollectionInput(
-                    caller=caller, collection_id=_ZOOLOGY, name="Whatever"
+                    caller=caller, collection_id=_REPTILES, name="Whatever"
                 )
             )
 
@@ -544,7 +546,7 @@ async def test_remove_collection_deletes_everything() -> None:
     async with factory() as session:
         repo = SqlAlchemyCollectionRepository(session)
         await AssignCollectionCurator(repo, _FakeClock()).execute(
-            _ADMIN, _ZOOLOGY, _CURATOR.id
+            _ADMIN, _REPTILES, _CURATOR.id
         )
         await session.commit()
 
@@ -553,7 +555,7 @@ async def test_remove_collection_deletes_everything() -> None:
             SqlAlchemyCollectionRepository(session),
             SqlAlchemySourceDocumentRepository(session),
             SqlAlchemyCollectionObjectIndex(session),
-        ).execute(_ADMIN, _ZOOLOGY)
+        ).execute(_ADMIN, _REPTILES)
         await session.commit()
 
     assert file_references == [uploaded.document.file_reference]
@@ -561,14 +563,14 @@ async def test_remove_collection_deletes_everything() -> None:
     async with factory() as session:
         repo = SqlAlchemyCollectionRepository(session)
         # The collection itself is gone.
-        assert await repo.get_by_id(_ZOOLOGY) is None
-        # Botany, untouched, is still there.
-        assert (await repo.get_by_id(_BOTANY)) is not None
+        assert await repo.get_by_id(_REPTILES) is None
+        # FISH, untouched, is still there.
+        assert (await repo.get_by_id(_FISH)) is not None
         # Its curator assignment is gone.
         assert await repo.list_curated_collection_ids(_CURATOR.id) == set()
         # Its source document row (live or not) is gone.
         documents = SqlAlchemySourceDocumentRepository(session)
-        assert await documents.list_all_by_collection(_ZOOLOGY) == []
+        assert await documents.list_all_by_collection(_REPTILES) == []
         # Its indexed rows are gone.
         assert await _object_rows(session) == []
 
@@ -593,12 +595,12 @@ async def test_remove_collection_deletes_already_soft_deleted_documents_too() ->
             SqlAlchemyCollectionRepository(session),
             SqlAlchemySourceDocumentRepository(session),
             SqlAlchemyCollectionObjectIndex(session),
-        ).execute(_ADMIN, _ZOOLOGY)
+        ).execute(_ADMIN, _REPTILES)
         await session.commit()
 
     async with factory() as session:
         documents = SqlAlchemySourceDocumentRepository(session)
-        assert await documents.list_all_by_collection(_ZOOLOGY) == []
+        assert await documents.list_all_by_collection(_REPTILES) == []
 
 
 async def test_remove_collection_raises_not_found_for_unknown_id() -> None:
@@ -621,7 +623,7 @@ async def test_remove_collection_blocked_for_non_sys_admin(caller: Actor) -> Non
                 SqlAlchemyCollectionRepository(session),
                 SqlAlchemySourceDocumentRepository(session),
                 SqlAlchemyCollectionObjectIndex(session),
-            ).execute(caller, _ZOOLOGY)
+            ).execute(caller, _REPTILES)
 
 
 async def test_list_searchable_collections_returns_full_catalogue() -> None:
@@ -629,7 +631,7 @@ async def test_list_searchable_collections_returns_full_catalogue() -> None:
     async with factory() as session:
         repo = SqlAlchemyCollectionRepository(session)
         names = {c.name for c in await ListSearchableCollections(repo).execute(_ADMIN)}
-    assert names == {"Zoology", "Botany"}
+    assert names == {"REPTILES & AMPHIBIANS", "FISH"}
 
 
 @pytest.mark.parametrize("caller", [_MANAGER, _CURATOR])
@@ -643,10 +645,10 @@ async def test_collections_management_and_curator_cannot_assign_or_remove(
         repo = SqlAlchemyCollectionRepository(session)
         with pytest.raises(InsufficientGroup):
             await AssignCollectionCurator(repo, _FakeClock()).execute(
-                caller, _ZOOLOGY, _CURATOR.id
+                caller, _REPTILES, _CURATOR.id
             )
         with pytest.raises(InsufficientGroup):
-            await RemoveCollectionCurator(repo).execute(caller, _ZOOLOGY, _CURATOR.id)
+            await RemoveCollectionCurator(repo).execute(caller, _REPTILES, _CURATOR.id)
 
 
 class _FakePermissionReader:
@@ -742,14 +744,14 @@ async def test_update_collection_area_renames() -> None:
         repo = SqlAlchemyCollectionRepository(session)
         await UpdateCollectionArea(repo, _FakeClock()).execute(
             UpdateCollectionAreaInput(
-                caller=_ADMIN, area_id=_NATURAL_HISTORY, name="Natural Sciences"
+                caller=_ADMIN, area_id=_ZOOLOGY_AREA, name="Natural Sciences"
             )
         )
         await session.commit()
 
     async with factory() as session:
         repo = SqlAlchemyCollectionRepository(session)
-        area = await repo.get_area_by_id(_NATURAL_HISTORY)
+        area = await repo.get_area_by_id(_ZOOLOGY_AREA)
     assert area is not None
     assert area.name == "Natural Sciences"
 
@@ -772,8 +774,8 @@ async def test_list_collection_areas_returns_counts() -> None:
         repo = SqlAlchemyCollectionRepository(session)
         areas = await ListCollectionAreas(repo).execute(_ADMIN)
         views = {v.area.name: v for v in areas}
-    assert views["Natural History"].collection_count == 2  # Zoology + Botany
-    assert views["Human Sciences"].collection_count == 0
+    assert views["Zoology"].collection_count == 2  # REPTILES & AMPHIBIANS + FISH
+    assert views["Temporary Area"].collection_count == 0
 
 
 @pytest.mark.parametrize("caller", [_MANAGER, _CURATOR])
@@ -790,19 +792,19 @@ async def test_remove_collection_area_blocked_while_collections_assigned() -> No
     async with factory() as session:
         repo = SqlAlchemyCollectionRepository(session)
         with pytest.raises(CollectionAreaInUse):
-            await RemoveCollectionArea(repo).execute(_ADMIN, _NATURAL_HISTORY)
+            await RemoveCollectionArea(repo).execute(_ADMIN, _ZOOLOGY_AREA)
 
 
 async def test_remove_collection_area_succeeds_once_empty() -> None:
     factory = await _session_factory()
     async with factory() as session:
         repo = SqlAlchemyCollectionRepository(session)
-        await RemoveCollectionArea(repo).execute(_ADMIN, _HUMAN_SCIENCES)
+        await RemoveCollectionArea(repo).execute(_ADMIN, _TEMPORARY_AREA)
         await session.commit()
 
     async with factory() as session:
         repo = SqlAlchemyCollectionRepository(session)
-        assert await repo.get_area_by_id(_HUMAN_SCIENCES) is None
+        assert await repo.get_area_by_id(_TEMPORARY_AREA) is None
 
 
 async def test_remove_collection_area_raises_not_found_for_unknown_id() -> None:
@@ -819,7 +821,7 @@ async def test_remove_collection_area_blocked_for_non_sys_admin(caller: Actor) -
     async with factory() as session:
         repo = SqlAlchemyCollectionRepository(session)
         with pytest.raises(InsufficientGroup):
-            await RemoveCollectionArea(repo).execute(caller, _HUMAN_SCIENCES)
+            await RemoveCollectionArea(repo).execute(caller, _TEMPORARY_AREA)
 
 
 async def test_move_collection_to_area() -> None:
@@ -828,20 +830,20 @@ async def test_move_collection_to_area() -> None:
         repo = SqlAlchemyCollectionRepository(session)
         collection = await MoveCollectionToArea(repo, _FakeClock()).execute(
             MoveCollectionToAreaInput(
-                caller=_ADMIN, collection_id=_ZOOLOGY, area_id=_HUMAN_SCIENCES
+                caller=_ADMIN, collection_id=_REPTILES, area_id=_TEMPORARY_AREA
             )
         )
         await session.commit()
-    assert collection.area_id == _HUMAN_SCIENCES
+    assert collection.area_id == _TEMPORARY_AREA
 
     async with factory() as session:
         repo = SqlAlchemyCollectionRepository(session)
-        stored = await repo.get_by_id(_ZOOLOGY)
+        stored = await repo.get_by_id(_REPTILES)
         counts = await repo.count_collections_by_area()
     assert stored is not None
-    assert stored.area_id == _HUMAN_SCIENCES
-    assert counts[_HUMAN_SCIENCES] == 1
-    assert counts[_NATURAL_HISTORY] == 1  # only Botany left
+    assert stored.area_id == _TEMPORARY_AREA
+    assert counts[_TEMPORARY_AREA] == 1
+    assert counts[_ZOOLOGY_AREA] == 1  # only FISH left
 
 
 async def test_move_collection_to_area_raises_not_found_for_unknown_area() -> None:
@@ -852,7 +854,7 @@ async def test_move_collection_to_area_raises_not_found_for_unknown_area() -> No
             await MoveCollectionToArea(repo, _FakeClock()).execute(
                 MoveCollectionToAreaInput(
                     caller=_ADMIN,
-                    collection_id=_ZOOLOGY,
+                    collection_id=_REPTILES,
                     area_id=CollectionAreaId("nope"),
                 )
             )
@@ -867,7 +869,7 @@ async def test_move_unknown_collection_to_area_raises_not_found() -> None:
                 MoveCollectionToAreaInput(
                     caller=_ADMIN,
                     collection_id=CollectionId("nope"),
-                    area_id=_HUMAN_SCIENCES,
+                    area_id=_TEMPORARY_AREA,
                 )
             )
 
@@ -880,7 +882,7 @@ async def test_move_collection_to_area_blocked_for_non_sys_admin(caller: Actor) 
         with pytest.raises(InsufficientGroup):
             await MoveCollectionToArea(repo, _FakeClock()).execute(
                 MoveCollectionToAreaInput(
-                    caller=caller, collection_id=_ZOOLOGY, area_id=_HUMAN_SCIENCES
+                    caller=caller, collection_id=_REPTILES, area_id=_TEMPORARY_AREA
                 )
             )
 

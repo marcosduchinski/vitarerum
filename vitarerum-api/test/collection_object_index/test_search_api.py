@@ -97,7 +97,7 @@ class _FakeIndex:
 _ROWS = [
     _Row(
         collection_id="col-zoo",
-        collection_name="Zoology",
+        collection_name="REPTILES & AMPHIBIANS",
         source_document_id="doc-1",
         file_name="zoo.xlsx",
         sheet="Objects",
@@ -107,7 +107,7 @@ _ROWS = [
     ),
     _Row(
         collection_id="col-bot",
-        collection_name="Botany",
+        collection_name="FISH",
         source_document_id="doc-2",
         file_name="bot.xlsx",
         sheet="Objects",
@@ -134,7 +134,7 @@ async def _client(
         session.add(
             CollectionAreaRecord(
                 id="area-nat-hist",
-                name="Natural History",
+                name="Zoology",
                 created_at=_NOW,
                 updated_at=_NOW,
             )
@@ -144,14 +144,14 @@ async def _client(
                 CollectionRecord(
                     id="col-zoo",
                     area_id="area-nat-hist",
-                    name="Zoology",
+                    name="REPTILES & AMPHIBIANS",
                     created_at=_NOW,
                     updated_at=_NOW,
                 ),
                 CollectionRecord(
                     id="col-bot",
                     area_id="area-nat-hist",
-                    name="Botany",
+                    name="FISH",
                     created_at=_NOW,
                     updated_at=_NOW,
                 ),
@@ -235,7 +235,7 @@ async def test_searchable_collections_lists_full_catalogue() -> None:
         response = await client.get("/objects/search/collections")
     assert response.status_code == 200
     names = {c["name"] for c in response.json()}
-    assert names == {"Zoology", "Botany"}
+    assert names == {"REPTILES & AMPHIBIANS", "FISH"}
 
 
 async def test_searchable_collections_rejects_non_staff() -> None:

@@ -34,10 +34,10 @@ from app.main import app
 from app.shared.dependencies import get_caller_permission
 
 _NOW = datetime(2026, 7, 4, 12, 0, tzinfo=UTC)
-_ZOOLOGY_ID = "col-zoo"
-_BOTANY_ID = "col-bot"
-_NATURAL_HISTORY_ID = "area-nat-hist"
-_HUMAN_SCIENCES_ID = "area-hum-sci"
+_REPTILES_ID = "col-zoo"
+_FISH_ID = "col-bot"
+_ZOOLOGY_AREA_ID = "area-nat-hist"
+_TEMPORARY_AREA_ID = "area-hum-sci"
 
 _ADMIN = Actor(
     id=PermissionId("perm-admin"), group=GroupName.SYS_ADMIN, email="a@museum.pt"
@@ -95,14 +95,14 @@ async def _client(
         session.add_all(
             [
                 CollectionAreaRecord(
-                    id=_NATURAL_HISTORY_ID,
-                    name="Natural History",
+                    id=_ZOOLOGY_AREA_ID,
+                    name="Zoology",
                     created_at=_NOW,
                     updated_at=_NOW,
                 ),
                 CollectionAreaRecord(
-                    id=_HUMAN_SCIENCES_ID,
-                    name="Human Sciences",
+                    id=_TEMPORARY_AREA_ID,
+                    name="Temporary Area",
                     created_at=_NOW,
                     updated_at=_NOW,
                 ),
@@ -111,16 +111,16 @@ async def _client(
         session.add_all(
             [
                 CollectionRecord(
-                    id=_ZOOLOGY_ID,
-                    area_id=_NATURAL_HISTORY_ID,
-                    name="Zoology",
+                    id=_REPTILES_ID,
+                    area_id=_ZOOLOGY_AREA_ID,
+                    name="REPTILES & AMPHIBIANS",
                     created_at=_NOW,
                     updated_at=_NOW,
                 ),
                 CollectionRecord(
-                    id=_BOTANY_ID,
-                    area_id=_NATURAL_HISTORY_ID,
-                    name="Botany",
+                    id=_FISH_ID,
+                    area_id=_ZOOLOGY_AREA_ID,
+                    name="FISH",
                     created_at=_NOW,
                     updated_at=_NOW,
                 ),
@@ -163,17 +163,17 @@ async def test_list_collections_shows_catalogue_with_scope_flags() -> None:
         response = await client.get("/admin/collection-data-sources/collections")
     assert response.status_code == 200
     body = {c["name"]: c for c in response.json()}
-    assert set(body) == {"Zoology", "Botany"}
-    assert body["Zoology"]["manageable"] is False
-    assert body["Zoology"]["documentCount"] == 0
-    assert body["Zoology"]["areaId"] == _NATURAL_HISTORY_ID
-    assert body["Zoology"]["areaName"] == "Natural History"
+    assert set(body) == {"REPTILES & AMPHIBIANS", "FISH"}
+    assert body["REPTILES & AMPHIBIANS"]["manageable"] is False
+    assert body["REPTILES & AMPHIBIANS"]["documentCount"] == 0
+    assert body["REPTILES & AMPHIBIANS"]["areaId"] == _ZOOLOGY_AREA_ID
+    assert body["REPTILES & AMPHIBIANS"]["areaName"] == "Zoology"
 
 
 async def test_upload_indexes_and_returns_document() -> None:
     async with _client(_ADMIN) as (client, storage):
         response = await client.post(
-            f"/admin/collection-data-sources/collections/{_ZOOLOGY_ID}/documents",
+            f"/admin/collection-data-sources/collections/{_REPTILES_ID}/documents",
             files=_upload_files([["ZOO-1", "Jaguar"], ["ZOO-2", "Arara"]]),
         )
         assert response.status_code == 201, response.text
@@ -184,7 +184,7 @@ async def test_upload_indexes_and_returns_document() -> None:
         assert len(storage.saved) == 1
 
         listing = await client.get(
-            f"/admin/collection-data-sources/collections/{_ZOOLOGY_ID}/documents"
+            f"/admin/collection-data-sources/collections/{_REPTILES_ID}/documents"
         )
         assert [d["id"] for d in listing.json()] == [body["id"]]
 
@@ -192,7 +192,7 @@ async def test_upload_indexes_and_returns_document() -> None:
 async def test_upload_rejects_non_xlsx_content() -> None:
     async with _client(_ADMIN) as (client, storage):
         response = await client.post(
-            f"/admin/collection-data-sources/collections/{_ZOOLOGY_ID}/documents",
+            f"/admin/collection-data-sources/collections/{_REPTILES_ID}/documents",
             files={"file": ("zoo.xlsx", b"not a spreadsheet", "application/zip")},
         )
     assert response.status_code == 415
@@ -218,7 +218,7 @@ async def test_external_caller_is_forbidden() -> None:
 async def test_curator_upload_out_of_scope_is_403() -> None:
     async with _client(_CURATOR) as (client, storage):
         response = await client.post(
-            f"/admin/collection-data-sources/collections/{_BOTANY_ID}/documents",
+            f"/admin/collection-data-sources/collections/{_FISH_ID}/documents",
             files=_upload_files(),
         )
     assert response.status_code == 403
@@ -227,10 +227,10 @@ async def test_curator_upload_out_of_scope_is_403() -> None:
 
 
 async def test_assign_then_curator_manages_and_delete_reclaims_file() -> None:
-    # Admin assigns the curator to Botany...
+    # Admin assigns the curator to FISH...
     async with _client(_ADMIN) as (client, storage):
         assign = await client.post(
-            f"/admin/collection-data-sources/collections/{_BOTANY_ID}/curators",
+            f"/admin/collection-data-sources/collections/{_FISH_ID}/curators",
             json={"permissionId": str(_CURATOR.id)},
         )
         # The target permission does not exist in the (empty) identity tables.
@@ -252,17 +252,17 @@ async def test_assign_curator_rejects_non_curatorial_permission() -> None:
     async with factory() as session:
         session.add(
             CollectionAreaRecord(
-                id=_NATURAL_HISTORY_ID,
-                name="Natural History",
+                id=_ZOOLOGY_AREA_ID,
+                name="Zoology",
                 created_at=_NOW,
                 updated_at=_NOW,
             )
         )
         session.add(
             CollectionRecord(
-                id=_ZOOLOGY_ID,
-                area_id=_NATURAL_HISTORY_ID,
-                name="Zoology",
+                id=_REPTILES_ID,
+                area_id=_ZOOLOGY_AREA_ID,
+                name="REPTILES & AMPHIBIANS",
                 created_at=_NOW,
                 updated_at=_NOW,
             )
@@ -298,7 +298,7 @@ async def test_assign_curator_rejects_non_curatorial_permission() -> None:
             transport=transport, base_url="http://test/api/v1"
         ) as client:
             response = await client.post(
-                f"/admin/collection-data-sources/collections/{_ZOOLOGY_ID}/curators",
+                f"/admin/collection-data-sources/collections/{_REPTILES_ID}/curators",
                 json={"permissionId": "p-mgmt"},
             )
     finally:
@@ -312,7 +312,7 @@ async def test_assign_curator_rejects_non_curatorial_permission() -> None:
 async def test_delete_document_removes_and_reclaims_after_commit() -> None:
     async with _client(_ADMIN) as (client, storage):
         created = await client.post(
-            f"/admin/collection-data-sources/collections/{_ZOOLOGY_ID}/documents",
+            f"/admin/collection-data-sources/collections/{_REPTILES_ID}/documents",
             files=_upload_files(),
         )
         document_id = created.json()["id"]
@@ -324,7 +324,7 @@ async def test_delete_document_removes_and_reclaims_after_commit() -> None:
         assert storage.saved == {}  # file reclaimed after commit
 
         listing = await client.get(
-            f"/admin/collection-data-sources/collections/{_ZOOLOGY_ID}/documents"
+            f"/admin/collection-data-sources/collections/{_REPTILES_ID}/documents"
         )
         assert listing.json() == []
 
@@ -332,7 +332,7 @@ async def test_delete_document_removes_and_reclaims_after_commit() -> None:
 async def test_reindex_returns_updated_document() -> None:
     async with _client(_ADMIN) as (client, _):
         created = await client.post(
-            f"/admin/collection-data-sources/collections/{_ZOOLOGY_ID}/documents",
+            f"/admin/collection-data-sources/collections/{_REPTILES_ID}/documents",
             files=_upload_files(),
         )
         document_id = created.json()["id"]
@@ -351,11 +351,11 @@ async def test_create_get_and_update_collection() -> None:
     async with _client(_ADMIN) as (client, _):
         created = await client.post(
             "/admin/collection-data-sources/collections",
-            json={"name": "Mineralogy", "areaId": _NATURAL_HISTORY_ID},
+            json={"name": "Mineralogy", "areaId": _ZOOLOGY_AREA_ID},
         )
         assert created.status_code == 201, created.text
-        assert created.json()["areaId"] == _NATURAL_HISTORY_ID
-        assert created.json()["areaName"] == "Natural History"
+        assert created.json()["areaId"] == _ZOOLOGY_AREA_ID
+        assert created.json()["areaName"] == "Zoology"
         collection_id = created.json()["id"]
 
         fetched = await client.get(
@@ -376,7 +376,7 @@ async def test_create_collection_duplicate_name_is_409() -> None:
     async with _client(_ADMIN) as (client, _):
         response = await client.post(
             "/admin/collection-data-sources/collections",
-            json={"name": "Zoology", "areaId": _NATURAL_HISTORY_ID},
+            json={"name": "REPTILES & AMPHIBIANS", "areaId": _ZOOLOGY_AREA_ID},
         )
     assert response.status_code == 409
     assert response.json()["error"] == "COLLECTION_NAME_ALREADY_EXISTS"
@@ -388,7 +388,7 @@ async def test_create_collection_duplicate_name_after_trim_is_409() -> None:
     async with _client(_ADMIN) as (client, _):
         response = await client.post(
             "/admin/collection-data-sources/collections",
-            json={"name": "  Zoology  ", "areaId": _NATURAL_HISTORY_ID},
+            json={"name": "  REPTILES & AMPHIBIANS  ", "areaId": _ZOOLOGY_AREA_ID},
         )
     assert response.status_code == 409
     assert response.json()["error"] == "COLLECTION_NAME_ALREADY_EXISTS"
@@ -408,7 +408,7 @@ async def test_create_collection_blocked_for_curator() -> None:
     async with _client(_CURATOR) as (client, _):
         response = await client.post(
             "/admin/collection-data-sources/collections",
-            json={"name": "Mineralogy", "areaId": _NATURAL_HISTORY_ID},
+            json={"name": "Mineralogy", "areaId": _ZOOLOGY_AREA_ID},
         )
     assert response.status_code == 403
     assert response.json()["error"] == "INSUFFICIENT_GROUP"
@@ -424,27 +424,27 @@ async def test_get_unknown_collection_is_404() -> None:
 async def test_remove_collection_deletes_everything_and_reclaims_files() -> None:
     async with _client(_ADMIN) as (client, storage):
         uploaded = await client.post(
-            f"/admin/collection-data-sources/collections/{_ZOOLOGY_ID}/documents",
+            f"/admin/collection-data-sources/collections/{_REPTILES_ID}/documents",
             files=_upload_files(),
         )
         assert uploaded.status_code == 201, uploaded.text
         assert len(storage.saved) == 1
 
         removed = await client.delete(
-            f"/admin/collection-data-sources/collections/{_ZOOLOGY_ID}"
+            f"/admin/collection-data-sources/collections/{_REPTILES_ID}"
         )
         assert removed.status_code == 204
         assert removed.content == b""
         assert storage.saved == {}  # the document's file was reclaimed too
 
         missing = await client.get(
-            f"/admin/collection-data-sources/collections/{_ZOOLOGY_ID}"
+            f"/admin/collection-data-sources/collections/{_REPTILES_ID}"
         )
         assert missing.status_code == 404
         assert missing.json()["error"] == "COLLECTION_NOT_FOUND"
 
         listing = await client.get("/admin/collection-data-sources/collections")
-        assert "Zoology" not in {c["name"] for c in listing.json()}
+        assert "REPTILES & AMPHIBIANS" not in {c["name"] for c in listing.json()}
 
 
 async def test_remove_unknown_collection_is_404() -> None:
@@ -459,7 +459,7 @@ async def test_remove_unknown_collection_is_404() -> None:
 async def test_remove_collection_blocked_for_curator() -> None:
     async with _client(_CURATOR) as (client, _):
         response = await client.delete(
-            f"/admin/collection-data-sources/collections/{_ZOOLOGY_ID}"
+            f"/admin/collection-data-sources/collections/{_REPTILES_ID}"
         )
     assert response.status_code == 403
     assert response.json()["error"] == "INSUFFICIENT_GROUP"
@@ -473,8 +473,8 @@ async def test_list_collection_areas_shows_counts() -> None:
         response = await client.get("/admin/collection-data-sources/areas")
     assert response.status_code == 200
     body = {a["name"]: a for a in response.json()}
-    assert body["Natural History"]["collectionCount"] == 2  # Zoology + Botany
-    assert body["Human Sciences"]["collectionCount"] == 0
+    assert body["Zoology"]["collectionCount"] == 2  # REPTILES & AMPHIBIANS + FISH
+    assert body["Temporary Area"]["collectionCount"] == 0
 
 
 async def test_list_collection_areas_blocked_for_curator() -> None:
@@ -510,7 +510,7 @@ async def test_create_rename_and_remove_collection_area() -> None:
 async def test_create_collection_area_duplicate_name_is_409() -> None:
     async with _client(_ADMIN) as (client, _):
         response = await client.post(
-            "/admin/collection-data-sources/areas", json={"name": "Natural History"}
+            "/admin/collection-data-sources/areas", json={"name": "Zoology"}
         )
     assert response.status_code == 409
     assert response.json()["error"] == "COLLECTION_AREA_NAME_ALREADY_EXISTS"
@@ -528,7 +528,7 @@ async def test_create_collection_area_blocked_for_curator() -> None:
 async def test_remove_collection_area_in_use_is_409() -> None:
     async with _client(_ADMIN) as (client, _):
         response = await client.delete(
-            f"/admin/collection-data-sources/areas/{_NATURAL_HISTORY_ID}"
+            f"/admin/collection-data-sources/areas/{_ZOOLOGY_AREA_ID}"
         )
     assert response.status_code == 409
     assert response.json()["error"] == "COLLECTION_AREA_IN_USE"
@@ -544,18 +544,18 @@ async def test_remove_unknown_collection_area_is_404() -> None:
 async def test_move_collection_to_area() -> None:
     async with _client(_ADMIN) as (client, _):
         response = await client.post(
-            f"/admin/collection-data-sources/collections/{_ZOOLOGY_ID}/move-area",
-            json={"areaId": _HUMAN_SCIENCES_ID},
+            f"/admin/collection-data-sources/collections/{_REPTILES_ID}/move-area",
+            json={"areaId": _TEMPORARY_AREA_ID},
         )
     assert response.status_code == 200, response.text
-    assert response.json()["areaId"] == _HUMAN_SCIENCES_ID
-    assert response.json()["areaName"] == "Human Sciences"
+    assert response.json()["areaId"] == _TEMPORARY_AREA_ID
+    assert response.json()["areaName"] == "Temporary Area"
 
 
 async def test_move_collection_to_unknown_area_is_404() -> None:
     async with _client(_ADMIN) as (client, _):
         response = await client.post(
-            f"/admin/collection-data-sources/collections/{_ZOOLOGY_ID}/move-area",
+            f"/admin/collection-data-sources/collections/{_REPTILES_ID}/move-area",
             json={"areaId": "nope"},
         )
     assert response.status_code == 404
@@ -566,7 +566,7 @@ async def test_move_unknown_collection_to_area_is_404() -> None:
     async with _client(_ADMIN) as (client, _):
         response = await client.post(
             "/admin/collection-data-sources/collections/nope/move-area",
-            json={"areaId": _HUMAN_SCIENCES_ID},
+            json={"areaId": _TEMPORARY_AREA_ID},
         )
     assert response.status_code == 404
     assert response.json()["error"] == "COLLECTION_NOT_FOUND"
@@ -575,8 +575,8 @@ async def test_move_unknown_collection_to_area_is_404() -> None:
 async def test_move_collection_to_area_blocked_for_curator() -> None:
     async with _client(_CURATOR) as (client, _):
         response = await client.post(
-            f"/admin/collection-data-sources/collections/{_ZOOLOGY_ID}/move-area",
-            json={"areaId": _HUMAN_SCIENCES_ID},
+            f"/admin/collection-data-sources/collections/{_REPTILES_ID}/move-area",
+            json={"areaId": _TEMPORARY_AREA_ID},
         )
     assert response.status_code == 403
     assert response.json()["error"] == "INSUFFICIENT_GROUP"
