@@ -3,9 +3,14 @@
 The reset link points at the frontend's reset route,
 ``{PUBLIC_ORIGIN}{PASSWORD_RESET_PUBLIC_PATH}?token=…`` (the page POSTs the
 token back to ``/auth/password-reset/confirm``). ``SmtpPasswordEmailSender``
-delivers via SMTP; ``LoggingPasswordEmailSender`` logs the link for
-local/dev, matching the equivalent adapters in ``public_submission`` and
-``museum_questions``.
+delivers via SMTP. Unlike the equivalent local/dev loggers in
+``public_submission``/``museum_questions`` (which log their link, token
+included), ``LoggingPasswordEmailSender`` deliberately never logs the raw
+token — plano-gestao-passwords.md's objective 4 is unconditional ("nunca
+armazenar nem logar passwords ou tokens de reset em claro") for this
+specific feature. Testing the reset flow without SMTP configured therefore
+requires reading the token from wherever the caller captured it (e.g. an
+e-mail-sender test double), not from logs.
 """
 
 from __future__ import annotations
@@ -32,8 +37,12 @@ class LoggingPasswordEmailSender:
     async def send_password_reset(
         self, to_email: str, display_name: str, token: str
     ) -> None:
-        link = _reset_link(self._origin, self._path, token)
-        logger.info("[identity] password reset link for %s: %s", to_email, link)
+        del token  # never logged, even locally — see module docstring
+        logger.info(
+            "[identity] password reset requested for %s; SMTP_HOST is not "
+            "configured so no link was delivered (the token is never logged)",
+            to_email,
+        )
 
     async def send_password_changed_notice(
         self, to_email: str, display_name: str

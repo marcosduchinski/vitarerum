@@ -2,11 +2,12 @@
 ConfirmPasswordReset use cases, plus the HTTP endpoints end-to-end."""
 
 import hashlib
+from collections.abc import AsyncIterator, Iterator
 from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_async_session
@@ -31,7 +32,7 @@ def hash_token(raw_token: str) -> str:
 
 
 @pytest.fixture(autouse=True)
-def _reset_rate_limiter_singleton():
+def _reset_rate_limiter_singleton() -> Iterator[None]:
     """The HTTP-level tests below share the process-wide rate-limiter
     singleton the route composition root uses (by design, so limits hold
     across requests in production). Without a reset, the ASGI test client's
@@ -342,7 +343,7 @@ async def test_confirm_reset_respects_rate_limit() -> None:
 # ── HTTP endpoints, end-to-end against a real (in-memory sqlite) session ──────
 
 
-async def _sqlite_session_factory() -> async_sessionmaker:
+async def _sqlite_session_factory() -> async_sessionmaker[AsyncSession]:
     engine = create_async_engine(
         "sqlite+aiosqlite://",
         poolclass=StaticPool,
@@ -357,15 +358,15 @@ class _SqliteSessionProvider:
     """Yields a single shared session across the request and later assertions,
     mirroring how the app's own get_async_session is a per-request dependency."""
 
-    def __init__(self, factory: async_sessionmaker) -> None:
+    def __init__(self, factory: async_sessionmaker[AsyncSession]) -> None:
         self._factory = factory
         self.session = factory()
 
-    async def __call__(self):  # noqa: ANN204
+    async def __call__(self) -> AsyncIterator[AsyncSession]:
         yield self.session
 
 
-async def _create_user(session, email: str, password: str) -> None:  # noqa: ANN001
+async def _create_user(session: AsyncSession, email: str, password: str) -> None:
     """Creates a user with an EXTERNAL permission, so login (which requires
     at least one group membership) can succeed for the reset/login assertions."""
     from app.identity.application.use_cases import CreateUser

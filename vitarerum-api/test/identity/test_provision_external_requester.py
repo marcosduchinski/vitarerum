@@ -58,8 +58,17 @@ class InMemoryGroupRepository:
     def __init__(self, groups: list[Group]) -> None:
         self._groups = groups
 
+    async def get_by_id(self, group_id: GroupId) -> Group | None:
+        return next((g for g in self._groups if g.id == group_id), None)
+
     async def get_by_name(self, name: GroupName) -> Group | None:
         return next((g for g in self._groups if g.name == name), None)
+
+    async def list(self) -> list[Group]:
+        return list(self._groups)
+
+    async def count_by_institution(self, institution_id: InstitutionId) -> int:
+        return sum(1 for g in self._groups if g.institution_id == institution_id)
 
 
 class InMemoryPermissionRepository:

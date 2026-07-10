@@ -3,7 +3,7 @@
 Backs the Collection Object Index curator-candidates endpoint: it must return
 only permissions in the requested group, hydrated with user name/email."""
 
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from app.database import Base
@@ -18,7 +18,7 @@ from app.identity.infrastructure.repositories import (
 )
 
 
-async def _session() -> async_sessionmaker:
+async def _session() -> async_sessionmaker[AsyncSession]:
     engine = create_async_engine(
         "sqlite+aiosqlite://",
         poolclass=StaticPool,

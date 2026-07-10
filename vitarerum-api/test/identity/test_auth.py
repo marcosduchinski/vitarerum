@@ -1,12 +1,15 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
+from typing import cast
 
 import pytest
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings as app_settings
 from app.database import get_async_session
 from app.identity.application.password_policy import WeakPassword
 from app.identity.application.ports import UserFilters
@@ -27,7 +30,6 @@ from app.identity.domain.models import (
     User,
     UserId,
 )
-from app.identity.infrastructure import security
 from app.identity.infrastructure.models import (
     GroupRecord,
     InstitutionRecord,
@@ -157,7 +159,11 @@ async def test_authenticate_success_returns_user_and_permissions() -> None:
     got_user, got_perms = await uc.execute("alice@x.org", "secret")
 
     assert got_user.id == "u1"
-    assert [p.group.name for p in got_perms] == [GroupName.CURATORIAL]
+    groups = []
+    for p in got_perms:
+        assert p.group is not None
+        groups.append(p.group.name)
+    assert groups == [GroupName.CURATORIAL]
 
 
 async def test_authenticate_wrong_password_raises() -> None:
@@ -275,7 +281,9 @@ class FakeSession:
     def __init__(self, record: PermissionRecord | None) -> None:
         self._record = record
 
-    async def get(self, model, pk, options=None):  # noqa: ANN001
+    async def get(
+        self, model: type[object], pk: str, options: object = None
+    ) -> PermissionRecord | None:
         return self._record
 
 
@@ -284,20 +292,32 @@ def _bearer(token: str) -> HTTPAuthorizationCredentials:
     return HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
 
 
+async def _caller_permission(
+    record: PermissionRecord | None,
+    *,
+    credentials: HTTPAuthorizationCredentials | None,
+    x_permission_id: str | None,
+) -> Actor:
+    """get_caller_permission expects a real AsyncSession; FakeSession only
+    structurally matches the one method (get) the dependency actually calls,
+    so the cast documents that gap instead of mypy silently widening it."""
+    return await get_caller_permission(
+        cast(AsyncSession, FakeSession(record)),
+        credentials=credentials,
+        x_permission_id=x_permission_id,
+    )
+
+
 async def test_caller_missing_authorization_is_401() -> None:
     with pytest.raises(HTTPException) as exc:
-        await get_caller_permission(
-            FakeSession(None), credentials=None, x_permission_id="perm-1"
-        )
+        await _caller_permission(None, credentials=None, x_permission_id="perm-1")
     assert exc.value.status_code == 401
 
 
 async def test_caller_malformed_token_is_401() -> None:
     with pytest.raises(HTTPException) as exc:
-        await get_caller_permission(
-            FakeSession(None),
-            credentials=_bearer("nonsense"),
-            x_permission_id="perm-1",
+        await _caller_permission(
+            None, credentials=_bearer("nonsense"), x_permission_id="perm-1"
         )
     assert exc.value.status_code == 401
 
@@ -305,17 +325,15 @@ async def test_caller_malformed_token_is_401() -> None:
 async def test_caller_valid_token_missing_permission_header_is_403() -> None:
     credentials = _bearer(create_access_token("u1"))
     with pytest.raises(HTTPException) as exc:
-        await get_caller_permission(
-            FakeSession(None), credentials=credentials, x_permission_id=None
-        )
+        await _caller_permission(None, credentials=credentials, x_permission_id=None)
     assert exc.value.status_code == 403
 
 
 async def test_caller_unknown_permission_is_403() -> None:
     credentials = _bearer(create_access_token("u1"))
     with pytest.raises(HTTPException) as exc:
-        await get_caller_permission(
-            FakeSession(None), credentials=credentials, x_permission_id="perm-1"
+        await _caller_permission(
+            None, credentials=credentials, x_permission_id="perm-1"
         )
     assert exc.value.status_code == 403
 
@@ -324,8 +342,8 @@ async def test_caller_permission_not_owned_is_403() -> None:
     credentials = _bearer(create_access_token("u1"))
     record = _perm_record("someone-else", GroupName.CURATORIAL)
     with pytest.raises(HTTPException) as exc:
-        await get_caller_permission(
-            FakeSession(record), credentials=credentials, x_permission_id="perm-1"
+        await _caller_permission(
+            record, credentials=credentials, x_permission_id="perm-1"
         )
     assert exc.value.status_code == 403
 
@@ -333,8 +351,8 @@ async def test_caller_permission_not_owned_is_403() -> None:
 async def test_caller_valid_and_owned_returns_actor() -> None:
     credentials = _bearer(create_access_token("u1"))
     record = _perm_record("u1", GroupName.CURATORIAL)
-    actor = await get_caller_permission(
-        FakeSession(record), credentials=credentials, x_permission_id="perm-1"
+    actor = await _caller_permission(
+        record, credentials=credentials, x_permission_id="perm-1"
     )
     assert actor.id == "perm-1"
     assert actor.group == GroupName.CURATORIAL
@@ -346,8 +364,8 @@ async def test_caller_token_issued_before_password_change_is_401() -> None:
     changed_at = datetime.now(UTC) + timedelta(seconds=1)
     record = _perm_record("u1", GroupName.CURATORIAL, password_changed_at=changed_at)
     with pytest.raises(HTTPException) as exc:
-        await get_caller_permission(
-            FakeSession(record), credentials=credentials, x_permission_id="perm-1"
+        await _caller_permission(
+            record, credentials=credentials, x_permission_id="perm-1"
         )
     assert exc.value.status_code == 401
 
@@ -356,8 +374,8 @@ async def test_caller_token_issued_after_password_change_is_valid() -> None:
     changed_at = datetime.now(UTC) - timedelta(hours=1)
     credentials = _bearer(create_access_token("u1"))
     record = _perm_record("u1", GroupName.CURATORIAL, password_changed_at=changed_at)
-    actor = await get_caller_permission(
-        FakeSession(record), credentials=credentials, x_permission_id="perm-1"
+    actor = await _caller_permission(
+        record, credentials=credentials, x_permission_id="perm-1"
     )
     assert actor.id == "perm-1"
 
@@ -374,8 +392,8 @@ async def test_caller_token_issued_same_second_as_change_is_valid() -> None:
     changed_at = issued_at + timedelta(microseconds=474224)
     record = _perm_record("u1", GroupName.CURATORIAL, password_changed_at=changed_at)
 
-    actor = await get_caller_permission(
-        FakeSession(record), credentials=credentials, x_permission_id="perm-1"
+    actor = await _caller_permission(
+        record, credentials=credentials, x_permission_id="perm-1"
     )
 
     assert actor.id == "perm-1"
@@ -405,57 +423,72 @@ def test_decode_garbage_token_raises() -> None:
 
 
 def test_expired_token_raises(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(security.settings, "access_token_ttl_minutes", -1)
-    expired = security.create_access_token("u1")
+    # Same settings object create_access_token/decode_access_token close over
+    # (import binds the name to it, not a copy), so patching it here reaches
+    # them without going through app.identity.infrastructure.security.settings
+    # — mypy's strict re-export check doesn't let us reach it that way.
+    monkeypatch.setattr(app_settings, "access_token_ttl_minutes", -1)
+    expired = create_access_token("u1")
     with pytest.raises(TokenError):
-        security.decode_access_token(expired)
+        decode_access_token(expired)
 
 
 # ── POST /auth/login (HTTP shape) ─────────────────────────────────────────────
 
 
+class _Scalars:
+    def __init__(self, items: list[PermissionRecord]) -> None:
+        self._items = items
+
+    def all(self) -> list[PermissionRecord]:
+        return self._items
+
+
 class _LoginResult:
-    def __init__(self, user_record, perm_records):  # noqa: ANN001
+    def __init__(
+        self, user_record: UserRecord | None, perm_records: list[PermissionRecord]
+    ) -> None:
         self._user = user_record
         self._perms = perm_records
 
-    def scalar_one_or_none(self):
+    def scalar_one_or_none(self) -> UserRecord | None:
         return self._user
 
-    def scalar_one(self):
+    def scalar_one(self) -> int:
         return len(self._perms)
 
-    def scalars(self):
-        perms = self._perms
-
-        class _Scalars:
-            def all(self):
-                return perms
-
-        return _Scalars()
+    def scalars(self) -> _Scalars:
+        return _Scalars(self._perms)
 
 
 class LoginSession:
     """Returns a fixed user via scalar_one_or_none and permissions via scalars();
     institution lookups (session.get) return the provided record, if any."""
 
-    def __init__(self, user_record, perm_records, institution_record=None):  # noqa: ANN001
+    def __init__(
+        self,
+        user_record: UserRecord | None,
+        perm_records: list[PermissionRecord],
+        institution_record: InstitutionRecord | None = None,
+    ) -> None:
         self._result = _LoginResult(user_record, perm_records)
         self._institution = institution_record
 
-    async def execute(self, *args, **kwargs):
+    async def execute(self, *args: object, **kwargs: object) -> _LoginResult:
         return self._result
 
-    async def get(self, *args, **kwargs):
+    async def get(self, *args: object, **kwargs: object) -> InstitutionRecord | None:
         return self._institution
 
-    async def commit(self):
+    async def commit(self) -> None:
         return None
 
 
 @asynccontextmanager
-async def login_client(  # noqa: ANN001
-    user_record, perm_records, institution_record=None
+async def login_client(
+    user_record: UserRecord | None,
+    perm_records: list[PermissionRecord],
+    institution_record: InstitutionRecord | None = None,
 ) -> AsyncIterator[AsyncClient]:
     app.dependency_overrides[get_async_session] = lambda: LoginSession(
         user_record, perm_records, institution_record
@@ -466,7 +499,7 @@ async def login_client(  # noqa: ANN001
     app.dependency_overrides.clear()
 
 
-def _login_records(password: str):
+def _login_records(password: str) -> tuple[UserRecord, list[PermissionRecord]]:
     hasher = BcryptPasswordHasher()
     user_rec = UserRecord(
         id="u1",
@@ -545,6 +578,14 @@ async def test_login_missing_password_is_422_with_errors() -> None:
 # ── POST /auth/change-password (HTTP shape) ───────────────────────────────────
 
 
+class _UserResult:
+    def __init__(self, record: UserRecord) -> None:
+        self._record = record
+
+    def scalar_one_or_none(self) -> UserRecord:
+        return self._record
+
+
 class ChangePasswordSession:
     """Fake session backing a single UserRecord for both the get_by_email
     lookup and the update-by-id write the route performs."""
@@ -552,16 +593,12 @@ class ChangePasswordSession:
     def __init__(self, user_record: UserRecord) -> None:
         self._user_record = user_record
 
-    async def execute(self, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003
-        record = self._user_record
+    async def execute(self, *args: object, **kwargs: object) -> _UserResult:
+        return _UserResult(self._user_record)
 
-        class _Result:
-            def scalar_one_or_none(self) -> UserRecord:
-                return record
-
-        return _Result()
-
-    async def get(self, model, pk, options=None):  # noqa: ANN001
+    async def get(
+        self, model: type[object], pk: str, options: object = None
+    ) -> UserRecord | None:
         return self._user_record if pk == self._user_record.id else None
 
     async def flush(self) -> None:
