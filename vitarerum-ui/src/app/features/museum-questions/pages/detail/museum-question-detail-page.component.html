@@ -39,18 +39,6 @@
       </button>
       <button
         type="button"
-        id="answered-history-tab"
-        class="question-detail__tab"
-        [class.question-detail__tab--active]="activePanel() === 'answered-history'"
-        role="tab"
-        aria-controls="answered-history-panel"
-        [attr.aria-selected]="activePanel() === 'answered-history'"
-        (click)="selectPanel('answered-history')"
-      >
-        Answered for this email
-      </button>
-      <button
-        type="button"
         id="ai-assistance-tab"
         class="question-detail__tab"
         [class.question-detail__tab--active]="activePanel() === 'ai-assistance'"
@@ -306,56 +294,6 @@
               <p class="detail-card__empty">This question is closed.</p>
             }
           </section>
-        </section>
-      }
-      @case ('answered-history') {
-        <section
-          id="answered-history-panel"
-          class="question-detail__panel"
-          role="tabpanel"
-          aria-labelledby="answered-history-tab"
-        >
-          @if (historyResource.isLoading()) {
-            <app-loading-state label="Loading answered messages..." />
-          } @else if (historyError()) {
-            <app-error-message [apiError]="historyError()!" (retry)="historyResource.reload()" />
-          } @else if (!answeredHistory().length) {
-            <app-empty-state
-              title="No answered messages"
-              message="There are no previous answered messages for this e-mail."
-            />
-          } @else {
-            <section class="detail-card" aria-labelledby="history-card-title">
-              <h2 id="history-card-title" class="detail-card__title">Answered for this email</h2>
-              <ul class="message-list">
-                @for (item of answeredHistory(); track item.id) {
-                  <li>
-                    <article class="message">
-                      <div class="message__header">
-                        <a class="message__sender" [routerLink]="['/p/museum-questions', item.id]">
-                          {{ item.subject }}
-                        </a>
-                        <span class="message__date">{{ formatDate(item.answeredAt) }}</span>
-                      </div>
-                      <p class="message__body">{{ item.message }}</p>
-                      @if (item.answerBody) {
-                        <p class="message__answer">{{ item.answerBody }}</p>
-                      }
-                    </article>
-                  </li>
-                }
-              </ul>
-              <app-pagination
-                [page]="historyPage()"
-                [totalPages]="historyTotalPages()"
-                [total]="historyTotal()"
-                [pageSize]="10"
-                itemLabel="answered questions"
-                (previous)="previousHistoryPage()"
-                (next)="nextHistoryPage()"
-              />
-            </section>
-          }
         </section>
       }
       @case ('ai-assistance') {

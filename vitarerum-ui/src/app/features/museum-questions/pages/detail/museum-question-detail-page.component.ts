@@ -31,7 +31,7 @@ import {
 import { MuseumQuestion, MuseumQuestionStatus } from '../../models/museum-question.model';
 import { MUSEUM_QUESTION_MANAGEMENT_SERVICE } from '../../services/museum-question-management.service';
 
-type QuestionDetailPanel = 'message' | 'answered-history' | 'ai-assistance';
+type QuestionDetailPanel = 'message' | 'ai-assistance';
 type ReplyEditorCommand = 'bold' | 'italic' | 'insertUnorderedList' | 'removeFormat';
 
 interface TriageHitRow {
@@ -52,7 +52,6 @@ interface TriageObjectResult extends MentionedObject {
   readonly totalPages: number;
 }
 
-const HISTORY_PAGE_SIZE = 10;
 // Backend no longer caps matches (see SEARCH_FETCH_LIMIT_PER_LANGUAGE) — the
 // full list is paginated here instead, at a size that still fits the panel.
 const TRIAGE_HITS_PAGE_SIZE = 5;
@@ -105,7 +104,6 @@ export class MuseumQuestionDetailPageComponent {
     this.normalizeTab(this.tab()),
   );
   protected readonly detailRefreshToken = signal(0);
-  protected readonly historyPage = signal(0);
   protected readonly answerBody = signal('');
   protected readonly outOfScopeReason = signal('');
   protected readonly confirmOutOfScope = signal(false);
@@ -128,46 +126,6 @@ export class MuseumQuestionDetailPageComponent {
   protected readonly question = computed(() => this.questionResource.value() ?? null);
   protected readonly questionError = computed<ApiError | null>(() => {
     const err = this.questionResource.error();
-    return err ? toApiError(err) : null;
-  });
-
-  protected readonly historyResource = resource({
-    params: () => ({
-      requesterEmail: this.question()?.requesterEmail ?? '',
-      questionId: this.question()?.id ?? '',
-      page: this.historyPage(),
-      refresh: this.detailRefreshToken(),
-    }),
-    loader: ({ params }) => {
-      if (!params.requesterEmail) {
-        return Promise.resolve({
-          content: [],
-          page: params.page,
-          size: HISTORY_PAGE_SIZE,
-          totalElements: 0,
-          totalPages: 0,
-        });
-      }
-      return firstValueFrom(
-        this.service.list({
-          status: 'ANSWERED',
-          requesterEmail: params.requesterEmail,
-          page: params.page,
-          size: HISTORY_PAGE_SIZE,
-        }),
-      );
-    },
-  });
-
-  protected readonly answeredHistory = computed(() => this.historyResource.value()?.content ?? []);
-  protected readonly historyTotal = computed(
-    () => this.historyResource.value()?.totalElements ?? 0,
-  );
-  protected readonly historyTotalPages = computed(
-    () => this.historyResource.value()?.totalPages ?? 0,
-  );
-  protected readonly historyError = computed<ApiError | null>(() => {
-    const err = this.historyResource.error();
     return err ? toApiError(err) : null;
   });
 
@@ -292,16 +250,6 @@ export class MuseumQuestionDetailPageComponent {
     this.confirmClose.set(false);
   }
 
-  protected previousHistoryPage(): void {
-    this.historyPage.update((page) => Math.max(0, page - 1));
-  }
-
-  protected nextHistoryPage(): void {
-    this.historyPage.update((page) =>
-      Math.min(Math.max(0, this.historyTotalPages() - 1), page + 1),
-    );
-  }
-
   protected statusLabel(status: MuseumQuestionStatus): string {
     return STATUS_LABELS[status];
   }
@@ -379,7 +327,7 @@ export class MuseumQuestionDetailPageComponent {
   }
 
   private normalizeTab(tab: string | undefined): QuestionDetailPanel {
-    if (tab === 'answered-history' || tab === 'ai-assistance') return tab;
+    if (tab === 'ai-assistance') return tab;
     return 'message';
   }
 
