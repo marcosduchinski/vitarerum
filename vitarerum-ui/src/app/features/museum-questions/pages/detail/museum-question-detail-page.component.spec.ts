@@ -3,11 +3,7 @@ import { provideRouter } from '@angular/router';
 import { of } from 'rxjs';
 
 import { MuseumQuestionTriage } from '../../models/museum-question-triage.model';
-import {
-  MuseumQuestion,
-  MuseumQuestionListQuery,
-  MuseumQuestionPage,
-} from '../../models/museum-question.model';
+import { MuseumQuestion } from '../../models/museum-question.model';
 import { MUSEUM_QUESTION_MANAGEMENT_SERVICE } from '../../services/museum-question-management.service';
 import { MuseumQuestionDetailPageComponent } from './museum-question-detail-page.component';
 
@@ -29,17 +25,6 @@ const QUESTION: MuseumQuestion = {
   outOfScopeEmailSentAt: null,
   closedAt: null,
   closedBy: null,
-};
-
-const ANSWERED: MuseumQuestion = {
-  ...QUESTION,
-  id: 'q2',
-  subject: 'Previous visit',
-  status: 'ANSWERED',
-  answeredAt: '2026-07-04T12:00:00Z',
-  answeredBy: 'perm-staff',
-  answerBody: 'Previous answer',
-  answerSentAt: '2026-07-04T12:00:00Z',
 };
 
 const OUT_OF_SCOPE_TRIAGE: MuseumQuestionTriage = {
@@ -87,7 +72,6 @@ class ServiceStub {
   question = QUESTION;
   triage: MuseumQuestionTriage | null = null;
   nextTriage: MuseumQuestionTriage | null = null;
-  readonly listCalls: MuseumQuestionListQuery[] = [];
   readonly answerCalls: [string, string][] = [];
   readonly outOfScopeCalls: [string, string | null][] = [];
   readonly closeCalls: string[] = [];
@@ -101,17 +85,6 @@ class ServiceStub {
     this.triageCalls.push(questionId);
     this.triage = this.nextTriage;
     return of(this.triage!);
-  }
-
-  list(query: MuseumQuestionListQuery) {
-    this.listCalls.push(query);
-    return of<MuseumQuestionPage>({
-      content: [ANSWERED],
-      page: query.page,
-      size: query.size,
-      totalElements: 1,
-      totalPages: 1,
-    });
   }
 
   get() {
@@ -239,23 +212,14 @@ describe('MuseumQuestionDetailPageComponent', () => {
     expect(service.closeCalls).toEqual(['q1']);
   });
 
-  it('loads answered history for the requester email', async () => {
+  it('does not render the answered history tab', async () => {
     const el = await setup();
-    Array.from(el.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
-      .find((button) => button.textContent?.includes('Answered for this email'))!
-      .click();
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
+    const tabLabels = Array.from(el.querySelectorAll<HTMLButtonElement>('[role="tab"]')).map(
+      (button) => button.textContent?.trim(),
+    );
 
-    expect(service.listCalls.at(-1)).toMatchObject({
-      status: 'ANSWERED',
-      requesterEmail: 'ana@example.org',
-      page: 0,
-      size: 10,
-    });
-    expect(el.textContent).toContain('Previous visit');
-    expect(el.textContent).toContain('Previous answer');
+    expect(tabLabels).toEqual(['Message', 'AI assistance']);
+    expect(el.textContent).not.toContain('Answered for this email');
   });
 
   it('runs AI triage from the message icon and switches to the AI assistance tab', async () => {
