@@ -15,6 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.museum_question_triage.application.use_cases import (
     GetLatestTriage,
+    OverrideTriageVerdict,
+    SyncTriageSearchTerms,
     TriageMuseumQuestion,
 )
 from app.ai.museum_question_triage.domain.ports import (
@@ -65,9 +67,7 @@ def get_triage_repository(session: DBSession) -> TriageRepository:
     return SqlAlchemyTriageRepository(session)
 
 
-MuseumQuestionAclPort = Annotated[
-    MuseumQuestionPort, Depends(get_museum_question_port)
-]
+MuseumQuestionAclPort = Annotated[MuseumQuestionPort, Depends(get_museum_question_port)]
 ModelPort = Annotated[TriageModelPort, Depends(get_triage_model_port)]
 SearchPort = Annotated[ObjectSearchPort, Depends(get_object_search_port)]
 Repository = Annotated[TriageRepository, Depends(get_triage_repository)]
@@ -88,7 +88,26 @@ def get_latest_triage_use_case(repository: Repository) -> GetLatestTriage:
     return GetLatestTriage(repository)
 
 
+def get_override_verdict_use_case(
+    museum_question: MuseumQuestionAclPort,
+    model: ModelPort,
+    repository: Repository,
+) -> OverrideTriageVerdict:
+    return OverrideTriageVerdict(museum_question, model, repository)
+
+
+def get_sync_search_terms_use_case(
+    object_search: SearchPort,
+    repository: Repository,
+) -> SyncTriageSearchTerms:
+    return SyncTriageSearchTerms(object_search, repository)
+
+
 TriageUseCase = Annotated[TriageMuseumQuestion, Depends(get_triage_use_case)]
-GetLatestTriageUseCase = Annotated[
-    GetLatestTriage, Depends(get_latest_triage_use_case)
+GetLatestTriageUseCase = Annotated[GetLatestTriage, Depends(get_latest_triage_use_case)]
+OverrideVerdictUseCase = Annotated[
+    OverrideTriageVerdict, Depends(get_override_verdict_use_case)
+]
+SyncSearchTermsUseCase = Annotated[
+    SyncTriageSearchTerms, Depends(get_sync_search_terms_use_case)
 ]

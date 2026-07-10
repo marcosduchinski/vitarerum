@@ -334,45 +334,144 @@
               <div class="question-detail__status-row">
                 <span
                   class="status-chip"
-                  [class.status-chip--answered]="triage.verdict === 'IN_SCOPE'"
-                  [class.status-chip--out-of-scope]="triage.verdict === 'OUT_OF_SCOPE'"
+                  [class.status-chip--answered]="effectiveVerdict() === 'IN_SCOPE'"
+                  [class.status-chip--out-of-scope]="effectiveVerdict() === 'OUT_OF_SCOPE'"
                 >
-                  {{ triage.verdict === 'IN_SCOPE' ? 'In scope' : 'Out of scope' }}
+                  {{ effectiveVerdict() === 'IN_SCOPE' ? 'In scope' : 'Out of scope' }}
                 </span>
+                @if (triage.staffOverrideVerdict) {
+                  <span class="status-chip status-chip--submitted">Staff-corrected</span>
+                }
+                <button
+                  type="button"
+                  class="action-btn"
+                  [disabled]="verdictOverrideBusy()"
+                  (click)="contestVerdict()"
+                >
+                  {{ verdictOverridePending() ? verdictConfirmLabel() : verdictActionLabel() }}
+                </button>
+                @if (verdictOverridePending()) {
+                  <button
+                    type="button"
+                    class="action-btn"
+                    [disabled]="verdictOverrideBusy()"
+                    (click)="cancelVerdictOverride()"
+                  >
+                    Cancel
+                  </button>
+                }
               </div>
 
-              @if (triage.verdict === 'OUT_OF_SCOPE') {
+              @if (effectiveVerdict() === 'OUT_OF_SCOPE') {
                 <div>
                   <h3 class="detail-card__title">Suggested reply</h3>
                   <p class="message__body">{{ triage.suggestedReply }}</p>
                 </div>
               } @else {
-                @if (!triageObjectResults().length) {
-                  <p class="detail-card__empty">
-                    General visit request — no specific object identified.
-                  </p>
-                } @else {
-                  <section class="triage-search-summary" aria-labelledby="objects-searched-title">
-                    <div class="triage-section-heading">
-                      <h3 id="objects-searched-title">Objects searched</h3>
-                      <span>{{ triageObjectResults().length }} object(s)</span>
-                    </div>
-                    <ul class="triage-object-list">
-                      @for (item of triageObjectResults(); track item.key) {
-                        <li>
-                          <span class="triage-object-list__name">{{ item.portuguese }}</span>
-                          @if (item.english.toLowerCase() !== item.portuguese.toLowerCase()) {
-                            <span class="triage-object-list__translation">{{ item.english }}</span>
+                <section class="triage-search-summary" aria-labelledby="objects-searched-title">
+                  <div class="triage-section-heading">
+                    <h3 id="objects-searched-title">Objects searched</h3>
+                    <span>{{ triageObjectResults().length }} object(s)</span>
+                  </div>
+                  <ul class="triage-object-list">
+                    @for (item of triageObjectResults(); track item.key) {
+                      <li>
+                        <span class="triage-object-list__name">{{ item.portuguese }}</span>
+                        @if (item.english.toLowerCase() !== item.portuguese.toLowerCase()) {
+                          <span class="triage-object-list__translation">{{ item.english }}</span>
+                        }
+                        <span class="triage-object-list__meta">
+                          <span class="status-chip status-chip--closed">
+                            {{ matchCountLabel(item.hits.length) }}
+                          </span>
+                          @if (item.origin === 'STAFF') {
+                            <span class="status-chip status-chip--submitted">Added by staff</span>
                           }
-                          <span class="triage-object-list__count">{{ matchCountLabel(item.hits.length) }}</span>
-                        </li>
-                      }
-                    </ul>
-                  </section>
+                        </span>
+                      </li>
+                    } @empty {
+                      <li class="triage-object-result__empty">
+                        General visit request — no specific object identified yet.
+                      </li>
+                    }
+                  </ul>
 
+                  <form
+                    class="triage-terms-editor"
+                    aria-label="Edit search terms"
+                    (submit)="$event.preventDefault(); submitSearchTerms()"
+                  >
+                    <div class="triage-terms-editor__heading">
+                      <span>Search terms</span>
+                      <span>{{ termsDraft().length }}/{{ MAX_STAFF_SEARCH_TERMS }} terms</span>
+                    </div>
+                    @if (searchTermsError()) {
+                      <app-error-message [apiError]="searchTermsError()!" />
+                    }
+                    @for (term of termsDraft(); track $index) {
+                      <div class="triage-terms-editor__row">
+                        <label>
+                          <span>Português</span>
+                          <input
+                            type="text"
+                            [value]="term.portuguese"
+                            [attr.maxlength]="MAX_SEARCH_TERM_FIELD_LENGTH"
+                            [disabled]="searchTermsBusy()"
+                            (input)="onSearchTermInput($index, 'portuguese', $event)"
+                          />
+                        </label>
+                        <label>
+                          <span>English</span>
+                          <input
+                            type="text"
+                            [value]="term.english"
+                            [attr.maxlength]="MAX_SEARCH_TERM_FIELD_LENGTH"
+                            [disabled]="searchTermsBusy()"
+                            (input)="onSearchTermInput($index, 'english', $event)"
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          class="editor-btn"
+                          [disabled]="searchTermsBusy()"
+                          (click)="removeSearchTermDraft($index)"
+                          aria-label="Remove search term"
+                          title="Remove search term"
+                        >
+                          <span class="pi pi-times" aria-hidden="true"></span>
+                        </button>
+                      </div>
+                    }
+                    <div class="triage-section-heading__actions">
+                      <button
+                        type="button"
+                        class="action-btn"
+                        [disabled]="!canAddSearchTerm()"
+                        (click)="addSearchTermDraft()"
+                      >
+                        <span class="pi pi-plus" aria-hidden="true"></span>
+                        Add term
+                      </button>
+                      <button
+                        type="submit"
+                        class="action-btn action-btn--primary"
+                        [disabled]="searchTermsBusy()"
+                      >
+                        {{ searchTermsBusy() ? 'Searching...' : 'Search' }}
+                      </button>
+                    </div>
+                  </form>
+                </section>
+
+                @if (triageObjectResults().length) {
                   <section class="triage-results" aria-labelledby="triage-results-title">
                     <div class="triage-section-heading">
-                      <h3 id="triage-results-title">Catalogue results</h3>
+                      <div>
+                        <h3 id="triage-results-title">Catalogue results</h3>
+                        @if (triage.searchStrategy) {
+                          <p class="triage-section-heading__note">{{ triage.searchStrategy }}</p>
+                        }
+                      </div>
                       <div class="triage-section-heading__actions">
                         <span>{{ selectedTriageHitKeys().size }} selected</span>
                         <button
@@ -388,60 +487,65 @@
                     </div>
                     <ul class="triage-result-list">
                       @for (item of triageObjectResults(); track item.key) {
-                      <li>
-                        <article class="triage-object-result">
-                          <header class="triage-object-result__header">
-                            <p>{{ objectDisplayName(item) }}</p>
-                            <span>{{ matchCountLabel(item.hits.length) }}</span>
-                          </header>
-                          @for (row of item.pagedHits; track row.key) {
-                            <div class="triage-hit-row">
-                              <label class="triage-hit-row__check">
-                                <input
-                                  type="checkbox"
-                                  [checked]="isTriageHitSelected(row.key)"
-                                  (change)="toggleTriageHitSelection(row.key)"
-                                />
-                                <span>Select</span>
-                              </label>
-                              <div class="triage-hit-row__body">
-                                <strong>{{ row.hit.collectionName }}</strong>
-                                <span class="triage-hit-row__file">{{ row.hit.fileName }}</span>
-                                <span [innerHTML]="highlightHtml(row.hit)"></span>
+                        <li>
+                          <article class="triage-object-result">
+                            <header class="triage-object-result__header">
+                              <p>{{ objectDisplayName(item) }}</p>
+                              <span>{{ matchCountLabel(item.hits.length) }}</span>
+                            </header>
+                            <p class="triage-object-list__translation">
+                              {{ item.languagesSearched.join(' + ') }}
+                            </p>
+                            @for (row of item.pagedHits; track row.key) {
+                              <div class="triage-hit-row">
+                                <label class="triage-hit-row__check">
+                                  <input
+                                    type="checkbox"
+                                    [checked]="isTriageHitSelected(row.key)"
+                                    (change)="toggleTriageHitSelection(row.key)"
+                                  />
+                                  <span>Select</span>
+                                </label>
+                                <div class="triage-hit-row__body">
+                                  <strong>{{ row.hit.collectionName }}</strong>
+                                  <span class="triage-hit-row__file">{{ row.hit.fileName }}</span>
+                                  <span [innerHTML]="highlightHtml(row.hit)"></span>
+                                </div>
+                                <button
+                                  type="button"
+                                  class="triage-hit-row__link"
+                                  (click)="openHitDetails(row)"
+                                >
+                                  <span class="pi pi-external-link" aria-hidden="true"></span>
+                                  Details
+                                </button>
                               </div>
-                              <button
-                                type="button"
-                                class="triage-hit-row__link"
-                                (click)="openHitDetails(row)"
-                              >
-                                <span class="pi pi-external-link" aria-hidden="true"></span>
-                                Details
-                              </button>
-                            </div>
-                          } @empty {
-                            <p class="triage-object-result__empty">Not found in catalogue.</p>
-                          }
-                          @if (item.totalPages > 1) {
-                            <app-pagination
-                              [page]="item.page"
-                              [totalPages]="item.totalPages"
-                              [total]="item.hits.length"
-                              [pageSize]="TRIAGE_HITS_PAGE_SIZE"
-                              itemLabel="matches"
-                              (previous)="previousTriageHitsPage(item)"
-                              (next)="nextTriageHitsPage(item)"
-                            />
-                          }
-                        </article>
-                      </li>
-                    }
-                  </ul>
+                            } @empty {
+                              <p class="triage-object-result__empty">Not found in catalogue.</p>
+                            }
+                            @if (item.totalPages > 1) {
+                              <app-pagination
+                                [page]="item.page"
+                                [totalPages]="item.totalPages"
+                                [total]="item.hits.length"
+                                [pageSize]="TRIAGE_HITS_PAGE_SIZE"
+                                itemLabel="matches"
+                                (previous)="previousTriageHitsPage(item)"
+                                (next)="nextTriageHitsPage(item)"
+                              />
+                            }
+                          </article>
+                        </li>
+                      }
+                    </ul>
                   </section>
                 }
               }
 
               <div class="question-detail__status-row">
-                <span class="message__date">{{ triage.modelName }} · {{ formatDate(triage.createdAt) }}</span>
+                <span class="message__date"
+                  >{{ triage.modelName }} · {{ formatDate(triage.createdAt) }}</span
+                >
                 <button
                   type="button"
                   class="editor-btn"

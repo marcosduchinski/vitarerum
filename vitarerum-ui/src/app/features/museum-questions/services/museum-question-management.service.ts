@@ -2,7 +2,7 @@ import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http'
 import { inject, Injectable, InjectionToken } from '@angular/core';
 import { API_BASE_URL } from '@core/config/app-config.model';
 import { buildApiUrl } from '@core/http/api-url.util';
-import { catchError, Observable, of, throwError } from 'rxjs';
+import { catchError, map, Observable, of, throwError } from 'rxjs';
 
 import {
   AnswerMuseumQuestionRequest,
@@ -11,7 +11,11 @@ import {
   MuseumQuestionListQuery,
   MuseumQuestionPage,
 } from '../models/museum-question.model';
-import { MuseumQuestionTriage } from '../models/museum-question-triage.model';
+import {
+  MuseumQuestionTriage,
+  SearchTermDraft,
+  TriageVerdict,
+} from '../models/museum-question-triage.model';
 
 export interface MuseumQuestionManagementApi {
   list(query: MuseumQuestionListQuery): Observable<MuseumQuestionPage>;
@@ -21,11 +25,40 @@ export interface MuseumQuestionManagementApi {
   close(questionId: string): Observable<MuseumQuestion>;
   getTriage(questionId: string): Observable<MuseumQuestionTriage | null>;
   runTriage(questionId: string): Observable<MuseumQuestionTriage>;
+  overrideTriageVerdict(
+    questionId: string,
+    verdict: TriageVerdict,
+  ): Observable<MuseumQuestionTriage>;
+  syncTriageSearchTerms(
+    questionId: string,
+    terms: readonly SearchTermDraft[],
+  ): Observable<MuseumQuestionTriage>;
 }
 
 export const MUSEUM_QUESTION_MANAGEMENT_SERVICE = new InjectionToken<MuseumQuestionManagementApi>(
   'MUSEUM_QUESTION_MANAGEMENT_SERVICE',
 );
+
+/** Tolerates a backend that hasn't been redeployed with the refinements-plan
+ * fields yet (`effectiveVerdict`/`origin`/`languagesSearched`/`searchStrategy`)
+ * — backend and frontend are independent deploys. TODO(remove after rollout
+ * of the backend refinements is confirmed stable): once that's certain, this
+ * mapping and the fallbacks below can go. */
+function withFallbacks(raw: MuseumQuestionTriage): MuseumQuestionTriage {
+  return {
+    ...raw,
+    effectiveVerdict: raw.effectiveVerdict ?? raw.verdict,
+    searchStrategy: raw.searchStrategy ?? null,
+    mentionedObjects: raw.mentionedObjects.map((obj) => ({
+      ...obj,
+      origin: obj.origin ?? 'AI',
+    })),
+    objectMatches: raw.objectMatches.map((match) => ({
+      ...match,
+      languagesSearched: match.languagesSearched ?? ['pt'],
+    })),
+  };
+}
 
 @Injectable()
 export class MuseumQuestionManagementService implements MuseumQuestionManagementApi {
@@ -62,6 +95,7 @@ export class MuseumQuestionManagementService implements MuseumQuestionManagement
     return this.http
       .get<MuseumQuestionTriage>(this.url(`/museum-questions/${questionId}/triage`))
       .pipe(
+        map((raw) => withFallbacks(raw)),
         catchError((err: unknown) => {
           if (err instanceof HttpErrorResponse && err.status === 404) return of(null);
           return throwError(() => err);
@@ -70,10 +104,32 @@ export class MuseumQuestionManagementService implements MuseumQuestionManagement
   }
 
   runTriage(questionId: string): Observable<MuseumQuestionTriage> {
-    return this.http.post<MuseumQuestionTriage>(
-      this.url(`/museum-questions/${questionId}/triage`),
-      {},
-    );
+    return this.http
+      .post<MuseumQuestionTriage>(this.url(`/museum-questions/${questionId}/triage`), {})
+      .pipe(map((raw) => withFallbacks(raw)));
+  }
+
+  overrideTriageVerdict(
+    questionId: string,
+    verdict: TriageVerdict,
+  ): Observable<MuseumQuestionTriage> {
+    return this.http
+      .patch<MuseumQuestionTriage>(this.url(`/museum-questions/${questionId}/triage/verdict`), {
+        verdict,
+      })
+      .pipe(map((raw) => withFallbacks(raw)));
+  }
+
+  syncTriageSearchTerms(
+    questionId: string,
+    terms: readonly SearchTermDraft[],
+  ): Observable<MuseumQuestionTriage> {
+    return this.http
+      .put<MuseumQuestionTriage>(
+        this.url(`/museum-questions/${questionId}/triage/search-terms`),
+        { terms },
+      )
+      .pipe(map((raw) => withFallbacks(raw)));
   }
 
   private url(path: string): string {

@@ -3,16 +3,23 @@ from datetime import UTC, datetime
 import pytest
 
 from app.ai.museum_question_triage.application.use_cases import (
+    MAX_STAFF_SEARCH_TERMS,
     SEARCH_FETCH_LIMIT_PER_LANGUAGE,
     GetLatestTriage,
     GetLatestTriageInput,
+    OverrideTriageVerdict,
+    OverrideTriageVerdictInput,
+    SyncTriageSearchTerms,
+    SyncTriageSearchTermsInput,
     TriageMuseumQuestion,
     TriageMuseumQuestionInput,
 )
 from app.ai.museum_question_triage.domain.models import (
     MentionedObject,
+    MentionedObjectOrigin,
     MessageTriage,
     ObjectHitView,
+    ObjectTriageMatch,
     QuestionView,
     TriageClassification,
     TriageId,
@@ -21,6 +28,9 @@ from app.ai.museum_question_triage.domain.models import (
 from app.ai.museum_question_triage.domain.ports import (
     ModelUnavailable,
     QuestionNotFound,
+    TriageNotFound,
+    TriageNotInScope,
+    TriageTermValidationError,
 )
 from app.identity.public import Actor, GroupName, PermissionId
 
@@ -92,16 +102,18 @@ class _FakeObjectSearch:
 class _FakeRepo:
     def __init__(self) -> None:
         self.stored: list[MessageTriage] = []
+        self.update_calls: list[MessageTriage] = []
 
     async def add(self, triage: MessageTriage) -> None:
         self.stored.append(triage)
 
-    async def get_latest_by_question(
-        self, question_id: str
-    ) -> MessageTriage | None:
+    async def get_latest_by_question(self, question_id: str) -> MessageTriage | None:
         matches = [t for t in self.stored if t.question_id == question_id]
         matches.sort(key=lambda t: t.created_at, reverse=True)
         return matches[0] if matches else None
+
+    async def update(self, triage: MessageTriage) -> None:
+        self.update_calls.append(triage)
 
 
 def _use_case(
@@ -436,7 +448,326 @@ async def test_get_latest_triage_returns_most_recent() -> None:
     )
     await repo.add(older)
     await repo.add(newer)
-    latest = await GetLatestTriage(repo).execute(
-        GetLatestTriageInput(question_id="q1")
-    )
+    latest = await GetLatestTriage(repo).execute(GetLatestTriageInput(question_id="q1"))
     assert latest == newer
+
+
+def _stored_triage(
+    *,
+    verdict: TriageVerdict = TriageVerdict.IN_SCOPE,
+    is_visit_related: bool = True,
+    mentioned_objects: list[MentionedObject] | None = None,
+    object_matches: list[ObjectTriageMatch] | None = None,
+    suggested_reply: str | None = None,
+) -> MessageTriage:
+    return MessageTriage(
+        id=TriageId("t1"),
+        question_id="q1",
+        verdict=verdict,
+        is_visit_related=is_visit_related,
+        mentioned_objects=mentioned_objects or [],
+        object_matches=object_matches or [],
+        suggested_reply=suggested_reply,
+        llm_model="llama3.1:8b",
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
+    )
+
+
+async def test_override_verdict_sets_effective_verdict_ai_verdict_unchanged() -> None:
+    repo = _FakeRepo()
+    await repo.add(_stored_triage(verdict=TriageVerdict.IN_SCOPE))
+    use_case = OverrideTriageVerdict(_FakeMuseumQuestion(), _FakeModel(), repo)
+
+    result = await use_case.execute(
+        OverrideTriageVerdictInput(
+            question_id="q1", verdict=TriageVerdict.OUT_OF_SCOPE, caller=_STAFF
+        )
+    )
+
+    assert result.verdict is TriageVerdict.IN_SCOPE  # AI's original, untouched
+    assert result.staff_override_verdict is TriageVerdict.OUT_OF_SCOPE
+    assert result.effective_verdict is TriageVerdict.OUT_OF_SCOPE
+    assert result.staff_override_by == _STAFF.email
+    assert result.staff_override_at is not None
+    assert repo.update_calls == [result]
+
+
+async def test_override_to_out_of_scope_drafts_reply_if_missing() -> None:
+    repo = _FakeRepo()
+    await repo.add(_stored_triage(verdict=TriageVerdict.IN_SCOPE, suggested_reply=None))
+    model = _FakeModel(reply="Sorry, out of scope.")
+    use_case = OverrideTriageVerdict(_FakeMuseumQuestion(), model, repo)
+
+    result = await use_case.execute(
+        OverrideTriageVerdictInput(
+            question_id="q1", verdict=TriageVerdict.OUT_OF_SCOPE, caller=_STAFF
+        )
+    )
+
+    assert result.suggested_reply == "Sorry, out of scope."
+    assert model.reply_calls == [_QUESTION.message]
+
+
+async def test_override_does_not_regenerate_an_existing_reply() -> None:
+    repo = _FakeRepo()
+    await repo.add(
+        _stored_triage(
+            verdict=TriageVerdict.OUT_OF_SCOPE, suggested_reply="Original reply."
+        )
+    )
+    model = _FakeModel(reply="Would overwrite.")
+    use_case = OverrideTriageVerdict(_FakeMuseumQuestion(), model, repo)
+
+    # Flip to IN_SCOPE and back to OUT_OF_SCOPE — the original reply must
+    # survive, and the model must not be called again since it was never
+    # cleared.
+    await use_case.execute(
+        OverrideTriageVerdictInput(
+            question_id="q1", verdict=TriageVerdict.IN_SCOPE, caller=_STAFF
+        )
+    )
+    result = await use_case.execute(
+        OverrideTriageVerdictInput(
+            question_id="q1", verdict=TriageVerdict.OUT_OF_SCOPE, caller=_STAFF
+        )
+    )
+
+    assert result.suggested_reply == "Original reply."
+    assert model.reply_calls == []
+
+
+async def test_override_raises_when_no_triage_exists() -> None:
+    use_case = OverrideTriageVerdict(_FakeMuseumQuestion(), _FakeModel(), _FakeRepo())
+    with pytest.raises(TriageNotFound):
+        await use_case.execute(
+            OverrideTriageVerdictInput(
+                question_id="missing", verdict=TriageVerdict.OUT_OF_SCOPE, caller=_STAFF
+            )
+        )
+
+
+async def test_sync_search_terms_adds_new_term_and_searches_it() -> None:
+    repo = _FakeRepo()
+    await repo.add(_stored_triage())
+    hit = ObjectHitView(
+        collection_id="c1",
+        collection_name="Zoology",
+        file_name="zoology.xlsx",
+        highlight="<b>Vulpes vulpes</b>",
+    )
+    object_search = _FakeObjectSearch({"Vulpes vulpes": [hit]})
+    use_case = SyncTriageSearchTerms(object_search, repo)
+
+    result = await use_case.execute(
+        SyncTriageSearchTermsInput(
+            question_id="q1",
+            terms=[("Vulpes vulpes", "Vulpes vulpes")],
+            caller=_STAFF,
+        )
+    )
+
+    assert result.mentioned_objects == [
+        MentionedObject(
+            english="Vulpes vulpes",
+            portuguese="Vulpes vulpes",
+            origin=MentionedObjectOrigin.STAFF,
+        )
+    ]
+    assert result.object_matches[0].hits == [hit]
+    assert result.object_matches[0].languages_searched == ["pt"]
+    assert object_search.calls == [
+        (_STAFF, "Vulpes vulpes", SEARCH_FETCH_LIMIT_PER_LANGUAGE)
+    ]
+
+
+async def test_sync_search_terms_removes_term_no_longer_present() -> None:
+    kept_match = ObjectTriageMatch(
+        english="Blue whale",
+        portuguese="Baleia azul",
+        hits=[],
+        languages_searched=["pt", "en"],
+    )
+    removed_match = ObjectTriageMatch(
+        english="Fox", portuguese="Raposa", hits=[], languages_searched=["pt", "en"]
+    )
+    repo = _FakeRepo()
+    await repo.add(
+        _stored_triage(
+            mentioned_objects=[
+                MentionedObject(english="Blue whale", portuguese="Baleia azul"),
+                MentionedObject(english="Fox", portuguese="Raposa"),
+            ],
+            object_matches=[kept_match, removed_match],
+        )
+    )
+    use_case = SyncTriageSearchTerms(_FakeObjectSearch(), repo)
+
+    result = await use_case.execute(
+        SyncTriageSearchTermsInput(
+            question_id="q1", terms=[("Blue whale", "Baleia azul")], caller=_STAFF
+        )
+    )
+
+    assert result.mentioned_objects == [
+        MentionedObject(english="Blue whale", portuguese="Baleia azul")
+    ]
+    assert result.object_matches == [kept_match]
+
+
+async def test_sync_search_terms_keeps_unchanged_term_without_re_searching() -> None:
+    existing_match = ObjectTriageMatch(
+        english="Blue whale",
+        portuguese="Baleia azul",
+        hits=[],
+        languages_searched=["pt", "en"],
+    )
+    repo = _FakeRepo()
+    await repo.add(
+        _stored_triage(
+            mentioned_objects=[
+                MentionedObject(english="Blue whale", portuguese="Baleia azul")
+            ],
+            object_matches=[existing_match],
+        )
+    )
+    object_search = _FakeObjectSearch()
+    use_case = SyncTriageSearchTerms(object_search, repo)
+
+    result = await use_case.execute(
+        SyncTriageSearchTermsInput(
+            question_id="q1", terms=[("Blue whale", "Baleia azul")], caller=_STAFF
+        )
+    )
+
+    assert result.object_matches == [existing_match]
+    assert object_search.calls == []
+
+
+async def test_sync_search_terms_edited_term_is_drop_and_add_not_correlated() -> None:
+    # Editing "raposa"/"fox" into "Vulpes vulpes" changes the (portuguese,
+    # english) key entirely — the diff must treat it as drop-the-old,
+    # search-the-new, not try to detect "this is the same item, edited".
+    old_match = ObjectTriageMatch(
+        english="Fox", portuguese="Raposa", hits=[], languages_searched=["pt", "en"]
+    )
+    repo = _FakeRepo()
+    await repo.add(
+        _stored_triage(
+            mentioned_objects=[MentionedObject(english="Fox", portuguese="Raposa")],
+            object_matches=[old_match],
+        )
+    )
+    new_hit = ObjectHitView(
+        collection_id="c1",
+        collection_name="Zoology",
+        file_name="zoology.xlsx",
+        highlight="<b>Vulpes vulpes</b>",
+    )
+    object_search = _FakeObjectSearch({"Vulpes vulpes": [new_hit]})
+    use_case = SyncTriageSearchTerms(object_search, repo)
+
+    result = await use_case.execute(
+        SyncTriageSearchTermsInput(
+            question_id="q1",
+            terms=[("Vulpes vulpes", "Vulpes vulpes")],
+            caller=_STAFF,
+        )
+    )
+
+    assert result.mentioned_objects == [
+        MentionedObject(
+            english="Vulpes vulpes",
+            portuguese="Vulpes vulpes",
+            origin=MentionedObjectOrigin.STAFF,
+        )
+    ]
+    assert result.object_matches[0].hits == [new_hit]
+
+
+async def test_sync_search_terms_rejects_when_out_of_scope() -> None:
+    repo = _FakeRepo()
+    await repo.add(_stored_triage(verdict=TriageVerdict.OUT_OF_SCOPE))
+    use_case = SyncTriageSearchTerms(_FakeObjectSearch(), repo)
+
+    with pytest.raises(TriageNotInScope):
+        await use_case.execute(
+            SyncTriageSearchTermsInput(
+                question_id="q1", terms=[("Fox", "Raposa")], caller=_STAFF
+            )
+        )
+
+
+async def test_sync_search_terms_rejects_too_many_terms() -> None:
+    repo = _FakeRepo()
+    await repo.add(_stored_triage())
+    use_case = SyncTriageSearchTerms(_FakeObjectSearch(), repo)
+
+    too_many = [(f"term{i}", f"termo{i}") for i in range(MAX_STAFF_SEARCH_TERMS + 1)]
+    with pytest.raises(TriageTermValidationError):
+        await use_case.execute(
+            SyncTriageSearchTermsInput(question_id="q1", terms=too_many, caller=_STAFF)
+        )
+
+
+async def test_sync_search_terms_rejects_field_too_long() -> None:
+    repo = _FakeRepo()
+    await repo.add(_stored_triage())
+    use_case = SyncTriageSearchTerms(_FakeObjectSearch(), repo)
+
+    with pytest.raises(TriageTermValidationError):
+        await use_case.execute(
+            SyncTriageSearchTermsInput(
+                question_id="q1", terms=[("x" * 201, "y")], caller=_STAFF
+            )
+        )
+
+
+async def test_sync_search_terms_length_checked_after_trimming() -> None:
+    # A field that only exceeds the limit because of surrounding whitespace
+    # must not be rejected — the check applies to the trimmed value, matching
+    # the documented order (normalize, then validate).
+    repo = _FakeRepo()
+    await repo.add(_stored_triage())
+    object_search = _FakeObjectSearch({"x": []})
+    use_case = SyncTriageSearchTerms(object_search, repo)
+
+    padded = f"{'  ' * 5}x{'  ' * 5}"  # 21 chars raw, 1 char trimmed
+    result = await use_case.execute(
+        SyncTriageSearchTermsInput(
+            question_id="q1", terms=[(padded, padded)], caller=_STAFF
+        )
+    )
+
+    assert result.mentioned_objects == [
+        MentionedObject(english="x", portuguese="x", origin=MentionedObjectOrigin.STAFF)
+    ]
+
+
+async def test_sync_search_terms_empty_list_is_valid_and_clears_matches() -> None:
+    repo = _FakeRepo()
+    await repo.add(
+        _stored_triage(
+            mentioned_objects=[MentionedObject(english="Fox", portuguese="Raposa")],
+            object_matches=[
+                ObjectTriageMatch(english="Fox", portuguese="Raposa", hits=[])
+            ],
+        )
+    )
+    use_case = SyncTriageSearchTerms(_FakeObjectSearch(), repo)
+
+    result = await use_case.execute(
+        SyncTriageSearchTermsInput(question_id="q1", terms=[], caller=_STAFF)
+    )
+
+    assert result.mentioned_objects == []
+    assert result.object_matches == []
+
+
+async def test_sync_search_terms_raises_when_no_triage_exists() -> None:
+    use_case = SyncTriageSearchTerms(_FakeObjectSearch(), _FakeRepo())
+    with pytest.raises(TriageNotFound):
+        await use_case.execute(
+            SyncTriageSearchTermsInput(
+                question_id="missing", terms=[("Fox", "Raposa")], caller=_STAFF
+            )
+        )

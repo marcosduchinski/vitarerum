@@ -94,12 +94,16 @@ class _FakeRepo:
     async def add(self, triage: MessageTriage) -> None:
         self.stored.append(triage)
 
-    async def get_latest_by_question(
-        self, question_id: str
-    ) -> MessageTriage | None:
+    async def get_latest_by_question(self, question_id: str) -> MessageTriage | None:
         matches = [t for t in self.stored if t.question_id == question_id]
         matches.sort(key=lambda t: t.created_at, reverse=True)
         return matches[0] if matches else None
+
+    async def update(self, triage: MessageTriage) -> None:
+        for index, existing in enumerate(self.stored):
+            if existing.id == triage.id:
+                self.stored[index] = triage
+                return
 
 
 class _FakeSession:
@@ -117,12 +121,12 @@ async def _client(
     repo: _FakeRepo | None = None,
 ) -> AsyncIterator[AsyncClient]:
     app.dependency_overrides[get_caller_permission] = lambda: caller
-    app.dependency_overrides[get_museum_question_port] = (
-        lambda: museum_question or _FakeMuseumQuestion()
+    app.dependency_overrides[get_museum_question_port] = lambda: (
+        museum_question or _FakeMuseumQuestion()
     )
     app.dependency_overrides[get_triage_model_port] = lambda: model or _FakeModel()
-    app.dependency_overrides[get_object_search_port] = (
-        lambda: object_search or _FakeObjectSearch()
+    app.dependency_overrides[get_object_search_port] = lambda: (
+        object_search or _FakeObjectSearch()
     )
     app.dependency_overrides[get_triage_repository] = lambda: repo or _FakeRepo()
     app.dependency_overrides[get_async_session] = lambda: _FakeSession()
@@ -165,7 +169,10 @@ async def test_in_scope_with_object_returns_search_hits() -> None:
     assert resp.status_code == 200
     body = resp.json()
     assert body["verdict"] == "IN_SCOPE"
+    assert body["effectiveVerdict"] == "IN_SCOPE"
+    assert body["staffOverrideVerdict"] is None
     assert body["suggestedReply"] is None
+    assert body["searchStrategy"]
     assert body["objectMatches"] == [
         {
             "english": "Allende",
@@ -178,14 +185,16 @@ async def test_in_scope_with_object_returns_search_hits() -> None:
                     "highlight": "<b>Allende</b>",
                 }
             ],
+            "languagesSearched": ["pt"],
         }
+    ]
+    assert body["mentionedObjects"] == [
+        {"english": "Allende", "portuguese": "Allende", "origin": "AI"}
     ]
 
 
 async def test_missing_question_is_404() -> None:
-    async with _client(
-        museum_question=_FakeMuseumQuestion(question=None)
-    ) as client:
+    async with _client(museum_question=_FakeMuseumQuestion(question=None)) as client:
         resp = await client.post(_URL)
     assert resp.status_code == 404
     assert resp.json()["error"] == "MUSEUM_QUESTION_NOT_FOUND"
@@ -230,4 +239,115 @@ async def test_get_returns_latest_stored_triage() -> None:
 async def test_get_forbidden_for_external() -> None:
     async with _client(caller=_EXTERNAL) as client:
         resp = await client.get(_URL)
+    assert resp.status_code == 403
+
+
+_VERDICT_URL = "/api/v1/museum-questions/q1/triage/verdict"
+_SEARCH_TERMS_URL = "/api/v1/museum-questions/q1/triage/search-terms"
+
+
+async def test_override_verdict_flips_effective_verdict() -> None:
+    repo = _FakeRepo()
+    async with _client(
+        repo=repo,
+        model=_FakeModel(is_visit_related=True),
+    ) as client:
+        await client.post(_URL)
+        resp = await client.patch(_VERDICT_URL, json={"verdict": "OUT_OF_SCOPE"})
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["verdict"] == "IN_SCOPE"
+    assert body["effectiveVerdict"] == "OUT_OF_SCOPE"
+    assert body["staffOverrideVerdict"] == "OUT_OF_SCOPE"
+    assert body["suggestedReply"]  # lazily drafted since it flipped OUT_OF_SCOPE
+
+
+async def test_override_verdict_404_when_no_triage_yet() -> None:
+    async with _client() as client:
+        resp = await client.patch(_VERDICT_URL, json={"verdict": "OUT_OF_SCOPE"})
+    assert resp.status_code == 404
+    assert resp.json()["error"] == "TRIAGE_NOT_FOUND"
+
+
+async def test_override_verdict_forbidden_for_external() -> None:
+    async with _client(caller=_EXTERNAL) as client:
+        resp = await client.patch(_VERDICT_URL, json={"verdict": "OUT_OF_SCOPE"})
+    assert resp.status_code == 403
+
+
+async def test_sync_search_terms_adds_and_searches() -> None:
+    hit = ObjectHitView(
+        collection_id="c1",
+        collection_name="Zoology",
+        file_name="zoology.xlsx",
+        highlight="<b>Vulpes vulpes</b>",
+    )
+    repo = _FakeRepo()
+    async with _client(
+        repo=repo,
+        model=_FakeModel(is_visit_related=True),
+        object_search=_FakeObjectSearch({"Vulpes vulpes": [hit]}),
+    ) as client:
+        await client.post(_URL)
+        resp = await client.put(
+            _SEARCH_TERMS_URL,
+            json={
+                "terms": [{"english": "Vulpes vulpes", "portuguese": "Vulpes vulpes"}]
+            },
+        )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["mentionedObjects"] == [
+        {"english": "Vulpes vulpes", "portuguese": "Vulpes vulpes", "origin": "STAFF"}
+    ]
+    assert body["objectMatches"][0]["hits"] == [
+        {
+            "collectionId": "c1",
+            "collectionName": "Zoology",
+            "fileName": "zoology.xlsx",
+            "highlight": "<b>Vulpes vulpes</b>",
+        }
+    ]
+
+
+async def test_sync_search_terms_409_when_out_of_scope() -> None:
+    repo = _FakeRepo()
+    async with _client(repo=repo, model=_FakeModel(is_visit_related=False)) as client:
+        await client.post(_URL)
+        resp = await client.put(_SEARCH_TERMS_URL, json={"terms": []})
+
+    assert resp.status_code == 409
+    assert resp.json()["error"] == "TRIAGE_NOT_IN_SCOPE"
+
+
+async def test_sync_search_terms_422_when_too_many_terms() -> None:
+    repo = _FakeRepo()
+    async with _client(repo=repo, model=_FakeModel(is_visit_related=True)) as client:
+        await client.post(_URL)
+        resp = await client.put(
+            _SEARCH_TERMS_URL,
+            json={
+                "terms": [
+                    {"english": f"term{i}", "portuguese": f"termo{i}"}
+                    for i in range(11)
+                ]
+            },
+        )
+
+    assert resp.status_code == 422
+    assert resp.json()["error"] == "INVALID_SEARCH_TERMS"
+
+
+async def test_sync_search_terms_404_when_no_triage_yet() -> None:
+    async with _client() as client:
+        resp = await client.put(_SEARCH_TERMS_URL, json={"terms": []})
+    assert resp.status_code == 404
+    assert resp.json()["error"] == "TRIAGE_NOT_FOUND"
+
+
+async def test_sync_search_terms_forbidden_for_external() -> None:
+    async with _client(caller=_EXTERNAL) as client:
+        resp = await client.put(_SEARCH_TERMS_URL, json={"terms": []})
     assert resp.status_code == 403

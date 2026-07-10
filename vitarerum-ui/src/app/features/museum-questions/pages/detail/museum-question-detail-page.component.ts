@@ -27,12 +27,15 @@ import {
   MuseumQuestionTriage,
   ObjectTriageHit,
   ObjectTriageMatch,
+  SearchTermDraft,
+  TriageVerdict,
 } from '../../models/museum-question-triage.model';
 import { MuseumQuestion, MuseumQuestionStatus } from '../../models/museum-question.model';
 import { MUSEUM_QUESTION_MANAGEMENT_SERVICE } from '../../services/museum-question-management.service';
 
 type QuestionDetailPanel = 'message' | 'ai-assistance';
 type ReplyEditorCommand = 'bold' | 'italic' | 'insertUnorderedList' | 'removeFormat';
+type SearchTermField = 'english' | 'portuguese';
 
 interface TriageHitRow {
   readonly key: string;
@@ -43,6 +46,7 @@ interface TriageHitRow {
 
 interface TriageObjectResult extends MentionedObject {
   readonly key: string;
+  readonly languagesSearched: readonly string[];
   /** Full merged/deduplicated list — used for the match count and for
    * "Add to reply" selection, which must work across every page. */
   readonly hits: readonly TriageHitRow[];
@@ -51,6 +55,12 @@ interface TriageObjectResult extends MentionedObject {
   readonly page: number;
   readonly totalPages: number;
 }
+
+// A staff-submitted search term cannot exceed this length per field
+// (backend rejects with 422 above it — kept in sync with
+// _MAX_TERM_FIELD_LENGTH in app/ai/museum_question_triage/application/use_cases.py).
+const MAX_SEARCH_TERM_FIELD_LENGTH = 200;
+const MAX_STAFF_SEARCH_TERMS = 10;
 
 // Backend no longer caps matches (see SEARCH_FETCH_LIMIT_PER_LANGUAGE) — the
 // full list is paginated here instead, at a size that still fits the panel.
@@ -117,6 +127,12 @@ export class MuseumQuestionDetailPageComponent {
   protected readonly selectedTriageHit = signal<TriageHitRow | null>(null);
   protected readonly triageHitPages = signal<ReadonlyMap<string, number>>(new Map());
   protected readonly TRIAGE_HITS_PAGE_SIZE = TRIAGE_HITS_PAGE_SIZE;
+  protected readonly MAX_SEARCH_TERM_FIELD_LENGTH = MAX_SEARCH_TERM_FIELD_LENGTH;
+  protected readonly MAX_STAFF_SEARCH_TERMS = MAX_STAFF_SEARCH_TERMS;
+  protected readonly verdictOverridePending = signal(false);
+  protected readonly verdictOverrideBusy = signal(false);
+  protected readonly searchTermsBusy = signal(false);
+  protected readonly searchTermsError = signal<ApiError | null>(null);
 
   protected readonly questionResource = resource({
     params: () => ({ id: this.id(), refresh: this.detailRefreshToken() }),
@@ -141,9 +157,20 @@ export class MuseumQuestionDetailPageComponent {
     const err = this.triageResource.error();
     return err ? toApiError(err) : null;
   });
+  /** The verdict that actually applies — a staff override if one was made,
+   * otherwise the AI's own verdict. All display logic reads this, never
+   * `triage().verdict` directly (that field is the AI's untouched original,
+   * kept only for reference). */
+  protected readonly effectiveVerdict = computed<TriageVerdict | null>(
+    () => this.triage()?.effectiveVerdict ?? null,
+  );
   protected readonly triageObjectResults = computed<readonly TriageObjectResult[]>(() => {
     const pages = this.triageHitPages();
-    return (this.triage()?.objectMatches ?? []).map((match) => {
+    const triage = this.triage();
+    const originByKey = new Map(
+      (triage?.mentionedObjects ?? []).map((obj) => [this.triageObjectKey(obj), obj.origin]),
+    );
+    return (triage?.objectMatches ?? []).map((match) => {
       const key = this.triageObjectKey(match);
       const hits = match.hits.map((hit) => this.triageHitRow(match, hit));
       const totalPages = Math.max(1, Math.ceil(hits.length / TRIAGE_HITS_PAGE_SIZE));
@@ -152,6 +179,8 @@ export class MuseumQuestionDetailPageComponent {
         key,
         english: match.english,
         portuguese: match.portuguese,
+        origin: originByKey.get(key) ?? 'AI',
+        languagesSearched: match.languagesSearched,
         hits,
         page,
         totalPages,
@@ -159,6 +188,19 @@ export class MuseumQuestionDetailPageComponent {
       };
     });
   });
+  /** Editable working copy of the search terms — resets whenever the triage
+   * reloads (e.g. after a successful submit, or a re-run). Deliberately typed
+   * as `SearchTermDraft` (no `origin`): the backend computes provenance from
+   * the diff, this is just what the staff is editing right now. */
+  protected readonly termsDraft = linkedSignal<readonly SearchTermDraft[]>(() =>
+    (this.triage()?.mentionedObjects ?? []).map(({ english, portuguese }) => ({
+      english,
+      portuguese,
+    })),
+  );
+  protected readonly canAddSearchTerm = computed(
+    () => this.termsDraft().length < MAX_STAFF_SEARCH_TERMS && !this.searchTermsBusy(),
+  );
   protected readonly selectedTriageHitRows = computed<readonly TriageHitRow[]>(() => {
     const selectedKeys = this.selectedTriageHitKeys();
     return this.triageObjectResults()
@@ -250,6 +292,82 @@ export class MuseumQuestionDetailPageComponent {
     this.confirmClose.set(false);
   }
 
+  /** Label depends on the *current* effective verdict so the action is
+   * never ambiguous — never a generic "contest classification". */
+  protected verdictActionLabel(): string {
+    return this.effectiveVerdict() === 'OUT_OF_SCOPE'
+      ? 'Marcar como dentro de escopo'
+      : 'Marcar como fora de escopo';
+  }
+
+  protected verdictConfirmLabel(): string {
+    return this.effectiveVerdict() === 'OUT_OF_SCOPE'
+      ? 'Confirm mark in scope'
+      : 'Confirm mark out of scope';
+  }
+
+  protected async contestVerdict(): Promise<void> {
+    if (!this.verdictOverridePending()) {
+      this.verdictOverridePending.set(true);
+      return;
+    }
+    const triage = this.triage();
+    if (!triage) return;
+    const nextVerdict: TriageVerdict =
+      triage.effectiveVerdict === 'OUT_OF_SCOPE' ? 'IN_SCOPE' : 'OUT_OF_SCOPE';
+
+    this.verdictOverrideBusy.set(true);
+    this.triageError.set(null);
+    try {
+      await firstValueFrom(this.service.overrideTriageVerdict(triage.questionId, nextVerdict));
+      this.triageRefreshToken.update((value) => value + 1);
+      this.verdictOverridePending.set(false);
+    } catch (err) {
+      this.triageError.set(toApiError(err));
+    } finally {
+      this.verdictOverrideBusy.set(false);
+    }
+  }
+
+  protected cancelVerdictOverride(): void {
+    this.verdictOverridePending.set(false);
+  }
+
+  protected onSearchTermInput(index: number, field: SearchTermField, event: Event): void {
+    const value = (event.target as HTMLInputElement).value;
+    this.termsDraft.update((current) =>
+      current.map((term, i) => (i === index ? { ...term, [field]: value } : term)),
+    );
+  }
+
+  protected addSearchTermDraft(): void {
+    this.termsDraft.update((current) => [...current, { english: '', portuguese: '' }]);
+  }
+
+  protected removeSearchTermDraft(index: number): void {
+    this.termsDraft.update((current) => current.filter((_, i) => i !== index));
+  }
+
+  protected async submitSearchTerms(): Promise<void> {
+    const triage = this.triage();
+    if (!triage || this.searchTermsBusy()) return;
+
+    this.searchTermsBusy.set(true);
+    this.searchTermsError.set(null);
+    try {
+      await firstValueFrom(
+        this.service.syncTriageSearchTerms(triage.questionId, this.termsDraft()),
+      );
+      this.selectedTriageHitKeys.set(new Set());
+      this.triageHitPages.set(new Map());
+      this.triageRefreshToken.update((value) => value + 1);
+    } catch (err) {
+      this.searchTermsError.set(toApiError(err));
+    } finally {
+      this.searchTermsBusy.set(false);
+    }
+  }
+
   protected statusLabel(status: MuseumQuestionStatus): string {
     return STATUS_LABELS[status];
   }
@@ -260,7 +378,7 @@ export class MuseumQuestionDetailPageComponent {
     return this.sanitizer.bypassSecurityTrustHtml(highlightToSafeMarkup(hit.highlight));
   }
 
-  protected objectDisplayName(item: MentionedObject): string {
+  protected objectDisplayName(item: { english: string; portuguese: string }): string {
     return item.english.toLowerCase() === item.portuguese.toLowerCase()
       ? item.portuguese
       : `${item.portuguese} (${item.english})`;
@@ -354,8 +472,8 @@ export class MuseumQuestionDetailPageComponent {
     });
   }
 
-  private triageObjectKey(match: ObjectTriageMatch): string {
-    return `${match.portuguese}:${match.english}`.toLowerCase();
+  private triageObjectKey(item: { english: string; portuguese: string }): string {
+    return `${item.portuguese}:${item.english}`.toLowerCase();
   }
 
   private triageHitRow(match: ObjectTriageMatch, hit: ObjectTriageHit): TriageHitRow {

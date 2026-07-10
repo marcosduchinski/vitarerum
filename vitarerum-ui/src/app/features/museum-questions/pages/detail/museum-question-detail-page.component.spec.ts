@@ -2,7 +2,11 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { of } from 'rxjs';
 
-import { MuseumQuestionTriage } from '../../models/museum-question-triage.model';
+import {
+  MuseumQuestionTriage,
+  SearchTermDraft,
+  TriageVerdict,
+} from '../../models/museum-question-triage.model';
 import { MuseumQuestion } from '../../models/museum-question.model';
 import { MUSEUM_QUESTION_MANAGEMENT_SERVICE } from '../../services/museum-question-management.service';
 import { MuseumQuestionDetailPageComponent } from './museum-question-detail-page.component';
@@ -31,10 +35,13 @@ const OUT_OF_SCOPE_TRIAGE: MuseumQuestionTriage = {
   id: 't1',
   questionId: 'q1',
   verdict: 'OUT_OF_SCOPE',
+  effectiveVerdict: 'OUT_OF_SCOPE',
+  staffOverrideVerdict: null,
   isVisitRelated: false,
   mentionedObjects: [],
   objectMatches: [],
   suggestedReply: 'This falls outside the collection-use scope.',
+  searchStrategy: null,
   modelName: 'llama3.1:8b',
   createdAt: '2026-07-05T12:00:00Z',
 };
@@ -43,10 +50,12 @@ const IN_SCOPE_TRIAGE: MuseumQuestionTriage = {
   id: 't2',
   questionId: 'q1',
   verdict: 'IN_SCOPE',
+  effectiveVerdict: 'IN_SCOPE',
+  staffOverrideVerdict: null,
   isVisitRelated: true,
   mentionedObjects: [
-    { english: 'Allende meteorite', portuguese: 'Meteorito Allende' },
-    { english: 'Ghost object', portuguese: 'Objeto fantasma' },
+    { english: 'Allende meteorite', portuguese: 'Meteorito Allende', origin: 'AI' },
+    { english: 'Ghost object', portuguese: 'Objeto fantasma', origin: 'AI' },
   ],
   objectMatches: [
     {
@@ -60,10 +69,17 @@ const IN_SCOPE_TRIAGE: MuseumQuestionTriage = {
           highlight: '<b>Allende</b> meteorite',
         },
       ],
+      languagesSearched: ['pt', 'en'],
     },
-    { english: 'Ghost object', portuguese: 'Objeto fantasma', hits: [] },
+    {
+      english: 'Ghost object',
+      portuguese: 'Objeto fantasma',
+      hits: [],
+      languagesSearched: ['pt', 'en'],
+    },
   ],
   suggestedReply: null,
+  searchStrategy: 'Correspondência aproximada por similaridade textual (não é busca exata).',
   modelName: 'llama3.1:8b',
   createdAt: '2026-07-05T12:00:00Z',
 };
@@ -76,6 +92,8 @@ class ServiceStub {
   readonly outOfScopeCalls: [string, string | null][] = [];
   readonly closeCalls: string[] = [];
   readonly triageCalls: string[] = [];
+  readonly overrideVerdictCalls: [string, TriageVerdict][] = [];
+  readonly syncSearchTermsCalls: [string, readonly SearchTermDraft[]][] = [];
 
   getTriage() {
     return of(this.triage);
@@ -85,6 +103,31 @@ class ServiceStub {
     this.triageCalls.push(questionId);
     this.triage = this.nextTriage;
     return of(this.triage!);
+  }
+
+  overrideTriageVerdict(questionId: string, verdict: TriageVerdict) {
+    this.overrideVerdictCalls.push([questionId, verdict]);
+    this.triage = {
+      ...this.triage!,
+      staffOverrideVerdict: verdict,
+      effectiveVerdict: verdict,
+      searchStrategy: verdict === 'IN_SCOPE' ? 'Correspondência aproximada.' : null,
+      suggestedReply:
+        verdict === 'OUT_OF_SCOPE' && !this.triage!.suggestedReply
+          ? 'Drafted out-of-scope reply.'
+          : this.triage!.suggestedReply,
+    };
+    return of(this.triage);
+  }
+
+  syncTriageSearchTerms(questionId: string, terms: readonly SearchTermDraft[]) {
+    this.syncSearchTermsCalls.push([questionId, terms]);
+    this.triage = {
+      ...this.triage!,
+      mentionedObjects: terms.map((term) => ({ ...term, origin: 'STAFF' })),
+      objectMatches: terms.map((term) => ({ ...term, hits: [], languagesSearched: ['pt'] })),
+    };
+    return of(this.triage);
   }
 
   get() {
@@ -358,7 +401,7 @@ describe('MuseumQuestionDetailPageComponent', () => {
     service.nextTriage = {
       ...IN_SCOPE_TRIAGE,
       mentionedObjects: [
-        { english: 'Allende meteorite', portuguese: 'Meteorito Allende' },
+        { english: 'Allende meteorite', portuguese: 'Meteorito Allende', origin: 'AI' },
       ],
       objectMatches: [
         {
@@ -372,6 +415,7 @@ describe('MuseumQuestionDetailPageComponent', () => {
               highlight: '<img src=x onerror=alert(1)> <b>Allende</b>',
             },
           ],
+          languagesSearched: ['pt'],
         },
       ],
     };
@@ -384,5 +428,104 @@ describe('MuseumQuestionDetailPageComponent', () => {
     expect(el.querySelector('img')).toBeNull();
     expect(el.textContent).toContain('<img');
     expect(el.querySelector('mark')?.textContent).toBe('Allende');
+  });
+
+  it('renders the catalogue search strategy line when in scope', async () => {
+    const el = await setup();
+    service.nextTriage = IN_SCOPE_TRIAGE;
+
+    el.querySelector<HTMLButtonElement>('[aria-label="Run AI triage"]')!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(el.textContent).toContain('Correspondência aproximada por similaridade textual');
+    expect(el.textContent).toContain('pt + en');
+  });
+
+  it('contests the verdict and flips the displayed view without re-running triage', async () => {
+    const el = await setup();
+    service.nextTriage = IN_SCOPE_TRIAGE;
+
+    el.querySelector<HTMLButtonElement>('[aria-label="Run AI triage"]')!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const contestButton = () =>
+      Array.from(el.querySelectorAll<HTMLButtonElement>('button')).find((b) =>
+        b.textContent?.includes('Marcar como'),
+      )!;
+
+    expect(contestButton().textContent).toContain('Marcar como fora de escopo');
+    contestButton().click();
+    fixture.detectChanges();
+    expect(service.overrideVerdictCalls).toEqual([]);
+    expect(el.textContent).toContain('Confirm mark out of scope');
+
+    Array.from(el.querySelectorAll<HTMLButtonElement>('button'))
+      .find((b) => b.textContent?.trim() === 'Confirm mark out of scope')!
+      .click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(service.overrideVerdictCalls).toEqual([['q1', 'OUT_OF_SCOPE']]);
+    expect(el.textContent).toContain('Drafted out-of-scope reply.');
+  });
+
+  it('edits and submits search terms, replacing only what changed', async () => {
+    const el = await setup();
+    service.nextTriage = IN_SCOPE_TRIAGE;
+
+    el.querySelector<HTMLButtonElement>('[aria-label="Run AI triage"]')!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const portugueseInputs = () =>
+      Array.from(el.querySelectorAll<HTMLInputElement>('.triage-terms-editor__row input')).filter(
+        (input, index) => index % 2 === 0,
+      );
+
+    portugueseInputs()[0].value = 'Vulpes vulpes';
+    portugueseInputs()[0].dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    Array.from(el.querySelectorAll<HTMLButtonElement>('button'))
+      .find((b) => b.textContent?.trim() === 'Search')!
+      .click();
+    await fixture.whenStable();
+
+    expect(service.syncSearchTermsCalls.length).toBe(1);
+    const [questionId, terms] = service.syncSearchTermsCalls[0];
+    expect(questionId).toBe('q1');
+    expect(terms[0].portuguese).toBe('Vulpes vulpes');
+    expect(terms.length).toBe(2);
+  });
+
+  it('shows the search term limit and disables adding terms at the cap', async () => {
+    const el = await setup();
+    service.nextTriage = IN_SCOPE_TRIAGE;
+
+    el.querySelector<HTMLButtonElement>('[aria-label="Run AI triage"]')!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const addTermButton = () =>
+      Array.from(el.querySelectorAll<HTMLButtonElement>('button')).find((b) =>
+        b.textContent?.includes('Add term'),
+      )!;
+
+    expect(el.textContent).toContain('2/10 terms');
+    expect(addTermButton().disabled).toBe(false);
+
+    for (let i = 0; i < 8; i += 1) {
+      addTermButton().click();
+      fixture.detectChanges();
+    }
+
+    expect(el.textContent).toContain('10/10 terms');
+    expect(addTermButton().disabled).toBe(true);
   });
 });

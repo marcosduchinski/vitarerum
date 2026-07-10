@@ -1,7 +1,12 @@
 import { Injectable } from '@angular/core';
 import { delay, Observable, of, throwError } from 'rxjs';
 
-import { MuseumQuestionTriage } from '../models/museum-question-triage.model';
+import {
+  MentionedObject,
+  MuseumQuestionTriage,
+  SearchTermDraft,
+  TriageVerdict,
+} from '../models/museum-question-triage.model';
 import {
   AnswerMuseumQuestionRequest,
   MarkOutOfScopeRequest,
@@ -13,6 +18,35 @@ import {
 import { MuseumQuestionManagementApi } from '../services/museum-question-management.service';
 
 const NOW = '2026-07-05T12:00:00Z';
+const SEARCH_STRATEGY_DESCRIPTION =
+  'Correspondência aproximada por similaridade textual (não é busca exata).';
+const MAX_STAFF_SEARCH_TERMS = 10;
+
+function normalizeTermKey(term: { english: string; portuguese: string }): string {
+  return `${term.portuguese.trim().toLowerCase()}::${term.english.trim().toLowerCase()}`;
+}
+
+/** Mirrors the backend's `_normalize_object_terms`: trim, drop blank pairs,
+ * fall back a missing language to the other, and deduplicate case-
+ * insensitively by the (portuguese, english) pair — so the mock behaves the
+ * same as the real API for manual QA (blank/duplicate/single-language rows
+ * behave identically, not just "happy path" input). */
+function normalizeSearchTerms(terms: readonly SearchTermDraft[]): SearchTermDraft[] {
+  const seen = new Set<string>();
+  const normalized: SearchTermDraft[] = [];
+  for (const raw of terms) {
+    let english = raw.english.trim();
+    let portuguese = raw.portuguese.trim();
+    if (!english && !portuguese) continue;
+    english = english || portuguese;
+    portuguese = portuguese || english;
+    const key = `${portuguese.toLowerCase()}::${english.toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    normalized.push({ english, portuguese });
+  }
+  return normalized;
+}
 
 @Injectable()
 export class MuseumQuestionManagementServiceMock implements MuseumQuestionManagementApi {
@@ -155,6 +189,8 @@ export class MuseumQuestionManagementServiceMock implements MuseumQuestionManage
           id: `triage-${questionId}-${Date.now()}`,
           questionId,
           verdict: 'OUT_OF_SCOPE',
+          effectiveVerdict: 'OUT_OF_SCOPE',
+          staffOverrideVerdict: null,
           isVisitRelated: false,
           mentionedObjects: [],
           objectMatches: [],
@@ -164,6 +200,7 @@ export class MuseumQuestionManagementServiceMock implements MuseumQuestionManage
             'outside that scope. Please contact the appropriate department for exhibitions, ' +
             'loans, events, or education, or rephrase your question if it was actually about ' +
             'the collection.',
+          searchStrategy: null,
           modelName: 'llama3.1:8b (mock)',
           createdAt: NOW,
         }
@@ -171,13 +208,20 @@ export class MuseumQuestionManagementServiceMock implements MuseumQuestionManage
           id: `triage-${questionId}-${Date.now()}`,
           questionId,
           verdict: 'IN_SCOPE',
+          effectiveVerdict: 'IN_SCOPE',
+          staffOverrideVerdict: null,
           isVisitRelated: true,
           mentionedObjects: [
             {
               english: 'Zoology reference collection',
               portuguese: 'Coleção de referência de zoologia',
+              origin: 'AI',
             },
-            { english: 'Unknown specimen X', portuguese: 'Espécime desconhecido X' },
+            {
+              english: 'Unknown specimen X',
+              portuguese: 'Espécime desconhecido X',
+              origin: 'AI',
+            },
           ],
           objectMatches: [
             {
@@ -191,19 +235,100 @@ export class MuseumQuestionManagementServiceMock implements MuseumQuestionManage
                   highlight: 'Zoology <b>reference collection</b>, drawer 12',
                 },
               ],
+              languagesSearched: ['pt', 'en'],
             },
             {
               english: 'Unknown specimen X',
               portuguese: 'Espécime desconhecido X',
               hits: [],
+              languagesSearched: ['pt', 'en'],
             },
           ],
           suggestedReply: null,
+          searchStrategy: SEARCH_STRATEGY_DESCRIPTION,
           modelName: 'llama3.1:8b (mock)',
           createdAt: NOW,
         };
     this.triages[questionId] = triage;
     return of(triage).pipe(delay(400));
+  }
+
+  overrideTriageVerdict(
+    questionId: string,
+    verdict: TriageVerdict,
+  ): Observable<MuseumQuestionTriage> {
+    const triage = this.triages[questionId];
+    if (!triage) return this.notFound();
+
+    const updated: MuseumQuestionTriage = {
+      ...triage,
+      staffOverrideVerdict: verdict,
+      effectiveVerdict: verdict,
+      searchStrategy: verdict === 'IN_SCOPE' ? SEARCH_STRATEGY_DESCRIPTION : null,
+      suggestedReply:
+        verdict === 'OUT_OF_SCOPE' && !triage.suggestedReply
+          ? 'Thank you for reaching out. This question falls outside the scope of this channel.'
+          : triage.suggestedReply,
+    };
+    this.triages[questionId] = updated;
+    return of(updated).pipe(delay(200));
+  }
+
+  syncTriageSearchTerms(
+    questionId: string,
+    terms: readonly SearchTermDraft[],
+  ): Observable<MuseumQuestionTriage> {
+    const triage = this.triages[questionId];
+    if (!triage) return this.notFound();
+    if (triage.effectiveVerdict !== 'IN_SCOPE') {
+      return throwError(() => ({
+        status: 409,
+        error: { error: 'TRIAGE_NOT_IN_SCOPE', message: 'Triage is not in scope.' },
+      }));
+    }
+
+    const normalizedTerms = normalizeSearchTerms(terms);
+    if (normalizedTerms.length > MAX_STAFF_SEARCH_TERMS) {
+      return throwError(() => ({
+        status: 422,
+        error: { error: 'INVALID_SEARCH_TERMS', message: 'Too many search terms.' },
+      }));
+    }
+
+    const existingTermsByKey = new Map(
+      triage.mentionedObjects.map((obj) => [normalizeTermKey(obj), obj]),
+    );
+    const existingMatchesByKey = new Map(
+      triage.objectMatches.map((match) => [normalizeTermKey(match), match]),
+    );
+
+    const newTerms: MentionedObject[] = [];
+    const newMatches: MuseumQuestionTriage['objectMatches'][number][] = [];
+    for (const term of normalizedTerms) {
+      const key = normalizeTermKey(term);
+      const existingTerm = existingTermsByKey.get(key);
+      if (existingTerm) {
+        newTerms.push(existingTerm);
+        const existingMatch = existingMatchesByKey.get(key);
+        if (existingMatch) newMatches.push(existingMatch);
+        continue;
+      }
+      newTerms.push({ english: term.english, portuguese: term.portuguese, origin: 'STAFF' });
+      newMatches.push({
+        english: term.english,
+        portuguese: term.portuguese,
+        hits: [],
+        languagesSearched: ['pt'],
+      });
+    }
+
+    const updated: MuseumQuestionTriage = {
+      ...triage,
+      mentionedObjects: newTerms,
+      objectMatches: newMatches,
+    };
+    this.triages[questionId] = updated;
+    return of(updated).pipe(delay(300));
   }
 
   private filtered(

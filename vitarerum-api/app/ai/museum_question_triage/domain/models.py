@@ -6,6 +6,17 @@ docs/plans/museum-questions-response-section-plan.md, "Regra de escopo") or
 out of scope (exhibitions, loans, events, education, other museum services),
 and — when in scope and a specific object is named — records what the
 catalogue search found for it.
+
+Mutability policy (docs/plans/museum-questions-ai-triage-refinements-plan.md):
+a triage run is not a fully frozen snapshot. ``verdict``/``is_visit_related``
+are fixed at creation — they are the AI's raw classification signal, never
+rewritten (contesting the verdict only sets ``staff_override_verdict``
+alongside it). ``mentioned_objects``, ``object_matches`` and
+``suggested_reply`` are revisable state: they start populated by the AI but
+can be updated in place afterwards by staff-triggered actions
+(``OverrideTriageVerdict``, ``SyncTriageSearchTerms``) — there are no
+parallel ``original_*``/``reviewed_*`` fields, just one current state per
+run, with per-entry provenance (``MentionedObjectOrigin``) where it matters.
 """
 
 from __future__ import annotations
@@ -19,6 +30,19 @@ from typing import NewType
 TriageId = NewType("TriageId", str)
 
 
+class TriageVerdict(StrEnum):
+    IN_SCOPE = "IN_SCOPE"
+    OUT_OF_SCOPE = "OUT_OF_SCOPE"
+
+
+class MentionedObjectOrigin(StrEnum):
+    """Who produced a mentioned-object entry: the AI's own extraction, or a
+    staff correction/addition made afterwards via ``SyncTriageSearchTerms``."""
+
+    AI = "AI"
+    STAFF = "STAFF"
+
+
 @dataclass(frozen=True, slots=True)
 class MentionedObject:
     """One object/specimen name extracted from the question, kept in both
@@ -28,11 +52,7 @@ class MentionedObject:
 
     english: str
     portuguese: str
-
-
-class TriageVerdict(StrEnum):
-    IN_SCOPE = "IN_SCOPE"
-    OUT_OF_SCOPE = "OUT_OF_SCOPE"
+    origin: MentionedObjectOrigin = MentionedObjectOrigin.AI
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,17 +91,21 @@ class ObjectTriageMatch:
     """The catalogue search results for one object name extracted from the
     question — searched in both languages, hits merged and deduplicated. An
     empty ``hits`` list is a valid, displayable outcome ("not found in
-    catalogue")."""
+    catalogue"). ``languages_searched`` records which of "pt"/"en" were
+    actually queried (English is skipped when identical to Portuguese)."""
 
     english: str
     portuguese: str
     hits: list[ObjectHitView]
+    languages_searched: list[str] = field(default_factory=lambda: ["pt"])
 
 
 @dataclass(slots=True)
 class MessageTriage:
-    """A persisted triage run — one immutable row per run. Staff may re-run
-    triage on the same question; each run is kept as history."""
+    """A triage run. ``verdict``/``is_visit_related`` are fixed at creation;
+    ``mentioned_objects``/``object_matches``/``suggested_reply`` and the
+    ``staff_override_*`` fields are revisable afterwards — see the module
+    docstring."""
 
     id: TriageId
     question_id: str
@@ -92,6 +116,9 @@ class MessageTriage:
     suggested_reply: str | None
     llm_model: str
     created_at: datetime
+    staff_override_verdict: TriageVerdict | None = None
+    staff_override_at: datetime | None = None
+    staff_override_by: str | None = None
 
     @classmethod
     def create(
@@ -118,3 +145,18 @@ class MessageTriage:
             llm_model=llm_model,
             created_at=datetime.now(UTC),
         )
+
+    @property
+    def effective_verdict(self) -> TriageVerdict:
+        """The verdict that actually applies: the staff override if one was
+        made, otherwise the AI's original classification."""
+        return self.staff_override_verdict or self.verdict
+
+    def override_verdict(self, verdict: TriageVerdict, *, by: str) -> None:
+        """Record a staff correction of the scope verdict. Last-write-wins:
+        calling this again simply replaces the previous override, with no
+        conflict detection (accepted MVP limitation, see the refinements
+        plan's "Decisões explícitas" section)."""
+        self.staff_override_verdict = verdict
+        self.staff_override_at = datetime.now(UTC)
+        self.staff_override_by = by

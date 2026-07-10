@@ -34,6 +34,20 @@ class ModelTimeout(Exception):
     """The triage model did not respond in time."""
 
 
+class TriageNotFound(Exception):
+    """No triage run exists yet for the requested question."""
+
+
+class TriageNotInScope(Exception):
+    """The requested action requires the triage's effective verdict to be
+    IN_SCOPE (e.g. editing search terms while OUT_OF_SCOPE)."""
+
+
+class TriageTermValidationError(Exception):
+    """A staff-submitted search-term list violates a validation rule (a
+    field too long, or too many terms)."""
+
+
 class TriageModelPort(Protocol):
     """Run the local LLM. Raises :class:`ModelUnavailable` / :class:`ModelTimeout`."""
 
@@ -58,10 +72,17 @@ class ObjectSearchPort(Protocol):
 
 
 class TriageRepository(Protocol):
-    """Persists and reads back triage runs (append-only history)."""
+    """Persists and reads back triage runs."""
 
     async def add(self, triage: MessageTriage) -> None: ...
 
     async def get_latest_by_question(
         self, question_id: str
     ) -> MessageTriage | None: ...
+
+    async def update(self, triage: MessageTriage) -> None:
+        """Persist in-place revisions to an already-stored triage run (staff
+        override of the verdict, or a reconciled search-term list) — as
+        opposed to ``add``, which only creates a brand new run. Last-write-
+        wins: no optimistic-concurrency check (accepted MVP limitation)."""
+        ...
