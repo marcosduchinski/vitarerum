@@ -32,6 +32,7 @@ from app.collection_object_index.application.ports import (
     CollectionRepository,
     FileStorage,
     InvalidSpreadsheet,
+    ParsedRow,
     SourceDocumentRepository,
 )
 from app.collection_object_index.application.read_models import (
@@ -148,6 +149,7 @@ class UploadSourceDocumentInput:
     collection_id: CollectionId
     file_name: str
     content: bytes
+    object_mapping: ObjectSnapshotMapping
 
 
 @dataclass(frozen=True, slots=True)
@@ -157,6 +159,33 @@ class UploadSourceDocumentResult:
     # File reference of a replaced previous version, reclaimed by the caller
     # after commit; None when nothing was replaced.
     replaced_file_reference: str | None
+
+
+class PreviewSourceDocumentColumns:
+    def __init__(
+        self,
+        collections: CollectionRepository,
+        parser: CollectionObjectParserPort,
+    ) -> None:
+        self._collections = collections
+        self._parser = parser
+
+    async def execute(
+        self, caller: Actor, collection_id: CollectionId, content: bytes
+    ) -> list[str]:
+        if await self._collections.get_by_id(collection_id) is None:
+            raise CollectionNotFound(collection_id)
+        require_collection_scope(
+            caller,
+            collection_id,
+            await _curated_ids(caller, self._collections),
+        )
+        rows = self._parser.parse(content)
+        if len(rows) > MAX_INDEXED_ROWS:
+            raise InvalidSpreadsheet(
+                f"Spreadsheet has {len(rows)} rows; the limit is {MAX_INDEXED_ROWS}."
+            )
+        return _columns_from_rows(rows)
 
 
 class UploadSourceDocument:
@@ -201,6 +230,12 @@ class UploadSourceDocument:
             data.collection_id, content_hash
         )
         if existing is not None:
+            rows = self._parser.parse(data.content)
+            _validate_mapping_columns(
+                data.object_mapping, set(_columns_from_rows(rows))
+            )
+            existing.configure_object_snapshot(data.object_mapping)
+            await self._documents.save(existing)
             return UploadSourceDocumentResult(
                 document=existing, created=False, replaced_file_reference=None
             )
@@ -230,6 +265,7 @@ class UploadSourceDocument:
             status=SourceDocumentStatus.UPLOADED,
             uploaded_by=data.caller.id,
             uploaded_at=now,
+            object_snapshot_mapping=data.object_mapping,
         )
         try:
             await self._documents.add(document)
@@ -251,11 +287,23 @@ class UploadSourceDocument:
                     f"Spreadsheet has {len(rows)} rows; "
                     f"the limit is {MAX_INDEXED_ROWS}."
                 )
+            if document.object_snapshot_mapping is None:
+                raise SourceDocumentMappingInvalid("Object mapping is required.")
+            _validate_mapping_columns(
+                document.object_snapshot_mapping, set(_columns_from_rows(rows))
+            )
             count = await self._index.index(document.id, document.collection_id, rows)
         except InvalidSpreadsheet as exc:
             document.mark_error(str(exc))
         else:
             document.mark_indexed(indexed_at=self._clock.now(), row_count=count)
+
+
+def _columns_from_rows(rows: list[ParsedRow]) -> list[str]:
+    columns: set[str] = set()
+    for row in rows:
+        columns.update(str(key) for key in row.cells.keys())
+    return sorted(columns, key=str.casefold)
 
 
 class DeleteSourceDocument:

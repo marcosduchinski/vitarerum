@@ -95,6 +95,28 @@
   }
 }
 
+.result__snapshot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--color-border, #e2e5ef);
+  border-radius: var(--radius-sm, 8px);
+  background: #f8fbfc;
+  font-size: 0.84rem;
+
+  span {
+    color: var(--color-subtle, #6b7280);
+  }
+}
+
+.result__snapshot-missing {
+  margin: 0;
+  color: var(--color-subtle, #6b7280);
+  font-size: 0.82rem;
+}
+
 .result__cells {
   margin: 0;
   display: grid;

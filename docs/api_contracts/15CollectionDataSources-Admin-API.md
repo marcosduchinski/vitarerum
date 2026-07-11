@@ -247,9 +247,10 @@ Source document responses include the optional semantic mapping used by
 }
 ```
 
-`objectMapping` is `null` until configured. The mapping is stored on the source
-document, not on indexed rows; changing it affects the next search response
-without reindexing.
+New uploads must provide `objectMapping` before indexing. Existing documents may
+still have `objectMapping: null` until they are corrected. The mapping is stored
+on the source document, not on indexed rows; changing it affects the next search
+response without reindexing.
 
 ### `GET /admin/collection-data-sources/collections/{collectionId}/documents`
 
@@ -262,7 +263,16 @@ caller lacks scope for this collection (`ACCESS_DENIED`).
 ### `POST /admin/collection-data-sources/collections/{collectionId}/documents`
 
 Uploads and synchronously indexes a spreadsheet. Content type: `multipart/form-data`, single
-`file` field (real `.xlsx`, magic-byte validated).
+`file` field (real `.xlsx`, magic-byte validated), plus the required semantic object mapping:
+
+- `inventoryNumberColumn`
+- `displayTitleColumn`
+- `objectNameColumn` (empty string means fallback to display title)
+- `descriptionColumns` (JSON string list, e.g. `["Description", "Notes"]`)
+
+The UI should call the columns-preview endpoint first, let the user choose the
+mapping, then call this upload endpoint. The backend validates the mapping
+against the parsed spreadsheet before indexing.
 
 Idempotency by content hash:
 - identical live file already on this collection → dedupe, no-op, returns the existing document.
@@ -272,7 +282,24 @@ Idempotency by content hash:
   the failure is visible in the admin screen.
 
 **Response `201`** — the source document. **`404 COLLECTION_NOT_FOUND`**. **`415`** — not a real
-`.xlsx`. **`403`** — caller lacks scope for this collection.
+`.xlsx`. **`422 SOURCE_DOCUMENT_MAPPING_INVALID`** — missing/unknown mapping columns.
+**`403`** — caller lacks scope for this collection.
+
+### `POST /admin/collection-data-sources/collections/{collectionId}/documents/columns-preview`
+
+Parses an uploaded spreadsheet and returns the sorted union of column names,
+without saving the file and without indexing rows. This is the pre-upload step
+used to choose the required object snapshot columns.
+
+Content type: `multipart/form-data`, single `file` field.
+
+**Response `200`**
+
+```json
+{ "columns": ["Description", "Inventory No", "Name"] }
+```
+
+**`404 COLLECTION_NOT_FOUND`**. **`415`** — not a real `.xlsx`. **`403`** — out of scope.
 
 ### `DELETE /admin/collection-data-sources/documents/{documentId}`
 

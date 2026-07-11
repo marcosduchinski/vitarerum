@@ -144,7 +144,22 @@ export class CollectionDataSourceServiceMock implements CollectionDataSourceApi 
     return of([...(this.documents.get(collectionId) ?? [])]).pipe(delay(200));
   }
 
-  upload(collectionId: string, file: File): Observable<SourceDocument> {
+  previewDocumentColumns(collectionId: string, file: File): Observable<string[]> {
+    void collectionId;
+    if (!file.name.toLowerCase().endsWith('.xlsx')) {
+      return throwError(() => ({
+        status: 415,
+        error: { message: 'Only valid .xlsx files are accepted' },
+      }));
+    }
+    return of(['Inventory No', 'Name', 'Description']).pipe(delay(150));
+  }
+
+  upload(
+    collectionId: string,
+    file: File,
+    objectMapping: UpdateSourceDocumentObjectMappingRequest,
+  ): Observable<SourceDocument> {
     if (!file.name.toLowerCase().endsWith('.xlsx')) {
       return throwError(() => ({
         status: 415,
@@ -161,7 +176,12 @@ export class CollectionDataSourceServiceMock implements CollectionDataSourceApi 
       rowCount: 42,
       uploadedAt: new Date().toISOString(),
       indexedAt: new Date().toISOString(),
-      objectMapping: null,
+      objectMapping: {
+        inventoryNumberColumn: objectMapping.inventoryNumberColumn,
+        displayTitleColumn: objectMapping.displayTitleColumn,
+        objectNameColumn: objectMapping.objectNameColumn,
+        descriptionColumns: [...objectMapping.descriptionColumns],
+      },
     };
     this.documents.set(collectionId, [document, ...(this.documents.get(collectionId) ?? [])]);
     this.documentColumns.set(document.id, ['Inventory No', 'Name', 'Description']);

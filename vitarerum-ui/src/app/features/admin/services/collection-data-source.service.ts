@@ -26,11 +26,16 @@ export interface CollectionDataSourceApi {
   removeCollection(collectionId: string): Observable<void>;
   listDocuments(collectionId: string): Observable<SourceDocument[]>;
   listDocumentColumns(documentId: string): Observable<string[]>;
+  previewDocumentColumns(collectionId: string, file: File): Observable<string[]>;
   updateObjectMapping(
     documentId: string,
     request: UpdateSourceDocumentObjectMappingRequest,
   ): Observable<SourceDocument>;
-  upload(collectionId: string, file: File): Observable<SourceDocument>;
+  upload(
+    collectionId: string,
+    file: File,
+    objectMapping: UpdateSourceDocumentObjectMappingRequest,
+  ): Observable<SourceDocument>;
   remove(documentId: string): Observable<void>;
   reindex(documentId: string): Observable<SourceDocument>;
   listCuratorCandidates(): Observable<CuratorCandidate[]>;
@@ -83,6 +88,17 @@ export class CollectionDataSourceService implements CollectionDataSourceApi {
     );
   }
 
+  previewDocumentColumns(collectionId: string, file: File): Observable<string[]> {
+    const form = new FormData();
+    form.append('file', file, file.name);
+    return this.http
+      .post<{ columns: string[] }>(
+        this.url(`/collections/${collectionId}/documents/columns-preview`),
+        form,
+      )
+      .pipe(map((response) => response.columns));
+  }
+
   updateObjectMapping(
     documentId: string,
     request: UpdateSourceDocumentObjectMappingRequest,
@@ -95,9 +111,17 @@ export class CollectionDataSourceService implements CollectionDataSourceApi {
     });
   }
 
-  upload(collectionId: string, file: File): Observable<SourceDocument> {
+  upload(
+    collectionId: string,
+    file: File,
+    objectMapping: UpdateSourceDocumentObjectMappingRequest,
+  ): Observable<SourceDocument> {
     const form = new FormData();
     form.append('file', file, file.name);
+    form.append('inventoryNumberColumn', objectMapping.inventoryNumberColumn);
+    form.append('displayTitleColumn', objectMapping.displayTitleColumn);
+    form.append('objectNameColumn', objectMapping.objectNameColumn ?? '');
+    form.append('descriptionColumns', JSON.stringify(objectMapping.descriptionColumns));
     return this.http.post<SourceDocument>(this.url(`/collections/${collectionId}/documents`), form);
   }
 

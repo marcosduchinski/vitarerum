@@ -143,6 +143,9 @@ export class CollectionDataSourcesPageComponent {
   protected readonly mappingTitleColumn = signal('');
   protected readonly mappingObjectNameColumn = signal('');
   protected readonly mappingDescriptionColumns = signal<readonly string[]>([]);
+  protected readonly pendingUploadCollectionId = signal<string | null>(null);
+  protected readonly pendingUploadFile = signal<File | null>(null);
+  protected readonly pendingUploadColumns = signal<readonly string[]>([]);
 
   /** Collection currently showing the "type the name to confirm" remove
    * control (one at a time). */
@@ -294,7 +297,23 @@ export class CollectionDataSourcesPageComponent {
     const file = input.files?.[0];
     input.value = '';
     if (!file) return;
-    await this.run(() => firstValueFrom(this.service.upload(collection.id, file)));
+    this.busy.set(true);
+    this.actionError.set(null);
+    try {
+      const columns = await firstValueFrom(this.service.previewDocumentColumns(collection.id, file));
+      this.pendingUploadCollectionId.set(collection.id);
+      this.pendingUploadFile.set(file);
+      this.pendingUploadColumns.set(columns);
+      this.mappingDocumentId.set(null);
+      this.mappingInventoryColumn.set('');
+      this.mappingTitleColumn.set('');
+      this.mappingObjectNameColumn.set('');
+      this.mappingDescriptionColumns.set([]);
+    } catch (err) {
+      this.actionError.set(toApiError(err));
+    } finally {
+      this.busy.set(false);
+    }
   }
 
   protected async remove(sourceDocument: SourceDocument): Promise<void> {
@@ -340,6 +359,12 @@ export class CollectionDataSourcesPageComponent {
     this.mappingDocumentId.set(null);
   }
 
+  protected cancelUploadMapping(): void {
+    this.pendingUploadCollectionId.set(null);
+    this.pendingUploadFile.set(null);
+    this.pendingUploadColumns.set([]);
+  }
+
   protected mappingCanSave(): boolean {
     return Boolean(this.mappingInventoryColumn() && this.mappingTitleColumn());
   }
@@ -372,6 +397,23 @@ export class CollectionDataSourcesPageComponent {
     this.mappingDocumentId.set(null);
   }
 
+  protected async saveUploadMapping(): Promise<void> {
+    const file = this.pendingUploadFile();
+    const collectionId = this.pendingUploadCollectionId();
+    if (!file || !collectionId || !this.mappingCanSave()) return;
+    const saved = await this.run(() =>
+      firstValueFrom(
+        this.service.upload(collectionId, file, {
+          inventoryNumberColumn: this.mappingInventoryColumn(),
+          displayTitleColumn: this.mappingTitleColumn(),
+          objectNameColumn: this.mappingObjectNameColumn() || null,
+          descriptionColumns: this.mappingDescriptionColumns(),
+        }),
+      ),
+    );
+    if (saved) this.cancelUploadMapping();
+  }
+
   protected formatDate(value: string | null): string {
     if (!value) return '—';
     return new Intl.DateTimeFormat(undefined, {
@@ -381,10 +423,10 @@ export class CollectionDataSourcesPageComponent {
   }
 
   protected documentsColumnCount(collection: CollectionDataSource): number {
-    return collection.manageable ? 6 : 5;
+    return collection.manageable ? 7 : 6;
   }
 
-  private async run(operation: () => Promise<unknown>): Promise<void> {
+  private async run(operation: () => Promise<unknown>): Promise<boolean> {
     this.busy.set(true);
     this.actionError.set(null);
     try {
@@ -392,8 +434,10 @@ export class CollectionDataSourcesPageComponent {
       this.documentsResource.reload();
       this.collectionsResource.reload();
       this.areasResource.reload();
+      return true;
     } catch (err) {
       this.actionError.set(toApiError(err));
+      return false;
     } finally {
       this.busy.set(false);
     }

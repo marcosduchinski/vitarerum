@@ -296,6 +296,7 @@
                           <th scope="col">File</th>
                           <th scope="col">Status</th>
                           <th scope="col">Rows</th>
+                          <th scope="col">Object mapping</th>
                           <th scope="col">Uploaded</th>
                           <th scope="col">Indexed</th>
                           @if (collection.manageable) {
@@ -324,6 +325,17 @@
                               }
                             </td>
                             <td>{{ doc.rowCount ?? '—' }}</td>
+                            <td>
+                              @if (doc.objectMapping) {
+                                <span class="badge badge--mapped">Configured</span>
+                                <p class="documents__mapping">
+                                  {{ doc.objectMapping.inventoryNumberColumn }} /
+                                  {{ doc.objectMapping.displayTitleColumn }}
+                                </p>
+                              } @else {
+                                <span class="badge badge--muted">Missing</span>
+                              }
+                            </td>
                             <td>{{ formatDate(doc.uploadedAt) }}</td>
                             <td>{{ formatDate(doc.indexedAt) }}</td>
                             @if (collection.manageable) {
@@ -515,6 +527,121 @@
           }
         </ul>
       </section>
+    }
+
+    @if (pendingUploadFile()) {
+      <div class="upload-mapping-modal" role="presentation" (keydown.escape)="cancelUploadMapping()">
+        <button
+          type="button"
+          class="upload-mapping-modal__backdrop"
+          aria-label="Close upload mapping dialog"
+          (click)="cancelUploadMapping()"
+        ></button>
+        <section
+          class="upload-mapping-modal__dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="upload-mapping-modal-title"
+        >
+          <header class="upload-mapping-modal__header">
+            <div>
+              <p class="upload-mapping-modal__eyebrow">Column preview</p>
+              <h2 id="upload-mapping-modal-title">
+                Configure columns for {{ pendingUploadFile()!.name }}
+              </h2>
+            </div>
+            <button
+              type="button"
+              class="upload-mapping-modal__close"
+              aria-label="Close upload mapping dialog"
+              [disabled]="busy()"
+              (click)="cancelUploadMapping()"
+            >
+              <span class="pi pi-times" aria-hidden="true"></span>
+            </button>
+          </header>
+
+          <div class="upload-mapping-modal__body">
+            <div class="mapping-panel__grid">
+              <label class="mapping-field">
+                <span>Inventory number</span>
+                <select
+                  [value]="mappingInventoryColumn()"
+                  [disabled]="busy()"
+                  (change)="mappingInventoryColumn.set($any($event.target).value)"
+                >
+                  <option value="">Select column…</option>
+                  @for (column of pendingUploadColumns(); track column) {
+                    <option [value]="column">{{ column }}</option>
+                  }
+                </select>
+              </label>
+              <label class="mapping-field">
+                <span>Display title</span>
+                <select
+                  [value]="mappingTitleColumn()"
+                  [disabled]="busy()"
+                  (change)="mappingTitleColumn.set($any($event.target).value)"
+                >
+                  <option value="">Select column…</option>
+                  @for (column of pendingUploadColumns(); track column) {
+                    <option [value]="column">{{ column }}</option>
+                  }
+                </select>
+              </label>
+              <label class="mapping-field">
+                <span>Object name</span>
+                <select
+                  [value]="mappingObjectNameColumn()"
+                  [disabled]="busy()"
+                  (change)="mappingObjectNameColumn.set($any($event.target).value)"
+                >
+                  <option value="">Use display title</option>
+                  @for (column of pendingUploadColumns(); track column) {
+                    <option [value]="column">{{ column }}</option>
+                  }
+                </select>
+              </label>
+            </div>
+
+            <fieldset class="mapping-descriptions">
+              <legend>Description columns</legend>
+              <div class="mapping-descriptions__list">
+                @for (column of pendingUploadColumns(); track column) {
+                  <label>
+                    <input
+                      type="checkbox"
+                      [checked]="isDescriptionColumnSelected(column)"
+                      [disabled]="busy()"
+                      (change)="toggleDescriptionColumn(column, $any($event.target).checked)"
+                    />
+                    <span>{{ column }}</span>
+                  </label>
+                }
+              </div>
+            </fieldset>
+          </div>
+
+          <footer class="upload-mapping-modal__footer">
+            <button
+              type="button"
+              class="admin-btn"
+              [disabled]="busy()"
+              (click)="cancelUploadMapping()"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              class="admin-btn upload-mapping-modal__primary"
+              [disabled]="busy() || !mappingCanSave()"
+              (click)="saveUploadMapping()"
+            >
+              Upload and index
+            </button>
+          </footer>
+        </section>
+      </div>
     }
   }
 </div>

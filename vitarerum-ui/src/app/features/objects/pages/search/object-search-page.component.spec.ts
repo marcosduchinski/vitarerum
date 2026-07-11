@@ -98,7 +98,19 @@ describe('ObjectSearchPageComponent', () => {
     ]);
     expect(el.querySelector('.result__collection')?.textContent).toContain('Zoology');
     expect(el.querySelector('.result__highlight mark')?.textContent).toContain('Jaguar');
+    expect(el.querySelector('.result__snapshot')?.textContent).toContain('ZOO-1');
+    expect(el.querySelector('.result__snapshot')?.textContent).toContain('Jaguar');
     expect(el.textContent).toContain('ZOO-1');
+  });
+
+  it('shows when a result has no proposal object snapshot', async () => {
+    const el = await setup();
+    service.result = makeResult({
+      items: [{ ...makeResult().items[0], objectSnapshot: null }],
+    });
+    await typeAndSearch(el, 'jaguar');
+
+    expect(el.textContent).toContain('Object mapping missing');
   });
 
   it('escapes unsafe markup in the highlight, keeping only <mark>', async () => {

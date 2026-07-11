@@ -60,6 +60,17 @@
             <span class="result__row">row {{ hit.rowNumber }}</span>
           </div>
           <p class="result__highlight" [innerHTML]="highlightHtml(hit)"></p>
+          @if (hit.objectSnapshot) {
+            <div class="result__snapshot" aria-label="Proposal object snapshot">
+              <span>{{ hit.objectSnapshot.inventoryNumber }}</span>
+              <strong>{{ hit.objectSnapshot.displayTitle }}</strong>
+              <span>{{ hit.objectSnapshot.objectName }}</span>
+            </div>
+          } @else {
+            <p class="result__snapshot-missing">
+              Object mapping missing for this source document.
+            </p>
+          }
           <dl class="result__cells">
             @for (entry of cellEntries(hit); track entry[0]) {
               <div class="result__cell">

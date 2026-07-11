@@ -158,6 +158,15 @@ def _upload_files(rows: list[list[str]] | None = None) -> dict:
     }
 
 
+def _upload_data() -> dict[str, str]:
+    return {
+        "inventoryNumberColumn": "Inventory No",
+        "displayTitleColumn": "Name",
+        "objectNameColumn": "",
+        "descriptionColumns": '["Name"]',
+    }
+
+
 async def test_list_collections_shows_catalogue_with_scope_flags() -> None:
     async with _client(_CURATOR) as (client, _):
         response = await client.get("/admin/collection-data-sources/collections")
@@ -174,6 +183,7 @@ async def test_upload_indexes_and_returns_document() -> None:
     async with _client(_ADMIN) as (client, storage):
         response = await client.post(
             f"/admin/collection-data-sources/collections/{_REPTILES_ID}/documents",
+            data=_upload_data(),
             files=_upload_files([["ZOO-1", "Jaguar"], ["ZOO-2", "Arara"]]),
         )
         assert response.status_code == 201, response.text
@@ -181,7 +191,7 @@ async def test_upload_indexes_and_returns_document() -> None:
         assert body["status"] == "INDEXED"
         assert body["rowCount"] == 2
         assert body["fileName"] == "zoo.xlsx"
-        assert body["objectMapping"] is None
+        assert body["objectMapping"]["inventoryNumberColumn"] == "Inventory No"
         assert len(storage.saved) == 1
 
         listing = await client.get(
@@ -190,10 +200,27 @@ async def test_upload_indexes_and_returns_document() -> None:
         assert [d["id"] for d in listing.json()] == [body["id"]]
 
 
+async def test_preview_upload_columns_without_indexing() -> None:
+    async with _client(_ADMIN) as (client, storage):
+        response = await client.post(
+            f"/admin/collection-data-sources/collections/{_REPTILES_ID}/documents/columns-preview",
+            files=_upload_files([["ZOO-1", "Jaguar"]]),
+        )
+        assert response.status_code == 200, response.text
+        assert response.json() == {"columns": ["Inventory No", "Name"]}
+        assert storage.saved == {}
+
+        listing = await client.get(
+            f"/admin/collection-data-sources/collections/{_REPTILES_ID}/documents"
+        )
+        assert listing.json() == []
+
+
 async def test_configure_source_document_object_mapping() -> None:
     async with _client(_ADMIN) as (client, _):
         upload = await client.post(
             f"/admin/collection-data-sources/collections/{_REPTILES_ID}/documents",
+            data=_upload_data(),
             files=_upload_files([["ZOO-1", "Jaguar"]]),
         )
         document_id = upload.json()["id"]
@@ -228,6 +255,7 @@ async def test_configure_source_document_object_mapping_rejects_unknown_column()
     async with _client(_ADMIN) as (client, _):
         upload = await client.post(
             f"/admin/collection-data-sources/collections/{_REPTILES_ID}/documents",
+            data=_upload_data(),
             files=_upload_files([["ZOO-1", "Jaguar"]]),
         )
         response = await client.put(
@@ -246,6 +274,7 @@ async def test_upload_rejects_non_xlsx_content() -> None:
     async with _client(_ADMIN) as (client, storage):
         response = await client.post(
             f"/admin/collection-data-sources/collections/{_REPTILES_ID}/documents",
+            data=_upload_data(),
             files={"file": ("zoo.xlsx", b"not a spreadsheet", "application/zip")},
         )
     assert response.status_code == 415
@@ -256,6 +285,7 @@ async def test_upload_to_unknown_collection_is_404() -> None:
     async with _client(_ADMIN) as (client, _):
         response = await client.post(
             "/admin/collection-data-sources/collections/nope/documents",
+            data=_upload_data(),
             files=_upload_files(),
         )
     assert response.status_code == 404
@@ -272,6 +302,7 @@ async def test_curator_upload_out_of_scope_is_403() -> None:
     async with _client(_CURATOR) as (client, storage):
         response = await client.post(
             f"/admin/collection-data-sources/collections/{_FISH_ID}/documents",
+            data=_upload_data(),
             files=_upload_files(),
         )
     assert response.status_code == 403
@@ -366,6 +397,7 @@ async def test_delete_document_removes_and_reclaims_after_commit() -> None:
     async with _client(_ADMIN) as (client, storage):
         created = await client.post(
             f"/admin/collection-data-sources/collections/{_REPTILES_ID}/documents",
+            data=_upload_data(),
             files=_upload_files(),
         )
         document_id = created.json()["id"]
@@ -386,6 +418,7 @@ async def test_reindex_returns_updated_document() -> None:
     async with _client(_ADMIN) as (client, _):
         created = await client.post(
             f"/admin/collection-data-sources/collections/{_REPTILES_ID}/documents",
+            data=_upload_data(),
             files=_upload_files(),
         )
         document_id = created.json()["id"]
@@ -478,6 +511,7 @@ async def test_remove_collection_deletes_everything_and_reclaims_files() -> None
     async with _client(_ADMIN) as (client, storage):
         uploaded = await client.post(
             f"/admin/collection-data-sources/collections/{_REPTILES_ID}/documents",
+            data=_upload_data(),
             files=_upload_files(),
         )
         assert uploaded.status_code == 201, uploaded.text

@@ -12,14 +12,25 @@ documents, CURATORIAL manages only assigned collections.
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, File, HTTPException, Query, Response, UploadFile, status
+from fastapi import (
+    APIRouter,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Response,
+    UploadFile,
+    status,
+)
 from sqlalchemy.exc import IntegrityError
 
 from app.collection_object_index.application.ports import (
     CollectionObjectSearchQuery,
+    InvalidSpreadsheet,
     SearchHit,
 )
 from app.collection_object_index.application.read_models import (
@@ -42,6 +53,7 @@ from app.collection_object_index.application.use_cases import (
     ListSourceDocumentColumns,
     MoveCollectionToArea,
     MoveCollectionToAreaInput,
+    PreviewSourceDocumentColumns,
     ReindexSourceDocument,
     RemoveCollection,
     RemoveCollectionArea,
@@ -62,6 +74,7 @@ from app.collection_object_index.domain.models import (
     CollectionAreaNotFound,
     CollectionId,
     CollectionNotFound,
+    ObjectSnapshotMapping,
     SourceDocument,
     SourceDocumentId,
     SourceDocumentMappingInvalid,
@@ -207,6 +220,29 @@ def _document_response(document: SourceDocument) -> SourceDocumentResponse:
             if mapping is not None
             else None
         ),
+    )
+
+
+def _mapping_from_form(
+    *,
+    inventory_number_column: str,
+    display_title_column: str,
+    object_name_column: str | None,
+    description_columns_json: str,
+) -> ObjectSnapshotMapping:
+    try:
+        raw_description_columns = json.loads(description_columns_json)
+    except json.JSONDecodeError as exc:
+        raise SourceDocumentMappingInvalid("descriptionColumns must be JSON.") from exc
+    if not isinstance(raw_description_columns, list) or not all(
+        isinstance(column, str) for column in raw_description_columns
+    ):
+        raise SourceDocumentMappingInvalid("descriptionColumns must be a string list.")
+    return ObjectSnapshotMapping(
+        inventory_number_column=inventory_number_column,
+        display_title_column=display_title_column,
+        object_name_column=object_name_column,
+        description_columns=tuple(raw_description_columns),
     )
 
 
@@ -550,11 +586,21 @@ async def upload_collection_document(
     clock: IndexClock,
     session: DBSession,
     file: Annotated[UploadFile, File()],
+    inventoryNumberColumn: Annotated[str, Form(min_length=1, max_length=255)],
+    displayTitleColumn: Annotated[str, Form(min_length=1, max_length=255)],
+    objectNameColumn: Annotated[str | None, Form(max_length=255)] = None,
+    descriptionColumns: Annotated[str, Form()] = "[]",
 ) -> SourceDocumentResponse:
     require_staff(caller)
     content = await read_upload_capped(file)
     ensure_xlsx(content)
     try:
+        mapping = _mapping_from_form(
+            inventory_number_column=inventoryNumberColumn,
+            display_title_column=displayTitleColumn,
+            object_name_column=objectNameColumn,
+            description_columns_json=descriptionColumns,
+        )
         result = await UploadSourceDocument(
             collections, documents, storage, parser, index, clock
         ).execute(
@@ -563,10 +609,16 @@ async def upload_collection_document(
                 collection_id=CollectionId(collection_id),
                 file_name=safe_basename(file.filename or "", default="objects.xlsx"),
                 content=content,
+                object_mapping=mapping,
             )
         )
     except CollectionNotFound as exc:
         raise _not_found("collection", "COLLECTION_NOT_FOUND", collection_id) from exc
+    except SourceDocumentMappingInvalid as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={"error": "SOURCE_DOCUMENT_MAPPING_INVALID", "message": str(exc)},
+        ) from exc
     try:
         await session.commit()
     except Exception:
@@ -577,6 +629,34 @@ async def upload_collection_document(
     if result.replaced_file_reference is not None:
         await storage.delete(result.replaced_file_reference)
     return _document_response(result.document)
+
+
+@collection_data_sources_router.post(
+    "/collections/{collection_id}/documents/columns-preview",
+    response_model=SourceDocumentColumnsResponse,
+)
+async def preview_collection_document_columns(
+    collection_id: str,
+    caller: CallerPermission,
+    collections: CollectionRepo,
+    parser: SourceParser,
+    file: Annotated[UploadFile, File()],
+) -> SourceDocumentColumnsResponse:
+    require_staff(caller)
+    content = await read_upload_capped(file)
+    ensure_xlsx(content)
+    try:
+        columns = await PreviewSourceDocumentColumns(collections, parser).execute(
+            caller, CollectionId(collection_id), content
+        )
+    except CollectionNotFound as exc:
+        raise _not_found("collection", "COLLECTION_NOT_FOUND", collection_id) from exc
+    except InvalidSpreadsheet as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={"error": "INVALID_SPREADSHEET", "message": str(exc)},
+        ) from exc
+    return SourceDocumentColumnsResponse(columns=columns)
 
 
 @collection_data_sources_router.delete(

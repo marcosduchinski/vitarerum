@@ -116,6 +116,7 @@ class ServiceStub {
     { permissionId: 'perm-2', name: 'Hugo Curator', email: 'hugo@museum.test' },
   ];
   readonly uploadCalls: [string, File][] = [];
+  readonly previewDocumentColumnsCalls: [string, File][] = [];
   readonly removeCalls: string[] = [];
   readonly reindexCalls: string[] = [];
   readonly listDocumentColumnsCalls: string[] = [];
@@ -178,9 +179,14 @@ class ServiceStub {
     );
   }
 
-  upload(collectionId: string, file: File) {
+  previewDocumentColumns(collectionId: string, file: File) {
+    this.previewDocumentColumnsCalls.push([collectionId, file]);
+    return of(['Inventory No', 'Name', 'Description', 'Notes']);
+  }
+
+  upload(collectionId: string, file: File, objectMapping: SourceDocument['objectMapping']) {
     this.uploadCalls.push([collectionId, file]);
-    return of(makeDocument({ id: 'doc-new', fileName: file.name }));
+    return of(makeDocument({ id: 'doc-new', fileName: file.name, objectMapping }));
   }
 
   remove(documentId: string) {
@@ -294,6 +300,24 @@ describe('CollectionDataSourcesPageComponent', () => {
     await expand(el);
     expect(el.querySelector('.documents__name')?.textContent).toContain('zoology.xlsx');
     expect(el.querySelector('.badge--indexed')?.textContent).toContain('INDEXED');
+    expect(el.textContent).toContain('Missing');
+  });
+
+  it('shows configured object mapping columns for a document', async () => {
+    const el = await setup(undefined, [
+      makeDocument({
+        objectMapping: {
+          inventoryNumberColumn: 'Inventory No',
+          displayTitleColumn: 'Name',
+          objectNameColumn: null,
+          descriptionColumns: ['Description'],
+        },
+      }),
+    ]);
+    await expand(el);
+
+    expect(el.textContent).toContain('Configured');
+    expect(el.textContent).toContain('Inventory No / Name');
   });
 
   it('shows the error message for a failed document', async () => {
@@ -305,13 +329,33 @@ describe('CollectionDataSourcesPageComponent', () => {
     expect(el.querySelector('.documents__error')?.textContent).toContain('Too many rows');
   });
 
-  it('uploads the selected file to the collection', async () => {
+  it('previews columns and uploads only after required mapping is selected', async () => {
     const el = await setup();
     await expand(el);
     const file = new File(['x'], 'new.xlsx');
     const input = el.querySelector<HTMLInputElement>('.upload input[type="file"]')!;
     Object.defineProperty(input, 'files', { value: [file], configurable: true });
     input.dispatchEvent(new Event('change'));
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(service.previewDocumentColumnsCalls).toEqual([['col-zoo', file]]);
+    expect(service.uploadCalls).toEqual([]);
+    const dialog = el.querySelector<HTMLElement>('[role="dialog"]')!;
+    expect(dialog).not.toBeNull();
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
+    expect(dialog.textContent).toContain('Configure columns for new.xlsx');
+
+    const selects = dialog.querySelectorAll<HTMLSelectElement>('.mapping-field select');
+    selects[0].value = 'Inventory No';
+    selects[0].dispatchEvent(new Event('change'));
+    selects[1].value = 'Name';
+    selects[1].dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    Array.from(dialog.querySelectorAll<HTMLButtonElement>('.admin-btn'))
+      .find((button) => button.textContent?.includes('Upload and index'))!
+      .click();
     await fixture.whenStable();
 
     expect(service.uploadCalls).toEqual([['col-zoo', file]]);

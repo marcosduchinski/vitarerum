@@ -348,6 +348,12 @@
   color: var(--color-danger, #b3261e);
 }
 
+.documents__mapping {
+  margin: 0.25rem 0 0;
+  color: var(--color-subtle, #6b7280);
+  font-size: 0.78rem;
+}
+
 .documents__actions {
   white-space: nowrap;
   text-align: right;
@@ -450,6 +456,105 @@
   gap: 0.5rem;
 }
 
+.upload-mapping-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+
+.upload-mapping-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgb(17 24 39 / 0.45);
+  cursor: default;
+}
+
+.upload-mapping-modal__dialog {
+  position: relative;
+  z-index: 1;
+  width: min(44rem, 100%);
+  max-height: min(42rem, calc(100vh - 2rem));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--color-border, #e2e5ef);
+  border-radius: var(--radius-sm, 8px);
+  background: var(--color-surface, #fff);
+  box-shadow: 0 24px 70px rgb(17 24 39 / 0.24);
+}
+
+.upload-mapping-modal__header,
+.upload-mapping-modal__footer {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  border-bottom: 1px solid var(--color-border, #e2e5ef);
+}
+
+.upload-mapping-modal__header {
+  justify-content: space-between;
+
+  h2 {
+    margin: 0.1rem 0 0;
+    font-size: 1.05rem;
+    line-height: 1.3;
+  }
+}
+
+.upload-mapping-modal__eyebrow {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-subtle, #6b7280);
+}
+
+.upload-mapping-modal__close {
+  width: 2rem;
+  height: 2rem;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 1px solid var(--color-border, #e2e5ef);
+  border-radius: var(--radius-sm, 8px);
+  background: transparent;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: var(--color-surface-hover, #f6f7fb);
+  }
+}
+
+.upload-mapping-modal__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 1rem;
+  overflow: auto;
+}
+
+.upload-mapping-modal__footer {
+  justify-content: flex-end;
+  border-top: 1px solid var(--color-border, #e2e5ef);
+  border-bottom: 0;
+}
+
+.upload-mapping-modal__primary {
+  background: var(--color-primary, #1f5eff);
+  border-color: var(--color-primary, #1f5eff);
+  color: #fff;
+
+  &:hover:not(:disabled) {
+    background: var(--color-primary-hover, #174bd1);
+  }
+}
+
 .badge {
   display: inline-block;
   padding: 0.15rem 0.5rem;
@@ -477,6 +582,11 @@
 .badge--muted {
   background: var(--color-surface-hover, #f6f7fb);
   color: var(--color-subtle, #6b7280);
+}
+
+.badge--mapped {
+  background: #e4f3f7;
+  color: #0d6072;
 }
 
 .curator-admin {

@@ -50,6 +50,7 @@ from app.collection_object_index.domain.models import (
     CollectionAreaNotFound,
     CollectionId,
     CollectionNotFound,
+    ObjectSnapshotMapping,
     SourceDocumentMappingInvalid,
 )
 from app.collection_object_index.infrastructure.models import (
@@ -204,6 +205,11 @@ async def _upload(
                 collection_id=collection_id,
                 file_name=file_name,
                 content=_xlsx(rows if rows is not None else [["ZOO-1", "Jaguar"]]),
+                object_mapping=ObjectSnapshotMapping(
+                    inventory_number_column="Inventory No",
+                    display_title_column="Name",
+                    description_columns=("Name",),
+                ),
             )
         )
         await session.commit()
