@@ -46,6 +46,44 @@ Response:
 
 Returns one `MuseumQuestion`.
 
+### `POST /museum-questions/{id}/triage`
+
+Runs AI triage for one question and returns a `MuseumQuestionTriage`.
+
+When `use_category_classification_enabled` is enabled, the response still waits only for
+the binary triage. The experimental use-category classification is created as
+`PENDING` in the same transaction and processed asynchronously after commit.
+
+### `GET /museum-questions/{id}/triage`
+
+Returns the latest stored `MuseumQuestionTriage`.
+
+If the binary triage has never been run, returns `404 TRIAGE_NOT_FOUND`.
+
+### `PATCH /museum-questions/{id}/triage/verdict`
+
+Request:
+
+```json
+{ "verdict": "OUT_OF_SCOPE" }
+```
+
+Records a staff correction of the binary AI verdict and returns the updated
+`MuseumQuestionTriage`.
+
+### `PUT /museum-questions/{id}/triage/search-terms`
+
+Request:
+
+```json
+{
+  "terms": [{ "english": "Allende meteorite", "portuguese": "Meteorito Allende" }]
+}
+```
+
+Reconciles staff-edited search terms for an in-scope triage and returns the updated
+`MuseumQuestionTriage`.
+
 ### `POST /museum-questions/{id}/answer`
 
 Request:
@@ -98,11 +136,77 @@ No e-mail is sent.
 }
 ```
 
+## `MuseumQuestionTriage`
+
+```json
+{
+  "id": "triage-1",
+  "questionId": "q1",
+  "verdict": "IN_SCOPE",
+  "effectiveVerdict": "IN_SCOPE",
+  "staffOverrideVerdict": null,
+  "isVisitRelated": true,
+  "mentionedObjects": [
+    { "english": "Allende meteorite", "portuguese": "Meteorito Allende", "origin": "AI" }
+  ],
+  "objectMatches": [],
+  "suggestedReply": null,
+  "searchStrategy": "Correspondência aproximada por similaridade textual...",
+  "modelName": "llama3.1:8b",
+  "createdAt": "2026-07-10T12:00:00Z",
+  "useCategoryClassification": {
+    "status": "COMPLETED",
+    "outcome": "CATEGORIZED",
+    "quality": "FULL",
+    "classifierKind": "LLM",
+    "classifierModel": "llama3.1:8b",
+    "classifierVersion": "llm-use-category-v1",
+    "assignedCategories": [
+      { "category": "RESEARCH_PROJECTS", "confidence": 0.91, "source": "LLM" }
+    ],
+    "categoryScores": [
+      { "category": "RESEARCH_PROJECTS", "confidence": 0.91, "source": "LLM" }
+    ],
+    "classifiedAt": "2026-07-10T12:00:05Z",
+    "error": null
+  }
+}
+```
+
+`useCategoryClassification.status` values:
+
+- `NOT_REQUESTED`: synthesized by the API when no current child row exists; never
+  persisted.
+- `PENDING`: the child row exists and asynchronous classification has not finished.
+- `COMPLETED`: classification finished successfully; `outcome`, `quality`, and
+  `classifiedAt` are non-null.
+- `FAILED`: classification was attempted and failed; `error` and `classifiedAt` are
+  non-null.
+
+When no current child row exists, `useCategoryClassification` is returned as:
+
+```json
+{
+  "status": "NOT_REQUESTED",
+  "outcome": null,
+  "quality": null,
+  "classifierKind": null,
+  "classifierModel": null,
+  "classifierVersion": null,
+  "assignedCategories": [],
+  "categoryScores": [],
+  "classifiedAt": null,
+  "error": null
+}
+```
+
 ## Errors
 
 - `401`: missing/invalid authentication.
 - `403`: caller is not staff.
 - `404 MUSEUM_QUESTION_NOT_FOUND`: unknown question id.
+- `404 TRIAGE_NOT_FOUND`: no AI triage has been run for the question.
+- `409 TRIAGE_NOT_IN_SCOPE`: search terms were submitted for an out-of-scope triage.
 - `409 INVALID_MUSEUM_QUESTION_TRANSITION`: action is not valid for the current status.
 - `422`: invalid request body.
 

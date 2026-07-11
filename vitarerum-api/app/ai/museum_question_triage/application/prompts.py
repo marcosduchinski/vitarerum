@@ -23,6 +23,26 @@ _SCOPE_RULE = (
     "loan of an object, asking about school visits or public events."
 )
 
+_USE_CATEGORY_DEFINITIONS = (
+    "- EXHIBITION: using collection items in an exhibition or display.\n"
+    "- PUBLISHING_IMAGES: requesting or planning image publication, "
+    "reproduction, licensing, or figure use.\n"
+    "- LEARNING_EVENTS: school, workshop, public learning, education, or "
+    "outreach activity.\n"
+    "- ANSWERING_ENQUIRIES: asking a factual question about an object, "
+    "specimen, record, provenance, or collection information.\n"
+    "- RESEARCH_PROJECTS: academic, scientific, curatorial, or independent "
+    "research involving collection material.\n"
+    "- OPERATING_MACHINERY: using machinery or technical equipment from the "
+    "collection.\n"
+    "- PLAYING_INSTRUMENTS: playing or performing with musical instruments "
+    "from the collection.\n"
+    "- FILMING: filming, TV, video, documentary, or audiovisual production "
+    "involving collection material.\n"
+    "- INSPIRING_NEW_WORK: using the collection as inspiration for new "
+    "artistic, design, literary, or creative work."
+)
+
 
 def build_classification_system_prompt() -> str:
     return (
@@ -52,6 +72,36 @@ def build_classification_system_prompt() -> str:
 
 
 def build_classification_user_prompt(message: str) -> str:
+    return f"[CITIZEN MESSAGE]\n{message}"
+
+
+def build_use_category_classification_system_prompt() -> str:
+    return (
+        "You classify a museum 'Ask the Museum' public message into Spectrum "
+        "collection-use categories. This is experimental metadata for staff "
+        "review, not an automatic decision.\n\n"
+        "Allowed categories:\n"
+        f"{_USE_CATEGORY_DEFINITIONS}\n\n"
+        "CRITICAL CONSTRAINTS:\n"
+        "1. Use only the allowed category enum values. Never invent a new "
+        "category.\n"
+        "2. The message may have multiple categories. Assign every category "
+        "that clearly applies.\n"
+        "3. If no category clearly applies, set outcome to UNCLEAR and return "
+        "assigned_categories as an empty list.\n"
+        "4. If at least one category clearly applies, set outcome to "
+        "CATEGORIZED and include those exact score objects in "
+        "assigned_categories.\n"
+        "5. category_scores should include only categories you considered "
+        "plausible enough to report. Do not add artificial zero-confidence "
+        "rows.\n"
+        "6. Confidence is a decimal from 0 to 1. Use source LLM for every "
+        "score in this phase.\n"
+        "7. Return only the structured fields requested — no extra commentary."
+    )
+
+
+def build_use_category_classification_user_prompt(message: str) -> str:
     return f"[CITIZEN MESSAGE]\n{message}"
 
 

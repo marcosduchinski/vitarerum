@@ -6,6 +6,7 @@ import {
   MuseumQuestionTriage,
   SearchTermDraft,
   TriageVerdict,
+  UseCategoryClassification,
 } from '../models/museum-question-triage.model';
 import {
   AnswerMuseumQuestionRequest,
@@ -46,6 +47,37 @@ function normalizeSearchTerms(terms: readonly SearchTermDraft[]): SearchTermDraf
     normalized.push({ english, portuguese });
   }
   return normalized;
+}
+
+function pendingUseCategoryClassification(): UseCategoryClassification {
+  return {
+    status: 'PENDING',
+    outcome: null,
+    quality: null,
+    classifierKind: 'LLM',
+    classifierModel: 'llama3.1:8b (mock)',
+    classifierVersion: 'llm-use-category-v1',
+    assignedCategories: [],
+    categoryScores: [],
+    classifiedAt: null,
+    error: null,
+  };
+}
+
+function completedUseCategoryClassification(): UseCategoryClassification {
+  const score = { category: 'RESEARCH_PROJECTS', confidence: 0.91, source: 'LLM' as const };
+  return {
+    status: 'COMPLETED',
+    outcome: 'CATEGORIZED',
+    quality: 'FULL',
+    classifierKind: 'LLM',
+    classifierModel: 'llama3.1:8b (mock)',
+    classifierVersion: 'llm-use-category-v1',
+    assignedCategories: [score],
+    categoryScores: [score],
+    classifiedAt: NOW,
+    error: null,
+  };
 }
 
 @Injectable()
@@ -176,7 +208,16 @@ export class MuseumQuestionManagementServiceMock implements MuseumQuestionManage
   private triages: Record<string, MuseumQuestionTriage> = {};
 
   getTriage(questionId: string): Observable<MuseumQuestionTriage | null> {
-    return of(this.triages[questionId] ?? null).pipe(delay(150));
+    const triage = this.triages[questionId] ?? null;
+    if (triage?.useCategoryClassification.status === 'PENDING') {
+      const updated = {
+        ...triage,
+        useCategoryClassification: completedUseCategoryClassification(),
+      };
+      this.triages[questionId] = updated;
+      return of(updated).pipe(delay(150));
+    }
+    return of(triage).pipe(delay(150));
   }
 
   runTriage(questionId: string): Observable<MuseumQuestionTriage> {
@@ -203,6 +244,7 @@ export class MuseumQuestionManagementServiceMock implements MuseumQuestionManage
           searchStrategy: null,
           modelName: 'llama3.1:8b (mock)',
           createdAt: NOW,
+          useCategoryClassification: pendingUseCategoryClassification(),
         }
       : {
           id: `triage-${questionId}-${Date.now()}`,
@@ -248,6 +290,7 @@ export class MuseumQuestionManagementServiceMock implements MuseumQuestionManage
           searchStrategy: SEARCH_STRATEGY_DESCRIPTION,
           modelName: 'llama3.1:8b (mock)',
           createdAt: NOW,
+          useCategoryClassification: pendingUseCategoryClassification(),
         };
     this.triages[questionId] = triage;
     return of(triage).pipe(delay(400));

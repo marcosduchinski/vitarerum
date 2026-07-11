@@ -14,12 +14,15 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.museum_question_triage.application.use_cases import (
+    ClassifyPendingUseCategory,
+    CreatePendingUseCategoryClassification,
     GetLatestTriage,
     OverrideTriageVerdict,
     SyncTriageSearchTerms,
     TriageMuseumQuestion,
 )
 from app.ai.museum_question_triage.domain.ports import (
+    MessageClassificationRepository,
     MuseumQuestionPort,
     ObjectSearchPort,
     TriageModelPort,
@@ -35,6 +38,7 @@ from app.ai.museum_question_triage.infrastructure.object_search_acl import (
     ObjectSearchAdapter,
 )
 from app.ai.museum_question_triage.infrastructure.repositories import (
+    SqlAlchemyMessageClassificationRepository,
     SqlAlchemyTriageRepository,
 )
 from app.collection_object_index.application.ports import CollectionObjectIndexPort
@@ -67,10 +71,19 @@ def get_triage_repository(session: DBSession) -> TriageRepository:
     return SqlAlchemyTriageRepository(session)
 
 
+def get_classification_repository(
+    session: DBSession,
+) -> MessageClassificationRepository:
+    return SqlAlchemyMessageClassificationRepository(session)
+
+
 MuseumQuestionAclPort = Annotated[MuseumQuestionPort, Depends(get_museum_question_port)]
 ModelPort = Annotated[TriageModelPort, Depends(get_triage_model_port)]
 SearchPort = Annotated[ObjectSearchPort, Depends(get_object_search_port)]
 Repository = Annotated[TriageRepository, Depends(get_triage_repository)]
+ClassificationRepository = Annotated[
+    MessageClassificationRepository, Depends(get_classification_repository)
+]
 
 
 def get_triage_use_case(
@@ -86,6 +99,23 @@ def get_triage_use_case(
 
 def get_latest_triage_use_case(repository: Repository) -> GetLatestTriage:
     return GetLatestTriage(repository)
+
+
+def get_create_pending_use_category_use_case(
+    repository: ClassificationRepository,
+) -> CreatePendingUseCategoryClassification:
+    return CreatePendingUseCategoryClassification(repository, settings.triage_model)
+
+
+def get_classify_pending_use_category_use_case(
+    museum_question: MuseumQuestionAclPort,
+    model: ModelPort,
+    triage_repository: Repository,
+    classification_repository: ClassificationRepository,
+) -> ClassifyPendingUseCategory:
+    return ClassifyPendingUseCategory(
+        museum_question, model, triage_repository, classification_repository
+    )
 
 
 def get_override_verdict_use_case(
@@ -105,6 +135,14 @@ def get_sync_search_terms_use_case(
 
 TriageUseCase = Annotated[TriageMuseumQuestion, Depends(get_triage_use_case)]
 GetLatestTriageUseCase = Annotated[GetLatestTriage, Depends(get_latest_triage_use_case)]
+CreatePendingUseCategoryUseCase = Annotated[
+    CreatePendingUseCategoryClassification,
+    Depends(get_create_pending_use_category_use_case),
+]
+ClassifyPendingUseCategoryUseCase = Annotated[
+    ClassifyPendingUseCategory,
+    Depends(get_classify_pending_use_category_use_case),
+]
 OverrideVerdictUseCase = Annotated[
     OverrideTriageVerdict, Depends(get_override_verdict_use_case)
 ]

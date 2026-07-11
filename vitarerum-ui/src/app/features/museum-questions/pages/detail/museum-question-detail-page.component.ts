@@ -29,6 +29,8 @@ import {
   ObjectTriageMatch,
   SearchTermDraft,
   TriageVerdict,
+  UseCategoryClassification,
+  UseCategoryScore,
 } from '../../models/museum-question-triage.model';
 import { MuseumQuestion, MuseumQuestionStatus } from '../../models/museum-question.model';
 import { MUSEUM_QUESTION_MANAGEMENT_SERVICE } from '../../services/museum-question-management.service';
@@ -83,6 +85,18 @@ const STATUS_LABELS: Record<MuseumQuestionStatus, string> = {
   ANSWERED: 'Answered',
   OUT_OF_SCOPE: 'Out of scope',
   CLOSED: 'Closed',
+};
+
+const USE_CATEGORY_LABELS: Record<string, string> = {
+  EXHIBITION: 'Exhibition',
+  PUBLISHING_IMAGES: 'Publishing images',
+  LEARNING_EVENTS: 'Learning events',
+  ANSWERING_ENQUIRIES: 'Answering enquiries',
+  RESEARCH_PROJECTS: 'Research projects',
+  OPERATING_MACHINERY: 'Operating machinery',
+  PLAYING_INSTRUMENTS: 'Playing instruments',
+  FILMING: 'Filming',
+  INSPIRING_NEW_WORK: 'Inspiring new work',
 };
 
 @Component({
@@ -163,6 +177,12 @@ export class MuseumQuestionDetailPageComponent {
    * kept only for reference). */
   protected readonly effectiveVerdict = computed<TriageVerdict | null>(
     () => this.triage()?.effectiveVerdict ?? null,
+  );
+  protected readonly useCategoryClassification = computed<UseCategoryClassification | null>(
+    () => this.triage()?.useCategoryClassification ?? null,
+  );
+  protected readonly assignedUseCategories = computed<readonly UseCategoryScore[]>(
+    () => this.useCategoryClassification()?.assignedCategories ?? [],
   );
   protected readonly triageObjectResults = computed<readonly TriageObjectResult[]>(() => {
     const pages = this.triageHitPages();
@@ -287,6 +307,10 @@ export class MuseumQuestionDetailPageComponent {
     }
   }
 
+  protected refreshTriage(): void {
+    this.triageRefreshToken.update((value) => value + 1);
+  }
+
   protected cancelConfirmations(): void {
     this.confirmOutOfScope.set(false);
     this.confirmClose.set(false);
@@ -370,6 +394,14 @@ export class MuseumQuestionDetailPageComponent {
 
   protected statusLabel(status: MuseumQuestionStatus): string {
     return STATUS_LABELS[status];
+  }
+
+  protected useCategoryLabel(category: string): string {
+    return USE_CATEGORY_LABELS[category] ?? category.replaceAll('_', ' ').toLowerCase();
+  }
+
+  protected confidenceLabel(confidence: number): string {
+    return `${Math.round(confidence * 100)}%`;
   }
 
   protected highlightHtml(hit: ObjectTriageHit): SafeHtml {

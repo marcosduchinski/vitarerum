@@ -6,6 +6,7 @@ import {
   MuseumQuestionTriage,
   SearchTermDraft,
   TriageVerdict,
+  UseCategoryClassification,
 } from '../../models/museum-question-triage.model';
 import { MuseumQuestion } from '../../models/museum-question.model';
 import { MUSEUM_QUESTION_MANAGEMENT_SERVICE } from '../../services/museum-question-management.service';
@@ -31,6 +32,19 @@ const QUESTION: MuseumQuestion = {
   closedBy: null,
 };
 
+const NOT_REQUESTED_USE_CATEGORY_CLASSIFICATION: UseCategoryClassification = {
+  status: 'NOT_REQUESTED',
+  outcome: null,
+  quality: null,
+  classifierKind: null,
+  classifierModel: null,
+  classifierVersion: null,
+  assignedCategories: [],
+  categoryScores: [],
+  classifiedAt: null,
+  error: null,
+};
+
 const OUT_OF_SCOPE_TRIAGE: MuseumQuestionTriage = {
   id: 't1',
   questionId: 'q1',
@@ -44,6 +58,7 @@ const OUT_OF_SCOPE_TRIAGE: MuseumQuestionTriage = {
   searchStrategy: null,
   modelName: 'llama3.1:8b',
   createdAt: '2026-07-05T12:00:00Z',
+  useCategoryClassification: NOT_REQUESTED_USE_CATEGORY_CLASSIFICATION,
 };
 
 const IN_SCOPE_TRIAGE: MuseumQuestionTriage = {
@@ -82,6 +97,59 @@ const IN_SCOPE_TRIAGE: MuseumQuestionTriage = {
   searchStrategy: 'Correspondência aproximada por similaridade textual (não é busca exata).',
   modelName: 'llama3.1:8b',
   createdAt: '2026-07-05T12:00:00Z',
+  useCategoryClassification: NOT_REQUESTED_USE_CATEGORY_CLASSIFICATION,
+};
+
+const PENDING_USE_CATEGORY_CLASSIFICATION: UseCategoryClassification = {
+  status: 'PENDING',
+  outcome: null,
+  quality: null,
+  classifierKind: 'LLM',
+  classifierModel: 'llama3.1:8b',
+  classifierVersion: 'llm-use-category-v1',
+  assignedCategories: [],
+  categoryScores: [],
+  classifiedAt: null,
+  error: null,
+};
+
+const COMPLETED_USE_CATEGORY_CLASSIFICATION: UseCategoryClassification = {
+  status: 'COMPLETED',
+  outcome: 'CATEGORIZED',
+  quality: 'FULL',
+  classifierKind: 'LLM',
+  classifierModel: 'llama3.1:8b',
+  classifierVersion: 'llm-use-category-v1',
+  assignedCategories: [{ category: 'RESEARCH_PROJECTS', confidence: 0.91, source: 'LLM' }],
+  categoryScores: [{ category: 'RESEARCH_PROJECTS', confidence: 0.91, source: 'LLM' }],
+  classifiedAt: '2026-07-05T12:01:00Z',
+  error: null,
+};
+
+const UNCLEAR_USE_CATEGORY_CLASSIFICATION: UseCategoryClassification = {
+  status: 'COMPLETED',
+  outcome: 'UNCLEAR',
+  quality: 'FULL',
+  classifierKind: 'LLM',
+  classifierModel: 'llama3.1:8b',
+  classifierVersion: 'llm-use-category-v1',
+  assignedCategories: [],
+  categoryScores: [],
+  classifiedAt: '2026-07-05T12:01:00Z',
+  error: null,
+};
+
+const FAILED_USE_CATEGORY_CLASSIFICATION: UseCategoryClassification = {
+  status: 'FAILED',
+  outcome: null,
+  quality: null,
+  classifierKind: 'LLM',
+  classifierModel: 'llama3.1:8b',
+  classifierVersion: 'llm-use-category-v1',
+  assignedCategories: [],
+  categoryScores: [],
+  classifiedAt: '2026-07-05T12:01:00Z',
+  error: 'model unavailable',
 };
 
 class ServiceStub {
@@ -91,11 +159,13 @@ class ServiceStub {
   readonly answerCalls: [string, string][] = [];
   readonly outOfScopeCalls: [string, string | null][] = [];
   readonly closeCalls: string[] = [];
+  readonly getTriageCalls: string[] = [];
   readonly triageCalls: string[] = [];
   readonly overrideVerdictCalls: [string, TriageVerdict][] = [];
   readonly syncSearchTermsCalls: [string, readonly SearchTermDraft[]][] = [];
 
-  getTriage() {
+  getTriage(questionId: string) {
+    this.getTriageCalls.push(questionId);
     return of(this.triage);
   }
 
@@ -441,6 +511,84 @@ describe('MuseumQuestionDetailPageComponent', () => {
 
     expect(el.textContent).toContain('Correspondência aproximada por similaridade textual');
     expect(el.textContent).toContain('pt + en');
+  });
+
+  it('renders pending use-category classification without re-running triage', async () => {
+    const el = await setup();
+    service.nextTriage = {
+      ...IN_SCOPE_TRIAGE,
+      useCategoryClassification: PENDING_USE_CATEGORY_CLASSIFICATION,
+    };
+
+    el.querySelector<HTMLButtonElement>('[aria-label="Run AI triage"]')!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(el.textContent).toContain('Categorias de uso detectadas');
+    expect(el.textContent).toContain('Processando classificação de categorias');
+    expect(service.triageCalls).toEqual(['q1']);
+
+    Array.from(el.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.includes('Atualizar'))!
+      .click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(service.triageCalls).toEqual(['q1']);
+    expect(service.getTriageCalls.length).toBeGreaterThan(1);
+  });
+
+  it('renders completed use-category chips', async () => {
+    const el = await setup();
+    service.nextTriage = {
+      ...IN_SCOPE_TRIAGE,
+      useCategoryClassification: COMPLETED_USE_CATEGORY_CLASSIFICATION,
+    };
+
+    el.querySelector<HTMLButtonElement>('[aria-label="Run AI triage"]')!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(el.textContent).toContain('Research projects');
+    expect(el.textContent).toContain('91%');
+  });
+
+  it('renders unclear use-category classification', async () => {
+    const el = await setup();
+    service.nextTriage = {
+      ...IN_SCOPE_TRIAGE,
+      useCategoryClassification: UNCLEAR_USE_CATEGORY_CLASSIFICATION,
+    };
+
+    el.querySelector<HTMLButtonElement>('[aria-label="Run AI triage"]')!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(el.textContent).toContain('Sem categoria suficientemente clara');
+  });
+
+  it('renders failed use-category classification without blocking triage actions', async () => {
+    const el = await setup();
+    service.nextTriage = {
+      ...IN_SCOPE_TRIAGE,
+      useCategoryClassification: FAILED_USE_CATEGORY_CLASSIFICATION,
+    };
+
+    el.querySelector<HTMLButtonElement>('[aria-label="Run AI triage"]')!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(el.textContent).toContain('Classificação indisponível');
+    expect(el.textContent).toContain('model unavailable');
+    expect(
+      Array.from(el.querySelectorAll<HTMLButtonElement>('button')).some((button) =>
+        button.textContent?.includes('Marcar como fora de escopo'),
+      ),
+    ).toBe(true);
   });
 
   it('contests the verdict and flips the displayed view without re-running triage', async () => {

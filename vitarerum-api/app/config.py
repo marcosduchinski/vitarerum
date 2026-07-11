@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     # extraction, local Llama via Ollama).
     triage_model: str = "llama3.1:8b"
     triage_timeout_seconds: float = 60.0
+    use_category_classification_enabled: bool = False
     # Public proposal submission (unauthenticated citizen intake, double opt-in).
     # Default is Cloudflare's always-passing test secret key; override in prod.
     turnstile_secret_key: str = "1x0000000000000000000000000000000AA"

@@ -49,6 +49,18 @@ function withFallbacks(raw: MuseumQuestionTriage): MuseumQuestionTriage {
     ...raw,
     effectiveVerdict: raw.effectiveVerdict ?? raw.verdict,
     searchStrategy: raw.searchStrategy ?? null,
+    useCategoryClassification: raw.useCategoryClassification ?? {
+      status: 'NOT_REQUESTED',
+      outcome: null,
+      quality: null,
+      classifierKind: null,
+      classifierModel: null,
+      classifierVersion: null,
+      assignedCategories: [],
+      categoryScores: [],
+      classifiedAt: null,
+      error: null,
+    },
     mentionedObjects: raw.mentionedObjects.map((obj) => ({
       ...obj,
       origin: obj.origin ?? 'AI',

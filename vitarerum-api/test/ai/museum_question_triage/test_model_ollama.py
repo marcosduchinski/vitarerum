@@ -1,14 +1,22 @@
 import pytest
 
 from app.ai.museum_question_triage.domain.models import (
+    ClassificationOutcome,
+    ClassificationScoreSource,
     MentionedObject,
     TriageClassification,
+    UseCategory,
+    UseCategoryClassification,
+    UseCategoryScore,
 )
 from app.ai.museum_question_triage.domain.ports import ModelUnavailable
 from app.ai.museum_question_triage.infrastructure.model_ollama import (
     _MentionedObjectSchema,
     _parse_classification,
+    _parse_use_category_classification,
     _TriageClassificationSchema,
+    _UseCategoryClassificationSchema,
+    _UseCategoryScoreSchema,
 )
 
 
@@ -80,3 +88,227 @@ def test_malformed_mentioned_object_entry_raises_model_unavailable() -> None:
 def test_completely_unstructured_output_raises_model_unavailable() -> None:
     with pytest.raises(ModelUnavailable):
         _parse_classification("free text the model returned instead of JSON")
+
+
+def test_parses_use_category_classification_schema_instance() -> None:
+    score = _UseCategoryScoreSchema(
+        category=UseCategory.RESEARCH_PROJECTS,
+        confidence=0.91,
+        source=ClassificationScoreSource.LLM,
+    )
+    schema = _UseCategoryClassificationSchema(
+        outcome=ClassificationOutcome.CATEGORIZED,
+        category_scores=[score],
+        assigned_categories=[score],
+    )
+
+    result = _parse_use_category_classification(schema)
+
+    expected_score = UseCategoryScore(
+        category=UseCategory.RESEARCH_PROJECTS,
+        confidence=0.91,
+        source=ClassificationScoreSource.LLM,
+    )
+    assert result == UseCategoryClassification(
+        outcome=ClassificationOutcome.CATEGORIZED,
+        category_scores=[expected_score],
+        assigned_categories=[expected_score],
+    )
+
+
+def test_parses_unclear_use_category_classification() -> None:
+    result = _parse_use_category_classification(
+        {
+            "outcome": "UNCLEAR",
+            "category_scores": [],
+            "assigned_categories": [],
+        }
+    )
+
+    assert result == UseCategoryClassification(
+        outcome=ClassificationOutcome.UNCLEAR,
+        category_scores=[],
+        assigned_categories=[],
+    )
+
+
+def test_use_category_classification_rejects_unclear_with_assigned_category() -> None:
+    score = {
+        "category": "RESEARCH_PROJECTS",
+        "confidence": 0.91,
+        "source": "LLM",
+    }
+
+    with pytest.raises(ModelUnavailable):
+        _parse_use_category_classification(
+            {
+                "outcome": "UNCLEAR",
+                "category_scores": [score],
+                "assigned_categories": [score],
+            }
+        )
+
+
+def test_use_category_classification_discards_invented_categories() -> None:
+    result = _parse_use_category_classification(
+        {
+            "outcome": "CATEGORIZED",
+            "category_scores": [
+                {
+                    "category": "MADE_UP_CATEGORY",
+                    "confidence": 0.99,
+                    "source": "LLM",
+                },
+                {
+                    "category": "RESEARCH_PROJECTS",
+                    "confidence": 0.8,
+                    "source": "LLM",
+                },
+            ],
+            "assigned_categories": [
+                {
+                    "category": "MADE_UP_CATEGORY",
+                    "confidence": 0.99,
+                    "source": "LLM",
+                },
+                {
+                    "category": "RESEARCH_PROJECTS",
+                    "confidence": 0.8,
+                    "source": "LLM",
+                },
+            ],
+        }
+    )
+
+    expected_score = UseCategoryScore(
+        category=UseCategory.RESEARCH_PROJECTS,
+        confidence=0.8,
+        source=ClassificationScoreSource.LLM,
+    )
+    assert result == UseCategoryClassification(
+        outcome=ClassificationOutcome.CATEGORIZED,
+        category_scores=[expected_score],
+        assigned_categories=[expected_score],
+    )
+
+
+def test_rejects_categorized_with_only_invented_category() -> None:
+    with pytest.raises(ModelUnavailable):
+        _parse_use_category_classification(
+            {
+                "outcome": "CATEGORIZED",
+                "category_scores": [
+                    {
+                        "category": "MADE_UP_CATEGORY",
+                        "confidence": 0.8,
+                        "source": "LLM",
+                    }
+                ],
+                "assigned_categories": [
+                    {
+                        "category": "MADE_UP_CATEGORY",
+                        "confidence": 0.8,
+                        "source": "LLM",
+                    }
+                ],
+            }
+        )
+
+
+def test_use_category_classification_rejects_confidence_outside_range() -> None:
+    with pytest.raises(ModelUnavailable):
+        _parse_use_category_classification(
+            {
+                "outcome": "CATEGORIZED",
+                "category_scores": [
+                    {
+                        "category": "RESEARCH_PROJECTS",
+                        "confidence": 1.2,
+                        "source": "LLM",
+                    }
+                ],
+                "assigned_categories": [
+                    {
+                        "category": "RESEARCH_PROJECTS",
+                        "confidence": 1.2,
+                        "source": "LLM",
+                    }
+                ],
+            }
+        )
+
+
+def test_use_category_classification_rejects_assigned_score_divergence() -> None:
+    with pytest.raises(ModelUnavailable):
+        _parse_use_category_classification(
+            {
+                "outcome": "CATEGORIZED",
+                "category_scores": [
+                    {
+                        "category": "RESEARCH_PROJECTS",
+                        "confidence": 0.91,
+                        "source": "LLM",
+                    }
+                ],
+                "assigned_categories": [
+                    {
+                        "category": "RESEARCH_PROJECTS",
+                        "confidence": 0.8,
+                        "source": "LLM",
+                    }
+                ],
+            }
+        )
+
+
+def test_use_category_classification_sorts_scores_deterministically() -> None:
+    result = _parse_use_category_classification(
+        {
+            "outcome": "CATEGORIZED",
+            "category_scores": [
+                {
+                    "category": "FILMING",
+                    "confidence": 0.7,
+                    "source": "LLM",
+                },
+                {
+                    "category": "RESEARCH_PROJECTS",
+                    "confidence": 0.91,
+                    "source": "LLM",
+                },
+                {
+                    "category": "EXHIBITION",
+                    "confidence": 0.91,
+                    "source": "LLM",
+                },
+            ],
+            "assigned_categories": [
+                {
+                    "category": "FILMING",
+                    "confidence": 0.7,
+                    "source": "LLM",
+                },
+                {
+                    "category": "RESEARCH_PROJECTS",
+                    "confidence": 0.91,
+                    "source": "LLM",
+                },
+                {
+                    "category": "EXHIBITION",
+                    "confidence": 0.91,
+                    "source": "LLM",
+                },
+            ],
+        }
+    )
+
+    assert [score.category for score in result.category_scores] == [
+        UseCategory.EXHIBITION,
+        UseCategory.RESEARCH_PROJECTS,
+        UseCategory.FILMING,
+    ]
+    assert [score.category for score in result.assigned_categories] == [
+        UseCategory.EXHIBITION,
+        UseCategory.RESEARCH_PROJECTS,
+        UseCategory.FILMING,
+    ]

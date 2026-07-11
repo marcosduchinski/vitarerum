@@ -362,6 +362,69 @@
                 }
               </div>
 
+              @if (
+                useCategoryClassification();
+                as useCategoryClassification
+              ) {
+                @if (useCategoryClassification.status !== 'NOT_REQUESTED') {
+                  <section
+                    class="triage-terms-editor"
+                    aria-labelledby="use-category-classification-title"
+                  >
+                    <div class="triage-section-heading">
+                      <div>
+                        <h3 id="use-category-classification-title">
+                          Categorias de uso detectadas
+                        </h3>
+                        <p class="triage-section-heading__note">
+                          Experimental · {{ useCategoryClassification.classifierModel }}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        class="action-btn"
+                        [disabled]="triageResource.isLoading() || triageBusy()"
+                        (click)="refreshTriage()"
+                      >
+                        <span class="pi pi-sync" aria-hidden="true"></span>
+                        Atualizar
+                      </button>
+                    </div>
+
+                    @if (useCategoryClassification.status === 'PENDING') {
+                      <div class="use-category-panel__state">
+                        <span class="pi pi-clock" aria-hidden="true"></span>
+                        <span>Processando classificação de categorias.</span>
+                      </div>
+                    } @else if (useCategoryClassification.status === 'FAILED') {
+                      <div class="use-category-panel__state use-category-panel__state--failed">
+                        <span class="pi pi-exclamation-triangle" aria-hidden="true"></span>
+                        <span>
+                          Classificação indisponível.
+                          @if (useCategoryClassification.error) {
+                            {{ useCategoryClassification.error }}
+                          }
+                        </span>
+                      </div>
+                    } @else if (useCategoryClassification.outcome === 'UNCLEAR') {
+                      <div class="use-category-panel__state">
+                        <span class="pi pi-question-circle" aria-hidden="true"></span>
+                        <span>Sem categoria suficientemente clara para atribuição automática.</span>
+                      </div>
+                    } @else if (assignedUseCategories().length) {
+                      <ul class="use-category-chip-list" aria-label="Detected use categories">
+                        @for (category of assignedUseCategories(); track category.category) {
+                          <li class="status-chip status-chip--submitted">
+                            <span>{{ useCategoryLabel(category.category) }}</span>
+                            <strong>{{ confidenceLabel(category.confidence) }}</strong>
+                          </li>
+                        }
+                      </ul>
+                    }
+                  </section>
+                }
+              }
+
               @if (effectiveVerdict() === 'OUT_OF_SCOPE') {
                 <div>
                   <h3 class="detail-card__title">Suggested reply</h3>

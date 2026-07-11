@@ -10,14 +10,20 @@ Protocols.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
     from app.ai.museum_question_triage.domain.models import (
+        ClassificationId,
+        ClassifierKind,
+        MessageClassification,
         MessageTriage,
         ObjectHitView,
         QuestionView,
         TriageClassification,
+        TriageId,
+        UseCategoryClassification,
     )
     from app.identity.public import Actor
 
@@ -38,6 +44,10 @@ class TriageNotFound(Exception):
     """No triage run exists yet for the requested question."""
 
 
+class ClassificationNotFound(Exception):
+    """No use-category classification row matches the requested id."""
+
+
 class TriageNotInScope(Exception):
     """The requested action requires the triage's effective verdict to be
     IN_SCOPE (e.g. editing search terms while OUT_OF_SCOPE)."""
@@ -52,6 +62,10 @@ class TriageModelPort(Protocol):
     """Run the local LLM. Raises :class:`ModelUnavailable` / :class:`ModelTimeout`."""
 
     async def classify(self, message: str) -> TriageClassification: ...
+
+    async def classify_use_categories(
+        self, message: str
+    ) -> UseCategoryClassification: ...
 
     async def draft_out_of_scope_reply(self, message: str) -> str: ...
 
@@ -76,6 +90,8 @@ class TriageRepository(Protocol):
 
     async def add(self, triage: MessageTriage) -> None: ...
 
+    async def get_by_id(self, triage_id: TriageId) -> MessageTriage | None: ...
+
     async def get_latest_by_question(
         self, question_id: str
     ) -> MessageTriage | None: ...
@@ -86,3 +102,26 @@ class TriageRepository(Protocol):
         opposed to ``add``, which only creates a brand new run. Last-write-
         wins: no optimistic-concurrency check (accepted MVP limitation)."""
         ...
+
+
+class MessageClassificationRepository(Protocol):
+    """Persists use-category classifier executions attached to triage runs."""
+
+    async def add(self, classification: MessageClassification) -> None: ...
+
+    async def get_by_id(
+        self, classification_id: ClassificationId
+    ) -> MessageClassification | None: ...
+
+    async def get_current_by_triage(
+        self, triage_id: TriageId, classifier_kind: ClassifierKind
+    ) -> MessageClassification | None: ...
+
+    async def supersede_current(
+        self,
+        triage_id: TriageId,
+        classifier_kind: ClassifierKind,
+        superseded_at: datetime,
+    ) -> None: ...
+
+    async def update(self, classification: MessageClassification) -> None: ...

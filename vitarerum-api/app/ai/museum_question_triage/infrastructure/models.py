@@ -24,7 +24,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, DateTime, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -49,3 +49,47 @@ class MessageTriageOrm(Base):
         DateTime(timezone=True), nullable=True
     )
     staff_override_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+
+class MessageClassificationOrm(Base):
+    __tablename__ = "museum_question_triage_classifications"
+    __table_args__ = (
+        Index(
+            "ix_mq_triage_classifications_current",
+            "triage_id",
+            "classifier_kind",
+            "superseded_at",
+        ),
+        Index(
+            "ix_mq_triage_classifications_pending",
+            "status",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    triage_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    classifier_kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    classifier_model: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    classifier_version: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    run_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    superseded_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    outcome: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    quality: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    category_scores: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False)
+    assigned_categories: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, nullable=False
+    )
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(
+        "metadata", JSON, nullable=False
+    )
+    classified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, index=True
+    )

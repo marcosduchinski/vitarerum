@@ -600,6 +600,15 @@ textarea {
   justify-content: flex-end;
 }
 
+.use-category-chip-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
 .triage-search-summary,
 .triage-results {
   display: grid;

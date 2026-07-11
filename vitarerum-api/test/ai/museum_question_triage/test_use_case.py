@@ -5,6 +5,10 @@ import pytest
 from app.ai.museum_question_triage.application.use_cases import (
     MAX_STAFF_SEARCH_TERMS,
     SEARCH_FETCH_LIMIT_PER_LANGUAGE,
+    ClassifyPendingUseCategory,
+    ClassifyPendingUseCategoryInput,
+    CreatePendingUseCategoryClassification,
+    CreatePendingUseCategoryClassificationInput,
     GetLatestTriage,
     GetLatestTriageInput,
     OverrideTriageVerdict,
@@ -15,8 +19,15 @@ from app.ai.museum_question_triage.application.use_cases import (
     TriageMuseumQuestionInput,
 )
 from app.ai.museum_question_triage.domain.models import (
+    ClassificationId,
+    ClassificationOutcome,
+    ClassificationQuality,
+    ClassificationScoreSource,
+    ClassificationStatus,
+    ClassifierKind,
     MentionedObject,
     MentionedObjectOrigin,
+    MessageClassification,
     MessageTriage,
     ObjectHitView,
     ObjectTriageMatch,
@@ -24,6 +35,9 @@ from app.ai.museum_question_triage.domain.models import (
     TriageClassification,
     TriageId,
     TriageVerdict,
+    UseCategory,
+    UseCategoryClassification,
+    UseCategoryScore,
 )
 from app.ai.museum_question_triage.domain.ports import (
     ModelUnavailable,
@@ -63,12 +77,15 @@ class _FakeModel:
         mentioned_objects: list[MentionedObject] | None = None,
         reply: str = "Thanks, but this is out of scope.",
         classify_error: Exception | None = None,
+        use_category_error: Exception | None = None,
     ) -> None:
         self._is_visit_related = is_visit_related
         self._mentioned_objects = mentioned_objects or []
         self._reply = reply
         self._classify_error = classify_error
+        self._use_category_error = use_category_error
         self.classify_calls: list[str] = []
+        self.use_category_calls: list[str] = []
         self.reply_calls: list[str] = []
 
     async def classify(self, message: str) -> TriageClassification:
@@ -83,6 +100,21 @@ class _FakeModel:
     async def draft_out_of_scope_reply(self, message: str) -> str:
         self.reply_calls.append(message)
         return self._reply
+
+    async def classify_use_categories(self, message: str) -> UseCategoryClassification:
+        self.use_category_calls.append(message)
+        if self._use_category_error is not None:
+            raise self._use_category_error
+        score = UseCategoryScore(
+            category=UseCategory.RESEARCH_PROJECTS,
+            confidence=0.91,
+            source=ClassificationScoreSource.LLM,
+        )
+        return UseCategoryClassification(
+            outcome=ClassificationOutcome.CATEGORIZED,
+            category_scores=[score],
+            assigned_categories=[score],
+        )
 
 
 class _FakeObjectSearch:
@@ -107,6 +139,9 @@ class _FakeRepo:
     async def add(self, triage: MessageTriage) -> None:
         self.stored.append(triage)
 
+    async def get_by_id(self, triage_id: TriageId) -> MessageTriage | None:
+        return next((triage for triage in self.stored if triage.id == triage_id), None)
+
     async def get_latest_by_question(self, question_id: str) -> MessageTriage | None:
         matches = [t for t in self.stored if t.question_id == question_id]
         matches.sort(key=lambda t: t.created_at, reverse=True)
@@ -114,6 +149,78 @@ class _FakeRepo:
 
     async def update(self, triage: MessageTriage) -> None:
         self.update_calls.append(triage)
+
+
+class _FakeClassificationRepo:
+    def __init__(self) -> None:
+        self.stored: list[MessageClassification] = []
+        self.update_calls: list[MessageClassification] = []
+        self.supersede_calls: list[tuple[TriageId, ClassifierKind, datetime]] = []
+
+    async def add(self, classification: MessageClassification) -> None:
+        self.stored.append(classification)
+
+    async def get_by_id(
+        self, classification_id: ClassificationId
+    ) -> MessageClassification | None:
+        return next(
+            (
+                classification
+                for classification in self.stored
+                if classification.id == classification_id
+            ),
+            None,
+        )
+
+    async def get_current_by_triage(
+        self, triage_id: TriageId, classifier_kind: ClassifierKind
+    ) -> MessageClassification | None:
+        matches = [
+            classification
+            for classification in self.stored
+            if classification.triage_id == triage_id
+            and classification.classifier_kind is classifier_kind
+            and classification.superseded_at is None
+        ]
+        matches.sort(key=lambda classification: classification.run_number, reverse=True)
+        return matches[0] if matches else None
+
+    async def supersede_current(
+        self,
+        triage_id: TriageId,
+        classifier_kind: ClassifierKind,
+        superseded_at: datetime,
+    ) -> None:
+        self.supersede_calls.append((triage_id, classifier_kind, superseded_at))
+        current = await self.get_current_by_triage(triage_id, classifier_kind)
+        if current is None:
+            return
+        index = self.stored.index(current)
+        self.stored[index] = MessageClassification(
+            id=current.id,
+            triage_id=current.triage_id,
+            classifier_kind=current.classifier_kind,
+            classifier_model=current.classifier_model,
+            classifier_version=current.classifier_version,
+            run_number=current.run_number,
+            superseded_at=superseded_at,
+            status=current.status,
+            outcome=current.outcome,
+            quality=current.quality,
+            category_scores=list(current.category_scores),
+            assigned_categories=list(current.assigned_categories),
+            error=current.error,
+            metadata=dict(current.metadata),
+            classified_at=current.classified_at,
+            created_at=current.created_at,
+        )
+
+    async def update(self, classification: MessageClassification) -> None:
+        self.update_calls.append(classification)
+        for index, existing in enumerate(self.stored):
+            if existing.id == classification.id:
+                self.stored[index] = classification
+                return
 
 
 def _use_case(
@@ -133,6 +240,117 @@ def _use_case(
         search,
         repository,
     )
+
+
+def _stored_use_category_triage(question_id: str = "q1") -> MessageTriage:
+    return MessageTriage(
+        id=TriageId("triage-1"),
+        question_id=question_id,
+        verdict=TriageVerdict.IN_SCOPE,
+        is_visit_related=True,
+        mentioned_objects=[],
+        object_matches=[],
+        suggested_reply=None,
+        llm_model="llama3.1:8b",
+        created_at=datetime(2026, 7, 10, 12, 0, tzinfo=UTC),
+    )
+
+
+async def test_create_pending_use_category_classification() -> None:
+    repo = _FakeClassificationRepo()
+    use_case = CreatePendingUseCategoryClassification(repo, "llama3.1:8b")
+
+    result = await use_case.execute(
+        CreatePendingUseCategoryClassificationInput(triage_id="triage-1")
+    )
+
+    assert result.status is ClassificationStatus.PENDING
+    assert result.triage_id == "triage-1"
+    assert result.classifier_kind is ClassifierKind.LLM
+    assert result.classifier_model == "llama3.1:8b"
+    assert result.classifier_version == "llm-use-category-v1"
+    assert result.run_number == 1
+    assert repo.stored == [result]
+
+
+async def test_create_pending_supersedes_current_line_and_increments_run() -> None:
+    repo = _FakeClassificationRepo()
+    current = MessageClassification.pending(
+        triage_id=TriageId("triage-1"),
+        classifier_kind=ClassifierKind.LLM,
+        classifier_model="llama3.1:8b",
+        classifier_version="llm-use-category-v1",
+    )
+    repo.stored.append(current)
+    use_case = CreatePendingUseCategoryClassification(repo, "llama3.1:8b")
+
+    result = await use_case.execute(
+        CreatePendingUseCategoryClassificationInput(triage_id="triage-1")
+    )
+
+    assert result.run_number == 2
+    assert repo.stored[0].superseded_at is not None
+    assert repo.stored[1] == result
+
+
+async def test_classify_pending_use_category_completes_classification() -> None:
+    triage_repo = _FakeRepo()
+    triage_repo.stored.append(_stored_use_category_triage())
+    classification_repo = _FakeClassificationRepo()
+    pending = MessageClassification.pending(
+        triage_id=TriageId("triage-1"),
+        classifier_kind=ClassifierKind.LLM,
+        classifier_model="llama3.1:8b",
+        classifier_version="llm-use-category-v1",
+    )
+    classification_repo.stored.append(pending)
+    model = _FakeModel()
+    use_case = ClassifyPendingUseCategory(
+        _FakeMuseumQuestion(), model, triage_repo, classification_repo
+    )
+
+    result = await use_case.execute(
+        ClassifyPendingUseCategoryInput(classification_id=pending.id)
+    )
+
+    assert result.status is ClassificationStatus.COMPLETED
+    assert result.outcome is ClassificationOutcome.CATEGORIZED
+    assert result.quality is ClassificationQuality.FULL
+    assert result.assigned_categories[0].category is UseCategory.RESEARCH_PROJECTS
+    assert result.error is None
+    assert result.classified_at is not None
+    assert model.use_category_calls == [_QUESTION.message]
+    assert classification_repo.update_calls == [result]
+
+
+async def test_classify_pending_use_category_marks_model_failure() -> None:
+    triage_repo = _FakeRepo()
+    triage_repo.stored.append(_stored_use_category_triage())
+    classification_repo = _FakeClassificationRepo()
+    pending = MessageClassification.pending(
+        triage_id=TriageId("triage-1"),
+        classifier_kind=ClassifierKind.LLM,
+        classifier_model="llama3.1:8b",
+        classifier_version="llm-use-category-v1",
+    )
+    classification_repo.stored.append(pending)
+    use_case = ClassifyPendingUseCategory(
+        _FakeMuseumQuestion(),
+        _FakeModel(use_category_error=ModelUnavailable("down")),
+        triage_repo,
+        classification_repo,
+    )
+
+    result = await use_case.execute(
+        ClassifyPendingUseCategoryInput(classification_id=pending.id)
+    )
+
+    assert result.status is ClassificationStatus.FAILED
+    assert result.outcome is None
+    assert result.quality is None
+    assert result.error == "down"
+    assert result.classified_at is not None
+    assert classification_repo.update_calls == [result]
 
 
 async def test_out_of_scope_drafts_reply_and_skips_search() -> None:

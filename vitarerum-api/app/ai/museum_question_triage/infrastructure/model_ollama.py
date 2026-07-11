@@ -20,8 +20,14 @@ from typing import Any
 from pydantic import BaseModel, Field, ValidationError
 
 from app.ai.museum_question_triage.domain.models import (
+    ClassificationOutcome,
+    ClassificationScoreSource,
+    InvalidMessageClassification,
     MentionedObject,
     TriageClassification,
+    UseCategory,
+    UseCategoryClassification,
+    UseCategoryScore,
 )
 from app.ai.museum_question_triage.domain.ports import ModelTimeout, ModelUnavailable
 
@@ -51,6 +57,26 @@ class _TriageClassificationSchema(BaseModel):
     )
 
 
+class _UseCategoryScoreSchema(BaseModel):
+    category: str = Field(description="One allowed Spectrum use category.")
+    confidence: float = Field(
+        ge=0,
+        le=1,
+        description="Model confidence from 0 to 1.",
+    )
+    source: ClassificationScoreSource = Field(
+        description="Always LLM for Fase 0 use-category classification."
+    )
+
+
+class _UseCategoryClassificationSchema(BaseModel):
+    outcome: ClassificationOutcome = Field(
+        description="CATEGORIZED when at least one category applies; otherwise UNCLEAR."
+    )
+    category_scores: list[_UseCategoryScoreSchema] = Field(default_factory=list)
+    assigned_categories: list[_UseCategoryScoreSchema] = Field(default_factory=list)
+
+
 def _parse_classification(result: Any) -> TriageClassification:
     """Validate the model's structured output, mapping any malformed/
     unexpected shape to :class:`ModelUnavailable` instead of letting a
@@ -74,6 +100,52 @@ def _parse_classification(result: Any) -> TriageClassification:
             for obj in schema.mentioned_objects
         ],
     )
+
+
+def _score_from_schema(score: _UseCategoryScoreSchema) -> UseCategoryScore | None:
+    try:
+        category = UseCategory(score.category)
+    except ValueError:
+        return None
+    return UseCategoryScore(
+        category=category,
+        confidence=score.confidence,
+        source=score.source,
+    )
+
+
+def _valid_scores_from_schema(
+    scores: list[_UseCategoryScoreSchema],
+) -> list[UseCategoryScore]:
+    valid_scores: list[UseCategoryScore] = []
+    for score in scores:
+        parsed = _score_from_schema(score)
+        if parsed is not None:
+            valid_scores.append(parsed)
+    return valid_scores
+
+
+def _parse_use_category_classification(result: Any) -> UseCategoryClassification:
+    try:
+        schema = (
+            result
+            if isinstance(result, _UseCategoryClassificationSchema)
+            else _UseCategoryClassificationSchema.model_validate(result)
+        )
+        return UseCategoryClassification(
+            outcome=schema.outcome,
+            category_scores=_valid_scores_from_schema(schema.category_scores),
+            assigned_categories=_valid_scores_from_schema(schema.assigned_categories),
+        )
+    except (
+        InvalidMessageClassification,
+        ValidationError,
+        ValueError,
+        TypeError,
+    ) as exc:
+        raise ModelUnavailable(
+            "The triage model returned an invalid use-category response"
+        ) from exc
 
 
 class OllamaTriageAdapter:
@@ -134,6 +206,47 @@ class OllamaTriageAdapter:
             ) from exc
 
         return _parse_classification(result)
+
+    async def classify_use_categories(self, message: str) -> UseCategoryClassification:
+        import httpx
+        from langchain_core.exceptions import OutputParserException
+        from langchain_core.messages import HumanMessage, SystemMessage
+        from langchain_ollama import ChatOllama
+
+        from app.ai.museum_question_triage.application.prompts import (
+            build_use_category_classification_system_prompt,
+            build_use_category_classification_user_prompt,
+        )
+
+        chat = ChatOllama(
+            base_url=self._base_url,
+            model=self._model,
+            temperature=_CLASSIFICATION_TEMPERATURE,
+            client_kwargs=self._client_kwargs(),
+        ).with_structured_output(_UseCategoryClassificationSchema)
+        try:
+            result = await chat.ainvoke(
+                [
+                    SystemMessage(
+                        content=build_use_category_classification_system_prompt()
+                    ),
+                    HumanMessage(
+                        content=build_use_category_classification_user_prompt(message)
+                    ),
+                ]
+            )
+        except (httpx.TimeoutException, TimeoutError) as exc:
+            raise ModelTimeout("The triage model did not respond in time") from exc
+        except (httpx.ConnectError, httpx.HTTPError, ConnectionError, OSError) as exc:
+            raise ModelUnavailable(
+                "The triage model is currently unavailable"
+            ) from exc
+        except OutputParserException as exc:
+            raise ModelUnavailable(
+                "The triage model returned an invalid use-category response"
+            ) from exc
+
+        return _parse_use_category_classification(result)
 
     async def draft_out_of_scope_reply(self, message: str) -> str:
         import httpx

@@ -18,17 +18,28 @@ re-search only what changed).
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from app.ai.museum_question_triage.domain.models import (
+    ClassificationId,
+    ClassificationQuality,
+    ClassificationStatus,
+    ClassifierKind,
     MentionedObject,
     MentionedObjectOrigin,
+    MessageClassification,
     MessageTriage,
     ObjectHitView,
     ObjectTriageMatch,
+    TriageId,
     TriageVerdict,
 )
 from app.ai.museum_question_triage.domain.ports import (
+    ClassificationNotFound,
+    MessageClassificationRepository,
+    ModelTimeout,
+    ModelUnavailable,
     MuseumQuestionPort,
     ObjectSearchPort,
     QuestionNotFound,
@@ -53,6 +64,7 @@ SEARCH_FETCH_LIMIT_PER_LANGUAGE = 100
 # one request can't trigger dozens of catalogue searches at once.
 MAX_STAFF_SEARCH_TERMS = 10
 _MAX_TERM_FIELD_LENGTH = 200
+USE_CATEGORY_CLASSIFIER_VERSION = "llm-use-category-v1"
 
 
 def _normalize_object_terms(pairs: list[tuple[str, str]]) -> list[tuple[str, str]]:
@@ -144,6 +156,16 @@ class TriageMuseumQuestionInput:
 
 
 @dataclass(frozen=True, slots=True)
+class CreatePendingUseCategoryClassificationInput:
+    triage_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class ClassifyPendingUseCategoryInput:
+    classification_id: str
+
+
+@dataclass(frozen=True, slots=True)
 class GetLatestTriageInput:
     question_id: str
 
@@ -230,6 +252,122 @@ class TriageMuseumQuestion:
         )
         await self._repository.add(record)
         return record
+
+
+class CreatePendingUseCategoryClassification:
+    def __init__(
+        self,
+        repository: MessageClassificationRepository,
+        model_name: str,
+        classifier_version: str = USE_CATEGORY_CLASSIFIER_VERSION,
+    ) -> None:
+        self._repository = repository
+        self._model_name = model_name
+        self._classifier_version = classifier_version
+
+    async def execute(
+        self, data: CreatePendingUseCategoryClassificationInput
+    ) -> MessageClassification:
+        triage_id = TriageId(data.triage_id)
+        current = await self._repository.get_current_by_triage(
+            triage_id, ClassifierKind.LLM
+        )
+        run_number = (current.run_number + 1) if current else 1
+        if current is not None:
+            await self._repository.supersede_current(
+                triage_id, ClassifierKind.LLM, datetime.now(UTC)
+            )
+        classification = MessageClassification.pending(
+            triage_id=triage_id,
+            classifier_kind=ClassifierKind.LLM,
+            classifier_model=self._model_name,
+            classifier_version=self._classifier_version,
+            run_number=run_number,
+        )
+        await self._repository.add(classification)
+        return classification
+
+
+class ClassifyPendingUseCategory:
+    def __init__(
+        self,
+        museum_question: MuseumQuestionPort,
+        model: TriageModelPort,
+        triage_repository: TriageRepository,
+        classification_repository: MessageClassificationRepository,
+    ) -> None:
+        self._museum_question = museum_question
+        self._model = model
+        self._triage_repository = triage_repository
+        self._classification_repository = classification_repository
+
+    async def execute(
+        self, data: ClassifyPendingUseCategoryInput
+    ) -> MessageClassification:
+        classification = await self._classification_repository.get_by_id(
+            ClassificationId(data.classification_id)
+        )
+        if classification is None:
+            raise ClassificationNotFound(
+                f"No classification found with id {data.classification_id!r}."
+            )
+
+        triage = await self._triage_repository.get_by_id(classification.triage_id)
+        if triage is None:
+            raise TriageNotFound(
+                f"No triage found with id {classification.triage_id!r}."
+            )
+
+        question = await self._museum_question.get_summary(triage.question_id)
+        if question is None:
+            raise QuestionNotFound(
+                f"No museum question found with id {triage.question_id!r}"
+            )
+
+        classified_at = datetime.now(UTC)
+        try:
+            result = await self._model.classify_use_categories(question.message)
+        except (ModelUnavailable, ModelTimeout) as exc:
+            updated = MessageClassification(
+                id=classification.id,
+                triage_id=classification.triage_id,
+                classifier_kind=classification.classifier_kind,
+                classifier_model=classification.classifier_model,
+                classifier_version=classification.classifier_version,
+                run_number=classification.run_number,
+                superseded_at=classification.superseded_at,
+                status=ClassificationStatus.FAILED,
+                outcome=None,
+                quality=None,
+                category_scores=[],
+                assigned_categories=[],
+                error=str(exc),
+                metadata=dict(classification.metadata),
+                classified_at=classified_at,
+                created_at=classification.created_at,
+            )
+        else:
+            updated = MessageClassification(
+                id=classification.id,
+                triage_id=classification.triage_id,
+                classifier_kind=classification.classifier_kind,
+                classifier_model=classification.classifier_model,
+                classifier_version=classification.classifier_version,
+                run_number=classification.run_number,
+                superseded_at=classification.superseded_at,
+                status=ClassificationStatus.COMPLETED,
+                outcome=result.outcome,
+                quality=ClassificationQuality.FULL,
+                category_scores=list(result.category_scores),
+                assigned_categories=list(result.assigned_categories),
+                error=None,
+                metadata=dict(classification.metadata),
+                classified_at=classified_at,
+                created_at=classification.created_at,
+            )
+
+        await self._classification_repository.update(updated)
+        return updated
 
 
 class GetLatestTriage:

@@ -14,10 +14,19 @@ from app.ai.museum_question_triage.infrastructure import (
 from app.cidoc_crm.in_situ_visit_mapping.infrastructure import (
     models as in_situ_visit_models,  # noqa: F401
 )
+from app.collection_object_index.infrastructure import (
+    models as collection_object_index_models,  # noqa: F401
+)
 from app.config import settings
 from app.database import Base
+from app.document_templates.infrastructure import (
+    models as document_templates_models,  # noqa: F401
+)
 from app.identity.infrastructure import (
     models as identity_models,  # noqa: F401
+)
+from app.museum_questions.infrastructure import (
+    models as museum_questions_models,  # noqa: F401
 )
 from app.public_submission.infrastructure import (
     models as public_submission_models,  # noqa: F401
@@ -38,6 +47,35 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
+def include_object(object_, name, type_, reflected, compare_to) -> bool:
+    """Keep PostgreSQL-only search artifacts out of autogenerate drift checks."""
+    if type_ == "column" and reflected and compare_to is None:
+        if object_.table.name == "collection_index_object" and name == "tsv":
+            return False
+    if type_ == "index" and reflected and compare_to is None:
+        if name in {
+            "ix_collection_index_object_content_trgm",
+            "ix_collection_index_object_tsv",
+        }:
+            return False
+    return True
+
+
+def compare_type(
+    context,
+    inspected_column,
+    metadata_column,
+    inspected_type,
+    metadata_type,
+):
+    if (
+        inspected_column.table.name == "collection_index_object"
+        and inspected_column.name == "cells"
+    ):
+        return False
+    return None
+
+
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
@@ -45,6 +83,8 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        include_object=include_object,
+        compare_type=compare_type,
     )
 
     with context.begin_transaction():
@@ -52,7 +92,12 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata)
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        include_object=include_object,
+        compare_type=compare_type,
+    )
 
     with context.begin_transaction():
         context.run_migrations()

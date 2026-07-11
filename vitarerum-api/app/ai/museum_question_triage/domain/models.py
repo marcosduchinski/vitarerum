@@ -28,6 +28,7 @@ from enum import StrEnum
 from typing import NewType
 
 TriageId = NewType("TriageId", str)
+ClassificationId = NewType("ClassificationId", str)
 
 
 class TriageVerdict(StrEnum):
@@ -41,6 +42,49 @@ class MentionedObjectOrigin(StrEnum):
 
     AI = "AI"
     STAFF = "STAFF"
+
+
+class UseCategory(StrEnum):
+    EXHIBITION = "EXHIBITION"
+    PUBLISHING_IMAGES = "PUBLISHING_IMAGES"
+    LEARNING_EVENTS = "LEARNING_EVENTS"
+    ANSWERING_ENQUIRIES = "ANSWERING_ENQUIRIES"
+    RESEARCH_PROJECTS = "RESEARCH_PROJECTS"
+    OPERATING_MACHINERY = "OPERATING_MACHINERY"
+    PLAYING_INSTRUMENTS = "PLAYING_INSTRUMENTS"
+    FILMING = "FILMING"
+    INSPIRING_NEW_WORK = "INSPIRING_NEW_WORK"
+
+
+class ClassificationOutcome(StrEnum):
+    CATEGORIZED = "CATEGORIZED"
+    UNCLEAR = "UNCLEAR"
+
+
+class ClassificationStatus(StrEnum):
+    PENDING = "PENDING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+
+
+class ClassifierKind(StrEnum):
+    LLM = "LLM"
+    EMBEDDING = "EMBEDDING"
+    CASCADE = "CASCADE"
+
+
+class ClassificationQuality(StrEnum):
+    FULL = "FULL"
+    DEGRADED = "DEGRADED"
+
+
+class ClassificationScoreSource(StrEnum):
+    LLM = "LLM"
+    EMBEDDING = "EMBEDDING"
+
+
+class InvalidMessageClassification(Exception):
+    """A use-category classification violates a domain invariant."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,6 +118,200 @@ class TriageClassification:
 
     is_visit_related: bool
     mentioned_objects: list[MentionedObject] = field(default_factory=list)
+
+
+@dataclass(frozen=True, slots=True)
+class UseCategoryClassification:
+    """Structured output of the use-category classification model call."""
+
+    outcome: ClassificationOutcome
+    category_scores: list[UseCategoryScore]
+    assigned_categories: list[UseCategoryScore]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self, "category_scores", _sorted_scores(self.category_scores)
+        )
+        object.__setattr__(
+            self, "assigned_categories", _sorted_scores(self.assigned_categories)
+        )
+        if (
+            self.outcome is ClassificationOutcome.CATEGORIZED
+            and not self.assigned_categories
+        ):
+            raise InvalidMessageClassification(
+                "CATEGORIZED classifications require assigned categories."
+            )
+        if (
+            self.outcome is ClassificationOutcome.UNCLEAR
+            and self.assigned_categories
+        ):
+            raise InvalidMessageClassification(
+                "UNCLEAR classifications cannot have assigned categories."
+            )
+        seen: set[UseCategory] = set()
+        for score in self.category_scores:
+            if score.category in seen:
+                raise InvalidMessageClassification(
+                    "category_scores cannot contain duplicate categories."
+                )
+            seen.add(score.category)
+        scores_by_category = {score.category: score for score in self.category_scores}
+        for assigned in self.assigned_categories:
+            if scores_by_category.get(assigned.category) != assigned:
+                raise InvalidMessageClassification(
+                    "Assigned categories must exactly match category_scores entries."
+                )
+
+
+@dataclass(frozen=True, slots=True)
+class UseCategoryScore:
+    category: UseCategory
+    confidence: float
+    source: ClassificationScoreSource
+
+    def __post_init__(self) -> None:
+        if not 0 <= self.confidence <= 1:
+            raise InvalidMessageClassification("Confidence must be between 0 and 1.")
+
+
+def _score_sort_key(score: UseCategoryScore) -> tuple[float, str, str]:
+    return (-score.confidence, score.category.value, score.source.value)
+
+
+def _sorted_scores(scores: list[UseCategoryScore]) -> list[UseCategoryScore]:
+    return sorted(scores, key=_score_sort_key)
+
+
+@dataclass(slots=True)
+class MessageClassification:
+    """One execution of a use-category classifier for a stored triage run."""
+
+    id: ClassificationId
+    triage_id: TriageId
+    classifier_kind: ClassifierKind
+    classifier_model: str | None
+    classifier_version: str | None
+    run_number: int
+    superseded_at: datetime | None
+    status: ClassificationStatus
+    outcome: ClassificationOutcome | None
+    quality: ClassificationQuality | None
+    category_scores: list[UseCategoryScore]
+    assigned_categories: list[UseCategoryScore]
+    error: str | None
+    metadata: dict[str, object]
+    classified_at: datetime | None
+    created_at: datetime
+
+    def __post_init__(self) -> None:
+        self.category_scores = _sorted_scores(self.category_scores)
+        self.assigned_categories = _sorted_scores(self.assigned_categories)
+        if self.run_number < 1:
+            raise InvalidMessageClassification("run_number must start at 1.")
+        self._validate_status_fields()
+        self._validate_scores()
+
+    @classmethod
+    def pending(
+        cls,
+        *,
+        triage_id: TriageId,
+        classifier_kind: ClassifierKind,
+        classifier_model: str | None,
+        classifier_version: str | None,
+        run_number: int = 1,
+    ) -> MessageClassification:
+        return cls(
+            id=ClassificationId(str(uuid.uuid4())),
+            triage_id=triage_id,
+            classifier_kind=classifier_kind,
+            classifier_model=classifier_model,
+            classifier_version=classifier_version,
+            run_number=run_number,
+            superseded_at=None,
+            status=ClassificationStatus.PENDING,
+            outcome=None,
+            quality=None,
+            category_scores=[],
+            assigned_categories=[],
+            error=None,
+            metadata={},
+            classified_at=None,
+            created_at=datetime.now(UTC),
+        )
+
+    def _validate_status_fields(self) -> None:
+        if self.status is ClassificationStatus.PENDING:
+            if self.outcome or self.quality or self.error or self.classified_at:
+                raise InvalidMessageClassification(
+                    "PENDING classifications cannot have result fields."
+                )
+            return
+
+        if self.status is ClassificationStatus.COMPLETED:
+            if (
+                self.outcome is None
+                or self.quality is None
+                or self.classified_at is None
+            ):
+                raise InvalidMessageClassification(
+                    "COMPLETED classifications require outcome, quality, "
+                    "and classified_at."
+                )
+            if self.error is not None:
+                raise InvalidMessageClassification(
+                    "COMPLETED classifications cannot have an error."
+                )
+            return
+
+        if self.status is ClassificationStatus.FAILED:
+            if self.outcome or self.quality:
+                raise InvalidMessageClassification(
+                    "FAILED classifications cannot have outcome or quality."
+                )
+            if self.error is None or self.classified_at is None:
+                raise InvalidMessageClassification(
+                    "FAILED classifications require error and classified_at."
+                )
+
+    def _validate_scores(self) -> None:
+        seen: set[UseCategory] = set()
+        for score in self.category_scores:
+            if score.category in seen:
+                raise InvalidMessageClassification(
+                    "category_scores cannot contain duplicate categories."
+                )
+            seen.add(score.category)
+
+        if self.status is not ClassificationStatus.COMPLETED:
+            if self.category_scores or self.assigned_categories:
+                raise InvalidMessageClassification(
+                    "Only COMPLETED classifications can have category scores."
+                )
+            return
+
+        if (
+            self.outcome is ClassificationOutcome.CATEGORIZED
+            and not self.assigned_categories
+        ):
+            raise InvalidMessageClassification(
+                "CATEGORIZED classifications require assigned categories."
+            )
+        if (
+            self.outcome is ClassificationOutcome.UNCLEAR
+            and self.assigned_categories
+        ):
+            raise InvalidMessageClassification(
+                "UNCLEAR classifications cannot have assigned categories."
+            )
+
+        scores_by_category = {score.category: score for score in self.category_scores}
+        for assigned in self.assigned_categories:
+            if scores_by_category.get(assigned.category) != assigned:
+                raise InvalidMessageClassification(
+                    "Assigned categories must exactly match category_scores entries."
+                )
 
 
 @dataclass(frozen=True, slots=True)

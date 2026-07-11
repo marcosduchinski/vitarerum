@@ -10,6 +10,7 @@ should flag as in-scope with an extractable object.
 
 from app.ai.museum_question_triage.application.prompts import (
     build_classification_system_prompt,
+    build_use_category_classification_system_prompt,
 )
 
 
@@ -23,3 +24,13 @@ def test_classification_prompt_explicitly_allows_general_categories() -> None:
     prompt = build_classification_system_prompt()
     assert "general kind" in prompt or "general kind/category" in prompt
     assert "lizards" in prompt
+
+
+def test_use_category_prompt_lists_allowed_categories_and_unclear() -> None:
+    prompt = build_use_category_classification_system_prompt()
+
+    assert "RESEARCH_PROJECTS" in prompt
+    assert "ANSWERING_ENQUIRIES" in prompt
+    assert "FILMING" in prompt
+    assert "UNCLEAR" in prompt
+    assert "Never invent a new category" in prompt

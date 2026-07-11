@@ -5,6 +5,15 @@
 export type TriageVerdict = 'IN_SCOPE' | 'OUT_OF_SCOPE';
 
 export type MentionedObjectOrigin = 'AI' | 'STAFF';
+export type UseCategoryClassificationStatus =
+  | 'NOT_REQUESTED'
+  | 'PENDING'
+  | 'COMPLETED'
+  | 'FAILED';
+export type UseCategoryClassificationOutcome = 'CATEGORIZED' | 'UNCLEAR';
+export type UseCategoryClassificationQuality = 'FULL' | 'DEGRADED';
+export type UseCategoryClassifierKind = 'LLM' | 'EMBEDDING' | 'CASCADE';
+export type UseCategoryScoreSource = 'LLM' | 'EMBEDDING';
 
 /** An object/specimen name extracted from the question, kept in both
  * languages so the catalogue can be searched in either. `origin` says
@@ -46,6 +55,25 @@ export interface ObjectTriageMatch {
   readonly languagesSearched: readonly string[];
 }
 
+export interface UseCategoryScore {
+  readonly category: string;
+  readonly confidence: number;
+  readonly source: UseCategoryScoreSource;
+}
+
+export interface UseCategoryClassification {
+  readonly status: UseCategoryClassificationStatus;
+  readonly outcome: UseCategoryClassificationOutcome | null;
+  readonly quality: UseCategoryClassificationQuality | null;
+  readonly classifierKind: UseCategoryClassifierKind | null;
+  readonly classifierModel: string | null;
+  readonly classifierVersion: string | null;
+  readonly assignedCategories: readonly UseCategoryScore[];
+  readonly categoryScores: readonly UseCategoryScore[];
+  readonly classifiedAt: string | null;
+  readonly error: string | null;
+}
+
 export interface MuseumQuestionTriage {
   readonly id: string;
   readonly questionId: string;
@@ -64,4 +92,5 @@ export interface MuseumQuestionTriage {
   readonly searchStrategy: string | null;
   readonly modelName: string;
   readonly createdAt: string;
+  readonly useCategoryClassification: UseCategoryClassification;
 }

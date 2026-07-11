@@ -9,6 +9,11 @@ from typing import Literal
 from pydantic import BaseModel
 
 TriageVerdictValue = Literal["IN_SCOPE", "OUT_OF_SCOPE"]
+ClassificationStatusValue = Literal["NOT_REQUESTED", "PENDING", "COMPLETED", "FAILED"]
+ClassificationOutcomeValue = Literal["CATEGORIZED", "UNCLEAR"]
+ClassificationQualityValue = Literal["FULL", "DEGRADED"]
+ClassifierKindValue = Literal["LLM", "EMBEDDING", "CASCADE"]
+ClassificationScoreSourceValue = Literal["LLM", "EMBEDDING"]
 
 
 class ObjectHitResponse(BaseModel):
@@ -34,6 +39,25 @@ class ObjectTriageMatchResponse(BaseModel):
     languagesSearched: list[str]
 
 
+class UseCategoryScoreResponse(BaseModel):
+    category: str
+    confidence: float
+    source: ClassificationScoreSourceValue
+
+
+class UseCategoryClassificationResponse(BaseModel):
+    status: ClassificationStatusValue
+    outcome: ClassificationOutcomeValue | None
+    quality: ClassificationQualityValue | None
+    classifierKind: ClassifierKindValue | None
+    classifierModel: str | None
+    classifierVersion: str | None
+    assignedCategories: list[UseCategoryScoreResponse]
+    categoryScores: list[UseCategoryScoreResponse]
+    classifiedAt: datetime | None
+    error: str | None
+
+
 class TriageResponse(BaseModel):
     id: str
     questionId: str
@@ -47,6 +71,7 @@ class TriageResponse(BaseModel):
     searchStrategy: str | None
     modelName: str
     createdAt: datetime
+    useCategoryClassification: UseCategoryClassificationResponse
 
 
 class OverrideTriageVerdictRequest(BaseModel):
