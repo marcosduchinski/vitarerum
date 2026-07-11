@@ -439,10 +439,10 @@ class RequestedObject:
     category: str
     description: str
     requested_at: datetime
-    requested_by: PermissionId
     display_title: str | None = None
     object_name: str | None = None
     brief_description_snapshot: str | None = None
+    requested_by: PermissionId | None = None
 
     def __post_init__(self) -> None:
         if not self.inventory_number:

@@ -254,7 +254,6 @@ export class ProposalApiServiceMock {
       category: o.category ?? '',
       description: o.description ?? '',
       requestedAt: now,
-      requestedBy: this.currentPrincipal(),
     }));
     const updated: ProposalDetail = {
       ...proposal,

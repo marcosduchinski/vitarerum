@@ -348,11 +348,7 @@ describe('ProposalApiService', () => {
           category: 'manuscript',
           description: '',
           requestedAt: '2026-06-01T10:00:00Z',
-          requestedBy: {
-            permissionId: 'permission-1',
-            user: { id: 'user-1', name: 'Ana', email: 'ana@example.test' },
-            group: 'EXTERNAL',
-          },
+          requestedBy: null,
         },
       ],
     });

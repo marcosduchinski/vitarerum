@@ -332,7 +332,11 @@ async def get_proposal(
             category=ro.category,
             description=ro.description,
             requestedAt=ro.requested_at,
-            requestedBy=_detail_or_stub(detail.view(ro.requested_by), ro.requested_by),
+            requestedBy=(
+                _detail_or_stub(detail.view(ro.requested_by), ro.requested_by)
+                if ro.requested_by is not None
+                else None
+            ),
         )
         for ro in proposal.requested_objects
     ]

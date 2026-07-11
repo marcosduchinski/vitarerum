@@ -505,7 +505,9 @@ def proposal_to_domain(record: ProposalRecord) -> Proposal:
                 category=ro.category,
                 description=ro.description,
                 requested_at=ro.requested_at,
-                requested_by=PermissionId(ro.requested_by),
+                requested_by=PermissionId(ro.requested_by)
+                if ro.requested_by is not None
+                else None,
             )
             for ro in record.requested_objects
         ],
@@ -1118,15 +1120,12 @@ class SqlAlchemyPublicationLogRepository:
             select(PublicationLogEntryRecord)
             .join(
                 PublicationLogRecord,
-                PublicationLogEntryRecord.publication_log_id
-                == PublicationLogRecord.id,
+                PublicationLogEntryRecord.publication_log_id == PublicationLogRecord.id,
             )
             .where(PublicationLogRecord.project_id == project_id)
         )
         if added_by:
-            base_stmt = base_stmt.where(
-                PublicationLogEntryRecord.added_by == added_by
-            )
+            base_stmt = base_stmt.where(PublicationLogEntryRecord.added_by == added_by)
         count_stmt = select(func.count()).select_from(base_stmt.subquery())
         total = (await self._session.execute(count_stmt)).scalar_one()
         data_stmt = (
@@ -1218,9 +1217,7 @@ class SqlAlchemyProjectExportReader:
                     position=index,
                     attachments=_attachment_views(entry.attachments),
                 )
-                for index, entry in enumerate(
-                    access_log.objects if access_log else []
-                )
+                for index, entry in enumerate(access_log.objects if access_log else [])
             ],
             in_situ_publications=[
                 ExportEntryView(

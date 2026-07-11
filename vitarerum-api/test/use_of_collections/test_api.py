@@ -756,6 +756,7 @@ async def test_relate_searched_objects_surfaces_them_on_detail() -> None:
     assert objects[0]["displayTitle"] == "Book of Hours"
     assert objects[0]["objectName"] == "Illuminated manuscript"
     assert objects[0]["category"] == "manuscript"
+    assert objects[0]["requestedBy"] is None
 
 
 async def test_remove_requested_object_updates_proposal_detail() -> None:

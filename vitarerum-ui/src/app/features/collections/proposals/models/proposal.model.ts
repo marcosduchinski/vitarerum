@@ -63,7 +63,7 @@ export interface RequestedObject {
   readonly category: string;
   readonly description: string;
   readonly requestedAt: string;
-  readonly requestedBy: PermissionPrincipal;
+  readonly requestedBy?: PermissionPrincipal | null;
 }
 
 export interface RequestedDocument {

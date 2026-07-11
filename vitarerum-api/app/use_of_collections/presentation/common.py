@@ -83,6 +83,7 @@ projects_router = APIRouter(
     prefix="/collection-use-projects", tags=["collection-use-projects"]
 )
 
+
 def _is_staff(caller: Actor) -> bool:
     return caller_is_staff(caller)
 
@@ -233,8 +234,6 @@ def _not_found(resource: str, resource_id: str) -> HTTPException:
 _guess_content_type = guess_content_type
 
 
-
-
 async def _build_proposal_event(
     event: ProposalEvent, session: AsyncSession
 ) -> ProposalEventResponse:
@@ -282,8 +281,11 @@ async def _build_document_response(
 async def _build_requested_object(
     ro: RequestedObject, session: AsyncSession
 ) -> RequestedObjectResponse:
-    requested_by = await hydrate_permission(ro.requested_by, session) or _stub_perm(
-        ro.requested_by
+    requested_by = (
+        (await hydrate_permission(ro.requested_by, session))
+        or _stub_perm(ro.requested_by)
+        if ro.requested_by is not None
+        else None
     )
     return RequestedObjectResponse(
         id=ro.id,

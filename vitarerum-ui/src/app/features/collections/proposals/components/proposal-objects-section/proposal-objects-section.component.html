@@ -32,9 +32,6 @@
                 <span>{{ object.category }}</span>
               }
               <span>{{ formatDate(object.requestedAt) }}</span>
-              @if (object.requestedBy.user.name) {
-                <span>{{ object.requestedBy.user.name }}</span>
-              }
             </p>
             @if (object.objectReference.briefDescriptionSnapshot || object.description) {
               <p class="object__description">

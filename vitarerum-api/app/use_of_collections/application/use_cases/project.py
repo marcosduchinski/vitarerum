@@ -103,9 +103,7 @@ class ApproveProposal:
             # moment, so a rejected/cancelled proposal never creates a user or
             # permission for a contact that never becomes a real requester.
             if proposal.requester_contact is None:
-                raise ValueError(
-                    "proposal requester must be resolved before approval"
-                )
+                raise ValueError("proposal requester must be resolved before approval")
             provisioned = await self._requester_provisioner.provision(
                 email=proposal.requester_contact.email.value,
                 name=proposal.requester_contact.name,
@@ -119,6 +117,7 @@ class ApproveProposal:
                 )
         if proposal.requested_by is None:
             raise ValueError("proposal requester must be resolved before approval")
+        requester_id = proposal.requested_by
 
         now = _now()
         project_id = proposal.collection_use_project_id or CollectionUseProjectId(
@@ -135,7 +134,7 @@ class ApproveProposal:
             status=UseStatus.CREATED,
             begin_date=data.begin_date,
             end_date=data.end_date,
-            requested_by=proposal.requested_by,
+            requested_by=requester_id,
             proposal_id=proposal.id,
             # Copy the proposal's requested objects into the project as it is
             # created: the project owns its own object snapshots from here on, so
@@ -147,7 +146,7 @@ class ApproveProposal:
                     category=ro.category,
                     description=ro.description,
                     requested_at=ro.requested_at,
-                    requested_by=ro.requested_by,
+                    requested_by=ro.requested_by or requester_id,
                     display_title=ro.display_title,
                     object_name=ro.object_name,
                     brief_description_snapshot=ro.brief_description_snapshot,

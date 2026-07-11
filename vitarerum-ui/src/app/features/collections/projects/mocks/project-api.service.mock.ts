@@ -677,7 +677,7 @@ export class ProjectApiServiceMock {
           category: item.category,
           description: item.description,
           requestedAt: item.requestedAt,
-          requestedBy: item.requestedBy,
+          requestedBy: item.requestedBy ?? proposal?.requestedBy ?? p.requestedBy,
         })) ?? [],
       requestedDocuments:
         proposal?.requestedDocuments?.map((item) => ({

@@ -199,7 +199,6 @@ class AddRequestedObjects:
                 category=item.category,
                 description=item.description,
                 requested_at=now,
-                requested_by=data.caller.id,
             )
             for item in data.objects
         ]

@@ -339,7 +339,6 @@ def test_proposal_roundtrip_preserves_key_data() -> None:
                 category="manuscript",
                 description="for study",
                 requested_at=now,
-                requested_by=PermissionId("permission-1"),
             )
         ],
         documents=[
@@ -366,6 +365,7 @@ def test_proposal_roundtrip_preserves_key_data() -> None:
     assert rebuilt.events[0].type == ProposalEventType.SUBMITTED
     assert rebuilt.requested_objects[0].inventory_number == "INV-010"
     assert rebuilt.requested_objects[0].category == "manuscript"
+    assert rebuilt.requested_objects[0].requested_by is None
     assert rebuilt.documents[0].type.value == "request-form"
     assert rebuilt.documents[0].file_name == "request.pdf"
 

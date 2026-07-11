@@ -59,6 +59,8 @@ from app.use_of_collections.domain.models import (
     PublicationLogEntryId,
     PublicationLogId,
     ReferenceNumber,
+    RequestedObject,
+    RequestedObjectId,
     RequesterContact,
 )
 
@@ -492,6 +494,15 @@ async def test_approve_proposal_creates_requested_project() -> None:
         status=ProposalStatus.PENDING,
         requested_by=PermissionId("permission-1"),
         submitted_at=datetime(2026, 6, 1, tzinfo=UTC),
+        requested_objects=[
+            RequestedObject(
+                id=RequestedObjectId("requested-object-1"),
+                inventory_number="INV-001",
+                category="manuscript",
+                description="for study",
+                requested_at=datetime(2026, 6, 1, tzinfo=UTC),
+            )
+        ],
     )
     await proposal_repository.add(proposal)
     requester_provisioner = RecordingRequesterProvisioner()
@@ -523,6 +534,7 @@ async def test_approve_proposal_creates_requested_project() -> None:
     assert saved_project.status == UseStatus.CREATED
     assert saved_project.title == "Collection study"
     assert saved_project.proposal_id == "proposal-1"
+    assert saved_project.objects[0].requested_by == "permission-1"
     assert saved_project.events[0].type == UseEventType.REQUESTED
     assert saved_project.events[0].triggered_by == "curator-1"
 
@@ -889,9 +901,7 @@ async def test_add_object_log_entry_creates_access_log_on_first_entry() -> None:
     )
     await project_repository.add(project)
 
-    entry = await AddObjectLogEntry(
-        project_repository, access_log_repository
-    ).execute(
+    entry = await AddObjectLogEntry(project_repository, access_log_repository).execute(
         AddObjectLogEntryInput(
             project_id=project.id,
             caller=_make_caller(),
@@ -911,9 +921,7 @@ async def test_add_object_log_entry_creates_access_log_on_first_entry() -> None:
     assert entry.number_of_objects == 2
     assert entry.observations == "Handled with gloves"
 
-    await AddObjectLogEntry(
-        project_repository, access_log_repository
-    ).execute(
+    await AddObjectLogEntry(project_repository, access_log_repository).execute(
         AddObjectLogEntryInput(
             project_id=project.id,
             caller=_make_caller(),
@@ -933,9 +941,7 @@ async def test_start_project_seeds_access_log_from_project_objects() -> None:
         )
     )
 
-    project = await StartProject(
-        project_repository, access_log_repository
-    ).execute(
+    project = await StartProject(project_repository, access_log_repository).execute(
         StartProjectInput(
             project_id=CollectionUseProjectId("project-1"),
             caller=_make_curator(),
@@ -966,9 +972,7 @@ async def test_start_project_without_objects_creates_no_access_log() -> None:
     access_log_repository = InMemoryAccessLogRepository()
     await project_repository.add(_make_project(status=UseStatus.CREATED))
 
-    await StartProject(
-        project_repository, access_log_repository
-    ).execute(
+    await StartProject(project_repository, access_log_repository).execute(
         StartProjectInput(
             project_id=CollectionUseProjectId("project-1"),
             caller=_make_curator(),
@@ -989,9 +993,7 @@ async def test_log_entry_links_to_collection_use_object() -> None:
         _make_project(objects=[_collection_use_object("cuo-1")])
     )
 
-    entry = await AddObjectLogEntry(
-        project_repository, access_log_repository
-    ).execute(
+    entry = await AddObjectLogEntry(project_repository, access_log_repository).execute(
         AddObjectLogEntryInput(
             project_id=CollectionUseProjectId("project-1"),
             caller=_make_caller(),

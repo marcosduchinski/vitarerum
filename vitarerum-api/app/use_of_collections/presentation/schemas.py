@@ -115,7 +115,7 @@ class RequestedObjectResponse(BaseModel):
     category: str
     description: str
     requestedAt: datetime
-    requestedBy: PermissionDetail
+    requestedBy: PermissionDetail | None = None
 
 
 class DocumentResponse(BaseModel):

@@ -74,9 +74,7 @@ class CollectionUseObjectRecord(Base):
     requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     requested_by: Mapped[str] = mapped_column(String(36), index=True)
 
-    project: Mapped[CollectionUseProjectRecord] = relationship(
-        back_populates="objects"
-    )
+    project: Mapped[CollectionUseProjectRecord] = relationship(back_populates="objects")
 
 
 class UseEventRecord(Base):
@@ -384,7 +382,9 @@ class RequestedObjectRecord(Base):
     category: Mapped[str] = mapped_column(String(255), default="")
     description: Mapped[str] = mapped_column(Text, default="")
     requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    requested_by: Mapped[str] = mapped_column(String(36), index=True)
+    requested_by: Mapped[str | None] = mapped_column(
+        String(36), index=True, nullable=True
+    )
 
     proposal: Mapped[ProposalRecord] = relationship(back_populates="requested_objects")
 
@@ -422,9 +422,7 @@ class DocumentCorrectionItemRecord(Base):
         DateTime(timezone=True), nullable=True
     )
 
-    proposal: Mapped[ProposalRecord] = relationship(
-        back_populates="correction_items"
-    )
+    proposal: Mapped[ProposalRecord] = relationship(back_populates="correction_items")
 
 
 class ConversationRecord(Base):
