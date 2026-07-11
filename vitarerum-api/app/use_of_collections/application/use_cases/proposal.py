@@ -208,6 +208,26 @@ class AddRequestedObjects:
         return proposal
 
 
+@dataclass(slots=True)
+class RemoveRequestedObjectInput:
+    proposal_id: ProposalId
+    requested_object_id: RequestedObjectId
+    caller: Actor
+
+
+class RemoveRequestedObject:
+    def __init__(self, proposal_repository: ProposalRepository) -> None:
+        self._repo = proposal_repository
+
+    async def execute(self, data: RemoveRequestedObjectInput) -> Proposal:
+        proposal = await self._repo.get_by_id(data.proposal_id)
+        if proposal is None:
+            raise LookupError(f"No proposal found with id {data.proposal_id}")
+        proposal.remove_requested_object(data.requested_object_id)
+        await self._repo.save(proposal)
+        return proposal
+
+
 # ── Edit Proposal Details ─────────────────────────────────────────────────────
 
 

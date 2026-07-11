@@ -160,6 +160,36 @@ proposal_id : UUID (required)
 
 ---
 
+### `DELETE /proposals/{proposal_id}/requested-objects/{requested_object_id}`
+
+**Description** — Remove one structured requested object from a proposal. Allowed while the proposal is not in a terminal status (`APPROVED`/`REJECTED`/`CANCELLED`). Access follows proposal detail: the requester and staff may remove requested objects. This only changes the proposal's requested-object list; once a proposal has been approved, the copied project objects are immutable through this endpoint.
+
+**Path parameters**
+```
+proposal_id : UUID (required)
+requested_object_id : UUID (required)
+```
+
+**Response `204 No Content`**
+
+**Response `404 Not Found`**
+```json
+{
+  "error": "NOT_FOUND",
+  "message": "Requested object {requested_object_id} not found on this proposal"
+}
+```
+
+**Response `409 Conflict`**
+```json
+{
+  "error": "INVALID_TRANSITION",
+  "message": "Cannot remove requested objects from a decided proposal"
+}
+```
+
+---
+
 ### `GET /proposals/{proposal_id}`
 
 **Description** — Get full detail of a proposal. Researchers only see proposals where

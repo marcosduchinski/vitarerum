@@ -629,6 +629,21 @@ class Proposal:
             )
         self.requested_objects.extend(objects)
 
+    def remove_requested_object(self, requested_object_id: RequestedObjectId) -> None:
+        if self.status in _PROPOSAL_TERMINAL_STATUSES:
+            raise InvalidTransition(
+                "Cannot remove requested objects from a decided proposal"
+            )
+        requested_object = next(
+            (ro for ro in self.requested_objects if ro.id == requested_object_id),
+            None,
+        )
+        if requested_object is None:
+            raise LookupError(
+                f"Requested object {requested_object_id} not found on this proposal"
+            )
+        self.requested_objects.remove(requested_object)
+
     def submit_documents(
         self,
         occurred_at: datetime,
@@ -710,8 +725,7 @@ class Proposal:
         any document of that type; for a *replacement* a document of that type
         other than the one flagged (so a fresh upload is required)."""
         return any(
-            document.type == item.document_type
-            and document.id != item.document_id
+            document.type == item.document_type and document.id != item.document_id
             for document in self.documents
         )
 

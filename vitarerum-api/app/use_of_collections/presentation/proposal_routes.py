@@ -49,6 +49,8 @@ from app.use_of_collections.application.use_cases import (
     ForwardProposalInput,
     RejectProposal,
     RejectProposalInput,
+    RemoveRequestedObject,
+    RemoveRequestedObjectInput,
     RequestDocumentCorrections,
     RequestDocumentCorrectionsInput,
     RequestDocuments,
@@ -74,6 +76,7 @@ from app.use_of_collections.domain.enums import (
 from app.use_of_collections.domain.models import (
     PermissionId,
     ProposalId,
+    RequestedObjectId,
 )
 from app.use_of_collections.presentation.common import (
     _build_document_response,
@@ -370,9 +373,7 @@ async def get_proposal(
             title=project.title if project else "",
             status=project.status if project else UseStatus.CREATED,
             requestedBy=(
-                _detail_or_none(detail.view(project.requested_by))
-                if project
-                else None
+                _detail_or_none(detail.view(project.requested_by)) if project else None
             ),
         ),
         conversationId=detail.conversation_id,
@@ -546,6 +547,35 @@ async def add_requested_objects(
         _handle_domain_errors(exc)
     await session.commit()
     return await get_proposal(proposal_id, caller, detail_query)
+
+
+@proposals_router.delete(
+    "/{proposal_id}/requested-objects/{requested_object_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def remove_requested_object(
+    proposal_id: str,
+    requested_object_id: str,
+    caller: CallerPermission,
+    proposal_repo: ProposalRepo,
+    session: DBSession,
+) -> Response:
+    proposal = await proposal_repo.get_by_id(ProposalId(proposal_id))
+    if proposal is None:
+        raise _not_found("proposal", proposal_id)
+    assert_proposal_access(caller, proposal)
+    try:
+        await RemoveRequestedObject(proposal_repo).execute(
+            RemoveRequestedObjectInput(
+                proposal_id=ProposalId(proposal_id),
+                requested_object_id=RequestedObjectId(requested_object_id),
+                caller=caller,
+            )
+        )
+    except Exception as exc:
+        _handle_domain_errors(exc)
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @proposals_router.post(
@@ -1027,8 +1057,7 @@ async def cancel_proposal(
             referenceNumber=output.project.reference_number.value,
             title=output.project.title,
             status=output.project.status,
-            requestedBy=project_requested_by
-            or _stub_perm(output.project.requested_by),
+            requestedBy=project_requested_by or _stub_perm(output.project.requested_by),
         )
     return CancelProposalResponse(
         proposal=ProposalCommandResponse(

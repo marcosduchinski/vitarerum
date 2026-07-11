@@ -264,6 +264,36 @@ export class ProposalApiServiceMock {
     return of(updated);
   }
 
+  removeRequestedObject(proposalId: string, requestedObjectId: string): Observable<void> {
+    const proposal = this.proposals.get(proposalId);
+    if (!proposal) return throwError(() => ({ status: 404, error: 'NOT_FOUND' }));
+    if (
+      proposal.status === 'APPROVED' ||
+      proposal.status === 'REJECTED' ||
+      proposal.status === 'CANCELLED'
+    ) {
+      return throwError(() => ({
+        status: 409,
+        error: 'INVALID_TRANSITION',
+        message: 'Cannot remove requested objects from a decided proposal',
+      }));
+    }
+    if (!proposal.requestedObjects.some((object) => object.id === requestedObjectId)) {
+      return throwError(() => ({
+        status: 404,
+        error: 'NOT_FOUND',
+        message: `Requested object ${requestedObjectId} not found on this proposal`,
+      }));
+    }
+    this.proposals.set(proposalId, {
+      ...proposal,
+      requestedObjects: proposal.requestedObjects.filter(
+        (object) => object.id !== requestedObjectId,
+      ),
+    });
+    return of(undefined);
+  }
+
   uploadDocument(proposalId: string, _file: File, documentType: string): Observable<Document> {
     const proposal = this.proposals.get(proposalId);
     if (!proposal) return throwError(() => ({ status: 404, error: 'NOT_FOUND' }));

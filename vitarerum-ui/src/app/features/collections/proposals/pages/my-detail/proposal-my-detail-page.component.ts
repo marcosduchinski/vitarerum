@@ -32,10 +32,11 @@ import {
 } from '../../components/proposal-conversation-section/proposal-conversation-section.component';
 import { ProposalDocumentsSectionComponent } from '../../components/proposal-documents-section/proposal-documents-section.component';
 import { ProposalEventsSectionComponent } from '../../components/proposal-events-section/proposal-events-section.component';
+import { ProposalObjectsSectionComponent } from '../../components/proposal-objects-section/proposal-objects-section.component';
 import { ProposalOverviewSectionComponent } from '../../components/proposal-overview-section/proposal-overview-section.component';
 import { PROPOSAL_DETAIL_GROUP_LABELS, StaffOption } from '../../proposal-detail.presentation';
 
-type MyDetailPanel = 'overview' | 'documents' | 'conversation' | 'actions';
+type MyDetailPanel = 'overview' | 'objects' | 'documents' | 'conversation' | 'actions';
 
 @Component({
   selector: 'app-proposal-my-detail-page',
@@ -51,6 +52,7 @@ type MyDetailPanel = 'overview' | 'documents' | 'conversation' | 'actions';
     ConfirmModalComponent,
     ProposalOverviewSectionComponent,
     ProposalDocumentsSectionComponent,
+    ProposalObjectsSectionComponent,
     ProposalConversationSectionComponent,
     ProposalEventsSectionComponent,
   ],
@@ -131,6 +133,8 @@ export class ProposalMyDetailPageComponent {
   protected readonly requestingCorrections = signal(false);
   protected readonly correctionError = signal<ApiError | null>(null);
   protected readonly correctionResetVersion = signal(0);
+  protected readonly removingObjectId = signal<string | null>(null);
+  protected readonly removeObjectError = signal<ApiError | null>(null);
   protected readonly temporaryExternalUserEmail = linkedSignal<string | null>(() => {
     this.id();
     return null;
@@ -199,7 +203,7 @@ export class ProposalMyDetailPageComponent {
   }
 
   private normalizeTab(tab: string | undefined): MyDetailPanel {
-    return tab === 'documents' || tab === 'conversation' || tab === 'actions'
+    return tab === 'objects' || tab === 'documents' || tab === 'conversation' || tab === 'actions'
       ? tab
       : 'overview';
   }
@@ -279,9 +283,7 @@ export class ProposalMyDetailPageComponent {
     }
   }
 
-  protected async onRequestCorrections(
-    payload: RequestDocumentCorrectionsRequest,
-  ): Promise<void> {
+  protected async onRequestCorrections(payload: RequestDocumentCorrectionsRequest): Promise<void> {
     if (this.requestingCorrections()) return;
 
     this.requestingCorrections.set(true);
@@ -298,6 +300,24 @@ export class ProposalMyDetailPageComponent {
       this.correctionError.set(toApiError(err));
     } finally {
       this.requestingCorrections.set(false);
+    }
+  }
+
+  protected async removeRequestedObject(requestedObjectId: string): Promise<void> {
+    if (this.removingObjectId()) return;
+
+    this.removingObjectId.set(requestedObjectId);
+    this.removeObjectError.set(null);
+
+    try {
+      await firstValueFrom(
+        this.proposalService.removeRequestedObject(this.id(), requestedObjectId),
+      );
+      this.proposalResource.reload();
+    } catch (err) {
+      this.removeObjectError.set(toApiError(err));
+    } finally {
+      this.removingObjectId.set(null);
     }
   }
 

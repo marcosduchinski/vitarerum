@@ -135,6 +135,18 @@
       </button>
       <button
         type="button"
+        id="objects-tab"
+        class="proposal-detail__tab"
+        [class.proposal-detail__tab--active]="activePanel() === 'objects'"
+        role="tab"
+        aria-controls="objects-panel"
+        [attr.aria-selected]="activePanel() === 'objects'"
+        (click)="selectPanel('objects')"
+      >
+        Objects
+      </button>
+      <button
+        type="button"
         id="conversation-tab"
         class="proposal-detail__tab"
         [class.proposal-detail__tab--active]="activePanel() === 'conversation'"
@@ -187,6 +199,21 @@
             [correctionError]="correctionError()"
             [correctionResetVersion]="correctionResetVersion()"
             (correctionRequestSubmitted)="onRequestCorrections($event)"
+          />
+        </section>
+      }
+      @case ('objects') {
+        <section
+          id="objects-panel"
+          class="proposal-detail__panel"
+          role="tabpanel"
+          aria-labelledby="objects-tab"
+        >
+          <app-proposal-objects-section
+            [objects]="proposal()!.requestedObjects"
+            [removingId]="removingObjectId()"
+            [removeError]="removeObjectError()"
+            (removeRequested)="removeRequestedObject($event)"
           />
         </section>
       }

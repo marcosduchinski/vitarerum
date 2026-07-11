@@ -31,10 +31,18 @@ import {
   ProposalEventsPage,
   ProposalListQuery,
   ProposalSummary,
+  RequestedObject,
   RequesterContact,
   SendMessageRequest,
   UpdateProposalResult,
 } from '../models/proposal.model';
+
+type WireRequestedObject = RequestedObject & {
+  readonly inventoryNumber?: string;
+  readonly displayTitle?: string | null;
+  readonly objectName?: string | null;
+  readonly briefDescriptionSnapshot?: string | null;
+};
 
 // Public proposals awaiting approval have no system user/permission yet: the
 // backend sends `requestedBy`/`submittedBy`/`triggeredBy` as null. Synthesize a
@@ -58,6 +66,23 @@ function normalizeProposal<T extends ProposalSummary>(p: T): T {
   return { ...p, type, requestedBy };
 }
 
+function normalizeRequestedObject(object: WireRequestedObject): RequestedObject {
+  if (object.objectReference) return object;
+  return {
+    id: object.id,
+    objectReference: {
+      inventoryNumber: object.inventoryNumber ?? '',
+      displayTitle: object.displayTitle ?? null,
+      objectName: object.objectName ?? null,
+      briefDescriptionSnapshot: object.briefDescriptionSnapshot ?? null,
+    },
+    category: object.category,
+    description: object.description,
+    requestedAt: object.requestedAt,
+    requestedBy: object.requestedBy,
+  };
+}
+
 // Detail additionally backfills document uploaders: public submissions arrive
 // with `submittedBy: null` until Identity provisions a requester at approval.
 function normalizeProposalDetail(p: ProposalDetail): ProposalDetail {
@@ -66,6 +91,9 @@ function normalizeProposalDetail(p: ProposalDetail): ProposalDetail {
     ...normalizeProposal(p),
     documents: (p.documents ?? []).map((d) =>
       d.submittedBy ? d : { ...d, submittedBy: fallback },
+    ),
+    requestedObjects: ((p.requestedObjects ?? []) as readonly WireRequestedObject[]).map((object) =>
+      normalizeRequestedObject(object),
     ),
     correctionItems: p.correctionItems ?? [],
   };
@@ -109,9 +137,7 @@ export class ProposalApiService {
       .get<Page<ProposalSummary>>(this.url('/proposals'), {
         params,
       })
-      .pipe(
-        map((page) => ({ ...page, content: page.content.map((p) => normalizeProposal(p)) })),
-      );
+      .pipe(map((page) => ({ ...page, content: page.content.map((p) => normalizeProposal(p)) })));
   }
 
   getProposal(proposalId: string): Observable<ProposalDetail> {
@@ -134,6 +160,12 @@ export class ProposalApiService {
     return this.http
       .post<ProposalDetail>(this.url(`/proposals/${proposalId}/requested-objects`), request)
       .pipe(map((p) => normalizeProposalDetail(p)));
+  }
+
+  removeRequestedObject(proposalId: string, requestedObjectId: string): Observable<void> {
+    return this.http.delete<void>(
+      this.url(`/proposals/${proposalId}/requested-objects/${requestedObjectId}`),
+    );
   }
 
   uploadDocument(proposalId: string, file: File, documentType: string): Observable<Document> {

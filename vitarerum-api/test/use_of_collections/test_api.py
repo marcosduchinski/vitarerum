@@ -181,11 +181,7 @@ class InMemoryProjectRepository:
         if filters.status:
             items = [item for item in items if item.status == filters.status]
         if filters.use_type:
-            items = [
-                item
-                for item in items
-                if item.intended_use == filters.use_type
-            ]
+            items = [item for item in items if item.intended_use == filters.use_type]
         if filters.requested_by:
             items = [
                 item for item in items if item.requested_by == filters.requested_by
@@ -524,11 +520,11 @@ async def client_with_repos(
     app.dependency_overrides[get_file_storage] = lambda: file_storage
     app.dependency_overrides[get_async_session] = lambda: session
     app.dependency_overrides[get_caller_permission] = lambda: caller
-    app.dependency_overrides[get_external_requester_provisioner] = (
-        lambda: requester_provisioner
+    app.dependency_overrides[get_external_requester_provisioner] = lambda: (
+        requester_provisioner
     )
-    app.dependency_overrides[get_requester_access_email_sender] = (
-        lambda: access_email_sender
+    app.dependency_overrides[get_requester_access_email_sender] = lambda: (
+        access_email_sender
     )
 
     transport = ASGITransport(app=app)
@@ -645,9 +641,7 @@ async def test_list_proposals_paginates_results() -> None:
             await proposal_repo.add(
                 Proposal(
                     id=ProposalId(f"prop-{index + 1}"),
-                    reference_number=ReferenceNumber(
-                        f"VRP-20260601-{index + 1:04d}"
-                    ),
+                    reference_number=ReferenceNumber(f"VRP-20260601-{index + 1:04d}"),
                     title=f"Proposal {index + 1}",
                     collection_use_project_id=CollectionUseProjectId(
                         f"proj-{index + 1}"
@@ -762,6 +756,52 @@ async def test_relate_searched_objects_surfaces_them_on_detail() -> None:
     assert objects[0]["displayTitle"] == "Book of Hours"
     assert objects[0]["objectName"] == "Illuminated manuscript"
     assert objects[0]["category"] == "manuscript"
+
+
+async def test_remove_requested_object_updates_proposal_detail() -> None:
+    async with client_with_repos() as (client, _, _, _):
+        create = await client.post(
+            "/api/v1/proposals",
+            json={
+                "title": "Manuscript study",
+                "intendedUse": "IN_SITU_VISIT",
+                "purpose": "To study the manuscript",
+                "beginDate": "2026-06-01",
+                "endDate": "2026-06-07",
+            },
+            headers={"X-Permission-Id": "permission-1"},
+        )
+        assert create.status_code == 201
+        proposal_id = create.json()["proposal"]["id"]
+
+        related = await client.post(
+            f"/api/v1/proposals/{proposal_id}/requested-objects",
+            json={
+                "objects": [
+                    {
+                        "inventoryNumber": "INV-001",
+                        "displayTitle": "Book of Hours",
+                        "objectName": "Illuminated manuscript",
+                    }
+                ]
+            },
+            headers={"X-Permission-Id": "permission-1"},
+        )
+        assert related.status_code == 201
+        requested_object_id = related.json()["requestedObjects"][0]["id"]
+
+        removed = await client.delete(
+            f"/api/v1/proposals/{proposal_id}/requested-objects/{requested_object_id}",
+            headers={"X-Permission-Id": "permission-1"},
+        )
+        detail = await client.get(
+            f"/api/v1/proposals/{proposal_id}",
+            headers={"X-Permission-Id": "permission-1"},
+        )
+
+    assert removed.status_code == 204
+    assert detail.status_code == 200
+    assert detail.json()["requestedObjects"] == []
 
 
 async def test_external_user_cannot_read_other_proposal_events() -> None:
@@ -1214,7 +1254,7 @@ async def test_staff_can_assign_proposal_to_staff_target() -> None:
             ),
             "permission-target": _permission_record(
                 "permission-target", GroupName.COLLECTIONS_MANAGEMENT
-            )
+            ),
         },
     ) as (client, _, proposal_repo, _):
         await proposal_repo.add(

@@ -205,6 +205,16 @@ describe('ProposalApiService', () => {
     });
   });
 
+  it('removes a requested object from a proposal', () => {
+    service.removeRequestedObject('proposal-1', 'requested-object-1').subscribe();
+
+    const request = http.expectOne(
+      'https://api.example.test/proposals/proposal-1/requested-objects/requested-object-1',
+    );
+    expect(request.request.method).toBe('DELETE');
+    request.flush(null);
+  });
+
   it('defaults missing proposal type data to other', () => {
     let listType: string | undefined;
     service.listProposals().subscribe((page) => (listType = page.content[0]?.type));
@@ -230,9 +240,7 @@ describe('ProposalApiService', () => {
 
   it('synthesizes an EXTERNAL requester from requesterContact when requestedBy is null', () => {
     let requestedBy: { user: { name: string; email: string }; group: string } | undefined;
-    service
-      .listProposals()
-      .subscribe((page) => (requestedBy = page.content[0]?.requestedBy));
+    service.listProposals().subscribe((page) => (requestedBy = page.content[0]?.requestedBy));
     http
       .expectOne((r) => r.url === 'https://api.example.test/proposals')
       .flush({
@@ -288,22 +296,69 @@ describe('ProposalApiService', () => {
     service
       .listEvents('pr1')
       .subscribe((page) => (actorName = page.content[0]?.triggeredBy.user.name));
-    http.expectOne((r) => r.url === 'https://api.example.test/proposals/pr1/events').flush({
-      proposalId: 'pr1',
-      content: [
+    http
+      .expectOne((r) => r.url === 'https://api.example.test/proposals/pr1/events')
+      .flush({
+        proposalId: 'pr1',
+        content: [
+          {
+            occurredAt: '2026-06-01T10:00:00Z',
+            type: 'SUBMITTED',
+            triggeredBy: null,
+            note: null,
+          },
+        ],
+        page: 0,
+        size: 20,
+        totalElements: 1,
+        totalPages: 1,
+      });
+    expect(actorName).toBe('External requester');
+  });
+
+  it('normalizes flat requested objects from proposal detail', () => {
+    let inventoryNumber: string | undefined;
+    let displayTitle: string | null | undefined;
+
+    service.getProposal('pr1').subscribe((proposal) => {
+      const requestedObject = proposal.requestedObjects[0];
+      inventoryNumber = requestedObject?.objectReference.inventoryNumber;
+      displayTitle = requestedObject?.objectReference.displayTitle;
+    });
+
+    http.expectOne('https://api.example.test/proposals/pr1').flush({
+      id: 'pr1',
+      referenceNumber: 'VRP-20260101-0001',
+      title: 'Object proposal',
+      status: 'PENDING',
+      type: 'IN_SITU_VISIT',
+      requestedBy: {
+        permissionId: 'permission-1',
+        user: { id: 'user-1', name: 'Ana', email: 'ana@example.test' },
+        group: 'EXTERNAL',
+      },
+      documents: [],
+      requestedObjects: [
         {
-          occurredAt: '2026-06-01T10:00:00Z',
-          type: 'SUBMITTED',
-          triggeredBy: null,
-          note: null,
+          id: 'requested-object-1',
+          inventoryNumber: 'INV-001',
+          displayTitle: 'Book of Hours',
+          objectName: 'Illuminated manuscript',
+          briefDescriptionSnapshot: null,
+          category: 'manuscript',
+          description: '',
+          requestedAt: '2026-06-01T10:00:00Z',
+          requestedBy: {
+            permissionId: 'permission-1',
+            user: { id: 'user-1', name: 'Ana', email: 'ana@example.test' },
+            group: 'EXTERNAL',
+          },
         },
       ],
-      page: 0,
-      size: 20,
-      totalElements: 1,
-      totalPages: 1,
     });
-    expect(actorName).toBe('External requester');
+
+    expect(inventoryNumber).toBe('INV-001');
+    expect(displayTitle).toBe('Book of Hours');
   });
 
   it('partially updates proposal metadata and preserves explicit null values', () => {

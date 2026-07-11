@@ -13,6 +13,7 @@ import {
   Message,
   ProposalDetail,
   ProposalEventsPage,
+  RequestedObject,
   SendMessageRequest,
 } from '../../models/proposal.model';
 import { PROPOSAL_API_SERVICE } from '../../services/proposal-api.service';
@@ -52,6 +53,20 @@ const PROPOSAL: ProposalDetail = {
   conversationId: 'conversation-1',
   documents: [],
   requestedObjects: [],
+};
+
+const REQUESTED_OBJECT: RequestedObject = {
+  id: 'requested-object-1',
+  objectReference: {
+    inventoryNumber: 'INV-001',
+    displayTitle: 'Book of Hours',
+    objectName: 'Illuminated manuscript',
+    briefDescriptionSnapshot: 'Decorated manuscript snapshot.',
+  },
+  category: 'manuscript',
+  description: 'Requested for comparative study.',
+  requestedAt: '2026-06-01T10:00:00Z',
+  requestedBy: PROPOSAL.requestedBy,
 };
 
 const CONVERSATION: Conversation = {
@@ -162,6 +177,10 @@ class ProposalApiServiceStub {
     readonly proposalId: string;
     readonly payload: RequestDocumentCorrectionsRequest;
   }[] = [];
+  readonly removeRequestedObjectCalls: {
+    readonly proposalId: string;
+    readonly requestedObjectId: string;
+  }[] = [];
   private nextDocumentId = 1;
   private proposal = PROPOSAL;
 
@@ -267,6 +286,17 @@ class ProposalApiServiceStub {
     this.requestCorrectionsCalls.push({ proposalId, payload });
     return of({ id: proposalId, status: this.proposal.status, lastEvent: EVENTS.content[0] });
   }
+
+  removeRequestedObject(proposalId: string, requestedObjectId: string) {
+    this.removeRequestedObjectCalls.push({ proposalId, requestedObjectId });
+    this.proposal = {
+      ...this.proposal,
+      requestedObjects: this.proposal.requestedObjects.filter(
+        (object) => object.id !== requestedObjectId,
+      ),
+    };
+    return of(undefined);
+  }
 }
 
 class UserManagementServiceStub {
@@ -277,7 +307,7 @@ class UserManagementServiceStub {
 
 async function selectPanel(
   fixture: ComponentFixture<ProposalMyDetailPageComponent>,
-  name: 'Overview' | 'Documents' | 'Conversation' | 'Actions',
+  name: 'Overview' | 'Objects' | 'Documents' | 'Conversation' | 'Actions',
 ): Promise<void> {
   const compiled = fixture.nativeElement as HTMLElement;
   const tab = Array.from(compiled.querySelectorAll<HTMLButtonElement>('[role="tab"]')).find(
@@ -330,6 +360,7 @@ describe('ProposalMyDetailPageComponent', () => {
     expect(compiled.textContent).toContain('Alice Ferreira');
     expect(compiled.textContent).toContain('Assigned to');
     expect(compiled.textContent).toContain('Bob Santos');
+    expect(compiled.textContent).toContain('Objects');
     expect(compiled.textContent).toContain('Conversation');
     expect(compiled.textContent).toContain('Event log');
     expect(compiled.textContent).toContain('SUBMITTED');
@@ -348,6 +379,59 @@ describe('ProposalMyDetailPageComponent', () => {
     expect(compiled.querySelector('#overview-panel')).not.toBeNull();
     expect(compiled.querySelector('#conversation-panel')).toBeNull();
     expect(compiled.textContent).not.toContain('Initial request');
+  });
+
+  it('opens the objects tab with an empty state', async () => {
+    const fixture = TestBed.createComponent(ProposalMyDetailPageComponent);
+    fixture.componentRef.setInput('id', 'proposal-1');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    await selectPanel(fixture, 'Objects');
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.querySelector('#objects-panel')).not.toBeNull();
+    expect(compiled.textContent).toContain('Requested objects');
+    expect(compiled.textContent).toContain('No objects have been requested');
+    expect(compiled.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toContain(
+      'Objects',
+    );
+  });
+
+  it('removes a requested object from the objects tab', async () => {
+    proposalService.setProposal({ ...PROPOSAL, requestedObjects: [REQUESTED_OBJECT] });
+    const fixture = TestBed.createComponent(ProposalMyDetailPageComponent);
+    fixture.componentRef.setInput('id', 'proposal-1');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    await selectPanel(fixture, 'Objects');
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.textContent).toContain('Book of Hours');
+
+    const removeButton = Array.from(compiled.querySelectorAll<HTMLButtonElement>('button')).find(
+      (button) => button.textContent?.trim() === 'Remove',
+    );
+    expect(removeButton).toBeDefined();
+    removeButton!.click();
+    fixture.detectChanges();
+    expect(compiled.textContent).toContain('Remove requested object?');
+
+    const confirmButton = Array.from(compiled.querySelectorAll<HTMLButtonElement>('button')).find(
+      (button) => button.textContent?.trim() === 'Remove object',
+    );
+    expect(confirmButton).toBeDefined();
+    confirmButton!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(proposalService.removeRequestedObjectCalls).toEqual([
+      { proposalId: 'proposal-1', requestedObjectId: 'requested-object-1' },
+    ]);
   });
 
   it('navigates from the Decision Desk to the proposal edit page', async () => {
