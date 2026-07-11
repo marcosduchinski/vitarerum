@@ -78,6 +78,88 @@
             <span class="pi pi-times" aria-hidden="true"></span>
           </button>
         </header>
+        <div class="add-modal__body">
+          @if (addError()) {
+            <app-error-message [apiError]="addError()!" />
+          }
+          @if (searchError()) {
+            <app-error-message [apiError]="searchError()!" />
+          }
+
+          <form class="object-search" (submit)="$event.preventDefault(); searchObjects()">
+            <input
+              type="search"
+              class="object-search__input"
+              placeholder="Search collection objects"
+              [value]="searchQuery()"
+              (input)="onSearchQueryInput($event)"
+            />
+            <button
+              type="submit"
+              class="object-search__button"
+              [disabled]="searching() || !searchQuery().trim()"
+            >
+              {{ searching() ? 'Searching...' : 'Search' }}
+            </button>
+          </form>
+
+          @if (searchResults().length === 0) {
+            <p class="object-search__empty">Search for indexed collection rows to add.</p>
+          } @else {
+            <ul class="search-results">
+              @for (hit of searchResults(); track hitId(hit)) {
+                <li class="search-hit" [class.search-hit--disabled]="!canAddHit(hit)">
+                  <label class="search-hit__select">
+                    <input
+                      type="checkbox"
+                      [checked]="isHitSelected(hit)"
+                      [disabled]="!canAddHit(hit)"
+                      (change)="toggleHit(hit, $any($event.target).checked)"
+                    />
+                    <span class="search-hit__content">
+                      <strong>
+                        {{
+                          hit.objectSnapshot?.displayTitle ||
+                            hit.cells['Name'] ||
+                            hit.cells['Title'] ||
+                            hit.highlight
+                        }}
+                      </strong>
+                      <span>
+                        {{
+                          hit.objectSnapshot?.inventoryNumber ||
+                            hit.cells['Inventory No'] ||
+                            hit.cells['Code'] ||
+                            hit.fileName
+                        }}
+                      </span>
+                      <span class="search-hit__provenance">
+                        {{ hit.collectionName }} / {{ hit.fileName }} / {{ hit.sheet }} row
+                        {{ hit.rowNumber }}
+                      </span>
+                    </span>
+                  </label>
+                  @if (adapterReason(hit); as reason) {
+                    <p class="search-hit__warning">{{ reason }}</p>
+                  }
+                </li>
+              }
+            </ul>
+          }
+        </div>
+        <footer class="add-modal__footer">
+          <button type="button" class="add-modal__secondary" (click)="closeAddModal()">
+            Cancel
+          </button>
+          <button
+            type="button"
+            class="add-modal__primary"
+            [disabled]="adding() || selectedItems().length === 0"
+            (click)="submitSelectedObjects()"
+          >
+            {{ adding() ? 'Adding...' : 'Add selected' }}
+          </button>
+        </footer>
       </section>
     </div>
   }

@@ -15,6 +15,15 @@ export interface ObjectSearchHit {
   readonly rowNumber: number;
   readonly cells: Record<string, string>;
   readonly highlight: string;
+  readonly objectSnapshot: ObjectSearchSnapshot | null;
+}
+
+export interface ObjectSearchSnapshot {
+  readonly inventoryNumber: string;
+  readonly displayTitle: string;
+  readonly objectName: string;
+  readonly briefDescriptionSnapshot: string | null;
+  readonly category: string;
 }
 
 export interface ObjectSearchResult {

@@ -104,6 +104,10 @@ class _Seed:
                     uploaded_by=str(uuid4()),
                     uploaded_at=_NOW,
                     indexed_at=_NOW,
+                    inventory_number_column="Inventory No",
+                    display_title_column="Name",
+                    object_name_column=None,
+                    description_columns=["Notes"],
                 )
             )
             await session.commit()
@@ -158,7 +162,11 @@ async def test_search_matches_full_text() -> None:
                         "Objects",
                         2,
                         "ZOO-1 Jaguar found near the river",
-                        {"Inventory No": "ZOO-1", "Name": "Jaguar"},
+                        {
+                            "Inventory No": "ZOO-1",
+                            "Name": "Jaguar",
+                            "Notes": "found near the river",
+                        },
                     ),
                     (
                         "Objects",
@@ -181,12 +189,22 @@ async def test_search_matches_full_text() -> None:
             assert result.items[0].cells == {
                 "Inventory No": "ZOO-1",
                 "Name": "Jaguar",
+                "Notes": "found near the river",
             }
             assert "<b>Jaguar</b>" in result.items[0].highlight
             # Locks in the join to collection_index_collection for the name
             # (not just the now-removed active filter).
             expected_name = f"Test Collection {seed.collection_id}"
             assert result.items[0].collection_name == expected_name
+            assert result.items[0].object_snapshot is not None
+            assert result.items[0].object_snapshot.inventory_number == "ZOO-1"
+            assert result.items[0].object_snapshot.display_title == "Jaguar"
+            assert result.items[0].object_snapshot.object_name == "Jaguar"
+            assert (
+                result.items[0].object_snapshot.brief_description_snapshot
+                == "found near the river"
+            )
+            assert result.items[0].object_snapshot.category == expected_name
 
 
 async def test_search_matches_hyphenated_code_partially() -> None:

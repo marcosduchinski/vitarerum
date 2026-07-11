@@ -39,6 +39,7 @@ from app.collection_object_index.application.use_cases import (
     ListCuratorCandidates,
     ListManageableCollections,
     ListSearchableCollections,
+    ListSourceDocumentColumns,
     MoveCollectionToArea,
     MoveCollectionToAreaInput,
     ReindexSourceDocument,
@@ -50,6 +51,8 @@ from app.collection_object_index.application.use_cases import (
     UpdateCollectionArea,
     UpdateCollectionAreaInput,
     UpdateCollectionInput,
+    UpdateSourceDocumentObjectMapping,
+    UpdateSourceDocumentObjectMappingInput,
     UploadSourceDocument,
     UploadSourceDocumentInput,
 )
@@ -61,6 +64,7 @@ from app.collection_object_index.domain.models import (
     CollectionNotFound,
     SourceDocument,
     SourceDocumentId,
+    SourceDocumentMappingInvalid,
     SourceDocumentNotFound,
 )
 from app.collection_object_index.presentation.dependencies import (
@@ -81,12 +85,16 @@ from app.collection_object_index.presentation.schemas import (
     CuratorCandidateResponse,
     CuratorResponse,
     MoveCollectionToAreaRequest,
+    ObjectSearchSnapshotResponse,
     SearchableCollectionResponse,
     SearchHitResponse,
     SearchResultResponse,
+    SourceDocumentColumnsResponse,
+    SourceDocumentObjectMappingResponse,
     SourceDocumentResponse,
     UpdateCollectionAreaRequest,
     UpdateCollectionRequest,
+    UpdateSourceDocumentObjectMappingRequest,
 )
 from app.identity.public import GroupName, get_permission_reader
 from app.identity.public import PermissionId as IdentityPermissionId
@@ -178,6 +186,7 @@ def _permission_not_curatorial() -> HTTPException:
 
 
 def _document_response(document: SourceDocument) -> SourceDocumentResponse:
+    mapping = document.object_snapshot_mapping
     return SourceDocumentResponse(
         id=document.id,
         collectionId=document.collection_id,
@@ -188,6 +197,16 @@ def _document_response(document: SourceDocument) -> SourceDocumentResponse:
         rowCount=document.row_count,
         uploadedAt=document.uploaded_at,
         indexedAt=document.indexed_at,
+        objectMapping=(
+            SourceDocumentObjectMappingResponse(
+                inventoryNumberColumn=mapping.inventory_number_column,
+                displayTitleColumn=mapping.display_title_column,
+                objectNameColumn=mapping.object_name_column,
+                descriptionColumns=list(mapping.description_columns),
+            )
+            if mapping is not None
+            else None
+        ),
     )
 
 
@@ -619,6 +638,67 @@ async def reindex_collection_document(
     return _document_response(document)
 
 
+@collection_data_sources_router.get(
+    "/documents/{document_id}/columns", response_model=SourceDocumentColumnsResponse
+)
+async def list_source_document_columns(
+    document_id: str,
+    caller: CallerPermission,
+    collections: CollectionRepo,
+    documents: SourceDocumentRepo,
+    index: ObjectIndex,
+) -> SourceDocumentColumnsResponse:
+    require_staff(caller)
+    try:
+        columns = await ListSourceDocumentColumns(
+            collections, documents, index
+        ).execute(caller, SourceDocumentId(document_id))
+    except SourceDocumentNotFound as exc:
+        raise _not_found(
+            "source document", "SOURCE_DOCUMENT_NOT_FOUND", document_id
+        ) from exc
+    return SourceDocumentColumnsResponse(columns=columns)
+
+
+@collection_data_sources_router.put(
+    "/documents/{document_id}/object-mapping", response_model=SourceDocumentResponse
+)
+async def update_source_document_object_mapping(
+    document_id: str,
+    payload: UpdateSourceDocumentObjectMappingRequest,
+    caller: CallerPermission,
+    collections: CollectionRepo,
+    documents: SourceDocumentRepo,
+    index: ObjectIndex,
+    session: DBSession,
+) -> SourceDocumentResponse:
+    require_staff(caller)
+    try:
+        document = await UpdateSourceDocumentObjectMapping(
+            collections, documents, index
+        ).execute(
+            UpdateSourceDocumentObjectMappingInput(
+                caller=caller,
+                document_id=SourceDocumentId(document_id),
+                inventory_number_column=payload.inventoryNumberColumn,
+                display_title_column=payload.displayTitleColumn,
+                object_name_column=payload.objectNameColumn,
+                description_columns=tuple(payload.descriptionColumns),
+            )
+        )
+    except SourceDocumentNotFound as exc:
+        raise _not_found(
+            "source document", "SOURCE_DOCUMENT_NOT_FOUND", document_id
+        ) from exc
+    except SourceDocumentMappingInvalid as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={"error": "SOURCE_DOCUMENT_MAPPING_INVALID", "message": str(exc)},
+        ) from exc
+    await session.commit()
+    return _document_response(document)
+
+
 @collection_data_sources_router.post(
     "/collections/{collection_id}/curators",
     status_code=status.HTTP_201_CREATED,
@@ -681,6 +761,7 @@ async def remove_collection_curator(
 
 
 def _search_hit_response(hit: SearchHit) -> SearchHitResponse:
+    snapshot = hit.object_snapshot
     return SearchHitResponse(
         collectionId=hit.collection_id,
         collectionName=hit.collection_name,
@@ -690,6 +771,17 @@ def _search_hit_response(hit: SearchHit) -> SearchHitResponse:
         rowNumber=hit.row_number,
         cells=dict(hit.cells),
         highlight=hit.highlight,
+        objectSnapshot=(
+            ObjectSearchSnapshotResponse(
+                inventoryNumber=snapshot.inventory_number,
+                displayTitle=snapshot.display_title,
+                objectName=snapshot.object_name,
+                briefDescriptionSnapshot=snapshot.brief_description_snapshot,
+                category=snapshot.category,
+            )
+            if snapshot is not None
+            else None
+        ),
     )
 
 

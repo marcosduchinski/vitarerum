@@ -2,7 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { inject, Injectable, InjectionToken } from '@angular/core';
 import { API_BASE_URL } from '@core/config/app-config.model';
 import { buildApiUrl } from '@core/http/api-url.util';
-import { Observable } from 'rxjs';
+import { map, Observable } from 'rxjs';
 
 import {
   CollectionArea,
@@ -10,6 +10,7 @@ import {
   CollectionDataSource,
   CuratorCandidate,
   SourceDocument,
+  UpdateSourceDocumentObjectMappingRequest,
   UpdateCollectionRequest,
 } from '../models/collection-data-source.model';
 
@@ -24,6 +25,11 @@ export interface CollectionDataSourceApi {
    * source documents, indexed rows, and their files. Cannot be undone. */
   removeCollection(collectionId: string): Observable<void>;
   listDocuments(collectionId: string): Observable<SourceDocument[]>;
+  listDocumentColumns(documentId: string): Observable<string[]>;
+  updateObjectMapping(
+    documentId: string,
+    request: UpdateSourceDocumentObjectMappingRequest,
+  ): Observable<SourceDocument>;
   upload(collectionId: string, file: File): Observable<SourceDocument>;
   remove(documentId: string): Observable<void>;
   reindex(documentId: string): Observable<SourceDocument>;
@@ -68,6 +74,25 @@ export class CollectionDataSourceService implements CollectionDataSourceApi {
 
   listDocuments(collectionId: string): Observable<SourceDocument[]> {
     return this.http.get<SourceDocument[]>(this.url(`/collections/${collectionId}/documents`));
+  }
+
+  listDocumentColumns(documentId: string): Observable<string[]> {
+    return this.http.get<{ columns: string[] }>(this.url(`/documents/${documentId}/columns`)).pipe(
+      // Keep components decoupled from the tiny response wrapper.
+      map((response) => response.columns),
+    );
+  }
+
+  updateObjectMapping(
+    documentId: string,
+    request: UpdateSourceDocumentObjectMappingRequest,
+  ): Observable<SourceDocument> {
+    return this.http.put<SourceDocument>(this.url(`/documents/${documentId}/object-mapping`), {
+      inventoryNumberColumn: request.inventoryNumberColumn,
+      displayTitleColumn: request.displayTitleColumn,
+      objectNameColumn: request.objectNameColumn,
+      descriptionColumns: [...request.descriptionColumns],
+    });
   }
 
   upload(collectionId: string, file: File): Observable<SourceDocument> {

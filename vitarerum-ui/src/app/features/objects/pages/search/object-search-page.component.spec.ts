@@ -24,6 +24,13 @@ function makeResult(overrides: Partial<ObjectSearchResult> = {}): ObjectSearchRe
         rowNumber: 2,
         cells: { 'Inventory No': 'ZOO-1', Name: 'Jaguar' },
         highlight: '<b>Jaguar</b> found near the river',
+        objectSnapshot: {
+          inventoryNumber: 'ZOO-1',
+          displayTitle: 'Jaguar',
+          objectName: 'Jaguar',
+          briefDescriptionSnapshot: 'found near the river',
+          category: 'Zoology',
+        },
       },
     ],
     ...overrides,

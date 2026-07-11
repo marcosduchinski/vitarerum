@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import Any
 from uuid import uuid4
 
 from sqlalchemy import delete, func, select, text
@@ -11,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.collection_object_index.application.ports import (
     CollectionObjectSearchQuery,
     CollectionObjectSearchResult,
+    ObjectSnapshot,
     ParsedRow,
     SearchHit,
 )
@@ -24,6 +26,7 @@ from app.collection_object_index.domain.models import (
     CollectionAreaId,
     CollectionId,
     CuratorAssignment,
+    ObjectSnapshotMapping,
     SourceDocument,
     SourceDocumentId,
 )
@@ -66,6 +69,16 @@ def _to_assignment(record: CuratorRecord) -> CuratorAssignment:
 
 
 def _to_document(record: SourceDocumentRecord) -> SourceDocument:
+    mapping = (
+        ObjectSnapshotMapping(
+            inventory_number_column=record.inventory_number_column,
+            display_title_column=record.display_title_column,
+            object_name_column=record.object_name_column,
+            description_columns=tuple(record.description_columns or ()),
+        )
+        if record.inventory_number_column and record.display_title_column
+        else None
+    )
     return SourceDocument(
         id=SourceDocumentId(record.id),
         collection_id=CollectionId(record.collection_id),
@@ -80,6 +93,7 @@ def _to_document(record: SourceDocumentRecord) -> SourceDocument:
         uploaded_at=record.uploaded_at,
         indexed_at=record.indexed_at,
         deleted_at=record.deleted_at,
+        object_snapshot_mapping=mapping,
     )
 
 
@@ -100,6 +114,19 @@ def _apply_document(record: SourceDocumentRecord, document: SourceDocument) -> N
     record.row_count = document.row_count
     record.indexed_at = document.indexed_at
     record.deleted_at = document.deleted_at
+    mapping = document.object_snapshot_mapping
+    record.inventory_number_column = (
+        mapping.inventory_number_column if mapping is not None else None
+    )
+    record.display_title_column = (
+        mapping.display_title_column if mapping is not None else None
+    )
+    record.object_name_column = (
+        mapping.object_name_column if mapping is not None else None
+    )
+    record.description_columns = (
+        list(mapping.description_columns) if mapping is not None else []
+    )
 
 
 class SqlAlchemyCollectionRepository:
@@ -262,6 +289,26 @@ class SqlAlchemySourceDocumentRepository:
                 uploaded_at=document.uploaded_at,
                 indexed_at=document.indexed_at,
                 deleted_at=document.deleted_at,
+                inventory_number_column=(
+                    document.object_snapshot_mapping.inventory_number_column
+                    if document.object_snapshot_mapping is not None
+                    else None
+                ),
+                display_title_column=(
+                    document.object_snapshot_mapping.display_title_column
+                    if document.object_snapshot_mapping is not None
+                    else None
+                ),
+                object_name_column=(
+                    document.object_snapshot_mapping.object_name_column
+                    if document.object_snapshot_mapping is not None
+                    else None
+                ),
+                description_columns=(
+                    list(document.object_snapshot_mapping.description_columns)
+                    if document.object_snapshot_mapping is not None
+                    else []
+                ),
             )
         )
         await self._session.flush()
@@ -367,6 +414,10 @@ _SEARCH_SELECT_SQL = text(
         col.name AS collection_name,
         co.source_document_id,
         sd.file_name,
+        sd.inventory_number_column,
+        sd.display_title_column,
+        sd.object_name_column,
+        sd.description_columns,
         co.sheet,
         co.row_number,
         co.cells,
@@ -443,6 +494,17 @@ class SqlAlchemyCollectionObjectIndex:
             )
         )
 
+    async def list_columns(self, source_document_id: SourceDocumentId) -> list[str]:
+        result = await self._session.execute(
+            select(CollectionObjectRecord.cells).where(
+                CollectionObjectRecord.source_document_id == str(source_document_id)
+            )
+        )
+        columns: set[str] = set()
+        for cells in result.scalars():
+            columns.update(str(key) for key in cells.keys())
+        return sorted(columns, key=str.casefold)
+
     async def search(
         self, query: CollectionObjectSearchQuery
     ) -> CollectionObjectSearchResult:
@@ -465,7 +527,33 @@ class SqlAlchemyCollectionObjectIndex:
                 row_number=row.row_number,
                 cells=row.cells,
                 highlight=row.highlight,
+                object_snapshot=_object_snapshot_from_row(row),
             )
             for row in rows
         ]
         return CollectionObjectSearchResult(total=total or 0, items=items)
+
+
+def _cell(cells: dict[str, str], column: str | None) -> str:
+    if column is None:
+        return ""
+    return str(cells.get(column, "")).strip()
+
+
+def _object_snapshot_from_row(row: Any) -> ObjectSnapshot | None:
+    inventory = _cell(row.cells, row.inventory_number_column)
+    display_title = _cell(row.cells, row.display_title_column)
+    object_name = _cell(row.cells, row.object_name_column) or display_title
+    if not inventory or not display_title or not object_name:
+        return None
+    description_parts = [
+        _cell(row.cells, column) for column in (row.description_columns or [])
+    ]
+    description = " · ".join(part for part in description_parts if part) or None
+    return ObjectSnapshot(
+        inventory_number=inventory,
+        display_title=display_title,
+        object_name=object_name,
+        brief_description_snapshot=description,
+        category=row.collection_name,
+    )

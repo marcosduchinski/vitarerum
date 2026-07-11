@@ -57,6 +57,13 @@ class CuratorCandidateResponse(BaseModel):
     email: str
 
 
+class SourceDocumentObjectMappingResponse(BaseModel):
+    inventoryNumberColumn: str
+    displayTitleColumn: str
+    objectNameColumn: str | None = None
+    descriptionColumns: list[str] = Field(default_factory=list)
+
+
 class SourceDocumentResponse(BaseModel):
     id: str
     collectionId: str
@@ -67,6 +74,18 @@ class SourceDocumentResponse(BaseModel):
     rowCount: int | None = None
     uploadedAt: datetime
     indexedAt: datetime | None = None
+    objectMapping: SourceDocumentObjectMappingResponse | None = None
+
+
+class UpdateSourceDocumentObjectMappingRequest(BaseModel):
+    inventoryNumberColumn: str = Field(min_length=1, max_length=255)
+    displayTitleColumn: str = Field(min_length=1, max_length=255)
+    objectNameColumn: str | None = Field(default=None, max_length=255)
+    descriptionColumns: list[str] = Field(default_factory=list)
+
+
+class SourceDocumentColumnsResponse(BaseModel):
+    columns: list[str]
 
 
 class AssignCuratorRequest(BaseModel):
@@ -78,6 +97,14 @@ class SearchableCollectionResponse(BaseModel):
     name: str
 
 
+class ObjectSearchSnapshotResponse(BaseModel):
+    inventoryNumber: str
+    displayTitle: str
+    objectName: str
+    briefDescriptionSnapshot: str | None = None
+    category: str
+
+
 class SearchHitResponse(BaseModel):
     collectionId: str
     collectionName: str
@@ -87,6 +114,7 @@ class SearchHitResponse(BaseModel):
     rowNumber: int
     cells: dict[str, str]
     highlight: str
+    objectSnapshot: ObjectSearchSnapshotResponse | None = None
 
 
 class SearchResultResponse(BaseModel):

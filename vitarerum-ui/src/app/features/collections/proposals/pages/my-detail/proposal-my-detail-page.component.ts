@@ -24,7 +24,10 @@ import {
 } from '@shared/components/status-chip/status-chip.component';
 import { TypeChipComponent } from '@shared/components/type-chip/type-chip.component';
 
-import { RequestDocumentCorrectionsRequest } from '../../models/proposal-actions.model';
+import {
+  AddRequestedObjectsRequest,
+  RequestDocumentCorrectionsRequest,
+} from '../../models/proposal-actions.model';
 import { PROPOSAL_API_SERVICE } from '../../services/proposal-api.service';
 import {
   ProposalConversationSectionComponent,
@@ -135,6 +138,8 @@ export class ProposalMyDetailPageComponent {
   protected readonly correctionResetVersion = signal(0);
   protected readonly removingObjectId = signal<string | null>(null);
   protected readonly removeObjectError = signal<ApiError | null>(null);
+  protected readonly addingObjects = signal(false);
+  protected readonly addObjectError = signal<ApiError | null>(null);
   protected readonly temporaryExternalUserEmail = linkedSignal<string | null>(() => {
     this.id();
     return null;
@@ -318,6 +323,22 @@ export class ProposalMyDetailPageComponent {
       this.removeObjectError.set(toApiError(err));
     } finally {
       this.removingObjectId.set(null);
+    }
+  }
+
+  protected async addRequestedObjects(payload: AddRequestedObjectsRequest): Promise<void> {
+    if (this.addingObjects()) return;
+
+    this.addingObjects.set(true);
+    this.addObjectError.set(null);
+
+    try {
+      await firstValueFrom(this.proposalService.addRequestedObjects(this.id(), payload));
+      this.proposalResource.reload();
+    } catch (err) {
+      this.addObjectError.set(toApiError(err));
+    } finally {
+      this.addingObjects.set(false);
     }
   }
 

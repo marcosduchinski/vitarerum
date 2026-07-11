@@ -56,6 +56,7 @@ function makeDocument(overrides: Partial<SourceDocument> = {}): SourceDocument {
     rowCount: 42,
     uploadedAt: '2026-07-01T10:00:00Z',
     indexedAt: '2026-07-01T10:00:02Z',
+    objectMapping: null,
     ...overrides,
   };
 }
@@ -117,6 +118,8 @@ class ServiceStub {
   readonly uploadCalls: [string, File][] = [];
   readonly removeCalls: string[] = [];
   readonly reindexCalls: string[] = [];
+  readonly listDocumentColumnsCalls: string[] = [];
+  readonly updateObjectMappingCalls: unknown[] = [];
   readonly createCollectionCalls: [string, string][] = [];
   readonly updateCollectionCalls: [string, { name: string }][] = [];
   readonly removeCollectionCalls: string[] = [];
@@ -158,6 +161,21 @@ class ServiceStub {
 
   listDocuments() {
     return of(this.documents);
+  }
+
+  listDocumentColumns(documentId: string) {
+    this.listDocumentColumnsCalls.push(documentId);
+    return of(['Inventory No', 'Name', 'Description', 'Notes']);
+  }
+
+  updateObjectMapping(documentId: string, request: unknown) {
+    this.updateObjectMappingCalls.push([documentId, request]);
+    return of(
+      makeDocument({
+        id: documentId,
+        objectMapping: request as SourceDocument['objectMapping'],
+      }),
+    );
   }
 
   upload(collectionId: string, file: File) {
@@ -335,6 +353,50 @@ describe('CollectionDataSourcesPageComponent', () => {
       .click();
     await fixture.whenStable();
     expect(service.reindexCalls).toEqual(['doc-1']);
+  });
+
+  it('configures object snapshot columns for a document', async () => {
+    const el = await setup();
+    await expand(el);
+
+    Array.from(el.querySelectorAll<HTMLButtonElement>('.doc-btn'))
+      .find((b) => b.textContent?.includes('Configure columns'))!
+      .click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(service.listDocumentColumnsCalls).toEqual(['doc-1']);
+
+    const selects = el.querySelectorAll<HTMLSelectElement>('.mapping-field select');
+    selects[0].value = 'Inventory No';
+    selects[0].dispatchEvent(new Event('change'));
+    selects[1].value = 'Name';
+    selects[1].dispatchEvent(new Event('change'));
+    selects[2].value = 'Name';
+    selects[2].dispatchEvent(new Event('change'));
+    const description = Array.from(
+      el.querySelectorAll<HTMLInputElement>('.mapping-descriptions input'),
+    ).find((input) => input.nextElementSibling?.textContent?.trim() === 'Description')!;
+    description.checked = true;
+    description.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    Array.from(el.querySelectorAll<HTMLButtonElement>('.mapping-panel__actions .admin-btn'))
+      .find((button) => button.textContent?.includes('Save mapping'))!
+      .click();
+    await fixture.whenStable();
+
+    expect(service.updateObjectMappingCalls).toEqual([
+      [
+        'doc-1',
+        {
+          inventoryNumberColumn: 'Inventory No',
+          displayTitleColumn: 'Name',
+          objectNameColumn: 'Name',
+          descriptionColumns: ['Description'],
+        },
+      ],
+    ]);
   });
 
   describe('SYS_ADMIN catalog administration', () => {

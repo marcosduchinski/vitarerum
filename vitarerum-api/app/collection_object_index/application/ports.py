@@ -49,6 +49,15 @@ class CollectionObjectSearchQuery:
 
 
 @dataclass(frozen=True, slots=True)
+class ObjectSnapshot:
+    inventory_number: str
+    display_title: str
+    object_name: str
+    brief_description_snapshot: str | None
+    category: str
+
+
+@dataclass(frozen=True, slots=True)
 class SearchHit:
     collection_id: CollectionId
     collection_name: str
@@ -58,6 +67,7 @@ class SearchHit:
     row_number: int
     cells: Mapping[str, str]
     highlight: str
+    object_snapshot: ObjectSnapshot | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -165,6 +175,10 @@ class CollectionObjectIndexPort(Protocol):
     async def remove_collection(self, collection_id: CollectionId) -> None:
         """Bulk-remove every indexed row of the collection (its source
         documents are being removed too)."""
+        ...
+
+    async def list_columns(self, source_document_id: SourceDocumentId) -> list[str]:
+        """Return the union of indexed cell keys for one source document."""
         ...
 
     async def search(

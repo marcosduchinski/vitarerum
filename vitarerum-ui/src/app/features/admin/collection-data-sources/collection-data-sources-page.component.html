@@ -332,6 +332,14 @@
                                   type="button"
                                   class="doc-btn"
                                   [disabled]="busy()"
+                                  (click)="configureMapping(doc)"
+                                >
+                                  Configure columns
+                                </button>
+                                <button
+                                  type="button"
+                                  class="doc-btn"
+                                  [disabled]="busy()"
                                   (click)="reindex(doc)"
                                 >
                                   Reindex
@@ -347,6 +355,91 @@
                               </td>
                             }
                           </tr>
+                          @if (mappingDocumentId() === doc.id) {
+                            <tr class="mapping-row">
+                              <td [attr.colspan]="documentsColumnCount(collection)">
+                                <section class="mapping-panel">
+                                  <div class="mapping-panel__grid">
+                                    <label class="mapping-field">
+                                      <span>Inventory number</span>
+                                      <select
+                                        [value]="mappingInventoryColumn()"
+                                        [disabled]="busy()"
+                                        (change)="mappingInventoryColumn.set($any($event.target).value)"
+                                      >
+                                        <option value="">Select column…</option>
+                                        @for (column of mappingColumns(doc); track column) {
+                                          <option [value]="column">{{ column }}</option>
+                                        }
+                                      </select>
+                                    </label>
+                                    <label class="mapping-field">
+                                      <span>Display title</span>
+                                      <select
+                                        [value]="mappingTitleColumn()"
+                                        [disabled]="busy()"
+                                        (change)="mappingTitleColumn.set($any($event.target).value)"
+                                      >
+                                        <option value="">Select column…</option>
+                                        @for (column of mappingColumns(doc); track column) {
+                                          <option [value]="column">{{ column }}</option>
+                                        }
+                                      </select>
+                                    </label>
+                                    <label class="mapping-field">
+                                      <span>Object name</span>
+                                      <select
+                                        [value]="mappingObjectNameColumn()"
+                                        [disabled]="busy()"
+                                        (change)="mappingObjectNameColumn.set($any($event.target).value)"
+                                      >
+                                        <option value="">Use display title</option>
+                                        @for (column of mappingColumns(doc); track column) {
+                                          <option [value]="column">{{ column }}</option>
+                                        }
+                                      </select>
+                                    </label>
+                                  </div>
+
+                                  <fieldset class="mapping-descriptions">
+                                    <legend>Description columns</legend>
+                                    <div class="mapping-descriptions__list">
+                                      @for (column of mappingColumns(doc); track column) {
+                                        <label>
+                                          <input
+                                            type="checkbox"
+                                            [checked]="isDescriptionColumnSelected(column)"
+                                            [disabled]="busy()"
+                                            (change)="toggleDescriptionColumn(column, $any($event.target).checked)"
+                                          />
+                                          <span>{{ column }}</span>
+                                        </label>
+                                      }
+                                    </div>
+                                  </fieldset>
+
+                                  <div class="mapping-panel__actions">
+                                    <button
+                                      type="button"
+                                      class="admin-btn"
+                                      [disabled]="busy() || !mappingCanSave()"
+                                      (click)="saveMapping(doc)"
+                                    >
+                                      Save mapping
+                                    </button>
+                                    <button
+                                      type="button"
+                                      class="admin-btn"
+                                      [disabled]="busy()"
+                                      (click)="cancelMapping()"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </section>
+                              </td>
+                            </tr>
+                          }
                         }
                       </tbody>
                     </table>

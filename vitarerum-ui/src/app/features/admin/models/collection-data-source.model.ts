@@ -41,10 +41,25 @@ export interface SourceDocument {
   readonly rowCount: number | null;
   readonly uploadedAt: string;
   readonly indexedAt: string | null;
+  readonly objectMapping: SourceDocumentObjectMapping | null;
 }
 
 export interface UpdateCollectionRequest {
   readonly name: string;
+}
+
+export interface SourceDocumentObjectMapping {
+  readonly inventoryNumberColumn: string;
+  readonly displayTitleColumn: string;
+  readonly objectNameColumn: string | null;
+  readonly descriptionColumns: readonly string[];
+}
+
+export interface UpdateSourceDocumentObjectMappingRequest {
+  readonly inventoryNumberColumn: string;
+  readonly displayTitleColumn: string;
+  readonly objectNameColumn: string | null;
+  readonly descriptionColumns: readonly string[];
 }
 
 /** A permission in the CURATORIAL group, eligible to be assigned as a curator. */

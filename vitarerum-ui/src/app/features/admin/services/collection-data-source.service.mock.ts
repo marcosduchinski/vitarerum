@@ -8,6 +8,7 @@ import {
   CuratorCandidate,
   SourceDocument,
   UpdateCollectionRequest,
+  UpdateSourceDocumentObjectMappingRequest,
 } from '../models/collection-data-source.model';
 import { CollectionDataSourceApi } from './collection-data-source.service';
 
@@ -49,9 +50,14 @@ export class CollectionDataSourceServiceMock implements CollectionDataSourceApi 
           rowCount: 412,
           uploadedAt: '2026-06-20T10:00:00Z',
           indexedAt: '2026-06-20T10:00:03Z',
+          objectMapping: null,
         },
       ],
     ],
+  ]);
+
+  private readonly documentColumns = new Map<string, string[]>([
+    ['doc-1', ['Inventory No', 'Name', 'Description', 'Notes']],
   ]);
 
   private readonly curatorCandidates: CuratorCandidate[] = [
@@ -155,10 +161,41 @@ export class CollectionDataSourceServiceMock implements CollectionDataSourceApi 
       rowCount: 42,
       uploadedAt: new Date().toISOString(),
       indexedAt: new Date().toISOString(),
+      objectMapping: null,
     };
     this.documents.set(collectionId, [document, ...(this.documents.get(collectionId) ?? [])]);
+    this.documentColumns.set(document.id, ['Inventory No', 'Name', 'Description']);
     this.bumpDocumentCount(collectionId, 1);
     return of(document).pipe(delay(400));
+  }
+
+  listDocumentColumns(documentId: string): Observable<string[]> {
+    return of([...(this.documentColumns.get(documentId) ?? [])]).pipe(delay(150));
+  }
+
+  updateObjectMapping(
+    documentId: string,
+    request: UpdateSourceDocumentObjectMappingRequest,
+  ): Observable<SourceDocument> {
+    for (const [collectionId, docs] of this.documents) {
+      const found = docs.find((d) => d.id === documentId);
+      if (!found) continue;
+      const updated: SourceDocument = {
+        ...found,
+        objectMapping: {
+          inventoryNumberColumn: request.inventoryNumberColumn,
+          displayTitleColumn: request.displayTitleColumn,
+          objectNameColumn: request.objectNameColumn,
+          descriptionColumns: [...request.descriptionColumns],
+        },
+      };
+      this.documents.set(
+        collectionId,
+        docs.map((doc) => (doc.id === documentId ? updated : doc)),
+      );
+      return of(updated).pipe(delay(200));
+    }
+    return throwError(() => ({ status: 404, error: { message: 'Not found' } }));
   }
 
   remove(documentId: string): Observable<void> {
@@ -171,6 +208,7 @@ export class CollectionDataSourceServiceMock implements CollectionDataSourceApi 
         this.bumpDocumentCount(collectionId, -1);
       }
     }
+    this.documentColumns.delete(documentId);
     return of(undefined).pipe(delay(200));
   }
 

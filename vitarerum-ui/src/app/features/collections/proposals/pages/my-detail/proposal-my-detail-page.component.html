@@ -213,7 +213,10 @@
             [objects]="proposal()!.requestedObjects"
             [removingId]="removingObjectId()"
             [removeError]="removeObjectError()"
+            [adding]="addingObjects()"
+            [addError]="addObjectError()"
             (removeRequested)="removeRequestedObject($event)"
+            (addRequested)="addRequestedObjects($event)"
           />
         </section>
       }

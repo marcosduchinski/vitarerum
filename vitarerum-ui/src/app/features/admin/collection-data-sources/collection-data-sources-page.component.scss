@@ -384,6 +384,72 @@
   border-color: currentColor;
 }
 
+.mapping-row td {
+  background: var(--color-surface-hover, #f6f7fb);
+}
+
+.mapping-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+}
+
+.mapping-panel__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.75rem;
+}
+
+.mapping-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-subtle, #6b7280);
+
+  select {
+    padding: 0.4rem 0.5rem;
+    border: 1px solid var(--color-border, #e2e5ef);
+    border-radius: var(--radius-sm, 8px);
+    background: var(--color-surface, #fff);
+    font: inherit;
+    color: var(--color-text, #111827);
+  }
+}
+
+.mapping-descriptions {
+  border: 1px solid var(--color-border, #e2e5ef);
+  border-radius: var(--radius-sm, 8px);
+  padding: 0.65rem;
+
+  legend {
+    padding: 0 0.25rem;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--color-subtle, #6b7280);
+  }
+}
+
+.mapping-descriptions__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.9rem;
+  font-size: 0.85rem;
+
+  label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+}
+
+.mapping-panel__actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
 .badge {
   display: inline-block;
   padding: 0.15rem 0.5rem;

@@ -141,12 +141,14 @@
 
 .add-modal__dialog {
   position: relative;
-  width: min(34rem, 100%);
-  min-height: 12rem;
+  width: min(46rem, 100%);
+  max-height: min(42rem, calc(100vh - 2rem));
   border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
   background: var(--color-panel);
   box-shadow: 0 24px 64px rgba(15, 23, 42, 0.22);
+  display: flex;
+  flex-direction: column;
 }
 
 .add-modal__header {
@@ -175,4 +177,113 @@
   background: var(--color-panel);
   color: var(--color-muted);
   cursor: pointer;
+}
+
+.add-modal__body {
+  padding: 1rem 1.25rem;
+  display: grid;
+  gap: 0.9rem;
+  overflow: auto;
+}
+
+.object-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+}
+
+.object-search__input {
+  min-width: 0;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  font: inherit;
+}
+
+.object-search__button,
+.add-modal__primary,
+.add-modal__secondary {
+  min-height: 2.35rem;
+  padding: 0.45rem 0.8rem;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-panel);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+}
+
+.object-search__button,
+.add-modal__primary {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+}
+
+.object-search__empty {
+  margin: 0;
+  color: var(--color-subtle);
+  font-size: 0.9rem;
+}
+
+.search-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.search-hit {
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem;
+}
+
+.search-hit--disabled {
+  background: var(--color-surface-muted, #f8fafc);
+}
+
+.search-hit__select {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+
+.search-hit__content {
+  min-width: 0;
+  display: grid;
+  gap: 0.2rem;
+  color: var(--color-muted);
+  font-size: 0.84rem;
+
+  strong {
+    color: var(--color-text);
+    overflow-wrap: anywhere;
+  }
+}
+
+.search-hit__provenance {
+  color: var(--color-subtle);
+}
+
+.search-hit__warning {
+  margin: 0.45rem 0 0 1.6rem;
+  color: var(--color-cta);
+  font-size: 0.8rem;
+}
+
+.add-modal__footer {
+  border-top: 1px solid var(--color-line);
+  padding: 0.9rem 1.25rem;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
 }

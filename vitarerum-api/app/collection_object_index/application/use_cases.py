@@ -48,8 +48,10 @@ from app.collection_object_index.domain.models import (
     CollectionId,
     CollectionNotFound,
     CuratorAssignment,
+    ObjectSnapshotMapping,
     SourceDocument,
     SourceDocumentId,
+    SourceDocumentMappingInvalid,
     SourceDocumentNotFound,
 )
 from app.identity.public import Actor, GroupName, PermissionReader, PermissionView
@@ -333,6 +335,90 @@ class ReindexSourceDocument:
             document.mark_indexed(indexed_at=self._clock.now(), row_count=count)
         await self._documents.save(document)
         return document
+
+
+@dataclass(frozen=True, slots=True)
+class UpdateSourceDocumentObjectMappingInput:
+    caller: Actor
+    document_id: SourceDocumentId
+    inventory_number_column: str
+    display_title_column: str
+    object_name_column: str | None
+    description_columns: tuple[str, ...]
+
+
+class ListSourceDocumentColumns:
+    def __init__(
+        self,
+        collections: CollectionRepository,
+        documents: SourceDocumentRepository,
+        index: CollectionObjectIndexPort,
+    ) -> None:
+        self._collections = collections
+        self._documents = documents
+        self._index = index
+
+    async def execute(self, caller: Actor, document_id: SourceDocumentId) -> list[str]:
+        document = await self._documents.get_by_id(document_id)
+        if document is None or document.is_deleted:
+            raise SourceDocumentNotFound(document_id)
+        require_collection_scope(
+            caller,
+            document.collection_id,
+            await _curated_ids(caller, self._collections),
+        )
+        return await self._index.list_columns(document_id)
+
+
+class UpdateSourceDocumentObjectMapping:
+    def __init__(
+        self,
+        collections: CollectionRepository,
+        documents: SourceDocumentRepository,
+        index: CollectionObjectIndexPort,
+    ) -> None:
+        self._collections = collections
+        self._documents = documents
+        self._index = index
+
+    async def execute(
+        self, data: UpdateSourceDocumentObjectMappingInput
+    ) -> SourceDocument:
+        document = await self._documents.get_by_id(data.document_id)
+        if document is None or document.is_deleted:
+            raise SourceDocumentNotFound(data.document_id)
+        require_collection_scope(
+            data.caller,
+            document.collection_id,
+            await _curated_ids(data.caller, self._collections),
+        )
+        mapping = ObjectSnapshotMapping(
+            inventory_number_column=data.inventory_number_column,
+            display_title_column=data.display_title_column,
+            object_name_column=data.object_name_column,
+            description_columns=data.description_columns,
+        )
+        columns = set(await self._index.list_columns(document.id))
+        _validate_mapping_columns(mapping, columns)
+        document.configure_object_snapshot(mapping)
+        await self._documents.save(document)
+        return document
+
+
+def _validate_mapping_columns(
+    mapping: ObjectSnapshotMapping, columns: set[str]
+) -> None:
+    required = [
+        mapping.inventory_number_column,
+        mapping.display_title_column,
+        *(column for column in [mapping.object_name_column] if column is not None),
+        *mapping.description_columns,
+    ]
+    missing = [column for column in required if column not in columns]
+    if missing:
+        raise SourceDocumentMappingInvalid(
+            "Unknown source document columns: " + ", ".join(missing)
+        )
 
 
 class AssignCollectionCurator:

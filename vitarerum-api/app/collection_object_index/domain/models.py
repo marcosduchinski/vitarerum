@@ -43,6 +43,36 @@ class SourceDocumentNotFound(Exception):
     """Raised when a source document id does not resolve (or is deleted)."""
 
 
+class SourceDocumentMappingInvalid(ValueError):
+    """Raised when object snapshot columns do not match indexed columns."""
+
+
+@dataclass(frozen=True, slots=True)
+class ObjectSnapshotMapping:
+    inventory_number_column: str
+    display_title_column: str
+    object_name_column: str | None = None
+    description_columns: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        inventory = self.inventory_number_column.strip()
+        title = self.display_title_column.strip()
+        object_name = (
+            self.object_name_column.strip() if self.object_name_column else None
+        )
+        descriptions = tuple(
+            column.strip() for column in self.description_columns if column.strip()
+        )
+        if not inventory:
+            raise SourceDocumentMappingInvalid("inventoryNumberColumn is required.")
+        if not title:
+            raise SourceDocumentMappingInvalid("displayTitleColumn is required.")
+        object.__setattr__(self, "inventory_number_column", inventory)
+        object.__setattr__(self, "display_title_column", title)
+        object.__setattr__(self, "object_name_column", object_name)
+        object.__setattr__(self, "description_columns", descriptions)
+
+
 @dataclass(slots=True)
 class CollectionArea:
     """Administrative/scientific classification above `Collection` (e.g.
@@ -134,6 +164,7 @@ class SourceDocument:
     row_count: int | None = None
     indexed_at: datetime | None = None
     deleted_at: datetime | None = None
+    object_snapshot_mapping: ObjectSnapshotMapping | None = None
 
     @property
     def is_deleted(self) -> bool:
@@ -153,3 +184,8 @@ class SourceDocument:
 
     def mark_deleted(self, deleted_at: datetime) -> None:
         self.deleted_at = deleted_at
+
+    def configure_object_snapshot(
+        self, mapping: ObjectSnapshotMapping | None
+    ) -> None:
+        self.object_snapshot_mapping = mapping

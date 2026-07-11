@@ -5,6 +5,7 @@ import { of } from 'rxjs';
 
 import { UserDetail } from '@core/auth/models/user.model';
 import { USER_MANAGEMENT_SERVICE } from '@features/admin/services/user-management.service';
+import { OBJECT_SEARCH_SERVICE } from '@features/objects/services/object-search.service';
 import { Page } from '@shared/models/page.model';
 
 import {
@@ -19,6 +20,7 @@ import {
 import { PROPOSAL_API_SERVICE } from '../../services/proposal-api.service';
 import {
   ApproveProposalRequest,
+  AddRequestedObjectsRequest,
   RequestDocumentCorrectionsRequest,
   UpdateProposalRequest,
 } from '../../models/proposal-actions.model';
@@ -181,6 +183,10 @@ class ProposalApiServiceStub {
     readonly proposalId: string;
     readonly requestedObjectId: string;
   }[] = [];
+  readonly addRequestedObjectsCalls: {
+    readonly proposalId: string;
+    readonly payload: AddRequestedObjectsRequest;
+  }[] = [];
   private nextDocumentId = 1;
   private proposal = PROPOSAL;
 
@@ -297,11 +303,26 @@ class ProposalApiServiceStub {
     };
     return of(undefined);
   }
+
+  addRequestedObjects(proposalId: string, payload: AddRequestedObjectsRequest) {
+    this.addRequestedObjectsCalls.push({ proposalId, payload });
+    return of(this.proposal);
+  }
 }
 
 class UserManagementServiceStub {
   listUsers() {
     return of(STAFF_USERS);
+  }
+}
+
+class ObjectSearchServiceStub {
+  search() {
+    return of({ total: 0, page: 0, size: 20, items: [] });
+  }
+
+  listSearchableCollections() {
+    return of([]);
   }
 }
 
@@ -334,6 +355,7 @@ describe('ProposalMyDetailPageComponent', () => {
         provideRouter([]),
         { provide: PROPOSAL_API_SERVICE, useValue: proposalService },
         { provide: USER_MANAGEMENT_SERVICE, useClass: UserManagementServiceStub },
+        { provide: OBJECT_SEARCH_SERVICE, useClass: ObjectSearchServiceStub },
       ],
     }).compileComponents();
   });

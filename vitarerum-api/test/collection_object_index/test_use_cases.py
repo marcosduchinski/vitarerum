@@ -27,6 +27,7 @@ from app.collection_object_index.application.use_cases import (
     ListCuratorCandidates,
     ListManageableCollections,
     ListSearchableCollections,
+    ListSourceDocumentColumns,
     MoveCollectionToArea,
     MoveCollectionToAreaInput,
     ReindexSourceDocument,
@@ -37,6 +38,8 @@ from app.collection_object_index.application.use_cases import (
     UpdateCollectionArea,
     UpdateCollectionAreaInput,
     UpdateCollectionInput,
+    UpdateSourceDocumentObjectMapping,
+    UpdateSourceDocumentObjectMappingInput,
     UploadSourceDocument,
     UploadSourceDocumentInput,
 )
@@ -47,6 +50,7 @@ from app.collection_object_index.domain.models import (
     CollectionAreaNotFound,
     CollectionId,
     CollectionNotFound,
+    SourceDocumentMappingInvalid,
 )
 from app.collection_object_index.infrastructure.models import (
     CollectionAreaRecord,
@@ -223,6 +227,70 @@ async def test_upload_indexes_rows_and_marks_indexed() -> None:
     assert [(r.sheet, r.row_number) for r in rows] == [("Objects", 2), ("Objects", 3)]
     assert rows[0].cells == {"Inventory No": "ZOO-1", "Name": "Jaguar"}
     assert rows[0].collection_id == str(_REPTILES)
+
+
+async def test_list_columns_and_update_object_mapping() -> None:
+    factory = await _session_factory()
+    storage = _FakeStorage()
+    uploaded = await _upload(factory, storage, rows=[["ZOO-1", "Jaguar"]])
+
+    async with factory() as session:
+        collections = SqlAlchemyCollectionRepository(session)
+        documents = SqlAlchemySourceDocumentRepository(session)
+        index = SqlAlchemyCollectionObjectIndex(session)
+        columns = await ListSourceDocumentColumns(
+            collections, documents, index
+        ).execute(_ADMIN, uploaded.document.id)
+        assert columns == ["Inventory No", "Name"]
+
+        document = await UpdateSourceDocumentObjectMapping(
+            collections, documents, index
+        ).execute(
+            UpdateSourceDocumentObjectMappingInput(
+                caller=_ADMIN,
+                document_id=uploaded.document.id,
+                inventory_number_column="Inventory No",
+                display_title_column="Name",
+                object_name_column=None,
+                description_columns=("Name",),
+            )
+        )
+        await session.commit()
+
+    assert document.object_snapshot_mapping is not None
+    assert document.object_snapshot_mapping.inventory_number_column == "Inventory No"
+    assert document.object_snapshot_mapping.description_columns == ("Name",)
+
+    async with factory() as session:
+        saved = await SqlAlchemySourceDocumentRepository(session).get_by_id(
+            uploaded.document.id
+        )
+    assert saved is not None
+    assert saved.object_snapshot_mapping is not None
+    assert saved.object_snapshot_mapping.display_title_column == "Name"
+
+
+async def test_update_object_mapping_rejects_unknown_columns() -> None:
+    factory = await _session_factory()
+    storage = _FakeStorage()
+    uploaded = await _upload(factory, storage, rows=[["ZOO-1", "Jaguar"]])
+
+    async with factory() as session:
+        with pytest.raises(SourceDocumentMappingInvalid):
+            await UpdateSourceDocumentObjectMapping(
+                SqlAlchemyCollectionRepository(session),
+                SqlAlchemySourceDocumentRepository(session),
+                SqlAlchemyCollectionObjectIndex(session),
+            ).execute(
+                UpdateSourceDocumentObjectMappingInput(
+                    caller=_ADMIN,
+                    document_id=uploaded.document.id,
+                    inventory_number_column="Missing",
+                    display_title_column="Name",
+                    object_name_column=None,
+                    description_columns=(),
+                )
+            )
 
 
 async def test_identical_reupload_dedupes() -> None:

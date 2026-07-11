@@ -29,6 +29,13 @@ const ROWS: MockRow[] = [
     rowNumber: 2,
     cells: { 'Inventory No': 'ZOO-001', Taxon: 'Panthera onca', Collected: '1998-05-04' },
     highlight: '...<b>Panthera onca</b> collected 1998...',
+    objectSnapshot: {
+      inventoryNumber: 'ZOO-001',
+      displayTitle: 'Panthera onca',
+      objectName: 'Panthera onca',
+      briefDescriptionSnapshot: '1998-05-04',
+      category: 'Zoology',
+    },
     content: 'ZOO-001 Panthera onca 1998-05-04',
   },
   {
@@ -40,6 +47,13 @@ const ROWS: MockRow[] = [
     rowNumber: 3,
     cells: { 'Inventory No': 'ZOO-002', Taxon: 'Ara ararauna' },
     highlight: '...<b>Ara ararauna</b>...',
+    objectSnapshot: {
+      inventoryNumber: 'ZOO-002',
+      displayTitle: 'Ara ararauna',
+      objectName: 'Ara ararauna',
+      briefDescriptionSnapshot: null,
+      category: 'Zoology',
+    },
     content: 'ZOO-002 Ara ararauna',
   },
   {
@@ -51,6 +65,13 @@ const ROWS: MockRow[] = [
     rowNumber: 2,
     cells: { Sample: 'BOT-009', Name: 'Quercus robur' },
     highlight: '...<b>Quercus robur</b>...',
+    objectSnapshot: {
+      inventoryNumber: 'BOT-009',
+      displayTitle: 'Quercus robur',
+      objectName: 'Quercus robur',
+      briefDescriptionSnapshot: null,
+      category: 'Botany',
+    },
     content: 'BOT-009 Quercus robur',
   },
   {
@@ -62,6 +83,7 @@ const ROWS: MockRow[] = [
     rowNumber: 5,
     cells: { Code: 'ARC-2024/0012', Description: 'Ceramic shard, site 12' },
     highlight: '...<b>ARC-2024/0012</b> ceramic shard...',
+    objectSnapshot: null,
     content: 'ARC-2024/0012 Ceramic shard, site 12',
   },
 ];
@@ -76,7 +98,11 @@ export class ObjectSearchServiceMock implements ObjectSearchApi {
         row.content.toLowerCase().includes(q),
     );
     const start = query.page * query.size;
-    const items = matches.slice(start, start + query.size).map(({ content, ...hit }) => hit);
+    const items = matches.slice(start, start + query.size).map((row) => {
+      const { content, ...hit } = row;
+      void content;
+      return hit;
+    });
     return of({ total: matches.length, page: query.page, size: query.size, items }).pipe(
       delay(300),
     );

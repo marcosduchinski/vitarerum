@@ -224,6 +224,33 @@ SYS_ADMIN only.
 
 ## Source documents
 
+Source document responses include the optional semantic mapping used by
+`/objects/search` to build proposal-ready object snapshots:
+
+```json
+{
+  "id": "doc-1",
+  "collectionId": "col-zoo",
+  "fileName": "zoology.xlsx",
+  "sourceKind": "UPLOAD",
+  "status": "INDEXED",
+  "errorMessage": null,
+  "rowCount": 42,
+  "uploadedAt": "2026-07-01T10:00:00Z",
+  "indexedAt": "2026-07-01T10:00:02Z",
+  "objectMapping": {
+    "inventoryNumberColumn": "Inventory No",
+    "displayTitleColumn": "Name",
+    "objectNameColumn": null,
+    "descriptionColumns": ["Description", "Notes"]
+  }
+}
+```
+
+`objectMapping` is `null` until configured. The mapping is stored on the source
+document, not on indexed rows; changing it affects the next search response
+without reindexing.
+
 ### `GET /admin/collection-data-sources/collections/{collectionId}/documents`
 
 Lists the collection's **live** (non-deleted) source documents. Requires management scope for
@@ -260,6 +287,41 @@ Re-reads the stored file and rebuilds its indexed rows (e.g. after fixing an `ER
 
 **Response `200`** — the updated source document. **`404 SOURCE_DOCUMENT_NOT_FOUND`** — unknown
 document or its stored file is missing. **`403`** — out of scope.
+
+### `GET /admin/collection-data-sources/documents/{documentId}/columns`
+
+Returns the sorted union of column names found in the indexed `cells` for the source document.
+Used by the admin UI to configure object mapping without reparsing the file.
+
+**Response `200`**
+
+```json
+{ "columns": ["Description", "Inventory No", "Name"] }
+```
+
+**`404 SOURCE_DOCUMENT_NOT_FOUND`**. **`403`** — out of scope.
+
+### `PUT /admin/collection-data-sources/documents/{documentId}/object-mapping`
+
+Stores the semantic column mapping used to build `objectSnapshot` on search hits.
+
+**Request**
+
+```json
+{
+  "inventoryNumberColumn": "Inventory No",
+  "displayTitleColumn": "Name",
+  "objectNameColumn": null,
+  "descriptionColumns": ["Description", "Notes"]
+}
+```
+
+`inventoryNumberColumn` and `displayTitleColumn` are required. `objectNameColumn`
+is optional and falls back to `displayTitleColumn` at search time. All supplied
+columns must exist in the indexed column list for the document.
+
+**Response `200`** — the updated source document. **`422 SOURCE_DOCUMENT_MAPPING_INVALID`** —
+unknown or invalid columns. **`404 SOURCE_DOCUMENT_NOT_FOUND`**. **`403`** — out of scope.
 
 ---
 

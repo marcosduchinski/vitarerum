@@ -80,6 +80,12 @@ class SourceDocumentRecord(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, index=True
     )
+    inventory_number_column: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )
+    display_title_column: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    object_name_column: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    description_columns: Mapped[list[str]] = mapped_column(JSON, default=list)
 
 
 class CollectionObjectRecord(Base):

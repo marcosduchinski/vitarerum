@@ -136,6 +136,14 @@ export class CollectionDataSourcesPageComponent {
   /** Target area picker for moving the expanded collection. */
   protected readonly moveAreaId = signal('');
 
+  /** Source document currently configuring semantic object columns. */
+  protected readonly mappingDocumentId = signal<string | null>(null);
+  protected readonly mappingColumnsByDocument = signal<Record<string, readonly string[]>>({});
+  protected readonly mappingInventoryColumn = signal('');
+  protected readonly mappingTitleColumn = signal('');
+  protected readonly mappingObjectNameColumn = signal('');
+  protected readonly mappingDescriptionColumns = signal<readonly string[]>([]);
+
   /** Collection currently showing the "type the name to confirm" remove
    * control (one at a time). */
   protected readonly removingId = signal<string | null>(null);
@@ -301,12 +309,79 @@ export class CollectionDataSourcesPageComponent {
     await this.run(() => firstValueFrom(this.service.reindex(sourceDocument.id)));
   }
 
+  protected mappingColumns(sourceDocument: SourceDocument): readonly string[] {
+    return this.mappingColumnsByDocument()[sourceDocument.id] ?? [];
+  }
+
+  protected async configureMapping(sourceDocument: SourceDocument): Promise<void> {
+    this.mappingDocumentId.set(sourceDocument.id);
+    const mapping = sourceDocument.objectMapping;
+    this.mappingInventoryColumn.set(mapping?.inventoryNumberColumn ?? '');
+    this.mappingTitleColumn.set(mapping?.displayTitleColumn ?? '');
+    this.mappingObjectNameColumn.set(mapping?.objectNameColumn ?? '');
+    this.mappingDescriptionColumns.set(mapping?.descriptionColumns ?? []);
+    if (this.mappingColumnsByDocument()[sourceDocument.id]) return;
+    this.busy.set(true);
+    this.actionError.set(null);
+    try {
+      const columns = await firstValueFrom(this.service.listDocumentColumns(sourceDocument.id));
+      this.mappingColumnsByDocument.update((current) => ({
+        ...current,
+        [sourceDocument.id]: columns,
+      }));
+    } catch (err) {
+      this.actionError.set(toApiError(err));
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  protected cancelMapping(): void {
+    this.mappingDocumentId.set(null);
+  }
+
+  protected mappingCanSave(): boolean {
+    return Boolean(this.mappingInventoryColumn() && this.mappingTitleColumn());
+  }
+
+  protected isDescriptionColumnSelected(column: string): boolean {
+    return this.mappingDescriptionColumns().includes(column);
+  }
+
+  protected toggleDescriptionColumn(column: string, checked: boolean): void {
+    this.mappingDescriptionColumns.update((current) => {
+      if (checked) {
+        return current.includes(column) ? current : [...current, column];
+      }
+      return current.filter((value) => value !== column);
+    });
+  }
+
+  protected async saveMapping(sourceDocument: SourceDocument): Promise<void> {
+    if (!this.mappingCanSave()) return;
+    await this.run(() =>
+      firstValueFrom(
+        this.service.updateObjectMapping(sourceDocument.id, {
+          inventoryNumberColumn: this.mappingInventoryColumn(),
+          displayTitleColumn: this.mappingTitleColumn(),
+          objectNameColumn: this.mappingObjectNameColumn() || null,
+          descriptionColumns: this.mappingDescriptionColumns(),
+        }),
+      ),
+    );
+    this.mappingDocumentId.set(null);
+  }
+
   protected formatDate(value: string | null): string {
     if (!value) return '—';
     return new Intl.DateTimeFormat(undefined, {
       dateStyle: 'medium',
       timeStyle: 'short',
     }).format(new Date(value));
+  }
+
+  protected documentsColumnCount(collection: CollectionDataSource): number {
+    return collection.manageable ? 6 : 5;
   }
 
   private async run(operation: () => Promise<unknown>): Promise<void> {

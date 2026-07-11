@@ -64,6 +64,9 @@ class _FakeIndex:
     async def remove_document(self, *args: object, **kwargs: object) -> None:
         raise NotImplementedError
 
+    async def list_columns(self, *args: object, **kwargs: object) -> list[str]:
+        return []
+
     async def search(
         self, query: CollectionObjectSearchQuery
     ) -> CollectionObjectSearchResult:

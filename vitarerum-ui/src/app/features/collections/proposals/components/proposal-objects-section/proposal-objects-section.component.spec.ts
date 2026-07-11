@@ -1,5 +1,9 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { of } from 'rxjs';
 
+import { ObjectSearchResult } from '@features/objects/models/object-search.model';
+import { OBJECT_SEARCH_SERVICE } from '@features/objects/services/object-search.service';
+import { AddRequestedObjectsRequest } from '../../models/proposal-actions.model';
 import { RequestedObject } from '../../models/proposal.model';
 import { ProposalObjectsSectionComponent } from './proposal-objects-section.component';
 
@@ -23,10 +27,59 @@ const REQUESTED_OBJECT: RequestedObject = {
 
 describe('ProposalObjectsSectionComponent', () => {
   let fixture: ComponentFixture<ProposalObjectsSectionComponent>;
+  let objectSearch: ObjectSearchServiceStub;
+
+  class ObjectSearchServiceStub {
+    result: ObjectSearchResult = {
+      total: 2,
+      page: 0,
+      size: 20,
+      items: [
+        {
+          collectionId: 'col-zoo',
+          collectionName: 'Zoology',
+          sourceDocumentId: 'doc-1',
+          fileName: 'zoo.xlsx',
+          sheet: 'Objects',
+          rowNumber: 2,
+          cells: { 'Inventory No': 'ZOO-001', Name: 'Jaguar' },
+          highlight: '<b>Jaguar</b>',
+          objectSnapshot: {
+            inventoryNumber: 'ZOO-001',
+            displayTitle: 'Jaguar',
+            objectName: 'Jaguar',
+            briefDescriptionSnapshot: 'Large cat.',
+            category: 'Zoology',
+          },
+        },
+        {
+          collectionId: 'col-arc',
+          collectionName: 'Archaeology',
+          sourceDocumentId: 'doc-2',
+          fileName: 'arc.xlsx',
+          sheet: 'Finds',
+          rowNumber: 3,
+          cells: { Code: 'ARC-001' },
+          highlight: '<b>ARC-001</b>',
+          objectSnapshot: null,
+        },
+      ],
+    };
+
+    search() {
+      return of(this.result);
+    }
+
+    listSearchableCollections() {
+      return of([]);
+    }
+  }
 
   async function setup(objects: RequestedObject[] = [REQUESTED_OBJECT]): Promise<HTMLElement> {
+    objectSearch = new ObjectSearchServiceStub();
     await TestBed.configureTestingModule({
       imports: [ProposalObjectsSectionComponent],
+      providers: [{ provide: OBJECT_SEARCH_SERVICE, useValue: objectSearch }],
     }).compileComponents();
 
     fixture = TestBed.createComponent(ProposalObjectsSectionComponent);
@@ -73,13 +126,50 @@ describe('ProposalObjectsSectionComponent', () => {
     expect(emitted).toEqual(['requested-object-1']);
   });
 
-  it('opens the empty add modal', async () => {
+  it('searches and emits selected object snapshots from the add modal', async () => {
     const el = await setup();
+    const emitted: AddRequestedObjectsRequest[] = [];
+    fixture.componentRef.instance.addRequested.subscribe((payload) => emitted.push(payload));
 
     el.querySelector<HTMLButtonElement>('.objects__add')!.click();
     fixture.detectChanges();
 
     expect(el.querySelector('.add-modal')).not.toBeNull();
     expect(el.textContent).toContain('Add requested object');
+
+    const input = el.querySelector<HTMLInputElement>('.object-search__input')!;
+    input.value = 'jaguar';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    el.querySelector<HTMLButtonElement>('.object-search__button')!.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(el.textContent).toContain('Jaguar');
+    expect(el.textContent).toContain('Cannot add this row');
+
+    const checkbox = el.querySelector<HTMLInputElement>('.search-hit input[type="checkbox"]')!;
+    checkbox.checked = true;
+    checkbox.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    Array.from(el.querySelectorAll<HTMLButtonElement>('.add-modal__footer button'))
+      .find((button) => button.textContent?.includes('Add selected'))!
+      .click();
+
+    expect(emitted).toEqual([
+      {
+        objects: [
+          {
+            inventoryNumber: 'ZOO-001',
+            displayTitle: 'Jaguar',
+            objectName: 'Jaguar',
+            briefDescriptionSnapshot: 'Large cat.',
+            category: 'Zoology',
+            description: 'Zoology / zoo.xlsx / Objects row 2',
+          },
+        ],
+      },
+    ]);
   });
 });

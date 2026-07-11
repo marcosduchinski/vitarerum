@@ -181,12 +181,65 @@ async def test_upload_indexes_and_returns_document() -> None:
         assert body["status"] == "INDEXED"
         assert body["rowCount"] == 2
         assert body["fileName"] == "zoo.xlsx"
+        assert body["objectMapping"] is None
         assert len(storage.saved) == 1
 
         listing = await client.get(
             f"/admin/collection-data-sources/collections/{_REPTILES_ID}/documents"
         )
         assert [d["id"] for d in listing.json()] == [body["id"]]
+
+
+async def test_configure_source_document_object_mapping() -> None:
+    async with _client(_ADMIN) as (client, _):
+        upload = await client.post(
+            f"/admin/collection-data-sources/collections/{_REPTILES_ID}/documents",
+            files=_upload_files([["ZOO-1", "Jaguar"]]),
+        )
+        document_id = upload.json()["id"]
+
+        columns = await client.get(
+            f"/admin/collection-data-sources/documents/{document_id}/columns"
+        )
+        assert columns.status_code == 200
+        assert columns.json() == {"columns": ["Inventory No", "Name"]}
+
+        mapping = await client.put(
+            f"/admin/collection-data-sources/documents/{document_id}/object-mapping",
+            json={
+                "inventoryNumberColumn": "Inventory No",
+                "displayTitleColumn": "Name",
+                "objectNameColumn": None,
+                "descriptionColumns": ["Name"],
+            },
+        )
+        assert mapping.status_code == 200, mapping.text
+        assert mapping.json()["objectMapping"] == {
+            "inventoryNumberColumn": "Inventory No",
+            "displayTitleColumn": "Name",
+            "objectNameColumn": None,
+            "descriptionColumns": ["Name"],
+        }
+
+
+async def test_configure_source_document_object_mapping_rejects_unknown_column() -> (
+    None
+):
+    async with _client(_ADMIN) as (client, _):
+        upload = await client.post(
+            f"/admin/collection-data-sources/collections/{_REPTILES_ID}/documents",
+            files=_upload_files([["ZOO-1", "Jaguar"]]),
+        )
+        response = await client.put(
+            f"/admin/collection-data-sources/documents/{upload.json()['id']}/object-mapping",
+            json={
+                "inventoryNumberColumn": "Missing",
+                "displayTitleColumn": "Name",
+                "descriptionColumns": [],
+            },
+        )
+    assert response.status_code == 422
+    assert response.json()["error"] == "SOURCE_DOCUMENT_MAPPING_INVALID"
 
 
 async def test_upload_rejects_non_xlsx_content() -> None:
