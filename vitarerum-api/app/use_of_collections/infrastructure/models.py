@@ -75,6 +75,12 @@ class CollectionUseObjectRecord(Base):
     requested_by: Mapped[str] = mapped_column(String(36), index=True)
 
     project: Mapped[CollectionUseProjectRecord] = relationship(back_populates="objects")
+    log_entries: Mapped[list[ObjectLogEntryRecord]] = relationship(
+        back_populates="collection_use_object"
+    )
+    occurrence_entries: Mapped[list[ObjectOccurrenceEntryRecord]] = relationship(
+        back_populates="collection_use_object"
+    )
 
 
 class UseEventRecord(Base):
@@ -132,10 +138,13 @@ class ObjectLogEntryRecord(Base):
     added_by: Mapped[str] = mapped_column(String(36), index=True)
     observations: Mapped[str | None] = mapped_column(Text, nullable=True)
     collection_use_object_id: Mapped[str] = mapped_column(
-        String(36), nullable=False, index=True
+        ForeignKey("collection_use_objects.id"), index=True
     )
 
     access_log: Mapped[ObjectAccessLogRecord] = relationship(back_populates="objects")
+    collection_use_object: Mapped[CollectionUseObjectRecord] = relationship(
+        back_populates="log_entries"
+    )
     attachments: Mapped[list[LogEntryAttachmentRecord]] = relationship(
         back_populates="entry",
         cascade="all, delete-orphan",
@@ -194,11 +203,14 @@ class ObjectOccurrenceEntryRecord(Base):
     detailed_description: Mapped[str] = mapped_column(Text)
     testimonial: Mapped[str | None] = mapped_column(Text, nullable=True)
     collection_use_object_id: Mapped[str] = mapped_column(
-        String(36), nullable=False, index=True
+        ForeignKey("collection_use_objects.id"), index=True
     )
 
     occurrence_log: Mapped[ObjectOccurrenceLogRecord] = relationship(
         back_populates="objects"
+    )
+    collection_use_object: Mapped[CollectionUseObjectRecord] = relationship(
+        back_populates="occurrence_entries"
     )
     attachments: Mapped[list[OccurrenceEntryAttachmentRecord]] = relationship(
         back_populates="entry",

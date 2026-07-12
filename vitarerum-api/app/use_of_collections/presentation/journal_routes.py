@@ -62,6 +62,7 @@ from app.use_of_collections.presentation.common import (
     _build_occurrence_log_response,
     _build_publication_entry,
     _build_publication_log_response,
+    _collection_use_objects_by_id,
     _guess_content_type,
     _handle_domain_errors,
     _is_staff,
@@ -138,7 +139,7 @@ async def add_log_entry(
     access_log_repo: AccessLogRepo,
     session: DBSession,
 ) -> ObjectLogEntryResponse:
-    await _assert_existing_project_access(
+    project = await _assert_existing_project_access(
         project_id, caller, project_repo, proposal_repo
     )
     try:
@@ -157,7 +158,10 @@ async def add_log_entry(
     except Exception as exc:
         _handle_domain_errors(exc)
     await session.commit()
-    return await _build_object_log_entry(entry, session)
+    collection_use_object = _collection_use_objects_by_id(project)[
+        entry.collection_use_object_id
+    ]
+    return await _build_object_log_entry(entry, session, collection_use_object)
 
 
 @projects_router.patch(
@@ -174,7 +178,7 @@ async def edit_log_entry(
     access_log_repo: AccessLogRepo,
     session: DBSession,
 ) -> ObjectLogEntryResponse:
-    await _assert_existing_project_access(
+    project = await _assert_existing_project_access(
         project_id, caller, project_repo, proposal_repo
     )
     try:
@@ -195,7 +199,10 @@ async def edit_log_entry(
     except LookupError as exc:
         raise _not_found("entry", entry_id) from exc
     await session.commit()
-    return await _build_object_log_entry(entry, session)
+    collection_use_object = _collection_use_objects_by_id(project)[
+        entry.collection_use_object_id
+    ]
+    return await _build_object_log_entry(entry, session, collection_use_object)
 
 
 @projects_router.get(
@@ -213,16 +220,22 @@ async def list_log_entries(
     page: Annotated[int, Query(ge=0)] = 0,
     size: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> PaginatedLogEntriesResponse:
-    await _assert_existing_project_access(
+    project = await _assert_existing_project_access(
         project_id, caller, project_repo, proposal_repo
     )
+    objects_by_id = _collection_use_objects_by_id(project)
     access_log = await access_log_repo.get_by_project_id(
         CollectionUseProjectId(project_id)
     )
     entries, total = await access_log_repo.list_entries_by_project(
         CollectionUseProjectId(project_id), added_by, page, size
     )
-    items = [await _build_object_log_entry(e, session) for e in entries]
+    items = [
+        await _build_object_log_entry(
+            e, session, objects_by_id[e.collection_use_object_id]
+        )
+        for e in entries
+    ]
     return PaginatedLogEntriesResponse(
         projectId=project_id,
         accessLog=(
@@ -356,7 +369,7 @@ async def add_occurrence_entry(
     occurrence_log_repo: OccurrenceLogRepo,
     session: DBSession,
 ) -> ObjectOccurrenceEntryResponse:
-    await _assert_existing_project_access(
+    project = await _assert_existing_project_access(
         project_id, caller, project_repo, proposal_repo
     )
     try:
@@ -380,7 +393,10 @@ async def add_occurrence_entry(
     except Exception as exc:
         _handle_domain_errors(exc)
     await session.commit()
-    return await _build_occurrence_entry(entry, session)
+    collection_use_object = _collection_use_objects_by_id(project)[
+        entry.collection_use_object_id
+    ]
+    return await _build_occurrence_entry(entry, session, collection_use_object)
 
 
 @projects_router.patch(
@@ -397,7 +413,7 @@ async def edit_occurrence_entry(
     occurrence_log_repo: OccurrenceLogRepo,
     session: DBSession,
 ) -> ObjectOccurrenceEntryResponse:
-    await _assert_existing_project_access(
+    project = await _assert_existing_project_access(
         project_id, caller, project_repo, proposal_repo
     )
     try:
@@ -422,7 +438,10 @@ async def edit_occurrence_entry(
     except LookupError as exc:
         raise _not_found("entry", entry_id) from exc
     await session.commit()
-    return await _build_occurrence_entry(entry, session)
+    collection_use_object = _collection_use_objects_by_id(project)[
+        entry.collection_use_object_id
+    ]
+    return await _build_occurrence_entry(entry, session, collection_use_object)
 
 
 @projects_router.get(
@@ -440,16 +459,22 @@ async def list_occurrence_entries(
     page: Annotated[int, Query(ge=0)] = 0,
     size: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> PaginatedOccurrenceEntriesResponse:
-    await _assert_existing_project_access(
+    project = await _assert_existing_project_access(
         project_id, caller, project_repo, proposal_repo
     )
+    objects_by_id = _collection_use_objects_by_id(project)
     occurrence_log = await occurrence_log_repo.get_by_project_id(
         CollectionUseProjectId(project_id)
     )
     entries, total = await occurrence_log_repo.list_entries_by_project(
         CollectionUseProjectId(project_id), reported_by, page, size
     )
-    items = [await _build_occurrence_entry(e, session) for e in entries]
+    items = [
+        await _build_occurrence_entry(
+            e, session, objects_by_id[e.collection_use_object_id]
+        )
+        for e in entries
+    ]
     return PaginatedOccurrenceEntriesResponse(
         projectId=project_id,
         occurrenceLog=(

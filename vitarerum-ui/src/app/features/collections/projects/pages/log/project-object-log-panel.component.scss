@@ -220,7 +220,7 @@
 
 .object-register__table {
   width: 100%;
-  min-width: 52rem;
+  min-width: 62rem;
   border-collapse: collapse;
   table-layout: fixed;
 
@@ -262,11 +262,16 @@
 
   th:nth-child(3),
   td:nth-child(3) {
-    width: 13rem;
+    width: 12rem;
   }
 
   th:nth-child(4),
   td:nth-child(4) {
+    width: 13rem;
+  }
+
+  th:nth-child(5),
+  td:nth-child(5) {
     width: 8rem;
   }
 }

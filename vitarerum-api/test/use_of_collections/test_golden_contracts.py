@@ -23,6 +23,12 @@ _REQUESTER_RECORDS = {
 }
 
 _PERMISSION_DETAIL = {"permissionId", "user.id", "user.name", "user.email", "group"}
+_OBJECT_REFERENCE = {
+    "inventoryNumber",
+    "displayTitle",
+    "objectName",
+    "briefDescriptionSnapshot",
+}
 
 
 def _paths(value: object, prefix: str = "") -> set[str]:
@@ -313,7 +319,7 @@ async def test_golden_log_entries_shapes() -> None:
     assert created.status_code == 201
     assert _paths(created.json()) == entry_shape | _nested(
         "addedBy", _PERMISSION_DETAIL
-    )
+    ) | _nested("objectReference", _OBJECT_REFERENCE)
 
     log_header_shape = {
         "id",
@@ -330,6 +336,7 @@ async def test_golden_log_entries_shapes() -> None:
         | {f"content[].{p}" for p in entry_shape if p != "attachments.[]"}
         | {"content[].attachments.[]"}
         | _nested("content[].addedBy", _PERMISSION_DETAIL)
+        | _nested("content[].objectReference", _OBJECT_REFERENCE)
     )
 
     assert header.status_code == 200
@@ -380,7 +387,7 @@ async def test_golden_occurrence_entries_shapes() -> None:
     assert created.status_code == 201
     assert _paths(created.json()) == entry_shape | _nested(
         "reportedBy", _PERMISSION_DETAIL
-    )
+    ) | _nested("objectReference", _OBJECT_REFERENCE)
 
     assert listing.status_code == 200
     assert _paths(listing.json()) == (
@@ -395,6 +402,7 @@ async def test_golden_occurrence_entries_shapes() -> None:
         | {f"content[].{p}" for p in entry_shape if p != "attachments.[]"}
         | {"content[].attachments.[]"}
         | _nested("content[].reportedBy", _PERMISSION_DETAIL)
+        | _nested("content[].objectReference", _OBJECT_REFERENCE)
     )
     assert listing.json()["occurrenceLog"]["referenceNumber"].startswith("OOL-")
 

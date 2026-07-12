@@ -354,9 +354,17 @@ class EditLogEntryRequest(BaseModel):
     observations: str | None = None
 
 
+class ObjectReferenceResponse(BaseModel):
+    inventoryNumber: str
+    displayTitle: str | None = None
+    objectName: str | None = None
+    briefDescriptionSnapshot: str | None = None
+
+
 class ObjectLogEntryResponse(BaseModel):
     id: str
     collectionUseObjectId: str
+    objectReference: ObjectReferenceResponse
     numberOfObjects: int
     addedAt: datetime
     addedBy: PermissionDetail
@@ -405,6 +413,7 @@ class EditOccurrenceEntryRequest(BaseModel):
 class ObjectOccurrenceEntryResponse(BaseModel):
     id: str
     collectionUseObjectId: str
+    objectReference: ObjectReferenceResponse
     numberOfObjects: int
     occurrenceDate: datetime
     location: str

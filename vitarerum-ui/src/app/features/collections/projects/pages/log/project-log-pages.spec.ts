@@ -269,7 +269,7 @@ describe('project log pages', () => {
 
     const detailRow = root.querySelector<HTMLTableRowElement>('.object-register__details-row');
     expect(detailRow).toBeTruthy();
-    expect(detailRow?.querySelector('td')?.getAttribute('colspan')).toBe('5');
+    expect(detailRow?.querySelector('td')?.getAttribute('colspan')).toBe('6');
     expect(root.textContent).toContain('Entry files');
     expect(root.querySelector('input[aria-label="Object entry file"]')).toBeTruthy();
   });

@@ -85,8 +85,8 @@
           >
             <table class="object-register__table">
               <caption style="height: 1px; overflow: hidden">
-                Object access entries with inventory number, access date, quantity, observations,
-                and expandable attachment details.
+                Object access entries with inventory number, object name, access date, quantity,
+                observations, and expandable attachment details.
               </caption>
               <thead>
                 <tr>
@@ -94,6 +94,7 @@
                     <span class="sr-only"></span>
                   </th>
                   <th scope="col">Inventory</th>
+                  <th scope="col">Object name</th>
                   <th scope="col">Access date</th>
                   <th scope="col">No. objects</th>
                   <th scope="col">Observations</th>
@@ -130,6 +131,13 @@
                       <span class="object-register__inventory">
                         {{ entry.objectReference.inventoryNumber }}
                       </span>
+                    </td>
+                    <td>
+                      {{
+                        entry.objectReference.objectName ||
+                          entry.objectReference.displayTitle ||
+                          '—'
+                      }}
                     </td>
                     <td>
                       <input
@@ -183,7 +191,7 @@
                   </tr>
                   @if (expandedObjectEntryId() === entry.id) {
                     <tr class="object-register__details-row">
-                      <td colspan="5">
+                      <td colspan="6">
                         <section
                           class="entry-files"
                           [id]="'object-entry-files-' + entry.id"

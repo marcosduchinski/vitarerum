@@ -37,6 +37,9 @@ from app.use_of_collections.application.ports import (
     ProposalRepository,
 )
 from app.use_of_collections.domain.models import (
+    CollectionUseObject,
+    CollectionUseObjectId,
+    CollectionUseProject,
     CollectionUseProjectId,
     Document,
     InsufficientGroup,
@@ -68,6 +71,7 @@ from app.use_of_collections.presentation.schemas import (
     ObjectLogEntryResponse,
     ObjectOccurrenceEntryResponse,
     ObjectOccurrenceLogResponse,
+    ObjectReferenceResponse,
     PermissionDetail,
     ProposalEventResponse,
     PublicationLogEntryResponse,
@@ -100,13 +104,29 @@ async def _assert_existing_project_access(
     caller: Actor,
     project_repo: CollectionUseProjectRepository,
     proposal_repo: ProposalRepository,
-) -> None:
+) -> CollectionUseProject:
     typed_project_id = CollectionUseProjectId(project_id)
     project = await project_repo.get_by_id(typed_project_id)
     if project is None:
         raise _not_found("project", project_id)
     project_proposal = await _find_project_proposal(typed_project_id, proposal_repo)
     assert_project_access(caller, project_proposal)
+    return project
+
+
+def _collection_use_objects_by_id(
+    project: CollectionUseProject,
+) -> dict[CollectionUseObjectId, CollectionUseObject]:
+    return {obj.id: obj for obj in project.objects}
+
+
+def _object_reference_response(obj: CollectionUseObject) -> ObjectReferenceResponse:
+    return ObjectReferenceResponse(
+        inventoryNumber=obj.inventory_number,
+        displayTitle=obj.display_title,
+        objectName=obj.object_name,
+        briefDescriptionSnapshot=obj.brief_description_snapshot,
+    )
 
 
 def _stub_perm(
@@ -301,7 +321,9 @@ async def _build_requested_object(
 
 
 async def _build_occurrence_entry(
-    entry: ObjectOccurrenceEntry, session: AsyncSession
+    entry: ObjectOccurrenceEntry,
+    session: AsyncSession,
+    collection_use_object: CollectionUseObject,
 ) -> ObjectOccurrenceEntryResponse:
     reported_by = await hydrate_permission(entry.reported_by, session) or _stub_perm(
         entry.reported_by
@@ -309,6 +331,7 @@ async def _build_occurrence_entry(
     return ObjectOccurrenceEntryResponse(
         id=entry.id,
         collectionUseObjectId=entry.collection_use_object_id,
+        objectReference=_object_reference_response(collection_use_object),
         numberOfObjects=entry.number_of_objects,
         occurrenceDate=entry.occurrence_date,
         location=entry.location,
@@ -388,7 +411,9 @@ async def _build_publication_log_response(
 
 
 async def _build_object_log_entry(
-    entry: ObjectLogEntry, session: AsyncSession
+    entry: ObjectLogEntry,
+    session: AsyncSession,
+    collection_use_object: CollectionUseObject,
 ) -> ObjectLogEntryResponse:
     added_by = await hydrate_permission(entry.added_by, session) or _stub_perm(
         entry.added_by
@@ -396,6 +421,7 @@ async def _build_object_log_entry(
     return ObjectLogEntryResponse(
         id=entry.id,
         collectionUseObjectId=entry.collection_use_object_id,
+        objectReference=_object_reference_response(collection_use_object),
         numberOfObjects=entry.number_of_objects,
         addedAt=entry.added_at,
         addedBy=added_by,
