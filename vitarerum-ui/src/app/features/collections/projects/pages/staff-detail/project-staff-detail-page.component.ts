@@ -32,8 +32,6 @@ import {
 import { REPORTS_API_SERVICE } from '../../../reports/services/reports-api.service';
 import { PROJECT_API_SERVICE } from '../../services/project-api.service';
 
-type StaffProjectPanel = 'overview' | 'tasks' | 'todo';
-
 const LOG_ROUTE_SEGMENTS: Record<UseType, string> = {
   EXHIBITION: 'exhibition',
   IN_SITU_VISIT: 'research',
@@ -191,7 +189,6 @@ export class ProjectStaffDetailPageComponent {
     }));
   });
 
-  protected readonly activePanel = signal<StaffProjectPanel>('overview');
   protected readonly acting = signal(false);
   protected readonly actionError = signal<ApiError | null>(null);
   protected readonly startConfirmOpen = signal(false);
@@ -207,10 +204,6 @@ export class ProjectStaffDetailPageComponent {
 
   protected asWorkflowStatus(value: string): WorkflowStatus {
     return value as WorkflowStatus;
-  }
-
-  protected selectPanel(panel: StaffProjectPanel): void {
-    this.activePanel.set(panel);
   }
 
   protected openCancelConfirm(): void {

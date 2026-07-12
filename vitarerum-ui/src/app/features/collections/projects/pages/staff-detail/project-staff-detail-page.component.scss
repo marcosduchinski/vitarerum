@@ -1,42 +1,16 @@
 @use '../detail/project-detail-page.component.scss';
 
-.project-detail__tabs {
-  display: flex;
-  gap: 1.5rem;
-  flex-wrap: wrap;
-  border-bottom: 1px solid var(--color-line);
+// The Overview card spans the full page width in the stacked layout (no
+// longer confined to an 18rem sidebar column), so its label/value pairs flow
+// across responsive columns instead of stacking in one narrow strip with a
+// wide empty gutter. Purpose stays full-width since it's free text.
+.overview-grid {
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 1.25rem 2rem;
 }
 
-.project-detail__tab {
-  appearance: none;
-  margin: 0 0 -1px;
-  padding: 0.65rem 0.15rem;
-  border: none;
-  border-bottom: 2px solid transparent;
-  background: none;
-  color: var(--color-muted);
-  font: inherit;
-  font-size: 0.9rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition:
-    color 120ms ease,
-    border-color 120ms ease;
-
-  &:hover {
-    color: var(--color-text);
-  }
-
-  &:focus-visible {
-    outline: 3px solid color-mix(in srgb, var(--color-accent) 50%, transparent);
-    outline-offset: 3px;
-    border-radius: 2px;
-  }
-}
-
-.project-detail__tab--active {
-  color: var(--color-accent);
-  border-bottom-color: var(--color-accent);
+.overview-grid__full {
+  grid-column: 1 / -1;
 }
 
 .project-detail__panel {

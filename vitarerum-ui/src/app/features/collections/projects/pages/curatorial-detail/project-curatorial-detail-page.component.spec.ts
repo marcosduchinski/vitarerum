@@ -209,43 +209,28 @@ describe('ProjectCuratorialDetailPageComponent', () => {
     return fixture.nativeElement as HTMLElement;
   }
 
-  it('renders overview by default with accessible tabs', async () => {
+  it('renders overview and project details', async () => {
     const compiled = await render();
 
-    expect(compiled.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toContain(
-      'Overview',
-    );
+    expect(compiled.textContent).toContain('Overview');
     expect(compiled.textContent).toContain('Curatorial specimen access');
     expect(compiled.textContent).toContain('Review object handling');
     expect(compiled.textContent).toContain('Alice Ferreira');
     expect(compiled.textContent).toContain('Carol Souza');
-    expect(compiled.querySelector('#overview-panel')).not.toBeNull();
   });
 
-  it('switches to the tasks tab and shows the cancel task', async () => {
+  it('shows the cancel task in the Actions section', async () => {
     const compiled = await render();
 
-    tabByName(compiled, 'Actions').click();
-    componentRef.changeDetectorRef.detectChanges();
-
-    expect(compiled.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toContain(
-      'Actions',
-    );
-    expect(compiled.querySelector('#tasks-panel')).not.toBeNull();
+    expect(compiled.textContent).toContain('Actions');
     expect(compiled.textContent).toContain('Cancel project');
     expect(buttonByText(compiled, 'Cancel project').disabled).toBe(false);
   });
 
-  it('switches to the frontend-only TODO List tab', async () => {
+  it('shows the frontend-only TODO List', async () => {
     const compiled = await render();
 
-    tabByName(compiled, 'TODO List').click();
-    componentRef.changeDetectorRef.detectChanges();
-
-    expect(compiled.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toContain(
-      'TODO List',
-    );
-    expect(compiled.querySelector('#todo-panel')).not.toBeNull();
+    expect(compiled.textContent).toContain('TODO List');
     expect(compiled.textContent).toContain('Items are kept only for this demonstration');
     expect(projectService.cancelled).toEqual([]);
   });
@@ -258,8 +243,6 @@ describe('ProjectCuratorialDetailPageComponent', () => {
     };
 
     const compiled = await render();
-    tabByName(compiled, 'Actions').click();
-    componentRef.changeDetectorRef.detectChanges();
 
     expect(compiled.textContent).toContain('This task is unavailable for the current status.');
     expect(buttonByText(compiled, 'Cancel project').disabled).toBe(true);
@@ -271,8 +254,6 @@ describe('ProjectCuratorialDetailPageComponent', () => {
     projectService.project = projectWithoutActions as unknown as CollectionUseProjectDetail;
 
     const compiled = await render();
-    tabByName(compiled, 'Actions').click();
-    componentRef.changeDetectorRef.detectChanges();
 
     expect(buttonByText(compiled, 'Cancel project').disabled).toBe(false);
   });
@@ -285,8 +266,6 @@ describe('ProjectCuratorialDetailPageComponent', () => {
     };
 
     const compiled = await render();
-    tabByName(compiled, 'Actions').click();
-    componentRef.changeDetectorRef.detectChanges();
 
     const accessLogLink = linkByText(compiled, 'Open access log');
     const occurrenceLogLink = linkByText(compiled, 'Open occurrence log');
@@ -304,8 +283,6 @@ describe('ProjectCuratorialDetailPageComponent', () => {
   it('shows in-situ visit report creation for curatorial and collections groups', async () => {
     projectService.project = { ...PROJECT, status: 'COMPLETED' };
     const compiled = await render();
-    tabByName(compiled, 'Actions').click();
-    componentRef.changeDetectorRef.detectChanges();
 
     expect(compiled.textContent).toContain('Reports');
     expect(compiled.textContent).toContain('In-situ visit narrative report');
@@ -320,15 +297,11 @@ describe('ProjectCuratorialDetailPageComponent', () => {
     identity.setGroup('DIRECTION');
     projectService.project = { ...PROJECT, status: 'COMPLETED' };
     const compiled = await render();
-    tabByName(compiled, 'Actions').click();
-    componentRef.changeDetectorRef.detectChanges();
     expect(compiled.textContent).not.toContain('Create new In Situ Visit Report');
 
     identity.setGroup('CURATORIAL');
     projectService.project = { ...PROJECT, type: 'EXHIBITION', status: 'COMPLETED' };
     const exhibitionCompiled = await render();
-    tabByName(exhibitionCompiled, 'Actions').click();
-    componentRef.changeDetectorRef.detectChanges();
     expect(exhibitionCompiled.textContent).not.toContain('Create new In Situ Visit Report');
   });
 
@@ -338,8 +311,6 @@ describe('ProjectCuratorialDetailPageComponent', () => {
     for (const status of ['CREATED', 'IN_PROGRESS', 'CANCELLED'] as const) {
       projectService.project = { ...PROJECT, status };
       const compiled = await render();
-      tabByName(compiled, 'Actions').click();
-      componentRef.changeDetectorRef.detectChanges();
       expect(compiled.textContent).not.toContain('Create new In Situ Visit Report');
     }
   });
@@ -347,8 +318,6 @@ describe('ProjectCuratorialDetailPageComponent', () => {
   it('creates a report with the selected options and shows success feedback', async () => {
     projectService.project = { ...PROJECT, status: 'COMPLETED' };
     const compiled = await render();
-    tabByName(compiled, 'Actions').click();
-    componentRef.changeDetectorRef.detectChanges();
     buttonByText(compiled, 'Create new In Situ Visit Report').click();
     componentRef.changeDetectorRef.detectChanges();
 
@@ -378,8 +347,6 @@ describe('ProjectCuratorialDetailPageComponent', () => {
     const navigateSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true);
     const compiled = await render();
 
-    tabByName(compiled, 'Actions').click();
-    componentRef.changeDetectorRef.detectChanges();
     buttonByText(compiled, 'Cancel project').click();
     componentRef.changeDetectorRef.detectChanges();
 
@@ -395,17 +362,6 @@ describe('ProjectCuratorialDetailPageComponent', () => {
     expect(navigateSpy).toHaveBeenCalledWith(['/p/collections/projects/cancelled']);
   });
 });
-
-function tabByName(
-  root: HTMLElement,
-  name: 'Overview' | 'Actions' | 'TODO List',
-): HTMLButtonElement {
-  const tab = Array.from(root.querySelectorAll<HTMLButtonElement>('[role="tab"]')).find((item) =>
-    item.textContent?.includes(name),
-  );
-  expect(tab).not.toBeNull();
-  return tab!;
-}
 
 function buttonByText(root: HTMLElement, text: string): HTMLButtonElement {
   const button = Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find((item) =>

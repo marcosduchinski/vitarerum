@@ -314,7 +314,7 @@
 }
 
 .occurrence-register__table {
-  min-width: 64rem;
+  min-width: 72rem;
 
   th:nth-child(1),
   td:nth-child(1) {
@@ -328,11 +328,16 @@
 
   th:nth-child(4),
   td:nth-child(4) {
-    width: 4rem;
+    width: 10rem;
   }
 
   th:nth-child(5),
   td:nth-child(5) {
+    width: 4rem;
+  }
+
+  th:nth-child(6),
+  td:nth-child(6) {
     width: 7rem;
   }
 }

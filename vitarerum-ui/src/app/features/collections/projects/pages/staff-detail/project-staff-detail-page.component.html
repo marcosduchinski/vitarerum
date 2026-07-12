@@ -21,217 +21,120 @@
       <app-error-message [apiError]="actionError()!" />
     }
 
-    <app-confirm-modal
-      [open]="startConfirmOpen()"
-      title="Start project?"
-      [message]="'This will move ' + project()!.referenceNumber + ' to in progress.'"
-      confirmLabel="Start project"
-      cancelLabel="Not yet"
-      tone="warning"
-      [pending]="acting()"
-      (confirmed)="start()"
-      (cancelled)="closeStartConfirm()"
-    />
+    <div class="project-detail__modals">
+      <app-confirm-modal
+        [open]="startConfirmOpen()"
+        title="Start project?"
+        [message]="'This will move ' + project()!.referenceNumber + ' to in progress.'"
+        confirmLabel="Start project"
+        cancelLabel="Not yet"
+        tone="warning"
+        [pending]="acting()"
+        (confirmed)="start()"
+        (cancelled)="closeStartConfirm()"
+      />
 
-    <app-confirm-modal
-      [open]="completeConfirmOpen()"
-      title="Complete project?"
-      [message]="'This will mark ' + project()!.referenceNumber + ' as completed.'"
-      confirmLabel="Complete project"
-      cancelLabel="Keep in progress"
-      [pending]="acting()"
-      (confirmed)="complete()"
-      (cancelled)="closeCompleteConfirm()"
-    />
+      <app-confirm-modal
+        [open]="completeConfirmOpen()"
+        title="Complete project?"
+        [message]="'This will mark ' + project()!.referenceNumber + ' as completed.'"
+        confirmLabel="Complete project"
+        cancelLabel="Keep in progress"
+        [pending]="acting()"
+        (confirmed)="complete()"
+        (cancelled)="closeCompleteConfirm()"
+      />
 
-    <app-confirm-modal
-      [open]="cancelConfirmOpen()"
-      title="Cancel project?"
-      [message]="'This will cancel ' + project()!.referenceNumber + ' and cannot be undone.'"
-      confirmLabel="Cancel project"
-      cancelLabel="Keep project"
-      tone="danger"
-      [pending]="acting()"
-      (confirmed)="cancel()"
-      (cancelled)="closeCancelConfirm()"
-    />
+      <app-confirm-modal
+        [open]="cancelConfirmOpen()"
+        title="Cancel project?"
+        [message]="'This will cancel ' + project()!.referenceNumber + ' and cannot be undone.'"
+        confirmLabel="Cancel project"
+        cancelLabel="Keep project"
+        tone="danger"
+        [pending]="acting()"
+        (confirmed)="cancel()"
+        (cancelled)="closeCancelConfirm()"
+      />
 
-    <app-create-in-situ-visit-report-modal
-      [open]="reportModalOpen()"
-      [pending]="reportCreating()"
-      [apiError]="reportError()"
-      (submitted)="createInSituVisitReport($event)"
-      (cancelled)="closeReportModal()"
-    />
+      <app-create-in-situ-visit-report-modal
+        [open]="reportModalOpen()"
+        [pending]="reportCreating()"
+        [apiError]="reportError()"
+        (submitted)="createInSituVisitReport($event)"
+        (cancelled)="closeReportModal()"
+      />
+    </div>
 
-    <nav
-      class="project-detail__tabs"
-      [attr.aria-label]="sectionLabel() + ' project sections'"
-      role="tablist"
-    >
-      <button
-        type="button"
-        id="overview-tab"
-        class="project-detail__tab"
-        [class.project-detail__tab--active]="activePanel() === 'overview'"
-        role="tab"
-        aria-controls="overview-panel"
-        [attr.aria-selected]="activePanel() === 'overview'"
-        (click)="selectPanel('overview')"
-      >
-        Overview
-      </button>
-      <button
-        type="button"
-        id="tasks-tab"
-        class="project-detail__tab"
-        [class.project-detail__tab--active]="activePanel() === 'tasks'"
-        role="tab"
-        aria-controls="tasks-panel"
-        [attr.aria-selected]="activePanel() === 'tasks'"
-        (click)="selectPanel('tasks')"
-      >
-        Actions
-      </button>
-      <button
-        type="button"
-        id="todo-tab"
-        class="project-detail__tab"
-        [class.project-detail__tab--active]="activePanel() === 'todo'"
-        role="tab"
-        aria-controls="todo-panel"
-        [attr.aria-selected]="activePanel() === 'todo'"
-        (click)="selectPanel('todo')"
-      >
-        TODO List
-      </button>
-    </nav>
+    <section class="detail-card" aria-labelledby="project-overview-heading">
+      <h2 id="project-overview-heading" class="detail-card__title">Overview</h2>
 
-    @switch (activePanel()) {
-      @case ('overview') {
-        <section
-          id="overview-panel"
-          class="project-detail__panel"
-          role="tabpanel"
-          aria-labelledby="overview-tab"
-        >
-          <div class="project-detail__grid">
-            <section class="detail-card" aria-labelledby="project-overview-heading">
-              <h2 id="project-overview-heading" class="detail-card__title">Overview</h2>
-              <dl class="detail-dl">
-                <div class="detail-dl__row">
-                  <dt>Purpose</dt>
-                  <dd>{{ project()!.purpose }}</dd>
-                </div>
-                <div class="detail-dl__row">
-                  <dt>Dates</dt>
-                  <dd>
-                    {{ formatDate(project()!.beginDate) }} - {{ formatDate(project()!.endDate) }}
-                  </dd>
-                </div>
-                <div class="detail-dl__row">
-                  <dt>Requested by</dt>
-                  <dd>
-                    @if (project()!.requestedBy; as requester) {
-                      {{ requester.user.name }}
-                      <span class="detail-dl__email">{{ requester.user.email }}</span>
-                    } @else {
-                      <span class="detail-dl__empty">-</span>
-                    }
-                  </dd>
-                </div>
-                <div class="detail-dl__row">
-                  <dt>Assigned staff</dt>
-                  <dd>
-                    @if (project()!.proposal.assignedTo) {
-                      {{ project()!.proposal.assignedTo!.user.name }}
-                      <span class="detail-dl__email">
-                        {{ project()!.proposal.assignedTo!.user.email }}
-                      </span>
-                    } @else {
-                      <span class="detail-dl__empty">Unassigned</span>
-                    }
-                  </dd>
-                </div>
-                <div class="detail-dl__row">
-                  <dt>Proposal status</dt>
-                  <dd>
-                    <app-status-chip
-                      kind="proposal"
-                      [status]="asWorkflowStatus(project()!.proposal.status)"
-                    />
-                  </dd>
-                </div>
-              </dl>
-            </section>
-
-            <section class="detail-card" aria-labelledby="project-events-heading">
-              <h2 id="project-events-heading" class="detail-card__title">Event log</h2>
-
-              @if (eventsResource.isLoading()) {
-                <app-loading-state label="Loading events..." />
-              } @else if (!events().length) {
-                <p class="detail-card__empty">No events recorded.</p>
-              } @else {
-                <ol class="event-list" aria-label="Project events">
-                  @for (event of events(); track event.occurredAt) {
-                    <li class="event">
-                      <div class="event__dot" aria-hidden="true"></div>
-                      <div class="event__content">
-                        <div class="event__header">
-                          <span class="event__type">{{ event.type.replace('_', ' ') }}</span>
-                          <span class="event__date">{{ formatDateTime(event.occurredAt) }}</span>
-                        </div>
-                        <p class="event__actor">{{ event.triggeredBy.user.name }}</p>
-                        @if (event.note) {
-                          <p class="event__note">"{{ event.note }}"</p>
-                        }
-                      </div>
-                    </li>
-                  }
-                </ol>
-              }
-            </section>
-          </div>
-        </section>
-      }
-      @case ('tasks') {
-        <section
-          id="tasks-panel"
-          class="project-detail__panel actions-panel"
-          role="tabpanel"
-          aria-labelledby="tasks-tab"
-        >
-          <ol
-            class="lifecycle"
-            [class.lifecycle--cancelled]="isCancelled()"
-            aria-label="Project lifecycle"
+      <ol class="lifecycle" [class.lifecycle--cancelled]="isCancelled()" aria-label="Project lifecycle">
+        @for (step of lifecycle(); track step.label) {
+          <li
+            class="lifecycle__step"
+            [class.lifecycle__step--done]="step.done"
+            [class.lifecycle__step--current]="step.current"
+            [attr.aria-current]="step.current ? 'step' : null"
           >
-            @for (step of lifecycle(); track step.label) {
-              <li
-                class="lifecycle__step"
-                [class.lifecycle__step--done]="step.done"
-                [class.lifecycle__step--current]="step.current"
-                [attr.aria-current]="step.current ? 'step' : null"
-              >
-                <span class="lifecycle__marker" aria-hidden="true">
-                  @if (step.done) {
-                    <span class="pi pi-check"></span>
-                  }
-                </span>
-                <span class="lifecycle__label">{{ step.label }}</span>
-              </li>
-            }
-            @if (isCancelled()) {
-              <li class="lifecycle__step lifecycle__step--cancelled" aria-current="step">
-                <span class="lifecycle__marker" aria-hidden="true">
-                  <span class="pi pi-times"></span>
-                </span>
-                <span class="lifecycle__label">Cancelled</span>
-              </li>
-            }
-          </ol>
+            <span class="lifecycle__marker" aria-hidden="true">
+              @if (step.done) {
+                <span class="pi pi-check"></span>
+              }
+            </span>
+            <span class="lifecycle__label">{{ step.label }}</span>
+          </li>
+        }
+        @if (isCancelled()) {
+          <li class="lifecycle__step lifecycle__step--cancelled" aria-current="step">
+            <span class="lifecycle__marker" aria-hidden="true">
+              <span class="pi pi-times"></span>
+            </span>
+            <span class="lifecycle__label">Cancelled</span>
+          </li>
+        }
+      </ol>
 
+      <dl class="detail-dl overview-grid">
+        <div class="detail-dl__row overview-grid__full">
+          <dt>Purpose</dt>
+          <dd>{{ project()!.purpose }}</dd>
+        </div>
+        <div class="detail-dl__row">
+          <dt>Dates</dt>
+          <dd>{{ formatDate(project()!.beginDate) }} - {{ formatDate(project()!.endDate) }}</dd>
+        </div>
+        <div class="detail-dl__row">
+          <dt>Requested by</dt>
+          <dd>
+            @if (project()!.requestedBy; as requester) {
+              {{ requester.user.name }}
+              <span class="detail-dl__email">{{ requester.user.email }}</span>
+            } @else {
+              <span class="detail-dl__empty">-</span>
+            }
+          </dd>
+        </div>
+        <div class="detail-dl__row">
+          <dt>Assigned staff</dt>
+          <dd>
+            @if (project()!.proposal.assignedTo) {
+              {{ project()!.proposal.assignedTo!.user.name }}
+              <span class="detail-dl__email">
+                {{ project()!.proposal.assignedTo!.user.email }}
+              </span>
+            } @else {
+              <span class="detail-dl__empty">Unassigned</span>
+            }
+          </dd>
+        </div>
+      </dl>
+    </section>
+
+    <section class="detail-card" aria-labelledby="project-actions-heading">
+      <h2 id="project-actions-heading" class="detail-card__title">Actions</h2>
+
+      <div class="project-detail__panel actions-panel">
           <div class="action-group" aria-labelledby="lifecycle-group-title">
             <p id="lifecycle-group-title" class="action-group__title">Lifecycle</p>
 
@@ -468,18 +371,12 @@
               </button>
             </div>
           </div>
-        </section>
-      }
-      @case ('todo') {
-        <section
-          id="todo-panel"
-          class="project-detail__panel"
-          role="tabpanel"
-          aria-labelledby="todo-tab"
-        >
-          <app-project-todo-list [projectId]="id()" />
-        </section>
-      }
-    }
+      </div>
+    </section>
+
+    <section class="detail-card" aria-labelledby="project-todo-heading">
+      <h2 id="project-todo-heading" class="detail-card__title">TODO List</h2>
+      <app-project-todo-list [projectId]="id()" />
+    </section>
   }
 </div>

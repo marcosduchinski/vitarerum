@@ -114,14 +114,11 @@ describe('ProjectStaffDetailPageComponent', () => {
     router = TestBed.inject(Router);
   });
 
-  it('starts created staff projects from the Actions tab', async () => {
+  it('starts created staff projects from the Actions section', async () => {
     const fixture = TestBed.createComponent(ProjectStaffDetailPageComponent);
     fixture.componentRef.setInput('id', PROJECT.id);
     fixture.detectChanges();
     await fixture.whenStable();
-    fixture.detectChanges();
-
-    selectTab(fixture.nativeElement, 'Actions');
     fixture.detectChanges();
 
     buttonByText(fixture.nativeElement, 'Start project').click();
@@ -136,7 +133,7 @@ describe('ProjectStaffDetailPageComponent', () => {
     ]);
   });
 
-  it('completes in-progress staff projects from the Actions tab', async () => {
+  it('completes in-progress staff projects from the Actions section', async () => {
     currentProject = {
       ...PROJECT,
       status: 'IN_PROGRESS',
@@ -146,9 +143,6 @@ describe('ProjectStaffDetailPageComponent', () => {
     fixture.componentRef.setInput('id', PROJECT.id);
     fixture.detectChanges();
     await fixture.whenStable();
-    fixture.detectChanges();
-
-    selectTab(fixture.nativeElement, 'Actions');
     fixture.detectChanges();
 
     buttonByText(fixture.nativeElement, 'Complete project').click();
@@ -177,9 +171,6 @@ describe('ProjectStaffDetailPageComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    selectTab(fixture.nativeElement, 'Actions');
-    fixture.detectChanges();
-
     buttonByText(fixture.nativeElement, 'Create follow-up project').click();
 
     expect(navigate).toHaveBeenCalledWith([
@@ -190,14 +181,6 @@ describe('ProjectStaffDetailPageComponent', () => {
     ]);
   });
 });
-
-function selectTab(root: HTMLElement, label: 'Overview' | 'Actions' | 'TODO List'): void {
-  const tab = Array.from(root.querySelectorAll<HTMLButtonElement>('[role="tab"]')).find((button) =>
-    button.textContent?.includes(label),
-  );
-  expect(tab).not.toBeNull();
-  tab!.click();
-}
 
 function buttonByText(root: HTMLElement, label: string): HTMLButtonElement {
   const button = Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find((item) =>

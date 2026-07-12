@@ -78,6 +78,7 @@
                 </th>
                 <th scope="col">No.</th>
                 <th scope="col">Inventory</th>
+                <th scope="col">Object name</th>
                 <th scope="col">Objects</th>
                 <th scope="col">Occurrences</th>
                 <th scope="col">Actions</th>
@@ -116,6 +117,9 @@
                       {{ row.objectReference.inventoryNumber }}
                     </span>
                   </td>
+                  <td>
+                    {{ row.objectReference.objectName || row.objectReference.displayTitle || '—' }}
+                  </td>
                   <td>{{ row.numberOfObjects }}</td>
                   <td>
                     {{ row.occurrences.length }}
@@ -137,7 +141,7 @@
                 </tr>
                 @if (expandedObjectKey() === row.key) {
                   <tr class="occurrence-register__details-row">
-                    <td colspan="6">
+                    <td colspan="7">
                       <section
                         class="occurrence-details"
                         [id]="'object-occurrences-' + row.key"
