@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, inject, input, output, signal } from '@angular/core';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { firstValueFrom } from 'rxjs';
 
 import { ApiError, toApiError } from '@core/http/api-error.model';
@@ -6,6 +7,7 @@ import { ObjectSearchHit } from '@features/objects/models/object-search.model';
 import { OBJECT_SEARCH_SERVICE } from '@features/objects/services/object-search.service';
 import { ConfirmModalComponent } from '@shared/components/confirm-modal/confirm-modal.component';
 import { ErrorMessageComponent } from '@shared/components/error-message/error-message.component';
+import { highlightToSafeMarkup } from '@shared/utils/highlight-html.util';
 
 import { adaptSearchHitToRequestedObject } from '../../adapters/requested-object-search.adapter';
 import { AddRequestedObjectsRequest } from '../../models/proposal-actions.model';
@@ -22,6 +24,7 @@ import { formatProposalDetailDateTime } from '../../proposal-detail.presentation
 })
 export class ProposalObjectsSectionComponent {
   private readonly objectSearch = inject(OBJECT_SEARCH_SERVICE);
+  private readonly sanitizer = inject(DomSanitizer);
 
   readonly objects = input.required<readonly RequestedObject[]>();
   readonly removingId = input<string | null>(null);
@@ -87,6 +90,16 @@ export class ProposalObjectsSectionComponent {
 
   protected hitId(hit: ObjectSearchHit): string {
     return `${hit.sourceDocumentId}:${hit.sheet}:${hit.rowNumber}`;
+  }
+
+  protected highlightHtml(hit: ObjectSearchHit): SafeHtml {
+    // Safe: highlightToSafeMarkup() escapes the whole string and only re-opens
+    // <mark> for the backend's own <b> markers — never trust hit.highlight raw.
+    return this.sanitizer.bypassSecurityTrustHtml(highlightToSafeMarkup(hit.highlight));
+  }
+
+  protected selectedCount(): number {
+    return this.selectedHitIds().length;
   }
 
   protected adapterReason(hit: ObjectSearchHit): string | null {

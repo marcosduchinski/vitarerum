@@ -382,6 +382,18 @@ h3 {
   }
 }
 
+/* ── Search-match highlighting ──────────────────────────── */
+/* Global (not component-scoped) because these <mark> elements are always
+   injected via [innerHTML] (sanitized search-hit highlights) — Angular's
+   emulated encapsulation never tags dynamically-inserted nodes, so a scoped
+   component rule would silently never match. */
+mark {
+  background: color-mix(in srgb, var(--color-accent) 30%, transparent);
+  color: var(--color-text);
+  border-radius: 3px;
+  padding: 0 0.15rem;
+}
+
 /* ── PrimeNG overrides ──────────────────────────────────── */
 
 .p-button {

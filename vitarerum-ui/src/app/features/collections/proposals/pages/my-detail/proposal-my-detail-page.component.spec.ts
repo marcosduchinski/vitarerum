@@ -689,6 +689,13 @@ describe('ProposalMyDetailPageComponent', () => {
   });
 
   it('confirms accepting the assignment and navigates to the approved list', async () => {
+    proposalService.setProposal({
+      ...PROPOSAL,
+      collectionUseProject: {
+        ...PROPOSAL.collectionUseProject!,
+        title: '',
+      },
+    });
     const fixture = TestBed.createComponent(ProposalMyDetailPageComponent);
     const componentRef: ComponentRef<ProposalMyDetailPageComponent> = fixture.componentRef;
 
@@ -724,8 +731,8 @@ describe('ProposalMyDetailPageComponent', () => {
     fixture.detectChanges();
     await fixture.whenStable();
 
-    // The project is materialised straight from the proposal: its title becomes the
-    // project title and purpose, and the requested period becomes its dates.
+    // The pre-approval project summary is only a placeholder. The real project
+    // title and purpose are materialised from the proposal title.
     expect(proposalService.approveCalls).toEqual([
       {
         proposalId: 'proposal-1',

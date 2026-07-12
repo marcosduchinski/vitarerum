@@ -83,16 +83,12 @@
 }
 
 .result__highlight {
+  // Note: `mark` styling for this content lives in the global stylesheet
+  // (styles.scss), not here — it's set via [innerHTML] so it never receives
+  // Angular's emulated-encapsulation attribute and a scoped rule would be dead.
   margin: 0;
   font-size: 0.95rem;
   line-height: 1.4;
-
-  mark {
-    background: #fff3b0;
-    color: inherit;
-    border-radius: 3px;
-    padding: 0 0.15rem;
-  }
 }
 
 .result__snapshot {

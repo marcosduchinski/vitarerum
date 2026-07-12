@@ -398,10 +398,10 @@ export class ProposalMyDetailPageComponent {
 
     try {
       await firstValueFrom(
-        // The project is materialised from the proposal: its title becomes both the
-        // project title and purpose, and the requested period becomes its dates.
+        // Before approval, collectionUseProject is only a placeholder with no
+        // title. Materialise the project from the proposal title instead.
         this.proposalService.approveProposal(this.id(), {
-          title: proposal.collectionUseProject?.title ?? '',
+          title: proposal.title,
           purpose: proposal.title,
           beginDate: proposal.beginDate ?? '',
           endDate: proposal.endDate ?? '',

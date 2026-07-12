@@ -139,7 +139,7 @@
                 [disabled]="actionProjectId() === project.id || !canLog(project)"
                 (click)="log(project)"
               >
-                Log
+                Object Access log
               </button>
               <button
                 type="button"
@@ -152,7 +152,7 @@
                 [disabled]="actionProjectId() === project.id || !canLog(project)"
                 (click)="occurrences(project)"
               >
-                Occurrences
+                Object Occurrences
               </button>
               <app-row-actions
                 [items]="actionItemsFor(project)"

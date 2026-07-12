@@ -11,6 +11,7 @@ import { IDENTITY_SERVICE } from '@core/auth/identity.service';
 import { firstValueFrom } from 'rxjs';
 
 import { ApiError, toApiError } from '@core/http/api-error.model';
+import { DataTableComponent } from '@shared/components/data-table/data-table.component';
 import { ErrorMessageComponent } from '@shared/components/error-message/error-message.component';
 import { LoadingStateComponent } from '@shared/components/loading-state/loading-state.component';
 import { PageHeaderComponent } from '@shared/components/page-header/page-header.component';
@@ -34,7 +35,7 @@ interface AreaGroup {
 @Component({
   selector: 'app-collection-data-sources-page',
   standalone: true,
-  imports: [PageHeaderComponent, ErrorMessageComponent, LoadingStateComponent],
+  imports: [PageHeaderComponent, ErrorMessageComponent, LoadingStateComponent, DataTableComponent],
   templateUrl: './collection-data-sources-page.component.html',
   styleUrl: './collection-data-sources-page.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

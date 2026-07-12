@@ -16,7 +16,10 @@
 
     @if (isSysAdmin()) {
       <section class="area-admin">
-        <h2 class="area-admin__title">Collection areas</h2>
+        <h2 class="area-admin__title">
+          <span class="pi pi-sitemap" aria-hidden="true"></span>
+          Collection areas
+        </h2>
         <form class="area-admin__new" (submit)="$event.preventDefault(); createArea()">
           <input
             type="text"
@@ -26,7 +29,7 @@
             (input)="newAreaName.set($any($event.target).value)"
             [disabled]="busy()"
           />
-          <button type="submit" class="admin-btn" [disabled]="busy() || !newAreaName().trim()">
+          <button type="submit" class="admin-btn admin-btn--accent" [disabled]="busy() || !newAreaName().trim()">
             <span class="pi pi-plus" aria-hidden="true"></span>
             Create area
           </button>
@@ -71,6 +74,7 @@
                   [disabled]="busy()"
                   (click)="startEditArea(area)"
                 >
+                  <span class="pi pi-pencil" aria-hidden="true"></span>
                   Rename
                 </button>
                 <button
@@ -79,6 +83,7 @@
                   [disabled]="busy()"
                   (click)="removeArea(area)"
                 >
+                  <span class="pi pi-trash" aria-hidden="true"></span>
                   Remove
                 </button>
               }
@@ -121,6 +126,7 @@
     @for (group of groupedCollections(); track group.areaId) {
       <section class="area-group">
         <h2 class="area-group__title">
+          <span class="pi pi-folder-open" aria-hidden="true"></span>
           {{ group.areaName }}
           <span class="area-group__count">
             {{ group.collections.length }}
@@ -179,7 +185,10 @@
                         {{ collection.documentCount === 1 ? 'file' : 'files' }}
                       </span>
                       @if (!collection.manageable) {
-                        <span class="badge badge--muted">Read only</span>
+                        <span class="badge badge--muted">
+                          <span class="pi pi-lock" aria-hidden="true"></span>
+                          Read only
+                        </span>
                       }
                     </span>
                   </button>
@@ -192,6 +201,7 @@
                         [disabled]="busy()"
                         (click)="startEdit(collection)"
                       >
+                        <span class="pi pi-pencil" aria-hidden="true"></span>
                         Rename
                       </button>
                       <button
@@ -200,6 +210,7 @@
                         [disabled]="busy()"
                         (click)="startRemove(collection)"
                       >
+                        <span class="pi pi-trash" aria-hidden="true"></span>
                         Remove
                       </button>
                     </div>
@@ -210,9 +221,12 @@
               @if (removingId() === collection.id) {
                 <div class="remove-confirm">
                   <p class="remove-confirm__warning">
-                    <strong>This cannot be undone.</strong> Removing "{{ collection.name }}"
-                    permanently deletes its curators, source documents, indexed rows, and their
-                    files.
+                    <span class="pi pi-exclamation-triangle" aria-hidden="true"></span>
+                    <span>
+                      <strong>This cannot be undone.</strong> Removing "{{ collection.name }}"
+                      permanently deletes its curators, source documents, indexed rows, and their
+                      files.
+                    </span>
                   </p>
                   <div class="remove-confirm__row">
                     <input
@@ -229,6 +243,7 @@
                       [disabled]="busy() || !removeConfirmMatches(collection)"
                       (click)="confirmRemove(collection)"
                     >
+                      <span class="pi pi-trash" aria-hidden="true"></span>
                       Remove permanently
                     </button>
                     <button
@@ -261,10 +276,11 @@
                       </select>
                       <button
                         type="button"
-                        class="admin-btn"
+                        class="admin-btn admin-btn--accent"
                         [disabled]="busy() || !moveAreaId()"
                         (click)="moveToArea(collection)"
                       >
+                        <span class="pi pi-arrow-right-arrow-left" aria-hidden="true"></span>
                         Move
                       </button>
                     </div>
@@ -287,10 +303,11 @@
                     <app-loading-state label="Loading files..." />
                   } @else if (documents().length === 0) {
                     <p class="collection__empty">
+                      <span class="pi pi-inbox" aria-hidden="true"></span>
                       No files have been uploaded to this collection yet.
                     </p>
                   } @else {
-                    <table class="documents">
+                    <app-data-table [ariaLabel]="'Source documents for ' + collection.name" class="documents">
                       <thead>
                         <tr>
                           <th scope="col">File</th>
@@ -309,7 +326,10 @@
                       <tbody>
                         @for (doc of documents(); track doc.id) {
                           <tr>
-                            <td class="documents__name">{{ doc.fileName }}</td>
+                            <td class="documents__name">
+                              <span class="pi pi-file-excel documents__file-icon" aria-hidden="true"></span>
+                              {{ doc.fileName }}
+                            </td>
                             <td>
                               <span
                                 class="badge"
@@ -318,26 +338,39 @@
                                 [class.badge--uploaded]="doc.status === 'UPLOADED'"
                                 [attr.title]="doc.errorMessage"
                               >
+                                <span
+                                  class="pi"
+                                  [class.pi-check-circle]="doc.status === 'INDEXED'"
+                                  [class.pi-times-circle]="doc.status === 'ERROR'"
+                                  [class.pi-clock]="doc.status === 'UPLOADED'"
+                                  aria-hidden="true"
+                                ></span>
                                 {{ doc.status }}
                               </span>
                               @if (doc.status === 'ERROR' && doc.errorMessage) {
                                 <p class="documents__error">{{ doc.errorMessage }}</p>
                               }
                             </td>
-                            <td>{{ doc.rowCount ?? '—' }}</td>
+                            <td class="documents__num">{{ doc.rowCount ?? '—' }}</td>
                             <td>
                               @if (doc.objectMapping) {
-                                <span class="badge badge--mapped">Configured</span>
+                                <span class="badge badge--mapped">
+                                  <span class="pi pi-check" aria-hidden="true"></span>
+                                  Configured
+                                </span>
                                 <p class="documents__mapping">
                                   {{ doc.objectMapping.inventoryNumberColumn }} /
                                   {{ doc.objectMapping.displayTitleColumn }}
                                 </p>
                               } @else {
-                                <span class="badge badge--muted">Missing</span>
+                                <span class="badge badge--muted">
+                                  <span class="pi pi-info-circle" aria-hidden="true"></span>
+                                  Missing
+                                </span>
                               }
                             </td>
-                            <td>{{ formatDate(doc.uploadedAt) }}</td>
-                            <td>{{ formatDate(doc.indexedAt) }}</td>
+                            <td class="documents__date">{{ formatDate(doc.uploadedAt) }}</td>
+                            <td class="documents__date">{{ formatDate(doc.indexedAt) }}</td>
                             @if (collection.manageable) {
                               <td class="documents__actions">
                                 <button
@@ -346,6 +379,7 @@
                                   [disabled]="busy()"
                                   (click)="configureMapping(doc)"
                                 >
+                                  <span class="pi pi-sliders-h" aria-hidden="true"></span>
                                   Configure columns
                                 </button>
                                 <button
@@ -354,6 +388,7 @@
                                   [disabled]="busy()"
                                   (click)="reindex(doc)"
                                 >
+                                  <span class="pi pi-refresh" aria-hidden="true"></span>
                                   Reindex
                                 </button>
                                 <button
@@ -362,6 +397,7 @@
                                   [disabled]="busy()"
                                   (click)="remove(doc)"
                                 >
+                                  <span class="pi pi-trash" aria-hidden="true"></span>
                                   Delete
                                 </button>
                               </td>
@@ -371,9 +407,20 @@
                             <tr class="mapping-row">
                               <td [attr.colspan]="documentsColumnCount(collection)">
                                 <section class="mapping-panel">
+                                  <header class="mapping-panel__header">
+                                    <span class="pi pi-sliders-h" aria-hidden="true"></span>
+                                    <div>
+                                      <p class="mapping-panel__eyebrow">Object snapshot mapping</p>
+                                      <p class="mapping-panel__hint">
+                                        Pick which columns of "{{ doc.fileName }}" identify each
+                                        object, so search results can be added to proposals.
+                                      </p>
+                                    </div>
+                                  </header>
+
                                   <div class="mapping-panel__grid">
                                     <label class="mapping-field">
-                                      <span>Inventory number</span>
+                                      <span>Inventory number <em>required</em></span>
                                       <select
                                         [value]="mappingInventoryColumn()"
                                         [disabled]="busy()"
@@ -386,7 +433,7 @@
                                       </select>
                                     </label>
                                     <label class="mapping-field">
-                                      <span>Display title</span>
+                                      <span>Display title <em>required</em></span>
                                       <select
                                         [value]="mappingTitleColumn()"
                                         [disabled]="busy()"
@@ -417,7 +464,10 @@
                                     <legend>Description columns</legend>
                                     <div class="mapping-descriptions__list">
                                       @for (column of mappingColumns(doc); track column) {
-                                        <label>
+                                        <label
+                                          class="mapping-descriptions__option"
+                                          [class.mapping-descriptions__option--checked]="isDescriptionColumnSelected(column)"
+                                        >
                                           <input
                                             type="checkbox"
                                             [checked]="isDescriptionColumnSelected(column)"
@@ -433,10 +483,11 @@
                                   <div class="mapping-panel__actions">
                                     <button
                                       type="button"
-                                      class="admin-btn"
+                                      class="admin-btn admin-btn--accent"
                                       [disabled]="busy() || !mappingCanSave()"
                                       (click)="saveMapping(doc)"
                                     >
+                                      <span class="pi pi-check" aria-hidden="true"></span>
                                       Save mapping
                                     </button>
                                     <button
@@ -454,25 +505,32 @@
                           }
                         }
                       </tbody>
-                    </table>
+                    </app-data-table>
                   }
 
                   @if (isSysAdmin()) {
                     <div class="curator-admin">
-                      <h3 class="curator-admin__title">Curators</h3>
+                      <h3 class="curator-admin__title">
+                        <span class="pi pi-users" aria-hidden="true"></span>
+                        Curators
+                      </h3>
                       @if (collection.curators.length === 0) {
                         <p class="curator-admin__empty">No curator assigned.</p>
                       } @else {
                         <ul class="curator-admin__list">
                           @for (curator of collection.curators; track curator.permissionId) {
                             <li>
-                              <span>{{ curator.name ?? curator.permissionId }}</span>
+                              <span class="curator-admin__name">
+                                <span class="pi pi-user" aria-hidden="true"></span>
+                                {{ curator.name ?? curator.permissionId }}
+                              </span>
                               <button
                                 type="button"
                                 class="admin-btn admin-btn--danger"
                                 [disabled]="busy()"
                                 (click)="removeCurator(collection, curator)"
                               >
+                                <span class="pi pi-times" aria-hidden="true"></span>
                                 Remove
                               </button>
                             </li>
@@ -509,16 +567,15 @@
                           </select>
                           <button
                             type="button"
-                            class="admin-btn"
+                            class="admin-btn admin-btn--accent"
                             [disabled]="busy() || !selectedCandidateId()"
                             (click)="assignCurator(collection)"
                           >
+                            <span class="pi pi-user-plus" aria-hidden="true"></span>
                             Assign curator
                           </button>
                         </div>
                       }
-
-                      
                     </div>
                   }
                 </div>
@@ -564,7 +621,7 @@
           <div class="upload-mapping-modal__body">
             <div class="mapping-panel__grid">
               <label class="mapping-field">
-                <span>Inventory number</span>
+                <span>Inventory number <em>required</em></span>
                 <select
                   [value]="mappingInventoryColumn()"
                   [disabled]="busy()"
@@ -577,7 +634,7 @@
                 </select>
               </label>
               <label class="mapping-field">
-                <span>Display title</span>
+                <span>Display title <em>required</em></span>
                 <select
                   [value]="mappingTitleColumn()"
                   [disabled]="busy()"
@@ -608,7 +665,10 @@
               <legend>Description columns</legend>
               <div class="mapping-descriptions__list">
                 @for (column of pendingUploadColumns(); track column) {
-                  <label>
+                  <label
+                    class="mapping-descriptions__option"
+                    [class.mapping-descriptions__option--checked]="isDescriptionColumnSelected(column)"
+                  >
                     <input
                       type="checkbox"
                       [checked]="isDescriptionColumnSelected(column)"
@@ -637,6 +697,7 @@
               [disabled]="busy() || !mappingCanSave()"
               (click)="saveUploadMapping()"
             >
+              <span class="pi pi-upload" aria-hidden="true"></span>
               Upload and index
             </button>
           </footer>

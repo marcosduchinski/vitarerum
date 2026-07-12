@@ -68,7 +68,10 @@
         tabindex="-1"
       >
         <header class="add-modal__header">
-          <h2 id="add-object-title">Add requested object</h2>
+          <div>
+            <p class="add-modal__eyebrow">Collection object search</p>
+            <h2 id="add-object-title">Add requested object</h2>
+          </div>
           <button
             type="button"
             class="add-modal__close"
@@ -87,28 +90,43 @@
           }
 
           <form class="object-search" (submit)="$event.preventDefault(); searchObjects()">
-            <input
-              type="search"
-              class="object-search__input"
-              placeholder="Search collection objects"
-              [value]="searchQuery()"
-              (input)="onSearchQueryInput($event)"
-            />
+            <span class="object-search__field">
+              <span class="pi pi-search object-search__icon" aria-hidden="true"></span>
+              <input
+                type="search"
+                class="object-search__input"
+                placeholder="Search by inventory number, title or code…"
+                [value]="searchQuery()"
+                (input)="onSearchQueryInput($event)"
+              />
+            </span>
             <button
               type="submit"
               class="object-search__button"
               [disabled]="searching() || !searchQuery().trim()"
             >
-              {{ searching() ? 'Searching...' : 'Search' }}
+              @if (searching()) {
+                <span class="pi pi-spin pi-spinner" aria-hidden="true"></span>
+                Searching…
+              } @else {
+                Search
+              }
             </button>
           </form>
 
           @if (searchResults().length === 0) {
-            <p class="object-search__empty">Search for indexed collection rows to add.</p>
+            <p class="object-search__empty">
+              <span class="pi pi-search" aria-hidden="true"></span>
+              Search for indexed collection rows to add to this proposal.
+            </p>
           } @else {
             <ul class="search-results">
               @for (hit of searchResults(); track hitId(hit)) {
-                <li class="search-hit" [class.search-hit--disabled]="!canAddHit(hit)">
+                <li
+                  class="search-hit"
+                  [class.search-hit--disabled]="!canAddHit(hit)"
+                  [class.search-hit--selected]="isHitSelected(hit)"
+                >
                   <label class="search-hit__select">
                     <input
                       type="checkbox"
@@ -117,22 +135,16 @@
                       (change)="toggleHit(hit, $any($event.target).checked)"
                     />
                     <span class="search-hit__content">
-                      <strong>
-                        {{
-                          hit.objectSnapshot?.displayTitle ||
-                            hit.cells['Name'] ||
-                            hit.cells['Title'] ||
-                            hit.highlight
-                        }}
-                      </strong>
-                      <span>
-                        {{
-                          hit.objectSnapshot?.inventoryNumber ||
-                            hit.cells['Inventory No'] ||
-                            hit.cells['Code'] ||
-                            hit.fileName
-                        }}
-                      </span>
+                      @if (hit.objectSnapshot; as snapshot) {
+                        <span class="search-hit__snapshot">
+                          <span class="search-hit__inventory">{{ snapshot.inventoryNumber }}</span>
+                          <strong>{{ snapshot.displayTitle }}</strong>
+                          @if (snapshot.objectName && snapshot.objectName !== snapshot.displayTitle) {
+                            <span class="search-hit__object-name">{{ snapshot.objectName }}</span>
+                          }
+                        </span>
+                      }
+                      <span class="search-hit__highlight" [innerHTML]="highlightHtml(hit)"></span>
                       <span class="search-hit__provenance">
                         {{ hit.collectionName }} / {{ hit.fileName }} / {{ hit.sheet }} row
                         {{ hit.rowNumber }}
@@ -140,7 +152,10 @@
                     </span>
                   </label>
                   @if (adapterReason(hit); as reason) {
-                    <p class="search-hit__warning">{{ reason }}</p>
+                    <p class="search-hit__warning">
+                      <span class="pi pi-exclamation-triangle" aria-hidden="true"></span>
+                      {{ reason }}
+                    </p>
                   }
                 </li>
               }
@@ -148,6 +163,11 @@
           }
         </div>
         <footer class="add-modal__footer">
+          <span class="add-modal__selection" aria-live="polite">
+            @if (selectedCount() > 0) {
+              {{ selectedCount() }} {{ selectedCount() === 1 ? 'object' : 'objects' }} selected
+            }
+          </span>
           <button type="button" class="add-modal__secondary" (click)="closeAddModal()">
             Cancel
           </button>
@@ -157,7 +177,7 @@
             [disabled]="adding() || selectedItems().length === 0"
             (click)="submitSelectedObjects()"
           >
-            {{ adding() ? 'Adding...' : 'Add selected' }}
+            {{ adding() ? 'Adding…' : 'Add selected' }}
           </button>
         </footer>
       </section>
