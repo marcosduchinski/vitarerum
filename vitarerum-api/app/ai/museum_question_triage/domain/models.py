@@ -30,6 +30,7 @@ from typing import NewType
 TriageId = NewType("TriageId", str)
 ClassificationId = NewType("ClassificationId", str)
 TrainingExampleId = NewType("TrainingExampleId", str)
+EmbeddingPrototypeVersionId = NewType("EmbeddingPrototypeVersionId", str)
 
 
 class TriageVerdict(StrEnum):
@@ -95,12 +96,22 @@ class TrainingExampleSource(StrEnum):
     HUMAN_CREATED = "HUMAN_CREATED"
 
 
+class EmbeddingPrototypeAggregation(StrEnum):
+    MEAN = "MEAN"
+    MAX_EXAMPLE = "MAX_EXAMPLE"
+    HYBRID = "HYBRID"
+
+
 class InvalidMessageClassification(Exception):
     """A use-category classification violates a domain invariant."""
 
 
 class InvalidUseCategoryTrainingExample(Exception):
     """A staff-reviewed training example violates a domain invariant."""
+
+
+class InvalidEmbeddingPrototypeVersion(Exception):
+    """A generated embedding prototype snapshot violates a domain invariant."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -445,6 +456,91 @@ class UseCategoryTrainingExample:
             active=active,
             notes=notes,
             created_at=reviewed_at,
+        )
+
+
+@dataclass(slots=True)
+class EmbeddingPrototypeVersion:
+    """A reproducible snapshot of category prototype vectors."""
+
+    id: EmbeddingPrototypeVersionId
+    version: str
+    embedding_model: str
+    aggregation_method: EmbeddingPrototypeAggregation
+    threshold_profile: dict[str, object]
+    example_ids: list[TrainingExampleId]
+    prototypes: dict[UseCategory, list[list[float]]]
+    metrics: dict[str, object]
+    created_at: datetime
+    promoted_at: datetime | None
+    retired_at: datetime | None
+
+    def __post_init__(self) -> None:
+        if not self.version.strip():
+            raise InvalidEmbeddingPrototypeVersion("version is required.")
+        if not self.embedding_model.strip():
+            raise InvalidEmbeddingPrototypeVersion("embedding_model is required.")
+        if not self.example_ids:
+            raise InvalidEmbeddingPrototypeVersion("example_ids cannot be empty.")
+        if not self.prototypes:
+            raise InvalidEmbeddingPrototypeVersion("prototypes cannot be empty.")
+        missing = set(self.prototypes) - set(UseCategory)
+        if missing:
+            raise InvalidEmbeddingPrototypeVersion(
+                "Unknown prototype categories are not allowed."
+            )
+        seen: set[TrainingExampleId] = set()
+        for example_id in self.example_ids:
+            if example_id in seen:
+                raise InvalidEmbeddingPrototypeVersion(
+                    "example_ids cannot contain duplicates."
+                )
+            seen.add(example_id)
+        vector_size: int | None = None
+        for category, vectors in self.prototypes.items():
+            if not vectors:
+                raise InvalidEmbeddingPrototypeVersion(
+                    f"{category.value} must define at least one vector."
+                )
+            for vector in vectors:
+                if not vector:
+                    raise InvalidEmbeddingPrototypeVersion(
+                        "prototype vectors cannot be empty."
+                    )
+                if vector_size is None:
+                    vector_size = len(vector)
+                elif len(vector) != vector_size:
+                    raise InvalidEmbeddingPrototypeVersion(
+                        "all prototype vectors must have the same dimension."
+                    )
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        version: str,
+        embedding_model: str,
+        aggregation_method: EmbeddingPrototypeAggregation,
+        threshold_profile: dict[str, object],
+        example_ids: list[TrainingExampleId],
+        prototypes: dict[UseCategory, list[list[float]]],
+        metrics: dict[str, object],
+        created_at: datetime,
+        promoted_at: datetime | None = None,
+        retired_at: datetime | None = None,
+    ) -> EmbeddingPrototypeVersion:
+        return cls(
+            id=EmbeddingPrototypeVersionId(str(uuid.uuid4())),
+            version=version,
+            embedding_model=embedding_model,
+            aggregation_method=aggregation_method,
+            threshold_profile=threshold_profile,
+            example_ids=example_ids,
+            prototypes=prototypes,
+            metrics=metrics,
+            created_at=created_at,
+            promoted_at=promoted_at,
+            retired_at=retired_at,
         )
 
 

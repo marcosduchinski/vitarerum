@@ -112,6 +112,47 @@ This action does not change `verdict`, `effectiveVerdict`, or
 
 Response: `UseCategoryClassificationAuditList` for the latest triage.
 
+### `POST /museum-questions/triage/embedding-prototypes`
+
+Curatorial-only administrative job. Generates a persisted
+`EmbeddingPrototypeVersion` from active human training examples linked to each
+question's latest triage. The endpoint computes embeddings inside the
+application environment; it does not export citizen message text.
+
+Request:
+
+```json
+{
+  "version": "embedding-prototypes-2026-07-13-v1",
+  "aggregationMethod": "MAX_EXAMPLE",
+  "promote": true
+}
+```
+
+`aggregationMethod` may be `MAX_EXAMPLE`, `MEAN`, or `HYBRID`. The initial
+recommended/default method is `MAX_EXAMPLE`, because it preserves individual
+human examples while the dataset is small. If `promote=true`, any previously
+promoted version is retired and the new version becomes the active promoted
+snapshot. Generation is transactional: a failure while reading examples,
+validating hashes, embedding text, or persisting the snapshot does not publish a
+partial version.
+
+Response: `EmbeddingPrototypeVersion`, including `version`, `embeddingModel`,
+`aggregationMethod`, `thresholdProfile`, `exampleIds`, `prototypes`, `metrics`,
+`createdAt`, `promotedAt`, and `retiredAt`.
+
+Failure cases:
+
+- `409 NOT_ENOUGH_TRAINING_EXAMPLES` when there are no active positive human
+  examples.
+- `422 INVALID_PROTOTYPE_VERSION` when the version already exists or a source
+  message hash no longer matches the reviewed example.
+
+### `GET /museum-questions/triage/embedding-prototypes`
+
+Curatorial-only. Lists persisted embedding prototype versions for audit and
+rollout review. The response does not include citizen message text.
+
 ### `GET /museum-questions/triage/classifications/calibration.csv?limit=100`
 
 Exports a calibration CSV for human labelling and threshold/prototype tuning.

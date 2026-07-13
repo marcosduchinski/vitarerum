@@ -37,6 +37,8 @@ from app.ai.museum_question_triage.domain.models import (
     ClassificationScoreSource,
     ClassificationStatus,
     ClassifierKind,
+    EmbeddingPrototypeAggregation,
+    EmbeddingPrototypeVersion,
     HumanCategoryOutcome,
     MentionedObject,
     MentionedObjectOrigin,
@@ -44,6 +46,7 @@ from app.ai.museum_question_triage.domain.models import (
     MessageTriage,
     ObjectHitView,
     ObjectTriageMatch,
+    QuestionView,
     TrainingExampleSource,
     TriageId,
     TriageVerdict,
@@ -53,6 +56,8 @@ from app.ai.museum_question_triage.domain.models import (
 )
 from app.ai.museum_question_triage.domain.ports import (
     ClassificationNotFound,
+    EmbeddingClassifierPort,
+    EmbeddingPrototypeVersionRepository,
     MessageClassificationRepository,
     ModelTimeout,
     ModelUnavailable,
@@ -90,6 +95,11 @@ EMBEDDING_USE_CATEGORY_CLASSIFIER_VERSION = "embedding-prototypes-v1"
 CASCADE_USE_CATEGORY_CLASSIFIER_VERSION = "cascade-v1"
 STAFF_USE_CATEGORY_CLASSIFIER_VERSION = "staff-reviewed-v1"
 MAX_CALIBRATION_EXPORT_LIMIT = 500
+MIN_EMBEDDING_PROTOTYPE_EXAMPLES = 1
+
+
+class NotEnoughTrainingExamples(Exception):
+    """No positive human examples are available to generate prototypes."""
 
 
 def _normalized_message_hash(message: str) -> str:
@@ -155,6 +165,37 @@ def _training_example_source(
     if llm or embedding:
         return TrainingExampleSource.HUMAN_CORRECTED
     return TrainingExampleSource.HUMAN_CREATED
+
+
+def _mean_vector(vectors: list[list[float]]) -> list[float]:
+    if not vectors:
+        raise ValueError("Cannot average empty vectors.")
+    dimension = len(vectors[0])
+    return [
+        sum(vector[index] for vector in vectors) / len(vectors)
+        for index in range(dimension)
+    ]
+
+
+def _prototype_metrics(
+    *,
+    examples_count: int,
+    unclear_examples_count: int,
+    prototypes: dict[UseCategory, list[list[float]]],
+) -> dict[str, object]:
+    examples_per_category = {
+        category.value: len(vectors)
+        for category, vectors in sorted(
+            prototypes.items(), key=lambda item: item[0].value
+        )
+    }
+    return {
+        "training_examples_count": examples_count,
+        "unclear_examples_count": unclear_examples_count,
+        "positive_examples_count": sum(examples_per_category.values()),
+        "categories_with_examples": len(examples_per_category),
+        "examples_per_category": examples_per_category,
+    }
 
 
 def _cascade_margin(scores: list[UseCategoryScore]) -> float | None:
@@ -329,6 +370,17 @@ class ClassifyPendingCascadeUseCategoryInput:
 @dataclass(frozen=True, slots=True)
 class ExportUseCategoryCalibrationInput:
     limit: int = 100
+
+
+@dataclass(frozen=True, slots=True)
+class GenerateEmbeddingPrototypeVersionInput:
+    version: str
+    embedding_model: str
+    threshold_profile: dict[str, object]
+    aggregation_method: EmbeddingPrototypeAggregation = (
+        EmbeddingPrototypeAggregation.MAX_EXAMPLE
+    )
+    promote: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -1003,6 +1055,96 @@ class SyncUseCategories:
             )
         await self._classification_repository.add(classification)
         return classification
+
+
+class GenerateEmbeddingPrototypeVersion:
+    def __init__(
+        self,
+        museum_question: MuseumQuestionPort,
+        embedding: EmbeddingClassifierPort,
+        training_example_repository: UseCategoryTrainingExampleRepository,
+        prototype_repository: EmbeddingPrototypeVersionRepository,
+    ) -> None:
+        self._museum_question = museum_question
+        self._embedding = embedding
+        self._training_example_repository = training_example_repository
+        self._prototype_repository = prototype_repository
+
+    async def execute(
+        self, data: GenerateEmbeddingPrototypeVersionInput
+    ) -> EmbeddingPrototypeVersion:
+        if await self._prototype_repository.get_by_version(data.version):
+            raise ValueError(f"Prototype version {data.version!r} already exists.")
+
+        examples = await self._training_example_repository.list_active_current()
+        positive_examples = [
+            example
+            for example in examples
+            if example.human_outcome is HumanCategoryOutcome.CATEGORIZED
+            and example.human_categories
+        ]
+        if len(positive_examples) < MIN_EMBEDDING_PROTOTYPE_EXAMPLES:
+            raise NotEnoughTrainingExamples(
+                "At least one positive human training example is required."
+            )
+
+        question_by_id: dict[str, QuestionView] = {}
+        for example in positive_examples:
+            question = await self._museum_question.get_summary(example.question_id)
+            if question is None:
+                raise QuestionNotFound(
+                    f"No museum question found with id {example.question_id!r}"
+                )
+            if _normalized_message_hash(question.message) != example.message_hash:
+                raise ValueError(
+                    f"Message hash mismatch for training example {example.id!r}."
+                )
+            question_by_id[example.id] = question
+
+        vectors = await self._embedding.embed_many(
+            [question_by_id[example.id].message for example in positive_examples]
+        )
+        vectors_by_category: dict[UseCategory, list[list[float]]] = {}
+        for example, vector in zip(positive_examples, vectors, strict=True):
+            for category in example.human_categories:
+                vectors_by_category.setdefault(category, []).append(vector)
+
+        if data.aggregation_method is EmbeddingPrototypeAggregation.MEAN:
+            prototypes = {
+                category: [_mean_vector(category_vectors)]
+                for category, category_vectors in vectors_by_category.items()
+            }
+        elif data.aggregation_method is EmbeddingPrototypeAggregation.HYBRID:
+            prototypes = {
+                category: [
+                    _mean_vector(category_vectors),
+                    *category_vectors,
+                ]
+                for category, category_vectors in vectors_by_category.items()
+            }
+        else:
+            prototypes = vectors_by_category
+
+        created_at = datetime.now(UTC)
+        version = EmbeddingPrototypeVersion.create(
+            version=data.version,
+            embedding_model=data.embedding_model,
+            aggregation_method=data.aggregation_method,
+            threshold_profile=data.threshold_profile,
+            example_ids=[example.id for example in examples],
+            prototypes=prototypes,
+            metrics=_prototype_metrics(
+                examples_count=len(examples),
+                unclear_examples_count=len(examples) - len(positive_examples),
+                prototypes=prototypes,
+            ),
+            created_at=created_at,
+            promoted_at=created_at if data.promote else None,
+        )
+        await self._prototype_repository.add(version)
+        if data.promote:
+            await self._prototype_repository.promote(version.version, created_at)
+        return version
 
 
 class ExportUseCategoryCalibrationCsv:

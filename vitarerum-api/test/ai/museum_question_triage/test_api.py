@@ -1,4 +1,5 @@
 import csv
+import hashlib
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -14,6 +15,7 @@ from app.ai.museum_question_triage.domain.models import (
     ClassificationScoreSource,
     ClassificationStatus,
     ClassifierKind,
+    EmbeddingPrototypeVersion,
     HumanCategoryOutcome,
     MentionedObject,
     MessageClassification,
@@ -35,6 +37,8 @@ from app.ai.museum_question_triage.domain.ports import (
 from app.ai.museum_question_triage.presentation import routes as triage_routes
 from app.ai.museum_question_triage.presentation.dependencies import (
     get_classification_repository,
+    get_embedding_port,
+    get_embedding_prototype_version_repository,
     get_museum_question_port,
     get_object_search_port,
     get_training_example_repository,
@@ -147,6 +151,29 @@ def _completed_embedding_classification(triage_id: TriageId) -> MessageClassific
         },
         classified_at=datetime(2026, 7, 10, 12, 1, tzinfo=UTC),
         created_at=datetime(2026, 7, 10, 11, 59, tzinfo=UTC),
+    )
+
+
+def _training_example(
+    *,
+    categories: list[UseCategory] | None = None,
+    outcome: HumanCategoryOutcome = HumanCategoryOutcome.CATEGORIZED,
+) -> UseCategoryTrainingExample:
+    normalized = " ".join(_QUESTION.message.strip().casefold().split())
+    return UseCategoryTrainingExample.create(
+        triage_id=TriageId("triage-1"),
+        question_id="q1",
+        run_number=1,
+        human_outcome=outcome,
+        human_categories=(
+            [UseCategory.RESEARCH_PROJECTS] if categories is None else categories
+        ),
+        llm_categories=[],
+        embedding_categories=[],
+        source=TrainingExampleSource.HUMAN_CREATED,
+        reviewed_by=_STAFF.email,
+        reviewed_at=datetime(2026, 7, 10, 12, 0, tzinfo=UTC),
+        message_hash=hashlib.sha256(normalized.encode("utf-8")).hexdigest(),
     )
 
 
@@ -371,6 +398,53 @@ class _FakeTrainingExampleRepo:
         ]
 
 
+class _FakeEmbedding:
+    def __init__(self, vectors: dict[str, list[float]] | None = None) -> None:
+        self._vectors = vectors or {_QUESTION.message: [0.9, 0.1]}
+
+    async def embed(self, text: str) -> list[float]:
+        return self._vectors[text]
+
+    async def embed_many(self, texts: list[str]) -> list[list[float]]:
+        return [self._vectors[text] for text in texts]
+
+
+class _FakePrototypeRepo:
+    def __init__(
+        self, stored: list[EmbeddingPrototypeVersion] | None = None
+    ) -> None:
+        self.stored: list[EmbeddingPrototypeVersion] = stored or []
+
+    async def add(self, version: EmbeddingPrototypeVersion) -> None:
+        self.stored.append(version)
+
+    async def get_by_version(
+        self, version: str
+    ) -> EmbeddingPrototypeVersion | None:
+        return next((item for item in self.stored if item.version == version), None)
+
+    async def get_promoted(self) -> EmbeddingPrototypeVersion | None:
+        return next(
+            (
+                item
+                for item in self.stored
+                if item.promoted_at is not None and item.retired_at is None
+            ),
+            None,
+        )
+
+    async def list(self) -> list[EmbeddingPrototypeVersion]:
+        return list(self.stored)
+
+    async def promote(self, version: str, promoted_at: datetime) -> None:
+        for item in self.stored:
+            if item.promoted_at is not None and item.retired_at is None:
+                item.retired_at = promoted_at
+            if item.version == version:
+                item.promoted_at = promoted_at
+                item.retired_at = None
+
+
 class _FakeSession:
     def __init__(self, events: list[tuple[str, str]] | None = None) -> None:
         self.events = events
@@ -396,6 +470,8 @@ async def _client(
     repo: _FakeRepo | None = None,
     classification_repo: _FakeClassificationRepo | None = None,
     training_example_repo: _FakeTrainingExampleRepo | None = None,
+    embedding: _FakeEmbedding | None = None,
+    prototype_repo: _FakePrototypeRepo | None = None,
     events: list[tuple[str, str]] | None = None,
 ) -> AsyncIterator[AsyncClient]:
     app.dependency_overrides[get_caller_permission] = lambda: caller
@@ -412,6 +488,10 @@ async def _client(
     )
     app.dependency_overrides[get_training_example_repository] = lambda: (
         training_example_repo or _FakeTrainingExampleRepo()
+    )
+    app.dependency_overrides[get_embedding_port] = lambda: embedding or _FakeEmbedding()
+    app.dependency_overrides[get_embedding_prototype_version_repository] = lambda: (
+        prototype_repo or _FakePrototypeRepo()
     )
     app.dependency_overrides[get_async_session] = lambda: _FakeSession(events)
     transport = ASGITransport(app=app)
@@ -850,6 +930,87 @@ async def test_sync_use_categories_rejects_non_curatorial_staff_groups(
         )
 
     assert resp.status_code == 403
+
+
+async def test_generate_embedding_prototype_version_endpoint() -> None:
+    training_repo = _FakeTrainingExampleRepo(
+        stored=[
+            _training_example(
+                categories=[
+                    UseCategory.RESEARCH_PROJECTS,
+                    UseCategory.ANSWERING_ENQUIRIES,
+                ]
+            )
+        ]
+    )
+    prototype_repo = _FakePrototypeRepo()
+
+    async with _client(
+        training_example_repo=training_repo,
+        prototype_repo=prototype_repo,
+    ) as client:
+        resp = await client.post(
+            "/api/v1/museum-questions/triage/embedding-prototypes",
+            json={
+                "version": "embedding-prototypes-test-v1",
+                "aggregationMethod": "MAX_EXAMPLE",
+                "promote": True,
+            },
+        )
+
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["version"] == "embedding-prototypes-test-v1"
+    assert body["embeddingModel"] == "nomic-embed-text"
+    assert body["aggregationMethod"] == "MAX_EXAMPLE"
+    assert body["promotedAt"] is not None
+    assert body["prototypes"] == {
+        "ANSWERING_ENQUIRIES": [[0.9, 0.1]],
+        "RESEARCH_PROJECTS": [[0.9, 0.1]],
+    }
+    assert body["metrics"]["training_examples_count"] == 1
+    assert prototype_repo.stored[0].version == "embedding-prototypes-test-v1"
+
+
+async def test_generate_embedding_prototype_version_requires_examples() -> None:
+    async with _client(training_example_repo=_FakeTrainingExampleRepo()) as client:
+        resp = await client.post(
+            "/api/v1/museum-questions/triage/embedding-prototypes",
+            json={"version": "embedding-prototypes-empty"},
+        )
+
+    assert resp.status_code == 409
+    assert resp.json()["error"] == "NOT_ENOUGH_TRAINING_EXAMPLES"
+
+
+async def test_generate_embedding_prototype_version_rejects_blank_version() -> None:
+    training_repo = _FakeTrainingExampleRepo(stored=[_training_example()])
+
+    async with _client(training_example_repo=training_repo) as client:
+        resp = await client.post(
+            "/api/v1/museum-questions/triage/embedding-prototypes",
+            json={"version": "   "},
+        )
+
+    assert resp.status_code == 422
+    assert resp.json()["error"] == "INVALID_PROTOTYPE_VERSION"
+
+
+@pytest.mark.parametrize("caller", [_COLLECTIONS, _DIRECTION])
+async def test_embedding_prototype_endpoints_reject_non_curatorial_staff_groups(
+    caller: Actor,
+) -> None:
+    async with _client(caller=caller) as client:
+        list_resp = await client.get(
+            "/api/v1/museum-questions/triage/embedding-prototypes"
+        )
+        create_resp = await client.post(
+            "/api/v1/museum-questions/triage/embedding-prototypes",
+            json={"version": "embedding-prototypes-test-v1"},
+        )
+
+    assert list_resp.status_code == 403
+    assert create_resp.status_code == 403
 
 
 async def test_export_use_category_calibration_csv() -> None:

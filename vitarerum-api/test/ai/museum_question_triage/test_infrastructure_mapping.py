@@ -10,6 +10,9 @@ from app.ai.museum_question_triage.domain.models import (
     ClassificationScoreSource,
     ClassificationStatus,
     ClassifierKind,
+    EmbeddingPrototypeAggregation,
+    EmbeddingPrototypeVersion,
+    EmbeddingPrototypeVersionId,
     HumanCategoryOutcome,
     MessageClassification,
     MessageTriage,
@@ -22,11 +25,14 @@ from app.ai.museum_question_triage.domain.models import (
     UseCategoryTrainingExample,
 )
 from app.ai.museum_question_triage.infrastructure.repositories import (
+    SqlAlchemyEmbeddingPrototypeVersionRepository,
     SqlAlchemyMessageClassificationRepository,
     SqlAlchemyTriageRepository,
     SqlAlchemyUseCategoryTrainingExampleRepository,
     classification_to_domain,
     classification_to_orm,
+    embedding_prototype_version_to_domain,
+    embedding_prototype_version_to_orm,
     training_example_to_domain,
     training_example_to_orm,
 )
@@ -121,6 +127,28 @@ def _training_example(
     )
 
 
+def _prototype_version(
+    *,
+    id_: str = "prototype-1",
+    version: str = "embedding-prototypes-test-v1",
+    promoted_at: datetime | None = None,
+    retired_at: datetime | None = None,
+) -> EmbeddingPrototypeVersion:
+    return EmbeddingPrototypeVersion(
+        id=EmbeddingPrototypeVersionId(id_),
+        version=version,
+        embedding_model="nomic-embed-text",
+        aggregation_method=EmbeddingPrototypeAggregation.MAX_EXAMPLE,
+        threshold_profile={"profile_version": "test"},
+        example_ids=[TrainingExampleId("example-1")],
+        prototypes={UseCategory.RESEARCH_PROJECTS: [[0.9, 0.1]]},
+        metrics={"training_examples_count": 1},
+        created_at=_NOW,
+        promoted_at=promoted_at,
+        retired_at=retired_at,
+    )
+
+
 async def _session_factory() -> async_sessionmaker:
     engine = create_async_engine(
         "sqlite+aiosqlite://",
@@ -167,6 +195,23 @@ def test_training_example_roundtrip_preserves_key_data() -> None:
     assert rebuilt.reviewed_by == "s@museum.pt"
     assert rebuilt.message_hash == "a" * 64
     assert rebuilt.active is True
+
+
+def test_embedding_prototype_version_roundtrip_preserves_key_data() -> None:
+    version = _prototype_version()
+
+    rebuilt = embedding_prototype_version_to_domain(
+        embedding_prototype_version_to_orm(version)
+    )
+
+    assert rebuilt.id == version.id
+    assert rebuilt.version == "embedding-prototypes-test-v1"
+    assert rebuilt.embedding_model == "nomic-embed-text"
+    assert rebuilt.aggregation_method is EmbeddingPrototypeAggregation.MAX_EXAMPLE
+    assert rebuilt.threshold_profile == {"profile_version": "test"}
+    assert rebuilt.example_ids == [TrainingExampleId("example-1")]
+    assert rebuilt.prototypes == {UseCategory.RESEARCH_PROJECTS: [[0.9, 0.1]]}
+    assert rebuilt.metrics == {"training_examples_count": 1}
 
 
 async def test_repository_returns_current_unsuperseded_highest_run() -> None:
@@ -247,3 +292,34 @@ async def test_training_example_repository_supersedes_and_filters_active() -> No
     assert [example.id for example in active] == ["new"]
     assert current is not None
     assert current.id == "new"
+
+
+async def test_embedding_prototype_repository_promotes_and_retires_previous() -> None:
+    factory = await _session_factory()
+    promoted_at = datetime(2026, 7, 10, 13, 0, tzinfo=UTC)
+
+    async with factory() as session:
+        repo = SqlAlchemyEmbeddingPrototypeVersionRepository(session)
+        await repo.add(
+            _prototype_version(
+                id_="old",
+                version="embedding-prototypes-old",
+                promoted_at=_NOW,
+            )
+        )
+        await repo.add(
+            _prototype_version(id_="new", version="embedding-prototypes-new")
+        )
+        await session.commit()
+
+        await repo.promote("embedding-prototypes-new", promoted_at)
+        await session.commit()
+
+        promoted = await repo.get_promoted()
+        old = await repo.get_by_version("embedding-prototypes-old")
+
+    assert promoted is not None
+    assert promoted.version == "embedding-prototypes-new"
+    assert promoted.promoted_at == promoted_at.replace(tzinfo=None)
+    assert old is not None
+    assert old.retired_at == promoted_at.replace(tzinfo=None)

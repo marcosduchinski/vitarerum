@@ -25,6 +25,7 @@ from app.ai.museum_question_triage.application.use_cases import (
     CreatePendingEmbeddingUseCategoryClassification,
     CreatePendingUseCategoryClassification,
     ExportUseCategoryCalibrationCsv,
+    GenerateEmbeddingPrototypeVersion,
     GetLatestTriage,
     OverrideTriageVerdict,
     SyncTriageSearchTerms,
@@ -33,6 +34,7 @@ from app.ai.museum_question_triage.application.use_cases import (
 )
 from app.ai.museum_question_triage.domain.ports import (
     EmbeddingClassifierPort,
+    EmbeddingPrototypeVersionRepository,
     MessageClassificationRepository,
     MuseumQuestionPort,
     ObjectSearchPort,
@@ -53,6 +55,7 @@ from app.ai.museum_question_triage.infrastructure.object_search_acl import (
     ObjectSearchAdapter,
 )
 from app.ai.museum_question_triage.infrastructure.repositories import (
+    SqlAlchemyEmbeddingPrototypeVersionRepository,
     SqlAlchemyMessageClassificationRepository,
     SqlAlchemyTriageRepository,
     SqlAlchemyUseCategoryTrainingExampleRepository,
@@ -108,6 +111,12 @@ def get_training_example_repository(
     return SqlAlchemyUseCategoryTrainingExampleRepository(session)
 
 
+def get_embedding_prototype_version_repository(
+    session: DBSession,
+) -> EmbeddingPrototypeVersionRepository:
+    return SqlAlchemyEmbeddingPrototypeVersionRepository(session)
+
+
 MuseumQuestionAclPort = Annotated[MuseumQuestionPort, Depends(get_museum_question_port)]
 ModelPort = Annotated[TriageModelPort, Depends(get_triage_model_port)]
 EmbeddingPort = Annotated[EmbeddingClassifierPort, Depends(get_embedding_port)]
@@ -118,6 +127,10 @@ ClassificationRepository = Annotated[
 ]
 TrainingExampleRepository = Annotated[
     UseCategoryTrainingExampleRepository, Depends(get_training_example_repository)
+]
+EmbeddingPrototypeRepository = Annotated[
+    EmbeddingPrototypeVersionRepository,
+    Depends(get_embedding_prototype_version_repository),
 ]
 
 
@@ -260,6 +273,20 @@ def get_sync_use_categories_use_case(
     )
 
 
+def get_generate_embedding_prototype_version_use_case(
+    museum_question: MuseumQuestionAclPort,
+    embedding: EmbeddingPort,
+    training_example_repository: TrainingExampleRepository,
+    prototype_repository: EmbeddingPrototypeRepository,
+) -> GenerateEmbeddingPrototypeVersion:
+    return GenerateEmbeddingPrototypeVersion(
+        museum_question,
+        embedding,
+        training_example_repository,
+        prototype_repository,
+    )
+
+
 TriageUseCase = Annotated[TriageMuseumQuestion, Depends(get_triage_use_case)]
 GetLatestTriageUseCase = Annotated[GetLatestTriage, Depends(get_latest_triage_use_case)]
 CreatePendingUseCategoryUseCase = Annotated[
@@ -298,4 +325,8 @@ SyncSearchTermsUseCase = Annotated[
 ]
 SyncUseCategoriesUseCase = Annotated[
     SyncUseCategories, Depends(get_sync_use_categories_use_case)
+]
+GenerateEmbeddingPrototypeVersionUseCase = Annotated[
+    GenerateEmbeddingPrototypeVersion,
+    Depends(get_generate_embedding_prototype_version_use_case),
 ]

@@ -20,6 +20,9 @@ from app.ai.museum_question_triage.domain.models import (
     ClassificationScoreSource,
     ClassificationStatus,
     ClassifierKind,
+    EmbeddingPrototypeAggregation,
+    EmbeddingPrototypeVersion,
+    EmbeddingPrototypeVersionId,
     HumanCategoryOutcome,
     MentionedObject,
     MentionedObjectOrigin,
@@ -36,6 +39,7 @@ from app.ai.museum_question_triage.domain.models import (
     UseCategoryTrainingExample,
 )
 from app.ai.museum_question_triage.infrastructure.models import (
+    EmbeddingPrototypeVersionOrm,
     MessageClassificationOrm,
     MessageTriageOrm,
     UseCategoryTrainingExampleOrm,
@@ -281,6 +285,62 @@ def training_example_to_domain(
     )
 
 
+def _prototype_vectors_to_json(
+    prototypes: dict[UseCategory, list[list[float]]],
+) -> dict[str, list[list[float]]]:
+    return {
+        category.value: [[float(value) for value in vector] for vector in vectors]
+        for category, vectors in prototypes.items()
+    }
+
+
+def _prototype_vectors_from_json(
+    raw: dict[str, list[list[float]]],
+) -> dict[UseCategory, list[list[float]]]:
+    return {
+        UseCategory(category): [
+            [float(value) for value in vector] for vector in vectors
+        ]
+        for category, vectors in raw.items()
+    }
+
+
+def embedding_prototype_version_to_orm(
+    version: EmbeddingPrototypeVersion,
+) -> EmbeddingPrototypeVersionOrm:
+    return EmbeddingPrototypeVersionOrm(
+        id=version.id,
+        version=version.version,
+        embedding_model=version.embedding_model,
+        aggregation_method=version.aggregation_method.value,
+        threshold_profile=dict(version.threshold_profile),
+        example_ids=[example_id for example_id in version.example_ids],
+        prototypes=_prototype_vectors_to_json(version.prototypes),
+        metrics=dict(version.metrics),
+        created_at=version.created_at,
+        promoted_at=version.promoted_at,
+        retired_at=version.retired_at,
+    )
+
+
+def embedding_prototype_version_to_domain(
+    orm: EmbeddingPrototypeVersionOrm,
+) -> EmbeddingPrototypeVersion:
+    return EmbeddingPrototypeVersion(
+        id=EmbeddingPrototypeVersionId(orm.id),
+        version=orm.version,
+        embedding_model=orm.embedding_model,
+        aggregation_method=EmbeddingPrototypeAggregation(orm.aggregation_method),
+        threshold_profile=dict(orm.threshold_profile),
+        example_ids=[TrainingExampleId(example_id) for example_id in orm.example_ids],
+        prototypes=_prototype_vectors_from_json(orm.prototypes),
+        metrics=dict(orm.metrics),
+        created_at=orm.created_at,
+        promoted_at=orm.promoted_at,
+        retired_at=orm.retired_at,
+    )
+
+
 class SqlAlchemyTriageRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -504,3 +564,60 @@ class SqlAlchemyUseCategoryTrainingExampleRepository:
             training_example_to_domain(orm)
             for orm in (await self._session.execute(stmt)).scalars()
         ]
+
+
+class SqlAlchemyEmbeddingPrototypeVersionRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def add(self, version: EmbeddingPrototypeVersion) -> None:
+        self._session.add(embedding_prototype_version_to_orm(version))
+        await self._session.flush()
+
+    async def get_by_version(
+        self, version: str
+    ) -> EmbeddingPrototypeVersion | None:
+        stmt = select(EmbeddingPrototypeVersionOrm).where(
+            EmbeddingPrototypeVersionOrm.version == version
+        )
+        orm = (await self._session.execute(stmt)).scalar_one_or_none()
+        return embedding_prototype_version_to_domain(orm) if orm else None
+
+    async def get_promoted(self) -> EmbeddingPrototypeVersion | None:
+        stmt = (
+            select(EmbeddingPrototypeVersionOrm)
+            .where(
+                EmbeddingPrototypeVersionOrm.promoted_at.is_not(None),
+                EmbeddingPrototypeVersionOrm.retired_at.is_(None),
+            )
+            .order_by(EmbeddingPrototypeVersionOrm.promoted_at.desc())
+            .limit(1)
+        )
+        orm = (await self._session.execute(stmt)).scalar_one_or_none()
+        return embedding_prototype_version_to_domain(orm) if orm else None
+
+    async def list(self) -> list[EmbeddingPrototypeVersion]:
+        stmt = select(EmbeddingPrototypeVersionOrm).order_by(
+            EmbeddingPrototypeVersionOrm.created_at.desc()
+        )
+        return [
+            embedding_prototype_version_to_domain(orm)
+            for orm in (await self._session.execute(stmt)).scalars()
+        ]
+
+    async def promote(self, version: str, promoted_at: datetime) -> None:
+        current_stmt = select(EmbeddingPrototypeVersionOrm).where(
+            EmbeddingPrototypeVersionOrm.promoted_at.is_not(None),
+            EmbeddingPrototypeVersionOrm.retired_at.is_(None),
+        )
+        for orm in (await self._session.execute(current_stmt)).scalars():
+            orm.retired_at = promoted_at
+
+        target_stmt = select(EmbeddingPrototypeVersionOrm).where(
+            EmbeddingPrototypeVersionOrm.version == version
+        )
+        target = (await self._session.execute(target_stmt)).scalar_one_or_none()
+        assert target is not None, f"No prototype version {version!r} to promote"
+        target.promoted_at = promoted_at
+        target.retired_at = None
+        await self._session.flush()

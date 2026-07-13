@@ -136,3 +136,34 @@ class UseCategoryTrainingExampleOrm(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, index=True
     )
+
+
+class EmbeddingPrototypeVersionOrm(Base):
+    __tablename__ = "museum_question_embedding_prototype_versions"
+    __table_args__ = (
+        Index(
+            "ix_mq_embedding_prototype_versions_promoted",
+            "promoted_at",
+            "retired_at",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    version: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    embedding_model: Mapped[str] = mapped_column(String(128), nullable=False)
+    aggregation_method: Mapped[str] = mapped_column(String(32), nullable=False)
+    threshold_profile: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    example_ids: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    prototypes: Mapped[dict[str, list[list[float]]]] = mapped_column(
+        JSON, nullable=False
+    )
+    metrics: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, index=True
+    )
+    promoted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    retired_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )

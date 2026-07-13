@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from app.ai.museum_question_triage.domain.models import (
         ClassificationId,
         ClassifierKind,
+        EmbeddingPrototypeVersion,
         MessageClassification,
         MessageTriage,
         ObjectHitView,
@@ -163,3 +164,19 @@ class UseCategoryTrainingExampleRepository(Protocol):
     ) -> None: ...
 
     async def list_active_current(self) -> list[UseCategoryTrainingExample]: ...
+
+
+class EmbeddingPrototypeVersionRepository(Protocol):
+    """Persists reproducible embedding prototype snapshots."""
+
+    async def add(self, version: EmbeddingPrototypeVersion) -> None: ...
+
+    async def get_by_version(
+        self, version: str
+    ) -> EmbeddingPrototypeVersion | None: ...
+
+    async def get_promoted(self) -> EmbeddingPrototypeVersion | None: ...
+
+    async def list(self) -> list[EmbeddingPrototypeVersion]: ...
+
+    async def promote(self, version: str, promoted_at: datetime) -> None: ...

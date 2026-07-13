@@ -1,4 +1,5 @@
 import csv
+import hashlib
 from datetime import UTC, datetime
 from io import StringIO
 
@@ -24,8 +25,11 @@ from app.ai.museum_question_triage.application.use_cases import (
     CreatePendingUseCategoryClassificationInput,
     ExportUseCategoryCalibrationCsv,
     ExportUseCategoryCalibrationInput,
+    GenerateEmbeddingPrototypeVersion,
+    GenerateEmbeddingPrototypeVersionInput,
     GetLatestTriage,
     GetLatestTriageInput,
+    NotEnoughTrainingExamples,
     OverrideTriageVerdict,
     OverrideTriageVerdictInput,
     SyncTriageSearchTerms,
@@ -42,6 +46,8 @@ from app.ai.museum_question_triage.domain.models import (
     ClassificationScoreSource,
     ClassificationStatus,
     ClassifierKind,
+    EmbeddingPrototypeAggregation,
+    EmbeddingPrototypeVersion,
     HumanCategoryOutcome,
     MentionedObject,
     MentionedObjectOrigin,
@@ -182,6 +188,19 @@ class _FakeEmbeddingClassifier:
             ),
             metadata=dict(self._metadata),
         )
+
+
+class _FakeEmbedding:
+    def __init__(self, vectors: dict[str, list[float]]) -> None:
+        self._vectors = vectors
+        self.calls: list[list[str]] = []
+
+    async def embed(self, text: str) -> list[float]:
+        return self._vectors[text]
+
+    async def embed_many(self, texts: list[str]) -> list[list[float]]:
+        self.calls.append(texts)
+        return [self._vectors[text] for text in texts]
 
 
 class _FakeObjectSearch:
@@ -364,6 +383,45 @@ class _FakeTrainingExampleRepo:
         ]
 
 
+class _FakePrototypeVersionRepo:
+    def __init__(self) -> None:
+        self.stored: list[EmbeddingPrototypeVersion] = []
+        self.promote_calls: list[tuple[str, datetime]] = []
+
+    async def add(self, version: EmbeddingPrototypeVersion) -> None:
+        self.stored.append(version)
+
+    async def get_by_version(
+        self, version: str
+    ) -> EmbeddingPrototypeVersion | None:
+        return next(
+            (item for item in self.stored if item.version == version),
+            None,
+        )
+
+    async def get_promoted(self) -> EmbeddingPrototypeVersion | None:
+        return next(
+            (
+                item
+                for item in self.stored
+                if item.promoted_at is not None and item.retired_at is None
+            ),
+            None,
+        )
+
+    async def list(self) -> list[EmbeddingPrototypeVersion]:
+        return list(self.stored)
+
+    async def promote(self, version: str, promoted_at: datetime) -> None:
+        self.promote_calls.append((version, promoted_at))
+        for item in self.stored:
+            if item.promoted_at is not None and item.retired_at is None:
+                item.retired_at = promoted_at
+            if item.version == version:
+                item.promoted_at = promoted_at
+                item.retired_at = None
+
+
 class _FailingTrainingExampleRepo(_FakeTrainingExampleRepo):
     async def add(self, example: UseCategoryTrainingExample) -> None:
         raise RuntimeError("training example store failed")
@@ -399,6 +457,38 @@ def _stored_use_category_triage(question_id: str = "q1") -> MessageTriage:
         suggested_reply=None,
         llm_model="llama3.1:8b",
         created_at=datetime(2026, 7, 10, 12, 0, tzinfo=UTC),
+    )
+
+
+def _training_example(
+    *,
+    id_: str = "example-1",
+    question_id: str = "q1",
+    categories: list[UseCategory] | None = None,
+    outcome: HumanCategoryOutcome = HumanCategoryOutcome.CATEGORIZED,
+    message: str = _QUESTION.message,
+) -> UseCategoryTrainingExample:
+    human_categories = (
+        [UseCategory.RESEARCH_PROJECTS] if categories is None else categories
+    )
+    return UseCategoryTrainingExample.create(
+        triage_id=TriageId(f"triage-{id_}"),
+        question_id=question_id,
+        run_number=1,
+        human_outcome=outcome,
+        human_categories=human_categories,
+        llm_categories=[],
+        embedding_categories=[],
+        source=TrainingExampleSource.HUMAN_CREATED,
+        reviewed_by=_STAFF.email,
+        reviewed_at=datetime(2026, 7, 10, 12, 0, tzinfo=UTC),
+        message_hash=(
+            "unclear-hash"
+            if outcome is HumanCategoryOutcome.UNCLEAR
+            else hashlib.sha256(
+                " ".join(message.strip().casefold().split()).encode("utf-8")
+            ).hexdigest()
+        ),
     )
 
 
@@ -898,6 +988,73 @@ async def test_sync_use_categories_can_mark_unclear() -> None:
     assert result.category_scores == []
     assert training_repo.stored[0].human_outcome is HumanCategoryOutcome.UNCLEAR
     assert training_repo.stored[0].human_categories == []
+
+
+async def test_generate_embedding_prototype_version_from_human_examples() -> None:
+    message = _QUESTION.message
+    training_repo = _FakeTrainingExampleRepo()
+    positive = _training_example(
+        categories=[UseCategory.RESEARCH_PROJECTS, UseCategory.ANSWERING_ENQUIRIES],
+        message=message,
+    )
+    unclear = _training_example(
+        id_="unclear",
+        categories=[],
+        outcome=HumanCategoryOutcome.UNCLEAR,
+    )
+    training_repo.stored.extend([positive, unclear])
+    prototype_repo = _FakePrototypeVersionRepo()
+    embedding = _FakeEmbedding({message: [0.9, 0.1]})
+    use_case = GenerateEmbeddingPrototypeVersion(
+        _FakeMuseumQuestion(), embedding, training_repo, prototype_repo
+    )
+
+    result = await use_case.execute(
+        GenerateEmbeddingPrototypeVersionInput(
+            version="embedding-prototypes-2026-07-13-v1",
+            embedding_model="nomic-embed-text",
+            threshold_profile={"profile_version": "test-thresholds"},
+            promote=True,
+        )
+    )
+
+    assert result.version == "embedding-prototypes-2026-07-13-v1"
+    assert result.embedding_model == "nomic-embed-text"
+    assert result.aggregation_method is EmbeddingPrototypeAggregation.MAX_EXAMPLE
+    assert result.promoted_at is not None
+    assert result.example_ids == [positive.id, unclear.id]
+    assert result.prototypes == {
+        UseCategory.ANSWERING_ENQUIRIES: [[0.9, 0.1]],
+        UseCategory.RESEARCH_PROJECTS: [[0.9, 0.1]],
+    }
+    assert result.metrics["training_examples_count"] == 2
+    assert result.metrics["unclear_examples_count"] == 1
+    assert result.metrics["positive_examples_count"] == 2
+    assert prototype_repo.stored == [result]
+    assert prototype_repo.promote_calls[0][0] == result.version
+    assert embedding.calls == [[message]]
+
+
+async def test_generate_embedding_prototype_version_requires_examples() -> None:
+    training_repo = _FakeTrainingExampleRepo()
+    training_repo.stored.append(
+        _training_example(categories=[], outcome=HumanCategoryOutcome.UNCLEAR)
+    )
+    use_case = GenerateEmbeddingPrototypeVersion(
+        _FakeMuseumQuestion(),
+        _FakeEmbedding({}),
+        training_repo,
+        _FakePrototypeVersionRepo(),
+    )
+
+    with pytest.raises(NotEnoughTrainingExamples):
+        await use_case.execute(
+            GenerateEmbeddingPrototypeVersionInput(
+                version="embedding-prototypes-empty",
+                embedding_model="nomic-embed-text",
+                threshold_profile={},
+            )
+        )
 
 
 async def test_export_use_category_calibration_csv_excludes_message_text() -> None:

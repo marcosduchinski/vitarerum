@@ -6,12 +6,14 @@ from app.ai.museum_question_triage.application.search_strategy import (
     SEARCH_STRATEGY_DESCRIPTION,
 )
 from app.ai.museum_question_triage.domain.models import (
+    EmbeddingPrototypeVersion,
     MessageClassification,
     MessageTriage,
     TriageVerdict,
     UseCategoryScore,
 )
 from app.ai.museum_question_triage.presentation.schemas import (
+    EmbeddingPrototypeVersionResponse,
     MentionedObjectResponse,
     ObjectHitResponse,
     ObjectTriageMatchResponse,
@@ -101,6 +103,26 @@ def use_category_classification_audit_list_response(
             use_category_classification_audit_response(classification)
             for classification in sorted_classifications
         ],
+    )
+
+
+def embedding_prototype_version_response(
+    version: EmbeddingPrototypeVersion,
+) -> EmbeddingPrototypeVersionResponse:
+    return EmbeddingPrototypeVersionResponse(
+        id=version.id,
+        version=version.version,
+        embeddingModel=version.embedding_model,
+        aggregationMethod=version.aggregation_method.value,
+        thresholdProfile=dict(version.threshold_profile),
+        exampleIds=[example_id for example_id in version.example_ids],
+        prototypes={
+            category.value: vectors for category, vectors in version.prototypes.items()
+        },
+        metrics=dict(version.metrics),
+        createdAt=version.created_at,
+        promotedAt=version.promoted_at,
+        retiredAt=version.retired_at,
     )
 
 

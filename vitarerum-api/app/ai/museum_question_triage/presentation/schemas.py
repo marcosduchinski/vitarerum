@@ -14,6 +14,7 @@ ClassificationOutcomeValue = Literal["CATEGORIZED", "UNCLEAR"]
 ClassificationQualityValue = Literal["FULL", "DEGRADED"]
 ClassifierKindValue = Literal["LLM", "EMBEDDING", "CASCADE"]
 ClassificationScoreSourceValue = Literal["LLM", "EMBEDDING"]
+EmbeddingPrototypeAggregationValue = Literal["MEAN", "MAX_EXAMPLE", "HYBRID"]
 UseCategoryValue = Literal[
     "EXHIBITION",
     "PUBLISHING_IMAGES",
@@ -81,6 +82,26 @@ class UseCategoryClassificationAuditResponse(UseCategoryClassificationResponse):
 class UseCategoryClassificationAuditListResponse(BaseModel):
     triageId: str
     classifications: list[UseCategoryClassificationAuditResponse]
+
+
+class EmbeddingPrototypeVersionResponse(BaseModel):
+    id: str
+    version: str
+    embeddingModel: str
+    aggregationMethod: EmbeddingPrototypeAggregationValue
+    thresholdProfile: dict[str, Any]
+    exampleIds: list[str]
+    prototypes: dict[str, list[list[float]]]
+    metrics: dict[str, Any]
+    createdAt: datetime
+    promotedAt: datetime | None
+    retiredAt: datetime | None
+
+
+class GenerateEmbeddingPrototypeVersionRequest(BaseModel):
+    version: str
+    aggregationMethod: EmbeddingPrototypeAggregationValue = "MAX_EXAMPLE"
+    promote: bool = False
 
 
 class TriageResponse(BaseModel):

@@ -37,7 +37,9 @@ from app.ai.museum_question_triage.application.use_cases import (
     CreatePendingEmbeddingUseCategoryClassificationInput,
     CreatePendingUseCategoryClassificationInput,
     ExportUseCategoryCalibrationInput,
+    GenerateEmbeddingPrototypeVersionInput,
     GetLatestTriageInput,
+    NotEnoughTrainingExamples,
     OverrideTriageVerdictInput,
     SyncTriageSearchTermsInput,
     SyncUseCategoriesInput,
@@ -47,7 +49,9 @@ from app.ai.museum_question_triage.domain.models import (
     ClassificationId,
     ClassificationStatus,
     ClassifierKind,
+    EmbeddingPrototypeAggregation,
     HumanCategoryOutcome,
+    InvalidEmbeddingPrototypeVersion,
     InvalidUseCategoryTrainingExample,
     MessageClassification,
     TriageId,
@@ -80,7 +84,9 @@ from app.ai.museum_question_triage.presentation.dependencies import (
     CreatePendingCascadeUseCategoryUseCase,
     CreatePendingEmbeddingUseCategoryUseCase,
     CreatePendingUseCategoryUseCase,
+    EmbeddingPrototypeRepository,
     ExportUseCategoryCalibrationCsvUseCase,
+    GenerateEmbeddingPrototypeVersionUseCase,
     GetLatestTriageUseCase,
     OverrideVerdictUseCase,
     SyncSearchTermsUseCase,
@@ -88,10 +94,13 @@ from app.ai.museum_question_triage.presentation.dependencies import (
     TriageUseCase,
 )
 from app.ai.museum_question_triage.presentation.mappers import (
+    embedding_prototype_version_response,
     triage_response,
     use_category_classification_audit_list_response,
 )
 from app.ai.museum_question_triage.presentation.schemas import (
+    EmbeddingPrototypeVersionResponse,
+    GenerateEmbeddingPrototypeVersionRequest,
     OverrideTriageVerdictRequest,
     TriageResponse,
     TriageSearchTermsRequest,
@@ -128,6 +137,66 @@ async def export_use_category_calibration_csv(
             )
         },
     )
+
+
+@museum_question_triage_router.get(
+    "/triage/embedding-prototypes",
+    response_model=list[EmbeddingPrototypeVersionResponse],
+)
+async def list_embedding_prototype_versions(
+    caller: CallerPermission,
+    repository: EmbeddingPrototypeRepository,
+) -> list[EmbeddingPrototypeVersionResponse]:
+    require_group(caller, GroupName.CURATORIAL)
+    return [
+        embedding_prototype_version_response(version)
+        for version in await repository.list()
+    ]
+
+
+@museum_question_triage_router.post(
+    "/triage/embedding-prototypes",
+    response_model=EmbeddingPrototypeVersionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def generate_embedding_prototype_version(
+    body: GenerateEmbeddingPrototypeVersionRequest,
+    caller: CallerPermission,
+    use_case: GenerateEmbeddingPrototypeVersionUseCase,
+    session: DBSession,
+) -> EmbeddingPrototypeVersionResponse:
+    require_group(caller, GroupName.CURATORIAL)
+    try:
+        result = await use_case.execute(
+            GenerateEmbeddingPrototypeVersionInput(
+                version=body.version,
+                embedding_model=settings.use_category_embedding_model,
+                aggregation_method=EmbeddingPrototypeAggregation(
+                    body.aggregationMethod
+                ),
+                threshold_profile={
+                    "profile_version": settings.use_category_embedding_profile_version,
+                    "low": settings.use_category_embedding_low_threshold,
+                    "high": settings.use_category_embedding_high_threshold,
+                    "long_message_words": (
+                        settings.use_category_embedding_long_message_words
+                    ),
+                },
+                promote=body.promote,
+            )
+        )
+    except NotEnoughTrainingExamples as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"error": "NOT_ENOUGH_TRAINING_EXAMPLES", "message": str(exc)},
+        ) from exc
+    except (InvalidEmbeddingPrototypeVersion, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"error": "INVALID_PROTOTYPE_VERSION", "message": str(exc)},
+        ) from exc
+    await session.commit()
+    return embedding_prototype_version_response(result)
 
 
 def _not_found(question_id: str) -> HTTPException:
