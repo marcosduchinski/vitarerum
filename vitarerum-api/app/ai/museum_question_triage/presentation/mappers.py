@@ -16,6 +16,8 @@ from app.ai.museum_question_triage.presentation.schemas import (
     ObjectHitResponse,
     ObjectTriageMatchResponse,
     TriageResponse,
+    UseCategoryClassificationAuditListResponse,
+    UseCategoryClassificationAuditResponse,
     UseCategoryClassificationResponse,
     UseCategoryScoreResponse,
 )
@@ -63,6 +65,42 @@ def use_category_classification_response(
         ],
         classifiedAt=classification.classified_at,
         error=classification.error,
+    )
+
+
+def use_category_classification_audit_response(
+    classification: MessageClassification,
+) -> UseCategoryClassificationAuditResponse:
+    base = use_category_classification_response(classification)
+    return UseCategoryClassificationAuditResponse(
+        **base.model_dump(),
+        id=classification.id,
+        triageId=classification.triage_id,
+        runNumber=classification.run_number,
+        supersededAt=classification.superseded_at,
+        metadata=dict(classification.metadata),
+        createdAt=classification.created_at,
+    )
+
+
+def use_category_classification_audit_list_response(
+    triage_id: str,
+    classifications: list[MessageClassification],
+) -> UseCategoryClassificationAuditListResponse:
+    kind_order = {"LLM": 0, "EMBEDDING": 1, "CASCADE": 2}
+    sorted_classifications = sorted(
+        classifications,
+        key=lambda item: (
+            kind_order.get(item.classifier_kind.value, 99),
+            -item.run_number,
+        ),
+    )
+    return UseCategoryClassificationAuditListResponse(
+        triageId=triage_id,
+        classifications=[
+            use_category_classification_audit_response(classification)
+            for classification in sorted_classifications
+        ],
     )
 
 

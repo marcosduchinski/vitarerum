@@ -70,6 +70,17 @@ class TriageModelPort(Protocol):
     async def draft_out_of_scope_reply(self, message: str) -> str: ...
 
 
+class EmbeddingClassifierPort(Protocol):
+    """Embeds text for the shadow use-category classifier.
+
+    Raises :class:`ModelUnavailable` / :class:`ModelTimeout`.
+    """
+
+    async def embed(self, text: str) -> list[float]: ...
+
+    async def embed_many(self, texts: list[str]) -> list[list[float]]: ...
+
+
 class MuseumQuestionPort(Protocol):
     """Reads a museum question through the published language ACL."""
 
@@ -96,6 +107,8 @@ class TriageRepository(Protocol):
         self, question_id: str
     ) -> MessageTriage | None: ...
 
+    async def list_latest(self, *, limit: int) -> list[MessageTriage]: ...
+
     async def update(self, triage: MessageTriage) -> None:
         """Persist in-place revisions to an already-stored triage run (staff
         override of the verdict, or a reconciled search-term list) — as
@@ -116,6 +129,10 @@ class MessageClassificationRepository(Protocol):
     async def get_current_by_triage(
         self, triage_id: TriageId, classifier_kind: ClassifierKind
     ) -> MessageClassification | None: ...
+
+    async def list_current_by_triage(
+        self, triage_id: TriageId
+    ) -> list[MessageClassification]: ...
 
     async def supersede_current(
         self,

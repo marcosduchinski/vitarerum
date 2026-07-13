@@ -1,0 +1,38 @@
+{
+  "EXHIBITION": [
+    "Request to include collection objects in an exhibition or gallery display.",
+    "Pedido para expor objetos do acervo em uma mostra temporaria ou permanente."
+  ],
+  "PUBLISHING_IMAGES": [
+    "Request to reproduce or publish images of collection objects in a book, article, website, or media.",
+    "Pedido de autorizacao para publicar fotografias ou imagens de itens do acervo."
+  ],
+  "LEARNING_EVENTS": [
+    "Use of collection objects in a class, workshop, lecture, guided activity, or education event.",
+    "Uso de pecas do acervo em aula, oficina, palestra ou atividade educativa."
+  ],
+  "ANSWERING_ENQUIRIES": [
+    "Question asking museum staff to identify, explain, or provide information about a collection object.",
+    "Pergunta ao museu solicitando identificacao, contexto ou informacao sobre um objeto do acervo."
+  ],
+  "RESEARCH_PROJECTS": [
+    "Researcher asks to study, inspect, sample, measure, or consult collection specimens or records.",
+    "Pesquisador solicita acesso para estudar, analisar, medir ou consultar especimes e registros do acervo."
+  ],
+  "OPERATING_MACHINERY": [
+    "Request to operate historical machinery, vehicles, tools, or technical equipment from the collection.",
+    "Pedido para operar maquinaria, veiculos, ferramentas ou equipamentos historicos do acervo."
+  ],
+  "PLAYING_INSTRUMENTS": [
+    "Request to play musical instruments from the collection for performance, study, or recording.",
+    "Pedido para tocar instrumentos musicais do acervo em estudo, apresentacao ou gravacao."
+  ],
+  "FILMING": [
+    "Request to film, record video, photograph a production, or use collection spaces and objects in a shoot.",
+    "Pedido de filmagem, gravacao ou producao audiovisual envolvendo objetos ou espacos do acervo."
+  ],
+  "INSPIRING_NEW_WORK": [
+    "Artist, designer, writer, or maker wants to use the collection as inspiration for a new creative work.",
+    "Artista, designer ou criador quer usar o acervo como inspiracao para uma nova obra."
+  ]
+}

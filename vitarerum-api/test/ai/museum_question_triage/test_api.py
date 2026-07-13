@@ -1,6 +1,8 @@
+import csv
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
+from io import StringIO
 
 from httpx import ASGITransport, AsyncClient
 
@@ -105,6 +107,35 @@ def _failed_classification(triage_id: TriageId) -> MessageClassification:
     )
 
 
+def _completed_embedding_classification(triage_id: TriageId) -> MessageClassification:
+    score = UseCategoryScore(
+        category=UseCategory.RESEARCH_PROJECTS,
+        confidence=0.86,
+        source=ClassificationScoreSource.EMBEDDING,
+    )
+    return MessageClassification(
+        id=ClassificationId("classification-embedding-completed"),
+        triage_id=triage_id,
+        classifier_kind=ClassifierKind.EMBEDDING,
+        classifier_model="nomic-embed-text",
+        classifier_version="embedding-prototypes-v1",
+        run_number=1,
+        superseded_at=None,
+        status=ClassificationStatus.COMPLETED,
+        outcome=ClassificationOutcome.CATEGORIZED,
+        quality=ClassificationQuality.FULL,
+        category_scores=[score],
+        assigned_categories=[score],
+        error=None,
+        metadata={
+            "threshold_profile": "embedding-prototypes-v1",
+            "would_escalate_due_to_length": False,
+        },
+        classified_at=datetime(2026, 7, 10, 12, 1, tzinfo=UTC),
+        created_at=datetime(2026, 7, 10, 11, 59, tzinfo=UTC),
+    )
+
+
 class _FakeMuseumQuestion:
     def __init__(self, *, question: QuestionView | None = _QUESTION) -> None:
         self._question = question
@@ -171,6 +202,10 @@ class _FakeRepo:
         matches.sort(key=lambda t: t.created_at, reverse=True)
         return matches[0] if matches else None
 
+    async def list_latest(self, *, limit: int) -> list[MessageTriage]:
+        matches = sorted(self.stored, key=lambda t: t.created_at, reverse=True)
+        return matches[:limit]
+
     async def update(self, triage: MessageTriage) -> None:
         for index, existing in enumerate(self.stored):
             if existing.id == triage.id:
@@ -217,11 +252,51 @@ class _FakeClassificationRepo:
         matches.sort(key=lambda classification: classification.run_number, reverse=True)
         return matches[0] if matches else None
 
-    async def supersede_current(self, *args, **kwargs) -> None:
-        return None
+    async def list_current_by_triage(
+        self, triage_id: TriageId
+    ) -> list[MessageClassification]:
+        return [
+            classification
+            for classification in self.stored
+            if classification.triage_id == triage_id
+            and classification.superseded_at is None
+        ]
+
+    async def supersede_current(
+        self,
+        triage_id: TriageId,
+        classifier_kind: ClassifierKind,
+        superseded_at: datetime,
+    ) -> None:
+        current = await self.get_current_by_triage(triage_id, classifier_kind)
+        if current is None:
+            return
+        index = self.stored.index(current)
+        self.stored[index] = MessageClassification(
+            id=current.id,
+            triage_id=current.triage_id,
+            classifier_kind=current.classifier_kind,
+            classifier_model=current.classifier_model,
+            classifier_version=current.classifier_version,
+            run_number=current.run_number,
+            superseded_at=superseded_at,
+            status=current.status,
+            outcome=current.outcome,
+            quality=current.quality,
+            category_scores=list(current.category_scores),
+            assigned_categories=list(current.assigned_categories),
+            error=current.error,
+            metadata=dict(current.metadata),
+            classified_at=current.classified_at,
+            created_at=current.created_at,
+        )
 
     async def update(self, classification: MessageClassification) -> None:
-        return None
+        for index, existing in enumerate(self.stored):
+            if existing.id == classification.id:
+                self.stored[index] = classification
+                return
+        self.stored.append(classification)
 
 
 class _FakeSession:
@@ -231,6 +306,11 @@ class _FakeSession:
     async def commit(self) -> None:
         if self.events is not None:
             self.events.append(("commit", "session"))
+        return None
+
+    async def rollback(self) -> None:
+        if self.events is not None:
+            self.events.append(("rollback", "session"))
         return None
 
 
@@ -318,6 +398,103 @@ async def test_post_triage_creates_pending_classification_before_background(
         ("commit", "session"),
         ("background", pending_id),
     ]
+
+
+async def test_post_triage_creates_embedding_shadow_classification(
+    monkeypatch,
+) -> None:
+    events: list[tuple[str, str]] = []
+    classification_repo = _FakeClassificationRepo(events)
+
+    async def fake_llm_background(classification_id: str) -> None:
+        events.append(("llm-background", classification_id))
+
+    async def fake_embedding_background(classification_id: str) -> None:
+        events.append(("embedding-background", classification_id))
+
+    async def fake_cascade_background(classification_id: str) -> None:
+        events.append(("cascade-background", classification_id))
+
+    monkeypatch.setattr(
+        triage_routes.settings, "use_category_classification_enabled", True
+    )
+    monkeypatch.setattr(
+        triage_routes.settings, "use_category_embedding_shadow_enabled", True
+    )
+    monkeypatch.setattr(triage_routes.settings, "use_category_cascade_enabled", True)
+    monkeypatch.setattr(
+        triage_routes, "_classify_use_categories_background", fake_llm_background
+    )
+    monkeypatch.setattr(
+        triage_routes,
+        "_classify_embedding_use_categories_background",
+        fake_embedding_background,
+    )
+    monkeypatch.setattr(
+        triage_routes,
+        "_classify_cascade_use_categories_background",
+        fake_cascade_background,
+    )
+
+    async with _client(
+        classification_repo=classification_repo, events=events
+    ) as client:
+        resp = await client.post(_URL)
+
+    assert resp.status_code == 200
+    assert [item.classifier_kind for item in classification_repo.stored] == [
+        ClassifierKind.LLM,
+        ClassifierKind.EMBEDDING,
+        ClassifierKind.CASCADE,
+    ]
+    llm_id = classification_repo.stored[0].id
+    embedding_id = classification_repo.stored[1].id
+    cascade_id = classification_repo.stored[2].id
+    assert events == [
+        ("pending", llm_id),
+        ("pending", embedding_id),
+        ("pending", cascade_id),
+        ("commit", "session"),
+        ("llm-background", llm_id),
+        ("embedding-background", embedding_id),
+        ("cascade-background", cascade_id),
+    ]
+
+
+async def test_background_failure_marks_pending_classification_failed(
+    monkeypatch,
+) -> None:
+    events: list[tuple[str, str]] = []
+    pending = MessageClassification.pending(
+        triage_id=TriageId("triage-1"),
+        classifier_kind=ClassifierKind.CASCADE,
+        classifier_model="llama3.1:8b",
+        classifier_version="cascade-use-category-v1",
+    )
+    classification_repo = _FakeClassificationRepo(events, stored=[pending])
+
+    @asynccontextmanager
+    async def fake_session_factory() -> AsyncIterator[_FakeSession]:
+        yield _FakeSession(events)
+
+    monkeypatch.setattr(triage_routes, "async_session_factory", fake_session_factory)
+    monkeypatch.setattr(
+        triage_routes,
+        "SqlAlchemyMessageClassificationRepository",
+        lambda session: classification_repo,
+    )
+
+    await triage_routes._mark_background_classification_failed(
+        pending.id, RuntimeError("classification exploded")
+    )
+
+    failed = classification_repo.stored[0]
+    assert failed.status is ClassificationStatus.FAILED
+    assert failed.error == "classification exploded"
+    assert failed.classified_at is not None
+    assert failed.category_scores == []
+    assert failed.assigned_categories == []
+    assert events == [("commit", "session")]
 
 
 async def test_in_scope_with_object_returns_search_hits() -> None:
@@ -468,6 +645,126 @@ async def test_get_returns_failed_use_category_classification() -> None:
     assert classification["status"] == "FAILED"
     assert classification["error"] == "model unavailable"
     assert classification["assignedCategories"] == []
+
+
+async def test_list_triage_classifications_returns_current_classifier_runs() -> None:
+    repo = _FakeRepo()
+    async with _client(repo=repo) as client:
+        posted = (await client.post(_URL)).json()
+
+    triage_id = TriageId(posted["id"])
+    classification_repo = _FakeClassificationRepo(
+        stored=[
+            _completed_classification(triage_id),
+            _completed_embedding_classification(triage_id),
+        ]
+    )
+
+    async with _client(repo=repo, classification_repo=classification_repo) as client:
+        resp = await client.get(f"{_URL}/classifications")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["triageId"] == posted["id"]
+    assert [item["classifierKind"] for item in body["classifications"]] == [
+        "LLM",
+        "EMBEDDING",
+    ]
+    embedding = body["classifications"][1]
+    assert embedding["id"] == "classification-embedding-completed"
+    assert embedding["runNumber"] == 1
+    assert embedding["metadata"]["threshold_profile"] == "embedding-prototypes-v1"
+    assert embedding["assignedCategories"] == [
+        {"category": "RESEARCH_PROJECTS", "confidence": 0.86, "source": "EMBEDDING"}
+    ]
+
+
+async def test_list_triage_classifications_requires_existing_triage() -> None:
+    async with _client(repo=_FakeRepo()) as client:
+        resp = await client.get(f"{_URL}/classifications")
+
+    assert resp.status_code == 404
+    assert resp.json()["error"] == "TRIAGE_NOT_FOUND"
+
+
+async def test_sync_use_categories_creates_staff_reviewed_cascade() -> None:
+    repo = _FakeRepo()
+    async with _client(repo=repo) as client:
+        posted = (await client.post(_URL)).json()
+
+    triage_id = TriageId(posted["id"])
+    classification_repo = _FakeClassificationRepo(
+        stored=[_completed_embedding_classification(triage_id)]
+    )
+
+    async with _client(repo=repo, classification_repo=classification_repo) as client:
+        resp = await client.put(
+            f"{_URL}/use-categories",
+            json={"categories": ["ANSWERING_ENQUIRIES", "RESEARCH_PROJECTS"]},
+        )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["triageId"] == posted["id"]
+    cascade = body["classifications"][-1]
+    assert cascade["classifierKind"] == "CASCADE"
+    assert cascade["classifierVersion"] == "staff-reviewed-v1"
+    assert cascade["runNumber"] == 1
+    assert cascade["outcome"] == "CATEGORIZED"
+    assert cascade["metadata"]["staff_reviewed"] is True
+    assert cascade["metadata"]["reviewed_by"] == _STAFF.email
+    assert cascade["assignedCategories"] == [
+        {"category": "ANSWERING_ENQUIRIES", "confidence": 1.0, "source": "LLM"},
+        {"category": "RESEARCH_PROJECTS", "confidence": 1.0, "source": "LLM"},
+    ]
+
+
+async def test_sync_use_categories_can_mark_unclear() -> None:
+    repo = _FakeRepo()
+    async with _client(repo=repo) as client:
+        posted = (await client.post(_URL)).json()
+
+    async with _client(repo=repo) as client:
+        resp = await client.put(f"{_URL}/use-categories", json={"categories": []})
+
+    assert resp.status_code == 200
+    cascade = resp.json()["classifications"][0]
+    assert cascade["triageId"] == posted["id"]
+    assert cascade["classifierKind"] == "CASCADE"
+    assert cascade["outcome"] == "UNCLEAR"
+    assert cascade["assignedCategories"] == []
+
+
+async def test_export_use_category_calibration_csv() -> None:
+    repo = _FakeRepo()
+    async with _client(repo=repo) as client:
+        posted = (await client.post(_URL)).json()
+
+    triage_id = TriageId(posted["id"])
+    classification_repo = _FakeClassificationRepo(
+        stored=[
+            _completed_classification(triage_id),
+            _completed_embedding_classification(triage_id),
+        ]
+    )
+
+    async with _client(repo=repo, classification_repo=classification_repo) as client:
+        resp = await client.get(
+            "/api/v1/museum-questions/triage/classifications/calibration.csv"
+        )
+
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("text/csv")
+    rows = list(csv.DictReader(StringIO(resp.text)))
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["triage_id"] == posted["id"]
+    assert row["question_id"] == "q1"
+    assert row["message_hash_sha256"]
+    assert "RESEARCH_PROJECTS" in row["llm_assigned_categories"]
+    assert "RESEARCH_PROJECTS" in row["embedding_assigned_categories"]
+    assert _QUESTION.message not in resp.text
+    assert _QUESTION.requester_email not in resp.text
 
 
 async def test_get_forbidden_for_external() -> None:

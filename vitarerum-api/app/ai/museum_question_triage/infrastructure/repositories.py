@@ -238,6 +238,17 @@ class SqlAlchemyTriageRepository:
         orm = (await self._session.execute(stmt)).scalar_one_or_none()
         return triage_to_domain(orm) if orm else None
 
+    async def list_latest(self, *, limit: int) -> list[MessageTriage]:
+        stmt = (
+            select(MessageTriageOrm)
+            .order_by(MessageTriageOrm.created_at.desc())
+            .limit(limit)
+        )
+        return [
+            triage_to_domain(orm)
+            for orm in (await self._session.execute(stmt)).scalars()
+        ]
+
     async def update(self, triage: MessageTriage) -> None:
         orm = await self._session.get(MessageTriageOrm, triage.id)
         # update() is only ever called with a triage just loaded from this
@@ -304,6 +315,25 @@ class SqlAlchemyMessageClassificationRepository:
         )
         orm = (await self._session.execute(stmt)).scalar_one_or_none()
         return classification_to_domain(orm) if orm else None
+
+    async def list_current_by_triage(
+        self, triage_id: TriageId
+    ) -> list[MessageClassification]:
+        stmt = (
+            select(MessageClassificationOrm)
+            .where(
+                MessageClassificationOrm.triage_id == triage_id,
+                MessageClassificationOrm.superseded_at.is_(None),
+            )
+            .order_by(
+                MessageClassificationOrm.classifier_kind.asc(),
+                MessageClassificationOrm.run_number.desc(),
+            )
+        )
+        return [
+            classification_to_domain(orm)
+            for orm in (await self._session.execute(stmt)).scalars()
+        ]
 
     async def supersede_current(
         self,

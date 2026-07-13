@@ -53,12 +53,70 @@ Runs AI triage for one question and returns a `MuseumQuestionTriage`.
 When `use_category_classification_enabled` is enabled, the response still waits only for
 the binary triage. The experimental use-category classification is created as
 `PENDING` in the same transaction and processed asynchronously after commit.
+When `use_category_embedding_shadow_enabled` is also enabled, a second shadow
+classification with `classifierKind=EMBEDDING` is created and processed
+asynchronously for calibration; operational responses continue to surface only the
+current `LLM` use-category classification.
+When `use_category_cascade_enabled` is also enabled, a `classifierKind=CASCADE`
+classification is created and processed asynchronously. The cascade runs
+embeddings first and escalates to the LLM on low confidence, narrow margin,
+long messages, or uncertain categories. If Tier 2 fails after Tier 1 succeeded,
+the row is completed with `quality=DEGRADED` and fallback metadata; the
+operational `GET /triage` response still surfaces only the current `LLM` line
+until the UI/operations phase promotes `CASCADE`.
 
 ### `GET /museum-questions/{id}/triage`
 
 Returns the latest stored `MuseumQuestionTriage`.
 
 If the binary triage has never been run, returns `404 TRIAGE_NOT_FOUND`.
+
+### `GET /museum-questions/{id}/triage/classifications`
+
+Returns the current use-category classifier executions attached to the latest
+stored triage. This endpoint is for internal evaluation/calibration: it can show
+the operational `LLM` line, the shadow `EMBEDDING` line, and the experimental
+`CASCADE` line side by side, including execution metadata. It does not change
+the operational triage response.
+
+If the binary triage has never been run, returns `404 TRIAGE_NOT_FOUND`.
+
+### `PUT /museum-questions/{id}/triage/use-categories`
+
+Request:
+
+```json
+{ "categories": ["ANSWERING_ENQUIRIES", "RESEARCH_PROJECTS"] }
+```
+
+Persists the staff-reviewed final category set for the latest triage. This creates
+a new current `classifierKind=CASCADE` classification with
+`classifierVersion=staff-reviewed-v1`, `confidence=1.0` scores, and metadata
+including `staff_reviewed`, `reviewed_by`, and `reviewed_at`. If a current
+`CASCADE` line exists, it is superseded and the new line receives
+`runNumber + 1`.
+
+An empty `categories` list is valid and records `outcome=UNCLEAR`. This action
+does not change `verdict`, `effectiveVerdict`, or `staffOverrideVerdict`.
+
+Response: `UseCategoryClassificationAuditList` for the latest triage.
+
+### `GET /museum-questions/triage/classifications/calibration.csv?limit=100`
+
+Exports a calibration CSV for human labelling and threshold/prototype tuning.
+The file intentionally omits citizen message text, requester name, and requester
+e-mail. It includes `message_hash_sha256`, computed from normalized message text,
+so exported rows can be checked against the live application without storing
+personal data in git or a shared spreadsheet.
+
+Columns:
+
+```csv
+triage_id,question_id,internal_link,question_status,triage_created_at,binary_effective_verdict,message_hash_sha256,llm_status,llm_outcome,llm_assigned_categories,llm_category_scores,embedding_status,embedding_outcome,embedding_assigned_categories,embedding_category_scores,embedding_metadata,human_categories
+```
+
+`human_categories` is blank by design; the curatorial reviewer fills it outside
+the system after consulting the original question in the application.
 
 ### `PATCH /museum-questions/{id}/triage/verdict`
 
@@ -197,6 +255,39 @@ When no current child row exists, `useCategoryClassification` is returned as:
   "categoryScores": [],
   "classifiedAt": null,
   "error": null
+}
+```
+
+## `UseCategoryClassificationAuditList`
+
+```json
+{
+  "triageId": "triage-1",
+  "classifications": [
+    {
+      "id": "classification-1",
+      "triageId": "triage-1",
+      "status": "COMPLETED",
+      "outcome": "CATEGORIZED",
+      "quality": "FULL",
+      "classifierKind": "EMBEDDING",
+      "classifierModel": "nomic-embed-text",
+      "classifierVersion": "embedding-prototypes-v1",
+      "runNumber": 1,
+      "supersededAt": null,
+      "assignedCategories": [
+        { "category": "RESEARCH_PROJECTS", "confidence": 0.86, "source": "EMBEDDING" }
+      ],
+      "categoryScores": [],
+      "classifiedAt": "2026-07-10T12:01:00Z",
+      "error": null,
+      "metadata": {
+        "threshold_profile": "embedding-prototypes-v1",
+        "would_escalate_due_to_length": false
+      },
+      "createdAt": "2026-07-10T11:59:00Z"
+    }
+  ]
 }
 ```
 

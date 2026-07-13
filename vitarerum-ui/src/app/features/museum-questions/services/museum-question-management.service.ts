@@ -15,6 +15,8 @@ import {
   MuseumQuestionTriage,
   SearchTermDraft,
   TriageVerdict,
+  UseCategoryClassificationAuditList,
+  UseCategoryValue,
 } from '../models/museum-question-triage.model';
 
 export interface MuseumQuestionManagementApi {
@@ -24,6 +26,9 @@ export interface MuseumQuestionManagementApi {
   markOutOfScope(questionId: string, body: MarkOutOfScopeRequest): Observable<MuseumQuestion>;
   close(questionId: string): Observable<MuseumQuestion>;
   getTriage(questionId: string): Observable<MuseumQuestionTriage | null>;
+  listTriageClassifications(
+    questionId: string,
+  ): Observable<UseCategoryClassificationAuditList | null>;
   runTriage(questionId: string): Observable<MuseumQuestionTriage>;
   overrideTriageVerdict(
     questionId: string,
@@ -33,6 +38,10 @@ export interface MuseumQuestionManagementApi {
     questionId: string,
     terms: readonly SearchTermDraft[],
   ): Observable<MuseumQuestionTriage>;
+  syncTriageUseCategories(
+    questionId: string,
+    categories: readonly UseCategoryValue[],
+  ): Observable<UseCategoryClassificationAuditList>;
 }
 
 export const MUSEUM_QUESTION_MANAGEMENT_SERVICE = new InjectionToken<MuseumQuestionManagementApi>(
@@ -115,6 +124,19 @@ export class MuseumQuestionManagementService implements MuseumQuestionManagement
       );
   }
 
+  listTriageClassifications(questionId: string): Observable<UseCategoryClassificationAuditList | null> {
+    return this.http
+      .get<UseCategoryClassificationAuditList>(
+        this.url(`/museum-questions/${questionId}/triage/classifications`),
+      )
+      .pipe(
+        catchError((err: unknown) => {
+          if (err instanceof HttpErrorResponse && err.status === 404) return of(null);
+          return throwError(() => err);
+        }),
+      );
+  }
+
   runTriage(questionId: string): Observable<MuseumQuestionTriage> {
     return this.http
       .post<MuseumQuestionTriage>(this.url(`/museum-questions/${questionId}/triage`), {})
@@ -142,6 +164,16 @@ export class MuseumQuestionManagementService implements MuseumQuestionManagement
         { terms },
       )
       .pipe(map((raw) => withFallbacks(raw)));
+  }
+
+  syncTriageUseCategories(
+    questionId: string,
+    categories: readonly UseCategoryValue[],
+  ): Observable<UseCategoryClassificationAuditList> {
+    return this.http.put<UseCategoryClassificationAuditList>(
+      this.url(`/museum-questions/${questionId}/triage/use-categories`),
+      { categories },
+    );
   }
 
   private url(path: string): string {

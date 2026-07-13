@@ -30,7 +30,11 @@ import {
   SearchTermDraft,
   TriageVerdict,
   UseCategoryClassification,
+  UseCategoryClassificationAudit,
+  UseCategoryClassifierKind,
   UseCategoryScore,
+  UseCategoryScoreSource,
+  UseCategoryValue,
 } from '../../models/museum-question-triage.model';
 import { MuseumQuestion, MuseumQuestionStatus } from '../../models/museum-question.model';
 import { MUSEUM_QUESTION_MANAGEMENT_SERVICE } from '../../services/museum-question-management.service';
@@ -99,6 +103,41 @@ const USE_CATEGORY_LABELS: Record<string, string> = {
   INSPIRING_NEW_WORK: 'Inspiring new work',
 };
 
+const USE_CATEGORY_OPTIONS: readonly UseCategoryValue[] = [
+  'EXHIBITION',
+  'PUBLISHING_IMAGES',
+  'LEARNING_EVENTS',
+  'ANSWERING_ENQUIRIES',
+  'RESEARCH_PROJECTS',
+  'OPERATING_MACHINERY',
+  'PLAYING_INSTRUMENTS',
+  'FILMING',
+  'INSPIRING_NEW_WORK',
+];
+
+const CLASSIFIER_KIND_LABELS: Record<UseCategoryClassifierKind, string> = {
+  LLM: 'LLM',
+  EMBEDDING: 'Embedding',
+  CASCADE: 'Cascade',
+};
+
+const USE_CATEGORY_SEARCH_POLICY_LABELS: Record<string, string> = {
+  EXHIBITION: 'No catalogue search',
+  PUBLISHING_IMAGES: 'Search if object named',
+  LEARNING_EVENTS: 'No catalogue search',
+  ANSWERING_ENQUIRIES: 'Search if object named',
+  RESEARCH_PROJECTS: 'Catalogue search',
+  OPERATING_MACHINERY: 'Search if object named',
+  PLAYING_INSTRUMENTS: 'Search if object named',
+  FILMING: 'No catalogue search',
+  INSPIRING_NEW_WORK: 'Search if object named',
+};
+
+const SCORE_SOURCE_LABELS: Record<UseCategoryScoreSource, string> = {
+  LLM: 'LLM',
+  EMBEDDING: 'Embedding',
+};
+
 @Component({
   selector: 'app-museum-question-detail-page',
   standalone: true,
@@ -147,6 +186,9 @@ export class MuseumQuestionDetailPageComponent {
   protected readonly verdictOverrideBusy = signal(false);
   protected readonly searchTermsBusy = signal(false);
   protected readonly searchTermsError = signal<ApiError | null>(null);
+  protected readonly useCategoriesBusy = signal(false);
+  protected readonly useCategoriesError = signal<ApiError | null>(null);
+  protected readonly useCategoryOptions = USE_CATEGORY_OPTIONS;
 
   protected readonly questionResource = resource({
     params: () => ({ id: this.id(), refresh: this.detailRefreshToken() }),
@@ -162,6 +204,11 @@ export class MuseumQuestionDetailPageComponent {
   protected readonly triageResource = resource({
     params: () => ({ id: this.id(), refresh: this.triageRefreshToken() }),
     loader: ({ params }) => firstValueFrom(this.service.getTriage(params.id)),
+  });
+
+  protected readonly classificationAuditResource = resource({
+    params: () => ({ id: this.id(), refresh: this.triageRefreshToken() }),
+    loader: ({ params }) => firstValueFrom(this.service.listTriageClassifications(params.id)),
   });
 
   protected readonly triage = computed<MuseumQuestionTriage | null>(
@@ -181,9 +228,36 @@ export class MuseumQuestionDetailPageComponent {
   protected readonly useCategoryClassification = computed<UseCategoryClassification | null>(
     () => this.triage()?.useCategoryClassification ?? null,
   );
+  protected readonly useCategoryClassifierRuns = computed<
+    readonly UseCategoryClassificationAudit[]
+  >(() => this.classificationAuditResource.value()?.classifications ?? []);
+  protected readonly displayedUseCategoryClassification = computed<
+    UseCategoryClassification | UseCategoryClassificationAudit | null
+  >(() => {
+    const runs = this.useCategoryClassifierRuns().filter(
+      (classification) => classification.status !== 'NOT_REQUESTED',
+    );
+    return (
+      runs.find(
+        (classification) =>
+          classification.classifierKind === 'CASCADE' && classification.status === 'COMPLETED',
+      ) ??
+      runs.find((classification) => classification.classifierKind === 'CASCADE') ??
+      this.useCategoryClassification()
+    );
+  });
   protected readonly assignedUseCategories = computed<readonly UseCategoryScore[]>(
-    () => this.useCategoryClassification()?.assignedCategories ?? [],
+    () => this.displayedUseCategoryClassification()?.assignedCategories ?? [],
   );
+  protected readonly categoryDraft = linkedSignal<ReadonlySet<UseCategoryValue>>(
+    () => new Set(this.assignedUseCategories().map((score) => score.category)),
+  );
+  protected readonly categoryDraftChanged = computed(() => {
+    const current = new Set(this.assignedUseCategories().map((score) => score.category));
+    const draft = this.categoryDraft();
+    if (current.size !== draft.size) return true;
+    return [...draft].some((category) => !current.has(category));
+  });
   protected readonly triageObjectResults = computed<readonly TriageObjectResult[]>(() => {
     const pages = this.triageHitPages();
     const triage = this.triage();
@@ -392,6 +466,40 @@ export class MuseumQuestionDetailPageComponent {
     }
   }
 
+  protected isCategoryDraftSelected(category: UseCategoryValue): boolean {
+    return this.categoryDraft().has(category);
+  }
+
+  protected onCategoryDraftToggle(category: UseCategoryValue, event: Event): void {
+    const checked = (event.target as HTMLInputElement).checked;
+    this.categoryDraft.update((current) => {
+      const next = new Set(current);
+      if (checked) next.add(category);
+      else next.delete(category);
+      return next;
+    });
+  }
+
+  protected async submitUseCategories(): Promise<void> {
+    const triage = this.triage();
+    if (!triage || this.useCategoriesBusy()) return;
+    this.useCategoriesBusy.set(true);
+    this.useCategoriesError.set(null);
+    try {
+      await firstValueFrom(
+        this.service.syncTriageUseCategories(
+          triage.questionId,
+          [...this.categoryDraft()].sort(),
+        ),
+      );
+      this.triageRefreshToken.update((value) => value + 1);
+    } catch (err) {
+      this.useCategoriesError.set(toApiError(err));
+    } finally {
+      this.useCategoriesBusy.set(false);
+    }
+  }
+
   protected statusLabel(status: MuseumQuestionStatus): string {
     return STATUS_LABELS[status];
   }
@@ -402,6 +510,25 @@ export class MuseumQuestionDetailPageComponent {
 
   protected confidenceLabel(confidence: number): string {
     return `${Math.round(confidence * 100)}%`;
+  }
+
+  protected classifierKindLabel(kind: UseCategoryClassifierKind | null): string {
+    return kind ? CLASSIFIER_KIND_LABELS[kind] : 'Classifier';
+  }
+
+  protected scoreSourceLabel(source: UseCategoryScoreSource): string {
+    return SCORE_SOURCE_LABELS[source];
+  }
+
+  protected categorySearchPolicyLabel(category: string): string {
+    return USE_CATEGORY_SEARCH_POLICY_LABELS[category] ?? 'Review search need';
+  }
+
+  protected categorySearchPolicyClass(category: string): string {
+    const policy = USE_CATEGORY_SEARCH_POLICY_LABELS[category];
+    if (policy === 'Catalogue search') return 'use-category-card__policy--strong';
+    if (policy === 'No catalogue search') return 'use-category-card__policy--muted';
+    return 'use-category-card__policy--conditional';
   }
 
   protected highlightHtml(hit: ObjectTriageHit): SafeHtml {

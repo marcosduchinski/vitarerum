@@ -363,7 +363,7 @@
               </div>
 
               @if (
-                useCategoryClassification();
+                displayedUseCategoryClassification();
                 as useCategoryClassification
               ) {
                 @if (useCategoryClassification.status !== 'NOT_REQUESTED') {
@@ -377,7 +377,13 @@
                           Categorias de uso detectadas
                         </h3>
                         <p class="triage-section-heading__note">
-                          Experimental · {{ useCategoryClassification.classifierModel }}
+                          {{ classifierKindLabel(useCategoryClassification.classifierKind) }}
+                          @if (useCategoryClassification.classifierModel) {
+                            · {{ useCategoryClassification.classifierModel }}
+                          }
+                          @if (useCategoryClassification.quality === 'DEGRADED') {
+                            · Degraded
+                          }
                         </p>
                       </div>
                       <button
@@ -412,14 +418,92 @@
                         <span>Sem categoria suficientemente clara para atribuição automática.</span>
                       </div>
                     } @else if (assignedUseCategories().length) {
-                      <ul class="use-category-chip-list" aria-label="Detected use categories">
+                      <ul class="use-category-card-list" aria-label="Detected use categories">
                         @for (category of assignedUseCategories(); track category.category) {
-                          <li class="status-chip status-chip--submitted">
-                            <span>{{ useCategoryLabel(category.category) }}</span>
-                            <strong>{{ confidenceLabel(category.confidence) }}</strong>
+                          <li class="use-category-card">
+                            <div>
+                              <span class="use-category-card__name">
+                                {{ useCategoryLabel(category.category) }}
+                              </span>
+                              <span
+                                class="use-category-card__policy"
+                                [class.use-category-card__policy--strong]="
+                                  categorySearchPolicyClass(category.category) ===
+                                  'use-category-card__policy--strong'
+                                "
+                                [class.use-category-card__policy--conditional]="
+                                  categorySearchPolicyClass(category.category) ===
+                                  'use-category-card__policy--conditional'
+                                "
+                                [class.use-category-card__policy--muted]="
+                                  categorySearchPolicyClass(category.category) ===
+                                  'use-category-card__policy--muted'
+                                "
+                              >
+                                {{ categorySearchPolicyLabel(category.category) }}
+                              </span>
+                            </div>
+                            <div class="use-category-card__score">
+                              <strong>{{ confidenceLabel(category.confidence) }}</strong>
+                              <span>{{ scoreSourceLabel(category.source) }}</span>
+                            </div>
                           </li>
                         }
                       </ul>
+                    }
+
+                    @if (
+                      useCategoryClassification.status === 'COMPLETED' ||
+                      useCategoryClassification.outcome === 'UNCLEAR'
+                    ) {
+                      <div class="triage-terms-editor__heading">
+                        <span>Staff correction</span>
+                        <button
+                          type="button"
+                          class="action-btn action-btn--primary"
+                          [disabled]="
+                            useCategoriesBusy() ||
+                            !categoryDraftChanged() ||
+                            triageResource.isLoading()
+                          "
+                          (click)="submitUseCategories()"
+                        >
+                          <span class="pi pi-check" aria-hidden="true"></span>
+                          Save categories
+                        </button>
+                      </div>
+                      <div class="triage-section-heading__actions">
+                        @for (category of useCategoryOptions; track category) {
+                          <label class="status-chip status-chip--closed">
+                            <input
+                              type="checkbox"
+                              [checked]="isCategoryDraftSelected(category)"
+                              [disabled]="useCategoriesBusy()"
+                              (change)="onCategoryDraftToggle(category, $event)"
+                            />
+                            <span>{{ useCategoryLabel(category) }}</span>
+                          </label>
+                        }
+                      </div>
+                      @if (useCategoriesError()) {
+                        <app-error-message [apiError]="useCategoriesError()!" />
+                      }
+                    }
+
+                    @if (useCategoryClassifierRuns().length > 1) {
+                      <div class="triage-section-heading__actions" aria-label="Classifier runs">
+                        @for (run of useCategoryClassifierRuns(); track run.id) {
+                          <div class="status-chip status-chip--closed">
+                            <span>{{ classifierKindLabel(run.classifierKind) }}</span>
+                            @if (run.outcome) {
+                              <span>{{ run.outcome }}</span>
+                            }
+                            @if (run.assignedCategories.length) {
+                              <span>{{ run.assignedCategories.length }} category(s)</span>
+                            }
+                          </div>
+                        }
+                      </div>
                     }
                   </section>
                 }

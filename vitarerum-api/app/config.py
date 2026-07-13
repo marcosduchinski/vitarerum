@@ -35,6 +35,15 @@ class Settings(BaseSettings):
     triage_model: str = "llama3.1:8b"
     triage_timeout_seconds: float = 60.0
     use_category_classification_enabled: bool = False
+    use_category_embedding_shadow_enabled: bool = False
+    use_category_embedding_model: str = "nomic-embed-text"
+    use_category_embedding_low_threshold: float = 0.58
+    use_category_embedding_high_threshold: float = 0.74
+    use_category_embedding_long_message_words: int = 80
+    use_category_embedding_profile_version: str = "embedding-prototypes-v1"
+    use_category_cascade_enabled: bool = False
+    use_category_cascade_margin_delta: float = 0.08
+    use_category_cascade_classifier_version: str = "cascade-v1"
     # Public proposal submission (unauthenticated citizen intake, double opt-in).
     # Default is Cloudflare's always-passing test secret key; override in prod.
     turnstile_secret_key: str = "1x0000000000000000000000000000000AA"

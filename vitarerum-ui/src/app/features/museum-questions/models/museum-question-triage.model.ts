@@ -14,6 +14,16 @@ export type UseCategoryClassificationOutcome = 'CATEGORIZED' | 'UNCLEAR';
 export type UseCategoryClassificationQuality = 'FULL' | 'DEGRADED';
 export type UseCategoryClassifierKind = 'LLM' | 'EMBEDDING' | 'CASCADE';
 export type UseCategoryScoreSource = 'LLM' | 'EMBEDDING';
+export type UseCategoryValue =
+  | 'EXHIBITION'
+  | 'PUBLISHING_IMAGES'
+  | 'LEARNING_EVENTS'
+  | 'ANSWERING_ENQUIRIES'
+  | 'RESEARCH_PROJECTS'
+  | 'OPERATING_MACHINERY'
+  | 'PLAYING_INSTRUMENTS'
+  | 'FILMING'
+  | 'INSPIRING_NEW_WORK';
 
 /** An object/specimen name extracted from the question, kept in both
  * languages so the catalogue can be searched in either. `origin` says
@@ -56,7 +66,7 @@ export interface ObjectTriageMatch {
 }
 
 export interface UseCategoryScore {
-  readonly category: string;
+  readonly category: UseCategoryValue;
   readonly confidence: number;
   readonly source: UseCategoryScoreSource;
 }
@@ -72,6 +82,20 @@ export interface UseCategoryClassification {
   readonly categoryScores: readonly UseCategoryScore[];
   readonly classifiedAt: string | null;
   readonly error: string | null;
+}
+
+export interface UseCategoryClassificationAudit extends UseCategoryClassification {
+  readonly id: string;
+  readonly triageId: string;
+  readonly runNumber: number;
+  readonly supersededAt: string | null;
+  readonly metadata: Record<string, unknown>;
+  readonly createdAt: string;
+}
+
+export interface UseCategoryClassificationAuditList {
+  readonly triageId: string;
+  readonly classifications: readonly UseCategoryClassificationAudit[];
 }
 
 export interface MuseumQuestionTriage {

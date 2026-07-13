@@ -4,7 +4,7 @@ camelCase to match the frontend's ``MuseumQuestionTriage`` model directly."""
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel
 
@@ -14,6 +14,17 @@ ClassificationOutcomeValue = Literal["CATEGORIZED", "UNCLEAR"]
 ClassificationQualityValue = Literal["FULL", "DEGRADED"]
 ClassifierKindValue = Literal["LLM", "EMBEDDING", "CASCADE"]
 ClassificationScoreSourceValue = Literal["LLM", "EMBEDDING"]
+UseCategoryValue = Literal[
+    "EXHIBITION",
+    "PUBLISHING_IMAGES",
+    "LEARNING_EVENTS",
+    "ANSWERING_ENQUIRIES",
+    "RESEARCH_PROJECTS",
+    "OPERATING_MACHINERY",
+    "PLAYING_INSTRUMENTS",
+    "FILMING",
+    "INSPIRING_NEW_WORK",
+]
 
 
 class ObjectHitResponse(BaseModel):
@@ -58,6 +69,20 @@ class UseCategoryClassificationResponse(BaseModel):
     error: str | None
 
 
+class UseCategoryClassificationAuditResponse(UseCategoryClassificationResponse):
+    id: str
+    triageId: str
+    runNumber: int
+    supersededAt: datetime | None
+    metadata: dict[str, Any]
+    createdAt: datetime
+
+
+class UseCategoryClassificationAuditListResponse(BaseModel):
+    triageId: str
+    classifications: list[UseCategoryClassificationAuditResponse]
+
+
 class TriageResponse(BaseModel):
     id: str
     questionId: str
@@ -89,3 +114,7 @@ class TriageSearchTermsRequest(BaseModel):
     client input (a client could otherwise forge a term's origin)."""
 
     terms: list[TriageSearchTermRequest]
+
+
+class UseCategoryCorrectionRequest(BaseModel):
+    categories: list[UseCategoryValue]

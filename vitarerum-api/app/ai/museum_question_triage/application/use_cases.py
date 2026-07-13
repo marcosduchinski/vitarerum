@@ -17,13 +17,24 @@ re-search only what changed).
 
 from __future__ import annotations
 
+import csv
+import hashlib
+import json
+import re
+import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from io import StringIO
+from typing import TYPE_CHECKING, Protocol
 
+from app.ai.museum_question_triage.application.embedding_classifier import (
+    EmbeddingClassificationResult,
+)
 from app.ai.museum_question_triage.domain.models import (
     ClassificationId,
+    ClassificationOutcome,
     ClassificationQuality,
+    ClassificationScoreSource,
     ClassificationStatus,
     ClassifierKind,
     MentionedObject,
@@ -34,6 +45,8 @@ from app.ai.museum_question_triage.domain.models import (
     ObjectTriageMatch,
     TriageId,
     TriageVerdict,
+    UseCategory,
+    UseCategoryScore,
 )
 from app.ai.museum_question_triage.domain.ports import (
     ClassificationNotFound,
@@ -53,6 +66,10 @@ from app.ai.museum_question_triage.domain.ports import (
 if TYPE_CHECKING:
     from app.identity.public import Actor
 
+
+class UseCategoryEmbeddingClassifierPort(Protocol):
+    async def classify(self, message: str) -> EmbeddingClassificationResult: ...
+
 MAX_OBJECT_QUERIES = 3
 # How many hits to fetch per language before merging — not a display cap (the
 # UI paginates client-side over the full merged list); just a sane ceiling so
@@ -65,6 +82,97 @@ SEARCH_FETCH_LIMIT_PER_LANGUAGE = 100
 MAX_STAFF_SEARCH_TERMS = 10
 _MAX_TERM_FIELD_LENGTH = 200
 USE_CATEGORY_CLASSIFIER_VERSION = "llm-use-category-v1"
+EMBEDDING_USE_CATEGORY_CLASSIFIER_VERSION = "embedding-prototypes-v1"
+CASCADE_USE_CATEGORY_CLASSIFIER_VERSION = "cascade-v1"
+STAFF_USE_CATEGORY_CLASSIFIER_VERSION = "staff-reviewed-v1"
+MAX_CALIBRATION_EXPORT_LIMIT = 500
+
+
+def _normalized_message_hash(message: str) -> str:
+    normalized = re.sub(r"\s+", " ", message.strip().casefold())
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def _scores_json(scores: list[UseCategoryScore]) -> str:
+    return json.dumps(
+        [
+            {
+                "category": score.category.value,
+                "confidence": score.confidence,
+                "source": score.source.value,
+            }
+            for score in scores
+        ],
+        ensure_ascii=True,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
+def _score_by_category(scores: list[UseCategoryScore]) -> dict[str, UseCategoryScore]:
+    return {score.category.value: score for score in scores}
+
+
+def _normalize_use_categories(categories: list[UseCategory]) -> list[UseCategory]:
+    seen: set[UseCategory] = set()
+    normalized: list[UseCategory] = []
+    for category in categories:
+        if category in seen:
+            continue
+        seen.add(category)
+        normalized.append(category)
+    return sorted(normalized, key=lambda item: item.value)
+
+
+def _cascade_margin(scores: list[UseCategoryScore]) -> float | None:
+    if len(scores) < 2:
+        return None
+    ordered = sorted(scores, key=lambda score: score.confidence, reverse=True)
+    return ordered[0].confidence - ordered[1].confidence
+
+
+def _cascade_escalation_reasons(
+    embedding_result: EmbeddingClassificationResult,
+    *,
+    high_threshold: float,
+    margin_delta: float,
+) -> list[str]:
+    scores = embedding_result.classification.category_scores
+    max_confidence = max((score.confidence for score in scores), default=0.0)
+    margin = _cascade_margin(scores)
+    reasons: list[str] = []
+    if max_confidence < high_threshold:
+        reasons.append("low_confidence")
+    if margin is not None and margin < margin_delta:
+        reasons.append("narrow_margin")
+    if bool(embedding_result.metadata.get("would_escalate_due_to_length")):
+        reasons.append("long_message")
+    if embedding_result.metadata.get("uncertain_categories"):
+        reasons.append("uncertain_category")
+    return sorted(set(reasons))
+
+
+def _combine_cascade_scores(
+    embedding_scores: list[UseCategoryScore],
+    llm_scores: list[UseCategoryScore],
+    assigned_categories: list[UseCategoryScore],
+) -> list[UseCategoryScore]:
+    combined = _score_by_category(embedding_scores)
+    for llm_score in llm_scores:
+        combined[llm_score.category.value] = llm_score
+    for assigned_score in assigned_categories:
+        combined[assigned_score.category.value] = assigned_score
+    return list(combined.values())
+
+
+def _combine_cascade_assigned_categories(
+    embedding_assigned: list[UseCategoryScore],
+    llm_assigned: list[UseCategoryScore],
+) -> list[UseCategoryScore]:
+    combined = _score_by_category(embedding_assigned)
+    for llm_score in llm_assigned:
+        combined[llm_score.category.value] = llm_score
+    return list(combined.values())
 
 
 def _normalize_object_terms(pairs: list[tuple[str, str]]) -> list[tuple[str, str]]:
@@ -166,6 +274,31 @@ class ClassifyPendingUseCategoryInput:
 
 
 @dataclass(frozen=True, slots=True)
+class CreatePendingEmbeddingUseCategoryClassificationInput:
+    triage_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class ClassifyPendingEmbeddingUseCategoryInput:
+    classification_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class CreatePendingCascadeUseCategoryClassificationInput:
+    triage_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class ClassifyPendingCascadeUseCategoryInput:
+    classification_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class ExportUseCategoryCalibrationInput:
+    limit: int = 100
+
+
+@dataclass(frozen=True, slots=True)
 class GetLatestTriageInput:
     question_id: str
 
@@ -183,6 +316,13 @@ class SyncTriageSearchTermsInput:
     terms: list[
         tuple[str, str]
     ]  # (english, portuguese) pairs, no origin — see routes.py
+    caller: Actor
+
+
+@dataclass(frozen=True, slots=True)
+class SyncUseCategoriesInput:
+    question_id: str
+    categories: list[UseCategory]
     caller: Actor
 
 
@@ -368,6 +508,523 @@ class ClassifyPendingUseCategory:
 
         await self._classification_repository.update(updated)
         return updated
+
+
+class CreatePendingEmbeddingUseCategoryClassification:
+    def __init__(
+        self,
+        repository: MessageClassificationRepository,
+        model_name: str,
+        classifier_version: str = EMBEDDING_USE_CATEGORY_CLASSIFIER_VERSION,
+    ) -> None:
+        self._repository = repository
+        self._model_name = model_name
+        self._classifier_version = classifier_version
+
+    async def execute(
+        self, data: CreatePendingEmbeddingUseCategoryClassificationInput
+    ) -> MessageClassification:
+        triage_id = TriageId(data.triage_id)
+        current = await self._repository.get_current_by_triage(
+            triage_id, ClassifierKind.EMBEDDING
+        )
+        run_number = (current.run_number + 1) if current else 1
+        if current is not None:
+            await self._repository.supersede_current(
+                triage_id, ClassifierKind.EMBEDDING, datetime.now(UTC)
+            )
+        classification = MessageClassification.pending(
+            triage_id=triage_id,
+            classifier_kind=ClassifierKind.EMBEDDING,
+            classifier_model=self._model_name,
+            classifier_version=self._classifier_version,
+            run_number=run_number,
+        )
+        await self._repository.add(classification)
+        return classification
+
+
+class ClassifyPendingEmbeddingUseCategory:
+    def __init__(
+        self,
+        museum_question: MuseumQuestionPort,
+        classifier: UseCategoryEmbeddingClassifierPort,
+        triage_repository: TriageRepository,
+        classification_repository: MessageClassificationRepository,
+    ) -> None:
+        self._museum_question = museum_question
+        self._classifier = classifier
+        self._triage_repository = triage_repository
+        self._classification_repository = classification_repository
+
+    async def execute(
+        self, data: ClassifyPendingEmbeddingUseCategoryInput
+    ) -> MessageClassification:
+        classification = await self._classification_repository.get_by_id(
+            ClassificationId(data.classification_id)
+        )
+        if classification is None:
+            raise ClassificationNotFound(
+                f"No classification found with id {data.classification_id!r}."
+            )
+        if classification.classifier_kind is not ClassifierKind.EMBEDDING:
+            raise ClassificationNotFound(
+                f"Classification {data.classification_id!r} is not an embedding run."
+            )
+
+        triage = await self._triage_repository.get_by_id(classification.triage_id)
+        if triage is None:
+            raise TriageNotFound(
+                f"No triage found with id {classification.triage_id!r}."
+            )
+
+        question = await self._museum_question.get_summary(triage.question_id)
+        if question is None:
+            raise QuestionNotFound(
+                f"No museum question found with id {triage.question_id!r}"
+            )
+
+        classified_at = datetime.now(UTC)
+        try:
+            result = await self._classifier.classify(question.message)
+        except (ModelUnavailable, ModelTimeout) as exc:
+            updated = MessageClassification(
+                id=classification.id,
+                triage_id=classification.triage_id,
+                classifier_kind=classification.classifier_kind,
+                classifier_model=classification.classifier_model,
+                classifier_version=classification.classifier_version,
+                run_number=classification.run_number,
+                superseded_at=classification.superseded_at,
+                status=ClassificationStatus.FAILED,
+                outcome=None,
+                quality=None,
+                category_scores=[],
+                assigned_categories=[],
+                error=str(exc),
+                metadata=dict(classification.metadata),
+                classified_at=classified_at,
+                created_at=classification.created_at,
+            )
+        else:
+            updated = MessageClassification(
+                id=classification.id,
+                triage_id=classification.triage_id,
+                classifier_kind=classification.classifier_kind,
+                classifier_model=classification.classifier_model,
+                classifier_version=classification.classifier_version,
+                run_number=classification.run_number,
+                superseded_at=classification.superseded_at,
+                status=ClassificationStatus.COMPLETED,
+                outcome=result.classification.outcome,
+                quality=ClassificationQuality.FULL,
+                category_scores=list(result.classification.category_scores),
+                assigned_categories=list(result.classification.assigned_categories),
+                error=None,
+                metadata={**classification.metadata, **result.metadata},
+                classified_at=classified_at,
+                created_at=classification.created_at,
+            )
+
+        await self._classification_repository.update(updated)
+        return updated
+
+
+class CreatePendingCascadeUseCategoryClassification:
+    def __init__(
+        self,
+        repository: MessageClassificationRepository,
+        model_name: str,
+        classifier_version: str = CASCADE_USE_CATEGORY_CLASSIFIER_VERSION,
+    ) -> None:
+        self._repository = repository
+        self._model_name = model_name
+        self._classifier_version = classifier_version
+
+    async def execute(
+        self, data: CreatePendingCascadeUseCategoryClassificationInput
+    ) -> MessageClassification:
+        triage_id = TriageId(data.triage_id)
+        current = await self._repository.get_current_by_triage(
+            triage_id, ClassifierKind.CASCADE
+        )
+        run_number = (current.run_number + 1) if current else 1
+        if current is not None:
+            await self._repository.supersede_current(
+                triage_id, ClassifierKind.CASCADE, datetime.now(UTC)
+            )
+        classification = MessageClassification.pending(
+            triage_id=triage_id,
+            classifier_kind=ClassifierKind.CASCADE,
+            classifier_model=self._model_name,
+            classifier_version=self._classifier_version,
+            run_number=run_number,
+        )
+        await self._repository.add(classification)
+        return classification
+
+
+class ClassifyPendingCascadeUseCategory:
+    def __init__(
+        self,
+        museum_question: MuseumQuestionPort,
+        embedding_classifier: UseCategoryEmbeddingClassifierPort,
+        model: TriageModelPort,
+        triage_repository: TriageRepository,
+        classification_repository: MessageClassificationRepository,
+        *,
+        high_threshold: float,
+        margin_delta: float,
+    ) -> None:
+        self._museum_question = museum_question
+        self._embedding_classifier = embedding_classifier
+        self._model = model
+        self._triage_repository = triage_repository
+        self._classification_repository = classification_repository
+        self._high_threshold = high_threshold
+        self._margin_delta = margin_delta
+
+    async def execute(
+        self, data: ClassifyPendingCascadeUseCategoryInput
+    ) -> MessageClassification:
+        classification = await self._classification_repository.get_by_id(
+            ClassificationId(data.classification_id)
+        )
+        if classification is None:
+            raise ClassificationNotFound(
+                f"No classification found with id {data.classification_id!r}."
+            )
+        if classification.classifier_kind is not ClassifierKind.CASCADE:
+            raise ClassificationNotFound(
+                f"Classification {data.classification_id!r} is not a cascade run."
+            )
+
+        triage = await self._triage_repository.get_by_id(classification.triage_id)
+        if triage is None:
+            raise TriageNotFound(
+                f"No triage found with id {classification.triage_id!r}."
+            )
+
+        question = await self._museum_question.get_summary(triage.question_id)
+        if question is None:
+            raise QuestionNotFound(
+                f"No museum question found with id {triage.question_id!r}"
+            )
+
+        classified_at = datetime.now(UTC)
+        try:
+            embedding_result = await self._embedding_classifier.classify(
+                question.message
+            )
+        except (ModelUnavailable, ModelTimeout) as exc:
+            updated = MessageClassification(
+                id=classification.id,
+                triage_id=classification.triage_id,
+                classifier_kind=classification.classifier_kind,
+                classifier_model=classification.classifier_model,
+                classifier_version=classification.classifier_version,
+                run_number=classification.run_number,
+                superseded_at=classification.superseded_at,
+                status=ClassificationStatus.FAILED,
+                outcome=None,
+                quality=None,
+                category_scores=[],
+                assigned_categories=[],
+                error=str(exc),
+                metadata=dict(classification.metadata),
+                classified_at=classified_at,
+                created_at=classification.created_at,
+            )
+            await self._classification_repository.update(updated)
+            return updated
+
+        escalation_reasons = _cascade_escalation_reasons(
+            embedding_result,
+            high_threshold=self._high_threshold,
+            margin_delta=self._margin_delta,
+        )
+        metadata = {
+            **classification.metadata,
+            **embedding_result.metadata,
+            "cascade_high_threshold": self._high_threshold,
+            "cascade_margin_delta": self._margin_delta,
+            "escalation_reasons": escalation_reasons,
+            "tier1_assigned_categories": [
+                score.category.value
+                for score in embedding_result.classification.assigned_categories
+            ],
+        }
+
+        if not escalation_reasons:
+            updated = MessageClassification(
+                id=classification.id,
+                triage_id=classification.triage_id,
+                classifier_kind=classification.classifier_kind,
+                classifier_model=classification.classifier_model,
+                classifier_version=classification.classifier_version,
+                run_number=classification.run_number,
+                superseded_at=classification.superseded_at,
+                status=ClassificationStatus.COMPLETED,
+                outcome=embedding_result.classification.outcome,
+                quality=ClassificationQuality.FULL,
+                category_scores=list(embedding_result.classification.category_scores),
+                assigned_categories=list(
+                    embedding_result.classification.assigned_categories
+                ),
+                error=None,
+                metadata={**metadata, "tier2_llm_used": False},
+                classified_at=classified_at,
+                created_at=classification.created_at,
+            )
+            await self._classification_repository.update(updated)
+            return updated
+
+        try:
+            llm_result = await self._model.classify_use_categories(question.message)
+        except (ModelUnavailable, ModelTimeout) as exc:
+            updated = MessageClassification(
+                id=classification.id,
+                triage_id=classification.triage_id,
+                classifier_kind=classification.classifier_kind,
+                classifier_model=classification.classifier_model,
+                classifier_version=classification.classifier_version,
+                run_number=classification.run_number,
+                superseded_at=classification.superseded_at,
+                status=ClassificationStatus.COMPLETED,
+                outcome=embedding_result.classification.outcome,
+                quality=ClassificationQuality.DEGRADED,
+                category_scores=list(embedding_result.classification.category_scores),
+                assigned_categories=list(
+                    embedding_result.classification.assigned_categories
+                ),
+                error=None,
+                metadata={
+                    **metadata,
+                    "tier2_llm_used": True,
+                    "fallback_reason": str(exc),
+                },
+                classified_at=classified_at,
+                created_at=classification.created_at,
+            )
+            await self._classification_repository.update(updated)
+            return updated
+
+        assigned_categories = _combine_cascade_assigned_categories(
+            list(embedding_result.classification.assigned_categories),
+            list(llm_result.assigned_categories),
+        )
+        category_scores = _combine_cascade_scores(
+            list(embedding_result.classification.category_scores),
+            list(llm_result.category_scores),
+            assigned_categories,
+        )
+        outcome = (
+            ClassificationOutcome.CATEGORIZED
+            if assigned_categories
+            else ClassificationOutcome.UNCLEAR
+        )
+        updated = MessageClassification(
+            id=classification.id,
+            triage_id=classification.triage_id,
+            classifier_kind=classification.classifier_kind,
+            classifier_model=classification.classifier_model,
+            classifier_version=classification.classifier_version,
+            run_number=classification.run_number,
+            superseded_at=classification.superseded_at,
+            status=ClassificationStatus.COMPLETED,
+            outcome=outcome,
+            quality=ClassificationQuality.FULL,
+            category_scores=category_scores,
+            assigned_categories=assigned_categories,
+            error=None,
+            metadata={
+                **metadata,
+                "tier2_llm_used": True,
+                "tier2_assigned_categories": [
+                    score.category.value for score in llm_result.assigned_categories
+                ],
+            },
+            classified_at=classified_at,
+            created_at=classification.created_at,
+        )
+        await self._classification_repository.update(updated)
+        return updated
+
+
+class SyncUseCategories:
+    """Persist the staff-reviewed category set as the current CASCADE line.
+
+    This closes the cascade UI loop without changing the legacy binary verdict:
+    manual category correction is a use-category classification revision, not a
+    scope-verdict override.
+    """
+
+    def __init__(
+        self,
+        triage_repository: TriageRepository,
+        classification_repository: MessageClassificationRepository,
+        classifier_version: str = STAFF_USE_CATEGORY_CLASSIFIER_VERSION,
+    ) -> None:
+        self._triage_repository = triage_repository
+        self._classification_repository = classification_repository
+        self._classifier_version = classifier_version
+
+    async def execute(self, data: SyncUseCategoriesInput) -> MessageClassification:
+        triage = await self._triage_repository.get_latest_by_question(data.question_id)
+        if triage is None:
+            raise TriageNotFound(
+                f"No triage has been run for question {data.question_id!r} yet."
+            )
+
+        triage_id = triage.id
+        current = await self._classification_repository.get_current_by_triage(
+            triage_id, ClassifierKind.CASCADE
+        )
+        run_number = (current.run_number + 1) if current else 1
+        if current is not None:
+            await self._classification_repository.supersede_current(
+                triage_id, ClassifierKind.CASCADE, datetime.now(UTC)
+            )
+
+        categories = _normalize_use_categories(data.categories)
+        scores = [
+            UseCategoryScore(
+                category=category,
+                confidence=1.0,
+                source=ClassificationScoreSource.LLM,
+            )
+            for category in categories
+        ]
+        outcome = (
+            ClassificationOutcome.CATEGORIZED
+            if scores
+            else ClassificationOutcome.UNCLEAR
+        )
+        classified_at = datetime.now(UTC)
+        classification = MessageClassification(
+            id=ClassificationId(str(uuid.uuid4())),
+            triage_id=triage_id,
+            classifier_kind=ClassifierKind.CASCADE,
+            classifier_model=None,
+            classifier_version=self._classifier_version,
+            run_number=run_number,
+            superseded_at=None,
+            status=ClassificationStatus.COMPLETED,
+            outcome=outcome,
+            quality=ClassificationQuality.FULL,
+            category_scores=scores,
+            assigned_categories=scores,
+            error=None,
+            metadata={
+                "reviewed_by": data.caller.email,
+                "reviewed_at": classified_at.isoformat(),
+                "staff_reviewed": True,
+            },
+            classified_at=classified_at,
+            created_at=classified_at,
+        )
+        await self._classification_repository.add(classification)
+        return classification
+
+
+class ExportUseCategoryCalibrationCsv:
+    def __init__(
+        self,
+        museum_question: MuseumQuestionPort,
+        triage_repository: TriageRepository,
+        classification_repository: MessageClassificationRepository,
+    ) -> None:
+        self._museum_question = museum_question
+        self._triage_repository = triage_repository
+        self._classification_repository = classification_repository
+
+    async def execute(self, data: ExportUseCategoryCalibrationInput) -> str:
+        limit = max(1, min(data.limit, MAX_CALIBRATION_EXPORT_LIMIT))
+        triages = await self._triage_repository.list_latest(limit=limit)
+        output = StringIO()
+        writer = csv.DictWriter(
+            output,
+            fieldnames=[
+                "triage_id",
+                "question_id",
+                "internal_link",
+                "question_status",
+                "triage_created_at",
+                "binary_effective_verdict",
+                "message_hash_sha256",
+                "llm_status",
+                "llm_outcome",
+                "llm_assigned_categories",
+                "llm_category_scores",
+                "embedding_status",
+                "embedding_outcome",
+                "embedding_assigned_categories",
+                "embedding_category_scores",
+                "embedding_metadata",
+                "human_categories",
+            ],
+        )
+        writer.writeheader()
+        for triage in triages:
+            question = await self._museum_question.get_summary(triage.question_id)
+            if question is None:
+                continue
+            current_classifications = (
+                await self._classification_repository.list_current_by_triage(triage.id)
+            )
+            by_kind = {
+                classification.classifier_kind: classification
+                for classification in current_classifications
+            }
+            llm = by_kind.get(ClassifierKind.LLM)
+            embedding = by_kind.get(ClassifierKind.EMBEDDING)
+            writer.writerow(
+                {
+                    "triage_id": triage.id,
+                    "question_id": triage.question_id,
+                    "internal_link": f"/p/museum-questions/{triage.question_id}",
+                    "question_status": question.status,
+                    "triage_created_at": triage.created_at.isoformat(),
+                    "binary_effective_verdict": triage.effective_verdict.value,
+                    "message_hash_sha256": _normalized_message_hash(question.message),
+                    "llm_status": llm.status.value if llm else "NOT_REQUESTED",
+                    "llm_outcome": llm.outcome.value if llm and llm.outcome else "",
+                    "llm_assigned_categories": (
+                        _scores_json(llm.assigned_categories) if llm else "[]"
+                    ),
+                    "llm_category_scores": (
+                        _scores_json(llm.category_scores) if llm else "[]"
+                    ),
+                    "embedding_status": (
+                        embedding.status.value if embedding else "NOT_REQUESTED"
+                    ),
+                    "embedding_outcome": (
+                        embedding.outcome.value
+                        if embedding and embedding.outcome
+                        else ""
+                    ),
+                    "embedding_assigned_categories": (
+                        _scores_json(embedding.assigned_categories)
+                        if embedding
+                        else "[]"
+                    ),
+                    "embedding_category_scores": (
+                        _scores_json(embedding.category_scores) if embedding else "[]"
+                    ),
+                    "embedding_metadata": (
+                        json.dumps(
+                            embedding.metadata,
+                            ensure_ascii=True,
+                            sort_keys=True,
+                            separators=(",", ":"),
+                        )
+                        if embedding
+                        else "{}"
+                    ),
+                    "human_categories": "",
+                }
+            )
+        return output.getvalue()
 
 
 class GetLatestTriage:

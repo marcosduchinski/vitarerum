@@ -1,20 +1,37 @@
+import csv
 from datetime import UTC, datetime
+from io import StringIO
 
 import pytest
 
+from app.ai.museum_question_triage.application.embedding_classifier import (
+    EmbeddingClassificationResult,
+)
 from app.ai.museum_question_triage.application.use_cases import (
     MAX_STAFF_SEARCH_TERMS,
     SEARCH_FETCH_LIMIT_PER_LANGUAGE,
+    ClassifyPendingCascadeUseCategory,
+    ClassifyPendingCascadeUseCategoryInput,
+    ClassifyPendingEmbeddingUseCategory,
+    ClassifyPendingEmbeddingUseCategoryInput,
     ClassifyPendingUseCategory,
     ClassifyPendingUseCategoryInput,
+    CreatePendingCascadeUseCategoryClassification,
+    CreatePendingCascadeUseCategoryClassificationInput,
+    CreatePendingEmbeddingUseCategoryClassification,
+    CreatePendingEmbeddingUseCategoryClassificationInput,
     CreatePendingUseCategoryClassification,
     CreatePendingUseCategoryClassificationInput,
+    ExportUseCategoryCalibrationCsv,
+    ExportUseCategoryCalibrationInput,
     GetLatestTriage,
     GetLatestTriageInput,
     OverrideTriageVerdict,
     OverrideTriageVerdictInput,
     SyncTriageSearchTerms,
     SyncTriageSearchTermsInput,
+    SyncUseCategories,
+    SyncUseCategoriesInput,
     TriageMuseumQuestion,
     TriageMuseumQuestionInput,
 )
@@ -78,12 +95,14 @@ class _FakeModel:
         reply: str = "Thanks, but this is out of scope.",
         classify_error: Exception | None = None,
         use_category_error: Exception | None = None,
+        use_category_result: UseCategoryClassification | None = None,
     ) -> None:
         self._is_visit_related = is_visit_related
         self._mentioned_objects = mentioned_objects or []
         self._reply = reply
         self._classify_error = classify_error
         self._use_category_error = use_category_error
+        self._use_category_result = use_category_result
         self.classify_calls: list[str] = []
         self.use_category_calls: list[str] = []
         self.reply_calls: list[str] = []
@@ -105,6 +124,8 @@ class _FakeModel:
         self.use_category_calls.append(message)
         if self._use_category_error is not None:
             raise self._use_category_error
+        if self._use_category_result is not None:
+            return self._use_category_result
         score = UseCategoryScore(
             category=UseCategory.RESEARCH_PROJECTS,
             confidence=0.91,
@@ -114,6 +135,48 @@ class _FakeModel:
             outcome=ClassificationOutcome.CATEGORIZED,
             category_scores=[score],
             assigned_categories=[score],
+        )
+
+
+class _FakeEmbeddingClassifier:
+    def __init__(
+        self,
+        error: Exception | None = None,
+        *,
+        scores: list[UseCategoryScore] | None = None,
+        assigned: list[UseCategoryScore] | None = None,
+        metadata: dict[str, object] | None = None,
+    ) -> None:
+        self._error = error
+        default_score = UseCategoryScore(
+            category=UseCategory.RESEARCH_PROJECTS,
+            confidence=0.86,
+            source=ClassificationScoreSource.EMBEDDING,
+        )
+        self._scores = scores or [default_score]
+        self._assigned = assigned if assigned is not None else [default_score]
+        self._metadata = metadata or {
+            "threshold_profile": "embedding-test",
+            "would_escalate_due_to_length": False,
+        }
+        self.calls: list[str] = []
+
+    async def classify(self, message: str) -> EmbeddingClassificationResult:
+        self.calls.append(message)
+        if self._error is not None:
+            raise self._error
+        outcome = (
+            ClassificationOutcome.CATEGORIZED
+            if self._assigned
+            else ClassificationOutcome.UNCLEAR
+        )
+        return EmbeddingClassificationResult(
+            classification=UseCategoryClassification(
+                outcome=outcome,
+                category_scores=list(self._scores),
+                assigned_categories=list(self._assigned),
+            ),
+            metadata=dict(self._metadata),
         )
 
 
@@ -146,6 +209,10 @@ class _FakeRepo:
         matches = [t for t in self.stored if t.question_id == question_id]
         matches.sort(key=lambda t: t.created_at, reverse=True)
         return matches[0] if matches else None
+
+    async def list_latest(self, *, limit: int) -> list[MessageTriage]:
+        matches = sorted(self.stored, key=lambda t: t.created_at, reverse=True)
+        return matches[:limit]
 
     async def update(self, triage: MessageTriage) -> None:
         self.update_calls.append(triage)
@@ -184,6 +251,16 @@ class _FakeClassificationRepo:
         ]
         matches.sort(key=lambda classification: classification.run_number, reverse=True)
         return matches[0] if matches else None
+
+    async def list_current_by_triage(
+        self, triage_id: TriageId
+    ) -> list[MessageClassification]:
+        return [
+            classification
+            for classification in self.stored
+            if classification.triage_id == triage_id
+            and classification.superseded_at is None
+        ]
 
     async def supersede_current(
         self,
@@ -351,6 +428,427 @@ async def test_classify_pending_use_category_marks_model_failure() -> None:
     assert result.error == "down"
     assert result.classified_at is not None
     assert classification_repo.update_calls == [result]
+
+
+async def test_create_pending_embedding_use_category_classification() -> None:
+    repo = _FakeClassificationRepo()
+    use_case = CreatePendingEmbeddingUseCategoryClassification(
+        repo, "nomic-embed-text", "embedding-test"
+    )
+
+    result = await use_case.execute(
+        CreatePendingEmbeddingUseCategoryClassificationInput(triage_id="triage-1")
+    )
+
+    assert result.status is ClassificationStatus.PENDING
+    assert result.triage_id == "triage-1"
+    assert result.classifier_kind is ClassifierKind.EMBEDDING
+    assert result.classifier_model == "nomic-embed-text"
+    assert result.classifier_version == "embedding-test"
+    assert result.run_number == 1
+    assert repo.stored == [result]
+
+
+async def test_classify_pending_embedding_completes_classification() -> None:
+    triage_repo = _FakeRepo()
+    triage_repo.stored.append(_stored_use_category_triage())
+    classification_repo = _FakeClassificationRepo()
+    pending = MessageClassification.pending(
+        triage_id=TriageId("triage-1"),
+        classifier_kind=ClassifierKind.EMBEDDING,
+        classifier_model="nomic-embed-text",
+        classifier_version="embedding-test",
+    )
+    classification_repo.stored.append(pending)
+    classifier = _FakeEmbeddingClassifier()
+    use_case = ClassifyPendingEmbeddingUseCategory(
+        _FakeMuseumQuestion(), classifier, triage_repo, classification_repo
+    )
+
+    result = await use_case.execute(
+        ClassifyPendingEmbeddingUseCategoryInput(classification_id=pending.id)
+    )
+
+    assert result.status is ClassificationStatus.COMPLETED
+    assert result.outcome is ClassificationOutcome.CATEGORIZED
+    assert result.quality is ClassificationQuality.FULL
+    assert result.assigned_categories[0].source is ClassificationScoreSource.EMBEDDING
+    assert result.metadata["threshold_profile"] == "embedding-test"
+    assert classifier.calls == [_QUESTION.message]
+    assert classification_repo.update_calls == [result]
+
+
+async def test_classify_pending_embedding_use_category_marks_model_failure() -> None:
+    triage_repo = _FakeRepo()
+    triage_repo.stored.append(_stored_use_category_triage())
+    classification_repo = _FakeClassificationRepo()
+    pending = MessageClassification.pending(
+        triage_id=TriageId("triage-1"),
+        classifier_kind=ClassifierKind.EMBEDDING,
+        classifier_model="nomic-embed-text",
+        classifier_version="embedding-test",
+    )
+    classification_repo.stored.append(pending)
+    use_case = ClassifyPendingEmbeddingUseCategory(
+        _FakeMuseumQuestion(),
+        _FakeEmbeddingClassifier(error=ModelUnavailable("embedding down")),
+        triage_repo,
+        classification_repo,
+    )
+
+    result = await use_case.execute(
+        ClassifyPendingEmbeddingUseCategoryInput(classification_id=pending.id)
+    )
+
+    assert result.status is ClassificationStatus.FAILED
+    assert result.outcome is None
+    assert result.error == "embedding down"
+    assert result.classified_at is not None
+    assert classification_repo.update_calls == [result]
+
+
+async def test_create_pending_cascade_use_category_classification() -> None:
+    repo = _FakeClassificationRepo()
+    use_case = CreatePendingCascadeUseCategoryClassification(
+        repo, "nomic-embed-text", "cascade-test"
+    )
+
+    result = await use_case.execute(
+        CreatePendingCascadeUseCategoryClassificationInput(triage_id="triage-1")
+    )
+
+    assert result.status is ClassificationStatus.PENDING
+    assert result.triage_id == "triage-1"
+    assert result.classifier_kind is ClassifierKind.CASCADE
+    assert result.classifier_model == "nomic-embed-text"
+    assert result.classifier_version == "cascade-test"
+    assert result.run_number == 1
+    assert repo.stored == [result]
+
+
+async def test_classify_pending_cascade_uses_embedding_when_confident() -> None:
+    triage_repo = _FakeRepo()
+    triage_repo.stored.append(_stored_use_category_triage())
+    classification_repo = _FakeClassificationRepo()
+    pending = MessageClassification.pending(
+        triage_id=TriageId("triage-1"),
+        classifier_kind=ClassifierKind.CASCADE,
+        classifier_model="nomic-embed-text",
+        classifier_version="cascade-test",
+    )
+    classification_repo.stored.append(pending)
+    embedding = _FakeEmbeddingClassifier()
+    model = _FakeModel()
+    use_case = ClassifyPendingCascadeUseCategory(
+        _FakeMuseumQuestion(),
+        embedding,
+        model,
+        triage_repo,
+        classification_repo,
+        high_threshold=0.74,
+        margin_delta=0.08,
+    )
+
+    result = await use_case.execute(
+        ClassifyPendingCascadeUseCategoryInput(classification_id=pending.id)
+    )
+
+    assert result.status is ClassificationStatus.COMPLETED
+    assert result.quality is ClassificationQuality.FULL
+    assert result.assigned_categories[0].source is ClassificationScoreSource.EMBEDDING
+    assert result.metadata["tier2_llm_used"] is False
+    assert result.metadata["escalation_reasons"] == []
+    assert embedding.calls == [_QUESTION.message]
+    assert model.use_category_calls == []
+
+
+async def test_classify_pending_cascade_escalates_low_confidence_to_llm() -> None:
+    triage_repo = _FakeRepo()
+    triage_repo.stored.append(_stored_use_category_triage())
+    classification_repo = _FakeClassificationRepo()
+    pending = MessageClassification.pending(
+        triage_id=TriageId("triage-1"),
+        classifier_kind=ClassifierKind.CASCADE,
+        classifier_model="nomic-embed-text",
+        classifier_version="cascade-test",
+    )
+    classification_repo.stored.append(pending)
+    low_score = UseCategoryScore(
+        category=UseCategory.RESEARCH_PROJECTS,
+        confidence=0.62,
+        source=ClassificationScoreSource.EMBEDDING,
+    )
+    embedding = _FakeEmbeddingClassifier(scores=[low_score], assigned=[])
+    model = _FakeModel()
+    use_case = ClassifyPendingCascadeUseCategory(
+        _FakeMuseumQuestion(),
+        embedding,
+        model,
+        triage_repo,
+        classification_repo,
+        high_threshold=0.74,
+        margin_delta=0.08,
+    )
+
+    result = await use_case.execute(
+        ClassifyPendingCascadeUseCategoryInput(classification_id=pending.id)
+    )
+
+    assert result.status is ClassificationStatus.COMPLETED
+    assert result.quality is ClassificationQuality.FULL
+    assert result.assigned_categories[0].source is ClassificationScoreSource.LLM
+    assert result.metadata["tier2_llm_used"] is True
+    assert "low_confidence" in result.metadata["escalation_reasons"]
+    assert model.use_category_calls == [_QUESTION.message]
+
+
+async def test_classify_pending_cascade_keeps_tier1_assigned_score_consistent() -> None:
+    triage_repo = _FakeRepo()
+    triage_repo.stored.append(_stored_use_category_triage())
+    classification_repo = _FakeClassificationRepo()
+    pending = MessageClassification.pending(
+        triage_id=TriageId("triage-1"),
+        classifier_kind=ClassifierKind.CASCADE,
+        classifier_model="nomic-embed-text",
+        classifier_version="cascade-test",
+    )
+    classification_repo.stored.append(pending)
+    embedding_score = UseCategoryScore(
+        category=UseCategory.RESEARCH_PROJECTS,
+        confidence=0.9,
+        source=ClassificationScoreSource.EMBEDDING,
+    )
+    llm_score = UseCategoryScore(
+        category=UseCategory.RESEARCH_PROJECTS,
+        confidence=0.55,
+        source=ClassificationScoreSource.LLM,
+    )
+    embedding = _FakeEmbeddingClassifier(
+        scores=[embedding_score],
+        assigned=[embedding_score],
+        metadata={
+            "threshold_profile": "embedding-test",
+            "would_escalate_due_to_length": True,
+        },
+    )
+    model = _FakeModel(
+        use_category_result=UseCategoryClassification(
+            outcome=ClassificationOutcome.UNCLEAR,
+            category_scores=[llm_score],
+            assigned_categories=[],
+        )
+    )
+    use_case = ClassifyPendingCascadeUseCategory(
+        _FakeMuseumQuestion(),
+        embedding,
+        model,
+        triage_repo,
+        classification_repo,
+        high_threshold=0.74,
+        margin_delta=0.08,
+    )
+
+    result = await use_case.execute(
+        ClassifyPendingCascadeUseCategoryInput(classification_id=pending.id)
+    )
+
+    assert result.status is ClassificationStatus.COMPLETED
+    assert result.outcome is ClassificationOutcome.CATEGORIZED
+    assert result.assigned_categories == [embedding_score]
+    assert result.category_scores == [embedding_score]
+    assert result.metadata["tier2_llm_used"] is True
+    assert "long_message" in result.metadata["escalation_reasons"]
+
+
+async def test_classify_pending_cascade_degrades_when_tier2_fails() -> None:
+    triage_repo = _FakeRepo()
+    triage_repo.stored.append(_stored_use_category_triage())
+    classification_repo = _FakeClassificationRepo()
+    pending = MessageClassification.pending(
+        triage_id=TriageId("triage-1"),
+        classifier_kind=ClassifierKind.CASCADE,
+        classifier_model="nomic-embed-text",
+        classifier_version="cascade-test",
+    )
+    classification_repo.stored.append(pending)
+    low_score = UseCategoryScore(
+        category=UseCategory.RESEARCH_PROJECTS,
+        confidence=0.62,
+        source=ClassificationScoreSource.EMBEDDING,
+    )
+    embedding = _FakeEmbeddingClassifier(scores=[low_score], assigned=[])
+    use_case = ClassifyPendingCascadeUseCategory(
+        _FakeMuseumQuestion(),
+        embedding,
+        _FakeModel(use_category_error=ModelUnavailable("llm down")),
+        triage_repo,
+        classification_repo,
+        high_threshold=0.74,
+        margin_delta=0.08,
+    )
+
+    result = await use_case.execute(
+        ClassifyPendingCascadeUseCategoryInput(classification_id=pending.id)
+    )
+
+    assert result.status is ClassificationStatus.COMPLETED
+    assert result.quality is ClassificationQuality.DEGRADED
+    assert result.outcome is ClassificationOutcome.UNCLEAR
+    assert result.assigned_categories == []
+    assert result.metadata["tier2_llm_used"] is True
+    assert result.metadata["fallback_reason"] == "llm down"
+
+
+async def test_sync_use_categories_creates_staff_reviewed_cascade_line() -> None:
+    triage_repo = _FakeRepo()
+    triage = _stored_use_category_triage()
+    triage_repo.stored.append(triage)
+    classification_repo = _FakeClassificationRepo()
+    current_score = UseCategoryScore(
+        category=UseCategory.RESEARCH_PROJECTS,
+        confidence=0.86,
+        source=ClassificationScoreSource.EMBEDDING,
+    )
+    classification_repo.stored.append(
+        MessageClassification(
+            id=ClassificationId("classification-cascade-1"),
+            triage_id=triage.id,
+            classifier_kind=ClassifierKind.CASCADE,
+            classifier_model="nomic-embed-text",
+            classifier_version="cascade-test",
+            run_number=1,
+            superseded_at=None,
+            status=ClassificationStatus.COMPLETED,
+            outcome=ClassificationOutcome.CATEGORIZED,
+            quality=ClassificationQuality.FULL,
+            category_scores=[current_score],
+            assigned_categories=[current_score],
+            error=None,
+            metadata={},
+            classified_at=datetime(2026, 7, 10, 12, 1, tzinfo=UTC),
+            created_at=datetime(2026, 7, 10, 12, 1, tzinfo=UTC),
+        )
+    )
+    use_case = SyncUseCategories(triage_repo, classification_repo)
+
+    result = await use_case.execute(
+        SyncUseCategoriesInput(
+            question_id="q1",
+            categories=[
+                UseCategory.ANSWERING_ENQUIRIES,
+                UseCategory.ANSWERING_ENQUIRIES,
+                UseCategory.PUBLISHING_IMAGES,
+            ],
+            caller=_STAFF,
+        )
+    )
+
+    assert result.classifier_kind is ClassifierKind.CASCADE
+    assert result.classifier_version == "staff-reviewed-v1"
+    assert result.run_number == 2
+    assert result.status is ClassificationStatus.COMPLETED
+    assert result.outcome is ClassificationOutcome.CATEGORIZED
+    assert result.quality is ClassificationQuality.FULL
+    assert [score.category for score in result.assigned_categories] == [
+        UseCategory.ANSWERING_ENQUIRIES,
+        UseCategory.PUBLISHING_IMAGES,
+    ]
+    assert all(score.confidence == 1.0 for score in result.assigned_categories)
+    assert result.metadata["staff_reviewed"] is True
+    assert result.metadata["reviewed_by"] == _STAFF.email
+    assert classification_repo.stored[0].superseded_at is not None
+    assert classification_repo.stored[1] == result
+    assert triage.effective_verdict is TriageVerdict.IN_SCOPE
+
+
+async def test_sync_use_categories_can_mark_unclear() -> None:
+    triage_repo = _FakeRepo()
+    triage_repo.stored.append(_stored_use_category_triage())
+    classification_repo = _FakeClassificationRepo()
+    use_case = SyncUseCategories(triage_repo, classification_repo)
+
+    result = await use_case.execute(
+        SyncUseCategoriesInput(question_id="q1", categories=[], caller=_STAFF)
+    )
+
+    assert result.outcome is ClassificationOutcome.UNCLEAR
+    assert result.assigned_categories == []
+    assert result.category_scores == []
+
+
+async def test_export_use_category_calibration_csv_excludes_message_text() -> None:
+    triage_repo = _FakeRepo()
+    triage_repo.stored.append(_stored_use_category_triage())
+    classification_repo = _FakeClassificationRepo()
+    llm_score = UseCategoryScore(
+        category=UseCategory.RESEARCH_PROJECTS,
+        confidence=0.91,
+        source=ClassificationScoreSource.LLM,
+    )
+    embedding_score = UseCategoryScore(
+        category=UseCategory.RESEARCH_PROJECTS,
+        confidence=0.86,
+        source=ClassificationScoreSource.EMBEDDING,
+    )
+    classification_repo.stored.extend(
+        [
+            MessageClassification(
+                id=ClassificationId("llm-1"),
+                triage_id=TriageId("triage-1"),
+                classifier_kind=ClassifierKind.LLM,
+                classifier_model="llama3.1:8b",
+                classifier_version="llm-use-category-v1",
+                run_number=1,
+                superseded_at=None,
+                status=ClassificationStatus.COMPLETED,
+                outcome=ClassificationOutcome.CATEGORIZED,
+                quality=ClassificationQuality.FULL,
+                category_scores=[llm_score],
+                assigned_categories=[llm_score],
+                error=None,
+                metadata={},
+                classified_at=datetime(2026, 7, 10, 12, 1, tzinfo=UTC),
+                created_at=datetime(2026, 7, 10, 12, 0, tzinfo=UTC),
+            ),
+            MessageClassification(
+                id=ClassificationId("embedding-1"),
+                triage_id=TriageId("triage-1"),
+                classifier_kind=ClassifierKind.EMBEDDING,
+                classifier_model="nomic-embed-text",
+                classifier_version="embedding-prototypes-v1",
+                run_number=1,
+                superseded_at=None,
+                status=ClassificationStatus.COMPLETED,
+                outcome=ClassificationOutcome.CATEGORIZED,
+                quality=ClassificationQuality.FULL,
+                category_scores=[embedding_score],
+                assigned_categories=[embedding_score],
+                error=None,
+                metadata={"threshold_profile": "embedding-prototypes-v1"},
+                classified_at=datetime(2026, 7, 10, 12, 2, tzinfo=UTC),
+                created_at=datetime(2026, 7, 10, 12, 0, tzinfo=UTC),
+            ),
+        ]
+    )
+    use_case = ExportUseCategoryCalibrationCsv(
+        _FakeMuseumQuestion(), triage_repo, classification_repo
+    )
+
+    content = await use_case.execute(ExportUseCategoryCalibrationInput(limit=100))
+    rows = list(csv.DictReader(StringIO(content)))
+
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["triage_id"] == "triage-1"
+    assert row["question_id"] == "q1"
+    assert row["internal_link"] == "/p/museum-questions/q1"
+    assert row["question_status"] == "SUBMITTED"
+    assert row["message_hash_sha256"]
+    assert row["human_categories"] == ""
+    assert "RESEARCH_PROJECTS" in row["llm_assigned_categories"]
+    assert "RESEARCH_PROJECTS" in row["embedding_assigned_categories"]
+    assert _QUESTION.message not in content
+    assert _QUESTION.requester_email not in content
 
 
 async def test_out_of_scope_drafts_reply_and_skips_search() -> None:

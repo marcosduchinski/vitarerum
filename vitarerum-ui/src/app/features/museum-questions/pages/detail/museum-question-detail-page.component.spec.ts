@@ -7,6 +7,9 @@ import {
   SearchTermDraft,
   TriageVerdict,
   UseCategoryClassification,
+  UseCategoryClassificationAudit,
+  UseCategoryClassificationAuditList,
+  UseCategoryValue,
 } from '../../models/museum-question-triage.model';
 import { MuseumQuestion } from '../../models/museum-question.model';
 import { MUSEUM_QUESTION_MANAGEMENT_SERVICE } from '../../services/museum-question-management.service';
@@ -126,6 +129,31 @@ const COMPLETED_USE_CATEGORY_CLASSIFICATION: UseCategoryClassification = {
   error: null,
 };
 
+const CASCADE_USE_CATEGORY_CLASSIFICATION: UseCategoryClassificationAudit = {
+  id: 'classification-cascade',
+  triageId: 't2',
+  runNumber: 2,
+  supersededAt: null,
+  metadata: {},
+  createdAt: '2026-07-05T12:02:00Z',
+  status: 'COMPLETED',
+  outcome: 'CATEGORIZED',
+  quality: 'FULL',
+  classifierKind: 'CASCADE',
+  classifierModel: 'cascade-use-category',
+  classifierVersion: 'cascade-use-category-v1',
+  assignedCategories: [
+    { category: 'RESEARCH_PROJECTS', confidence: 0.94, source: 'EMBEDDING' },
+    { category: 'ANSWERING_ENQUIRIES', confidence: 0.82, source: 'LLM' },
+  ],
+  categoryScores: [
+    { category: 'RESEARCH_PROJECTS', confidence: 0.94, source: 'EMBEDDING' },
+    { category: 'ANSWERING_ENQUIRIES', confidence: 0.82, source: 'LLM' },
+  ],
+  classifiedAt: '2026-07-05T12:02:00Z',
+  error: null,
+};
+
 const UNCLEAR_USE_CATEGORY_CLASSIFICATION: UseCategoryClassification = {
   status: 'COMPLETED',
   outcome: 'UNCLEAR',
@@ -163,15 +191,22 @@ class ServiceStub {
   readonly triageCalls: string[] = [];
   readonly overrideVerdictCalls: [string, TriageVerdict][] = [];
   readonly syncSearchTermsCalls: [string, readonly SearchTermDraft[]][] = [];
+  readonly syncUseCategoriesCalls: [string, readonly UseCategoryValue[]][] = [];
+  audit: UseCategoryClassificationAuditList | null = null;
 
   getTriage(questionId: string) {
     this.getTriageCalls.push(questionId);
     return of(this.triage);
   }
 
+  listTriageClassifications() {
+    return of(this.audit);
+  }
+
   runTriage(questionId: string) {
     this.triageCalls.push(questionId);
     this.triage = this.nextTriage;
+    this.audit = this.audit ?? null;
     return of(this.triage!);
   }
 
@@ -198,6 +233,35 @@ class ServiceStub {
       objectMatches: terms.map((term) => ({ ...term, hits: [], languagesSearched: ['pt'] })),
     };
     return of(this.triage);
+  }
+
+  syncTriageUseCategories(questionId: string, categories: readonly UseCategoryValue[]) {
+    this.syncUseCategoriesCalls.push([questionId, categories]);
+    const scores = categories.map((category) => ({
+      category,
+      confidence: 1,
+      source: 'LLM' as const,
+    }));
+    const classification: UseCategoryClassificationAudit = {
+      id: 'classification-staff',
+      triageId: this.triage!.id,
+      runNumber: 3,
+      supersededAt: null,
+      metadata: { staff_reviewed: true },
+      createdAt: '2026-07-05T12:03:00Z',
+      status: 'COMPLETED',
+      outcome: scores.length ? 'CATEGORIZED' : 'UNCLEAR',
+      quality: 'FULL',
+      classifierKind: 'CASCADE',
+      classifierModel: null,
+      classifierVersion: 'staff-reviewed-v1',
+      assignedCategories: scores,
+      categoryScores: scores,
+      classifiedAt: '2026-07-05T12:03:00Z',
+      error: null,
+    };
+    this.audit = { triageId: this.triage!.id, classifications: [classification] };
+    return of(this.audit);
   }
 
   get() {
@@ -553,6 +617,78 @@ describe('MuseumQuestionDetailPageComponent', () => {
 
     expect(el.textContent).toContain('Research projects');
     expect(el.textContent).toContain('91%');
+    expect(el.textContent).toContain('Catalogue search');
+    expect(el.textContent).toContain('LLM');
+  });
+
+  it('prefers cascade audit classification over the legacy triage field', async () => {
+    const el = await setup();
+    service.nextTriage = {
+      ...IN_SCOPE_TRIAGE,
+      useCategoryClassification: COMPLETED_USE_CATEGORY_CLASSIFICATION,
+    };
+    service.audit = {
+      triageId: 't2',
+      classifications: [
+        {
+          id: 'classification-llm',
+          triageId: 't2',
+          runNumber: 1,
+          supersededAt: '2026-07-05T12:02:00Z',
+          metadata: {},
+          createdAt: '2026-07-05T12:01:00Z',
+          ...COMPLETED_USE_CATEGORY_CLASSIFICATION,
+        },
+        CASCADE_USE_CATEGORY_CLASSIFICATION,
+      ],
+    };
+
+    el.querySelector<HTMLButtonElement>('[aria-label="Run AI triage"]')!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(el.textContent).toContain('Cascade');
+    expect(el.textContent).toContain('94%');
+    expect(el.textContent).toContain('Answering enquiries');
+    expect(el.textContent).toContain('Search if object named');
+    expect(el.textContent).toContain('2 category(s)');
+  });
+
+  it('saves staff-corrected use categories', async () => {
+    const el = await setup();
+    service.nextTriage = {
+      ...IN_SCOPE_TRIAGE,
+      useCategoryClassification: COMPLETED_USE_CATEGORY_CLASSIFICATION,
+    };
+    service.audit = {
+      triageId: 't2',
+      classifications: [CASCADE_USE_CATEGORY_CLASSIFICATION],
+    };
+
+    el.querySelector<HTMLButtonElement>('[aria-label="Run AI triage"]')!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const publishingLabel = Array.from(el.querySelectorAll<HTMLLabelElement>('label')).find(
+      (label) => label.textContent?.includes('Publishing images'),
+    )!;
+    publishingLabel.querySelector<HTMLInputElement>('input')!.click();
+    fixture.detectChanges();
+
+    Array.from(el.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.includes('Save categories'))!
+      .click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(service.syncUseCategoriesCalls).toEqual([
+      [
+        'q1',
+        ['ANSWERING_ENQUIRIES', 'PUBLISHING_IMAGES', 'RESEARCH_PROJECTS'],
+      ],
+    ]);
   });
 
   it('renders unclear use-category classification', async () => {

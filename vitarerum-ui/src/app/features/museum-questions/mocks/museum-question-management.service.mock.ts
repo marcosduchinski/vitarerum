@@ -7,6 +7,10 @@ import {
   SearchTermDraft,
   TriageVerdict,
   UseCategoryClassification,
+  UseCategoryClassificationAudit,
+  UseCategoryClassificationAuditList,
+  UseCategoryScore,
+  UseCategoryValue,
 } from '../models/museum-question-triage.model';
 import {
   AnswerMuseumQuestionRequest,
@@ -65,19 +69,43 @@ function pendingUseCategoryClassification(): UseCategoryClassification {
 }
 
 function completedUseCategoryClassification(): UseCategoryClassification {
-  const score = { category: 'RESEARCH_PROJECTS', confidence: 0.91, source: 'LLM' as const };
+  const scores = [
+    { category: 'RESEARCH_PROJECTS', confidence: 0.91, source: 'LLM' as const },
+    { category: 'ANSWERING_ENQUIRIES', confidence: 0.76, source: 'EMBEDDING' as const },
+  ] satisfies UseCategoryScore[];
   return {
     status: 'COMPLETED',
     outcome: 'CATEGORIZED',
     quality: 'FULL',
-    classifierKind: 'LLM',
-    classifierModel: 'llama3.1:8b (mock)',
-    classifierVersion: 'llm-use-category-v1',
-    assignedCategories: [score],
-    categoryScores: [score],
+    classifierKind: 'CASCADE',
+    classifierModel: 'cascade (mock)',
+    classifierVersion: 'cascade-use-category-v1',
+    assignedCategories: scores,
+    categoryScores: scores,
     classifiedAt: NOW,
     error: null,
   };
+}
+
+function classificationAudit(
+  triage: MuseumQuestionTriage,
+): UseCategoryClassificationAuditList {
+  if (triage.useCategoryClassification.status === 'NOT_REQUESTED') {
+    return { triageId: triage.id, classifications: [] };
+  }
+  const current = triage.useCategoryClassification;
+  const classifications: UseCategoryClassificationAudit[] = [
+    {
+      id: `classification-${triage.id}-current`,
+      triageId: triage.id,
+      runNumber: 1,
+      supersededAt: null,
+      metadata: {},
+      createdAt: current.classifiedAt ?? NOW,
+      ...current,
+    },
+  ];
+  return { triageId: triage.id, classifications };
 }
 
 @Injectable()
@@ -218,6 +246,41 @@ export class MuseumQuestionManagementServiceMock implements MuseumQuestionManage
       return of(updated).pipe(delay(150));
     }
     return of(triage).pipe(delay(150));
+  }
+
+  listTriageClassifications(questionId: string): Observable<UseCategoryClassificationAuditList | null> {
+    const triage = this.triages[questionId] ?? null;
+    return of(triage ? classificationAudit(triage) : null).pipe(delay(150));
+  }
+
+  syncTriageUseCategories(
+    questionId: string,
+    categories: readonly UseCategoryValue[],
+  ): Observable<UseCategoryClassificationAuditList> {
+    const triage = this.triages[questionId];
+    if (!triage) return this.notFound();
+    const scores = [...new Set(categories)].sort().map((category) => ({
+      category,
+      confidence: 1,
+      source: 'LLM' as const,
+    }));
+    const updated: MuseumQuestionTriage = {
+      ...triage,
+      useCategoryClassification: {
+        status: 'COMPLETED',
+        outcome: scores.length ? 'CATEGORIZED' : 'UNCLEAR',
+        quality: 'FULL',
+        classifierKind: 'CASCADE',
+        classifierModel: null,
+        classifierVersion: 'staff-reviewed-v1',
+        assignedCategories: scores,
+        categoryScores: scores,
+        classifiedAt: NOW,
+        error: null,
+      },
+    };
+    this.triages[questionId] = updated;
+    return of(classificationAudit(updated)).pipe(delay(200));
   }
 
   runTriage(questionId: string): Observable<MuseumQuestionTriage> {
