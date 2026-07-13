@@ -77,6 +77,8 @@ function formatDateTime(iso: string): string {
 
 const START_NOTE = 'Started from staff project detail.';
 const COMPLETE_NOTE = 'Completed from staff project detail.';
+type ProjectDetailTab = 'actions' | 'objects' | 'todo';
+const PROJECT_DETAIL_TABS: readonly ProjectDetailTab[] = ['actions', 'objects', 'todo'];
 
 @Component({
   selector: 'app-project-staff-detail-page',
@@ -218,12 +220,36 @@ export class ProjectStaffDetailPageComponent {
   protected readonly removingObjectId = signal<string | null>(null);
   protected readonly addObjectsError = signal<ApiError | null>(null);
   protected readonly removeObjectError = signal<ApiError | null>(null);
+  protected readonly activeTab = signal<ProjectDetailTab>('actions');
 
   protected readonly formatDate = formatDate;
   protected readonly formatDateTime = formatDateTime;
 
   protected asWorkflowStatus(value: string): WorkflowStatus {
     return value as WorkflowStatus;
+  }
+
+  protected selectTab(tab: ProjectDetailTab): void {
+    this.activeTab.set(tab);
+  }
+
+  protected onTabKeydown(event: KeyboardEvent, index: number): void {
+    const lastIndex = PROJECT_DETAIL_TABS.length - 1;
+    let nextIndex: number | null = null;
+
+    if (event.key === 'ArrowRight') {
+      nextIndex = index === lastIndex ? 0 : index + 1;
+    } else if (event.key === 'ArrowLeft') {
+      nextIndex = index === 0 ? lastIndex : index - 1;
+    } else if (event.key === 'Home') {
+      nextIndex = 0;
+    } else if (event.key === 'End') {
+      nextIndex = lastIndex;
+    }
+
+    if (nextIndex === null) return;
+    event.preventDefault();
+    this.activeTab.set(PROJECT_DETAIL_TABS[nextIndex]);
   }
 
   protected openCancelConfirm(): void {

@@ -242,7 +242,9 @@ describe('ProjectCuratorialDetailPageComponent', () => {
   it('shows the frontend-only TODO List', async () => {
     const compiled = await render();
 
-    expect(compiled.textContent).toContain('TODO List');
+    buttonByText(compiled, 'Todo List').click();
+    componentRef.changeDetectorRef.detectChanges();
+
     expect(compiled.textContent).toContain('Items are kept only for this demonstration');
     expect(projectService.cancelled).toEqual([]);
   });

@@ -233,6 +233,25 @@ describe('ProjectStaffDetailPageComponent', () => {
     expect(fixture.nativeElement.querySelector('a.project-detail__edit')).toBeNull();
   });
 
+  it('groups actions, objects, and todo list below the overview in tabs', async () => {
+    const fixture = TestBed.createComponent(ProjectStaffDetailPageComponent);
+    fixture.componentRef.setInput('id', PROJECT.id);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const el: HTMLElement = fixture.nativeElement;
+    const tabs = Array.from(el.querySelectorAll<HTMLElement>('[role="tab"]'));
+    expect(tabs.map((tab) => tab.textContent?.trim().replace(/\s+/g, ' '))).toEqual([
+      'Actions',
+      'Objects',
+      'Todo List',
+    ]);
+    expect(el.querySelector<HTMLElement>('#actions-tab')?.getAttribute('aria-selected')).toBe(
+      'true',
+    );
+  });
+
   it('adds and removes project objects through the Objects section', async () => {
     currentProject = {
       ...PROJECT,
@@ -255,6 +274,9 @@ describe('ProjectStaffDetailPageComponent', () => {
     fixture.detectChanges();
 
     const el: HTMLElement = fixture.nativeElement;
+    buttonByText(el, 'Objects').click();
+    fixture.detectChanges();
+
     el.querySelector<HTMLButtonElement>('.object-row__remove')!.click();
     fixture.detectChanges();
     Array.from(el.querySelectorAll<HTMLButtonElement>('button'))
