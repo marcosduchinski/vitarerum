@@ -54,6 +54,16 @@ class UpdateProposalRequest(BaseModel):
     endDate: date | None = None
 
 
+class UpdateProjectRequest(BaseModel):
+    # Partial update: an omitted key leaves the project field unchanged. Project
+    # title/purpose/dates are required fields, so explicit null is rejected by
+    # the domain instead of clearing the value.
+    title: str | None = None
+    purpose: str | None = None
+    beginDate: date | None = None
+    endDate: date | None = None
+
+
 class RequesterContactResponse(BaseModel):
     name: str
     email: str
@@ -283,6 +293,10 @@ class RequestedObjectSnapshotInput(BaseModel):
 
 
 class AddRequestedObjectsRequest(BaseModel):
+    objects: list[RequestedObjectSnapshotInput]
+
+
+class AddProjectObjectsRequest(BaseModel):
     objects: list[RequestedObjectSnapshotInput]
 
 

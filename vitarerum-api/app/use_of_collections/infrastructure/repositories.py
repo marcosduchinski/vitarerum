@@ -972,6 +972,26 @@ class SqlAlchemyObjectAccessLogRepository:
         records = (await self._session.execute(data_stmt)).scalars().all()
         return [log_entry_to_domain(r) for r in records], total
 
+    async def has_entries_for_object(
+        self,
+        project_id: CollectionUseProjectId,
+        collection_use_object_id: CollectionUseObjectId,
+    ) -> bool:
+        stmt = (
+            select(ObjectLogEntryRecord.id)
+            .join(
+                ObjectAccessLogRecord,
+                ObjectLogEntryRecord.access_log_id == ObjectAccessLogRecord.id,
+            )
+            .where(
+                ObjectAccessLogRecord.project_id == project_id,
+                ObjectLogEntryRecord.collection_use_object_id
+                == collection_use_object_id,
+            )
+            .limit(1)
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none() is not None
+
 
 class SqlAlchemyObjectOccurrenceLogRepository:
     def __init__(self, session: AsyncSession) -> None:
@@ -1055,6 +1075,27 @@ class SqlAlchemyObjectOccurrenceLogRepository:
         )
         records = (await self._session.execute(data_stmt)).scalars().all()
         return [occurrence_entry_to_domain(r) for r in records], total
+
+    async def has_entries_for_object(
+        self,
+        project_id: CollectionUseProjectId,
+        collection_use_object_id: CollectionUseObjectId,
+    ) -> bool:
+        stmt = (
+            select(ObjectOccurrenceEntryRecord.id)
+            .join(
+                ObjectOccurrenceLogRecord,
+                ObjectOccurrenceEntryRecord.occurrence_log_id
+                == ObjectOccurrenceLogRecord.id,
+            )
+            .where(
+                ObjectOccurrenceLogRecord.project_id == project_id,
+                ObjectOccurrenceEntryRecord.collection_use_object_id
+                == collection_use_object_id,
+            )
+            .limit(1)
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none() is not None
 
 
 class SqlAlchemyPublicationLogRepository:

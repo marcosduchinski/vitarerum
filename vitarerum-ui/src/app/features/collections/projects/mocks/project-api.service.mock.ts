@@ -7,6 +7,7 @@ import { Observable, of, throwError } from 'rxjs';
 import { MediaType, UseResult, UseStatus } from '@shared/models/collection-use-status.model';
 import {
   Attachment,
+  AddProjectObjectsRequest,
   CollectionUseProjectDetail,
   CollectionUseProjectSummary,
   CreateObjectLogEntryRequest,
@@ -30,6 +31,7 @@ import {
   PublicationLog,
   PublicationLogEntry,
   ReasonRequest,
+  UpdateProjectRequest,
   UpdateObjectLogEntryRequest,
   UpdateObjectOccurrenceEntryRequest,
   UseEvent,
@@ -95,6 +97,79 @@ export class ProjectApiServiceMock {
       'CANCELLED',
       request.reason,
     );
+  }
+
+  updateProject(
+    projectId: string,
+    request: UpdateProjectRequest,
+  ): Observable<CollectionUseProjectDetail> {
+    const p = this.state.projects.get(projectId);
+    if (!p) return throwError(() => ({ status: 404, error: 'NOT_FOUND' }));
+    if (p.status === 'COMPLETED' || p.status === 'CANCELLED') {
+      return throwError(() => ({ status: 409, error: 'INVALID_TRANSITION' }));
+    }
+    if (
+      request.beginDate !== undefined &&
+      request.endDate !== undefined &&
+      request.beginDate &&
+      request.endDate &&
+      request.endDate < request.beginDate
+    ) {
+      return throwError(() => ({ status: 422, error: 'INVALID_DATE_RANGE' }));
+    }
+    const beginDate = request.beginDate !== undefined ? request.beginDate : p.beginDate;
+    const endDate = request.endDate !== undefined ? request.endDate : p.endDate;
+    if (beginDate && endDate && endDate < beginDate) {
+      return throwError(() => ({ status: 422, error: 'INVALID_DATE_RANGE' }));
+    }
+    if (request.title !== undefined) p.title = request.title ?? p.title;
+    if (request.purpose !== undefined) p.purpose = request.purpose ?? p.purpose;
+    if (request.beginDate !== undefined && request.beginDate) p.beginDate = request.beginDate;
+    if (request.endDate !== undefined && request.endDate) p.endDate = request.endDate;
+    return of(this.toDetail(p));
+  }
+
+  addProjectObjects(
+    projectId: string,
+    request: AddProjectObjectsRequest,
+  ): Observable<CollectionUseProjectDetail> {
+    const p = this.state.projects.get(projectId);
+    if (!p) return throwError(() => ({ status: 404, error: 'NOT_FOUND' }));
+    if (p.status === 'COMPLETED' || p.status === 'CANCELLED') {
+      return throwError(() => ({ status: 409, error: 'INVALID_TRANSITION' }));
+    }
+    const current = p.objects ?? [];
+    p.objects = [
+      ...current,
+      ...request.objects.map((object) => ({
+        id: this.state.nextProjectObjectId(),
+        inventoryNumber: object.inventoryNumber,
+        displayTitle: object.displayTitle,
+        objectName: object.objectName,
+        briefDescriptionSnapshot: object.briefDescriptionSnapshot ?? null,
+        category: object.category ?? '',
+        description: object.description ?? '',
+      })),
+    ];
+    return of(this.toDetail(p));
+  }
+
+  removeProjectObject(projectId: string, objectId: string): Observable<void> {
+    const p = this.state.projects.get(projectId);
+    if (!p) return throwError(() => ({ status: 404, error: 'NOT_FOUND' }));
+    if (p.status === 'COMPLETED' || p.status === 'CANCELLED') {
+      return throwError(() => ({ status: 409, error: 'INVALID_TRANSITION' }));
+    }
+    const inUse =
+      (this.state.logEntries.get(projectId) ?? []).some(
+        (entry) => entry.requestedObjectId === objectId,
+      ) ||
+      (this.state.occurrenceEntries.get(projectId) ?? []).some(
+        (entry) => entry.requestedObjectId === objectId,
+      );
+    if (inUse) return throwError(() => ({ status: 409, error: 'PROJECT_OBJECT_IN_USE' }));
+    p.objects = (p.objects ?? []).filter((object) => object.id !== objectId);
+    return of(void 0);
   }
 
   createObjectLogEntry(
@@ -618,9 +693,22 @@ export class ProjectApiServiceMock {
   private toDetail(p: MutableProjectState): CollectionUseProjectDetail {
     const group = this.identity.session()?.group ?? null;
     const isStaffGroup = group !== null && group !== 'EXTERNAL';
+    const proposal = this.state.proposals.get(p.proposalId);
 
     return {
       ...this.toSummary(p),
+      objects:
+        p.objects ??
+        proposal?.requestedObjects.map((object) => ({
+          id: object.id,
+          inventoryNumber: object.objectReference.inventoryNumber,
+          displayTitle: object.objectReference.displayTitle,
+          objectName: object.objectReference.objectName,
+          briefDescriptionSnapshot: object.objectReference.briefDescriptionSnapshot,
+          category: object.category,
+          description: object.description,
+        })) ??
+        [],
       actions: this.projectActions(p, group),
       staffContext: isStaffGroup
         ? this.staffContext(p, group as Exclude<GroupName, 'EXTERNAL'>)

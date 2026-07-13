@@ -11,6 +11,8 @@ from app.use_of_collections.domain.enums import (
     UseType,
 )
 from app.use_of_collections.domain.models import (
+    CollectionUseObject,
+    CollectionUseObjectId,
     CollectionUseProject,
     CollectionUseProjectId,
     Document,
@@ -163,6 +165,100 @@ def test_cancel_project_blocks_already_cancelled_project() -> None:
 
     assert project.status == UseStatus.CANCELLED
     assert len(project.events) == event_count
+
+
+def test_edit_project_updates_metadata_without_lifecycle_event() -> None:
+    project = _make_project(status=UseStatus.IN_PROGRESS)
+
+    project.edit(
+        title="Corrected title",
+        update_title=True,
+        purpose="Corrected purpose",
+        update_purpose=True,
+        begin_date=date(2026, 7, 1),
+        update_begin_date=True,
+        end_date=date(2026, 7, 5),
+        update_end_date=True,
+    )
+
+    assert project.title == "Corrected title"
+    assert project.purpose == "Corrected purpose"
+    assert project.begin_date == date(2026, 7, 1)
+    assert project.end_date == date(2026, 7, 5)
+    assert project.events == []
+
+
+def test_edit_project_blocks_terminal_status() -> None:
+    project = _make_project(status=UseStatus.COMPLETED)
+
+    with pytest.raises(InvalidTransition, match="completed or cancelled"):
+        project.edit(
+            title="Corrected title",
+            update_title=True,
+            purpose=None,
+            update_purpose=False,
+            begin_date=None,
+            update_begin_date=False,
+            end_date=None,
+            update_end_date=False,
+        )
+
+
+def test_edit_project_rejects_invalid_effective_date_range() -> None:
+    project = _make_project(status=UseStatus.CREATED)
+
+    with pytest.raises(ValueError, match="endDate"):
+        project.edit(
+            title=None,
+            update_title=False,
+            purpose=None,
+            update_purpose=False,
+            begin_date=date(2026, 7, 10),
+            update_begin_date=True,
+            end_date=None,
+            update_end_date=False,
+        )
+
+
+def test_add_project_objects_appends_to_editable_project() -> None:
+    project = _make_project(status=UseStatus.CREATED)
+    project_object = CollectionUseObject(
+        id=CollectionUseObjectId("object-1"),
+        inventory_number="INV-001",
+        category="zoology",
+        description="",
+        requested_at=_now(),
+        requested_by=PermissionId("permission-staff"),
+        display_title="Specimen drawer",
+        object_name="Drawer",
+    )
+
+    project.add_objects([project_object])
+
+    assert project.objects == [project_object]
+
+
+def test_add_project_objects_blocks_terminal_project() -> None:
+    project = _make_project(status=UseStatus.CANCELLED)
+
+    with pytest.raises(InvalidTransition, match="completed or cancelled"):
+        project.add_objects([])
+
+
+def test_remove_project_object_removes_existing_object() -> None:
+    project_object = CollectionUseObject(
+        id=CollectionUseObjectId("object-1"),
+        inventory_number="INV-001",
+        category="zoology",
+        description="",
+        requested_at=_now(),
+        requested_by=PermissionId("permission-staff"),
+    )
+    project = _make_project(status=UseStatus.IN_PROGRESS, objects=[project_object])
+
+    project.remove_object(CollectionUseObjectId("object-1"))
+
+    assert project.objects == []
 
 
 def test_proposal_cancellation_records_cancelled_status_and_event() -> None:

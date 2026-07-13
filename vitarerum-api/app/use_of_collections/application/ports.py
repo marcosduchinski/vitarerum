@@ -5,6 +5,7 @@ from typing import Protocol
 from app.identity.public import Actor
 from app.use_of_collections.domain.enums import ProposalStatus, UseStatus, UseType
 from app.use_of_collections.domain.models import (
+    CollectionUseObjectId,
     CollectionUseProject,
     CollectionUseProjectId,
     Conversation,
@@ -139,6 +140,12 @@ class ObjectAccessLogRepository(Protocol):
         size: int,
     ) -> tuple[list[ObjectLogEntry], int]: ...
 
+    async def has_entries_for_object(
+        self,
+        project_id: CollectionUseProjectId,
+        collection_use_object_id: CollectionUseObjectId,
+    ) -> bool: ...
+
 
 class ObjectOccurrenceLogRepository(Protocol):
     async def add(self, occurrence_log: ObjectOccurrenceLog) -> None: ...
@@ -166,6 +173,12 @@ class ObjectOccurrenceLogRepository(Protocol):
         page: int,
         size: int,
     ) -> tuple[list[ObjectOccurrenceEntry], int]: ...
+
+    async def has_entries_for_object(
+        self,
+        project_id: CollectionUseProjectId,
+        collection_use_object_id: CollectionUseObjectId,
+    ) -> bool: ...
 
 
 class PublicationLogRepository(Protocol):

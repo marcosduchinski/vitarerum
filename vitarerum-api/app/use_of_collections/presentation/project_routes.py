@@ -11,9 +11,13 @@ from datetime import date
 from typing import Annotated
 
 from fastapi import (
+    HTTPException,
     Query,
+    Response,
+    status,
 )
 
+from app.shared.authorization import require_staff
 from app.shared.dependencies import CallerPermission
 from app.use_of_collections.application.authorization import (
     assert_project_access,
@@ -22,10 +26,17 @@ from app.use_of_collections.application.ports import (
     ProjectFilters,
 )
 from app.use_of_collections.application.use_cases import (
+    AddProjectObjects,
+    AddProjectObjectsInput,
     CancelProject,
     CancelProjectInput,
     CompleteProject,
     CompleteProjectInput,
+    EditProjectDetails,
+    EditProjectDetailsInput,
+    ProjectObjectSnapshotInput,
+    RemoveProjectObject,
+    RemoveProjectObjectInput,
     StartProject,
     StartProjectInput,
 )
@@ -35,7 +46,9 @@ from app.use_of_collections.domain.enums import (
     UseType,
 )
 from app.use_of_collections.domain.models import (
+    CollectionUseObjectId,
     CollectionUseProjectId,
+    ProjectObjectInUse,
 )
 from app.use_of_collections.presentation.common import (
     _assert_existing_project_access,
@@ -50,11 +63,13 @@ from app.use_of_collections.presentation.dependencies import (
     AccessLogRepo,
     DBSession,
     ListProjectsQuery,
+    OccurrenceLogRepo,
     ProjectDetailQuery,
     ProjectRepo,
     ProposalRepo,
 )
 from app.use_of_collections.presentation.schemas import (
+    AddProjectObjectsRequest,
     CollectionUseObjectResponse,
     NoteRequest,
     PaginatedEventsResponse,
@@ -64,6 +79,7 @@ from app.use_of_collections.presentation.schemas import (
     ProjectListItemResponse,
     ProposalRefSummary,
     ReasonRequest,
+    UpdateProjectRequest,
     UseEventResponse,
 )
 
@@ -197,6 +213,144 @@ async def get_project(
             for obj in project.objects
         ],
     )
+
+
+@projects_router.patch("/{project_id}", response_model=ProjectDetailResponse)
+async def edit_project(
+    project_id: str,
+    body: UpdateProjectRequest,
+    caller: CallerPermission,
+    project_repo: ProjectRepo,
+    proposal_repo: ProposalRepo,
+    detail_query: ProjectDetailQuery,
+    session: DBSession,
+) -> ProjectDetailResponse:
+    project_before = await _assert_existing_project_access(
+        project_id, caller, project_repo, proposal_repo
+    )
+    require_staff(caller)
+
+    fields_set = body.model_fields_set
+    update_begin = "beginDate" in fields_set
+    update_end = "endDate" in fields_set
+    effective_begin = body.beginDate if update_begin else project_before.begin_date
+    effective_end = body.endDate if update_end else project_before.end_date
+    if (
+        effective_begin is not None
+        and effective_end is not None
+        and effective_end < effective_begin
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={
+                "error": "INVALID_DATE_RANGE",
+                "message": "endDate must be after beginDate",
+            },
+        )
+
+    try:
+        await EditProjectDetails(project_repo).execute(
+            EditProjectDetailsInput(
+                project_id=CollectionUseProjectId(project_id),
+                caller=caller,
+                title=body.title,
+                update_title="title" in fields_set,
+                purpose=body.purpose,
+                update_purpose="purpose" in fields_set,
+                begin_date=body.beginDate,
+                update_begin_date=update_begin,
+                end_date=body.endDate,
+                update_end_date=update_end,
+            )
+        )
+    except Exception as exc:
+        _handle_domain_errors(exc)
+    await session.commit()
+    return await get_project(project_id, caller, detail_query)
+
+
+@projects_router.post(
+    "/{project_id}/objects",
+    status_code=status.HTTP_201_CREATED,
+    response_model=ProjectDetailResponse,
+)
+async def add_project_objects(
+    project_id: str,
+    body: AddProjectObjectsRequest,
+    caller: CallerPermission,
+    project_repo: ProjectRepo,
+    proposal_repo: ProposalRepo,
+    detail_query: ProjectDetailQuery,
+    session: DBSession,
+) -> ProjectDetailResponse:
+    await _assert_existing_project_access(
+        project_id, caller, project_repo, proposal_repo
+    )
+    require_staff(caller)
+    try:
+        await AddProjectObjects(project_repo).execute(
+            AddProjectObjectsInput(
+                project_id=CollectionUseProjectId(project_id),
+                caller=caller,
+                objects=[
+                    ProjectObjectSnapshotInput(
+                        inventory_number=obj.inventoryNumber,
+                        display_title=obj.displayTitle,
+                        object_name=obj.objectName,
+                        brief_description_snapshot=obj.briefDescriptionSnapshot,
+                        category=obj.category,
+                        description=obj.description,
+                    )
+                    for obj in body.objects
+                ],
+            )
+        )
+    except Exception as exc:
+        _handle_domain_errors(exc)
+    await session.commit()
+    return await get_project(project_id, caller, detail_query)
+
+
+@projects_router.delete(
+    "/{project_id}/objects/{object_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def remove_project_object(
+    project_id: str,
+    object_id: str,
+    caller: CallerPermission,
+    project_repo: ProjectRepo,
+    proposal_repo: ProposalRepo,
+    access_log_repo: AccessLogRepo,
+    occurrence_log_repo: OccurrenceLogRepo,
+    session: DBSession,
+) -> Response:
+    await _assert_existing_project_access(
+        project_id, caller, project_repo, proposal_repo
+    )
+    require_staff(caller)
+    try:
+        await RemoveProjectObject(
+            project_repo, access_log_repo, occurrence_log_repo
+        ).execute(
+            RemoveProjectObjectInput(
+                project_id=CollectionUseProjectId(project_id),
+                collection_use_object_id=CollectionUseObjectId(object_id),
+                caller=caller,
+            )
+        )
+    except ProjectObjectInUse as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error": "PROJECT_OBJECT_IN_USE",
+                "message": str(exc),
+            },
+        ) from exc
+    except Exception as exc:
+        _handle_domain_errors(exc)
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 def _project_command_response(

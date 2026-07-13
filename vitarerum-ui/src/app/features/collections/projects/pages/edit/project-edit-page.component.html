@@ -1,0 +1,112 @@
+<div class="project-edit">
+  <a class="project-edit__back" [routerLink]="detailLink()">← Back to project</a>
+
+  @if (projectResource.isLoading()) {
+    <app-loading-state />
+  } @else if (loadError()) {
+    <app-error-message [apiError]="loadError()!" (retry)="projectResource.reload()" />
+  } @else if (project()) {
+    <header class="project-edit__header">
+      <div>
+        <p class="project-edit__ref">{{ project()!.referenceNumber }}</p>
+        <h1>Edit project</h1>
+      </div>
+      <app-status-chip kind="project" [status]="asWorkflowStatus(project()!.status)" />
+    </header>
+
+    @if (!canEdit()) {
+      <app-error-message
+        [apiError]="{
+          kind: 'conflict',
+          status: 409,
+          serverMessage: 'Completed or cancelled projects cannot be edited.',
+          fieldErrors: [],
+        }"
+      />
+    }
+
+    @if (updateError()) {
+      <app-error-message [apiError]="updateError()!" />
+    }
+
+    <form class="project-edit__form" (submit)="save($event)">
+      <label class="form-row" for="project-edit-title">
+        <span>Title</span>
+        <input
+          id="project-edit-title"
+          type="text"
+          [formField]="editForm.title"
+          autocomplete="off"
+          [readOnly]="pending() || !canEdit()"
+          aria-describedby="project-edit-title-error"
+        />
+        <p id="project-edit-title-error" class="form-row__error" aria-live="polite">
+          @if (
+            (editForm.title().touched() || editForm.title().dirty()) && editForm.title().invalid()
+          ) {
+            {{ editForm.title().errors()[0].message }}
+          }
+        </p>
+      </label>
+
+      <label class="form-row" for="project-edit-purpose">
+        <span>Purpose</span>
+        <textarea
+          id="project-edit-purpose"
+          rows="5"
+          [formField]="editForm.purpose"
+          [readOnly]="pending() || !canEdit()"
+          aria-describedby="project-edit-purpose-error"
+        ></textarea>
+        <p id="project-edit-purpose-error" class="form-row__error" aria-live="polite">
+          @if (
+            (editForm.purpose().touched() || editForm.purpose().dirty()) &&
+            editForm.purpose().invalid()
+          ) {
+            {{ editForm.purpose().errors()[0].message }}
+          }
+        </p>
+      </label>
+
+      <div class="date-grid">
+        <label class="form-row" for="project-edit-begin-date">
+          <span>Begin date</span>
+          <input
+            id="project-edit-begin-date"
+            type="date"
+            [formField]="editForm.beginDate"
+            [readOnly]="pending() || !canEdit()"
+          />
+        </label>
+
+        <label class="form-row" for="project-edit-end-date">
+          <span>End date</span>
+          <input
+            id="project-edit-end-date"
+            type="date"
+            [formField]="editForm.endDate"
+            [readOnly]="pending() || !canEdit()"
+            aria-describedby="project-edit-end-date-error"
+          />
+          <p id="project-edit-end-date-error" class="form-row__error" aria-live="polite">
+            @if (
+              (editForm.endDate().touched() || editForm.endDate().dirty()) &&
+              editForm.endDate().invalid()
+            ) {
+              {{ editForm.endDate().errors()[0].message }}
+            }
+          </p>
+        </label>
+      </div>
+
+      <footer class="project-edit__actions">
+        <button type="button" class="secondary-btn" [disabled]="pending()" (click)="cancel()">
+          Cancel
+        </button>
+        <button type="submit" class="primary-btn" [disabled]="saveDisabled()">
+          {{ pending() ? 'Saving...' : 'Save changes' }}
+        </button>
+      </footer>
+    </form>
+  }
+</div>

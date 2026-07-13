@@ -7,6 +7,7 @@ import { IDENTITY_SERVICE, IdentityService } from '@core/auth/identity.service';
 import { GroupName } from '@core/auth/models/group-name.enum';
 import { IdentitySession } from '@core/auth/models/identity-session.model';
 import { LoginRequest } from '@core/auth/models/login.model';
+import { OBJECT_SEARCH_SERVICE } from '@features/objects/services/object-search.service';
 
 import {
   CreateInSituVisitReportRequest,
@@ -172,6 +173,16 @@ class ReportsApiServiceStub {
   }
 }
 
+class ObjectSearchServiceStub {
+  search() {
+    return of({ items: [], page: 0, size: 20, totalElements: 0, totalPages: 0 });
+  }
+
+  listSearchableCollections() {
+    return of([]);
+  }
+}
+
 describe('ProjectCuratorialDetailPageComponent', () => {
   let projectService: ProjectApiServiceStub;
   let identity: IdentityServiceStub;
@@ -191,6 +202,7 @@ describe('ProjectCuratorialDetailPageComponent', () => {
         { provide: PROJECT_API_SERVICE, useValue: projectService },
         { provide: IDENTITY_SERVICE, useValue: identity },
         { provide: REPORTS_API_SERVICE, useValue: reportsService },
+        { provide: OBJECT_SEARCH_SERVICE, useClass: ObjectSearchServiceStub },
       ],
     }).compileComponents();
 

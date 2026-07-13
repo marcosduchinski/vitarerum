@@ -17,6 +17,7 @@ from app.use_of_collections.application.ports import (
     CollectionUseProjectRepository,
     ExternalRequesterProvisioner,
     ObjectAccessLogRepository,
+    ObjectOccurrenceLogRepository,
     ProposalRepository,
 )
 from app.use_of_collections.application.use_cases._shared import (
@@ -36,6 +37,7 @@ from app.use_of_collections.domain.models import (
     ObjectLogEntry,
     ObjectLogEntryId,
     PermissionId,
+    ProjectObjectInUse,
     Proposal,
     ProposalId,
     ReferenceNumber,
@@ -224,6 +226,128 @@ class CancelProposal:
 
 
 # ── Project commands ──────────────────────────────────────────────────────────
+
+
+@dataclass(slots=True)
+class EditProjectDetailsInput:
+    project_id: CollectionUseProjectId
+    caller: Actor
+    title: str | None = None
+    update_title: bool = False
+    purpose: str | None = None
+    update_purpose: bool = False
+    begin_date: date | None = None
+    update_begin_date: bool = False
+    end_date: date | None = None
+    update_end_date: bool = False
+
+
+class EditProjectDetails:
+    def __init__(self, project_repository: CollectionUseProjectRepository) -> None:
+        self._repo = project_repository
+
+    async def execute(self, data: EditProjectDetailsInput) -> CollectionUseProject:
+        project = await self._repo.get_by_id(data.project_id)
+        if project is None:
+            raise LookupError(f"No project found with id {data.project_id}")
+        project.edit(
+            title=data.title,
+            update_title=data.update_title,
+            purpose=data.purpose,
+            update_purpose=data.update_purpose,
+            begin_date=data.begin_date,
+            update_begin_date=data.update_begin_date,
+            end_date=data.end_date,
+            update_end_date=data.update_end_date,
+        )
+        await self._repo.save(project)
+        return project
+
+
+@dataclass(slots=True)
+class ProjectObjectSnapshotInput:
+    inventory_number: str
+    display_title: str
+    object_name: str
+    brief_description_snapshot: str | None = None
+    category: str = ""
+    description: str = ""
+
+
+@dataclass(slots=True)
+class AddProjectObjectsInput:
+    project_id: CollectionUseProjectId
+    caller: Actor
+    objects: list[ProjectObjectSnapshotInput]
+
+
+class AddProjectObjects:
+    def __init__(self, project_repository: CollectionUseProjectRepository) -> None:
+        self._repo = project_repository
+
+    async def execute(self, data: AddProjectObjectsInput) -> CollectionUseProject:
+        project = await self._repo.get_by_id(data.project_id)
+        if project is None:
+            raise LookupError(f"No project found with id {data.project_id}")
+        now = _now()
+        objects = [
+            CollectionUseObject(
+                id=CollectionUseObjectId(_new_id()),
+                inventory_number=item.inventory_number,
+                display_title=item.display_title,
+                object_name=item.object_name,
+                brief_description_snapshot=item.brief_description_snapshot,
+                category=item.category,
+                description=item.description,
+                requested_at=now,
+                requested_by=data.caller.id,
+            )
+            for item in data.objects
+        ]
+        for item in objects:
+            if not item.display_title or not item.display_title.strip():
+                raise ValueError("displayTitle is required.")
+            if not item.object_name or not item.object_name.strip():
+                raise ValueError("objectName is required.")
+        project.add_objects(objects)
+        await self._repo.save(project)
+        return project
+
+
+@dataclass(slots=True)
+class RemoveProjectObjectInput:
+    project_id: CollectionUseProjectId
+    collection_use_object_id: CollectionUseObjectId
+    caller: Actor
+
+
+class RemoveProjectObject:
+    def __init__(
+        self,
+        project_repository: CollectionUseProjectRepository,
+        access_log_repository: ObjectAccessLogRepository,
+        occurrence_log_repository: ObjectOccurrenceLogRepository,
+    ) -> None:
+        self._project_repo = project_repository
+        self._access_log_repo = access_log_repository
+        self._occurrence_log_repo = occurrence_log_repository
+
+    async def execute(self, data: RemoveProjectObjectInput) -> CollectionUseProject:
+        project = await self._project_repo.get_by_id(data.project_id)
+        if project is None:
+            raise LookupError(f"No project found with id {data.project_id}")
+        if await self._access_log_repo.has_entries_for_object(
+            data.project_id, data.collection_use_object_id
+        ) or await self._occurrence_log_repo.has_entries_for_object(
+            data.project_id, data.collection_use_object_id
+        ):
+            raise ProjectObjectInUse(
+                f"Project object {data.collection_use_object_id} has log or "
+                "occurrence entries"
+            )
+        project.remove_object(data.collection_use_object_id)
+        await self._project_repo.save(project)
+        return project
 
 
 @dataclass(slots=True)

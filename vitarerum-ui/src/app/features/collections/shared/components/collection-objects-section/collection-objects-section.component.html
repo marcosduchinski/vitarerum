@@ -1,0 +1,186 @@
+<div class="collection-objects">
+  <div class="collection-objects__header">
+    <h2 class="detail-card__title">{{ title() }}</h2>
+    @if (canManage()) {
+      <button
+        type="button"
+        class="objects-action objects__add"
+        [disabled]="adding()"
+        (click)="openAddModal()"
+      >
+        <span class="pi pi-plus" aria-hidden="true"></span>
+        Add object
+      </button>
+    }
+  </div>
+
+  @if (addError()) {
+    <app-error-message [apiError]="addError()!" />
+  }
+  @if (removeError()) {
+    <app-error-message [apiError]="removeError()!" />
+  }
+
+  @if (objects().length) {
+    <ul class="objects-list">
+      @for (object of objects(); track object.id) {
+        <li class="object-row">
+          <div class="object-row__body">
+            <span class="object-row__inventory">{{ object.inventoryNumber }}</span>
+            <span class="object-row__title">{{ objectLabel(object) }}</span>
+            <span class="object-row__meta">
+              @if (object.objectName) {
+                <span>{{ object.objectName }}</span>
+              }
+              @if (object.category) {
+                <span>{{ object.category }}</span>
+              }
+              @if (object.requestedAt) {
+                <span>{{ object.requestedAt.slice(0, 10) }}</span>
+              }
+            </span>
+            @if (object.briefDescriptionSnapshot || object.description) {
+              <p class="object-row__description">
+                {{ object.briefDescriptionSnapshot || object.description }}
+              </p>
+            }
+          </div>
+          @if (canManage()) {
+            <button
+              type="button"
+              class="object-row__remove object__remove"
+              [disabled]="removingId() === object.id"
+              (click)="requestRemove(object.id)"
+            >
+              <span class="pi pi-trash" aria-hidden="true"></span>
+              {{ removingId() === object.id ? 'Removing...' : 'Remove' }}
+            </button>
+          }
+        </li>
+      }
+    </ul>
+  } @else {
+    <p class="objects-empty">{{ emptyMessage() }}</p>
+  }
+
+  <app-confirm-modal
+    [open]="removeTargetId() !== null"
+    [title]="removeDialogTitle()"
+    [message]="
+      removeMessageLead() + ' ' + removeTargetName() + ' from ' + removeMessageScope() + '.'
+    "
+    confirmLabel="Remove object"
+    cancelLabel="Keep object"
+    tone="danger"
+    [pending]="removingId() !== null"
+    (confirmed)="confirmRemove()"
+    (cancelled)="cancelRemove()"
+  />
+
+  @if (addModalOpen()) {
+    <div class="add-modal" role="dialog" aria-modal="true" aria-labelledby="add-object-title">
+      <button
+        type="button"
+        class="add-modal__backdrop"
+        aria-label="Close add object"
+        (click)="closeAddModal()"
+      ></button>
+      <div class="add-modal__dialog add-modal__panel">
+        <header class="add-modal__header">
+          <div>
+            <p class="add-modal__eyebrow">Object search</p>
+            <h3 id="add-object-title">{{ addDialogTitle() }}</h3>
+          </div>
+          <button
+            type="button"
+            class="add-modal__close"
+            aria-label="Close add object"
+            (click)="closeAddModal()"
+          >
+            <span class="pi pi-times" aria-hidden="true"></span>
+          </button>
+        </header>
+
+        <div class="add-modal__body">
+          @if (searchError()) {
+            <app-error-message [apiError]="searchError()!" />
+          }
+
+          <form class="object-search" (submit)="$event.preventDefault(); searchObjects()">
+            <label class="object-search__field">
+              <span class="pi pi-search object-search__icon" aria-hidden="true"></span>
+              <input
+                type="search"
+                class="object-search__input"
+                placeholder="Search collection objects"
+                [value]="searchQuery()"
+                (input)="onSearchQueryInput($event)"
+              />
+            </label>
+            <button
+              type="submit"
+              class="objects-action objects-action--primary object-search__button"
+              [disabled]="searching() || !searchQuery().trim()"
+            >
+              {{ searching() ? 'Searching...' : 'Search' }}
+            </button>
+          </form>
+
+          @if (searchResults().length) {
+            <ul class="search-results">
+              @for (hit of searchResults(); track hitId(hit)) {
+                <li
+                  class="search-hit"
+                  [class.search-hit--disabled]="!canAddHit(hit)"
+                  [class.search-hit--selected]="isHitSelected(hit)"
+                >
+                  <label class="search-hit__select">
+                    <input
+                      type="checkbox"
+                      [disabled]="!canAddHit(hit)"
+                      [checked]="isHitSelected(hit)"
+                      (change)="toggleHit(hit, $any($event.target).checked)"
+                    />
+                    <span class="search-hit__content">
+                      @if (hit.objectSnapshot; as snapshot) {
+                        <span class="search-hit__snapshot">
+                          <span class="search-hit__inventory">{{ snapshot.inventoryNumber }}</span>
+                          <strong>{{ snapshot.displayTitle || snapshot.objectName }}</strong>
+                        </span>
+                      }
+                      <span class="search-hit__highlight" [innerHTML]="highlightHtml(hit)"></span>
+                      <span class="search-hit__provenance">
+                        {{ hit.collectionName }} / {{ hit.fileName }} / {{ hit.sheet }}
+                      </span>
+                      @if (adapterReason(hit); as reason) {
+                        <span class="search-hit__warning">{{ reason }}</span>
+                      }
+                    </span>
+                  </label>
+                </li>
+              }
+            </ul>
+          } @else {
+            <p class="object-search__empty">
+              <span class="pi pi-search" aria-hidden="true"></span>
+              No search results.
+            </p>
+          }
+        </div>
+
+        <footer class="add-modal__footer">
+          <span class="add-modal__selection">{{ selectedCount() }} selected</span>
+          <button type="button" class="objects-action" (click)="closeAddModal()">Cancel</button>
+          <button
+            type="button"
+            class="objects-action objects-action--primary"
+            [disabled]="selectedCount() === 0 || adding()"
+            (click)="submitSelectedObjects()"
+          >
+            {{ adding() ? 'Adding...' : 'Add selected' }}
+          </button>
+        </footer>
+      </div>
+    </div>
+  }
+</div>

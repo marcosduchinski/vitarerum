@@ -8,6 +8,7 @@ import { map, Observable } from 'rxjs';
 
 import {
   Attachment,
+  AddProjectObjectsRequest,
   CollectionUseProjectDetail,
   CollectionUseProjectSummary,
   CreateObjectLogEntryRequest,
@@ -29,6 +30,7 @@ import {
   PublicationLog,
   PublicationLogEntry,
   ReasonRequest,
+  UpdateProjectRequest,
   UpdateObjectLogEntryRequest,
   UpdateObjectOccurrenceEntryRequest,
   UseEvent,
@@ -97,6 +99,32 @@ export class ProjectApiService {
     return this.http.post<ProjectTransitionResult>(
       this.url(`/collection-use-projects/${projectId}/cancel`),
       request,
+    );
+  }
+
+  updateProject(
+    projectId: string,
+    request: UpdateProjectRequest,
+  ): Observable<CollectionUseProjectDetail> {
+    return this.http.patch<CollectionUseProjectDetail>(
+      this.url(`/collection-use-projects/${projectId}`),
+      request,
+    );
+  }
+
+  addProjectObjects(
+    projectId: string,
+    request: AddProjectObjectsRequest,
+  ): Observable<CollectionUseProjectDetail> {
+    return this.http.post<CollectionUseProjectDetail>(
+      this.url(`/collection-use-projects/${projectId}/objects`),
+      request,
+    );
+  }
+
+  removeProjectObject(projectId: string, objectId: string): Observable<void> {
+    return this.http.delete<void>(
+      this.url(`/collection-use-projects/${projectId}/objects/${objectId}`),
     );
   }
 

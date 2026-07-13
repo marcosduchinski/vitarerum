@@ -122,6 +122,13 @@ export const PROJECTS_ROUTES: Routes = [
       ),
   },
   {
+    path: 'collections/:id/edit',
+    title: 'Edit Project',
+    canMatch: [staffGuard],
+    loadComponent: () =>
+      import('./pages/edit/project-edit-page.component').then((m) => m.ProjectEditPageComponent),
+  },
+  {
     path: 'collections/:id',
     title: 'Project Detail',
     canMatch: [staffGuard],
@@ -131,6 +138,13 @@ export const PROJECTS_ROUTES: Routes = [
       ),
   },
   {
+    path: 'curatorial/:id/edit',
+    title: 'Edit Project',
+    canMatch: [staffGuard],
+    loadComponent: () =>
+      import('./pages/edit/project-edit-page.component').then((m) => m.ProjectEditPageComponent),
+  },
+  {
     path: 'curatorial/:id',
     title: 'Project Detail',
     canMatch: [staffGuard],
@@ -138,6 +152,13 @@ export const PROJECTS_ROUTES: Routes = [
       import('./pages/curatorial-detail/project-curatorial-detail-page.component').then(
         (m) => m.ProjectCuratorialDetailPageComponent,
       ),
+  },
+  {
+    path: 'direction/:id/edit',
+    title: 'Edit Project',
+    canMatch: [staffGuard],
+    loadComponent: () =>
+      import('./pages/edit/project-edit-page.component').then((m) => m.ProjectEditPageComponent),
   },
   {
     path: 'direction/:id',

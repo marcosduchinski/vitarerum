@@ -1,0 +1,138 @@
+.project-edit {
+  display: grid;
+  gap: 1.25rem;
+  width: min(58rem, 100%);
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+.project-edit__back {
+  color: var(--color-muted);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.project-edit__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.project-edit__header h1 {
+  margin: 0.25rem 0 0;
+  font-size: 1.8rem;
+  letter-spacing: 0;
+}
+
+.project-edit__ref {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.project-edit__form {
+  display: grid;
+  gap: 1rem;
+  padding: 1.25rem;
+  border: 1px solid var(--color-line);
+  border-radius: 0.5rem;
+  background: var(--color-surface);
+}
+
+.form-row {
+  display: grid;
+  gap: 0.45rem;
+  color: var(--color-muted);
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.form-row input,
+.form-row textarea {
+  width: 100%;
+  border: 1px solid var(--color-line);
+  border-radius: 0.5rem;
+  background: var(--color-panel);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 500;
+}
+
+.form-row input {
+  min-height: 2.65rem;
+  padding: 0 0.8rem;
+}
+
+.form-row textarea {
+  resize: vertical;
+  min-height: 8rem;
+  padding: 0.75rem 0.8rem;
+}
+
+.form-row__error {
+  min-height: 1.1rem;
+  margin: 0;
+  color: var(--color-danger, #a83232);
+  font-size: 0.76rem;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.date-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.project-edit__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.primary-btn,
+.secondary-btn {
+  min-height: 2.5rem;
+  padding: 0 1rem;
+  border: 1px solid var(--color-line);
+  border-radius: 0.5rem;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.62;
+  }
+}
+
+.primary-btn {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-on-accent, #fff);
+}
+
+.secondary-btn {
+  background: var(--color-panel);
+  color: var(--color-text);
+}
+
+@media (max-width: 680px) {
+  .project-edit {
+    padding: 1rem;
+  }
+
+  .project-edit__header,
+  .date-grid,
+  .project-edit__actions {
+    grid-template-columns: 1fr;
+  }
+
+  .project-edit__actions {
+    flex-direction: column-reverse;
+  }
+}

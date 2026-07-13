@@ -330,9 +330,18 @@ describe('ProjectsMyPageComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    buttonByText(cardByReference(fixture.nativeElement, 'VR-2026-051'), 'Log').click();
-    buttonByText(cardByReference(fixture.nativeElement, 'VR-2026-052'), 'Log').click();
-    buttonByText(cardByReference(fixture.nativeElement, 'VR-2026-053'), 'Log').click();
+    buttonByText(
+      cardByReference(fixture.nativeElement, 'VR-2026-051'),
+      'Object Access log',
+    ).click();
+    buttonByText(
+      cardByReference(fixture.nativeElement, 'VR-2026-052'),
+      'Object Access log',
+    ).click();
+    buttonByText(
+      cardByReference(fixture.nativeElement, 'VR-2026-053'),
+      'Object Access log',
+    ).click();
 
     expect(navigateSpy).toHaveBeenCalledWith('/p/collections/projects/project-1/log/research');
     expect(navigateSpy).toHaveBeenCalledWith('/p/collections/projects/project-2/log/exhibition');
@@ -346,9 +355,18 @@ describe('ProjectsMyPageComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    buttonByText(cardByReference(fixture.nativeElement, 'VR-2026-051'), 'Occurrences').click();
-    buttonByText(cardByReference(fixture.nativeElement, 'VR-2026-052'), 'Occurrences').click();
-    buttonByText(cardByReference(fixture.nativeElement, 'VR-2026-053'), 'Occurrences').click();
+    buttonByText(
+      cardByReference(fixture.nativeElement, 'VR-2026-051'),
+      'Object Occurrences',
+    ).click();
+    buttonByText(
+      cardByReference(fixture.nativeElement, 'VR-2026-052'),
+      'Object Occurrences',
+    ).click();
+    buttonByText(
+      cardByReference(fixture.nativeElement, 'VR-2026-053'),
+      'Object Occurrences',
+    ).click();
 
     expect(navigateSpy).toHaveBeenCalledWith(
       '/p/collections/projects/project-1/occurrences/research',

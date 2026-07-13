@@ -70,9 +70,7 @@
                 {{ busyKey() === 'delete:' + document.id ? 'Removing...' : 'Remove' }}
               </button>
             </div>
-          }
-
-          @if (!documentFor(item)) {
+          } @else {
             @for (document of documentsForType(item.documentType); track document.id) {
               <div class="document-row">
                 <span class="document-row__name">{{ document.fileName }}</span>

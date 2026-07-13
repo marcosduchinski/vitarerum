@@ -4,6 +4,7 @@ import { TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 
 import { IDENTITY_SERVICE } from '@core/auth/identity.service';
+import { OBJECT_SEARCH_SERVICE } from '@features/objects/services/object-search.service';
 
 import { CollectionUseProjectDetail, ProjectEventsPage } from '../../models/project.model';
 import { PROJECT_API_SERVICE } from '../../services/project-api.service';
@@ -63,6 +64,8 @@ class IdentityServiceStub {
 class ProjectApiServiceStub {
   readonly started: { id: string; note: string }[] = [];
   readonly completed: { id: string; note: string }[] = [];
+  readonly addedObjects: { id: string; request: unknown }[] = [];
+  readonly removedObjects: { id: string; objectId: string }[] = [];
 
   getProject() {
     return of(currentProject);
@@ -85,11 +88,31 @@ class ProjectApiServiceStub {
   cancelProject() {
     return of({ id: PROJECT.id, referenceNumber: PROJECT.referenceNumber, status: 'CANCELLED' });
   }
+
+  addProjectObjects(id: string, request: unknown) {
+    this.addedObjects.push({ id, request });
+    return of(currentProject);
+  }
+
+  removeProjectObject(id: string, objectId: string) {
+    this.removedObjects.push({ id, objectId });
+    return of(void 0);
+  }
 }
 
 class ReportsApiServiceStub {
   createInSituVisitReport() {
     return of({});
+  }
+}
+
+class ObjectSearchServiceStub {
+  search() {
+    return of({ items: [], page: 0, size: 20, totalElements: 0, totalPages: 0 });
+  }
+
+  listSearchableCollections() {
+    return of([]);
   }
 }
 
@@ -108,6 +131,7 @@ describe('ProjectStaffDetailPageComponent', () => {
         { provide: IDENTITY_SERVICE, useClass: IdentityServiceStub },
         { provide: PROJECT_API_SERVICE, useValue: projectService },
         { provide: REPORTS_API_SERVICE, useClass: ReportsApiServiceStub },
+        { provide: OBJECT_SEARCH_SERVICE, useClass: ObjectSearchServiceStub },
       ],
     }).compileComponents();
 
@@ -178,6 +202,68 @@ describe('ProjectStaffDetailPageComponent', () => {
       PROJECT.id,
       'follow-up',
       'new',
+    ]);
+  });
+
+  it('shows the Edit link for an editable project and links to the segmented edit route', async () => {
+    const fixture = TestBed.createComponent(ProjectStaffDetailPageComponent);
+    fixture.componentRef.setInput('id', PROJECT.id);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const link = fixture.nativeElement.querySelector('a.project-detail__edit');
+    expect(link).not.toBeNull();
+    expect(link!.getAttribute('href')).toBe('/p/collections/projects/collections/proj-12/edit');
+  });
+
+  it('hides the Edit link for a completed project', async () => {
+    currentProject = {
+      ...PROJECT,
+      status: 'COMPLETED',
+      result: 'COMPLETED',
+      actions: { ...PROJECT.actions, canStart: false, canComplete: false, canCancel: false },
+    };
+    const fixture = TestBed.createComponent(ProjectStaffDetailPageComponent);
+    fixture.componentRef.setInput('id', PROJECT.id);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('a.project-detail__edit')).toBeNull();
+  });
+
+  it('adds and removes project objects through the Objects section', async () => {
+    currentProject = {
+      ...PROJECT,
+      objects: [
+        {
+          id: 'project-object-1',
+          inventoryNumber: 'INV-001',
+          displayTitle: 'Book of Hours',
+          objectName: 'Illuminated manuscript',
+          briefDescriptionSnapshot: null,
+          category: 'manuscript',
+          description: '',
+        },
+      ],
+    };
+    const fixture = TestBed.createComponent(ProjectStaffDetailPageComponent);
+    fixture.componentRef.setInput('id', PROJECT.id);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const el: HTMLElement = fixture.nativeElement;
+    el.querySelector<HTMLButtonElement>('.object-row__remove')!.click();
+    fixture.detectChanges();
+    Array.from(el.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.trim() === 'Remove object')!
+      .click();
+    await fixture.whenStable();
+
+    expect(projectService.removedObjects).toEqual([
+      { id: PROJECT.id, objectId: 'project-object-1' },
     ]);
   });
 });

@@ -315,6 +315,18 @@ class InMemoryAccessLogRepository:
         ]
         return items[page * size : page * size + size], len(items)
 
+    async def has_entries_for_object(self, project_id, collection_use_object_id):
+        log_ids = {
+            log.id
+            for log in self.items.values()
+            if log.collection_use_project_id == project_id
+        }
+        return any(
+            entry.object_access_log_id in log_ids
+            and entry.collection_use_object_id == collection_use_object_id
+            for entry in self.entries.values()
+        )
+
 
 class InMemoryOccurrenceLogRepository:
     def __init__(self) -> None:
@@ -355,6 +367,18 @@ class InMemoryOccurrenceLogRepository:
             and (reported_by is None or entry.reported_by == reported_by)
         ]
         return items[page * size : page * size + size], len(items)
+
+    async def has_entries_for_object(self, project_id, collection_use_object_id):
+        log_ids = {
+            log.id
+            for log in self.items.values()
+            if log.collection_use_project_id == project_id
+        }
+        return any(
+            entry.object_occurrence_log_id in log_ids
+            and entry.collection_use_object_id == collection_use_object_id
+            for entry in self.entries.values()
+        )
 
 
 class InMemoryPublicationLogRepository:
@@ -1539,6 +1563,257 @@ async def test_patch_proposal_unknown_id_returns_404() -> None:
 
     assert response.status_code == 404
     assert response.json()["error"] == "PROPOSAL_NOT_FOUND"
+
+
+async def test_staff_can_patch_project_details() -> None:
+    async with client_with_repos(caller=_STAFF_CALLER) as (
+        client,
+        project_repo,
+        proposal_repo,
+        _,
+    ):
+        await project_repo.add(_project())
+        await proposal_repo.add(_proposal())
+
+        response = await client.patch(
+            "/api/v1/collection-use-projects/proj-1",
+            json={
+                "title": "Corrected project",
+                "purpose": "Corrected purpose",
+                "beginDate": "2026-07-01",
+                "endDate": "2026-07-05",
+            },
+        )
+        project = await project_repo.get_by_id(CollectionUseProjectId("proj-1"))
+
+    assert response.status_code == 200
+    assert response.json()["title"] == "Corrected project"
+    assert response.json()["purpose"] == "Corrected purpose"
+    assert response.json()["beginDate"] == "2026-07-01"
+    assert response.json()["endDate"] == "2026-07-05"
+    assert project is not None
+    assert project.title == "Corrected project"
+    assert project.purpose == "Corrected purpose"
+    assert project.begin_date == date(2026, 7, 1)
+    assert project.end_date == date(2026, 7, 5)
+
+
+async def test_patch_project_requires_staff() -> None:
+    async with client_with_repos(caller=_CALLER) as (
+        client,
+        project_repo,
+        proposal_repo,
+        _,
+    ):
+        await project_repo.add(_project())
+        await proposal_repo.add(_proposal())
+
+        response = await client.patch(
+            "/api/v1/collection-use-projects/proj-1",
+            json={"title": "Requester correction"},
+        )
+        project = await project_repo.get_by_id(CollectionUseProjectId("proj-1"))
+
+    assert response.status_code == 403
+    assert response.json()["error"] == "INSUFFICIENT_GROUP"
+    assert project is not None
+    assert project.title == "Project title"
+
+
+async def test_patch_project_invalid_date_range_returns_422() -> None:
+    async with client_with_repos(caller=_STAFF_CALLER) as (
+        client,
+        project_repo,
+        proposal_repo,
+        _,
+    ):
+        await project_repo.add(_project())
+        await proposal_repo.add(_proposal())
+
+        response = await client.patch(
+            "/api/v1/collection-use-projects/proj-1",
+            json={"endDate": "2026-05-01"},
+        )
+        project = await project_repo.get_by_id(CollectionUseProjectId("proj-1"))
+
+    assert response.status_code == 422
+    assert response.json()["error"] == "INVALID_DATE_RANGE"
+    assert project is not None
+    assert project.end_date == date(2026, 6, 7)
+
+
+async def test_patch_project_terminal_status_returns_409() -> None:
+    async with client_with_repos(caller=_STAFF_CALLER) as (
+        client,
+        project_repo,
+        proposal_repo,
+        _,
+    ):
+        await project_repo.add(_project(status=UseStatus.COMPLETED))
+        await proposal_repo.add(_proposal())
+
+        response = await client.patch(
+            "/api/v1/collection-use-projects/proj-1",
+            json={"title": "Too late"},
+        )
+        project = await project_repo.get_by_id(CollectionUseProjectId("proj-1"))
+
+    assert response.status_code == 409
+    assert response.json()["error"] == "INVALID_TRANSITION"
+    assert project is not None
+    assert project.title == "Project title"
+
+
+async def test_staff_can_add_project_objects() -> None:
+    async with client_with_repos(caller=_STAFF_CALLER) as (
+        client,
+        project_repo,
+        proposal_repo,
+        _,
+    ):
+        await project_repo.add(_project())
+        await proposal_repo.add(_proposal())
+
+        response = await client.post(
+            "/api/v1/collection-use-projects/proj-1/objects",
+            json={
+                "objects": [
+                    {
+                        "inventoryNumber": "INV-002",
+                        "displayTitle": "Specimen drawer",
+                        "objectName": "Drawer",
+                        "briefDescriptionSnapshot": "A drawer with specimens.",
+                        "category": "zoology",
+                        "description": "Selected from object index.",
+                    }
+                ]
+            },
+        )
+        project = await project_repo.get_by_id(CollectionUseProjectId("proj-1"))
+
+    assert response.status_code == 201
+    assert response.json()["objects"][-1]["inventoryNumber"] == "INV-002"
+    assert project is not None
+    assert project.objects[-1].inventory_number == "INV-002"
+    assert project.objects[-1].display_title == "Specimen drawer"
+    assert project.objects[-1].requested_by == _STAFF_CALLER.id
+
+
+async def test_add_project_objects_requires_staff() -> None:
+    async with client_with_repos(caller=_CALLER) as (
+        client,
+        project_repo,
+        proposal_repo,
+        _,
+    ):
+        await project_repo.add(_project())
+        await proposal_repo.add(_proposal())
+
+        response = await client.post(
+            "/api/v1/collection-use-projects/proj-1/objects",
+            json={
+                "objects": [
+                    {
+                        "inventoryNumber": "INV-002",
+                        "displayTitle": "Specimen drawer",
+                        "objectName": "Drawer",
+                    }
+                ]
+            },
+        )
+        project = await project_repo.get_by_id(CollectionUseProjectId("proj-1"))
+
+    assert response.status_code == 403
+    assert response.json()["error"] == "INSUFFICIENT_GROUP"
+    assert project is not None
+    assert project.objects == []
+
+
+async def test_add_project_objects_terminal_status_returns_409() -> None:
+    async with client_with_repos(caller=_STAFF_CALLER) as (
+        client,
+        project_repo,
+        proposal_repo,
+        _,
+    ):
+        await project_repo.add(_project(status=UseStatus.COMPLETED))
+        await proposal_repo.add(_proposal())
+
+        response = await client.post(
+            "/api/v1/collection-use-projects/proj-1/objects",
+            json={
+                "objects": [
+                    {
+                        "inventoryNumber": "INV-002",
+                        "displayTitle": "Specimen drawer",
+                        "objectName": "Drawer",
+                    }
+                ]
+            },
+        )
+
+    assert response.status_code == 409
+    assert response.json()["error"] == "INVALID_TRANSITION"
+
+
+async def test_staff_can_remove_unused_project_object() -> None:
+    project_object = _collection_use_object()
+    async with client_with_repos(caller=_STAFF_CALLER) as (
+        client,
+        project_repo,
+        proposal_repo,
+        _,
+    ):
+        await project_repo.add(_project(objects=[project_object]))
+        await proposal_repo.add(_proposal())
+
+        response = await client.delete(
+            "/api/v1/collection-use-projects/proj-1/objects/cuo-1",
+        )
+        project = await project_repo.get_by_id(CollectionUseProjectId("proj-1"))
+
+    assert response.status_code == 204
+    assert project is not None
+    assert project.objects == []
+
+
+async def test_remove_project_object_blocks_when_log_entry_references_it() -> None:
+    project_object = _collection_use_object()
+    async with client_with_repos(caller=_STAFF_CALLER) as (
+        client,
+        project_repo,
+        proposal_repo,
+        _,
+    ):
+        await project_repo.add(_project(objects=[project_object]))
+        await proposal_repo.add(_proposal())
+        access_log_repo = app.dependency_overrides[get_access_log_repo]()
+        access_log = ObjectAccessLog(
+            id=ObjectAccessLogId("log-1"),
+            reference_number=ReferenceNumber("OAL-ABCDEFG1"),
+            collection_use_project_id=CollectionUseProjectId("proj-1"),
+        )
+        await access_log_repo.add(access_log)
+        await access_log_repo.save_entry(
+            ObjectLogEntry(
+                id=ObjectLogEntryId("entry-1"),
+                object_access_log_id=ObjectAccessLogId("log-1"),
+                collection_use_object_id=CollectionUseObjectId("cuo-1"),
+                number_of_objects=1,
+                added_at=datetime(2026, 6, 2, tzinfo=UTC),
+                added_by=PermissionId("permission-staff"),
+            )
+        )
+
+        response = await client.delete(
+            "/api/v1/collection-use-projects/proj-1/objects/cuo-1",
+        )
+        project = await project_repo.get_by_id(CollectionUseProjectId("proj-1"))
+
+    assert response.status_code == 409
+    assert response.json()["error"] == "PROJECT_OBJECT_IN_USE"
+    assert project is not None
+    assert len(project.objects) == 1
 
 
 async def test_approve_proposal_invalid_date_range_returns_422() -> None:

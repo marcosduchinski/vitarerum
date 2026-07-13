@@ -15,6 +15,12 @@
           <app-type-chip [type]="project()!.type" />
         </div>
       </div>
+      @if (canEditProject()) {
+        <a class="project-detail__edit" [routerLink]="editLink()">
+          <span class="pi pi-pencil" aria-hidden="true"></span>
+          Edit
+        </a>
+      }
     </header>
 
     @if (actionError()) {
@@ -69,7 +75,11 @@
     <section class="detail-card" aria-labelledby="project-overview-heading">
       <h2 id="project-overview-heading" class="detail-card__title">Overview</h2>
 
-      <ol class="lifecycle" [class.lifecycle--cancelled]="isCancelled()" aria-label="Project lifecycle">
+      <ol
+        class="lifecycle"
+        [class.lifecycle--cancelled]="isCancelled()"
+        aria-label="Project lifecycle"
+      >
         @for (step of lifecycle(); track step.label) {
           <li
             class="lifecycle__step"
@@ -131,246 +141,245 @@
       </dl>
     </section>
 
+    <section class="detail-card" aria-labelledby="project-objects-heading">
+      <app-project-objects-section
+        [objects]="project()!.objects ?? []"
+        [canManage]="canEditProject()"
+        [adding]="addingObjects()"
+        [removingId]="removingObjectId()"
+        [addError]="addObjectsError()"
+        [removeError]="removeObjectError()"
+        (addRequested)="addProjectObjects($event)"
+        (removeRequested)="removeProjectObject($event)"
+      />
+    </section>
+
     <section class="detail-card" aria-labelledby="project-actions-heading">
       <h2 id="project-actions-heading" class="detail-card__title">Actions</h2>
 
       <div class="project-detail__panel actions-panel">
-          <div class="action-group" aria-labelledby="lifecycle-group-title">
-            <p id="lifecycle-group-title" class="action-group__title">Lifecycle</p>
+        <div class="action-group" aria-labelledby="lifecycle-group-title">
+          <p id="lifecycle-group-title" class="action-group__title">Lifecycle</p>
 
-            @if (canStart()) {
-              <div class="task-row" aria-labelledby="start-project-task-heading">
-                <span class="task-row__icon task-row__icon--accent" aria-hidden="true">
-                  <span class="pi pi-play"></span>
-                </span>
-                <div class="task-row__body">
-                  <h3 id="start-project-task-heading" class="task-row__title">Start project</h3>
-                  <p class="task-row__desc">
-                    Move this project to in progress so log and completion tasks become available.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  class="action-btn action-btn--primary task-row__control"
-                  [disabled]="acting()"
-                  (click)="openStartConfirm()"
-                >
-                  {{ acting() ? 'Starting...' : 'Start project' }}
-                </button>
-              </div>
-            }
-
-            @if (canComplete()) {
-              <div class="task-row" aria-labelledby="complete-project-task-heading">
-                <span class="task-row__icon task-row__icon--accent" aria-hidden="true">
-                  <span class="pi pi-check-circle"></span>
-                </span>
-                <div class="task-row__body">
-                  <h3 id="complete-project-task-heading" class="task-row__title">
-                    Complete project
-                  </h3>
-                  <p class="task-row__desc">
-                    Finish this project and move it to completed projects.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  class="action-btn action-btn--primary task-row__control"
-                  [disabled]="acting()"
-                  (click)="openCompleteConfirm()"
-                >
-                  {{ acting() ? 'Completing...' : 'Complete project' }}
-                </button>
-              </div>
-            }
-
-            @if (canCreateFollowUp()) {
-              <div class="task-row" aria-labelledby="follow-up-project-task-heading">
-                <span class="task-row__icon task-row__icon--accent" aria-hidden="true">
-                  <span class="pi pi-step-forward"></span>
-                </span>
-                <div class="task-row__body">
-                  <h3 id="follow-up-project-task-heading" class="task-row__title">
-                    Create follow-up project
-                  </h3>
-                  <p class="task-row__desc">
-                    Start a new project as a continuation of this completed project.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  class="action-btn task-row__control"
-                  (click)="createFollowUpProject()"
-                >
-                  Create follow-up project
-                </button>
-              </div>
-            }
-          </div>
-
-          @if (canOpenLogTasks() || canOpenPublication()) {
-            <div class="action-group" aria-labelledby="logs-group-title">
-              <p id="logs-group-title" class="action-group__title">Logs &amp; records</p>
-
-              @if (canOpenLogTasks()) {
-                <div
-                  class="task-row task-row--link"
-                  aria-labelledby="object-access-log-task-heading"
-                >
-                  <span class="task-row__icon" aria-hidden="true">
-                    <span class="pi pi-file-edit"></span>
-                  </span>
-                  <div class="task-row__body">
-                    <h3 id="object-access-log-task-heading" class="task-row__title">
-                      Object access log
-                    </h3>
-                    <p class="task-row__desc">
-                      Review and update the object access register for this active project.
-                    </p>
-                  </div>
-                  <a
-                    class="task-row__cta"
-                    [routerLink]="['/p/collections/projects', id(), 'log', logRouteSegment()]"
-                  >
-                    <span class="task-row__cta-text">Open access log</span>
-                    <span class="pi pi-arrow-right" aria-hidden="true"></span>
-                  </a>
-                </div>
-
-                <div
-                  class="task-row task-row--link"
-                  aria-labelledby="object-occurrence-log-task-heading"
-                >
-                  <span class="task-row__icon" aria-hidden="true">
-                    <span class="pi pi-clipboard"></span>
-                  </span>
-                  <div class="task-row__body">
-                    <h3 id="object-occurrence-log-task-heading" class="task-row__title">
-                      Object occurrence log
-                    </h3>
-                    <p class="task-row__desc">
-                      Record or inspect object occurrences reported during this active project.
-                    </p>
-                  </div>
-                  <a
-                    class="task-row__cta"
-                    [routerLink]="[
-                      '/p/collections/projects',
-                      id(),
-                      'occurrences',
-                      logRouteSegment(),
-                    ]"
-                  >
-                    <span class="task-row__cta-text">Open occurrence log</span>
-                    <span class="pi pi-arrow-right" aria-hidden="true"></span>
-                  </a>
-                </div>
-              }
-
-              @if (canOpenPublication()) {
-                <div class="task-row task-row--link" aria-labelledby="publication-log-task-heading">
-                  <span class="task-row__icon" aria-hidden="true">
-                    <span class="pi pi-book"></span>
-                  </span>
-                  <div class="task-row__body">
-                    <h3 id="publication-log-task-heading" class="task-row__title">
-                      Publication log
-                    </h3>
-                    <p class="task-row__desc">
-                      Record or inspect publications and outputs derived from this project.
-                    </p>
-                  </div>
-                  <a
-                    class="task-row__cta"
-                    [routerLink]="['/p/collections/projects', id(), 'publications']"
-                  >
-                    <span class="task-row__cta-text">Open publication log</span>
-                    <span class="pi pi-arrow-right" aria-hidden="true"></span>
-                  </a>
-                </div>
-              }
-            </div>
-          }
-
-          @if (canCreateInSituVisitReport()) {
-            <div class="action-group action-group--reports" aria-labelledby="reports-group-title">
-              <p id="reports-group-title" class="action-group__title">Reports</p>
-
-              @if (createdReport()) {
-                <app-feedback-message
-                  title="In-situ visit report created"
-                  [message]="
-                    'Report ' +
-                    createdReport()!.id +
-                    ' was created. Creating again will produce a separate report.'
-                  "
-                  tone="success"
-                  [dismissible]="true"
-                  (dismissed)="dismissCreatedReport()"
-                />
-              }
-
-              <div class="task-row task-row--report" aria-labelledby="report-task-heading">
-                <span class="task-row__icon task-row__icon--accent" aria-hidden="true">
-                  <span class="pi pi-sparkles"></span>
-                </span>
-                <div class="task-row__body">
-                  <h3 id="report-task-heading" class="task-row__title">
-                    In-situ visit narrative report
-                  </h3>
-                  <p class="task-row__desc">
-                    Generate an institutional, scientific, or social-media narrative from this
-                    project's in-situ visit and object-access records.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  class="action-btn action-btn--report task-row__control"
-                  [disabled]="reportCreating()"
-                  (click)="openReportModal()"
-                >
-                  Create new In Situ Visit Report
-                </button>
-              </div>
-            </div>
-          }
-
-          <div class="action-group action-group--danger" aria-labelledby="danger-group-title">
-            <p id="danger-group-title" class="action-group__title action-group__title--danger">
-              Danger zone
-            </p>
-
-            <div
-              class="task-row task-row--danger"
-              [class.task-row--locked]="!canCancel()"
-              aria-labelledby="cancel-project-task-heading"
-            >
-              <span class="task-row__icon task-row__icon--danger" aria-hidden="true">
-                <span class="pi pi-times-circle"></span>
+          @if (canStart()) {
+            <div class="task-row" aria-labelledby="start-project-task-heading">
+              <span class="task-row__icon task-row__icon--accent" aria-hidden="true">
+                <span class="pi pi-play"></span>
               </span>
               <div class="task-row__body">
-                <h3 id="cancel-project-task-heading" class="task-row__title">Cancel project</h3>
+                <h3 id="start-project-task-heading" class="task-row__title">Start project</h3>
                 <p class="task-row__desc">
-                  Stop this project and move it to cancelled projects. This action records a project
-                  cancellation event.
+                  Move this project to in progress so log and completion tasks become available.
                 </p>
-                @if (!canCancel()) {
-                  <p class="task-row__status">
-                    <span class="pi pi-lock" aria-hidden="true"></span>
-                    This task is unavailable for the current status.
-                  </p>
-                }
               </div>
               <button
                 type="button"
-                class="action-btn action-btn--danger task-row__control"
-                [disabled]="acting() || !canCancel()"
-                (click)="openCancelConfirm()"
+                class="action-btn action-btn--primary task-row__control"
+                [disabled]="acting()"
+                (click)="openStartConfirm()"
               >
-                {{ acting() ? 'Cancelling...' : 'Cancel project' }}
+                {{ acting() ? 'Starting...' : 'Start project' }}
+              </button>
+            </div>
+          }
+
+          @if (canComplete()) {
+            <div class="task-row" aria-labelledby="complete-project-task-heading">
+              <span class="task-row__icon task-row__icon--accent" aria-hidden="true">
+                <span class="pi pi-check-circle"></span>
+              </span>
+              <div class="task-row__body">
+                <h3 id="complete-project-task-heading" class="task-row__title">Complete project</h3>
+                <p class="task-row__desc">Finish this project and move it to completed projects.</p>
+              </div>
+              <button
+                type="button"
+                class="action-btn action-btn--primary task-row__control"
+                [disabled]="acting()"
+                (click)="openCompleteConfirm()"
+              >
+                {{ acting() ? 'Completing...' : 'Complete project' }}
+              </button>
+            </div>
+          }
+
+          @if (canCreateFollowUp()) {
+            <div class="task-row" aria-labelledby="follow-up-project-task-heading">
+              <span class="task-row__icon task-row__icon--accent" aria-hidden="true">
+                <span class="pi pi-step-forward"></span>
+              </span>
+              <div class="task-row__body">
+                <h3 id="follow-up-project-task-heading" class="task-row__title">
+                  Create follow-up project
+                </h3>
+                <p class="task-row__desc">
+                  Start a new project as a continuation of this completed project.
+                </p>
+              </div>
+              <button
+                type="button"
+                class="action-btn task-row__control"
+                (click)="createFollowUpProject()"
+              >
+                Create follow-up project
+              </button>
+            </div>
+          }
+        </div>
+
+        @if (canOpenLogTasks() || canOpenPublication()) {
+          <div class="action-group" aria-labelledby="logs-group-title">
+            <p id="logs-group-title" class="action-group__title">Logs &amp; records</p>
+
+            @if (canOpenLogTasks()) {
+              <div class="task-row task-row--link" aria-labelledby="object-access-log-task-heading">
+                <span class="task-row__icon" aria-hidden="true">
+                  <span class="pi pi-file-edit"></span>
+                </span>
+                <div class="task-row__body">
+                  <h3 id="object-access-log-task-heading" class="task-row__title">
+                    Object access log
+                  </h3>
+                  <p class="task-row__desc">
+                    Review and update the object access register for this active project.
+                  </p>
+                </div>
+                <a
+                  class="task-row__cta"
+                  [routerLink]="['/p/collections/projects', id(), 'log', logRouteSegment()]"
+                >
+                  <span class="task-row__cta-text">Open access log</span>
+                  <span class="pi pi-arrow-right" aria-hidden="true"></span>
+                </a>
+              </div>
+
+              <div
+                class="task-row task-row--link"
+                aria-labelledby="object-occurrence-log-task-heading"
+              >
+                <span class="task-row__icon" aria-hidden="true">
+                  <span class="pi pi-clipboard"></span>
+                </span>
+                <div class="task-row__body">
+                  <h3 id="object-occurrence-log-task-heading" class="task-row__title">
+                    Object occurrence log
+                  </h3>
+                  <p class="task-row__desc">
+                    Record or inspect object occurrences reported during this active project.
+                  </p>
+                </div>
+                <a
+                  class="task-row__cta"
+                  [routerLink]="['/p/collections/projects', id(), 'occurrences', logRouteSegment()]"
+                >
+                  <span class="task-row__cta-text">Open occurrence log</span>
+                  <span class="pi pi-arrow-right" aria-hidden="true"></span>
+                </a>
+              </div>
+            }
+
+            @if (canOpenPublication()) {
+              <div class="task-row task-row--link" aria-labelledby="publication-log-task-heading">
+                <span class="task-row__icon" aria-hidden="true">
+                  <span class="pi pi-book"></span>
+                </span>
+                <div class="task-row__body">
+                  <h3 id="publication-log-task-heading" class="task-row__title">Publication log</h3>
+                  <p class="task-row__desc">
+                    Record or inspect publications and outputs derived from this project.
+                  </p>
+                </div>
+                <a
+                  class="task-row__cta"
+                  [routerLink]="['/p/collections/projects', id(), 'publications']"
+                >
+                  <span class="task-row__cta-text">Open publication log</span>
+                  <span class="pi pi-arrow-right" aria-hidden="true"></span>
+                </a>
+              </div>
+            }
+          </div>
+        }
+
+        @if (canCreateInSituVisitReport()) {
+          <div class="action-group action-group--reports" aria-labelledby="reports-group-title">
+            <p id="reports-group-title" class="action-group__title">Reports</p>
+
+            @if (createdReport()) {
+              <app-feedback-message
+                title="In-situ visit report created"
+                [message]="
+                  'Report ' +
+                  createdReport()!.id +
+                  ' was created. Creating again will produce a separate report.'
+                "
+                tone="success"
+                [dismissible]="true"
+                (dismissed)="dismissCreatedReport()"
+              />
+            }
+
+            <div class="task-row task-row--report" aria-labelledby="report-task-heading">
+              <span class="task-row__icon task-row__icon--accent" aria-hidden="true">
+                <span class="pi pi-sparkles"></span>
+              </span>
+              <div class="task-row__body">
+                <h3 id="report-task-heading" class="task-row__title">
+                  In-situ visit narrative report
+                </h3>
+                <p class="task-row__desc">
+                  Generate an institutional, scientific, or social-media narrative from this
+                  project's in-situ visit and object-access records.
+                </p>
+              </div>
+              <button
+                type="button"
+                class="action-btn action-btn--report task-row__control"
+                [disabled]="reportCreating()"
+                (click)="openReportModal()"
+              >
+                Create new In Situ Visit Report
               </button>
             </div>
           </div>
+        }
+
+        <div class="action-group action-group--danger" aria-labelledby="danger-group-title">
+          <p id="danger-group-title" class="action-group__title action-group__title--danger">
+            Danger zone
+          </p>
+
+          <div
+            class="task-row task-row--danger"
+            [class.task-row--locked]="!canCancel()"
+            aria-labelledby="cancel-project-task-heading"
+          >
+            <span class="task-row__icon task-row__icon--danger" aria-hidden="true">
+              <span class="pi pi-times-circle"></span>
+            </span>
+            <div class="task-row__body">
+              <h3 id="cancel-project-task-heading" class="task-row__title">Cancel project</h3>
+              <p class="task-row__desc">
+                Stop this project and move it to cancelled projects. This action records a project
+                cancellation event.
+              </p>
+              @if (!canCancel()) {
+                <p class="task-row__status">
+                  <span class="pi pi-lock" aria-hidden="true"></span>
+                  This task is unavailable for the current status.
+                </p>
+              }
+            </div>
+            <button
+              type="button"
+              class="action-btn action-btn--danger task-row__control"
+              [disabled]="acting() || !canCancel()"
+              (click)="openCancelConfirm()"
+            >
+              {{ acting() ? 'Cancelling...' : 'Cancel project' }}
+            </button>
+          </div>
+        </div>
       </div>
     </section>
 

@@ -24,11 +24,13 @@ import { TypeChipComponent } from '@shared/components/type-chip/type-chip.compon
 import { UseType } from '@shared/models/collection-use-status.model';
 
 import { ProjectTodoListComponent } from '../../components/project-todo-list/project-todo-list.component';
+import { ProjectObjectsSectionComponent } from '../../components/project-objects-section/project-objects-section.component';
 import { CreateInSituVisitReportModalComponent } from '../../../reports/components/create-in-situ-visit-report-modal/create-in-situ-visit-report-modal.component';
 import {
   CreateInSituVisitReportRequest,
   InSituVisitReport,
 } from '../../../reports/models/report.model';
+import { AddProjectObjectsRequest } from '../../models/project.model';
 import { REPORTS_API_SERVICE } from '../../../reports/services/reports-api.service';
 import { PROJECT_API_SERVICE } from '../../services/project-api.service';
 
@@ -89,6 +91,7 @@ const COMPLETE_NOTE = 'Completed from staff project detail.';
     TypeChipComponent,
     ConfirmModalComponent,
     CreateInSituVisitReportModalComponent,
+    ProjectObjectsSectionComponent,
     ProjectTodoListComponent,
   ],
   templateUrl: './project-staff-detail-page.component.html',
@@ -148,6 +151,19 @@ export class ProjectStaffDetailPageComponent {
 
     return project.actions?.canComplete ?? project.status === 'IN_PROGRESS';
   });
+  protected readonly canEditProject = computed(() => {
+    const status = this.project()?.status;
+    return status === 'CREATED' || status === 'IN_PROGRESS';
+  });
+  protected readonly editLink = computed(() => {
+    const label = this.sectionLabel().toLowerCase();
+    const section = label.includes('curatorial')
+      ? 'curatorial'
+      : label.includes('direction')
+        ? 'direction'
+        : 'collections';
+    return ['/p/collections/projects', section, this.id(), 'edit'];
+  });
   protected readonly canCreateFollowUp = computed(() => this.project()?.status === 'COMPLETED');
   protected readonly canOpenLogTasks = computed(() => this.project()?.status === 'IN_PROGRESS');
   // Staff write publication entries once COMPLETED; the log stays readable in
@@ -198,6 +214,10 @@ export class ProjectStaffDetailPageComponent {
   protected readonly reportCreating = signal(false);
   protected readonly reportError = signal<ApiError | null>(null);
   protected readonly createdReport = signal<InSituVisitReport | null>(null);
+  protected readonly addingObjects = signal(false);
+  protected readonly removingObjectId = signal<string | null>(null);
+  protected readonly addObjectsError = signal<ApiError | null>(null);
+  protected readonly removeObjectError = signal<ApiError | null>(null);
 
   protected readonly formatDate = formatDate;
   protected readonly formatDateTime = formatDateTime;
@@ -274,6 +294,36 @@ export class ProjectStaffDetailPageComponent {
       this.reportError.set(toApiError(err));
     } finally {
       this.reportCreating.set(false);
+    }
+  }
+
+  protected async addProjectObjects(request: AddProjectObjectsRequest): Promise<void> {
+    if (this.addingObjects() || !this.canEditProject()) return;
+    this.addingObjects.set(true);
+    this.addObjectsError.set(null);
+    this.removeObjectError.set(null);
+    try {
+      await firstValueFrom(this.projectService.addProjectObjects(this.id(), request));
+      this.projectResource.reload();
+    } catch (err) {
+      this.addObjectsError.set(toApiError(err));
+    } finally {
+      this.addingObjects.set(false);
+    }
+  }
+
+  protected async removeProjectObject(objectId: string): Promise<void> {
+    if (this.removingObjectId() || !this.canEditProject()) return;
+    this.removingObjectId.set(objectId);
+    this.addObjectsError.set(null);
+    this.removeObjectError.set(null);
+    try {
+      await firstValueFrom(this.projectService.removeProjectObject(this.id(), objectId));
+      this.projectResource.reload();
+    } catch (err) {
+      this.removeObjectError.set(toApiError(err));
+    } finally {
+      this.removingObjectId.set(null);
     }
   }
 

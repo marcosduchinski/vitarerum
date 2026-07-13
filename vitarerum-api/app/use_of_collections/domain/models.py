@@ -62,9 +62,17 @@ _PROPOSAL_TERMINAL_STATUSES = {
     ProposalStatus.REJECTED,
     ProposalStatus.CANCELLED,
 }
+_PROJECT_EDITABLE_STATUSES = {
+    UseStatus.CREATED,
+    UseStatus.IN_PROGRESS,
+}
 
 
 class InvalidTransition(ValueError):
+    pass
+
+
+class ProjectObjectInUse(Exception):
     pass
 
 
@@ -316,6 +324,62 @@ class CollectionUseProject:
     authorised_at: datetime | None = None
     events: list[UseEvent] = field(default_factory=list)
     objects: list[CollectionUseObject] = field(default_factory=list)
+
+    def edit(
+        self,
+        *,
+        title: str | None,
+        update_title: bool,
+        purpose: str | None,
+        update_purpose: bool,
+        begin_date: date | None,
+        update_begin_date: bool,
+        end_date: date | None,
+        update_end_date: bool,
+    ) -> None:
+        """Staff correction of project metadata; not a lifecycle transition."""
+        if self.status not in _PROJECT_EDITABLE_STATUSES:
+            raise InvalidTransition(
+                "Cannot edit a project that is already completed or cancelled"
+            )
+        if update_title:
+            if title is None or not title.strip():
+                raise ValueError("title is required")
+            self.title = title
+        if update_purpose:
+            if purpose is None or not purpose.strip():
+                raise ValueError("purpose is required")
+            self.purpose = purpose
+        if update_begin_date:
+            if begin_date is None:
+                raise ValueError("beginDate is required")
+            self.begin_date = begin_date
+        if update_end_date:
+            if end_date is None:
+                raise ValueError("endDate is required")
+            self.end_date = end_date
+        if self.end_date < self.begin_date:
+            raise ValueError("endDate must be after beginDate")
+
+    def add_objects(self, objects: list[CollectionUseObject]) -> None:
+        if self.status not in _PROJECT_EDITABLE_STATUSES:
+            raise InvalidTransition(
+                "Cannot add objects to a project that is already completed or cancelled"
+            )
+        self.objects.extend(objects)
+
+    def remove_object(self, object_id: CollectionUseObjectId) -> None:
+        if self.status not in _PROJECT_EDITABLE_STATUSES:
+            raise InvalidTransition(
+                "Cannot remove objects from a project that is already completed "
+                "or cancelled"
+            )
+        project_object = next(
+            (obj for obj in self.objects if obj.id == object_id), None
+        )
+        if project_object is None:
+            raise LookupError(f"No project object found with id {object_id}")
+        self.objects.remove(project_object)
 
     def record_requested(
         self,

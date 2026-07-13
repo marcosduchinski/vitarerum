@@ -8,6 +8,7 @@ import { ProposalStatus } from '@shared/models/collection-use-status.model';
 
 import { ApproveProposalRequest } from '../models/proposal-actions.model';
 import {
+  CollectionUseProjectObject,
   ObjectAccessLog,
   ObjectLogEntry,
   ObjectOccurrenceEntry,
@@ -576,6 +577,7 @@ export interface MutableProjectState {
   proposalId: string;
   proposalStatus: import('@shared/models/collection-use-status.model').ProposalStatus;
   proposalAssignedTo: PermissionPrincipal | null;
+  objects?: CollectionUseProjectObject[];
 }
 
 export const SEED_PROJECTS: MutableProjectState[] = [
@@ -920,6 +922,17 @@ export class MockProjectState {
       proposalId: proposal.id,
       proposalStatus: 'APPROVED',
       proposalAssignedTo: proposal.assignedTo,
+      objects:
+        existingProject?.objects ??
+        proposal.requestedObjects.map((object) => ({
+          id: `project-object-${this.nextId++}`,
+          inventoryNumber: object.objectReference.inventoryNumber,
+          displayTitle: object.objectReference.displayTitle,
+          objectName: object.objectReference.objectName,
+          briefDescriptionSnapshot: object.objectReference.briefDescriptionSnapshot,
+          category: object.category,
+          description: object.description,
+        })),
     };
     this.projects.set(project.id, project);
     this.proposals.set(proposal.id, structuredClone(proposal));
@@ -1000,6 +1013,10 @@ export class MockProjectState {
 
   nextPublicationLogReference(): string {
     return `PUB-${String(this.nextId++).padStart(8, '0')}`;
+  }
+
+  nextProjectObjectId(): string {
+    return `project-object-${this.nextId++}`;
   }
 
   nextFileReference(): string {

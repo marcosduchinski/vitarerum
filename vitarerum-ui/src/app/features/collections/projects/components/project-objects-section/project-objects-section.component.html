@@ -1,0 +1,15 @@
+<app-collection-objects-section
+  title="Objects"
+  emptyMessage="No objects linked to this project."
+  addDialogTitle="Add object"
+  removeDialogTitle="Remove object?"
+  removeMessageScope="this project"
+  [objects]="objects()"
+  [canManage]="canManage()"
+  [adding]="adding()"
+  [removingId]="removingId()"
+  [addError]="addError()"
+  [removeError]="removeError()"
+  (addRequested)="addRequested.emit($event)"
+  (removeRequested)="removeRequested.emit($event)"
+/>

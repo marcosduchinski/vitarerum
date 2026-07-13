@@ -19,6 +19,16 @@ export interface ProjectProposalSummary {
   readonly assignedTo?: PermissionPrincipal | null;
 }
 
+export interface CollectionUseProjectObject {
+  readonly id: string;
+  readonly inventoryNumber: string;
+  readonly displayTitle: string | null;
+  readonly objectName: string | null;
+  readonly briefDescriptionSnapshot: string | null;
+  readonly category: string;
+  readonly description: string;
+}
+
 export interface CollectionUseProjectSummary {
   readonly id: string;
   readonly referenceNumber: string;
@@ -188,6 +198,7 @@ export interface ProjectStaffContext {
 }
 
 export interface CollectionUseProjectDetail extends CollectionUseProjectSummary {
+  readonly objects?: readonly CollectionUseProjectObject[];
   readonly actions: ProjectActionPermissions;
   readonly staffContext: ProjectStaffContext | null;
 }
@@ -255,6 +266,26 @@ export interface NoteRequest {
 
 export interface ReasonRequest {
   readonly reason: string;
+}
+
+export interface UpdateProjectRequest {
+  readonly title?: string | null;
+  readonly purpose?: string | null;
+  readonly beginDate?: string | null;
+  readonly endDate?: string | null;
+}
+
+export interface ProjectObjectSnapshotInput {
+  readonly inventoryNumber: string;
+  readonly displayTitle: string;
+  readonly objectName: string;
+  readonly briefDescriptionSnapshot?: string | null;
+  readonly category?: string;
+  readonly description?: string;
+}
+
+export interface AddProjectObjectsRequest {
+  readonly objects: readonly ProjectObjectSnapshotInput[];
 }
 
 export interface CreateObjectLogEntryRequest {
