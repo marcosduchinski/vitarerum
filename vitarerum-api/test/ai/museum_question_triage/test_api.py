@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from io import StringIO
 
+import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.ai.museum_question_triage.domain.models import (
@@ -13,15 +14,19 @@ from app.ai.museum_question_triage.domain.models import (
     ClassificationScoreSource,
     ClassificationStatus,
     ClassifierKind,
+    HumanCategoryOutcome,
     MentionedObject,
     MessageClassification,
     MessageTriage,
     ObjectHitView,
     QuestionView,
+    TrainingExampleId,
+    TrainingExampleSource,
     TriageClassification,
     TriageId,
     UseCategory,
     UseCategoryScore,
+    UseCategoryTrainingExample,
 )
 from app.ai.museum_question_triage.domain.ports import (
     ModelTimeout,
@@ -32,6 +37,7 @@ from app.ai.museum_question_triage.presentation.dependencies import (
     get_classification_repository,
     get_museum_question_port,
     get_object_search_port,
+    get_training_example_repository,
     get_triage_model_port,
     get_triage_repository,
 )
@@ -45,6 +51,14 @@ _STAFF = Actor(
 )
 _EXTERNAL = Actor(
     id=PermissionId("perm-ext"), group=GroupName.EXTERNAL, email="r@uni.pt"
+)
+_COLLECTIONS = Actor(
+    id=PermissionId("perm-col"),
+    group=GroupName.COLLECTIONS_MANAGEMENT,
+    email="c@museum.pt",
+)
+_DIRECTION = Actor(
+    id=PermissionId("perm-dir"), group=GroupName.DIRECTION, email="d@museum.pt"
 )
 
 _QUESTION = QuestionView(
@@ -299,6 +313,64 @@ class _FakeClassificationRepo:
         self.stored.append(classification)
 
 
+class _FakeTrainingExampleRepo:
+    def __init__(
+        self, stored: list[UseCategoryTrainingExample] | None = None
+    ) -> None:
+        self.stored: list[UseCategoryTrainingExample] = stored or []
+
+    async def add(self, example: UseCategoryTrainingExample) -> None:
+        self.stored.append(example)
+
+    async def get_current_by_triage(
+        self, triage_id: TriageId
+    ) -> UseCategoryTrainingExample | None:
+        matches = [
+            example
+            for example in self.stored
+            if example.triage_id == triage_id and example.superseded_at is None
+        ]
+        matches.sort(key=lambda example: example.run_number, reverse=True)
+        return matches[0] if matches else None
+
+    async def supersede_current(
+        self,
+        triage_id: TriageId,
+        superseded_at: datetime,
+        superseded_by_example_id: TrainingExampleId,
+    ) -> None:
+        current = await self.get_current_by_triage(triage_id)
+        if current is None:
+            return
+        index = self.stored.index(current)
+        self.stored[index] = UseCategoryTrainingExample(
+            id=current.id,
+            triage_id=current.triage_id,
+            question_id=current.question_id,
+            run_number=current.run_number,
+            superseded_at=superseded_at,
+            superseded_by_example_id=superseded_by_example_id,
+            human_outcome=current.human_outcome,
+            human_categories=list(current.human_categories),
+            llm_categories=list(current.llm_categories),
+            embedding_categories=list(current.embedding_categories),
+            source=current.source,
+            reviewed_by=current.reviewed_by,
+            reviewed_at=current.reviewed_at,
+            message_hash=current.message_hash,
+            active=current.active,
+            notes=current.notes,
+            created_at=current.created_at,
+        )
+
+    async def list_active_current(self) -> list[UseCategoryTrainingExample]:
+        return [
+            example
+            for example in self.stored
+            if example.active and example.superseded_at is None
+        ]
+
+
 class _FakeSession:
     def __init__(self, events: list[tuple[str, str]] | None = None) -> None:
         self.events = events
@@ -323,6 +395,7 @@ async def _client(
     object_search: _FakeObjectSearch | None = None,
     repo: _FakeRepo | None = None,
     classification_repo: _FakeClassificationRepo | None = None,
+    training_example_repo: _FakeTrainingExampleRepo | None = None,
     events: list[tuple[str, str]] | None = None,
 ) -> AsyncIterator[AsyncClient]:
     app.dependency_overrides[get_caller_permission] = lambda: caller
@@ -336,6 +409,9 @@ async def _client(
     app.dependency_overrides[get_triage_repository] = lambda: repo or _FakeRepo()
     app.dependency_overrides[get_classification_repository] = lambda: (
         classification_repo or _FakeClassificationRepo(events)
+    )
+    app.dependency_overrides[get_training_example_repository] = lambda: (
+        training_example_repo or _FakeTrainingExampleRepo()
     )
     app.dependency_overrides[get_async_session] = lambda: _FakeSession(events)
     transport = ASGITransport(app=app)
@@ -696,11 +772,19 @@ async def test_sync_use_categories_creates_staff_reviewed_cascade() -> None:
     classification_repo = _FakeClassificationRepo(
         stored=[_completed_embedding_classification(triage_id)]
     )
+    training_example_repo = _FakeTrainingExampleRepo()
 
-    async with _client(repo=repo, classification_repo=classification_repo) as client:
+    async with _client(
+        repo=repo,
+        classification_repo=classification_repo,
+        training_example_repo=training_example_repo,
+    ) as client:
         resp = await client.put(
             f"{_URL}/use-categories",
-            json={"categories": ["ANSWERING_ENQUIRIES", "RESEARCH_PROJECTS"]},
+            json={
+                "categories": ["ANSWERING_ENQUIRIES", "RESEARCH_PROJECTS"],
+                "humanOutcome": "CATEGORIZED",
+            },
         )
 
     assert resp.status_code == 200
@@ -717,6 +801,16 @@ async def test_sync_use_categories_creates_staff_reviewed_cascade() -> None:
         {"category": "ANSWERING_ENQUIRIES", "confidence": 1.0, "source": "LLM"},
         {"category": "RESEARCH_PROJECTS", "confidence": 1.0, "source": "LLM"},
     ]
+    assert len(training_example_repo.stored) == 1
+    assert training_example_repo.stored[0].question_id == "q1"
+    assert (
+        training_example_repo.stored[0].human_outcome
+        is HumanCategoryOutcome.CATEGORIZED
+    )
+    assert (
+        training_example_repo.stored[0].source
+        is TrainingExampleSource.HUMAN_CORRECTED
+    )
 
 
 async def test_sync_use_categories_can_mark_unclear() -> None:
@@ -725,7 +819,10 @@ async def test_sync_use_categories_can_mark_unclear() -> None:
         posted = (await client.post(_URL)).json()
 
     async with _client(repo=repo) as client:
-        resp = await client.put(f"{_URL}/use-categories", json={"categories": []})
+        resp = await client.put(
+            f"{_URL}/use-categories",
+            json={"categories": [], "humanOutcome": "UNCLEAR"},
+        )
 
     assert resp.status_code == 200
     cascade = resp.json()["classifications"][0]
@@ -733,6 +830,26 @@ async def test_sync_use_categories_can_mark_unclear() -> None:
     assert cascade["classifierKind"] == "CASCADE"
     assert cascade["outcome"] == "UNCLEAR"
     assert cascade["assignedCategories"] == []
+
+
+@pytest.mark.parametrize("caller", [_COLLECTIONS, _DIRECTION])
+async def test_sync_use_categories_rejects_non_curatorial_staff_groups(
+    caller: Actor,
+) -> None:
+    repo = _FakeRepo()
+    async with _client(repo=repo) as client:
+        await client.post(_URL)
+
+    async with _client(repo=repo, caller=caller) as client:
+        resp = await client.put(
+            f"{_URL}/use-categories",
+            json={
+                "categories": ["RESEARCH_PROJECTS"],
+                "humanOutcome": "CATEGORIZED",
+            },
+        )
+
+    assert resp.status_code == 403
 
 
 async def test_export_use_category_calibration_csv() -> None:

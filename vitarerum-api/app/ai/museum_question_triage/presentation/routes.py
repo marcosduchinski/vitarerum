@@ -47,6 +47,8 @@ from app.ai.museum_question_triage.domain.models import (
     ClassificationId,
     ClassificationStatus,
     ClassifierKind,
+    HumanCategoryOutcome,
+    InvalidUseCategoryTrainingExample,
     MessageClassification,
     TriageId,
     TriageVerdict,
@@ -98,7 +100,8 @@ from app.ai.museum_question_triage.presentation.schemas import (
 )
 from app.config import settings
 from app.database import async_session_factory, get_async_session
-from app.shared.authorization import require_staff
+from app.identity.public import GroupName
+from app.shared.authorization import require_group, require_staff
 from app.shared.dependencies import CallerPermission
 
 DBSession = Annotated[AsyncSession, Depends(get_async_session)]
@@ -402,17 +405,28 @@ async def sync_triage_use_categories(
     classification_repository: ClassificationRepository,
     session: DBSession,
 ) -> UseCategoryClassificationAuditListResponse:
-    require_staff(caller)
+    require_group(caller, GroupName.CURATORIAL)
     try:
         await use_case.execute(
             SyncUseCategoriesInput(
                 question_id=question_id,
                 categories=[UseCategory(category) for category in body.categories],
+                human_outcome=HumanCategoryOutcome(body.humanOutcome),
                 caller=caller,
             )
         )
     except TriageNotFound as exc:
         raise _triage_not_found(question_id) from exc
+    except QuestionNotFound as exc:
+        raise _not_found(question_id) from exc
+    except InvalidUseCategoryTrainingExample as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "error": "INVALID_USE_CATEGORY_TRAINING_EXAMPLE",
+                "message": str(exc),
+            },
+        ) from exc
     await session.commit()
     triage = await latest_triage.execute(GetLatestTriageInput(question_id=question_id))
     if triage is None:

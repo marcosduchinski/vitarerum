@@ -11,6 +11,7 @@ export type UseCategoryClassificationStatus =
   | 'COMPLETED'
   | 'FAILED';
 export type UseCategoryClassificationOutcome = 'CATEGORIZED' | 'UNCLEAR';
+export type UseCategoryHumanOutcome = UseCategoryClassificationOutcome;
 export type UseCategoryClassificationQuality = 'FULL' | 'DEGRADED';
 export type UseCategoryClassifierKind = 'LLM' | 'EMBEDDING' | 'CASCADE';
 export type UseCategoryScoreSource = 'LLM' | 'EMBEDDING';

@@ -93,3 +93,46 @@ class MessageClassificationOrm(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, index=True
     )
+
+
+class UseCategoryTrainingExampleOrm(Base):
+    __tablename__ = "museum_question_use_category_training_examples"
+    __table_args__ = (
+        Index(
+            "ix_mq_use_category_training_current_triage",
+            "triage_id",
+            "superseded_at",
+        ),
+        Index(
+            "ix_mq_use_category_training_active_question",
+            "question_id",
+            "active",
+            "superseded_at",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    triage_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    question_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    run_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    superseded_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    superseded_by_example_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True
+    )
+    human_outcome: Mapped[str] = mapped_column(String(16), nullable=False)
+    human_categories: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    llm_categories: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    embedding_categories: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    source: Mapped[str] = mapped_column(String(32), nullable=False)
+    reviewed_by: Mapped[str] = mapped_column(String(255), nullable=False)
+    reviewed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    message_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, index=True
+    )

@@ -9,6 +9,7 @@ import {
   UseCategoryClassification,
   UseCategoryClassificationAudit,
   UseCategoryClassificationAuditList,
+  UseCategoryHumanOutcome,
   UseCategoryScore,
   UseCategoryValue,
 } from '../models/museum-question-triage.model';
@@ -256,6 +257,7 @@ export class MuseumQuestionManagementServiceMock implements MuseumQuestionManage
   syncTriageUseCategories(
     questionId: string,
     categories: readonly UseCategoryValue[],
+    humanOutcome: UseCategoryHumanOutcome,
   ): Observable<UseCategoryClassificationAuditList> {
     const triage = this.triages[questionId];
     if (!triage) return this.notFound();
@@ -268,7 +270,7 @@ export class MuseumQuestionManagementServiceMock implements MuseumQuestionManage
       ...triage,
       useCategoryClassification: {
         status: 'COMPLETED',
-        outcome: scores.length ? 'CATEGORIZED' : 'UNCLEAR',
+        outcome: humanOutcome,
         quality: 'FULL',
         classifierKind: 'CASCADE',
         classifierModel: null,

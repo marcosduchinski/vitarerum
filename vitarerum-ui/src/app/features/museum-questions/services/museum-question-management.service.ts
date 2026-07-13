@@ -16,6 +16,7 @@ import {
   SearchTermDraft,
   TriageVerdict,
   UseCategoryClassificationAuditList,
+  UseCategoryHumanOutcome,
   UseCategoryValue,
 } from '../models/museum-question-triage.model';
 
@@ -41,6 +42,7 @@ export interface MuseumQuestionManagementApi {
   syncTriageUseCategories(
     questionId: string,
     categories: readonly UseCategoryValue[],
+    humanOutcome: UseCategoryHumanOutcome,
   ): Observable<UseCategoryClassificationAuditList>;
 }
 
@@ -169,10 +171,11 @@ export class MuseumQuestionManagementService implements MuseumQuestionManagement
   syncTriageUseCategories(
     questionId: string,
     categories: readonly UseCategoryValue[],
+    humanOutcome: UseCategoryHumanOutcome,
   ): Observable<UseCategoryClassificationAuditList> {
     return this.http.put<UseCategoryClassificationAuditList>(
       this.url(`/museum-questions/${questionId}/triage/use-categories`),
-      { categories },
+      { categories, humanOutcome },
     );
   }
 

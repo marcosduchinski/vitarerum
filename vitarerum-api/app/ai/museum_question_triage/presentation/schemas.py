@@ -118,3 +118,4 @@ class TriageSearchTermsRequest(BaseModel):
 
 class UseCategoryCorrectionRequest(BaseModel):
     categories: list[UseCategoryValue]
+    humanOutcome: ClassificationOutcomeValue

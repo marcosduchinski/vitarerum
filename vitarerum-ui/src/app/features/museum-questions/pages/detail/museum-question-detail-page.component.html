@@ -461,11 +461,7 @@
                         <button
                           type="button"
                           class="action-btn action-btn--primary"
-                          [disabled]="
-                            useCategoriesBusy() ||
-                            !categoryDraftChanged() ||
-                            triageResource.isLoading()
-                          "
+                          [disabled]="!canSubmitUseCategoryDraft()"
                           (click)="submitUseCategories()"
                         >
                           <span class="pi pi-check" aria-hidden="true"></span>
@@ -473,6 +469,15 @@
                         </button>
                       </div>
                       <div class="triage-section-heading__actions">
+                        <label class="status-chip status-chip--closed">
+                          <input
+                            type="checkbox"
+                            [checked]="categoryDraftOutcome() === 'UNCLEAR'"
+                            [disabled]="useCategoriesBusy()"
+                            (change)="onUseCategoryUnclearToggle($event)"
+                          />
+                          <span>No category applies</span>
+                        </label>
                         @for (category of useCategoryOptions; track category) {
                           <label class="status-chip status-chip--closed">
                             <input

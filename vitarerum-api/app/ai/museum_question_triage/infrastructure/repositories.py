@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.museum_question_triage.domain.models import (
@@ -20,20 +20,25 @@ from app.ai.museum_question_triage.domain.models import (
     ClassificationScoreSource,
     ClassificationStatus,
     ClassifierKind,
+    HumanCategoryOutcome,
     MentionedObject,
     MentionedObjectOrigin,
     MessageClassification,
     MessageTriage,
     ObjectHitView,
     ObjectTriageMatch,
+    TrainingExampleId,
+    TrainingExampleSource,
     TriageId,
     TriageVerdict,
     UseCategory,
     UseCategoryScore,
+    UseCategoryTrainingExample,
 )
 from app.ai.museum_question_triage.infrastructure.models import (
     MessageClassificationOrm,
     MessageTriageOrm,
+    UseCategoryTrainingExampleOrm,
 )
 
 
@@ -216,6 +221,66 @@ def classification_to_domain(
     )
 
 
+def _categories_to_json(categories: list[UseCategory]) -> list[str]:
+    return [category.value for category in categories]
+
+
+def _categories_from_json(raw: list[str]) -> list[UseCategory]:
+    return [UseCategory(category) for category in raw]
+
+
+def training_example_to_orm(
+    example: UseCategoryTrainingExample,
+) -> UseCategoryTrainingExampleOrm:
+    return UseCategoryTrainingExampleOrm(
+        id=example.id,
+        triage_id=example.triage_id,
+        question_id=example.question_id,
+        run_number=example.run_number,
+        superseded_at=example.superseded_at,
+        superseded_by_example_id=example.superseded_by_example_id,
+        human_outcome=example.human_outcome.value,
+        human_categories=_categories_to_json(example.human_categories),
+        llm_categories=_categories_to_json(example.llm_categories),
+        embedding_categories=_categories_to_json(example.embedding_categories),
+        source=example.source.value,
+        reviewed_by=example.reviewed_by,
+        reviewed_at=example.reviewed_at,
+        message_hash=example.message_hash,
+        active=example.active,
+        notes=example.notes,
+        created_at=example.created_at,
+    )
+
+
+def training_example_to_domain(
+    orm: UseCategoryTrainingExampleOrm,
+) -> UseCategoryTrainingExample:
+    return UseCategoryTrainingExample(
+        id=TrainingExampleId(orm.id),
+        triage_id=TriageId(orm.triage_id),
+        question_id=orm.question_id,
+        run_number=orm.run_number,
+        superseded_at=orm.superseded_at,
+        superseded_by_example_id=(
+            TrainingExampleId(orm.superseded_by_example_id)
+            if orm.superseded_by_example_id
+            else None
+        ),
+        human_outcome=HumanCategoryOutcome(orm.human_outcome),
+        human_categories=_categories_from_json(orm.human_categories),
+        llm_categories=_categories_from_json(orm.llm_categories),
+        embedding_categories=_categories_from_json(orm.embedding_categories),
+        source=TrainingExampleSource(orm.source),
+        reviewed_by=orm.reviewed_by,
+        reviewed_at=orm.reviewed_at,
+        message_hash=orm.message_hash,
+        active=orm.active,
+        notes=orm.notes,
+        created_at=orm.created_at,
+    )
+
+
 class SqlAlchemyTriageRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -363,3 +428,79 @@ class SqlAlchemyMessageClassificationRepository:
         ), f"No stored classification with id {classification.id!r} to update"
         _copy_classification_to_orm(classification, orm)
         await self._session.flush()
+
+
+class SqlAlchemyUseCategoryTrainingExampleRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def add(self, example: UseCategoryTrainingExample) -> None:
+        self._session.add(training_example_to_orm(example))
+        await self._session.flush()
+
+    async def get_current_by_triage(
+        self, triage_id: TriageId
+    ) -> UseCategoryTrainingExample | None:
+        stmt = (
+            select(UseCategoryTrainingExampleOrm)
+            .where(
+                UseCategoryTrainingExampleOrm.triage_id == triage_id,
+                UseCategoryTrainingExampleOrm.superseded_at.is_(None),
+            )
+            .order_by(UseCategoryTrainingExampleOrm.run_number.desc())
+            .limit(1)
+        )
+        orm = (await self._session.execute(stmt)).scalar_one_or_none()
+        return training_example_to_domain(orm) if orm else None
+
+    async def supersede_current(
+        self,
+        triage_id: TriageId,
+        superseded_at: datetime,
+        superseded_by_example_id: TrainingExampleId,
+    ) -> None:
+        stmt = (
+            select(UseCategoryTrainingExampleOrm)
+            .where(
+                UseCategoryTrainingExampleOrm.triage_id == triage_id,
+                UseCategoryTrainingExampleOrm.superseded_at.is_(None),
+            )
+            .order_by(UseCategoryTrainingExampleOrm.run_number.desc())
+            .limit(1)
+        )
+        orm = (await self._session.execute(stmt)).scalar_one_or_none()
+        if orm is not None:
+            orm.superseded_at = superseded_at
+            orm.superseded_by_example_id = superseded_by_example_id
+            await self._session.flush()
+
+    async def list_active_current(self) -> list[UseCategoryTrainingExample]:
+        latest_triages = (
+            select(
+                MessageTriageOrm.question_id.label("question_id"),
+                func.max(MessageTriageOrm.created_at).label("created_at"),
+            )
+            .group_by(MessageTriageOrm.question_id)
+            .subquery()
+        )
+        stmt = (
+            select(UseCategoryTrainingExampleOrm)
+            .join(
+                MessageTriageOrm,
+                MessageTriageOrm.id == UseCategoryTrainingExampleOrm.triage_id,
+            )
+            .join(
+                latest_triages,
+                (latest_triages.c.question_id == MessageTriageOrm.question_id)
+                & (latest_triages.c.created_at == MessageTriageOrm.created_at),
+            )
+            .where(
+                UseCategoryTrainingExampleOrm.active.is_(True),
+                UseCategoryTrainingExampleOrm.superseded_at.is_(None),
+            )
+            .order_by(UseCategoryTrainingExampleOrm.reviewed_at.desc())
+        )
+        return [
+            training_example_to_domain(orm)
+            for orm in (await self._session.execute(stmt)).scalars()
+        ]

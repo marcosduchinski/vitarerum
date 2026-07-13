@@ -38,6 +38,7 @@ from app.ai.museum_question_triage.domain.ports import (
     ObjectSearchPort,
     TriageModelPort,
     TriageRepository,
+    UseCategoryTrainingExampleRepository,
 )
 from app.ai.museum_question_triage.infrastructure.embedding_ollama import (
     OllamaEmbeddingAdapter,
@@ -54,6 +55,7 @@ from app.ai.museum_question_triage.infrastructure.object_search_acl import (
 from app.ai.museum_question_triage.infrastructure.repositories import (
     SqlAlchemyMessageClassificationRepository,
     SqlAlchemyTriageRepository,
+    SqlAlchemyUseCategoryTrainingExampleRepository,
 )
 from app.collection_object_index.application.ports import CollectionObjectIndexPort
 from app.collection_object_index.presentation.dependencies import get_object_index
@@ -100,6 +102,12 @@ def get_classification_repository(
     return SqlAlchemyMessageClassificationRepository(session)
 
 
+def get_training_example_repository(
+    session: DBSession,
+) -> UseCategoryTrainingExampleRepository:
+    return SqlAlchemyUseCategoryTrainingExampleRepository(session)
+
+
 MuseumQuestionAclPort = Annotated[MuseumQuestionPort, Depends(get_museum_question_port)]
 ModelPort = Annotated[TriageModelPort, Depends(get_triage_model_port)]
 EmbeddingPort = Annotated[EmbeddingClassifierPort, Depends(get_embedding_port)]
@@ -107,6 +115,9 @@ SearchPort = Annotated[ObjectSearchPort, Depends(get_object_search_port)]
 Repository = Annotated[TriageRepository, Depends(get_triage_repository)]
 ClassificationRepository = Annotated[
     MessageClassificationRepository, Depends(get_classification_repository)
+]
+TrainingExampleRepository = Annotated[
+    UseCategoryTrainingExampleRepository, Depends(get_training_example_repository)
 ]
 
 
@@ -236,10 +247,17 @@ def get_sync_search_terms_use_case(
 
 
 def get_sync_use_categories_use_case(
+    museum_question: MuseumQuestionAclPort,
     triage_repository: Repository,
     classification_repository: ClassificationRepository,
+    training_example_repository: TrainingExampleRepository,
 ) -> SyncUseCategories:
-    return SyncUseCategories(triage_repository, classification_repository)
+    return SyncUseCategories(
+        museum_question,
+        triage_repository,
+        classification_repository,
+        training_example_repository,
+    )
 
 
 TriageUseCase = Annotated[TriageMuseumQuestion, Depends(get_triage_use_case)]

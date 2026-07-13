@@ -9,6 +9,7 @@ import {
   UseCategoryClassification,
   UseCategoryClassificationAudit,
   UseCategoryClassificationAuditList,
+  UseCategoryHumanOutcome,
   UseCategoryValue,
 } from '../../models/museum-question-triage.model';
 import { MuseumQuestion } from '../../models/museum-question.model';
@@ -191,7 +192,11 @@ class ServiceStub {
   readonly triageCalls: string[] = [];
   readonly overrideVerdictCalls: [string, TriageVerdict][] = [];
   readonly syncSearchTermsCalls: [string, readonly SearchTermDraft[]][] = [];
-  readonly syncUseCategoriesCalls: [string, readonly UseCategoryValue[]][] = [];
+  readonly syncUseCategoriesCalls: [
+    string,
+    readonly UseCategoryValue[],
+    UseCategoryHumanOutcome,
+  ][] = [];
   audit: UseCategoryClassificationAuditList | null = null;
 
   getTriage(questionId: string) {
@@ -235,8 +240,12 @@ class ServiceStub {
     return of(this.triage);
   }
 
-  syncTriageUseCategories(questionId: string, categories: readonly UseCategoryValue[]) {
-    this.syncUseCategoriesCalls.push([questionId, categories]);
+  syncTriageUseCategories(
+    questionId: string,
+    categories: readonly UseCategoryValue[],
+    humanOutcome: UseCategoryHumanOutcome,
+  ) {
+    this.syncUseCategoriesCalls.push([questionId, categories, humanOutcome]);
     const scores = categories.map((category) => ({
       category,
       confidence: 1,
@@ -250,7 +259,7 @@ class ServiceStub {
       metadata: { staff_reviewed: true },
       createdAt: '2026-07-05T12:03:00Z',
       status: 'COMPLETED',
-      outcome: scores.length ? 'CATEGORIZED' : 'UNCLEAR',
+      outcome: humanOutcome,
       quality: 'FULL',
       classifierKind: 'CASCADE',
       classifierModel: null,
@@ -687,6 +696,7 @@ describe('MuseumQuestionDetailPageComponent', () => {
       [
         'q1',
         ['ANSWERING_ENQUIRIES', 'PUBLISHING_IMAGES', 'RESEARCH_PROJECTS'],
+        'CATEGORIZED',
       ],
     ]);
   });

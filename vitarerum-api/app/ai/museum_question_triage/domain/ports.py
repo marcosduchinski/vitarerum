@@ -21,9 +21,11 @@ if TYPE_CHECKING:
         MessageTriage,
         ObjectHitView,
         QuestionView,
+        TrainingExampleId,
         TriageClassification,
         TriageId,
         UseCategoryClassification,
+        UseCategoryTrainingExample,
     )
     from app.identity.public import Actor
 
@@ -142,3 +144,22 @@ class MessageClassificationRepository(Protocol):
     ) -> None: ...
 
     async def update(self, classification: MessageClassification) -> None: ...
+
+
+class UseCategoryTrainingExampleRepository(Protocol):
+    """Persists staff-reviewed labels used by embedding calibration."""
+
+    async def add(self, example: UseCategoryTrainingExample) -> None: ...
+
+    async def get_current_by_triage(
+        self, triage_id: TriageId
+    ) -> UseCategoryTrainingExample | None: ...
+
+    async def supersede_current(
+        self,
+        triage_id: TriageId,
+        superseded_at: datetime,
+        superseded_by_example_id: TrainingExampleId,
+    ) -> None: ...
+
+    async def list_active_current(self) -> list[UseCategoryTrainingExample]: ...

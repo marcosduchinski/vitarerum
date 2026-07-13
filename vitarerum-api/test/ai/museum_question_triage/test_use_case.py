@@ -42,6 +42,7 @@ from app.ai.museum_question_triage.domain.models import (
     ClassificationScoreSource,
     ClassificationStatus,
     ClassifierKind,
+    HumanCategoryOutcome,
     MentionedObject,
     MentionedObjectOrigin,
     MessageClassification,
@@ -49,12 +50,15 @@ from app.ai.museum_question_triage.domain.models import (
     ObjectHitView,
     ObjectTriageMatch,
     QuestionView,
+    TrainingExampleId,
+    TrainingExampleSource,
     TriageClassification,
     TriageId,
     TriageVerdict,
     UseCategory,
     UseCategoryClassification,
     UseCategoryScore,
+    UseCategoryTrainingExample,
 )
 from app.ai.museum_question_triage.domain.ports import (
     ModelUnavailable,
@@ -298,6 +302,71 @@ class _FakeClassificationRepo:
             if existing.id == classification.id:
                 self.stored[index] = classification
                 return
+
+
+class _FakeTrainingExampleRepo:
+    def __init__(self) -> None:
+        self.stored: list[UseCategoryTrainingExample] = []
+        self.supersede_calls: list[tuple[TriageId, datetime, TrainingExampleId]] = []
+
+    async def add(self, example: UseCategoryTrainingExample) -> None:
+        self.stored.append(example)
+
+    async def get_current_by_triage(
+        self, triage_id: TriageId
+    ) -> UseCategoryTrainingExample | None:
+        matches = [
+            example
+            for example in self.stored
+            if example.triage_id == triage_id and example.superseded_at is None
+        ]
+        matches.sort(key=lambda example: example.run_number, reverse=True)
+        return matches[0] if matches else None
+
+    async def supersede_current(
+        self,
+        triage_id: TriageId,
+        superseded_at: datetime,
+        superseded_by_example_id: TrainingExampleId,
+    ) -> None:
+        self.supersede_calls.append(
+            (triage_id, superseded_at, superseded_by_example_id)
+        )
+        current = await self.get_current_by_triage(triage_id)
+        if current is None:
+            return
+        index = self.stored.index(current)
+        self.stored[index] = UseCategoryTrainingExample(
+            id=current.id,
+            triage_id=current.triage_id,
+            question_id=current.question_id,
+            run_number=current.run_number,
+            superseded_at=superseded_at,
+            superseded_by_example_id=superseded_by_example_id,
+            human_outcome=current.human_outcome,
+            human_categories=list(current.human_categories),
+            llm_categories=list(current.llm_categories),
+            embedding_categories=list(current.embedding_categories),
+            source=current.source,
+            reviewed_by=current.reviewed_by,
+            reviewed_at=current.reviewed_at,
+            message_hash=current.message_hash,
+            active=current.active,
+            notes=current.notes,
+            created_at=current.created_at,
+        )
+
+    async def list_active_current(self) -> list[UseCategoryTrainingExample]:
+        return [
+            example
+            for example in self.stored
+            if example.active and example.superseded_at is None
+        ]
+
+
+class _FailingTrainingExampleRepo(_FakeTrainingExampleRepo):
+    async def add(self, example: UseCategoryTrainingExample) -> None:
+        raise RuntimeError("training example store failed")
 
 
 def _use_case(
@@ -729,7 +798,10 @@ async def test_sync_use_categories_creates_staff_reviewed_cascade_line() -> None
             created_at=datetime(2026, 7, 10, 12, 1, tzinfo=UTC),
         )
     )
-    use_case = SyncUseCategories(triage_repo, classification_repo)
+    training_repo = _FakeTrainingExampleRepo()
+    use_case = SyncUseCategories(
+        _FakeMuseumQuestion(), triage_repo, classification_repo, training_repo
+    )
 
     result = await use_case.execute(
         SyncUseCategoriesInput(
@@ -739,6 +811,7 @@ async def test_sync_use_categories_creates_staff_reviewed_cascade_line() -> None
                 UseCategory.ANSWERING_ENQUIRIES,
                 UseCategory.PUBLISHING_IMAGES,
             ],
+            human_outcome=HumanCategoryOutcome.CATEGORIZED,
             caller=_STAFF,
         )
     )
@@ -756,24 +829,75 @@ async def test_sync_use_categories_creates_staff_reviewed_cascade_line() -> None
     assert all(score.confidence == 1.0 for score in result.assigned_categories)
     assert result.metadata["staff_reviewed"] is True
     assert result.metadata["reviewed_by"] == _STAFF.email
+    assert result.metadata["human_outcome"] == "CATEGORIZED"
     assert classification_repo.stored[0].superseded_at is not None
     assert classification_repo.stored[1] == result
+    example = training_repo.stored[-1]
+    assert result.metadata["training_example_id"] == example.id
+    assert example.triage_id == triage.id
+    assert example.question_id == "q1"
+    assert example.run_number == 1
+    assert example.human_outcome is HumanCategoryOutcome.CATEGORIZED
+    assert example.human_categories == [
+        UseCategory.ANSWERING_ENQUIRIES,
+        UseCategory.PUBLISHING_IMAGES,
+    ]
+    assert example.embedding_categories == []
+    assert example.source is TrainingExampleSource.HUMAN_CREATED
+    assert example.reviewed_by == _STAFF.email
+    assert example.message_hash
+    assert example.active is True
     assert triage.effective_verdict is TriageVerdict.IN_SCOPE
+
+
+async def test_sync_use_categories_training_failure_does_not_add_cascade_line() -> None:
+    triage_repo = _FakeRepo()
+    triage_repo.stored.append(_stored_use_category_triage())
+    classification_repo = _FakeClassificationRepo()
+    use_case = SyncUseCategories(
+        _FakeMuseumQuestion(),
+        triage_repo,
+        classification_repo,
+        _FailingTrainingExampleRepo(),
+    )
+
+    with pytest.raises(RuntimeError, match="training example store failed"):
+        await use_case.execute(
+            SyncUseCategoriesInput(
+                question_id="q1",
+                categories=[UseCategory.RESEARCH_PROJECTS],
+                human_outcome=HumanCategoryOutcome.CATEGORIZED,
+                caller=_STAFF,
+            )
+        )
+
+    assert classification_repo.stored == []
+    assert classification_repo.supersede_calls == []
 
 
 async def test_sync_use_categories_can_mark_unclear() -> None:
     triage_repo = _FakeRepo()
     triage_repo.stored.append(_stored_use_category_triage())
     classification_repo = _FakeClassificationRepo()
-    use_case = SyncUseCategories(triage_repo, classification_repo)
+    training_repo = _FakeTrainingExampleRepo()
+    use_case = SyncUseCategories(
+        _FakeMuseumQuestion(), triage_repo, classification_repo, training_repo
+    )
 
     result = await use_case.execute(
-        SyncUseCategoriesInput(question_id="q1", categories=[], caller=_STAFF)
+        SyncUseCategoriesInput(
+            question_id="q1",
+            categories=[],
+            human_outcome=HumanCategoryOutcome.UNCLEAR,
+            caller=_STAFF,
+        )
     )
 
     assert result.outcome is ClassificationOutcome.UNCLEAR
     assert result.assigned_categories == []
     assert result.category_scores == []
+    assert training_repo.stored[0].human_outcome is HumanCategoryOutcome.UNCLEAR
+    assert training_repo.stored[0].human_categories == []
 
 
 async def test_export_use_category_calibration_csv_excludes_message_text() -> None:

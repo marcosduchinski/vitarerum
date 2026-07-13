@@ -37,16 +37,19 @@ from app.ai.museum_question_triage.domain.models import (
     ClassificationScoreSource,
     ClassificationStatus,
     ClassifierKind,
+    HumanCategoryOutcome,
     MentionedObject,
     MentionedObjectOrigin,
     MessageClassification,
     MessageTriage,
     ObjectHitView,
     ObjectTriageMatch,
+    TrainingExampleSource,
     TriageId,
     TriageVerdict,
     UseCategory,
     UseCategoryScore,
+    UseCategoryTrainingExample,
 )
 from app.ai.museum_question_triage.domain.ports import (
     ClassificationNotFound,
@@ -61,6 +64,7 @@ from app.ai.museum_question_triage.domain.ports import (
     TriageNotInScope,
     TriageRepository,
     TriageTermValidationError,
+    UseCategoryTrainingExampleRepository,
 )
 
 if TYPE_CHECKING:
@@ -122,6 +126,35 @@ def _normalize_use_categories(categories: list[UseCategory]) -> list[UseCategory
         seen.add(category)
         normalized.append(category)
     return sorted(normalized, key=lambda item: item.value)
+
+
+def _assigned_categories(
+    classification: MessageClassification | None,
+) -> list[UseCategory]:
+    if (
+        classification is None
+        or classification.status is not ClassificationStatus.COMPLETED
+        or classification.outcome is not ClassificationOutcome.CATEGORIZED
+    ):
+        return []
+    return _normalize_use_categories(
+        [score.category for score in classification.assigned_categories]
+    )
+
+
+def _training_example_source(
+    human_categories: list[UseCategory],
+    llm_categories: list[UseCategory],
+    embedding_categories: list[UseCategory],
+) -> TrainingExampleSource:
+    human = set(human_categories)
+    llm = set(llm_categories)
+    embedding = set(embedding_categories)
+    if llm and human == llm:
+        return TrainingExampleSource.LLM_ACCEPTED
+    if llm or embedding:
+        return TrainingExampleSource.HUMAN_CORRECTED
+    return TrainingExampleSource.HUMAN_CREATED
 
 
 def _cascade_margin(scores: list[UseCategoryScore]) -> float | None:
@@ -323,6 +356,7 @@ class SyncTriageSearchTermsInput:
 class SyncUseCategoriesInput:
     question_id: str
     categories: list[UseCategory]
+    human_outcome: HumanCategoryOutcome
     caller: Actor
 
 
@@ -861,12 +895,16 @@ class SyncUseCategories:
 
     def __init__(
         self,
+        museum_question: MuseumQuestionPort,
         triage_repository: TriageRepository,
         classification_repository: MessageClassificationRepository,
+        training_example_repository: UseCategoryTrainingExampleRepository,
         classifier_version: str = STAFF_USE_CATEGORY_CLASSIFIER_VERSION,
     ) -> None:
+        self._museum_question = museum_question
         self._triage_repository = triage_repository
         self._classification_repository = classification_repository
+        self._training_example_repository = training_example_repository
         self._classifier_version = classifier_version
 
     async def execute(self, data: SyncUseCategoriesInput) -> MessageClassification:
@@ -875,16 +913,23 @@ class SyncUseCategories:
             raise TriageNotFound(
                 f"No triage has been run for question {data.question_id!r} yet."
             )
+        question = await self._museum_question.get_summary(data.question_id)
+        if question is None:
+            raise QuestionNotFound(
+                f"No museum question found with id {data.question_id!r}"
+            )
 
         triage_id = triage.id
+        llm = await self._classification_repository.get_current_by_triage(
+            triage_id, ClassifierKind.LLM
+        )
+        embedding = await self._classification_repository.get_current_by_triage(
+            triage_id, ClassifierKind.EMBEDDING
+        )
         current = await self._classification_repository.get_current_by_triage(
             triage_id, ClassifierKind.CASCADE
         )
         run_number = (current.run_number + 1) if current else 1
-        if current is not None:
-            await self._classification_repository.supersede_current(
-                triage_id, ClassifierKind.CASCADE, datetime.now(UTC)
-            )
 
         categories = _normalize_use_categories(data.categories)
         scores = [
@@ -895,12 +940,34 @@ class SyncUseCategories:
             )
             for category in categories
         ]
-        outcome = (
-            ClassificationOutcome.CATEGORIZED
-            if scores
-            else ClassificationOutcome.UNCLEAR
-        )
+        outcome = ClassificationOutcome(data.human_outcome.value)
         classified_at = datetime.now(UTC)
+
+        existing_example = (
+            await self._training_example_repository.get_current_by_triage(triage_id)
+        )
+        example_run_number = (
+            existing_example.run_number + 1 if existing_example is not None else 1
+        )
+        source = _training_example_source(
+            categories,
+            _assigned_categories(llm),
+            _assigned_categories(embedding),
+        )
+        training_example = UseCategoryTrainingExample.create(
+            triage_id=triage_id,
+            question_id=triage.question_id,
+            run_number=example_run_number,
+            human_outcome=data.human_outcome,
+            human_categories=categories,
+            llm_categories=_assigned_categories(llm),
+            embedding_categories=_assigned_categories(embedding),
+            source=source,
+            reviewed_by=data.caller.email,
+            reviewed_at=classified_at,
+            message_hash=_normalized_message_hash(question.message),
+        )
+
         classification = MessageClassification(
             id=ClassificationId(str(uuid.uuid4())),
             triage_id=triage_id,
@@ -919,10 +986,21 @@ class SyncUseCategories:
                 "reviewed_by": data.caller.email,
                 "reviewed_at": classified_at.isoformat(),
                 "staff_reviewed": True,
+                "training_example_id": training_example.id,
+                "human_outcome": data.human_outcome.value,
             },
             classified_at=classified_at,
             created_at=classified_at,
         )
+        await self._training_example_repository.add(training_example)
+        if existing_example is not None:
+            await self._training_example_repository.supersede_current(
+                triage_id, classified_at, training_example.id
+            )
+        if current is not None:
+            await self._classification_repository.supersede_current(
+                triage_id, ClassifierKind.CASCADE, classified_at
+            )
         await self._classification_repository.add(classification)
         return classification
 

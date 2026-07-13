@@ -9,11 +9,16 @@ from app.ai.museum_question_triage.domain.models import (
     ClassificationScoreSource,
     ClassificationStatus,
     ClassifierKind,
+    HumanCategoryOutcome,
     InvalidMessageClassification,
+    InvalidUseCategoryTrainingExample,
     MessageClassification,
+    TrainingExampleId,
+    TrainingExampleSource,
     TriageId,
     UseCategory,
     UseCategoryScore,
+    UseCategoryTrainingExample,
 )
 
 _NOW = datetime(2026, 7, 10, 12, 0, tzinfo=UTC)
@@ -59,6 +64,45 @@ def _classification(
         error=error,
         metadata={},
         classified_at=classified_at,
+        created_at=_NOW,
+    )
+
+
+def _training_example(
+    *,
+    human_outcome: HumanCategoryOutcome = HumanCategoryOutcome.CATEGORIZED,
+    human_categories: list[UseCategory] | None = None,
+    llm_categories: list[UseCategory] | None = None,
+    embedding_categories: list[UseCategory] | None = None,
+    source: TrainingExampleSource = TrainingExampleSource.LLM_ACCEPTED,
+    reviewed_by: str = "s@museum.pt",
+    message_hash: str = "f" * 64,
+) -> UseCategoryTrainingExample:
+    categories = (
+        [UseCategory.RESEARCH_PROJECTS]
+        if human_categories is None
+        else human_categories
+    )
+    llm = [UseCategory.RESEARCH_PROJECTS] if llm_categories is None else llm_categories
+    return UseCategoryTrainingExample(
+        id=TrainingExampleId("example-1"),
+        triage_id=TriageId("triage-1"),
+        question_id="q1",
+        run_number=1,
+        superseded_at=None,
+        superseded_by_example_id=None,
+        human_outcome=human_outcome,
+        human_categories=categories,
+        llm_categories=llm,
+        embedding_categories=(
+            [] if embedding_categories is None else embedding_categories
+        ),
+        source=source,
+        reviewed_by=reviewed_by,
+        reviewed_at=_NOW,
+        message_hash=message_hash,
+        active=True,
+        notes=None,
         created_at=_NOW,
     )
 
@@ -203,3 +247,68 @@ def test_sorts_category_scores_deterministically() -> None:
 def test_run_number_starts_at_one() -> None:
     with pytest.raises(InvalidMessageClassification):
         _classification(run_number=0)
+
+
+def test_training_example_requires_categories_for_categorized() -> None:
+    with pytest.raises(InvalidUseCategoryTrainingExample):
+        _training_example(
+            human_outcome=HumanCategoryOutcome.CATEGORIZED,
+            human_categories=[],
+            llm_categories=[],
+            source=TrainingExampleSource.HUMAN_CREATED,
+        )
+
+
+def test_training_example_unclear_requires_empty_categories() -> None:
+    with pytest.raises(InvalidUseCategoryTrainingExample):
+        _training_example(
+            human_outcome=HumanCategoryOutcome.UNCLEAR,
+            human_categories=[UseCategory.RESEARCH_PROJECTS],
+        )
+
+
+def test_training_example_rejects_duplicate_human_categories() -> None:
+    with pytest.raises(InvalidUseCategoryTrainingExample):
+        _training_example(
+            human_categories=[
+                UseCategory.RESEARCH_PROJECTS,
+                UseCategory.RESEARCH_PROJECTS,
+            ]
+        )
+
+
+def test_training_example_requires_review_audit_fields() -> None:
+    with pytest.raises(InvalidUseCategoryTrainingExample):
+        _training_example(reviewed_by="")
+
+    with pytest.raises(InvalidUseCategoryTrainingExample):
+        _training_example(message_hash="")
+
+
+def test_training_example_llm_accepted_must_match_llm_categories() -> None:
+    with pytest.raises(InvalidUseCategoryTrainingExample):
+        _training_example(
+            human_categories=[UseCategory.RESEARCH_PROJECTS],
+            llm_categories=[UseCategory.EXHIBITION],
+            source=TrainingExampleSource.LLM_ACCEPTED,
+        )
+
+
+def test_training_example_human_created_requires_no_suggestions() -> None:
+    with pytest.raises(InvalidUseCategoryTrainingExample):
+        _training_example(
+            human_categories=[UseCategory.RESEARCH_PROJECTS],
+            llm_categories=[UseCategory.EXHIBITION],
+            source=TrainingExampleSource.HUMAN_CREATED,
+        )
+
+
+def test_training_example_human_corrected_accepts_embedding_acceptance() -> None:
+    example = _training_example(
+        human_categories=[UseCategory.RESEARCH_PROJECTS],
+        llm_categories=[UseCategory.EXHIBITION],
+        embedding_categories=[UseCategory.RESEARCH_PROJECTS],
+        source=TrainingExampleSource.HUMAN_CORRECTED,
+    )
+
+    assert example.source is TrainingExampleSource.HUMAN_CORRECTED

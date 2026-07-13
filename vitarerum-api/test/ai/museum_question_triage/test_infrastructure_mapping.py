@@ -10,19 +10,48 @@ from app.ai.museum_question_triage.domain.models import (
     ClassificationScoreSource,
     ClassificationStatus,
     ClassifierKind,
+    HumanCategoryOutcome,
     MessageClassification,
+    MessageTriage,
+    TrainingExampleId,
+    TrainingExampleSource,
     TriageId,
+    TriageVerdict,
     UseCategory,
     UseCategoryScore,
+    UseCategoryTrainingExample,
 )
 from app.ai.museum_question_triage.infrastructure.repositories import (
     SqlAlchemyMessageClassificationRepository,
+    SqlAlchemyTriageRepository,
+    SqlAlchemyUseCategoryTrainingExampleRepository,
     classification_to_domain,
     classification_to_orm,
+    training_example_to_domain,
+    training_example_to_orm,
 )
 from app.database import Base
 
 _NOW = datetime(2026, 7, 10, 12, 0, tzinfo=UTC)
+
+
+def _triage(
+    *,
+    id_: str = "triage-1",
+    question_id: str = "q1",
+    created_at: datetime = _NOW,
+) -> MessageTriage:
+    return MessageTriage(
+        id=TriageId(id_),
+        question_id=question_id,
+        verdict=TriageVerdict.IN_SCOPE,
+        is_visit_related=True,
+        mentioned_objects=[],
+        object_matches=[],
+        suggested_reply=None,
+        llm_model="llama3.1:8b",
+        created_at=created_at,
+    )
 
 
 def _score(
@@ -63,6 +92,35 @@ def _classification(
     )
 
 
+def _training_example(
+    *,
+    id_: str = "example-1",
+    triage_id: str = "triage-1",
+    question_id: str = "q1",
+    run_number: int = 1,
+    active: bool = True,
+) -> UseCategoryTrainingExample:
+    return UseCategoryTrainingExample(
+        id=TrainingExampleId(id_),
+        triage_id=TriageId(triage_id),
+        question_id=question_id,
+        run_number=run_number,
+        superseded_at=None,
+        superseded_by_example_id=None,
+        human_outcome=HumanCategoryOutcome.CATEGORIZED,
+        human_categories=[UseCategory.RESEARCH_PROJECTS],
+        llm_categories=[UseCategory.RESEARCH_PROJECTS],
+        embedding_categories=[],
+        source=TrainingExampleSource.LLM_ACCEPTED,
+        reviewed_by="s@museum.pt",
+        reviewed_at=_NOW,
+        message_hash="a" * 64,
+        active=active,
+        notes=None,
+        created_at=_NOW,
+    )
+
+
 async def _session_factory() -> async_sessionmaker:
     engine = create_async_engine(
         "sqlite+aiosqlite://",
@@ -92,6 +150,23 @@ def test_classification_roundtrip_preserves_key_data() -> None:
     assert rebuilt.assigned_categories == classification.assigned_categories
     assert rebuilt.metadata == {"prompt": "v1"}
     assert rebuilt.classified_at == _NOW
+
+
+def test_training_example_roundtrip_preserves_key_data() -> None:
+    example = _training_example()
+
+    rebuilt = training_example_to_domain(training_example_to_orm(example))
+
+    assert rebuilt.id == example.id
+    assert rebuilt.triage_id == example.triage_id
+    assert rebuilt.question_id == "q1"
+    assert rebuilt.human_outcome is HumanCategoryOutcome.CATEGORIZED
+    assert rebuilt.human_categories == [UseCategory.RESEARCH_PROJECTS]
+    assert rebuilt.llm_categories == [UseCategory.RESEARCH_PROJECTS]
+    assert rebuilt.source is TrainingExampleSource.LLM_ACCEPTED
+    assert rebuilt.reviewed_by == "s@museum.pt"
+    assert rebuilt.message_hash == "a" * 64
+    assert rebuilt.active is True
 
 
 async def test_repository_returns_current_unsuperseded_highest_run() -> None:
@@ -141,3 +216,34 @@ async def test_repository_supersedes_current_line() -> None:
     assert current is None
     assert superseded is not None
     assert superseded.superseded_at == superseded_at.replace(tzinfo=None)
+
+
+async def test_training_example_repository_supersedes_and_filters_active() -> None:
+    factory = await _session_factory()
+    superseded_at = datetime(2026, 7, 10, 13, 0, tzinfo=UTC)
+
+    async with factory() as session:
+        triage_repo = SqlAlchemyTriageRepository(session)
+        repo = SqlAlchemyUseCategoryTrainingExampleRepository(session)
+        await triage_repo.add(
+            _triage(id_="triage-old", created_at=datetime(2026, 7, 9, tzinfo=UTC))
+        )
+        await triage_repo.add(_triage(id_="triage-1", created_at=_NOW))
+        await repo.add(
+            _training_example(id_="other-triage", triage_id="triage-old", run_number=1)
+        )
+        await repo.add(_training_example(id_="old", run_number=1))
+        await session.commit()
+
+        await repo.supersede_current(
+            TriageId("triage-1"), superseded_at, TrainingExampleId("new")
+        )
+        await repo.add(_training_example(id_="new", run_number=2))
+        await session.commit()
+
+        active = await repo.list_active_current()
+        current = await repo.get_current_by_triage(TriageId("triage-1"))
+
+    assert [example.id for example in active] == ["new"]
+    assert current is not None
+    assert current.id == "new"

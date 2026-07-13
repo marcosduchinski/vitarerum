@@ -31,6 +31,7 @@ import {
   TriageVerdict,
   UseCategoryClassification,
   UseCategoryClassificationAudit,
+  UseCategoryClassificationOutcome,
   UseCategoryClassifierKind,
   UseCategoryScore,
   UseCategoryScoreSource,
@@ -252,11 +253,22 @@ export class MuseumQuestionDetailPageComponent {
   protected readonly categoryDraft = linkedSignal<ReadonlySet<UseCategoryValue>>(
     () => new Set(this.assignedUseCategories().map((score) => score.category)),
   );
+  protected readonly categoryDraftOutcome = linkedSignal<UseCategoryClassificationOutcome>(
+    () => this.displayedUseCategoryClassification()?.outcome ?? 'CATEGORIZED',
+  );
   protected readonly categoryDraftChanged = computed(() => {
     const current = new Set(this.assignedUseCategories().map((score) => score.category));
     const draft = this.categoryDraft();
+    const currentOutcome =
+      this.displayedUseCategoryClassification()?.outcome ?? 'CATEGORIZED';
+    if (currentOutcome !== this.categoryDraftOutcome()) return true;
     if (current.size !== draft.size) return true;
     return [...draft].some((category) => !current.has(category));
+  });
+  protected readonly canSubmitUseCategoryDraft = computed(() => {
+    if (!this.categoryDraftChanged() || this.useCategoriesBusy()) return false;
+    if (this.triageResource.isLoading()) return false;
+    return this.categoryDraftOutcome() === 'UNCLEAR' || this.categoryDraft().size > 0;
   });
   protected readonly triageObjectResults = computed<readonly TriageObjectResult[]>(() => {
     const pages = this.triageHitPages();
@@ -478,6 +490,17 @@ export class MuseumQuestionDetailPageComponent {
       else next.delete(category);
       return next;
     });
+    if (checked) this.categoryDraftOutcome.set('CATEGORIZED');
+  }
+
+  protected onUseCategoryUnclearToggle(event: Event): void {
+    const checked = (event.target as HTMLInputElement).checked;
+    if (checked) {
+      this.categoryDraft.set(new Set());
+      this.categoryDraftOutcome.set('UNCLEAR');
+    } else {
+      this.categoryDraftOutcome.set('CATEGORIZED');
+    }
   }
 
   protected async submitUseCategories(): Promise<void> {
@@ -490,6 +513,7 @@ export class MuseumQuestionDetailPageComponent {
         this.service.syncTriageUseCategories(
           triage.questionId,
           [...this.categoryDraft()].sort(),
+          this.categoryDraftOutcome(),
         ),
       );
       this.triageRefreshToken.update((value) => value + 1);

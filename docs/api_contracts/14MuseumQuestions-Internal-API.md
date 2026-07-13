@@ -86,18 +86,29 @@ If the binary triage has never been run, returns `404 TRIAGE_NOT_FOUND`.
 Request:
 
 ```json
-{ "categories": ["ANSWERING_ENQUIRIES", "RESEARCH_PROJECTS"] }
+{
+  "categories": ["ANSWERING_ENQUIRIES", "RESEARCH_PROJECTS"],
+  "humanOutcome": "CATEGORIZED"
+}
 ```
 
 Persists the staff-reviewed final category set for the latest triage. This creates
 a new current `classifierKind=CASCADE` classification with
 `classifierVersion=staff-reviewed-v1`, `confidence=1.0` scores, and metadata
-including `staff_reviewed`, `reviewed_by`, and `reviewed_at`. If a current
-`CASCADE` line exists, it is superseded and the new line receives
-`runNumber + 1`.
+including `staff_reviewed`, `reviewed_by`, `reviewed_at`, `human_outcome`, and
+`training_example_id`. The same transaction also creates a separate
+`UseCategoryTrainingExample` for embedding calibration. If a current `CASCADE`
+line exists, it is superseded and the new line receives `runNumber + 1`.
 
-An empty `categories` list is valid and records `outcome=UNCLEAR`. This action
-does not change `verdict`, `effectiveVerdict`, or `staffOverrideVerdict`.
+For "no category applies", send:
+
+```json
+{ "categories": [], "humanOutcome": "UNCLEAR" }
+```
+
+`humanOutcome` is required; `UNCLEAR` is not inferred from an empty list alone.
+This action does not change `verdict`, `effectiveVerdict`, or
+`staffOverrideVerdict`.
 
 Response: `UseCategoryClassificationAuditList` for the latest triage.
 

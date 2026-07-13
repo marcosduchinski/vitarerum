@@ -29,6 +29,7 @@ from typing import NewType
 
 TriageId = NewType("TriageId", str)
 ClassificationId = NewType("ClassificationId", str)
+TrainingExampleId = NewType("TrainingExampleId", str)
 
 
 class TriageVerdict(StrEnum):
@@ -83,8 +84,23 @@ class ClassificationScoreSource(StrEnum):
     EMBEDDING = "EMBEDDING"
 
 
+class HumanCategoryOutcome(StrEnum):
+    CATEGORIZED = "CATEGORIZED"
+    UNCLEAR = "UNCLEAR"
+
+
+class TrainingExampleSource(StrEnum):
+    LLM_ACCEPTED = "LLM_ACCEPTED"
+    HUMAN_CORRECTED = "HUMAN_CORRECTED"
+    HUMAN_CREATED = "HUMAN_CREATED"
+
+
 class InvalidMessageClassification(Exception):
     """A use-category classification violates a domain invariant."""
+
+
+class InvalidUseCategoryTrainingExample(Exception):
+    """A staff-reviewed training example violates a domain invariant."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -312,6 +328,141 @@ class MessageClassification:
                 raise InvalidMessageClassification(
                     "Assigned categories must exactly match category_scores entries."
                 )
+
+
+@dataclass(slots=True)
+class UseCategoryTrainingExample:
+    """A human-reviewed category label usable for embedding calibration.
+
+    It is deliberately separate from the operational CASCADE classification
+    row so bad examples can be withdrawn without rewriting classifier history.
+    """
+
+    id: TrainingExampleId
+    triage_id: TriageId
+    question_id: str
+    run_number: int
+    superseded_at: datetime | None
+    superseded_by_example_id: TrainingExampleId | None
+    human_outcome: HumanCategoryOutcome
+    human_categories: list[UseCategory]
+    llm_categories: list[UseCategory]
+    embedding_categories: list[UseCategory]
+    source: TrainingExampleSource
+    reviewed_by: str
+    reviewed_at: datetime
+    message_hash: str
+    active: bool
+    notes: str | None
+    created_at: datetime
+
+    def __post_init__(self) -> None:
+        self.human_categories = _sorted_categories(self.human_categories)
+        self.llm_categories = _sorted_categories(self.llm_categories)
+        self.embedding_categories = _sorted_categories(self.embedding_categories)
+        if self.run_number < 1:
+            raise InvalidUseCategoryTrainingExample("run_number must start at 1.")
+        if not self.question_id.strip():
+            raise InvalidUseCategoryTrainingExample("question_id is required.")
+        if not self.reviewed_by.strip():
+            raise InvalidUseCategoryTrainingExample("reviewed_by is required.")
+        if not self.message_hash.strip():
+            raise InvalidUseCategoryTrainingExample("message_hash is required.")
+        _reject_duplicate_categories(self.human_categories, "human_categories")
+        _reject_duplicate_categories(self.llm_categories, "llm_categories")
+        _reject_duplicate_categories(self.embedding_categories, "embedding_categories")
+        if (
+            self.human_outcome is HumanCategoryOutcome.CATEGORIZED
+            and not self.human_categories
+        ):
+            raise InvalidUseCategoryTrainingExample(
+                "CATEGORIZED training examples require human categories."
+            )
+        if (
+            self.human_outcome is HumanCategoryOutcome.UNCLEAR
+            and self.human_categories
+        ):
+            raise InvalidUseCategoryTrainingExample(
+                "UNCLEAR training examples cannot have human categories."
+            )
+        self._validate_source()
+
+    def _validate_source(self) -> None:
+        human = set(self.human_categories)
+        llm = set(self.llm_categories)
+        embedding = set(self.embedding_categories)
+        if self.source is TrainingExampleSource.LLM_ACCEPTED and human != llm:
+            raise InvalidUseCategoryTrainingExample(
+                "LLM_ACCEPTED requires human categories to match LLM categories."
+            )
+        if self.source is TrainingExampleSource.HUMAN_CORRECTED:
+            if not llm and not embedding:
+                raise InvalidUseCategoryTrainingExample(
+                    "HUMAN_CORRECTED requires a previous LLM or embedding suggestion."
+                )
+            if llm and human == llm:
+                raise InvalidUseCategoryTrainingExample(
+                    "Human categories matching LLM categories must use LLM_ACCEPTED."
+                )
+        if self.source is TrainingExampleSource.HUMAN_CREATED and (llm or embedding):
+            raise InvalidUseCategoryTrainingExample(
+                "HUMAN_CREATED requires no valid LLM or embedding suggestion."
+            )
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        triage_id: TriageId,
+        question_id: str,
+        run_number: int,
+        human_outcome: HumanCategoryOutcome,
+        human_categories: list[UseCategory],
+        llm_categories: list[UseCategory],
+        embedding_categories: list[UseCategory],
+        source: TrainingExampleSource,
+        reviewed_by: str,
+        reviewed_at: datetime,
+        message_hash: str,
+        active: bool = True,
+        notes: str | None = None,
+    ) -> UseCategoryTrainingExample:
+        return cls(
+            id=TrainingExampleId(str(uuid.uuid4())),
+            triage_id=triage_id,
+            question_id=question_id,
+            run_number=run_number,
+            superseded_at=None,
+            superseded_by_example_id=None,
+            human_outcome=human_outcome,
+            human_categories=human_categories,
+            llm_categories=llm_categories,
+            embedding_categories=embedding_categories,
+            source=source,
+            reviewed_by=reviewed_by,
+            reviewed_at=reviewed_at,
+            message_hash=message_hash,
+            active=active,
+            notes=notes,
+            created_at=reviewed_at,
+        )
+
+
+def _category_sort_key(category: UseCategory) -> str:
+    return category.value
+
+
+def _sorted_categories(categories: list[UseCategory]) -> list[UseCategory]:
+    return sorted(categories, key=_category_sort_key)
+
+
+def _reject_duplicate_categories(
+    categories: list[UseCategory], field_name: str
+) -> None:
+    if len(set(categories)) != len(categories):
+        raise InvalidUseCategoryTrainingExample(
+            f"{field_name} cannot contain duplicate categories."
+        )
 
 
 @dataclass(frozen=True, slots=True)
