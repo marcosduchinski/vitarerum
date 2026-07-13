@@ -19,56 +19,74 @@
       </div>
     </header>
 
-    <section class="detail-card" aria-labelledby="approved-project-heading">
-      <h2 id="approved-project-heading" class="detail-card__title">Resulting project</h2>
-      @if (project(); as project) {
-        <div class="proposal-detail__status-row">
-          <p class="proposal-detail__ref">{{ project.referenceNumber }}</p>
-          <app-status-chip kind="project" [status]="asWorkflowStatus(project.status)" />
-        </div>
-        <dl class="detail-dl">
-          <div class="detail-dl__row">
-            <dt>Use period</dt>
-            <dd>{{ formatDate(proposal()!.beginDate) }} → {{ formatDate(proposal()!.endDate) }}</dd>
-          </div>
-          @if (approvalEvent()) {
-            <div class="detail-dl__row">
-              <dt>Approved by</dt>
-              <dd>
-                {{ approvalEvent()!.triggeredBy.user.name }}
-                <span class="detail-dl__email">{{ formatDate(approvalEvent()!.occurredAt) }}</span>
-              </dd>
-            </div>
-          }
-        </dl>
-        <a
-          class="action-btn action-btn--primary approved-project-cta"
-          [routerLink]="['/p/collections/projects', project.id]"
-          [queryParams]="{
-            returnTo: '/p/collections/proposals/approved',
-            returnLabel: 'approved proposals'
-          }"
+    <div class="approved-detail__workspace">
+      <div class="approved-detail__sidebar">
+        <section
+          class="detail-card approved-project-card"
+          aria-labelledby="approved-project-heading"
         >
-          <span class="pi pi-folder-open" aria-hidden="true"></span>
-          Go to project
-        </a>
-      } @else {
-        <p class="detail-card__empty">The project for this proposal is not available yet.</p>
-      }
-    </section>
+          <div class="approved-project-card__header">
+            <h2 id="approved-project-heading" class="detail-card__title">Resulting project</h2>
+            @if (project(); as project) {
+              <app-status-chip kind="project" [status]="asWorkflowStatus(project.status)" />
+            }
+          </div>
+          @if (project(); as project) {
+            <div class="approved-project-card__identity">
+              <p class="proposal-detail__ref">{{ project.referenceNumber }}</p>
+              <h3>{{ project.title }}</h3>
+            </div>
+            <dl class="detail-dl approved-project-card__facts">
+              <div class="detail-dl__row">
+                <dt>Use period</dt>
+                <dd>
+                  {{ formatDate(proposal()!.beginDate) }} → {{ formatDate(proposal()!.endDate) }}
+                </dd>
+              </div>
+              @if (approvalEvent()) {
+                <div class="detail-dl__row">
+                  <dt>Approved by</dt>
+                  <dd>
+                    {{ approvalEvent()!.triggeredBy.user.name }}
+                    <span class="detail-dl__email">{{
+                      formatDate(approvalEvent()!.occurredAt)
+                    }}</span>
+                  </dd>
+                </div>
+              }
+            </dl>
+            <a
+              class="action-btn action-btn--primary approved-project-cta"
+              [routerLink]="['/p/collections/projects', project.id]"
+              [queryParams]="{
+                returnTo: '/p/collections/proposals/approved',
+                returnLabel: 'approved proposals',
+              }"
+            >
+              <span class="pi pi-folder-open" aria-hidden="true"></span>
+              Go to project
+            </a>
+          } @else {
+            <p class="detail-card__empty">The project for this proposal is not available yet.</p>
+          }
+        </section>
 
-    <app-proposal-overview-section [proposal]="proposal()!" />
+        <app-proposal-overview-section [proposal]="proposal()!" />
+      </div>
 
-    <app-proposal-events-section [events]="events()" [loading]="eventsResource.isLoading()" />
+      <div class="approved-detail__main">
+        <app-proposal-events-section [events]="events()" [loading]="eventsResource.isLoading()" />
 
-    <app-proposal-conversation-section
-      [proposal]="proposal()!"
-      [messages]="messages()"
-      [messagesLoading]="conversationResource.isLoading()"
-      [sendingMessage]="false"
-      [messageError]="null"
-      [replyResetVersion]="0"
-      [canReply]="false"
-    />
+        <app-proposal-conversation-section
+          [proposal]="proposal()!"
+          [messages]="messages()"
+          [messagesLoading]="conversationResource.isLoading()"
+          [sendingMessage]="false"
+          [messageError]="null"
+          [replyResetVersion]="0"
+          [canReply]="false"
+        />
+      </div>
+    </div>
   }
 </div>

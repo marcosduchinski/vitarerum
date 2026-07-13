@@ -3,7 +3,7 @@
 // The Overview card spans the full page width in the stacked layout (no
 // longer confined to an 18rem sidebar column), so its label/value pairs flow
 // across responsive columns instead of stacking in one narrow strip with a
-// wide empty gutter. Purpose stays full-width since it's free text.
+// wide empty gutter.
 .overview-grid {
   grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
   gap: 1.25rem 2rem;

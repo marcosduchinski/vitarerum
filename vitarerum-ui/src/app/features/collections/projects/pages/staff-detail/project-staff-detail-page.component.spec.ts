@@ -205,13 +205,16 @@ describe('ProjectStaffDetailPageComponent', () => {
     ]);
   });
 
-  it('shows the Edit link for an editable project and links to the segmented edit route', async () => {
+  it('shows the Edit link in the Actions tab for editable projects', async () => {
     const fixture = TestBed.createComponent(ProjectStaffDetailPageComponent);
     fixture.componentRef.setInput('id', PROJECT.id);
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
 
+    expect(
+      fixture.nativeElement.querySelector('.project-detail__header a.project-detail__edit'),
+    ).toBeNull();
     const link = fixture.nativeElement.querySelector('a.project-detail__edit');
     expect(link).not.toBeNull();
     expect(link!.getAttribute('href')).toBe('/p/collections/projects/collections/proj-12/edit');

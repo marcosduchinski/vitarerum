@@ -226,7 +226,6 @@ describe('ProjectCuratorialDetailPageComponent', () => {
 
     expect(compiled.textContent).toContain('Overview');
     expect(compiled.textContent).toContain('Curatorial specimen access');
-    expect(compiled.textContent).toContain('Review object handling');
     expect(compiled.textContent).toContain('Alice Ferreira');
     expect(compiled.textContent).toContain('Carol Souza');
   });
