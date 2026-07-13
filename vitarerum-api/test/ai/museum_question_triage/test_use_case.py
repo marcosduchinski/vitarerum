@@ -203,6 +203,12 @@ class _FakeEmbedding:
         return [self._vectors[text] for text in texts]
 
 
+class _FailingEmbedding(_FakeEmbedding):
+    async def embed_many(self, texts: list[str]) -> list[list[float]]:
+        self.calls.append(texts)
+        raise RuntimeError("embedding failed")
+
+
 class _FakeObjectSearch:
     def __init__(
         self, hits_by_query: dict[str, list[ObjectHitView]] | None = None
@@ -418,6 +424,11 @@ class _FakePrototypeVersionRepo:
             if item.version == version:
                 item.promoted_at = promoted_at
                 item.retired_at = None
+
+
+class _FailingPrototypeVersionRepo(_FakePrototypeVersionRepo):
+    async def add(self, version: EmbeddingPrototypeVersion) -> None:
+        raise RuntimeError("prototype store failed")
 
 
 class _FailingTrainingExampleRepo(_FakeTrainingExampleRepo):
@@ -1271,6 +1282,60 @@ async def test_generate_embedding_prototype_version_from_human_examples() -> Non
     assert prototype_repo.stored == [result]
     assert prototype_repo.promote_calls[0][0] == result.version
     assert embedding.calls == [[message]]
+
+
+async def test_generate_prototype_does_not_publish_when_embedding_fails() -> None:
+    message = _QUESTION.message
+    training_repo = _FakeTrainingExampleRepo()
+    training_repo.stored.append(
+        _training_example(categories=[UseCategory.RESEARCH_PROJECTS], message=message)
+    )
+    prototype_repo = _FakePrototypeVersionRepo()
+    embedding = _FailingEmbedding({message: [0.9, 0.1]})
+    use_case = GenerateEmbeddingPrototypeVersion(
+        _FakeMuseumQuestion(), embedding, training_repo, prototype_repo
+    )
+
+    with pytest.raises(RuntimeError, match="embedding failed"):
+        await use_case.execute(
+            GenerateEmbeddingPrototypeVersionInput(
+                version="embedding-prototypes-failing-embedding",
+                embedding_model="nomic-embed-text",
+                threshold_profile={},
+                promote=True,
+            )
+        )
+
+    assert prototype_repo.stored == []
+    assert prototype_repo.promote_calls == []
+
+
+async def test_generate_prototype_does_not_promote_when_store_fails() -> None:
+    message = _QUESTION.message
+    training_repo = _FakeTrainingExampleRepo()
+    training_repo.stored.append(
+        _training_example(categories=[UseCategory.RESEARCH_PROJECTS], message=message)
+    )
+    prototype_repo = _FailingPrototypeVersionRepo()
+    use_case = GenerateEmbeddingPrototypeVersion(
+        _FakeMuseumQuestion(),
+        _FakeEmbedding({message: [0.9, 0.1]}),
+        training_repo,
+        prototype_repo,
+    )
+
+    with pytest.raises(RuntimeError, match="prototype store failed"):
+        await use_case.execute(
+            GenerateEmbeddingPrototypeVersionInput(
+                version="embedding-prototypes-failing-store",
+                embedding_model="nomic-embed-text",
+                threshold_profile={},
+                promote=True,
+            )
+        )
+
+    assert prototype_repo.stored == []
+    assert prototype_repo.promote_calls == []
 
 
 async def test_generate_embedding_prototype_version_requires_examples() -> None:
