@@ -33,6 +33,7 @@ from app.ai.museum_question_triage.application.use_cases import (
     SyncUseCategories,
     TriageMuseumQuestion,
 )
+from app.ai.museum_question_triage.domain.models import UseCategory
 from app.ai.museum_question_triage.domain.ports import (
     EmbeddingClassifierPort,
     EmbeddingPrototypeVersionRepository,
@@ -68,6 +69,16 @@ from app.database import get_async_session
 
 DBSession = Annotated[AsyncSession, Depends(get_async_session)]
 ObjectIndex = Annotated[CollectionObjectIndexPort, Depends(get_object_index)]
+
+
+def _cascade_category_high_thresholds() -> dict[UseCategory, float]:
+    return {
+        UseCategory(category_value): threshold
+        for (
+            category_value,
+            threshold,
+        ) in settings.use_category_cascade_category_high_thresholds.items()
+    }
 
 
 def get_museum_question_port(session: DBSession) -> MuseumQuestionPort:
@@ -234,6 +245,7 @@ def get_classify_pending_cascade_use_category_use_case(
         triage_repository,
         classification_repository,
         high_threshold=settings.use_category_embedding_high_threshold,
+        category_high_thresholds=_cascade_category_high_thresholds(),
         margin_delta=settings.use_category_cascade_margin_delta,
     )
 

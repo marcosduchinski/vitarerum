@@ -538,6 +538,7 @@ async def test_out_of_scope_returns_suggested_reply() -> None:
         "classifiedAt": None,
         "error": None,
     }
+    assert body["useCategoryOperationalClassifier"] == "LLM"
 
 
 async def test_post_triage_creates_pending_classification_before_background(
@@ -797,6 +798,110 @@ async def test_get_returns_completed_use_category_classification() -> None:
         {"category": "RESEARCH_PROJECTS", "confidence": 0.91, "source": "LLM"}
     ]
     assert classification["categoryScores"] == classification["assignedCategories"]
+
+
+async def test_get_uses_cascade_when_operational_classifier_is_cascade(
+    monkeypatch,
+) -> None:
+    repo = _FakeRepo()
+    async with _client(repo=repo) as client:
+        posted = (await client.post(_URL)).json()
+
+    cascade_score = UseCategoryScore(
+        category=UseCategory.RESEARCH_PROJECTS,
+        confidence=0.86,
+        source=ClassificationScoreSource.EMBEDDING,
+    )
+    classification_repo = _FakeClassificationRepo(
+        stored=[
+            _completed_classification(TriageId(posted["id"])),
+            MessageClassification(
+                id=ClassificationId("cascade-operational"),
+                triage_id=TriageId(posted["id"]),
+                classifier_kind=ClassifierKind.CASCADE,
+                classifier_model="nomic-embed-text",
+                classifier_version="embedding-prototypes-v2",
+                run_number=1,
+                superseded_at=None,
+                status=ClassificationStatus.COMPLETED,
+                outcome=ClassificationOutcome.CATEGORIZED,
+                quality=ClassificationQuality.FULL,
+                category_scores=[cascade_score],
+                assigned_categories=[cascade_score],
+                error=None,
+                metadata={"tier2_llm_used": False},
+                classified_at=datetime(2026, 7, 10, 12, 2, tzinfo=UTC),
+                created_at=datetime(2026, 7, 10, 12, 0, tzinfo=UTC),
+            ),
+        ]
+    )
+    monkeypatch.setattr(
+        triage_routes.settings,
+        "use_category_operational_classifier",
+        "CASCADE_CALIBRATED",
+    )
+
+    async with _client(repo=repo, classification_repo=classification_repo) as client:
+        resp = await client.get(_URL)
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["useCategoryOperationalClassifier"] == "CASCADE_CALIBRATED"
+    assert body["useCategoryClassification"]["classifierKind"] == "CASCADE"
+    assert body["useCategoryClassification"]["classifierVersion"] == (
+        "embedding-prototypes-v2"
+    )
+
+
+async def test_get_rolls_back_to_llm_operational_classifier(monkeypatch) -> None:
+    repo = _FakeRepo()
+    async with _client(repo=repo) as client:
+        posted = (await client.post(_URL)).json()
+
+    cascade_score = UseCategoryScore(
+        category=UseCategory.RESEARCH_PROJECTS,
+        confidence=0.86,
+        source=ClassificationScoreSource.EMBEDDING,
+    )
+    classification_repo = _FakeClassificationRepo(
+        stored=[
+            _completed_classification(TriageId(posted["id"])),
+            MessageClassification(
+                id=ClassificationId("cascade-operational"),
+                triage_id=TriageId(posted["id"]),
+                classifier_kind=ClassifierKind.CASCADE,
+                classifier_model="nomic-embed-text",
+                classifier_version="embedding-prototypes-v2",
+                run_number=1,
+                superseded_at=None,
+                status=ClassificationStatus.COMPLETED,
+                outcome=ClassificationOutcome.CATEGORIZED,
+                quality=ClassificationQuality.FULL,
+                category_scores=[cascade_score],
+                assigned_categories=[cascade_score],
+                error=None,
+                metadata={"tier2_llm_used": False},
+                classified_at=datetime(2026, 7, 10, 12, 2, tzinfo=UTC),
+                created_at=datetime(2026, 7, 10, 12, 0, tzinfo=UTC),
+            ),
+        ]
+    )
+    monkeypatch.setattr(
+        triage_routes.settings,
+        "use_category_operational_classifier",
+        "LLM",
+    )
+
+    async with _client(repo=repo, classification_repo=classification_repo) as client:
+        resp = await client.get(_URL)
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["useCategoryOperationalClassifier"] == "LLM"
+    assert body["useCategoryClassification"]["classifierKind"] == "LLM"
+    assert body["useCategoryClassification"]["classifierVersion"] == (
+        "llm-use-category-v1"
+    )
 
 
 async def test_get_returns_failed_use_category_classification() -> None:

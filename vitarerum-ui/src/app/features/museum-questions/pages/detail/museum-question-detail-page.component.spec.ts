@@ -630,7 +630,7 @@ describe('MuseumQuestionDetailPageComponent', () => {
     expect(el.textContent).toContain('LLM');
   });
 
-  it('prefers cascade audit classification over the legacy triage field', async () => {
+  it('uses the operational classification returned by the triage response', async () => {
     const el = await setup();
     service.nextTriage = {
       ...IN_SCOPE_TRIAGE,
@@ -657,10 +657,9 @@ describe('MuseumQuestionDetailPageComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(el.textContent).toContain('Cascade');
-    expect(el.textContent).toContain('94%');
-    expect(el.textContent).toContain('Answering enquiries');
-    expect(el.textContent).toContain('Search if object named');
+    expect(el.textContent).toContain('Operational: LLM');
+    expect(el.textContent).toContain('91%');
+    expect(el.textContent).not.toContain('94%');
     expect(el.textContent).toContain('2 category(s)');
   });
 
@@ -668,7 +667,8 @@ describe('MuseumQuestionDetailPageComponent', () => {
     const el = await setup();
     service.nextTriage = {
       ...IN_SCOPE_TRIAGE,
-      useCategoryClassification: COMPLETED_USE_CATEGORY_CLASSIFICATION,
+      useCategoryOperationalClassifier: 'CASCADE_CALIBRATED',
+      useCategoryClassification: CASCADE_USE_CATEGORY_CLASSIFICATION,
     };
     service.audit = {
       triageId: 't2',

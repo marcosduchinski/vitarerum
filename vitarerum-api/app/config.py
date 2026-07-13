@@ -4,6 +4,8 @@ from typing import Literal
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.ai.museum_question_triage.domain.models import UseCategory
+
 _LOCAL_ENVS = {"local", "test", "development"}
 
 
@@ -45,9 +47,13 @@ class Settings(BaseSettings):
     use_category_embedding_prototype_source: Literal["PROMOTED", "JSON_SEED"] = (
         "PROMOTED"
     )
+    use_category_operational_classifier: Literal[
+        "LLM", "CASCADE_SEED", "CASCADE_CALIBRATED"
+    ] = "LLM"
     use_category_cascade_enabled: bool = False
     use_category_cascade_margin_delta: float = 0.08
     use_category_cascade_classifier_version: str = "cascade-v1"
+    use_category_cascade_category_high_thresholds: dict[str, float] = {}
     # Public proposal submission (unauthenticated citizen intake, double opt-in).
     # Default is Cloudflare's always-passing test secret key; override in prod.
     turnstile_secret_key: str = "1x0000000000000000000000000000000AA"
@@ -74,6 +80,53 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    @model_validator(mode="after")
+    def validate_use_category_operational_classifier(self) -> "Settings":
+        if (
+            self.use_category_operational_classifier != "LLM"
+            and not self.use_category_cascade_enabled
+        ):
+            raise ValueError(
+                "use_category_cascade_enabled must be true when "
+                "use_category_operational_classifier uses CASCADE"
+            )
+        if (
+            self.use_category_operational_classifier == "CASCADE_SEED"
+            and self.use_category_embedding_prototype_source != "JSON_SEED"
+        ):
+            raise ValueError(
+                "CASCADE_SEED requires "
+                "use_category_embedding_prototype_source='JSON_SEED'"
+            )
+        if (
+            self.use_category_operational_classifier == "CASCADE_CALIBRATED"
+            and self.use_category_embedding_prototype_source != "PROMOTED"
+        ):
+            raise ValueError(
+                "CASCADE_CALIBRATED requires "
+                "use_category_embedding_prototype_source='PROMOTED'"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def validate_triage_cascade_thresholds(self) -> "Settings":
+        errors: list[str] = []
+        for (
+            category_value,
+            threshold,
+        ) in self.use_category_cascade_category_high_thresholds.items():
+            try:
+                UseCategory(category_value)
+            except ValueError:
+                errors.append(f"unknown use category {category_value!r}")
+            if not 0 <= threshold <= 1:
+                errors.append(
+                    f"use category {category_value!r} threshold must be between 0 and 1"
+                )
+        if errors:
+            raise ValueError("; ".join(errors))
+        return self
 
     @model_validator(mode="after")
     def validate_non_local_security(self) -> "Settings":

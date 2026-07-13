@@ -14,6 +14,10 @@ export type UseCategoryClassificationOutcome = 'CATEGORIZED' | 'UNCLEAR';
 export type UseCategoryHumanOutcome = UseCategoryClassificationOutcome;
 export type UseCategoryClassificationQuality = 'FULL' | 'DEGRADED';
 export type UseCategoryClassifierKind = 'LLM' | 'EMBEDDING' | 'CASCADE';
+export type UseCategoryOperationalClassifier =
+  | 'LLM'
+  | 'CASCADE_SEED'
+  | 'CASCADE_CALIBRATED';
 export type UseCategoryScoreSource = 'LLM' | 'EMBEDDING';
 export type UseCategoryValue =
   | 'EXHIBITION'
@@ -117,5 +121,6 @@ export interface MuseumQuestionTriage {
   readonly searchStrategy: string | null;
   readonly modelName: string;
   readonly createdAt: string;
+  readonly useCategoryOperationalClassifier?: UseCategoryOperationalClassifier;
   readonly useCategoryClassification: UseCategoryClassification;
 }

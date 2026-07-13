@@ -377,6 +377,8 @@
                           Categorias de uso detectadas
                         </h3>
                         <p class="triage-section-heading__note">
+                          {{ operationalClassifierLabel(useCategoryOperationalClassifier()) }}
+                          ·
                           {{ classifierKindLabel(useCategoryClassification.classifierKind) }}
                           @if (useCategoryClassification.classifierModel) {
                             · {{ useCategoryClassification.classifierModel }}

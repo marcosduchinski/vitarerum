@@ -60,6 +60,7 @@ function withFallbacks(raw: MuseumQuestionTriage): MuseumQuestionTriage {
     ...raw,
     effectiveVerdict: raw.effectiveVerdict ?? raw.verdict,
     searchStrategy: raw.searchStrategy ?? null,
+    useCategoryOperationalClassifier: raw.useCategoryOperationalClassifier ?? 'LLM',
     useCategoryClassification: raw.useCategoryClassification ?? {
       status: 'NOT_REQUESTED',
       outcome: null,

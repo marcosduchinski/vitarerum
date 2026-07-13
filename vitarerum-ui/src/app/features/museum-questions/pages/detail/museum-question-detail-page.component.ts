@@ -33,6 +33,7 @@ import {
   UseCategoryClassificationAudit,
   UseCategoryClassificationOutcome,
   UseCategoryClassifierKind,
+  UseCategoryOperationalClassifier,
   UseCategoryScore,
   UseCategoryScoreSource,
   UseCategoryValue,
@@ -120,6 +121,12 @@ const CLASSIFIER_KIND_LABELS: Record<UseCategoryClassifierKind, string> = {
   LLM: 'LLM',
   EMBEDDING: 'Embedding',
   CASCADE: 'Cascade',
+};
+
+const OPERATIONAL_CLASSIFIER_LABELS: Record<UseCategoryOperationalClassifier, string> = {
+  LLM: 'Operational: LLM',
+  CASCADE_SEED: 'Operational: Cascade seed',
+  CASCADE_CALIBRATED: 'Operational: Cascade calibrated',
 };
 
 const USE_CATEGORY_SEARCH_POLICY_LABELS: Record<string, string> = {
@@ -229,24 +236,15 @@ export class MuseumQuestionDetailPageComponent {
   protected readonly useCategoryClassification = computed<UseCategoryClassification | null>(
     () => this.triage()?.useCategoryClassification ?? null,
   );
+  protected readonly useCategoryOperationalClassifier = computed<UseCategoryOperationalClassifier>(
+    () => this.triage()?.useCategoryOperationalClassifier ?? 'LLM',
+  );
   protected readonly useCategoryClassifierRuns = computed<
     readonly UseCategoryClassificationAudit[]
   >(() => this.classificationAuditResource.value()?.classifications ?? []);
   protected readonly displayedUseCategoryClassification = computed<
     UseCategoryClassification | UseCategoryClassificationAudit | null
-  >(() => {
-    const runs = this.useCategoryClassifierRuns().filter(
-      (classification) => classification.status !== 'NOT_REQUESTED',
-    );
-    return (
-      runs.find(
-        (classification) =>
-          classification.classifierKind === 'CASCADE' && classification.status === 'COMPLETED',
-      ) ??
-      runs.find((classification) => classification.classifierKind === 'CASCADE') ??
-      this.useCategoryClassification()
-    );
-  });
+  >(() => this.useCategoryClassification());
   protected readonly assignedUseCategories = computed<readonly UseCategoryScore[]>(
     () => this.displayedUseCategoryClassification()?.assignedCategories ?? [],
   );
@@ -538,6 +536,10 @@ export class MuseumQuestionDetailPageComponent {
 
   protected classifierKindLabel(kind: UseCategoryClassifierKind | null): string {
     return kind ? CLASSIFIER_KIND_LABELS[kind] : 'Classifier';
+  }
+
+  protected operationalClassifierLabel(kind: UseCategoryOperationalClassifier): string {
+    return OPERATIONAL_CLASSIFIER_LABELS[kind];
   }
 
   protected scoreSourceLabel(source: UseCategoryScoreSource): string {

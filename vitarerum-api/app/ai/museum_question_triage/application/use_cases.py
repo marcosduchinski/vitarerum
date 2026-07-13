@@ -213,23 +213,84 @@ def _cascade_margin(scores: list[UseCategoryScore]) -> float | None:
     return ordered[0].confidence - ordered[1].confidence
 
 
+def _cascade_effective_high_threshold(
+    category: UseCategory,
+    *,
+    default_high_threshold: float,
+    category_high_thresholds: dict[UseCategory, float],
+) -> float:
+    return category_high_thresholds.get(category, default_high_threshold)
+
+
+def _cascade_tier1_assigned_categories(
+    scores: list[UseCategoryScore],
+    *,
+    default_high_threshold: float,
+    category_high_thresholds: dict[UseCategory, float],
+) -> list[UseCategoryScore]:
+    return [
+        score
+        for score in scores
+        if score.confidence
+        >= _cascade_effective_high_threshold(
+            score.category,
+            default_high_threshold=default_high_threshold,
+            category_high_thresholds=category_high_thresholds,
+        )
+    ]
+
+
+def _cascade_effective_thresholds_metadata(
+    scores: list[UseCategoryScore],
+    *,
+    default_high_threshold: float,
+    category_high_thresholds: dict[UseCategory, float],
+) -> dict[str, float]:
+    return {
+        score.category.value: _cascade_effective_high_threshold(
+            score.category,
+            default_high_threshold=default_high_threshold,
+            category_high_thresholds=category_high_thresholds,
+        )
+        for score in scores
+    }
+
+
 def _cascade_escalation_reasons(
     embedding_result: EmbeddingClassificationResult,
     *,
     high_threshold: float,
+    category_high_thresholds: dict[UseCategory, float],
     margin_delta: float,
 ) -> list[str]:
     scores = embedding_result.classification.category_scores
-    max_confidence = max((score.confidence for score in scores), default=0.0)
+    ordered_scores = sorted(scores, key=lambda score: score.confidence, reverse=True)
+    top_score = ordered_scores[0] if ordered_scores else None
+    tier1_assigned = _cascade_tier1_assigned_categories(
+        scores,
+        default_high_threshold=high_threshold,
+        category_high_thresholds=category_high_thresholds,
+    )
     margin = _cascade_margin(scores)
     reasons: list[str] = []
-    if max_confidence < high_threshold:
+    if top_score is None or top_score.confidence < _cascade_effective_high_threshold(
+        top_score.category,
+        default_high_threshold=high_threshold,
+        category_high_thresholds=category_high_thresholds,
+    ):
         reasons.append("low_confidence")
     if margin is not None and margin < margin_delta:
         reasons.append("narrow_margin")
     if bool(embedding_result.metadata.get("would_escalate_due_to_length")):
         reasons.append("long_message")
-    if embedding_result.metadata.get("uncertain_categories"):
+    uncertain_metadata = embedding_result.metadata.get("uncertain_categories")
+    uncertain_categories = (
+        {str(category) for category in uncertain_metadata}
+        if isinstance(uncertain_metadata, list)
+        else set()
+    )
+    resolved_categories = {score.category.value for score in tier1_assigned}
+    if uncertain_categories - resolved_categories:
         reasons.append("uncertain_category")
     return sorted(set(reasons))
 
@@ -770,6 +831,7 @@ class ClassifyPendingCascadeUseCategory:
         classification_repository: MessageClassificationRepository,
         *,
         high_threshold: float,
+        category_high_thresholds: dict[UseCategory, float] | None = None,
         margin_delta: float,
     ) -> None:
         self._museum_question = museum_question
@@ -778,6 +840,7 @@ class ClassifyPendingCascadeUseCategory:
         self._triage_repository = triage_repository
         self._classification_repository = classification_repository
         self._high_threshold = high_threshold
+        self._category_high_thresholds = category_high_thresholds or {}
         self._margin_delta = margin_delta
 
     async def execute(
@@ -837,21 +900,48 @@ class ClassifyPendingCascadeUseCategory:
         escalation_reasons = _cascade_escalation_reasons(
             embedding_result,
             high_threshold=self._high_threshold,
+            category_high_thresholds=self._category_high_thresholds,
             margin_delta=self._margin_delta,
+        )
+        tier1_assigned_categories = _cascade_tier1_assigned_categories(
+            list(embedding_result.classification.category_scores),
+            default_high_threshold=self._high_threshold,
+            category_high_thresholds=self._category_high_thresholds,
         )
         metadata = {
             **classification.metadata,
             **embedding_result.metadata,
             "cascade_high_threshold": self._high_threshold,
+            "cascade_category_high_thresholds": {
+                category.value: threshold
+                for category, threshold in sorted(
+                    self._category_high_thresholds.items(),
+                    key=lambda item: item[0].value,
+                )
+            },
+            "cascade_effective_high_thresholds": (
+                _cascade_effective_thresholds_metadata(
+                    list(embedding_result.classification.category_scores),
+                    default_high_threshold=self._high_threshold,
+                    category_high_thresholds=self._category_high_thresholds,
+                )
+            ),
             "cascade_margin_delta": self._margin_delta,
+            "cascade_margin": _cascade_margin(
+                list(embedding_result.classification.category_scores)
+            ),
             "escalation_reasons": escalation_reasons,
             "tier1_assigned_categories": [
-                score.category.value
-                for score in embedding_result.classification.assigned_categories
+                score.category.value for score in tier1_assigned_categories
             ],
         }
 
         if not escalation_reasons:
+            outcome = (
+                ClassificationOutcome.CATEGORIZED
+                if tier1_assigned_categories
+                else ClassificationOutcome.UNCLEAR
+            )
             updated = MessageClassification(
                 id=classification.id,
                 triage_id=classification.triage_id,
@@ -863,12 +953,10 @@ class ClassifyPendingCascadeUseCategory:
                 run_number=classification.run_number,
                 superseded_at=classification.superseded_at,
                 status=ClassificationStatus.COMPLETED,
-                outcome=embedding_result.classification.outcome,
+                outcome=outcome,
                 quality=ClassificationQuality.FULL,
                 category_scores=list(embedding_result.classification.category_scores),
-                assigned_categories=list(
-                    embedding_result.classification.assigned_categories
-                ),
+                assigned_categories=tier1_assigned_categories,
                 error=None,
                 metadata={**metadata, "tier2_llm_used": False},
                 classified_at=classified_at,
@@ -891,12 +979,14 @@ class ClassifyPendingCascadeUseCategory:
                 run_number=classification.run_number,
                 superseded_at=classification.superseded_at,
                 status=ClassificationStatus.COMPLETED,
-                outcome=embedding_result.classification.outcome,
+                outcome=(
+                    ClassificationOutcome.CATEGORIZED
+                    if tier1_assigned_categories
+                    else ClassificationOutcome.UNCLEAR
+                ),
                 quality=ClassificationQuality.DEGRADED,
                 category_scores=list(embedding_result.classification.category_scores),
-                assigned_categories=list(
-                    embedding_result.classification.assigned_categories
-                ),
+                assigned_categories=tier1_assigned_categories,
                 error=None,
                 metadata={
                     **metadata,
@@ -910,7 +1000,7 @@ class ClassifyPendingCascadeUseCategory:
             return updated
 
         assigned_categories = _combine_cascade_assigned_categories(
-            list(embedding_result.classification.assigned_categories),
+            tier1_assigned_categories,
             list(llm_result.assigned_categories),
         )
         category_scores = _combine_cascade_scores(
@@ -1203,6 +1293,12 @@ class ExportUseCategoryCalibrationCsv:
                 "embedding_assigned_categories",
                 "embedding_category_scores",
                 "embedding_metadata",
+                "cascade_status",
+                "cascade_outcome",
+                "cascade_quality",
+                "cascade_assigned_categories",
+                "cascade_category_scores",
+                "cascade_metadata",
                 "human_outcome",
                 "human_categories",
                 "human_source",
@@ -1222,6 +1318,7 @@ class ExportUseCategoryCalibrationCsv:
             }
             llm = by_kind.get(ClassifierKind.LLM)
             embedding = by_kind.get(ClassifierKind.EMBEDDING)
+            cascade = by_kind.get(ClassifierKind.CASCADE)
             human = examples_by_question.get(triage.question_id)
             writer.writerow(
                 {
@@ -1264,6 +1361,31 @@ class ExportUseCategoryCalibrationCsv:
                             separators=(",", ":"),
                         )
                         if embedding
+                        else "{}"
+                    ),
+                    "cascade_status": (
+                        cascade.status.value if cascade else "NOT_REQUESTED"
+                    ),
+                    "cascade_outcome": (
+                        cascade.outcome.value if cascade and cascade.outcome else ""
+                    ),
+                    "cascade_quality": (
+                        cascade.quality.value if cascade and cascade.quality else ""
+                    ),
+                    "cascade_assigned_categories": (
+                        _scores_json(cascade.assigned_categories) if cascade else "[]"
+                    ),
+                    "cascade_category_scores": (
+                        _scores_json(cascade.category_scores) if cascade else "[]"
+                    ),
+                    "cascade_metadata": (
+                        json.dumps(
+                            cascade.metadata,
+                            ensure_ascii=True,
+                            sort_keys=True,
+                            separators=(",", ":"),
+                        )
+                        if cascade
                         else "{}"
                     ),
                     "human_outcome": human.human_outcome.value if human else "",

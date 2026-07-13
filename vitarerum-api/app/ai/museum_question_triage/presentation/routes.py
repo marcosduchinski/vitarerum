@@ -55,6 +55,7 @@ from app.ai.museum_question_triage.domain.models import (
     InvalidEmbeddingPrototypeVersion,
     InvalidUseCategoryTrainingExample,
     MessageClassification,
+    MessageTriage,
     TriageId,
     TriageVerdict,
     UseCategory,
@@ -94,6 +95,7 @@ from app.ai.museum_question_triage.presentation.dependencies import (
     SyncSearchTermsUseCase,
     SyncUseCategoriesUseCase,
     TriageUseCase,
+    _cascade_category_high_thresholds,
 )
 from app.ai.museum_question_triage.presentation.mappers import (
     embedding_prototype_version_response,
@@ -249,11 +251,33 @@ def _triage_not_found(question_id: str) -> HTTPException:
     )
 
 
-async def _current_llm_use_category_classification(
+def _operational_classifier_kind() -> ClassifierKind:
+    if settings.use_category_operational_classifier == "LLM":
+        return ClassifierKind.LLM
+    return ClassifierKind.CASCADE
+
+
+async def _current_operational_use_category_classification(
     classification_repository: ClassificationRepository, triage_id: str
 ) -> MessageClassification | None:
     return await classification_repository.get_current_by_triage(
-        TriageId(triage_id), ClassifierKind.LLM
+        TriageId(triage_id), _operational_classifier_kind()
+    )
+
+
+async def _triage_response_with_operational_use_category(
+    triage: MessageTriage,
+    classification_repository: ClassificationRepository,
+) -> TriageResponse:
+    use_category_classification = (
+        await _current_operational_use_category_classification(
+            classification_repository, triage.id
+        )
+    )
+    return triage_response(
+        triage,
+        use_category_classification,
+        settings.use_category_operational_classifier,
     )
 
 
@@ -371,6 +395,7 @@ async def _classify_cascade_use_categories_background(classification_id: str) ->
             SqlAlchemyTriageRepository(session),
             SqlAlchemyMessageClassificationRepository(session),
             high_threshold=settings.use_category_embedding_high_threshold,
+            category_high_thresholds=_cascade_category_high_thresholds(),
             margin_delta=settings.use_category_cascade_margin_delta,
         )
         try:
@@ -452,10 +477,9 @@ async def triage_museum_question(
             _classify_cascade_use_categories_background,
             pending_cascade_classification_id,
         )
-    use_category_classification = await _current_llm_use_category_classification(
-        classification_repository, result.id
+    return await _triage_response_with_operational_use_category(
+        result, classification_repository
     )
-    return triage_response(result, use_category_classification)
 
 
 @museum_question_triage_router.get(
@@ -471,10 +495,9 @@ async def get_latest_museum_question_triage(
     result = await use_case.execute(GetLatestTriageInput(question_id=question_id))
     if result is None:
         raise _triage_not_found(question_id)
-    use_category_classification = await _current_llm_use_category_classification(
-        classification_repository, result.id
+    return await _triage_response_with_operational_use_category(
+        result, classification_repository
     )
-    return triage_response(result, use_category_classification)
 
 
 @museum_question_triage_router.get(
@@ -575,10 +598,9 @@ async def override_triage_verdict(
             detail={"error": "MODEL_TIMEOUT", "message": str(exc)},
         ) from exc
     await session.commit()
-    use_category_classification = await _current_llm_use_category_classification(
-        classification_repository, result.id
+    return await _triage_response_with_operational_use_category(
+        result, classification_repository
     )
-    return triage_response(result, use_category_classification)
 
 
 @museum_question_triage_router.put(
@@ -618,7 +640,6 @@ async def sync_triage_search_terms(
             detail={"error": "INVALID_SEARCH_TERMS", "message": str(exc)},
         ) from exc
     await session.commit()
-    use_category_classification = await _current_llm_use_category_classification(
-        classification_repository, result.id
+    return await _triage_response_with_operational_use_category(
+        result, classification_repository
     )
-    return triage_response(result, use_category_classification)

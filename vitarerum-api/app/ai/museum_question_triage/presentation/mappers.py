@@ -21,6 +21,7 @@ from app.ai.museum_question_triage.presentation.schemas import (
     UseCategoryClassificationAuditListResponse,
     UseCategoryClassificationAuditResponse,
     UseCategoryClassificationResponse,
+    UseCategoryOperationalClassifierValue,
     UseCategoryScoreResponse,
 )
 
@@ -129,6 +130,7 @@ def embedding_prototype_version_response(
 def triage_response(
     triage: MessageTriage,
     use_category_classification: MessageClassification | None = None,
+    use_category_operational_classifier: UseCategoryOperationalClassifierValue = "LLM",
 ) -> TriageResponse:
     return TriageResponse(
         id=triage.id,
@@ -172,6 +174,7 @@ def triage_response(
         ),
         modelName=triage.llm_model,
         createdAt=triage.created_at,
+        useCategoryOperationalClassifier=use_category_operational_classifier,
         useCategoryClassification=use_category_classification_response(
             use_category_classification
         ),

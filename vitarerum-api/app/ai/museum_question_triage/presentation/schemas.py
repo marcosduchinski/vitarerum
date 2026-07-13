@@ -15,6 +15,9 @@ ClassificationQualityValue = Literal["FULL", "DEGRADED"]
 ClassifierKindValue = Literal["LLM", "EMBEDDING", "CASCADE"]
 ClassificationScoreSourceValue = Literal["LLM", "EMBEDDING"]
 EmbeddingPrototypeAggregationValue = Literal["MEAN", "MAX_EXAMPLE", "HYBRID"]
+UseCategoryOperationalClassifierValue = Literal[
+    "LLM", "CASCADE_SEED", "CASCADE_CALIBRATED"
+]
 UseCategoryValue = Literal[
     "EXHIBITION",
     "PUBLISHING_IMAGES",
@@ -117,6 +120,7 @@ class TriageResponse(BaseModel):
     searchStrategy: str | None
     modelName: str
     createdAt: datetime
+    useCategoryOperationalClassifier: UseCategoryOperationalClassifierValue
     useCategoryClassification: UseCategoryClassificationResponse
 
 
