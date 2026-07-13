@@ -2,13 +2,16 @@ import pytest
 
 from app.ai.museum_question_triage.application.embedding_classifier import (
     EmbeddingThresholds,
+    PersistedEmbeddingPrototypes,
     UseCategoryEmbeddingClassifier,
+    build_use_category_embedding_classifier,
     cosine_similarity,
     load_use_category_prototypes,
 )
 from app.ai.museum_question_triage.domain.models import (
     ClassificationOutcome,
     ClassificationScoreSource,
+    EmbeddingPrototypeAggregation,
     UseCategory,
 )
 
@@ -25,6 +28,11 @@ class _FakeEmbedding:
     async def embed_many(self, texts: list[str]) -> list[list[float]]:
         self.calls.extend(texts)
         return [self._vectors[text] for text in texts]
+
+
+class _FailingPrototypeRepo:
+    async def get_promoted(self):
+        raise AssertionError("JSON_SEED mode must not load promoted prototypes")
 
 
 def test_loads_versioned_prototypes_for_every_category() -> None:
@@ -101,6 +109,93 @@ async def test_embedding_classifier_returns_unclear_without_high_score() -> None
     assert result.classification.outcome is ClassificationOutcome.UNCLEAR
     assert result.classification.assigned_categories == []
     assert result.metadata["uncertain_categories"] == ["RESEARCH_PROJECTS"]
+
+
+async def test_embedding_classifier_uses_persisted_prototype_vectors() -> None:
+    message = "I want to study the meteorite collection"
+    embedding = _FakeEmbedding({message: [1, 0]})
+    classifier = UseCategoryEmbeddingClassifier(
+        embedding,
+        EmbeddingThresholds(
+            low=0.4,
+            high=0.8,
+            profile_version="test-profile",
+            long_message_words=80,
+        ),
+        persisted_prototypes=PersistedEmbeddingPrototypes(
+            version="embedding-prototypes-v2",
+            aggregation_method=EmbeddingPrototypeAggregation.MAX_EXAMPLE,
+            prototypes={
+                UseCategory.RESEARCH_PROJECTS: [[0.95, 0.05]],
+                UseCategory.FILMING: [[0, 1]],
+            },
+            metrics={"examples_per_category": {"RESEARCH_PROJECTS": 1}},
+        ),
+    )
+
+    result = await classifier.classify(message)
+
+    assert result.classification.outcome is ClassificationOutcome.CATEGORIZED
+    assert result.classification.assigned_categories[0].category is (
+        UseCategory.RESEARCH_PROJECTS
+    )
+    assert result.metadata["prototype_source"] == "PERSISTED"
+    assert result.metadata["prototype_version"] == "embedding-prototypes-v2"
+    assert result.metadata["aggregation"] == "MAX_EXAMPLE"
+    assert result.metadata["prototype_metrics"] == {
+        "examples_per_category": {"RESEARCH_PROJECTS": 1}
+    }
+    assert embedding.calls == [message]
+
+
+async def test_hybrid_persisted_prototypes_require_mean_support_for_example_hit() -> (
+    None
+):
+    message = "edge case"
+    embedding = _FakeEmbedding({message: [1, 0]})
+    classifier = UseCategoryEmbeddingClassifier(
+        embedding,
+        EmbeddingThresholds(
+            low=0.4,
+            high=0.8,
+            profile_version="test-profile",
+            long_message_words=80,
+        ),
+        persisted_prototypes=PersistedEmbeddingPrototypes(
+            version="embedding-prototypes-hybrid",
+            aggregation_method=EmbeddingPrototypeAggregation.HYBRID,
+            prototypes={
+                UseCategory.RESEARCH_PROJECTS: [
+                    [0, 1],
+                    [1, 0],
+                ],
+            },
+            metrics={},
+        ),
+    )
+
+    result = await classifier.classify(message)
+
+    assert result.classification.outcome is ClassificationOutcome.UNCLEAR
+    assert result.classification.assigned_categories == []
+    assert result.metadata["raw_similarity"] == {"RESEARCH_PROJECTS": 0}
+    assert result.metadata["raw_max_example_similarity"] == {"RESEARCH_PROJECTS": 1}
+
+
+async def test_embedding_classifier_builder_can_force_json_seed() -> None:
+    classifier = await build_use_category_embedding_classifier(
+        _FakeEmbedding({}),
+        EmbeddingThresholds(
+            low=0.4,
+            high=0.8,
+            profile_version="test-profile",
+            long_message_words=80,
+        ),
+        _FailingPrototypeRepo(),
+        prototype_source="JSON_SEED",
+    )
+
+    assert classifier._persisted_prototypes is None
 
 
 def test_thresholds_reject_invalid_order() -> None:

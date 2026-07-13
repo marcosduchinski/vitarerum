@@ -33,9 +33,7 @@ def test_parses_a_valid_schema_instance() -> None:
     assert result == TriageClassification(
         is_visit_related=True,
         mentioned_objects=[
-            MentionedObject(
-                english="Allende meteorite", portuguese="Meteorito Allende"
-            )
+            MentionedObject(english="Allende meteorite", portuguese="Meteorito Allende")
         ],
     )
 
@@ -58,9 +56,7 @@ def test_parses_a_plain_dict() -> None:
 
 
 def test_empty_mentioned_objects_is_valid() -> None:
-    result = _parse_classification(
-        {"is_visit_related": False, "mentioned_objects": []}
-    )
+    result = _parse_classification({"is_visit_related": False, "mentioned_objects": []})
     assert result == TriageClassification(is_visit_related=False, mentioned_objects=[])
 
 

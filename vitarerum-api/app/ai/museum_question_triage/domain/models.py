@@ -169,10 +169,7 @@ class UseCategoryClassification:
             raise InvalidMessageClassification(
                 "CATEGORIZED classifications require assigned categories."
             )
-        if (
-            self.outcome is ClassificationOutcome.UNCLEAR
-            and self.assigned_categories
-        ):
+        if self.outcome is ClassificationOutcome.UNCLEAR and self.assigned_categories:
             raise InvalidMessageClassification(
                 "UNCLEAR classifications cannot have assigned categories."
             )
@@ -325,10 +322,7 @@ class MessageClassification:
             raise InvalidMessageClassification(
                 "CATEGORIZED classifications require assigned categories."
             )
-        if (
-            self.outcome is ClassificationOutcome.UNCLEAR
-            and self.assigned_categories
-        ):
+        if self.outcome is ClassificationOutcome.UNCLEAR and self.assigned_categories:
             raise InvalidMessageClassification(
                 "UNCLEAR classifications cannot have assigned categories."
             )
@@ -389,10 +383,7 @@ class UseCategoryTrainingExample:
             raise InvalidUseCategoryTrainingExample(
                 "CATEGORIZED training examples require human categories."
             )
-        if (
-            self.human_outcome is HumanCategoryOutcome.UNCLEAR
-            and self.human_categories
-        ):
+        if self.human_outcome is HumanCategoryOutcome.UNCLEAR and self.human_categories:
             raise InvalidUseCategoryTrainingExample(
                 "UNCLEAR training examples cannot have human categories."
             )

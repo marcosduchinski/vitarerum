@@ -15,6 +15,7 @@ from app.ai.museum_question_triage.domain.models import (
     ClassificationScoreSource,
     ClassificationStatus,
     ClassifierKind,
+    EmbeddingPrototypeAggregation,
     EmbeddingPrototypeVersion,
     HumanCategoryOutcome,
     MentionedObject,
@@ -174,6 +175,26 @@ def _training_example(
         reviewed_by=_STAFF.email,
         reviewed_at=datetime(2026, 7, 10, 12, 0, tzinfo=UTC),
         message_hash=hashlib.sha256(normalized.encode("utf-8")).hexdigest(),
+    )
+
+
+def _prototype_version(
+    *,
+    version: str,
+    promoted_at: datetime | None = None,
+    retired_at: datetime | None = None,
+) -> EmbeddingPrototypeVersion:
+    return EmbeddingPrototypeVersion.create(
+        version=version,
+        embedding_model="nomic-embed-text",
+        aggregation_method=EmbeddingPrototypeAggregation.MAX_EXAMPLE,
+        threshold_profile={"profile_version": "test"},
+        example_ids=[TrainingExampleId(f"example-{version}")],
+        prototypes={UseCategory.RESEARCH_PROJECTS: [[0.9, 0.1]]},
+        metrics={"training_examples_count": 1},
+        created_at=datetime(2026, 7, 10, 12, 0, tzinfo=UTC),
+        promoted_at=promoted_at,
+        retired_at=retired_at,
     )
 
 
@@ -341,9 +362,7 @@ class _FakeClassificationRepo:
 
 
 class _FakeTrainingExampleRepo:
-    def __init__(
-        self, stored: list[UseCategoryTrainingExample] | None = None
-    ) -> None:
+    def __init__(self, stored: list[UseCategoryTrainingExample] | None = None) -> None:
         self.stored: list[UseCategoryTrainingExample] = stored or []
 
     async def add(self, example: UseCategoryTrainingExample) -> None:
@@ -410,17 +429,13 @@ class _FakeEmbedding:
 
 
 class _FakePrototypeRepo:
-    def __init__(
-        self, stored: list[EmbeddingPrototypeVersion] | None = None
-    ) -> None:
+    def __init__(self, stored: list[EmbeddingPrototypeVersion] | None = None) -> None:
         self.stored: list[EmbeddingPrototypeVersion] = stored or []
 
     async def add(self, version: EmbeddingPrototypeVersion) -> None:
         self.stored.append(version)
 
-    async def get_by_version(
-        self, version: str
-    ) -> EmbeddingPrototypeVersion | None:
+    async def get_by_version(self, version: str) -> EmbeddingPrototypeVersion | None:
         return next((item for item in self.stored if item.version == version), None)
 
     async def get_promoted(self) -> EmbeddingPrototypeVersion | None:
@@ -888,8 +903,7 @@ async def test_sync_use_categories_creates_staff_reviewed_cascade() -> None:
         is HumanCategoryOutcome.CATEGORIZED
     )
     assert (
-        training_example_repo.stored[0].source
-        is TrainingExampleSource.HUMAN_CORRECTED
+        training_example_repo.stored[0].source is TrainingExampleSource.HUMAN_CORRECTED
     )
 
 
@@ -996,6 +1010,39 @@ async def test_generate_embedding_prototype_version_rejects_blank_version() -> N
     assert resp.json()["error"] == "INVALID_PROTOTYPE_VERSION"
 
 
+async def test_promote_embedding_prototype_version_rolls_back_to_existing() -> None:
+    old_version = _prototype_version(version="embedding-prototypes-old")
+    new_version = _prototype_version(
+        version="embedding-prototypes-new",
+        promoted_at=datetime(2026, 7, 10, 13, 0, tzinfo=UTC),
+    )
+    prototype_repo = _FakePrototypeRepo(stored=[old_version, new_version])
+
+    async with _client(prototype_repo=prototype_repo) as client:
+        resp = await client.patch(
+            "/api/v1/museum-questions/triage/embedding-prototypes/"
+            "embedding-prototypes-old/promotion"
+        )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["version"] == "embedding-prototypes-old"
+    assert body["promotedAt"] is not None
+    assert old_version.promoted_at is not None
+    assert old_version.retired_at is None
+    assert new_version.retired_at is not None
+
+
+async def test_promote_embedding_prototype_version_404_when_missing() -> None:
+    async with _client(prototype_repo=_FakePrototypeRepo()) as client:
+        resp = await client.patch(
+            "/api/v1/museum-questions/triage/embedding-prototypes/missing/promotion"
+        )
+
+    assert resp.status_code == 404
+    assert resp.json()["error"] == "EMBEDDING_PROTOTYPE_VERSION_NOT_FOUND"
+
+
 @pytest.mark.parametrize("caller", [_COLLECTIONS, _DIRECTION])
 async def test_embedding_prototype_endpoints_reject_non_curatorial_staff_groups(
     caller: Actor,
@@ -1008,9 +1055,14 @@ async def test_embedding_prototype_endpoints_reject_non_curatorial_staff_groups(
             "/api/v1/museum-questions/triage/embedding-prototypes",
             json={"version": "embedding-prototypes-test-v1"},
         )
+        promote_resp = await client.patch(
+            "/api/v1/museum-questions/triage/embedding-prototypes/"
+            "embedding-prototypes-test-v1/promotion"
+        )
 
     assert list_resp.status_code == 403
     assert create_resp.status_code == 403
+    assert promote_resp.status_code == 403
 
 
 async def test_export_use_category_calibration_csv() -> None:

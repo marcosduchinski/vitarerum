@@ -483,9 +483,9 @@ class SqlAlchemyMessageClassificationRepository:
 
     async def update(self, classification: MessageClassification) -> None:
         orm = await self._session.get(MessageClassificationOrm, classification.id)
-        assert (
-            orm is not None
-        ), f"No stored classification with id {classification.id!r} to update"
+        assert orm is not None, (
+            f"No stored classification with id {classification.id!r} to update"
+        )
         _copy_classification_to_orm(classification, orm)
         await self._session.flush()
 
@@ -574,9 +574,7 @@ class SqlAlchemyEmbeddingPrototypeVersionRepository:
         self._session.add(embedding_prototype_version_to_orm(version))
         await self._session.flush()
 
-    async def get_by_version(
-        self, version: str
-    ) -> EmbeddingPrototypeVersion | None:
+    async def get_by_version(self, version: str) -> EmbeddingPrototypeVersion | None:
         stmt = select(EmbeddingPrototypeVersionOrm).where(
             EmbeddingPrototypeVersionOrm.version == version
         )

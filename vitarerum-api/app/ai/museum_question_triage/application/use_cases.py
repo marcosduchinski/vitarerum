@@ -79,6 +79,14 @@ if TYPE_CHECKING:
 class UseCategoryEmbeddingClassifierPort(Protocol):
     async def classify(self, message: str) -> EmbeddingClassificationResult: ...
 
+
+def _classifier_version_from_metadata(
+    current_version: str | None, metadata: dict[str, object]
+) -> str | None:
+    prototype_version = metadata.get("prototype_version")
+    return prototype_version if isinstance(prototype_version, str) else current_version
+
+
 MAX_OBJECT_QUERIES = 3
 # How many hits to fetch per language before merging — not a display cap (the
 # UI paginates client-side over the full merged list); just a sane ceiling so
@@ -698,7 +706,9 @@ class ClassifyPendingEmbeddingUseCategory:
                 triage_id=classification.triage_id,
                 classifier_kind=classification.classifier_kind,
                 classifier_model=classification.classifier_model,
-                classifier_version=classification.classifier_version,
+                classifier_version=_classifier_version_from_metadata(
+                    classification.classifier_version, result.metadata
+                ),
                 run_number=classification.run_number,
                 superseded_at=classification.superseded_at,
                 status=ClassificationStatus.COMPLETED,
@@ -847,7 +857,9 @@ class ClassifyPendingCascadeUseCategory:
                 triage_id=classification.triage_id,
                 classifier_kind=classification.classifier_kind,
                 classifier_model=classification.classifier_model,
-                classifier_version=classification.classifier_version,
+                classifier_version=_classifier_version_from_metadata(
+                    classification.classifier_version, embedding_result.metadata
+                ),
                 run_number=classification.run_number,
                 superseded_at=classification.superseded_at,
                 status=ClassificationStatus.COMPLETED,
@@ -873,7 +885,9 @@ class ClassifyPendingCascadeUseCategory:
                 triage_id=classification.triage_id,
                 classifier_kind=classification.classifier_kind,
                 classifier_model=classification.classifier_model,
-                classifier_version=classification.classifier_version,
+                classifier_version=_classifier_version_from_metadata(
+                    classification.classifier_version, embedding_result.metadata
+                ),
                 run_number=classification.run_number,
                 superseded_at=classification.superseded_at,
                 status=ClassificationStatus.COMPLETED,
@@ -914,7 +928,9 @@ class ClassifyPendingCascadeUseCategory:
             triage_id=classification.triage_id,
             classifier_kind=classification.classifier_kind,
             classifier_model=classification.classifier_model,
-            classifier_version=classification.classifier_version,
+            classifier_version=_classifier_version_from_metadata(
+                classification.classifier_version, embedding_result.metadata
+            ),
             run_number=classification.run_number,
             superseded_at=classification.superseded_at,
             status=ClassificationStatus.COMPLETED,
@@ -1153,14 +1169,20 @@ class ExportUseCategoryCalibrationCsv:
         museum_question: MuseumQuestionPort,
         triage_repository: TriageRepository,
         classification_repository: MessageClassificationRepository,
+        training_example_repository: UseCategoryTrainingExampleRepository,
     ) -> None:
         self._museum_question = museum_question
         self._triage_repository = triage_repository
         self._classification_repository = classification_repository
+        self._training_example_repository = training_example_repository
 
     async def execute(self, data: ExportUseCategoryCalibrationInput) -> str:
         limit = max(1, min(data.limit, MAX_CALIBRATION_EXPORT_LIMIT))
         triages = await self._triage_repository.list_latest(limit=limit)
+        active_examples = await self._training_example_repository.list_active_current()
+        examples_by_question = {
+            example.question_id: example for example in active_examples
+        }
         output = StringIO()
         writer = csv.DictWriter(
             output,
@@ -1181,7 +1203,9 @@ class ExportUseCategoryCalibrationCsv:
                 "embedding_assigned_categories",
                 "embedding_category_scores",
                 "embedding_metadata",
+                "human_outcome",
                 "human_categories",
+                "human_source",
             ],
         )
         writer.writeheader()
@@ -1198,6 +1222,7 @@ class ExportUseCategoryCalibrationCsv:
             }
             llm = by_kind.get(ClassifierKind.LLM)
             embedding = by_kind.get(ClassifierKind.EMBEDDING)
+            human = examples_by_question.get(triage.question_id)
             writer.writerow(
                 {
                     "triage_id": triage.id,
@@ -1241,7 +1266,16 @@ class ExportUseCategoryCalibrationCsv:
                         if embedding
                         else "{}"
                     ),
-                    "human_categories": "",
+                    "human_outcome": human.human_outcome.value if human else "",
+                    "human_categories": (
+                        json.dumps(
+                            [category.value for category in human.human_categories],
+                            ensure_ascii=True,
+                        )
+                        if human
+                        else "[]"
+                    ),
+                    "human_source": human.source.value if human else "",
                 }
             )
         return output.getvalue()

@@ -195,9 +195,7 @@ class OllamaTriageAdapter:
         except (httpx.TimeoutException, TimeoutError) as exc:
             raise ModelTimeout("The triage model did not respond in time") from exc
         except (httpx.ConnectError, httpx.HTTPError, ConnectionError, OSError) as exc:
-            raise ModelUnavailable(
-                "The triage model is currently unavailable"
-            ) from exc
+            raise ModelUnavailable("The triage model is currently unavailable") from exc
         except OutputParserException as exc:
             # The model failed to produce output matching the requested schema
             # (e.g. it doesn't support tool/function calling well).
@@ -238,9 +236,7 @@ class OllamaTriageAdapter:
         except (httpx.TimeoutException, TimeoutError) as exc:
             raise ModelTimeout("The triage model did not respond in time") from exc
         except (httpx.ConnectError, httpx.HTTPError, ConnectionError, OSError) as exc:
-            raise ModelUnavailable(
-                "The triage model is currently unavailable"
-            ) from exc
+            raise ModelUnavailable("The triage model is currently unavailable") from exc
         except OutputParserException as exc:
             raise ModelUnavailable(
                 "The triage model returned an invalid use-category response"
@@ -268,17 +264,13 @@ class OllamaTriageAdapter:
             response = await chat.ainvoke(
                 [
                     SystemMessage(content=build_out_of_scope_reply_system_prompt()),
-                    HumanMessage(
-                        content=build_out_of_scope_reply_user_prompt(message)
-                    ),
+                    HumanMessage(content=build_out_of_scope_reply_user_prompt(message)),
                 ]
             )
         except (httpx.TimeoutException, TimeoutError) as exc:
             raise ModelTimeout("The triage model did not respond in time") from exc
         except (httpx.ConnectError, httpx.HTTPError, ConnectionError, OSError) as exc:
-            raise ModelUnavailable(
-                "The triage model is currently unavailable"
-            ) from exc
+            raise ModelUnavailable("The triage model is currently unavailable") from exc
 
         text = str(response.content).strip()
         if not text:

@@ -4,17 +4,24 @@ import json
 import math
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 from app.ai.museum_question_triage.domain.models import (
     ClassificationOutcome,
     ClassificationScoreSource,
+    EmbeddingPrototypeAggregation,
+    EmbeddingPrototypeVersion,
     UseCategory,
     UseCategoryClassification,
     UseCategoryScore,
 )
-from app.ai.museum_question_triage.domain.ports import EmbeddingClassifierPort
+from app.ai.museum_question_triage.domain.ports import (
+    EmbeddingClassifierPort,
+    EmbeddingPrototypeVersionRepository,
+)
 
 _PROTOTYPES_PATH = Path(__file__).with_name("use_category_prototypes.json")
+EmbeddingPrototypeSource = Literal["PROMOTED", "JSON_SEED"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,6 +42,48 @@ class EmbeddingThresholds:
 class EmbeddingClassificationResult:
     classification: UseCategoryClassification
     metadata: dict[str, object]
+
+
+@dataclass(frozen=True, slots=True)
+class PersistedEmbeddingPrototypes:
+    version: str
+    aggregation_method: EmbeddingPrototypeAggregation
+    prototypes: dict[UseCategory, list[list[float]]]
+    metrics: dict[str, object]
+
+
+def persisted_prototypes_from_version(
+    version: EmbeddingPrototypeVersion,
+) -> PersistedEmbeddingPrototypes:
+    return PersistedEmbeddingPrototypes(
+        version=version.version,
+        aggregation_method=version.aggregation_method,
+        prototypes=version.prototypes,
+        metrics=version.metrics,
+    )
+
+
+async def build_use_category_embedding_classifier(
+    embedding: EmbeddingClassifierPort,
+    thresholds: EmbeddingThresholds,
+    prototype_repository: EmbeddingPrototypeVersionRepository,
+    *,
+    prototype_source: EmbeddingPrototypeSource,
+) -> UseCategoryEmbeddingClassifier:
+    promoted_version = (
+        await prototype_repository.get_promoted()
+        if prototype_source == "PROMOTED"
+        else None
+    )
+    return UseCategoryEmbeddingClassifier(
+        embedding,
+        thresholds,
+        persisted_prototypes=(
+            persisted_prototypes_from_version(promoted_version)
+            if promoted_version is not None
+            else None
+        ),
+    )
 
 
 def load_use_category_prototypes(
@@ -80,12 +129,32 @@ class UseCategoryEmbeddingClassifier:
         embedding: EmbeddingClassifierPort,
         thresholds: EmbeddingThresholds,
         prototypes: dict[UseCategory, list[str]] | None = None,
+        persisted_prototypes: PersistedEmbeddingPrototypes | None = None,
     ) -> None:
         self._embedding = embedding
         self._thresholds = thresholds
-        self._prototypes = prototypes or load_use_category_prototypes()
+        self._persisted_prototypes = persisted_prototypes
+        self._prototypes = (
+            prototypes
+            if prototypes is not None
+            else (
+                {}
+                if persisted_prototypes is not None
+                else load_use_category_prototypes()
+            )
+        )
 
     async def classify(self, message: str) -> EmbeddingClassificationResult:
+        if self._persisted_prototypes is not None:
+            vectors = await self._embedding.embed_many([message])
+            message_vector = vectors[0]
+            return self._classify_from_vectors(message, message_vector)
+
+        return await self._classify_from_text_prototypes(message)
+
+    async def _classify_from_text_prototypes(
+        self, message: str
+    ) -> EmbeddingClassificationResult:
         prototype_items = [
             (category, prototype)
             for category in sorted(self._prototypes, key=lambda item: item.value)
@@ -96,8 +165,6 @@ class UseCategoryEmbeddingClassifier:
         )
         message_vector = vectors[0]
         prototype_vectors = vectors[1:]
-        scores: list[UseCategoryScore] = []
-        raw_scores: dict[str, float] = {}
         vectors_by_category: dict[UseCategory, list[list[float]]] = {
             category: [] for category in self._prototypes
         }
@@ -105,13 +172,34 @@ class UseCategoryEmbeddingClassifier:
             prototype_items, prototype_vectors, strict=True
         ):
             vectors_by_category[category].append(prototype_vector)
+        return self._classify_from_vectors(message, message_vector, vectors_by_category)
 
-        for category in sorted(self._prototypes, key=lambda item: item.value):
-            similarities = [
-                cosine_similarity(message_vector, prototype_vector)
-                for prototype_vector in vectors_by_category[category]
-            ]
-            confidence = max(similarities)
+    def _classify_from_vectors(
+        self,
+        message: str,
+        message_vector: list[float],
+        vectors_by_category: dict[UseCategory, list[list[float]]] | None = None,
+    ) -> EmbeddingClassificationResult:
+        persisted = self._persisted_prototypes
+        if persisted is not None:
+            vectors_by_category = persisted.prototypes
+        if vectors_by_category is None:
+            raise ValueError("Prototype vectors are required.")
+
+        scores: list[UseCategoryScore] = []
+        raw_scores: dict[str, float] = {}
+        raw_mean_scores: dict[str, float] = {}
+        raw_max_example_scores: dict[str, float] = {}
+
+        for category in sorted(vectors_by_category, key=lambda item: item.value):
+            confidence = self._category_confidence(
+                message_vector,
+                vectors_by_category[category],
+                persisted.aggregation_method if persisted is not None else None,
+                raw_mean_scores,
+                raw_max_example_scores,
+                category,
+            )
             raw_scores[category.value] = confidence
             scores.append(
                 UseCategoryScore(
@@ -146,6 +234,24 @@ class UseCategoryEmbeddingClassifier:
             "uncertain_categories": sorted(uncertain),
             "raw_similarity": raw_scores,
         }
+        if persisted is None:
+            metadata["prototype_source"] = "JSON_SEED"
+            metadata["prototype_version"] = self._thresholds.profile_version
+            metadata["examples_per_category"] = {
+                category.value: len(examples)
+                for category, examples in sorted(
+                    self._prototypes.items(), key=lambda item: item[0].value
+                )
+            }
+        else:
+            metadata["prototype_source"] = "PERSISTED"
+            metadata["prototype_version"] = persisted.version
+            metadata["aggregation"] = persisted.aggregation_method.value
+            metadata["prototype_metrics"] = dict(persisted.metrics)
+            if raw_mean_scores:
+                metadata["raw_mean_similarity"] = raw_mean_scores
+            if raw_max_example_scores:
+                metadata["raw_max_example_similarity"] = raw_max_example_scores
         return EmbeddingClassificationResult(
             classification=UseCategoryClassification(
                 outcome=outcome,
@@ -154,3 +260,29 @@ class UseCategoryEmbeddingClassifier:
             ),
             metadata=metadata,
         )
+
+    def _category_confidence(
+        self,
+        message_vector: list[float],
+        prototype_vectors: list[list[float]],
+        aggregation: EmbeddingPrototypeAggregation | None,
+        raw_mean_scores: dict[str, float],
+        raw_max_example_scores: dict[str, float],
+        category: UseCategory,
+    ) -> float:
+        similarities = [
+            cosine_similarity(message_vector, prototype_vector)
+            for prototype_vector in prototype_vectors
+        ]
+        if aggregation is not EmbeddingPrototypeAggregation.HYBRID:
+            return max(similarities)
+
+        mean_similarity = similarities[0]
+        example_similarity = max(similarities[1:]) if len(similarities) > 1 else 0.0
+        raw_mean_scores[category.value] = mean_similarity
+        raw_max_example_scores[category.value] = example_similarity
+        if example_similarity >= self._thresholds.high and (
+            mean_similarity >= self._thresholds.low
+        ):
+            return example_similarity
+        return mean_similarity

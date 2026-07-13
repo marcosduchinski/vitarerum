@@ -391,9 +391,7 @@ class _FakePrototypeVersionRepo:
     async def add(self, version: EmbeddingPrototypeVersion) -> None:
         self.stored.append(version)
 
-    async def get_by_version(
-        self, version: str
-    ) -> EmbeddingPrototypeVersion | None:
+    async def get_by_version(self, version: str) -> EmbeddingPrototypeVersion | None:
         return next(
             (item for item in self.stored if item.version == version),
             None,
@@ -637,6 +635,38 @@ async def test_classify_pending_embedding_completes_classification() -> None:
     assert classification_repo.update_calls == [result]
 
 
+async def test_classify_pending_embedding_records_prototype_version() -> None:
+    triage_repo = _FakeRepo()
+    triage_repo.stored.append(_stored_use_category_triage())
+    classification_repo = _FakeClassificationRepo()
+    pending = MessageClassification.pending(
+        triage_id=TriageId("triage-1"),
+        classifier_kind=ClassifierKind.EMBEDDING,
+        classifier_model="nomic-embed-text",
+        classifier_version="embedding-test",
+    )
+    classification_repo.stored.append(pending)
+    classifier = _FakeEmbeddingClassifier(
+        metadata={
+            "threshold_profile": "embedding-test",
+            "prototype_source": "PERSISTED",
+            "prototype_version": "embedding-prototypes-v2",
+            "would_escalate_due_to_length": False,
+        }
+    )
+    use_case = ClassifyPendingEmbeddingUseCategory(
+        _FakeMuseumQuestion(), classifier, triage_repo, classification_repo
+    )
+
+    result = await use_case.execute(
+        ClassifyPendingEmbeddingUseCategoryInput(classification_id=pending.id)
+    )
+
+    assert result.status is ClassificationStatus.COMPLETED
+    assert result.classifier_version == "embedding-prototypes-v2"
+    assert result.metadata["prototype_version"] == "embedding-prototypes-v2"
+
+
 async def test_classify_pending_embedding_use_category_marks_model_failure() -> None:
     triage_repo = _FakeRepo()
     triage_repo.stored.append(_stored_use_category_triage())
@@ -719,6 +749,74 @@ async def test_classify_pending_cascade_uses_embedding_when_confident() -> None:
     assert result.metadata["escalation_reasons"] == []
     assert embedding.calls == [_QUESTION.message]
     assert model.use_category_calls == []
+
+
+async def test_classify_pending_cascade_records_prototype_version() -> None:
+    triage_repo = _FakeRepo()
+    triage_repo.stored.append(_stored_use_category_triage())
+    classification_repo = _FakeClassificationRepo()
+    pending = MessageClassification.pending(
+        triage_id=TriageId("triage-1"),
+        classifier_kind=ClassifierKind.CASCADE,
+        classifier_model="nomic-embed-text",
+        classifier_version="cascade-test",
+    )
+    classification_repo.stored.append(pending)
+    embedding = _FakeEmbeddingClassifier(
+        metadata={
+            "threshold_profile": "embedding-test",
+            "prototype_source": "PERSISTED",
+            "prototype_version": "embedding-prototypes-v2",
+            "would_escalate_due_to_length": False,
+        }
+    )
+    use_case = ClassifyPendingCascadeUseCategory(
+        _FakeMuseumQuestion(),
+        embedding,
+        _FakeModel(),
+        triage_repo,
+        classification_repo,
+        high_threshold=0.74,
+        margin_delta=0.08,
+    )
+
+    result = await use_case.execute(
+        ClassifyPendingCascadeUseCategoryInput(classification_id=pending.id)
+    )
+
+    assert result.status is ClassificationStatus.COMPLETED
+    assert result.classifier_version == "embedding-prototypes-v2"
+    assert result.metadata["prototype_version"] == "embedding-prototypes-v2"
+
+
+async def test_classify_pending_cascade_marks_embedding_failure() -> None:
+    triage_repo = _FakeRepo()
+    triage_repo.stored.append(_stored_use_category_triage())
+    classification_repo = _FakeClassificationRepo()
+    pending = MessageClassification.pending(
+        triage_id=TriageId("triage-1"),
+        classifier_kind=ClassifierKind.CASCADE,
+        classifier_model="nomic-embed-text",
+        classifier_version="cascade-test",
+    )
+    classification_repo.stored.append(pending)
+    use_case = ClassifyPendingCascadeUseCategory(
+        _FakeMuseumQuestion(),
+        _FakeEmbeddingClassifier(error=ModelUnavailable("embedding down")),
+        _FakeModel(),
+        triage_repo,
+        classification_repo,
+        high_threshold=0.74,
+        margin_delta=0.08,
+    )
+
+    result = await use_case.execute(
+        ClassifyPendingCascadeUseCategoryInput(classification_id=pending.id)
+    )
+
+    assert result.status is ClassificationStatus.FAILED
+    assert result.classifier_version == "cascade-test"
+    assert result.error == "embedding down"
 
 
 async def test_classify_pending_cascade_escalates_low_confidence_to_llm() -> None:
@@ -1111,8 +1209,16 @@ async def test_export_use_category_calibration_csv_excludes_message_text() -> No
             ),
         ]
     )
+    training_repo = _FakeTrainingExampleRepo()
+    training_repo.stored.append(
+        _training_example(
+            id_="human-1",
+            question_id="q1",
+            categories=[UseCategory.RESEARCH_PROJECTS],
+        )
+    )
     use_case = ExportUseCategoryCalibrationCsv(
-        _FakeMuseumQuestion(), triage_repo, classification_repo
+        _FakeMuseumQuestion(), triage_repo, classification_repo, training_repo
     )
 
     content = await use_case.execute(ExportUseCategoryCalibrationInput(limit=100))
@@ -1125,7 +1231,9 @@ async def test_export_use_category_calibration_csv_excludes_message_text() -> No
     assert row["internal_link"] == "/p/museum-questions/q1"
     assert row["question_status"] == "SUBMITTED"
     assert row["message_hash_sha256"]
-    assert row["human_categories"] == ""
+    assert row["human_outcome"] == "CATEGORIZED"
+    assert row["human_categories"] == '["RESEARCH_PROJECTS"]'
+    assert row["human_source"] == "HUMAN_CREATED"
     assert "RESEARCH_PROJECTS" in row["llm_assigned_categories"]
     assert "RESEARCH_PROJECTS" in row["embedding_assigned_categories"]
     assert _QUESTION.message not in content

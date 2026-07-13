@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.ai.museum_question_triage.application.embedding_classifier import (
     EmbeddingThresholds,
     UseCategoryEmbeddingClassifier,
+    build_use_category_embedding_classifier,
 )
 from app.ai.museum_question_triage.application.use_cases import (
     ClassifyPendingCascadeUseCategory,
@@ -186,10 +187,11 @@ def get_classify_pending_use_category_use_case(
     )
 
 
-def get_embedding_classifier(
+async def get_embedding_classifier(
     embedding: EmbeddingPort,
+    prototype_repository: EmbeddingPrototypeRepository,
 ) -> UseCategoryEmbeddingClassifier:
-    return UseCategoryEmbeddingClassifier(
+    return await build_use_category_embedding_classifier(
         embedding,
         EmbeddingThresholds(
             low=settings.use_category_embedding_low_threshold,
@@ -197,6 +199,8 @@ def get_embedding_classifier(
             profile_version=settings.use_category_embedding_profile_version,
             long_message_words=settings.use_category_embedding_long_message_words,
         ),
+        prototype_repository,
+        prototype_source=settings.use_category_embedding_prototype_source,
     )
 
 
@@ -238,9 +242,13 @@ def get_export_use_category_calibration_csv_use_case(
     museum_question: MuseumQuestionAclPort,
     triage_repository: Repository,
     classification_repository: ClassificationRepository,
+    training_example_repository: TrainingExampleRepository,
 ) -> ExportUseCategoryCalibrationCsv:
     return ExportUseCategoryCalibrationCsv(
-        museum_question, triage_repository, classification_repository
+        museum_question,
+        triage_repository,
+        classification_repository,
+        training_example_repository,
     )
 
 

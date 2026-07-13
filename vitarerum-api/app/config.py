@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Literal
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -41,6 +42,9 @@ class Settings(BaseSettings):
     use_category_embedding_high_threshold: float = 0.74
     use_category_embedding_long_message_words: int = 80
     use_category_embedding_profile_version: str = "embedding-prototypes-v1"
+    use_category_embedding_prototype_source: Literal["PROMOTED", "JSON_SEED"] = (
+        "PROMOTED"
+    )
     use_category_cascade_enabled: bool = False
     use_category_cascade_margin_delta: float = 0.08
     use_category_cascade_classifier_version: str = "cascade-v1"

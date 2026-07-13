@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.ai.museum_question_triage.application.embedding_classifier import (
     EmbeddingThresholds,
     UseCategoryEmbeddingClassifier,
+    build_use_category_embedding_classifier,
 )
 from app.ai.museum_question_triage.application.use_cases import (
     ClassifyPendingCascadeUseCategory,
@@ -76,6 +77,7 @@ from app.ai.museum_question_triage.infrastructure.museum_questions_acl import (
     MuseumQuestionAdapter,
 )
 from app.ai.museum_question_triage.infrastructure.repositories import (
+    SqlAlchemyEmbeddingPrototypeVersionRepository,
     SqlAlchemyMessageClassificationRepository,
     SqlAlchemyTriageRepository,
 )
@@ -199,6 +201,34 @@ async def generate_embedding_prototype_version(
     return embedding_prototype_version_response(result)
 
 
+@museum_question_triage_router.patch(
+    "/triage/embedding-prototypes/{version}/promotion",
+    response_model=EmbeddingPrototypeVersionResponse,
+)
+async def promote_embedding_prototype_version(
+    version: str,
+    caller: CallerPermission,
+    repository: EmbeddingPrototypeRepository,
+    session: DBSession,
+) -> EmbeddingPrototypeVersionResponse:
+    require_group(caller, GroupName.CURATORIAL)
+    existing = await repository.get_by_version(version)
+    if existing is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "error": "EMBEDDING_PROTOTYPE_VERSION_NOT_FOUND",
+                "message": f"Embedding prototype version {version!r} was not found.",
+            },
+        )
+
+    await repository.promote(version, datetime.now(UTC))
+    promoted = await repository.get_by_version(version)
+    await session.commit()
+    assert promoted is not None
+    return embedding_prototype_version_response(promoted)
+
+
 def _not_found(question_id: str) -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
@@ -285,8 +315,10 @@ async def _classify_use_categories_background(classification_id: str) -> None:
         await session.commit()
 
 
-def _embedding_classifier() -> UseCategoryEmbeddingClassifier:
-    return UseCategoryEmbeddingClassifier(
+async def _embedding_classifier(
+    session: AsyncSession,
+) -> UseCategoryEmbeddingClassifier:
+    return await build_use_category_embedding_classifier(
         OllamaEmbeddingAdapter(
             base_url=settings.ollama_base_url,
             model=settings.use_category_embedding_model,
@@ -299,6 +331,8 @@ def _embedding_classifier() -> UseCategoryEmbeddingClassifier:
             profile_version=settings.use_category_embedding_profile_version,
             long_message_words=settings.use_category_embedding_long_message_words,
         ),
+        SqlAlchemyEmbeddingPrototypeVersionRepository(session),
+        prototype_source=settings.use_category_embedding_prototype_source,
     )
 
 
@@ -306,7 +340,7 @@ async def _classify_embedding_use_categories_background(classification_id: str) 
     async with async_session_factory() as session:
         use_case = ClassifyPendingEmbeddingUseCategory(
             MuseumQuestionAdapter(session),
-            _embedding_classifier(),
+            await _embedding_classifier(session),
             SqlAlchemyTriageRepository(session),
             SqlAlchemyMessageClassificationRepository(session),
         )
@@ -327,7 +361,7 @@ async def _classify_cascade_use_categories_background(classification_id: str) ->
     async with async_session_factory() as session:
         use_case = ClassifyPendingCascadeUseCategory(
             MuseumQuestionAdapter(session),
-            _embedding_classifier(),
+            await _embedding_classifier(session),
             OllamaTriageAdapter(
                 base_url=settings.ollama_base_url,
                 model=settings.triage_model,

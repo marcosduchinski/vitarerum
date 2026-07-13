@@ -36,6 +36,7 @@ from app.ai.museum_question_triage.infrastructure.repositories import (
     training_example_to_domain,
     training_example_to_orm,
 )
+from app.ai.museum_question_triage.presentation import routes as triage_routes
 from app.database import Base
 
 _NOW = datetime(2026, 7, 10, 12, 0, tzinfo=UTC)
@@ -147,6 +148,17 @@ def _prototype_version(
         promoted_at=promoted_at,
         retired_at=retired_at,
     )
+
+
+class _FakeEmbeddingAdapter:
+    def __init__(self, **kwargs: object) -> None:
+        self.kwargs = kwargs
+
+    async def embed(self, text: str) -> list[float]:
+        return [1.0, 0.0]
+
+    async def embed_many(self, texts: list[str]) -> list[list[float]]:
+        return [[1.0, 0.0] for _ in texts]
 
 
 async def _session_factory() -> async_sessionmaker:
@@ -323,3 +335,29 @@ async def test_embedding_prototype_repository_promotes_and_retires_previous() ->
     assert promoted.promoted_at == promoted_at.replace(tzinfo=None)
     assert old is not None
     assert old.retired_at == promoted_at.replace(tzinfo=None)
+
+
+async def test_route_embedding_classifier_loads_promoted_sqlalchemy_prototype(
+    monkeypatch,
+) -> None:
+    factory = await _session_factory()
+    monkeypatch.setattr(triage_routes, "OllamaEmbeddingAdapter", _FakeEmbeddingAdapter)
+    monkeypatch.setattr(
+        triage_routes.settings, "use_category_embedding_prototype_source", "PROMOTED"
+    )
+
+    async with factory() as session:
+        repo = SqlAlchemyEmbeddingPrototypeVersionRepository(session)
+        await repo.add(
+            _prototype_version(
+                version="embedding-prototypes-promoted",
+                promoted_at=_NOW,
+            )
+        )
+        await session.commit()
+
+        classifier = await triage_routes._embedding_classifier(session)
+        result = await classifier.classify("message")
+
+    assert result.metadata["prototype_source"] == "PERSISTED"
+    assert result.metadata["prototype_version"] == "embedding-prototypes-promoted"
