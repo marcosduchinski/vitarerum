@@ -181,6 +181,66 @@ describe('ProjectApiServiceMock', () => {
     expect(accessLog.referenceNumber).toMatch(/^OAL-/);
   });
 
+  it('syncs added project objects to an existing object access log', async () => {
+    session.set(staffSession());
+    state.projects.get('proj-4')!.status = 'IN_PROGRESS';
+    await firstValueFrom(
+      service.createObjectLogEntry('proj-4', {
+        collectionUseObjectId: 'INV-001',
+        numberOfObjects: 1,
+      }),
+    );
+
+    const detail = await firstValueFrom(
+      service.addProjectObjects('proj-4', {
+        objects: [
+          {
+            inventoryNumber: 'INV-MOCK-002',
+            displayTitle: 'Mock specimen drawer',
+            objectName: 'Drawer',
+          },
+          {
+            inventoryNumber: 'INV-MOCK-003',
+            displayTitle: 'Mock field notebook',
+            objectName: 'Notebook',
+          },
+        ],
+      }),
+    );
+    const addedIds = (detail.objects ?? []).slice(-2).map((object) => object.id);
+    const entries = await firstValueFrom(service.listObjectLogEntries('proj-4'));
+
+    const synced = entries.content.filter((entry) =>
+      addedIds.includes(entry.collectionUseObjectId),
+    );
+    expect(synced.map((entry) => entry.objectReference.inventoryNumber)).toEqual([
+      'INV-MOCK-002',
+      'INV-MOCK-003',
+    ]);
+    expect(synced.every((entry) => entry.numberOfObjects === 1)).toBe(true);
+    expect(synced.every((entry) => entry.addedBy.permissionId === 'perm-bob')).toBe(true);
+  });
+
+  it('does not create an object access log when adding project objects before one exists', async () => {
+    session.set(staffSession());
+
+    await firstValueFrom(
+      service.addProjectObjects('proj-4', {
+        objects: [
+          {
+            inventoryNumber: 'INV-MOCK-004',
+            displayTitle: 'Mock storage box',
+            objectName: 'Box',
+          },
+        ],
+      }),
+    );
+    const entries = await firstValueFrom(service.listObjectLogEntries('proj-4'));
+
+    expect(entries.accessLog).toBeNull();
+    expect(entries.content).toEqual([]);
+  });
+
   it('updates editable object log entry fields', async () => {
     state.projects.get('proj-4')!.status = 'IN_PROGRESS';
     const entry = await firstValueFrom(

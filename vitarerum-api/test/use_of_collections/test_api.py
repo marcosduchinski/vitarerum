@@ -1759,6 +1759,143 @@ async def test_add_project_objects_terminal_status_returns_409() -> None:
     assert response.json()["error"] == "INVALID_TRANSITION"
 
 
+async def test_add_project_objects_syncs_new_objects_to_existing_access_log() -> None:
+    async with client_with_repos(caller=_STAFF_CALLER) as (
+        client,
+        project_repo,
+        proposal_repo,
+        _,
+    ):
+        await project_repo.add(
+            _project(status=UseStatus.IN_PROGRESS, objects=[_collection_use_object()])
+        )
+        await proposal_repo.add(_proposal())
+        access_log_repo = app.dependency_overrides[get_access_log_repo]()
+        access_log = ObjectAccessLog(
+            id=ObjectAccessLogId("log-1"),
+            reference_number=ReferenceNumber("OAL-ABCDEFG1"),
+            collection_use_project_id=CollectionUseProjectId("proj-1"),
+        )
+        await access_log_repo.add(access_log)
+        await access_log_repo.save_entry(
+            ObjectLogEntry(
+                id=ObjectLogEntryId("entry-1"),
+                object_access_log_id=ObjectAccessLogId("log-1"),
+                collection_use_object_id=CollectionUseObjectId("cuo-1"),
+                number_of_objects=1,
+                added_at=datetime(2026, 6, 2, tzinfo=UTC),
+                added_by=PermissionId("permission-staff"),
+            )
+        )
+
+        added = await client.post(
+            "/api/v1/collection-use-projects/proj-1/objects",
+            json={
+                "objects": [
+                    {
+                        "inventoryNumber": "INV-002",
+                        "displayTitle": "Specimen drawer",
+                        "objectName": "Drawer",
+                    },
+                    {
+                        "inventoryNumber": "INV-003",
+                        "displayTitle": "Field notebook",
+                        "objectName": "Notebook",
+                    },
+                ]
+            },
+        )
+        new_ids = [obj["id"] for obj in added.json()["objects"][-2:]]
+        listing = await client.get(
+            "/api/v1/collection-use-projects/proj-1/log-entries"
+        )
+
+    assert added.status_code == 201
+    assert listing.status_code == 200
+    entries = listing.json()["content"]
+    synced = [entry for entry in entries if entry["collectionUseObjectId"] in new_ids]
+    assert len(synced) == 2
+    assert {entry["numberOfObjects"] for entry in synced} == {1}
+    assert {entry["addedBy"]["permissionId"] for entry in synced} == {
+        "permission-staff"
+    }
+    assert sum(entry["collectionUseObjectId"] == "cuo-1" for entry in entries) == 1
+
+
+async def test_add_project_objects_does_not_create_access_log_when_missing() -> None:
+    async with client_with_repos(caller=_STAFF_CALLER) as (
+        client,
+        project_repo,
+        proposal_repo,
+        _,
+    ):
+        await project_repo.add(_project())
+        await proposal_repo.add(_proposal())
+
+        added = await client.post(
+            "/api/v1/collection-use-projects/proj-1/objects",
+            json={
+                "objects": [
+                    {
+                        "inventoryNumber": "INV-002",
+                        "displayTitle": "Specimen drawer",
+                        "objectName": "Drawer",
+                    }
+                ]
+            },
+        )
+        listing = await client.get(
+            "/api/v1/collection-use-projects/proj-1/log-entries"
+        )
+
+    assert added.status_code == 201
+    assert listing.status_code == 200
+    assert listing.json()["accessLog"] is None
+    assert listing.json()["content"] == []
+
+
+async def test_add_project_objects_skips_sync_when_access_log_concluded() -> None:
+    async with client_with_repos(caller=_STAFF_CALLER) as (
+        client,
+        project_repo,
+        proposal_repo,
+        _,
+    ):
+        await project_repo.add(_project(status=UseStatus.IN_PROGRESS))
+        await proposal_repo.add(_proposal())
+        access_log_repo = app.dependency_overrides[get_access_log_repo]()
+        await access_log_repo.add(
+            ObjectAccessLog(
+                id=ObjectAccessLogId("log-1"),
+                reference_number=ReferenceNumber("OAL-ABCDEFG1"),
+                collection_use_project_id=CollectionUseProjectId("proj-1"),
+                date_conclusion=datetime(2026, 6, 3, tzinfo=UTC),
+            )
+        )
+
+        added = await client.post(
+            "/api/v1/collection-use-projects/proj-1/objects",
+            json={
+                "objects": [
+                    {
+                        "inventoryNumber": "INV-002",
+                        "displayTitle": "Specimen drawer",
+                        "objectName": "Drawer",
+                    }
+                ]
+            },
+        )
+        listing = await client.get(
+            "/api/v1/collection-use-projects/proj-1/log-entries"
+        )
+
+    assert added.status_code == 201
+    assert added.json()["objects"][-1]["inventoryNumber"] == "INV-002"
+    assert listing.status_code == 200
+    assert listing.json()["accessLog"]["dateConclusion"] is not None
+    assert listing.json()["content"] == []
+
+
 async def test_staff_can_remove_unused_project_object() -> None:
     project_object = _collection_use_object()
     async with client_with_repos(caller=_STAFF_CALLER) as (

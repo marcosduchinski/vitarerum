@@ -139,18 +139,39 @@ export class ProjectApiServiceMock {
       return throwError(() => ({ status: 409, error: 'INVALID_TRANSITION' }));
     }
     const current = p.objects ?? [];
-    p.objects = [
-      ...current,
-      ...request.objects.map((object) => ({
-        id: this.state.nextProjectObjectId(),
-        inventoryNumber: object.inventoryNumber,
-        displayTitle: object.displayTitle,
-        objectName: object.objectName,
-        briefDescriptionSnapshot: object.briefDescriptionSnapshot ?? null,
-        category: object.category ?? '',
-        description: object.description ?? '',
-      })),
-    ];
+    const newObjects = request.objects.map((object) => ({
+      id: this.state.nextProjectObjectId(),
+      inventoryNumber: object.inventoryNumber,
+      displayTitle: object.displayTitle,
+      objectName: object.objectName,
+      briefDescriptionSnapshot: object.briefDescriptionSnapshot ?? null,
+      category: object.category ?? '',
+      description: object.description ?? '',
+    }));
+    p.objects = [...current, ...newObjects];
+    const accessLog = this.state.objectAccessLogs.get(projectId);
+    if (accessLog) {
+      const currentEntries = this.state.logEntries.get(projectId) ?? [];
+      const addedBy = this.currentPrincipal();
+      const addedAt = new Date().toISOString();
+      const syncedEntries: ObjectLogEntry[] = newObjects.map((object) => ({
+        id: this.state.nextEntryId(),
+        collectionUseObjectId: object.id,
+        objectReference: {
+          inventoryNumber: object.inventoryNumber,
+          displayTitle: object.displayTitle,
+          objectName: object.objectName,
+          briefDescriptionSnapshot: object.briefDescriptionSnapshot,
+        },
+        numberOfObjects: 1,
+        addedAt,
+        addedBy,
+        observations: null,
+        requestedObjectId: object.id,
+        attachments: [],
+      }));
+      this.state.logEntries.set(projectId, [...currentEntries, ...syncedEntries]);
+    }
     return of(this.toDetail(p));
   }
 

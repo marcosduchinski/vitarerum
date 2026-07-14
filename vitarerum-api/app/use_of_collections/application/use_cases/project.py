@@ -32,6 +32,7 @@ from app.use_of_collections.domain.models import (
     CollectionUseObjectId,
     CollectionUseProject,
     CollectionUseProjectId,
+    InvalidTransition,
     ObjectAccessLog,
     ObjectAccessLogId,
     ObjectLogEntry,
@@ -282,8 +283,13 @@ class AddProjectObjectsInput:
 
 
 class AddProjectObjects:
-    def __init__(self, project_repository: CollectionUseProjectRepository) -> None:
+    def __init__(
+        self,
+        project_repository: CollectionUseProjectRepository,
+        access_log_repository: ObjectAccessLogRepository,
+    ) -> None:
         self._repo = project_repository
+        self._access_log_repo = access_log_repository
 
     async def execute(self, data: AddProjectObjectsInput) -> CollectionUseProject:
         project = await self._repo.get_by_id(data.project_id)
@@ -311,6 +317,25 @@ class AddProjectObjects:
                 raise ValueError("objectName is required.")
         project.add_objects(objects)
         await self._repo.save(project)
+        access_log = await self._access_log_repo.get_by_project_id(data.project_id)
+        if access_log is not None:
+            for obj in objects:
+                entry = ObjectLogEntry(
+                    id=ObjectLogEntryId(_new_id()),
+                    object_access_log_id=access_log.id,
+                    collection_use_object_id=obj.id,
+                    number_of_objects=1,
+                    added_at=now,
+                    added_by=data.caller.id,
+                )
+                try:
+                    access_log.add_object_log_entry(entry)
+                except InvalidTransition:
+                    # Adding a project object stays valid even if the access log
+                    # has already been concluded; in that defensive case there is
+                    # no writable log to synchronize with.
+                    continue
+                await self._access_log_repo.save_entry(entry)
         return project
 
 

@@ -280,6 +280,7 @@ async def add_project_objects(
     caller: CallerPermission,
     project_repo: ProjectRepo,
     proposal_repo: ProposalRepo,
+    access_log_repo: AccessLogRepo,
     detail_query: ProjectDetailQuery,
     session: DBSession,
 ) -> ProjectDetailResponse:
@@ -288,7 +289,7 @@ async def add_project_objects(
     )
     require_staff(caller)
     try:
-        await AddProjectObjects(project_repo).execute(
+        await AddProjectObjects(project_repo, access_log_repo).execute(
             AddProjectObjectsInput(
                 project_id=CollectionUseProjectId(project_id),
                 caller=caller,
