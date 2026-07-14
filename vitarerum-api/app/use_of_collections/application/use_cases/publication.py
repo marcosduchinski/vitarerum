@@ -24,10 +24,12 @@ from app.use_of_collections.application.use_cases._shared import (
     _new_publication_log_reference_number,
     _now,
     _store_attachment,
+    _validate_collection_use_object,
 )
 from app.use_of_collections.domain.enums import UseStatus
 from app.use_of_collections.domain.models import (
     Attachment,
+    CollectionUseObjectId,
     CollectionUseProject,
     CollectionUseProjectId,
     InvalidTransition,
@@ -95,6 +97,7 @@ class AddPublicationLogEntryInput:
     project_id: CollectionUseProjectId
     caller: Actor
     note: str
+    collection_use_object_id: CollectionUseObjectId | None = None
 
 
 class AddPublicationLogEntry:
@@ -113,6 +116,8 @@ class AddPublicationLogEntry:
         if project is None:
             raise LookupError(f"No project found with id {data.project_id}")
         _check_publication_entry_allowed(project, data.caller)
+        if data.collection_use_object_id is not None:
+            _validate_collection_use_object(project, data.collection_use_object_id)
         # The curator is informational: the staff member related to the project,
         # taken from the proposal's assignee when the log is first created.
         proposal = await self._proposal_repo.get_by_project_id(data.project_id)
@@ -126,6 +131,7 @@ class AddPublicationLogEntry:
             added_at=_now(),
             added_by=data.caller.id,
             note=data.note,
+            collection_use_object_id=data.collection_use_object_id,
         )
         publication_log.add_entry(entry)
         await self._repo.save_entry(entry)

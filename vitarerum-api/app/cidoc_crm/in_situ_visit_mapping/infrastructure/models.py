@@ -75,6 +75,9 @@ class InSituOccurrenceRecordOrm(Base):
     source_id: Mapped[str] = mapped_column(String(255))
     description: Mapped[str] = mapped_column(Text, default="")
     position: Mapped[int] = mapped_column(Integer)
+    related_object_source_id: Mapped[str | None] = mapped_column(
+        String(255), default=None
+    )
 
     visit: Mapped[InSituVisitRecordOrm] = relationship(back_populates="occurrences")
     attachments: Mapped[list[InSituOccurrenceAttachmentRecordOrm]] = relationship(
@@ -111,6 +114,9 @@ class InSituLogRecordOrm(Base):
     source_id: Mapped[str] = mapped_column(String(255))
     description: Mapped[str] = mapped_column(Text, default="")
     position: Mapped[int] = mapped_column(Integer)
+    related_object_source_id: Mapped[str | None] = mapped_column(
+        String(255), default=None
+    )
 
     visit: Mapped[InSituVisitRecordOrm] = relationship(back_populates="logs")
     attachments: Mapped[list[InSituLogAttachmentRecordOrm]] = relationship(
@@ -145,6 +151,9 @@ class InSituPublicationRecordOrm(Base):
     source_id: Mapped[str] = mapped_column(String(255))
     description: Mapped[str] = mapped_column(Text, default="")
     position: Mapped[int] = mapped_column(Integer)
+    related_object_source_id: Mapped[str | None] = mapped_column(
+        String(255), default=None
+    )
 
     visit: Mapped[InSituVisitRecordOrm] = relationship(back_populates="publications")
     attachments: Mapped[list[InSituPublicationAttachmentRecordOrm]] = relationship(

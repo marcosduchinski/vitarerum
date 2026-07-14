@@ -702,7 +702,7 @@ async def add_publication_entry(
     publication_log_repo: PublicationLogRepo,
     session: DBSession,
 ) -> PublicationLogEntryResponse:
-    await _assert_existing_project_access(
+    project = await _assert_existing_project_access(
         project_id, caller, project_repo, proposal_repo
     )
     try:
@@ -713,12 +713,22 @@ async def add_publication_entry(
                 project_id=CollectionUseProjectId(project_id),
                 caller=caller,
                 note=body.note,
+                collection_use_object_id=(
+                    CollectionUseObjectId(body.collectionUseObjectId)
+                    if body.collectionUseObjectId is not None
+                    else None
+                ),
             )
         )
     except Exception as exc:
         _handle_domain_errors(exc)
     await session.commit()
-    return await _build_publication_entry(entry, session)
+    collection_use_object = (
+        _collection_use_objects_by_id(project).get(entry.collection_use_object_id)
+        if entry.collection_use_object_id is not None
+        else None
+    )
+    return await _build_publication_entry(entry, session, collection_use_object)
 
 
 @projects_router.patch(
@@ -735,7 +745,7 @@ async def edit_publication_entry(
     publication_log_repo: PublicationLogRepo,
     session: DBSession,
 ) -> PublicationLogEntryResponse:
-    await _assert_existing_project_access(
+    project = await _assert_existing_project_access(
         project_id, caller, project_repo, proposal_repo
     )
     try:
@@ -754,7 +764,12 @@ async def edit_publication_entry(
     except Exception as exc:
         _handle_domain_errors(exc)
     await session.commit()
-    return await _build_publication_entry(entry, session)
+    collection_use_object = (
+        _collection_use_objects_by_id(project).get(entry.collection_use_object_id)
+        if entry.collection_use_object_id is not None
+        else None
+    )
+    return await _build_publication_entry(entry, session, collection_use_object)
 
 
 @projects_router.get(
@@ -772,16 +787,26 @@ async def list_publication_entries(
     page: Annotated[int, Query(ge=0)] = 0,
     size: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> PaginatedPublicationEntriesResponse:
-    await _assert_existing_project_access(
+    project = await _assert_existing_project_access(
         project_id, caller, project_repo, proposal_repo
     )
+    objects_by_id = _collection_use_objects_by_id(project)
     publication_log = await publication_log_repo.get_by_project_id(
         CollectionUseProjectId(project_id)
     )
     entries, total = await publication_log_repo.list_entries_by_project(
         CollectionUseProjectId(project_id), added_by, page, size
     )
-    items = [await _build_publication_entry(e, session) for e in entries]
+    items = [
+        await _build_publication_entry(
+            e,
+            session,
+            objects_by_id.get(e.collection_use_object_id)
+            if e.collection_use_object_id is not None
+            else None,
+        )
+        for e in entries
+    ]
     return PaginatedPublicationEntriesResponse(
         projectId=project_id,
         publicationLog=(

@@ -22,6 +22,8 @@
    sh:class crm:E28_Conceptual_Object .
 [] a sh:NodeShape ; sh:targetObjectsOf crm:P2_has_type ;
    sh:class crm:E55_Type .
+[] a sh:NodeShape ; sh:targetObjectsOf crm:P129_is_about ;
+   sh:class crm:E1_CRM_Entity .
 
 # ── domains ────────────────────────────────────────────────────────────────────
 [] a sh:NodeShape ; sh:targetSubjectsOf crm:P14_carried_out_by ;
@@ -36,3 +38,5 @@
    sh:class crm:E65_Creation .
 [] a sh:NodeShape ; sh:targetSubjectsOf crm:P70_documents ;
    sh:class crm:E31_Document .
+[] a sh:NodeShape ; sh:targetSubjectsOf crm:P129_is_about ;
+   sh:class crm:E89_Propositional_Object .

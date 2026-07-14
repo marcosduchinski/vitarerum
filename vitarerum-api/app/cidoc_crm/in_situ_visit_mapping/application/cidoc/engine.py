@@ -242,6 +242,22 @@ def _link_node(
         _set_predicate_value(item_node, link["predicate"], reference(visit_id))
 
 
+def _apply_related_object_link(
+    item: Any,
+    extras: dict[str, Any],
+    node: dict[str, Any],
+    spec: dict[str, Any],
+) -> None:
+    """Link an occurrence/log item to the specific requested object it concerns
+    (resolved deterministically via the ``requested_object`` id template, no
+    cross-collection lookup needed)."""
+    link_spec = spec.get("related_object_link")
+    if not link_spec or not _should_generate(item, extras, link_spec):
+        return
+    target_id = _resolve(item, extras, link_spec["target_id_template"])
+    _set_predicate_value(node, link_spec["predicate"], reference(target_id))
+
+
 def _build_item_node(
     item: Any,
     extras: dict[str, Any],
@@ -257,6 +273,7 @@ def _build_item_node(
     if type_vocab and type_vocab in vocab_ids:
         node["crm:P2_has_type"] = reference(vocab_ids[type_vocab])
     _apply_field_mappings(item, extras, node, spec.get("field_mappings", []))
+    _apply_related_object_link(item, extras, node, spec)
     return node
 
 

@@ -47,6 +47,7 @@ class ExportEntry:
     description: str
     position: int
     attachments: list[ExportAttachment] = field(default_factory=list)
+    related_object_source_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

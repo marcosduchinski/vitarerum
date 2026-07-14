@@ -460,6 +460,7 @@ class PaginatedOccurrenceEntriesResponse(BaseModel):
 
 class AddPublicationEntryRequest(BaseModel):
     note: str = Field(min_length=1)
+    collectionUseObjectId: str | None = None
 
 
 class EditPublicationEntryRequest(BaseModel):
@@ -471,6 +472,8 @@ class PublicationLogEntryResponse(BaseModel):
     addedAt: datetime
     addedBy: PermissionDetail
     note: str
+    collectionUseObjectId: str | None
+    objectReference: ObjectReferenceResponse | None
     attachments: list[AttachmentResponse]
 
 

@@ -11,7 +11,11 @@ from uuid import uuid4
 
 from app.identity.public import Actor
 from app.use_of_collections.application.ports import FileStoragePort
-from app.use_of_collections.domain.models import Attachment
+from app.use_of_collections.domain.models import (
+    Attachment,
+    CollectionUseObjectId,
+    CollectionUseProject,
+)
 
 
 def _now() -> datetime:
@@ -55,6 +59,18 @@ def _new_publication_log_reference_number() -> str:
 
 def _actor_email(actor: Actor) -> str:
     return actor.email or f"{actor.id}@unknown.local"
+
+
+def _validate_collection_use_object(
+    project: CollectionUseProject,
+    collection_use_object_id: CollectionUseObjectId,
+) -> None:
+    """An entry may only link to a CollectionUseObject owned by this project."""
+    if not any(o.id == collection_use_object_id for o in project.objects):
+        raise ValueError(
+            f"Collection use object {collection_use_object_id} is not part of "
+            "this project"
+        )
 
 
 async def _store_attachment(

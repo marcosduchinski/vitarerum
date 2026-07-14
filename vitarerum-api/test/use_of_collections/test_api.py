@@ -2890,6 +2890,60 @@ async def test_add_publication_entry_in_progress_external_creates_log() -> None:
     assert listing_body["content"][0]["note"].startswith("Published")
 
 
+async def test_add_publication_entry_with_collection_use_object_id() -> None:
+    async with client_with_repos(caller=_CALLER) as (
+        client,
+        project_repo,
+        proposal_repo,
+        _,
+    ):
+        await project_repo.add(
+            _project(
+                "project-1",
+                status=UseStatus.IN_PROGRESS,
+                objects=[_collection_use_object("cuo-1", "MB03-000827")],
+            )
+        )
+        await proposal_repo.add(_project_proposal())
+
+        response = await client.post(
+            "/api/v1/collection-use-projects/project-1/publication-entries",
+            json={
+                "note": "Heyning & Dahlheim, Orcinus orca",
+                "collectionUseObjectId": "cuo-1",
+            },
+            headers={"X-Permission-Id": "permission-1"},
+        )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["collectionUseObjectId"] == "cuo-1"
+    assert body["objectReference"]["inventoryNumber"] == "MB03-000827"
+
+
+async def test_add_publication_entry_rejects_foreign_collection_use_object_id() -> None:
+    async with client_with_repos(caller=_CALLER) as (
+        client,
+        project_repo,
+        proposal_repo,
+        _,
+    ):
+        await project_repo.add(_project("project-1", status=UseStatus.IN_PROGRESS))
+        await proposal_repo.add(_project_proposal())
+
+        response = await client.post(
+            "/api/v1/collection-use-projects/project-1/publication-entries",
+            json={
+                "note": "References an object outside this project",
+                "collectionUseObjectId": "not-in-this-project",
+            },
+            headers={"X-Permission-Id": "permission-1"},
+        )
+
+    assert response.status_code == 422
+    assert response.json()["error"] == "VALIDATION_ERROR"
+
+
 async def test_add_publication_entry_staff_while_in_progress_rejected() -> None:
     async with client_with_repos(caller=_STAFF_CALLER) as (
         client,

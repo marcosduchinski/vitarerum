@@ -253,7 +253,11 @@ class ObjectOccurrenceLog:
 @dataclass(slots=True)
 class PublicationLogEntry:
     """Entity inside PublicationLog — one note about a publication or output
-    derived from the project, with optional file attachments."""
+    derived from the project, with optional file attachments.
+
+    ``collection_use_object_id`` is optional: a publication entry may concern a
+    specific collection object (a note/citation about that specimen), or none
+    at all (a general remark about the project)."""
 
     id: PublicationLogEntryId
     publication_log_id: PublicationLogId
@@ -261,6 +265,7 @@ class PublicationLogEntry:
     added_by: PermissionId
     note: str
     attachments: list[Attachment] = field(default_factory=list)
+    collection_use_object_id: CollectionUseObjectId | None = None
 
     def __post_init__(self) -> None:
         if not self.note:

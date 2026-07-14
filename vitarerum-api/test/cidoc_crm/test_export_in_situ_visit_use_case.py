@@ -96,6 +96,33 @@ async def test_export_maps_project_into_record_and_persists() -> None:
     assert len(record.in_situ_publications) == 1
 
 
+async def test_export_propagates_related_object_source_id() -> None:
+    data = _export()
+    export_with_link = ProjectExportData(
+        reference_number=data.reference_number,
+        begin_date=data.begin_date,
+        end_date=data.end_date,
+        use_type=data.use_type,
+        visitor_name=data.visitor_name,
+        requested_objects=data.requested_objects,
+        in_situ_occurrences=[
+            ExportEntry("occ-1", "an occurrence", 0, related_object_source_id="INV-1")
+        ],
+        in_situ_logs=[ExportEntry("log-1", "observed", 0)],
+        in_situ_publications=[
+            ExportEntry("pub-1", "a paper", 0, related_object_source_id="INV-1")
+        ],
+    )
+    use_case, repo = _use_case(export_with_link)
+
+    record = await use_case.execute(ExportInSituVisitInput(project_id="p1"))
+
+    assert repo.added is record
+    assert record.in_situ_occurrences[0].related_object_source_id == "INV-1"
+    assert record.in_situ_logs[0].related_object_source_id is None
+    assert record.in_situ_publications[0].related_object_source_id == "INV-1"
+
+
 async def test_export_raises_when_project_missing() -> None:
     use_case, _ = _use_case(None)
     with pytest.raises(ProjectNotFound):

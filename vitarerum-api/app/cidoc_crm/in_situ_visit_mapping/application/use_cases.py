@@ -135,6 +135,7 @@ def _entry_to_child(entry: ExportEntry) -> ChildData:
         source_id=entry.source_id,
         description=entry.description,
         position=entry.position,
+        related_object_source_id=entry.related_object_source_id,
         attachments=[
             AttachmentData(
                 source_id=att.source_id,

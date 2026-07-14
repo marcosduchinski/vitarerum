@@ -62,6 +62,7 @@ def _entry(view: ExportEntryView) -> ExportEntry:
         source_id=view.source_id,
         description=view.description,
         position=view.position,
+        related_object_source_id=view.object_source_id,
         attachments=[
             ExportAttachment(
                 source_id=att.source_id,

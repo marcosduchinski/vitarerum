@@ -61,6 +61,7 @@ class InSituOccurrenceRecord:
     description: str
     position: int
     attachments: list[InSituOccurrenceAttachmentRecord] = field(default_factory=list)
+    related_object_source_id: str | None = None
 
 
 @dataclass(slots=True)
@@ -81,6 +82,7 @@ class InSituLogRecord:
     description: str
     position: int
     attachments: list[InSituLogAttachmentRecord] = field(default_factory=list)
+    related_object_source_id: str | None = None
 
 
 @dataclass(slots=True)
@@ -101,6 +103,7 @@ class InSituPublicationRecord:
     description: str
     position: int
     attachments: list[InSituPublicationAttachmentRecord] = field(default_factory=list)
+    related_object_source_id: str | None = None
 
 
 # ── Children-as-data, used by the create() factory ─────────────────────────────
@@ -117,12 +120,15 @@ class AttachmentData:
 @dataclass(frozen=True, slots=True)
 class ChildData:
     """A requested object, occurrence, log, or publication before id assignment.
-    ``attachments`` is ignored for requested objects (they carry none)."""
+    ``attachments`` is ignored for requested objects (they carry none).
+    ``related_object_source_id`` is only used by occurrences and logs, to link
+    the entry back to the specific requested object it concerns."""
 
     source_id: str
     description: str
     position: int
     attachments: list[AttachmentData] = field(default_factory=list)
+    related_object_source_id: str | None = None
 
 
 @dataclass(slots=True)
@@ -197,6 +203,7 @@ def _build_occurrence(
         source_id=data.source_id,
         description=data.description,
         position=data.position,
+        related_object_source_id=data.related_object_source_id,
         attachments=[
             InSituOccurrenceAttachmentRecord(
                 id=InSituOccurrenceAttachmentId(_new_id()),
@@ -219,6 +226,7 @@ def _build_log(visit_id: InSituVisitId, data: ChildData) -> InSituLogRecord:
         source_id=data.source_id,
         description=data.description,
         position=data.position,
+        related_object_source_id=data.related_object_source_id,
         attachments=[
             InSituLogAttachmentRecord(
                 id=InSituLogAttachmentId(_new_id()),
@@ -243,6 +251,7 @@ def _build_publication(
         source_id=data.source_id,
         description=data.description,
         position=data.position,
+        related_object_source_id=data.related_object_source_id,
         attachments=[
             InSituPublicationAttachmentRecord(
                 id=InSituPublicationAttachmentId(_new_id()),

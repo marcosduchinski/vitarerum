@@ -316,6 +316,7 @@ def publication_entry_to_record(
         added_at=entry.added_at,
         added_by=entry.added_by,
         note=entry.note,
+        collection_use_object_id=entry.collection_use_object_id,
         attachments=[
             PublicationEntryAttachmentRecord(
                 file_reference=a.file_reference,
@@ -338,6 +339,11 @@ def publication_entry_to_domain(
         added_at=record.added_at,
         added_by=PermissionId(record.added_by),
         note=record.note,
+        collection_use_object_id=(
+            CollectionUseObjectId(record.collection_use_object_id)
+            if record.collection_use_object_id
+            else None
+        ),
         attachments=[_attachment_to_domain(a) for a in record.attachments],
     )
 
@@ -1209,6 +1215,9 @@ class SqlAlchemyProjectExportReader:
         ).get_by_id(typed_id)
         if project is None:
             return None
+        inventory_by_object_id = {
+            obj.id: obj.inventory_number for obj in project.objects
+        }
 
         proposal = await SqlAlchemyProposalRepository(self._session).get_by_project_id(
             typed_id
@@ -1246,6 +1255,9 @@ class SqlAlchemyProjectExportReader:
                     description=entry.detailed_description,
                     position=index,
                     attachments=_attachment_views(entry.attachments),
+                    object_source_id=inventory_by_object_id.get(
+                        entry.collection_use_object_id
+                    ),
                 )
                 for index, entry in enumerate(
                     occurrence_log.objects if occurrence_log else []
@@ -1257,6 +1269,9 @@ class SqlAlchemyProjectExportReader:
                     description=entry.observations or "",
                     position=index,
                     attachments=_attachment_views(entry.attachments),
+                    object_source_id=inventory_by_object_id.get(
+                        entry.collection_use_object_id
+                    ),
                 )
                 for index, entry in enumerate(access_log.objects if access_log else [])
             ],
@@ -1266,6 +1281,11 @@ class SqlAlchemyProjectExportReader:
                     description=entry.note,
                     position=index,
                     attachments=_attachment_views(entry.attachments),
+                    object_source_id=(
+                        inventory_by_object_id.get(entry.collection_use_object_id)
+                        if entry.collection_use_object_id is not None
+                        else None
+                    ),
                 )
                 for index, entry in enumerate(
                     publication_log.entries if publication_log else []

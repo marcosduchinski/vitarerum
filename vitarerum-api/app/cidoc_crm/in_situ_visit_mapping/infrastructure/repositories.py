@@ -82,6 +82,7 @@ def record_to_orm(record: InSituVisitRecord) -> InSituVisitRecordOrm:
                 source_id=occ.source_id,
                 description=occ.description,
                 position=occ.position,
+                related_object_source_id=occ.related_object_source_id,
                 attachments=[
                     InSituOccurrenceAttachmentRecordOrm(
                         id=att.id,
@@ -103,6 +104,7 @@ def record_to_orm(record: InSituVisitRecord) -> InSituVisitRecordOrm:
                 source_id=log.source_id,
                 description=log.description,
                 position=log.position,
+                related_object_source_id=log.related_object_source_id,
                 attachments=[
                     InSituLogAttachmentRecordOrm(
                         id=att.id,
@@ -124,6 +126,7 @@ def record_to_orm(record: InSituVisitRecord) -> InSituVisitRecordOrm:
                 source_id=pub.source_id,
                 description=pub.description,
                 position=pub.position,
+                related_object_source_id=pub.related_object_source_id,
                 attachments=[
                     InSituPublicationAttachmentRecordOrm(
                         id=att.id,
@@ -170,6 +173,7 @@ def record_to_domain(orm: InSituVisitRecordOrm) -> InSituVisitRecord:
                 source_id=occ.source_id,
                 description=occ.description,
                 position=occ.position,
+                related_object_source_id=occ.related_object_source_id,
                 attachments=[
                     InSituOccurrenceAttachmentRecord(
                         id=InSituOccurrenceAttachmentId(att.id),
@@ -191,6 +195,7 @@ def record_to_domain(orm: InSituVisitRecordOrm) -> InSituVisitRecord:
                 source_id=log.source_id,
                 description=log.description,
                 position=log.position,
+                related_object_source_id=log.related_object_source_id,
                 attachments=[
                     InSituLogAttachmentRecord(
                         id=InSituLogAttachmentId(att.id),
@@ -212,6 +217,7 @@ def record_to_domain(orm: InSituVisitRecordOrm) -> InSituVisitRecord:
                 source_id=pub.source_id,
                 description=pub.description,
                 position=pub.position,
+                related_object_source_id=pub.related_object_source_id,
                 attachments=[
                     InSituPublicationAttachmentRecord(
                         id=InSituPublicationAttachmentId(att.id),

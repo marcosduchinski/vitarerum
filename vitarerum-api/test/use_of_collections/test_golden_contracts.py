@@ -433,6 +433,8 @@ async def test_golden_publication_entries_shapes() -> None:
         "id",
         "addedAt",
         "note",
+        "collectionUseObjectId",
+        "objectReference",
         "attachments.[]",
     }
     assert created.status_code == 201

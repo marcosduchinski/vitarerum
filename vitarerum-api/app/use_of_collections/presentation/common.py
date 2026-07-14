@@ -370,7 +370,9 @@ async def _build_occurrence_log_response(
 
 
 async def _build_publication_entry(
-    entry: PublicationLogEntry, session: AsyncSession
+    entry: PublicationLogEntry,
+    session: AsyncSession,
+    collection_use_object: CollectionUseObject | None = None,
 ) -> PublicationLogEntryResponse:
     added_by = await hydrate_permission(entry.added_by, session) or _stub_perm(
         entry.added_by
@@ -380,6 +382,12 @@ async def _build_publication_entry(
         addedAt=entry.added_at,
         addedBy=added_by,
         note=entry.note,
+        collectionUseObjectId=entry.collection_use_object_id,
+        objectReference=(
+            _object_reference_response(collection_use_object)
+            if collection_use_object is not None
+            else None
+        ),
         attachments=[
             AttachmentResponse(
                 fileReference=a.file_reference,

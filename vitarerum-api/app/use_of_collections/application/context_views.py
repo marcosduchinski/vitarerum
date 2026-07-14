@@ -39,12 +39,17 @@ class ExportObjectView:
 
 @dataclass(frozen=True, slots=True)
 class ExportEntryView:
-    """A journal entry (occurrence / access log / publication) with attachments."""
+    """A journal entry (occurrence / access log / publication) with attachments.
+
+    ``object_source_id`` is the inventory number of the specific collection
+    object the entry concerns (occurrences and access log entries always refer
+    to one; publication entries have none, so it stays ``None``)."""
 
     source_id: str
     description: str
     position: int
     attachments: list[ExportAttachmentView] = field(default_factory=list)
+    object_source_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

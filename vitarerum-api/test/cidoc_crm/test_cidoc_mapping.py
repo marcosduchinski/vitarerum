@@ -128,6 +128,81 @@ def test_visit_links_to_actor_place_timespan_and_type() -> None:
     assert visit["crm:P2_has_type"] == {"@id": "ex:type/in-situ-visit"}
 
 
+def test_occurrence_and_log_link_to_related_object_when_present() -> None:
+    record = InSituVisitRecord.create(
+        code="VS-0002",
+        visit_begin_date=date(2026, 6, 19),
+        visit_end_date=date(2026, 6, 20),
+        visitor_name="Maria do Rosário",
+        place_name="MUSEU",
+        requested_objects=[ChildData("XL01", "lupus lupus", 1)],
+        in_situ_occurrences=[
+            ChildData(
+                "OC-10",
+                "o objeto caiu da mesa",
+                0,
+                related_object_source_id="XL01",
+            )
+        ],
+        in_situ_logs=[
+            ChildData("LOG01", "detalhes finos", 0, related_object_source_id="XL01"),
+            ChildData("LOG02", "sem objeto associado", 1),
+        ],
+    )
+    doc = map_record_to_cidoc(record)
+    object_id = next(
+        n["@id"] for n in doc["@graph"] if n["@type"] == "crm:E20_Biological_Object"
+    )
+
+    occurrence = next(n for n in doc["@graph"] if n["@id"].startswith("ex:occurrence/"))
+    # E7_Activity → E70_Thing: correct CRM domain/range for P16.
+    assert occurrence["crm:P16_used_specific_object"] == {"@id": object_id}
+
+    log_with_object = next(
+        n for n in doc["@graph"] if n.get("rdfs:label") == "LOG01"
+    )
+    # E31_Document → E1_CRM_Entity: P129 (not P16) since a document isn't an
+    # activity that "used" the object, it's just about it.
+    assert log_with_object["crm:P129_is_about"] == {"@id": object_id}
+
+    log_without_object = next(
+        n for n in doc["@graph"] if n.get("rdfs:label") == "LOG02"
+    )
+    assert "crm:P129_is_about" not in log_without_object
+
+
+def test_publication_information_object_links_to_related_object_when_present() -> None:
+    record = InSituVisitRecord.create(
+        code="VS-0003",
+        visit_begin_date=date(2026, 6, 19),
+        visit_end_date=date(2026, 6, 20),
+        visitor_name="Maria do Rosário",
+        place_name="MUSEU",
+        requested_objects=[ChildData("XL01", "lupus lupus", 1)],
+        in_situ_publications=[
+            ChildData(
+                "PUB01",
+                "Heyning & Dahlheim, Orcinus orca",
+                0,
+                related_object_source_id="XL01",
+            )
+        ],
+    )
+    doc = map_record_to_cidoc(record)
+    object_id = next(
+        n["@id"] for n in doc["@graph"] if n["@type"] == "crm:E20_Biological_Object"
+    )
+
+    creation = next(n for n in doc["@graph"] if n["@type"] == "crm:E65_Creation")
+    information_object = next(
+        n for n in doc["@graph"] if n["@id"].startswith("ex:information/")
+    )
+    # The link belongs on the E73 Information Object (E89 Propositional Object),
+    # not the E65 Creation event — P129's domain wouldn't accept the latter.
+    assert "crm:P129_is_about" not in creation
+    assert information_object["crm:P129_is_about"] == {"@id": object_id}
+
+
 class _StubRepo:
     def __init__(self, record: InSituVisitRecord | None) -> None:
         self._record = record

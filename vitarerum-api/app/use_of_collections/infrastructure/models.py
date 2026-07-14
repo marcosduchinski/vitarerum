@@ -265,6 +265,9 @@ class PublicationLogEntryRecord(Base):
     added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     added_by: Mapped[str] = mapped_column(String(36), index=True)
     note: Mapped[str] = mapped_column(Text)
+    collection_use_object_id: Mapped[str | None] = mapped_column(
+        ForeignKey("collection_use_objects.id"), index=True, default=None
+    )
 
     publication_log: Mapped[PublicationLogRecord] = relationship(
         back_populates="entries"

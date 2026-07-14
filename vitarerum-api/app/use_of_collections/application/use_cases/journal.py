@@ -30,6 +30,7 @@ from app.use_of_collections.application.use_cases._shared import (
     _new_occurrence_log_reference_number,
     _now,
     _store_attachment,
+    _validate_collection_use_object,
 )
 from app.use_of_collections.domain.enums import UseStatus
 from app.use_of_collections.domain.models import (
@@ -99,18 +100,6 @@ def _assert_entry_log_writable(
         raise LookupError(f"No entry found with id {entry_id}")
     if log.is_concluded:
         raise InvalidTransition(f"Cannot {action} a concluded {log_kind}")
-
-
-def _validate_collection_use_object(
-    project: CollectionUseProject,
-    collection_use_object_id: CollectionUseObjectId,
-) -> None:
-    """An entry may only link to a CollectionUseObject owned by this project."""
-    if not any(o.id == collection_use_object_id for o in project.objects):
-        raise ValueError(
-            f"Collection use object {collection_use_object_id} is not part of "
-            "this project"
-        )
 
 
 # ── Object access log ──────────────────────────────────────────────────────────
