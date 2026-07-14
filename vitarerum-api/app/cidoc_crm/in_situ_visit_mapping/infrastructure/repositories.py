@@ -1,4 +1,4 @@
-"""SQLAlchemy repository for the In Situ Visit CEDOC mapping aggregate.
+"""SQLAlchemy repository for the In Situ Visit CIDOC mapping aggregate.
 
 The whole aggregate is written in one shot (the root cascades to children and
 attachments) and read back with the nested relationships eagerly loaded.

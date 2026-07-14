@@ -5,7 +5,7 @@ skinparam linetype ortho
 skinparam shadowing false
 
 
-package "In Situ Visit CEDOC Mapping" <<Bounded Context>> {
+package "In Situ Visit CIDOC Mapping" <<Bounded Context>> {
 
 class InSituVisitRecord {
     + id: UUID <<PK>>

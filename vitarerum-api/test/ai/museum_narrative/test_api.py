@@ -93,7 +93,7 @@ async def _client(
     app.dependency_overrides.clear()
 
 
-_URL = "/api/v1/cedoc-mapping/in-situ-visit/r1/narrative"
+_URL = "/api/v1/cidoc-mapping/in-situ-visit/r1/narrative"
 
 
 async def test_default_type_returns_institutional() -> None:
@@ -168,7 +168,7 @@ async def test_external_caller_is_403() -> None:
 
 # ── persistence ──────────────────────────────────────────────────────────────-
 
-_LIST_URL = "/api/v1/cedoc-mapping/in-situ-visit/r1/narratives"
+_LIST_URL = "/api/v1/cidoc-mapping/in-situ-visit/r1/narratives"
 
 
 async def test_post_persists_and_returns_identifiers() -> None:
@@ -248,7 +248,7 @@ async def test_get_under_wrong_record_is_404() -> None:
         narrative_id = (await client.post(_URL, json={})).json()["narrative_id"]
         # same narrative id, but addressed under a different visit record
         resp = await client.get(
-            f"/api/v1/cedoc-mapping/in-situ-visit/other/narratives/{narrative_id}"
+            f"/api/v1/cidoc-mapping/in-situ-visit/other/narratives/{narrative_id}"
         )
     assert resp.status_code == 404
     assert resp.json()["error"] == "NARRATIVE_NOT_FOUND"
@@ -259,7 +259,7 @@ async def test_patch_under_wrong_record_is_404() -> None:
     async with _client(repo=repo) as client:
         narrative_id = (await client.post(_URL, json={})).json()["narrative_id"]
         resp = await client.patch(
-            f"/api/v1/cedoc-mapping/in-situ-visit/other/narratives/{narrative_id}",
+            f"/api/v1/cidoc-mapping/in-situ-visit/other/narratives/{narrative_id}",
             json={"narrative": "edited"},
         )
     assert resp.status_code == 404

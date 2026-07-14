@@ -192,7 +192,7 @@ describe('ReportsApiService', () => {
     service.getInSituVisitCidocCrm('record-1').subscribe((document) => (received = document));
 
     const request = http.expectOne(
-      'https://api.example.test/cedoc-mapping/in-situ-visit/record-1/cidoc-crm',
+      'https://api.example.test/cidoc-mapping/in-situ-visit/record-1/cidoc-crm',
     );
     expect(request.request.method).toBe('GET');
 
@@ -214,7 +214,7 @@ describe('ReportsApiService', () => {
       .subscribe((narrative) => (receivedText = narrative.text));
 
     const request = http.expectOne(
-      'https://api.example.test/cedoc-mapping/in-situ-visit/record-1/narratives/narrative-1',
+      'https://api.example.test/cidoc-mapping/in-situ-visit/record-1/narratives/narrative-1',
     );
     expect(request.request.method).toBe('PATCH');
     expect(request.request.body).toEqual({ narrative: 'Corrected narrative text.' });

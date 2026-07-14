@@ -1,4 +1,4 @@
-"""Application services for the In Situ Visit CEDOC mapping context.
+"""Application services for the In Situ Visit CIDOC mapping context.
 
 One use case per endpoint: ``RecordInSituVisit`` persists a freshly generated
 aggregate (POST), ``ListInSituVisits`` returns a page of stored records (GET).

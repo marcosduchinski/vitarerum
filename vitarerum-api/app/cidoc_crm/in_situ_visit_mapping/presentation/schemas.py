@@ -1,4 +1,4 @@
-"""Pydantic request/response shapes for the In Situ Visit CEDOC mapping API,
+"""Pydantic request/response shapes for the In Situ Visit CIDOC mapping API,
 matching 08InSituVisit-CIDOC-CRM.md exactly (camelCase JSON)."""
 
 from __future__ import annotations

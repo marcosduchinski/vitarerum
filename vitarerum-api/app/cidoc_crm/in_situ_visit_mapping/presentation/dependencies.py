@@ -1,4 +1,4 @@
-"""Composition root for the In Situ Visit CEDOC mapping inbound adapter.
+"""Composition root for the In Situ Visit CIDOC mapping inbound adapter.
 
 Wires the SQLAlchemy repository to the two application use cases. Route handlers
 depend only on the ``Annotated`` aliases exported here.

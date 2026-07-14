@@ -305,7 +305,7 @@ test.describe('in-situ visit report creation', () => {
 
     let cidocRequestCount = 0;
     let cidocPermissionHeader: string | undefined;
-    await page.route('**/cedoc-mapping/in-situ-visit/record-1/cidoc-crm', async (route) => {
+    await page.route('**/cidoc-mapping/in-situ-visit/record-1/cidoc-crm', async (route) => {
       cidocRequestCount += 1;
       cidocPermissionHeader = route.request().headers()['x-permission-id'];
       await route.fulfill({
@@ -325,7 +325,7 @@ test.describe('in-situ visit report creation', () => {
     let patchRequestBody: unknown;
     let patchPermissionHeader: string | undefined;
     await page.route(
-      '**/cedoc-mapping/in-situ-visit/record-1/narratives/narrative-1',
+      '**/cidoc-mapping/in-situ-visit/record-1/narratives/narrative-1',
       async (route) => {
         patchRequestBody = route.request().postDataJSON();
         patchPermissionHeader = route.request().headers()['x-permission-id'];

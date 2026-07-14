@@ -1,4 +1,4 @@
-"""Domain model for the In Situ Visit CEDOC mapping context.
+"""Domain model for the In Situ Visit CIDOC mapping context.
 
 A generated, read-oriented projection of an in-situ visit ready to be mapped to
 CIDOC-CRM. ``InSituVisitRecord`` is the aggregate root; its four child

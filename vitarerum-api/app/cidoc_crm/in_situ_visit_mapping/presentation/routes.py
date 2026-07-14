@@ -1,4 +1,4 @@
-"""In Situ Visit CEDOC mapping endpoints (the driving adapter).
+"""In Situ Visit CIDOC mapping endpoints (the driving adapter).
 
 Two staff-only operations over the ``InSituVisitRecord`` aggregate: persist one
 (POST) and list them paginated (GET). Authentication uses the shared
@@ -49,11 +49,11 @@ from app.shared.authorization import require_staff
 from app.shared.dependencies import CallerPermission
 
 in_situ_visit_router = APIRouter(
-    prefix="/cedoc-mapping/in-situ-visit", tags=["cedoc-mapping"]
+    prefix="/cidoc-mapping/in-situ-visit", tags=["cidoc-mapping"]
 )
 
 project_export_router = APIRouter(
-    prefix="/collection-use-projects", tags=["cedoc-mapping"]
+    prefix="/collection-use-projects", tags=["cidoc-mapping"]
 )
 
 DBSession = Annotated[AsyncSession, Depends(get_async_session)]

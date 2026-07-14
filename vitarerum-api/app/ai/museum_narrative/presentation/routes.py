@@ -52,7 +52,7 @@ from app.shared.authorization import require_staff
 from app.shared.dependencies import CallerPermission
 
 museum_narrative_router = APIRouter(
-    prefix="/cedoc-mapping/in-situ-visit", tags=["kg-rag-narrative"]
+    prefix="/cidoc-mapping/in-situ-visit", tags=["kg-rag-narrative"]
 )
 
 

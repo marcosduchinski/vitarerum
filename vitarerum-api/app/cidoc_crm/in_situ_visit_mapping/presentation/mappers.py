@@ -1,4 +1,4 @@
-"""Domain → response mapping for the In Situ Visit CEDOC mapping context.
+"""Domain → response mapping for the In Situ Visit CIDOC mapping context.
 
 Extracted from ``routes.py`` so the same mapping can be reused by the published
 language (``app.cidoc_crm.public``) without pulling in the router.

@@ -102,7 +102,7 @@ export class ReportsApiService {
 
   getInSituVisitCidocCrm(recordId: string) {
     return this.http.get<CidocCrmJsonObject>(
-      this.url(`/cedoc-mapping/in-situ-visit/${recordId}/cidoc-crm`),
+      this.url(`/cidoc-mapping/in-situ-visit/${recordId}/cidoc-crm`),
     );
   }
 
@@ -113,7 +113,7 @@ export class ReportsApiService {
   ) {
     return this.http
       .patch<NarrativeDto>(
-        this.url(`/cedoc-mapping/in-situ-visit/${recordId}/narratives/${narrativeId}`),
+        this.url(`/cidoc-mapping/in-situ-visit/${recordId}/narratives/${narrativeId}`),
         { narrative: request.narrative },
       )
       .pipe(map((narrative) => this.toNarrative(narrative)));

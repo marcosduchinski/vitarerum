@@ -20,7 +20,7 @@ metadata stays unchanged. The `POST` returns the new `narrative_id`; the two
 
 ---
 
-## POST /api/v1/cedoc-mapping/in-situ-visit/{record_id}/narrative
+## POST /api/v1/cidoc-mapping/in-situ-visit/{record_id}/narrative
 
 **Path parameters**
 
@@ -108,7 +108,7 @@ local LLM could not be reached or returned an empty narrative. **504
 
 ---
 
-## GET /api/v1/cedoc-mapping/in-situ-visit/{record_id}/narratives
+## GET /api/v1/cidoc-mapping/in-situ-visit/{record_id}/narratives
 
 Lists the stored narratives for an in-situ visit record, **newest first**,
 paginated. Staff-only.
@@ -150,7 +150,7 @@ An unknown `record_id` simply returns an empty page (`total_elements: 0`).
 
 ---
 
-## GET /api/v1/cedoc-mapping/in-situ-visit/{record_id}/narratives/{narrative_id}
+## GET /api/v1/cidoc-mapping/in-situ-visit/{record_id}/narratives/{narrative_id}
 
 Returns one stored narrative. Staff-only. The body is a single
 `StoredNarrative` object (same shape as a `content[]` item above).
@@ -169,7 +169,7 @@ Returns one stored narrative. Staff-only. The body is a single
 
 ---
 
-## PATCH /api/v1/cedoc-mapping/in-situ-visit/{record_id}/narratives/{narrative_id}
+## PATCH /api/v1/cidoc-mapping/in-situ-visit/{record_id}/narratives/{narrative_id}
 
 Edits the **text** of a stored narrative (a manual editorial correction). Only
 the `narrative` property is mutable; the metadata (type, source, language,

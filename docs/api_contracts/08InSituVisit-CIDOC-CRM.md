@@ -1,6 +1,6 @@
 # In Situ Visit — CIDOC-CRM mapping
 
-The In Situ Visit CEDOC mapping is a separate bounded context
+The In Situ Visit CIDOC mapping is a separate bounded context
 (`app/cidoc_crm/in_situ_visit_mapping`) that stores **generated mapping records** of
 in-situ visits, ready to be projected onto CIDOC-CRM. The aggregate root is
 `InSituVisitRecord`; it owns four child collections — `requestedObjects`,
@@ -21,7 +21,7 @@ bearer token + `X-Permission-Id` header) and the same error shape
 
 ---
 
-## POST /api/v1/cedoc-mapping/in-situ-visit
+## POST /api/v1/cidoc-mapping/in-situ-visit
 
 **Description** — Persists a new in-situ visit mapping record with its full child
 graph. The server assigns the aggregate `id`, every child/attachment `id`, and the
@@ -177,7 +177,7 @@ required field, invalid date). Follows the shared validation shape:
 
 ---
 
-## GET /api/v1/cedoc-mapping/in-situ-visit
+## GET /api/v1/cidoc-mapping/in-situ-visit
 
 **Description** — Lists stored in-situ visit mapping records, most recently
 generated first, with their full child graphs. Paginated.
@@ -222,7 +222,7 @@ is the total count across all pages; `totalPages` is `ceil(totalElements / size)
 
 ---
 
-## GET /api/v1/cedoc-mapping/in-situ-visit/{record_id}/cidoc-crm
+## GET /api/v1/cidoc-mapping/in-situ-visit/{record_id}/cidoc-crm
 
 **Description** — Returns a **CIDOC-CRM 7.1.3 JSON-LD** representation of a stored
 record, mapping the aggregate onto CRM entities and properties. The visit becomes an
@@ -311,7 +311,7 @@ terms, the per-child nodes described above, and a provenance node
 
 **Description** — Generates an `InSituVisitRecord` **from an existing
 collection-use project** and persists it, then returns the stored record (same
-`201 Created` body shape as `POST /api/v1/cedoc-mapping/in-situ-visit`). This is a
+`201 Created` body shape as `POST /api/v1/cidoc-mapping/in-situ-visit`). This is a
 cross-context export: the mapping context reads the project and its journals
 through the Use of Collections published language (OHS), maps them, and saves a
 fresh snapshot. Each call creates a **new** record (no de-duplication); `id`,
@@ -338,7 +338,7 @@ inSituPublications <- PublicationLog entries      (sourceId = entry id, attachme
 There is no request body; `place_name` comes from the `INSTITUTION_NAME` setting.
 
 **Response 201 Created** — identical shape to the
-`POST /api/v1/cedoc-mapping/in-situ-visit` response above.
+`POST /api/v1/cidoc-mapping/in-situ-visit` response above.
 
 **Response 403 Forbidden** — non-staff callers (`EXTERNAL`).
 

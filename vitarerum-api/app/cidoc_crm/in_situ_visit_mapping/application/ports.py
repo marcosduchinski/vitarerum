@@ -1,4 +1,4 @@
-"""Application ports for the In Situ Visit CEDOC mapping context."""
+"""Application ports for the In Situ Visit CIDOC mapping context."""
 
 from __future__ import annotations
 

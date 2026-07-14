@@ -13,7 +13,7 @@ The final text is adapted to a specific **Narrative Type**, allowing the museum 
 ## 2. Endpoint Definition
 
 * **HTTP Method:** `POST`
-* **Path:** `/api/v1/cedoc-mapping/in-situ-visit/{record_id}/narrative`
+* **Path:** `/api/v1/cidoc-mapping/in-situ-visit/{record_id}/narrative`
 * **Content-Type:** `application/json`
 
 ### Path Parameters

@@ -1,4 +1,4 @@
-"""SQLAlchemy ORM models for the In Situ Visit CEDOC mapping context.
+"""SQLAlchemy ORM models for the In Situ Visit CIDOC mapping context.
 
 Class names carry an ``Orm`` suffix because the domain classes (in
 ``domain/models.py``) already use the PUML ``...Record`` names. Tables form the
