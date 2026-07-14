@@ -88,7 +88,11 @@ class Attachment:
     file_name: str
     media_type: MediaType
     uploaded_at: datetime
-    note: str | None = None
+    description: str
+
+    def __post_init__(self) -> None:
+        if not self.description.strip():
+            raise ValueError("description is required.")
 
 
 @dataclass(frozen=True, slots=True)

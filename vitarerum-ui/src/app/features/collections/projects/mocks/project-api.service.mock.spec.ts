@@ -425,7 +425,7 @@ describe('ProjectApiServiceMock', () => {
     session.set(staffSession());
     const file = new File(['x'], 'evidence.pdf', { type: 'application/pdf' });
     const attachment = await firstValueFrom(
-      service.uploadLogEntryAttachment('proj-3', 'entry-101', file, 'DOCUMENT'),
+      service.uploadLogEntryAttachment('proj-3', 'entry-101', file, 'DOCUMENT', 'Evidence PDF'),
     );
 
     const blob = await firstValueFrom(
@@ -446,7 +446,7 @@ describe('ProjectApiServiceMock', () => {
     session.set(staffSession());
     const file = new File(['x'], 'evidence.pdf', { type: 'application/pdf' });
     const attachment = await firstValueFrom(
-      service.uploadLogEntryAttachment('proj-3', 'entry-101', file, 'DOCUMENT'),
+      service.uploadLogEntryAttachment('proj-3', 'entry-101', file, 'DOCUMENT', 'Evidence PDF'),
     );
 
     await firstValueFrom(
@@ -482,6 +482,7 @@ describe('ProjectApiServiceMock', () => {
         entry.id,
         new File(['occ'], 'occurrence.pdf', { type: 'application/pdf' }),
         'DOCUMENT',
+        'Occurrence PDF',
       ),
     );
 
@@ -520,6 +521,7 @@ describe('ProjectApiServiceMock', () => {
           'no-such-entry',
           new File(['x'], 'x.jpg'),
           'IMAGE',
+          'Photo',
         ),
       ),
     ).rejects.toMatchObject({
@@ -605,7 +607,7 @@ describe('ProjectApiServiceMock', () => {
     const attachment = await firstValueFrom(
       service.uploadPublicationEntryAttachment('proj-4', entry.id, file, 'DOCUMENT', 'The PDF'),
     );
-    expect(attachment.note).toBe('The PDF');
+    expect(attachment.attachmentDescription).toBe('The PDF');
 
     const page = await firstValueFrom(service.listPublicationEntries('proj-4'));
     const stored = page.content.find((e) => e.id === entry.id);

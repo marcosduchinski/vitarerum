@@ -177,7 +177,7 @@ def _attachment_to_domain(record: object) -> Attachment:
         file_name=a.file_name,
         media_type=a.media_type,
         uploaded_at=a.uploaded_at,
-        note=a.note,
+        description=a.description,
     )
 
 
@@ -196,7 +196,7 @@ def log_entry_to_record(entry: ObjectLogEntry) -> ObjectLogEntryRecord:
                 file_name=a.file_name,
                 media_type=a.media_type,
                 uploaded_at=a.uploaded_at,
-                note=a.note,
+                description=a.description,
             )
             for a in entry.attachments
         ],
@@ -257,7 +257,7 @@ def occurrence_entry_to_record(
                 file_name=a.file_name,
                 media_type=a.media_type,
                 uploaded_at=a.uploaded_at,
-                note=a.note,
+                description=a.description,
             )
             for a in entry.attachments
         ],
@@ -323,7 +323,7 @@ def publication_entry_to_record(
                 file_name=a.file_name,
                 media_type=a.media_type,
                 uploaded_at=a.uploaded_at,
-                note=a.note,
+                description=a.description,
             )
             for a in entry.attachments
         ],
@@ -1189,7 +1189,7 @@ def _attachment_views(attachments: list[Attachment]) -> list[ExportAttachmentVie
     return [
         ExportAttachmentView(
             source_id=att.file_reference,
-            description=att.note or att.file_name,
+            description=att.description,
             reference=att.file_reference,
             position=index,
         )

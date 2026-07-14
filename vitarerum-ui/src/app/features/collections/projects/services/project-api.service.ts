@@ -170,10 +170,12 @@ export class ProjectApiService {
     entryId: string,
     file: File,
     mediaType: MediaType,
+    attachmentDescription: string,
   ): Observable<Attachment> {
     const body = new FormData();
     body.append('file', file);
     body.append('mediaType', mediaType);
+    body.append('attachmentDescription', attachmentDescription);
 
     return this.http.post<Attachment>(
       this.url(`/collection-use-projects/${projectId}/log-entries/${entryId}/attachments`),
@@ -255,10 +257,12 @@ export class ProjectApiService {
     entryId: string,
     file: File,
     mediaType: MediaType,
+    attachmentDescription: string,
   ): Observable<Attachment> {
     const body = new FormData();
     body.append('file', file);
     body.append('mediaType', mediaType);
+    body.append('attachmentDescription', attachmentDescription);
 
     return this.http.post<Attachment>(
       this.url(`/collection-use-projects/${projectId}/occurrence-entries/${entryId}/attachments`),
@@ -336,12 +340,12 @@ export class ProjectApiService {
     entryId: string,
     file: File,
     mediaType: MediaType,
-    note?: string,
+    attachmentDescription: string,
   ): Observable<Attachment> {
     const body = new FormData();
     body.append('file', file);
     body.append('mediaType', mediaType);
-    if (note) body.append('note', note);
+    body.append('attachmentDescription', attachmentDescription);
 
     return this.http.post<Attachment>(
       this.url(`/collection-use-projects/${projectId}/publication-entries/${entryId}/attachments`),

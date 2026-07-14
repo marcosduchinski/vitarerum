@@ -152,6 +152,7 @@ def test_object_log_entry_roundtrip_preserves_reference_and_attachments() -> Non
                 file_name="photo.jpg",
                 media_type=MediaType.IMAGE,
                 uploaded_at=now,
+                description="Photo of the object",
             )
         ],
     )
@@ -216,6 +217,7 @@ def test_publication_log_roundtrip_preserves_entries_and_curator() -> None:
                         file_name="paper.pdf",
                         media_type=MediaType.DOCUMENT,
                         uploaded_at=now,
+                        description="Publication PDF",
                     )
                 ],
             )

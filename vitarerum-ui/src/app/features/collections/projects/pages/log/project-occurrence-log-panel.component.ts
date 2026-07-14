@@ -30,6 +30,8 @@ interface OccurrenceObjectRow {
   readonly occurrences: readonly ObjectOccurrenceEntry[];
 }
 
+type InitialAttachmentDescriptions = Record<number, string>;
+
 @Component({
   selector: 'app-project-occurrence-log-panel',
   standalone: true,
@@ -121,6 +123,7 @@ export class ProjectOccurrenceLogPanelComponent {
   protected readonly occurrenceDescription = signal('');
   protected readonly occurrenceTestimonial = signal('');
   protected readonly occurrenceFiles = signal<readonly File[]>([]);
+  protected readonly occurrenceFileDescriptions = signal<InitialAttachmentDescriptions>({});
   protected readonly occurrenceSubmitting = signal(false);
   protected readonly occurrenceSubmitError = signal<ApiError | null>(null);
   protected readonly occurrenceFormValid = computed(
@@ -128,7 +131,8 @@ export class ProjectOccurrenceLogPanelComponent {
       !!this.selectedOccurrenceObject() &&
       this.occurrenceDate().trim().length > 0 &&
       this.occurrenceLocation().trim().length > 0 &&
-      this.occurrenceDescription().trim().length > 0,
+      this.occurrenceDescription().trim().length > 0 &&
+      this.occurrenceFiles().every((_, index) => this.occurrenceFileDescription(index).trim()),
   );
   protected readonly occurrenceEditNumberOfObjects = signal(1);
   protected readonly occurrenceEditDate = signal('');
@@ -146,6 +150,7 @@ export class ProjectOccurrenceLogPanelComponent {
       this.occurrenceEditDescription().trim().length > 0,
   );
   protected readonly occurrenceAttachmentFiles = signal<Record<string, File | null>>({});
+  protected readonly occurrenceAttachmentDescriptions = signal<Record<string, string>>({});
   protected readonly occurrenceAttachmentUploading = signal<Record<string, boolean>>({});
   protected readonly occurrenceAttachmentErrors = signal<Record<string, ApiError | null>>({});
   // Download state is keyed by the attachment's fileReference.
@@ -169,6 +174,7 @@ export class ProjectOccurrenceLogPanelComponent {
     this.occurrenceDescription.set('');
     this.occurrenceTestimonial.set('');
     this.occurrenceFiles.set([]);
+    this.occurrenceFileDescriptions.set({});
     this.occurrenceSubmitError.set(null);
   }
 
@@ -213,6 +219,18 @@ export class ProjectOccurrenceLogPanelComponent {
 
   protected onOccurrenceFilesInput(event: Event): void {
     this.occurrenceFiles.set(Array.from((event.target as HTMLInputElement).files ?? []));
+    this.occurrenceFileDescriptions.set({});
+  }
+
+  protected occurrenceFileDescription(index: number): string {
+    return this.occurrenceFileDescriptions()[index] ?? '';
+  }
+
+  protected onOccurrenceFileDescriptionInput(index: number, event: Event): void {
+    this.occurrenceFileDescriptions.update((current) => ({
+      ...current,
+      [index]: (event.target as HTMLInputElement).value,
+    }));
   }
 
   protected onOccurrenceEditQuantityInput(event: Event): void {
@@ -243,6 +261,10 @@ export class ProjectOccurrenceLogPanelComponent {
     const location = this.occurrenceLocation().trim();
     const detailedDescription = this.occurrenceDescription().trim();
     const testimonial = this.occurrenceTestimonial().trim();
+    const initialAttachments = this.occurrenceFiles().map((file, index) => ({
+      file,
+      description: this.occurrenceFileDescription(index).trim(),
+    }));
     if (
       !selectedObject ||
       !this.occurrenceFormValid() ||
@@ -265,13 +287,14 @@ export class ProjectOccurrenceLogPanelComponent {
           ...(testimonial ? { testimonial } : {}),
         }),
       );
-      for (const file of this.occurrenceFiles()) {
+      for (const attachment of initialAttachments) {
         await firstValueFrom(
           this.projectService.uploadOccurrenceEntryAttachment(
             this.projectId(),
             createdEntry.id,
-            file,
+            attachment.file,
             'DOCUMENT',
+            attachment.description,
           ),
         );
       }
@@ -326,10 +349,28 @@ export class ProjectOccurrenceLogPanelComponent {
     );
   }
 
+  protected occurrenceAttachmentDescription(entryId: string): string {
+    return this.occurrenceAttachmentDescriptions()[entryId] ?? '';
+  }
+
+  protected onOccurrenceAttachmentDescriptionInput(entryId: string, event: Event): void {
+    this.setEntryRecord(
+      this.occurrenceAttachmentDescriptions,
+      entryId,
+      (event.target as HTMLInputElement).value,
+    );
+  }
+
   protected async uploadOccurrenceAttachment(entryId: string, event: Event): Promise<void> {
     event.preventDefault();
     const file = this.occurrenceAttachmentFiles()[entryId];
-    if (!file || this.occurrenceAttachmentUploading()[entryId] || !this.canAddOccurrenceEntries()) {
+    const description = this.occurrenceAttachmentDescription(entryId).trim();
+    if (
+      !file ||
+      !description ||
+      this.occurrenceAttachmentUploading()[entryId] ||
+      !this.canAddOccurrenceEntries()
+    ) {
       return;
     }
 
@@ -342,9 +383,11 @@ export class ProjectOccurrenceLogPanelComponent {
           entryId,
           file,
           'DOCUMENT',
+          description,
         ),
       );
       this.setEntryRecord(this.occurrenceAttachmentFiles, entryId, null);
+      this.setEntryRecord(this.occurrenceAttachmentDescriptions, entryId, '');
       this.occurrenceResource.reload();
     } catch (err) {
       this.setEntryRecord(this.occurrenceAttachmentErrors, entryId, toApiError(err));

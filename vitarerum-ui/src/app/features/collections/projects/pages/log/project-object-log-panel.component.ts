@@ -95,6 +95,7 @@ export class ProjectObjectLogPanelComponent {
     this.logEntries().some((entry) => this.isObjectEntryDirty(entry)),
   );
   protected readonly objectAttachmentFiles = signal<Record<string, File | null>>({});
+  protected readonly objectAttachmentDescriptions = signal<Record<string, string>>({});
   protected readonly objectAttachmentUploading = signal<Record<string, boolean>>({});
   protected readonly objectAttachmentErrors = signal<Record<string, ApiError | null>>({});
   // Download state is keyed by the attachment's fileReference.
@@ -182,18 +183,45 @@ export class ProjectObjectLogPanelComponent {
     );
   }
 
+  protected objectAttachmentDescription(entryId: string): string {
+    return this.objectAttachmentDescriptions()[entryId] ?? '';
+  }
+
+  protected onObjectAttachmentDescriptionInput(entryId: string, event: Event): void {
+    this.setEntryRecord(
+      this.objectAttachmentDescriptions,
+      entryId,
+      (event.target as HTMLInputElement).value,
+    );
+  }
+
   protected async uploadObjectAttachment(entryId: string, event: Event): Promise<void> {
     event.preventDefault();
     const file = this.objectAttachmentFiles()[entryId];
-    if (!file || this.objectAttachmentUploading()[entryId] || !this.canEditObjectEntries()) return;
+    const description = this.objectAttachmentDescription(entryId).trim();
+    if (
+      !file ||
+      !description ||
+      this.objectAttachmentUploading()[entryId] ||
+      !this.canEditObjectEntries()
+    ) {
+      return;
+    }
 
     this.setEntryRecord(this.objectAttachmentUploading, entryId, true);
     this.setEntryRecord(this.objectAttachmentErrors, entryId, null);
     try {
       await firstValueFrom(
-        this.projectService.uploadLogEntryAttachment(this.projectId(), entryId, file, 'DOCUMENT'),
+        this.projectService.uploadLogEntryAttachment(
+          this.projectId(),
+          entryId,
+          file,
+          'DOCUMENT',
+          description,
+        ),
       );
       this.setEntryRecord(this.objectAttachmentFiles, entryId, null);
+      this.setEntryRecord(this.objectAttachmentDescriptions, entryId, '');
       this.logResource.reload();
     } catch (err) {
       this.setEntryRecord(this.objectAttachmentErrors, entryId, toApiError(err));

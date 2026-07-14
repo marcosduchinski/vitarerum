@@ -246,7 +246,9 @@ describe('ProjectApiService', () => {
   it('uploads log entry attachments as multipart form data', () => {
     const file = new File(['image'], 'photo.jpg', { type: 'image/jpeg' });
 
-    service.uploadLogEntryAttachment('project-1', 'entry-1', file, 'IMAGE').subscribe();
+    service
+      .uploadLogEntryAttachment('project-1', 'entry-1', file, 'IMAGE', 'Front view')
+      .subscribe();
 
     const request = http.expectOne(
       'https://api.example.test/collection-use-projects/project-1/log-entries/entry-1/attachments',
@@ -256,11 +258,13 @@ describe('ProjectApiService', () => {
     expect(request.request.body instanceof FormData).toBe(true);
     expect((request.request.body as FormData).get('file')).toBe(file);
     expect((request.request.body as FormData).get('mediaType')).toBe('IMAGE');
+    expect((request.request.body as FormData).get('attachmentDescription')).toBe('Front view');
     request.flush({
       fileReference: 'files/photo',
       fileName: 'photo.jpg',
       mediaType: 'IMAGE',
       uploadedAt: '2026-06-01T10:00:00',
+      attachmentDescription: 'Front view',
     });
   });
 
@@ -410,6 +414,33 @@ describe('ProjectApiService', () => {
     expect(received).toBe(blob);
   });
 
+  it('uploads occurrence entry attachments as multipart form data', () => {
+    const file = new File(['image'], 'occurrence.jpg', { type: 'image/jpeg' });
+
+    service
+      .uploadOccurrenceEntryAttachment('project-1', 'entry-1', file, 'IMAGE', 'Occurrence photo')
+      .subscribe();
+
+    const request = http.expectOne(
+      'https://api.example.test/collection-use-projects/project-1/occurrence-entries/entry-1/attachments',
+    );
+
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body instanceof FormData).toBe(true);
+    expect((request.request.body as FormData).get('file')).toBe(file);
+    expect((request.request.body as FormData).get('mediaType')).toBe('IMAGE');
+    expect((request.request.body as FormData).get('attachmentDescription')).toBe(
+      'Occurrence photo',
+    );
+    request.flush({
+      fileReference: 'files/occurrence',
+      fileName: 'occurrence.jpg',
+      mediaType: 'IMAGE',
+      uploadedAt: '2026-06-03T10:00:00',
+      attachmentDescription: 'Occurrence photo',
+    });
+  });
+
   it('deletes an occurrence entry attachment with an encoded file reference', () => {
     service.deleteOccurrenceEntryAttachment('project-1', 'entry-1', 'report 2024.pdf').subscribe();
 
@@ -493,7 +524,7 @@ describe('ProjectApiService', () => {
     });
   });
 
-  it('uploads a publication entry attachment with an optional note', () => {
+  it('uploads a publication entry attachment with a required description', () => {
     const file = new File(['pdf'], 'paper.pdf', { type: 'application/pdf' });
 
     service
@@ -507,13 +538,13 @@ describe('ProjectApiService', () => {
     expect(request.request.body instanceof FormData).toBe(true);
     expect((request.request.body as FormData).get('file')).toBe(file);
     expect((request.request.body as FormData).get('mediaType')).toBe('DOCUMENT');
-    expect((request.request.body as FormData).get('note')).toBe('The paper');
+    expect((request.request.body as FormData).get('attachmentDescription')).toBe('The paper');
     request.flush({
       fileReference: 'files/paper',
       fileName: 'paper.pdf',
       mediaType: 'DOCUMENT',
       uploadedAt: '2026-06-10T14:05:00',
-      note: 'The paper',
+      attachmentDescription: 'The paper',
     });
   });
 

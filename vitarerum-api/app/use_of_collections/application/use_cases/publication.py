@@ -203,7 +203,7 @@ class AddPublicationEntryAttachmentInput:
     file_content: bytes
     file_name: str
     media_type: str
-    note: str | None = None
+    description: str
 
 
 class AddPublicationEntryAttachment:
@@ -238,7 +238,7 @@ class AddPublicationEntryAttachment:
             data.file_content,
             data.file_name,
             data.media_type,
-            data.note,
+            data.description,
         )
         entry.add_attachment(attachment)
         try:

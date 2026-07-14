@@ -80,7 +80,7 @@ async def _store_attachment(
     file_content: bytes,
     file_name: str,
     media_type: str,
-    note: str | None,
+    description: str,
 ) -> Attachment:
     """Persist an uploaded file and build the Attachment value object.
 
@@ -96,5 +96,5 @@ async def _store_attachment(
         file_name=file_name,
         media_type=parsed_media_type,
         uploaded_at=_now(),
-        note=note,
+        description=description,
     )

@@ -22,6 +22,7 @@ import { PROJECT_API_SERVICE } from '../../services/project-api.service';
 
 // Groups that may add publication entries once the project is COMPLETED.
 const PUBLICATION_STAFF_GROUPS = ['CURATORIAL', 'COLLECTIONS_MANAGEMENT', 'DIRECTION'] as const;
+type InitialAttachmentDescriptions = Record<number, string>;
 
 @Component({
   selector: 'app-project-publication-log-panel',
@@ -93,9 +94,14 @@ export class ProjectPublicationLogPanelComponent {
   // Add-entry form state.
   protected readonly addNote = signal('');
   protected readonly addFiles = signal<readonly File[]>([]);
+  protected readonly addFileDescriptions = signal<InitialAttachmentDescriptions>({});
   protected readonly addSubmitting = signal(false);
   protected readonly addError = signal<ApiError | null>(null);
-  protected readonly addFormValid = computed(() => this.addNote().trim().length > 0);
+  protected readonly addFormValid = computed(
+    () =>
+      this.addNote().trim().length > 0 &&
+      this.addFiles().every((_, index) => this.addFileDescription(index).trim()),
+  );
 
   // Inline edit state.
   protected readonly editingEntryId = signal<string | null>(null);
@@ -107,7 +113,7 @@ export class ProjectPublicationLogPanelComponent {
   // Attachment state, keyed by entry id (uploads) or fileReference (downloads).
   protected readonly expandedEntryId = signal<string | null>(null);
   protected readonly attachmentFiles = signal<Record<string, File | null>>({});
-  protected readonly attachmentNotes = signal<Record<string, string>>({});
+  protected readonly attachmentDescriptions = signal<Record<string, string>>({});
   protected readonly attachmentUploading = signal<Record<string, boolean>>({});
   protected readonly attachmentErrors = signal<Record<string, ApiError | null>>({});
   protected readonly attachmentDownloading = signal<Record<string, boolean>>({});
@@ -121,32 +127,51 @@ export class ProjectPublicationLogPanelComponent {
 
   protected onAddFilesInput(event: Event): void {
     this.addFiles.set(Array.from((event.target as HTMLInputElement).files ?? []));
+    this.addFileDescriptions.set({});
+  }
+
+  protected addFileDescription(index: number): string {
+    return this.addFileDescriptions()[index] ?? '';
+  }
+
+  protected onAddFileDescriptionInput(index: number, event: Event): void {
+    this.addFileDescriptions.update((current) => ({
+      ...current,
+      [index]: (event.target as HTMLInputElement).value,
+    }));
   }
 
   protected async addEntry(event: Event): Promise<void> {
     event.preventDefault();
     if (!this.addFormValid() || this.addSubmitting() || !this.canWriteEntries()) return;
 
+    const note = this.addNote().trim();
+    const initialAttachments = this.addFiles().map((file, index) => ({
+      file,
+      description: this.addFileDescription(index).trim(),
+    }));
     this.addSubmitting.set(true);
     this.addError.set(null);
     try {
       const created = await firstValueFrom(
         this.projectService.createPublicationEntry(this.projectId(), {
-          note: this.addNote().trim(),
+          note,
         }),
       );
-      for (const file of this.addFiles()) {
+      for (const attachment of initialAttachments) {
         await firstValueFrom(
           this.projectService.uploadPublicationEntryAttachment(
             this.projectId(),
             created.id,
-            file,
+            attachment.file,
             'DOCUMENT',
+            attachment.description,
           ),
         );
       }
       this.addNote.set('');
       this.addFiles.set([]);
+      this.addFileDescriptions.set({});
       this.publicationResource.reload();
     } catch (err) {
       this.addError.set(toApiError(err));
@@ -208,34 +233,40 @@ export class ProjectPublicationLogPanelComponent {
     );
   }
 
-  protected attachmentNote(entryId: string): string {
-    return this.attachmentNotes()[entryId] ?? '';
+  protected attachmentDescription(entryId: string): string {
+    return this.attachmentDescriptions()[entryId] ?? '';
   }
 
-  protected onAttachmentNoteInput(entryId: string, event: Event): void {
-    this.setEntryRecord(this.attachmentNotes, entryId, (event.target as HTMLInputElement).value);
+  protected onAttachmentDescriptionInput(entryId: string, event: Event): void {
+    this.setEntryRecord(
+      this.attachmentDescriptions,
+      entryId,
+      (event.target as HTMLInputElement).value,
+    );
   }
 
   protected async uploadAttachment(entryId: string, event: Event): Promise<void> {
     event.preventDefault();
     const file = this.attachmentFiles()[entryId];
-    if (!file || this.attachmentUploading()[entryId] || !this.canWriteEntries()) return;
+    const description = this.attachmentDescription(entryId).trim();
+    if (!file || !description || this.attachmentUploading()[entryId] || !this.canWriteEntries()) {
+      return;
+    }
 
     this.setEntryRecord(this.attachmentUploading, entryId, true);
     this.setEntryRecord(this.attachmentErrors, entryId, null);
     try {
-      const note = this.attachmentNotes()[entryId]?.trim();
       await firstValueFrom(
         this.projectService.uploadPublicationEntryAttachment(
           this.projectId(),
           entryId,
           file,
           'DOCUMENT',
-          note || undefined,
+          description,
         ),
       );
       this.setEntryRecord(this.attachmentFiles, entryId, null);
-      this.setEntryRecord(this.attachmentNotes, entryId, '');
+      this.setEntryRecord(this.attachmentDescriptions, entryId, '');
       this.publicationResource.reload();
     } catch (err) {
       this.setEntryRecord(this.attachmentErrors, entryId, toApiError(err));

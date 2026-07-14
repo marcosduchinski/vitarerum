@@ -304,7 +304,7 @@ async def add_log_entry_attachment(
     session: DBSession,
     file: Annotated[UploadFile, File(...)],
     mediaType: Annotated[str, Form(...)],
-    note: Annotated[str | None, Form()] = None,
+    attachmentDescription: Annotated[str, Form(..., min_length=1)],
 ) -> AttachmentResponse:
     await _assert_existing_project_access(
         project_id, caller, project_repo, proposal_repo
@@ -321,7 +321,7 @@ async def add_log_entry_attachment(
                 file_content=content,
                 file_name=file.filename or "upload",
                 media_type=mediaType,
-                note=note,
+                description=attachmentDescription,
                 restrict_to_in_progress=not _is_staff(caller),
             )
         )
@@ -335,7 +335,7 @@ async def add_log_entry_attachment(
         fileName=attachment.file_name,
         mediaType=attachment.media_type,
         uploadedAt=attachment.uploaded_at,
-        note=attachment.note,
+        attachmentDescription=attachment.description,
     )
 
 
@@ -584,7 +584,7 @@ async def add_occurrence_entry_attachment(
     session: DBSession,
     file: Annotated[UploadFile, File(...)],
     mediaType: Annotated[str, Form(...)],
-    note: Annotated[str | None, Form()] = None,
+    attachmentDescription: Annotated[str, Form(..., min_length=1)],
 ) -> AttachmentResponse:
     await _assert_existing_project_access(
         project_id, caller, project_repo, proposal_repo
@@ -601,7 +601,7 @@ async def add_occurrence_entry_attachment(
                 file_content=content,
                 file_name=file.filename or "upload",
                 media_type=mediaType,
-                note=note,
+                description=attachmentDescription,
                 restrict_to_in_progress=not _is_staff(caller),
             )
         )
@@ -615,7 +615,7 @@ async def add_occurrence_entry_attachment(
         fileName=attachment.file_name,
         mediaType=attachment.media_type,
         uploadedAt=attachment.uploaded_at,
-        note=attachment.note,
+        attachmentDescription=attachment.description,
     )
 
 
@@ -861,7 +861,7 @@ async def add_publication_entry_attachment(
     session: DBSession,
     file: Annotated[UploadFile, File(...)],
     mediaType: Annotated[str, Form(...)],
-    note: Annotated[str | None, Form()] = None,
+    attachmentDescription: Annotated[str, Form(..., min_length=1)],
 ) -> AttachmentResponse:
     await _assert_existing_project_access(
         project_id, caller, project_repo, proposal_repo
@@ -878,7 +878,7 @@ async def add_publication_entry_attachment(
                 file_content=content,
                 file_name=file.filename or "upload",
                 media_type=mediaType,
-                note=note,
+                description=attachmentDescription,
             )
         )
     except LookupError as exc:
@@ -891,7 +891,7 @@ async def add_publication_entry_attachment(
         fileName=attachment.file_name,
         mediaType=attachment.media_type,
         uploadedAt=attachment.uploaded_at,
-        note=attachment.note,
+        attachmentDescription=attachment.description,
     )
 
 

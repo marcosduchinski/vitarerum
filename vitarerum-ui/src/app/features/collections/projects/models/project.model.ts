@@ -57,9 +57,7 @@ export interface Attachment {
   readonly fileName: string;
   readonly mediaType: MediaType;
   readonly uploadedAt: string;
-  // Optional caption. Only the publication-entry attachment endpoints accept and
-  // return it; object access/occurrence attachments leave it undefined.
-  readonly note?: string | null;
+  readonly attachmentDescription: string;
 }
 
 export interface ObjectAccessLog {

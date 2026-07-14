@@ -233,6 +233,11 @@ describe('project log pages', () => {
       value: [new File(['object'], 'object-photo.jpg', { type: 'image/jpeg' })],
     });
     objectFileInput.dispatchEvent(new Event('change'));
+    const objectDescriptionInput = root.querySelector<HTMLInputElement>(
+      'input[aria-label="Object attachment description"]',
+    )!;
+    objectDescriptionInput.value = 'Object photo';
+    objectDescriptionInput.dispatchEvent(new Event('input'));
     root
       .querySelector<HTMLFormElement>('form[aria-label="Upload file for INV-ZOO-1892-001"]')!
       .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
@@ -499,6 +504,8 @@ describe('project log pages', () => {
 
   it('registers object occurrence entries from an object row with required contract fields', async () => {
     const state = TestBed.inject(MockProjectState);
+    const projectService = TestBed.inject(PROJECT_API_SERVICE);
+    const uploadSpy = vi.spyOn(projectService, 'uploadOccurrenceEntryAttachment');
     const fixture = TestBed.createComponent(ProjectOccurrenceLogPanelComponent);
     fixture.componentRef.setInput('projectId', 'proj-3');
     fixture.detectChanges();
@@ -537,9 +544,38 @@ describe('project log pages', () => {
 
     expect(submit.disabled).toBe(false);
 
-    root
-      .querySelector<HTMLFormElement>('.occurrence-modal__panel')!
-      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    const occurrenceComponent = fixture.componentInstance as unknown as {
+      occurrenceFiles: { set(value: readonly File[]): void };
+    };
+    occurrenceComponent.occurrenceFiles.set([
+      new File(['front'], 'occurrence-front.jpg', { type: 'image/jpeg' }),
+      new File(['detail'], 'occurrence-detail.jpg', { type: 'image/jpeg' }),
+    ]);
+    fixture.detectChanges();
+
+    expect(submit.disabled).toBe(true);
+    const frontDescription = root.querySelector<HTMLInputElement>(
+      'input[aria-label="Description for occurrence-front.jpg"]',
+    )!;
+    const detailDescription = root.querySelector<HTMLInputElement>(
+      'input[aria-label="Description for occurrence-detail.jpg"]',
+    )!;
+    frontDescription.value = 'Front view showing abrasion.';
+    frontDescription.dispatchEvent(new Event('input'));
+    detailDescription.value = 'Detail image of handling mark.';
+    detailDescription.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    expect(submit.disabled).toBe(false);
+    expect((occurrenceComponent.occurrenceFiles as unknown as () => readonly File[])().length).toBe(
+      2,
+    );
+
+    await (
+      fixture.componentInstance as unknown as {
+        addOccurrenceEntry(event: Event): Promise<void>;
+      }
+    ).addOccurrenceEntry(new Event('submit', { bubbles: true, cancelable: true }));
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
@@ -550,6 +586,15 @@ describe('project log pages', () => {
     expect(entry?.numberOfObjects).toBe(1);
     expect(entry?.location).toBe('Conservation lab');
     expect(entry?.reportedBy.permissionId).toBe('perm-carol');
+    expect(uploadSpy).toHaveBeenCalledTimes(2);
+    expect(uploadSpy.mock.calls.map((call) => call[4])).toEqual([
+      'Front view showing abrasion.',
+      'Detail image of handling mark.',
+    ]);
+    expect(entry?.attachments.map((attachment) => attachment.attachmentDescription)).toEqual([
+      'Front view showing abrasion.',
+      'Detail image of handling mark.',
+    ]);
     expect(state.objectOccurrenceLogs.get('proj-3')?.referenceNumber).toMatch(/^OOL-/);
   });
 
@@ -609,6 +654,11 @@ describe('project log pages', () => {
       value: [new File(['occurrence'], 'occurrence-photo.jpg', { type: 'image/jpeg' })],
     });
     fileInput.dispatchEvent(new Event('change'));
+    const occurrenceDescriptionInput = root.querySelector<HTMLInputElement>(
+      'input[aria-label="Occurrence attachment description"]',
+    )!;
+    occurrenceDescriptionInput.value = 'Occurrence photo';
+    occurrenceDescriptionInput.dispatchEvent(new Event('input'));
     root
       .querySelector<HTMLFormElement>(
         'form[aria-label="Upload file for occurrence INV-ZOO-1892-001"]',
@@ -710,6 +760,8 @@ describe('project log pages', () => {
   it('lets the external requester add a publication entry while in progress', async () => {
     identitySession.set(researcherSession());
     const state = TestBed.inject(MockProjectState);
+    const projectService = TestBed.inject(PROJECT_API_SERVICE);
+    const uploadSpy = vi.spyOn(projectService, 'uploadPublicationEntryAttachment');
     const project = state.projects.get('proj-3')!;
     // Make hugo (the researcher session) the requester so the gate lets them write.
     state.projects.set('proj-3', {
@@ -731,17 +783,51 @@ describe('project log pages', () => {
     note.dispatchEvent(new Event('input'));
     fixture.detectChanges();
 
-    root
-      .querySelector<HTMLFormElement>('form[aria-label="Add publication entry"]')!
-      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    const publicationComponent = fixture.componentInstance as unknown as {
+      addFiles: { set(value: readonly File[]): void };
+    };
+    publicationComponent.addFiles.set([
+      new File(['paper'], 'paper.pdf', { type: 'application/pdf' }),
+      new File(['slide'], 'slide.jpg', { type: 'image/jpeg' }),
+    ]);
+    fixture.detectChanges();
+
+    const submit = root.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+    expect(submit.disabled).toBe(true);
+    const paperDescription = root.querySelector<HTMLInputElement>(
+      'input[aria-label="Description for paper.pdf"]',
+    )!;
+    const slideDescription = root.querySelector<HTMLInputElement>(
+      'input[aria-label="Description for slide.jpg"]',
+    )!;
+    paperDescription.value = 'Accepted conference paper PDF.';
+    paperDescription.dispatchEvent(new Event('input'));
+    slideDescription.value = 'Presentation slide showing reproduced object.';
+    slideDescription.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    expect(submit.disabled).toBe(false);
+    expect((publicationComponent.addFiles as unknown as () => readonly File[])().length).toBe(2);
+
+    await (
+      fixture.componentInstance as unknown as {
+        addEntry(event: Event): Promise<void>;
+      }
+    ).addEntry(new Event('submit', { bubbles: true, cancelable: true }));
     fixture.detectChanges();
     await fixture.whenStable();
 
-    expect(
-      state.publicationEntries
-        .get('proj-3')
-        ?.some((entry) => entry.note === 'Published a conference paper.'),
-    ).toBe(true);
+    const entry = state.publicationEntries
+      .get('proj-3')
+      ?.find((item) => item.note === 'Published a conference paper.');
+    expect(uploadSpy).toHaveBeenCalledTimes(2);
+    expect(uploadSpy.mock.calls.map((call) => call[4])).toEqual([
+      'Accepted conference paper PDF.',
+      'Presentation slide showing reproduced object.',
+    ]);
+    expect(entry?.attachments.map((attachment) => attachment.attachmentDescription)).toEqual([
+      'Accepted conference paper PDF.',
+      'Presentation slide showing reproduced object.',
+    ]);
   });
 
   it('locks publication entry controls for staff while the project is in progress', async () => {

@@ -285,6 +285,7 @@ export class ProjectApiServiceMock {
     entryId: string,
     file: File,
     mediaType: MediaType,
+    attachmentDescription: string,
   ): Observable<Attachment> {
     const p = this.state.projects.get(projectId);
     if (!p) return throwError(() => ({ status: 404, error: 'NOT_FOUND' }));
@@ -298,14 +299,19 @@ export class ProjectApiServiceMock {
     const allEntries = this.state.logEntries.get(projectId) ?? [];
     const entry = allEntries.find((e) => e.id === entryId);
     if (!entry) return throwError(() => ({ status: 404, error: 'NOT_FOUND' }));
+    if (!attachmentDescription.trim()) {
+      return throwError(() => ({ status: 422, error: 'VALIDATION_ERROR' }));
+    }
     const attachment: Attachment = {
       fileReference: this.state.nextFileReference(),
       fileName: file.name,
       mediaType,
       uploadedAt: new Date().toISOString(),
+      attachmentDescription,
     };
     const idx = allEntries.findIndex((e) => e.id === entryId);
-    allEntries[idx] = { ...entry, attachments: [...entry.attachments, attachment] };
+    const currentEntry = allEntries[idx];
+    allEntries[idx] = { ...currentEntry, attachments: [...currentEntry.attachments, attachment] };
     this.state.logEntries.set(projectId, allEntries);
     return of(attachment);
   }
@@ -481,6 +487,7 @@ export class ProjectApiServiceMock {
     entryId: string,
     file: File,
     mediaType: MediaType,
+    attachmentDescription: string,
   ): Observable<Attachment> {
     const p = this.state.projects.get(projectId);
     if (!p) return throwError(() => ({ status: 404, error: 'NOT_FOUND' }));
@@ -494,14 +501,19 @@ export class ProjectApiServiceMock {
     const allEntries = this.state.occurrenceEntries.get(projectId) ?? [];
     const entry = allEntries.find((e) => e.id === entryId);
     if (!entry) return throwError(() => ({ status: 404, error: 'NOT_FOUND' }));
+    if (!attachmentDescription.trim()) {
+      return throwError(() => ({ status: 422, error: 'VALIDATION_ERROR' }));
+    }
     const attachment: Attachment = {
       fileReference: this.state.nextFileReference(),
       fileName: file.name,
       mediaType,
       uploadedAt: new Date().toISOString(),
+      attachmentDescription,
     };
     const idx = allEntries.findIndex((e) => e.id === entryId);
-    allEntries[idx] = { ...entry, attachments: [...entry.attachments, attachment] };
+    const currentEntry = allEntries[idx];
+    allEntries[idx] = { ...currentEntry, attachments: [...currentEntry.attachments, attachment] };
     this.state.occurrenceEntries.set(projectId, allEntries);
     return of(attachment);
   }
@@ -635,7 +647,7 @@ export class ProjectApiServiceMock {
     entryId: string,
     file: File,
     mediaType: MediaType,
-    note?: string,
+    attachmentDescription: string,
   ): Observable<Attachment> {
     const p = this.state.projects.get(projectId);
     if (!p) return throwError(() => ({ status: 404, error: 'NOT_FOUND' }));
@@ -644,15 +656,19 @@ export class ProjectApiServiceMock {
     const allEntries = this.state.publicationEntries.get(projectId) ?? [];
     const entry = allEntries.find((e) => e.id === entryId);
     if (!entry) return throwError(() => ({ status: 404, error: 'ENTRY_NOT_FOUND' }));
+    if (!attachmentDescription.trim()) {
+      return throwError(() => ({ status: 422, error: 'VALIDATION_ERROR' }));
+    }
     const attachment: Attachment = {
       fileReference: this.state.nextFileReference(),
       fileName: file.name,
       mediaType,
       uploadedAt: new Date().toISOString(),
-      note: note ?? null,
+      attachmentDescription,
     };
     const idx = allEntries.findIndex((e) => e.id === entryId);
-    allEntries[idx] = { ...entry, attachments: [...entry.attachments, attachment] };
+    const currentEntry = allEntries[idx];
+    allEntries[idx] = { ...currentEntry, attachments: [...currentEntry.attachments, attachment] };
     this.state.publicationEntries.set(projectId, allEntries);
     return of(attachment);
   }

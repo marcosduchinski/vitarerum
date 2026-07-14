@@ -344,7 +344,7 @@ async def _build_occurrence_entry(
                 fileName=a.file_name,
                 mediaType=a.media_type,
                 uploadedAt=a.uploaded_at,
-                note=a.note,
+                attachmentDescription=a.description,
             )
             for a in entry.attachments
         ],
@@ -394,7 +394,7 @@ async def _build_publication_entry(
                 fileName=a.file_name,
                 mediaType=a.media_type,
                 uploadedAt=a.uploaded_at,
-                note=a.note,
+                attachmentDescription=a.description,
             )
             for a in entry.attachments
         ],
@@ -440,7 +440,7 @@ async def _build_object_log_entry(
                 fileName=a.file_name,
                 mediaType=a.media_type,
                 uploadedAt=a.uploaded_at,
-                note=a.note,
+                attachmentDescription=a.description,
             )
             for a in entry.attachments
         ],

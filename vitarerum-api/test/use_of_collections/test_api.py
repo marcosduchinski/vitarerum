@@ -2193,14 +2193,17 @@ async def test_log_entry_attachment_invalid_media_type_returns_422() -> None:
         response = await client.post(
             "/api/v1/collection-use-projects/project-1/log-entries/entry-1/attachments",
             files={"file": ("photo.jpg", b"jpeg", "image/jpeg")},
-            data={"mediaType": "NOT_A_MEDIA_TYPE"},
+            data={
+                "mediaType": "NOT_A_MEDIA_TYPE",
+                "attachmentDescription": "Front view",
+            },
         )
 
     assert response.status_code == 422
     assert response.json()["error"] == "VALIDATION_ERROR"
 
 
-async def test_log_entry_attachment_persists_optional_note() -> None:
+async def test_log_entry_attachment_requires_description() -> None:
     async with client_with_repos(caller=_STAFF_CALLER) as (
         client,
         project_repo,
@@ -2221,16 +2224,22 @@ async def test_log_entry_attachment_persists_optional_note() -> None:
         )
         entry_id = created.json()["id"]
 
-        with_note = await client.post(
+        without_description = await client.post(
             f"/api/v1/collection-use-projects/project-1/log-entries/{entry_id}/attachments",
-            files={"file": ("photo.jpg", b"jpeg", "image/jpeg")},
-            data={"mediaType": "IMAGE", "note": "Front view"},
+            files={"file": ("missing.pdf", b"pdf", "application/pdf")},
+            data={"mediaType": "DOCUMENT"},
             headers={"X-Permission-Id": "permission-staff"},
         )
-        without_note = await client.post(
+        blank_description = await client.post(
             f"/api/v1/collection-use-projects/project-1/log-entries/{entry_id}/attachments",
-            files={"file": ("doc.pdf", b"pdf", "application/pdf")},
-            data={"mediaType": "DOCUMENT"},
+            files={"file": ("blank.pdf", b"pdf", "application/pdf")},
+            data={"mediaType": "DOCUMENT", "attachmentDescription": "   "},
+            headers={"X-Permission-Id": "permission-staff"},
+        )
+        with_description = await client.post(
+            f"/api/v1/collection-use-projects/project-1/log-entries/{entry_id}/attachments",
+            files={"file": ("photo.jpg", b"jpeg", "image/jpeg")},
+            data={"mediaType": "IMAGE", "attachmentDescription": "Front view"},
             headers={"X-Permission-Id": "permission-staff"},
         )
         listing = await client.get(
@@ -2238,13 +2247,16 @@ async def test_log_entry_attachment_persists_optional_note() -> None:
             headers={"X-Permission-Id": "permission-staff"},
         )
 
-    assert with_note.status_code == 201
-    assert with_note.json()["note"] == "Front view"
-    assert without_note.status_code == 201
-    assert without_note.json()["note"] is None
-    # The note survives the round-trip through the listing endpoint.
-    notes = {a["note"] for a in listing.json()["content"][0]["attachments"]}
-    assert notes == {"Front view", None}
+    assert without_description.status_code == 422
+    assert blank_description.status_code == 422
+    assert blank_description.json()["error"] == "VALIDATION_ERROR"
+    assert with_description.status_code == 201
+    assert with_description.json()["attachmentDescription"] == "Front view"
+    # The description survives the round-trip through the listing endpoint.
+    descriptions = {
+        a["attachmentDescription"] for a in listing.json()["content"][0]["attachments"]
+    }
+    assert descriptions == {"Front view"}
 
 
 async def test_download_log_entry_attachment_returns_file() -> None:
@@ -2270,7 +2282,7 @@ async def test_download_log_entry_attachment_returns_file() -> None:
         uploaded = await client.post(
             f"/api/v1/collection-use-projects/project-1/log-entries/{entry_id}/attachments",
             files={"file": ("report.pdf", b"%PDF-1.4 bytes", "application/pdf")},
-            data={"mediaType": "DOCUMENT"},
+            data={"mediaType": "DOCUMENT", "attachmentDescription": "Visit report"},
             headers={"X-Permission-Id": "permission-staff"},
         )
         file_reference = uploaded.json()["fileReference"]
@@ -2339,7 +2351,7 @@ async def test_delete_log_entry_attachment_removes_file() -> None:
         uploaded = await client.post(
             f"/api/v1/collection-use-projects/project-1/log-entries/{entry_id}/attachments",
             files={"file": ("report.pdf", b"%PDF-1.4 bytes", "application/pdf")},
-            data={"mediaType": "DOCUMENT"},
+            data={"mediaType": "DOCUMENT", "attachmentDescription": "Visit report"},
             headers={"X-Permission-Id": "permission-staff"},
         )
         file_reference = uploaded.json()["fileReference"]
@@ -2387,7 +2399,7 @@ async def test_download_occurrence_entry_attachment_returns_file() -> None:
         uploaded = await client.post(
             f"/api/v1/collection-use-projects/project-1/occurrence-entries/{entry_id}/attachments",
             files={"file": ("photo.jpg", b"jpegbytes", "image/jpeg")},
-            data={"mediaType": "IMAGE"},
+            data={"mediaType": "IMAGE", "attachmentDescription": "Occurrence photo"},
             headers={"X-Permission-Id": "permission-staff"},
         )
         file_reference = uploaded.json()["fileReference"]
@@ -2401,6 +2413,51 @@ async def test_download_occurrence_entry_attachment_returns_file() -> None:
     assert download.content == b"jpegbytes"
     assert download.headers["content-type"].startswith("image/jpeg")
     assert "photo.jpg" in download.headers["content-disposition"]
+
+
+async def test_occurrence_entry_attachment_requires_description() -> None:
+    async with client_with_repos(caller=_STAFF_CALLER) as (
+        client,
+        project_repo,
+        proposal_repo,
+        _,
+    ):
+        await project_repo.add(
+            _project(
+                "project-1",
+                status=UseStatus.IN_PROGRESS,
+                objects=[_collection_use_object()],
+            )
+        )
+        created = await client.post(
+            "/api/v1/collection-use-projects/project-1/occurrence-entries",
+            json={
+                "collectionUseObjectId": "cuo-1",
+                "numberOfObjects": 1,
+                "occurrenceDate": "2026-06-03T11:30:00Z",
+                "location": "Lab",
+                "detailedDescription": "desc",
+            },
+            headers={"X-Permission-Id": "permission-staff"},
+        )
+        entry_id = created.json()["id"]
+
+        without_description = await client.post(
+            f"/api/v1/collection-use-projects/project-1/occurrence-entries/{entry_id}/attachments",
+            files={"file": ("photo.jpg", b"jpegbytes", "image/jpeg")},
+            data={"mediaType": "IMAGE"},
+            headers={"X-Permission-Id": "permission-staff"},
+        )
+        blank_description = await client.post(
+            f"/api/v1/collection-use-projects/project-1/occurrence-entries/{entry_id}/attachments",
+            files={"file": ("photo.jpg", b"jpegbytes", "image/jpeg")},
+            data={"mediaType": "IMAGE", "attachmentDescription": "   "},
+            headers={"X-Permission-Id": "permission-staff"},
+        )
+
+    assert without_description.status_code == 422
+    assert blank_description.status_code == 422
+    assert blank_description.json()["error"] == "VALIDATION_ERROR"
 
 
 async def test_delete_occurrence_entry_attachment_removes_file() -> None:
@@ -2432,7 +2489,7 @@ async def test_delete_occurrence_entry_attachment_removes_file() -> None:
         uploaded = await client.post(
             f"/api/v1/collection-use-projects/project-1/occurrence-entries/{entry_id}/attachments",
             files={"file": ("photo.jpg", b"jpegbytes", "image/jpeg")},
-            data={"mediaType": "IMAGE"},
+            data={"mediaType": "IMAGE", "attachmentDescription": "Occurrence photo"},
             headers={"X-Permission-Id": "permission-staff"},
         )
         file_reference = uploaded.json()["fileReference"]
@@ -3069,7 +3126,10 @@ async def test_publication_entry_attachment_upload_and_download() -> None:
         uploaded = await client.post(
             f"/api/v1/collection-use-projects/project-1/publication-entries/{entry_id}/attachments",
             files={"file": ("paper.pdf", b"%PDF-1.4 paper", "application/pdf")},
-            data={"mediaType": "DOCUMENT", "note": "the publication itself"},
+            data={
+                "mediaType": "DOCUMENT",
+                "attachmentDescription": "The publication itself",
+            },
             headers={"X-Permission-Id": "permission-1"},
         )
         assert uploaded.status_code == 201
@@ -3083,6 +3143,40 @@ async def test_publication_entry_attachment_upload_and_download() -> None:
     assert download.status_code == 200
     assert download.content == b"%PDF-1.4 paper"
     assert "paper.pdf" in download.headers["content-disposition"]
+
+
+async def test_publication_entry_attachment_requires_description() -> None:
+    async with client_with_repos(caller=_CALLER) as (
+        client,
+        project_repo,
+        proposal_repo,
+        _,
+    ):
+        await project_repo.add(_project("project-1", status=UseStatus.IN_PROGRESS))
+        await proposal_repo.add(_project_proposal())
+        created = await client.post(
+            "/api/v1/collection-use-projects/project-1/publication-entries",
+            json={"note": "with attachment"},
+            headers={"X-Permission-Id": "permission-1"},
+        )
+        entry_id = created.json()["id"]
+
+        without_description = await client.post(
+            f"/api/v1/collection-use-projects/project-1/publication-entries/{entry_id}/attachments",
+            files={"file": ("paper.pdf", b"%PDF-1.4 paper", "application/pdf")},
+            data={"mediaType": "DOCUMENT"},
+            headers={"X-Permission-Id": "permission-1"},
+        )
+        blank_description = await client.post(
+            f"/api/v1/collection-use-projects/project-1/publication-entries/{entry_id}/attachments",
+            files={"file": ("paper.pdf", b"%PDF-1.4 paper", "application/pdf")},
+            data={"mediaType": "DOCUMENT", "attachmentDescription": "   "},
+            headers={"X-Permission-Id": "permission-1"},
+        )
+
+    assert without_description.status_code == 422
+    assert blank_description.status_code == 422
+    assert blank_description.json()["error"] == "VALIDATION_ERROR"
 
 
 async def test_delete_publication_entry_attachment_removes_file() -> None:
@@ -3103,7 +3197,10 @@ async def test_delete_publication_entry_attachment_removes_file() -> None:
         uploaded = await client.post(
             f"/api/v1/collection-use-projects/project-1/publication-entries/{entry_id}/attachments",
             files={"file": ("paper.pdf", b"%PDF-1.4 paper", "application/pdf")},
-            data={"mediaType": "DOCUMENT", "note": "the publication itself"},
+            data={
+                "mediaType": "DOCUMENT",
+                "attachmentDescription": "The publication itself",
+            },
             headers={"X-Permission-Id": "permission-1"},
         )
         file_reference = uploaded.json()["fileReference"]

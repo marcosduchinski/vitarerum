@@ -253,13 +253,13 @@ size                 : Integer  (default 20)
 
 ### `POST /collection-use-projects/{project_id}/log-entries/{entry_id}/attachments` · `.../occurrence-entries/{entry_id}/attachments`
 
-**Description** — Staff upload a file to an existing log / occurrence entry at any project status, while the respective log is not concluded (`409` afterwards). `mediaType` is one of `DOCUMENT`, `IMAGE`, `VIDEO`, `OTHER`. `note` is an optional free-text description of the attachment.
+**Description** — Staff upload a file to an existing log / occurrence entry at any project status, while the respective log is not concluded (`409` afterwards). `mediaType` is one of `DOCUMENT`, `IMAGE`, `VIDEO`, `OTHER`. `attachmentDescription` is a required non-empty free-text description of the attachment.
 
 **Request body** — `multipart/form-data`
 ```
 file      : File      (required)
 mediaType : MediaType (required) DOCUMENT | IMAGE | VIDEO | OTHER
-note      : String    (optional)
+attachmentDescription : String (required)
 ```
 
 **Response `201 Created`**
@@ -269,7 +269,7 @@ note      : String    (optional)
   "fileName": "conservation_note.pdf",
   "mediaType": "DOCUMENT",
   "uploadedAt": "2025-06-04T10:15:00",
-  "note": "string"
+  "attachmentDescription": "string"
 }
 ```
 

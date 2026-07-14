@@ -70,6 +70,29 @@
             (change)="onAddFilesInput($event)"
           />
 
+          @if (addFiles().length) {
+            <div class="publication-add__initial-files">
+              <span class="publication-add__label">File descriptions</span>
+              <ul class="initial-files__list" aria-label="Publication file descriptions">
+                @for (file of addFiles(); track file.name + ':' + $index; let index = $index) {
+                  <li class="initial-files__item">
+                    <span class="initial-files__name">{{ file.name }}</span>
+                    <input
+                      type="text"
+                      [id]="'publication-file-description-' + index"
+                      [attr.aria-label]="'Description for ' + file.name"
+                      placeholder="Describe what this file shows"
+                      [value]="addFileDescription(index)"
+                      (input)="onAddFileDescriptionInput(index, $event)"
+                      [attr.aria-invalid]="!addFileDescription(index).trim() || null"
+                      required
+                    />
+                  </li>
+                }
+              </ul>
+            </div>
+          }
+
           <div class="publication-add__actions">
             <button type="submit" [disabled]="!addFormValid() || addSubmitting()">
               {{ addSubmitting() ? 'Adding…' : 'Add entry' }}
@@ -183,9 +206,9 @@
                                 aria-hidden="true"
                               ></span>
                               <span class="attachment-link__name">{{ attachment.fileName }}</span>
-                              @if (attachment.note) {
-                                <span class="attachment-link__meta">{{ attachment.note }}</span>
-                              }
+                              <span class="attachment-link__meta">{{
+                                attachment.attachmentDescription
+                              }}</span>
                               @if (attachmentDownloading()[attachment.fileReference]) {
                                 <span
                                   class="attachment-link__action pi pi-spin pi-spinner"
@@ -245,14 +268,18 @@
                       <input
                         type="text"
                         class="entry-upload__note"
-                        placeholder="Caption (optional)"
-                        aria-label="Publication attachment caption"
-                        [value]="attachmentNote(entry.id)"
-                        (input)="onAttachmentNoteInput(entry.id, $event)"
+                        placeholder="Description"
+                        aria-label="Publication attachment description"
+                        [value]="attachmentDescription(entry.id)"
+                        (input)="onAttachmentDescriptionInput(entry.id, $event)"
                       />
                       <button
                         type="submit"
-                        [disabled]="!attachmentFiles()[entry.id] || attachmentUploading()[entry.id]"
+                        [disabled]="
+                          !attachmentFiles()[entry.id] ||
+                          !attachmentDescription(entry.id).trim() ||
+                          attachmentUploading()[entry.id]
+                        "
                       >
                         {{ attachmentUploading()[entry.id] ? 'Uploading…' : 'Upload' }}
                       </button>

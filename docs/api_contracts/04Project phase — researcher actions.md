@@ -422,7 +422,7 @@ size    : Integer  (default 20)
           "fileName": "photo_01.jpg",
           "mediaType": "IMAGE",
           "uploadedAt": "2025-06-03T14:05:00",
-          "note": "string"
+          "attachmentDescription": "string"
         }
       ]
     }
@@ -468,7 +468,7 @@ project_id : UUID (required)
 
 ### `POST /collection-use-projects/{project_id}/log-entries/{entry_id}/attachments`
 
-**Description** — Uploads a file to an existing object log entry. For non-staff callers the project must be `IN_PROGRESS`, and the access log must not be concluded (`409`). `mediaType` declares the kind of file: `DOCUMENT`, `IMAGE`, `VIDEO`, or `OTHER`. `note` is an optional free-text description of the attachment.
+**Description** — Uploads a file to an existing object log entry. For non-staff callers the project must be `IN_PROGRESS`, and the access log must not be concluded (`409`). `mediaType` declares the kind of file: `DOCUMENT`, `IMAGE`, `VIDEO`, or `OTHER`. `attachmentDescription` is a required non-empty free-text description of the attachment.
 
 **Path parameters**
 ```
@@ -480,7 +480,7 @@ entry_id   : UUID (required)
 ```
 file      : File      (required)
 mediaType : MediaType (required) DOCUMENT | IMAGE | VIDEO | OTHER
-note      : String    (optional)
+attachmentDescription : String (required)
 ```
 
 **Response `201 Created`**
@@ -490,7 +490,7 @@ note      : String    (optional)
   "fileName": "fieldwork_notes.pdf",
   "mediaType": "DOCUMENT",
   "uploadedAt": "2025-06-03T14:10:00",
-  "note": "string"
+  "attachmentDescription": "string"
 }
 ```
 
@@ -858,7 +858,7 @@ project_id : UUID (required)
 
 ### `POST /collection-use-projects/{project_id}/publication-entries/{entry_id}/attachments`
 
-**Description** — Uploads a file to an existing publication log entry (e.g. the publication PDF itself). Same `multipart/form-data` body and responses as the log-entry attachment endpoint; subject to the same phase/role gate as adding entries. `mediaType` is one of `DOCUMENT`, `IMAGE`, `VIDEO`, `OTHER`; `note` is optional.
+**Description** — Uploads a file to an existing publication log entry (e.g. the publication PDF itself). Same `multipart/form-data` body and responses as the log-entry attachment endpoint; subject to the same phase/role gate as adding entries. `mediaType` is one of `DOCUMENT`, `IMAGE`, `VIDEO`, `OTHER`; `attachmentDescription` is required and non-empty.
 
 **Path parameters**
 ```
@@ -870,10 +870,10 @@ entry_id   : UUID (required)
 ```
 file      : File      (required)
 mediaType : MediaType (required) DOCUMENT | IMAGE | VIDEO | OTHER
-note      : String    (optional)
+attachmentDescription : String (required)
 ```
 
-**Response `201 Created`** — an `Attachment` (`fileReference`, `fileName`, `mediaType`, `uploadedAt`, `note`).
+**Response `201 Created`** — an `Attachment` (`fileReference`, `fileName`, `mediaType`, `uploadedAt`, `attachmentDescription`).
 
 ---
 

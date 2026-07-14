@@ -350,7 +350,7 @@ class AttachmentResponse(BaseModel):
     fileName: str
     mediaType: MediaType
     uploadedAt: datetime
-    note: str | None = None
+    attachmentDescription: str
 
 
 # ── Object access log (per-project register of accessed objects) ─────────────

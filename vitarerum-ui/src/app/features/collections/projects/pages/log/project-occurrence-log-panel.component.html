@@ -314,6 +314,9 @@
                                                         {{ attachment.fileName }}
                                                       </span>
                                                       <span class="attachment-link__meta">
+                                                        {{ attachment.attachmentDescription }}
+                                                      </span>
+                                                      <span class="attachment-link__meta">
                                                         {{ attachment.mediaType }}
                                                       </span>
                                                       @if (
@@ -420,11 +423,26 @@
                                               "
                                               aria-label="Occurrence entry file"
                                             />
+                                            <input
+                                              type="text"
+                                              class="entry-upload__note"
+                                              placeholder="Description"
+                                              aria-label="Occurrence attachment description"
+                                              [disabled]="!canAddOccurrenceEntries()"
+                                              [value]="occurrenceAttachmentDescription(entry.id)"
+                                              (input)="
+                                                onOccurrenceAttachmentDescriptionInput(
+                                                  entry.id,
+                                                  $event
+                                                )
+                                              "
+                                            />
                                             <button
                                               type="submit"
                                               [disabled]="
                                                 !canAddOccurrenceEntries() ||
                                                 !occurrenceAttachmentFiles()[entry.id] ||
+                                                !occurrenceAttachmentDescription(entry.id).trim() ||
                                                 occurrenceAttachmentUploading()[entry.id]
                                               "
                                             >
@@ -563,6 +581,31 @@
                 (change)="onOccurrenceFilesInput($event)"
               />
             </div>
+
+            @if (occurrenceFiles().length) {
+              <div
+                class="occurrence-entry-form__field occurrence-entry-form__field--wide initial-files"
+              >
+                <span class="initial-files__label">File descriptions</span>
+                <ul class="initial-files__list" aria-label="Occurrence file descriptions">
+                  @for (file of occurrenceFiles(); track file.name + ':' + $index; let index = $index) {
+                    <li class="initial-files__item">
+                      <span class="initial-files__name">{{ file.name }}</span>
+                      <input
+                        type="text"
+                        [id]="'occurrence-file-description-' + index"
+                        [attr.aria-label]="'Description for ' + file.name"
+                        placeholder="Describe what this file shows"
+                        [value]="occurrenceFileDescription(index)"
+                        (input)="onOccurrenceFileDescriptionInput(index, $event)"
+                        [attr.aria-invalid]="!occurrenceFileDescription(index).trim() || null"
+                        required
+                      />
+                    </li>
+                  }
+                </ul>
+              </div>
+            }
           </div>
 
           @if (occurrenceSubmitError()) {

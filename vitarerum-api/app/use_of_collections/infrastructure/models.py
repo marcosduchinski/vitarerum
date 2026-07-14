@@ -162,7 +162,7 @@ class LogEntryAttachmentRecord(Base):
     file_name: Mapped[str] = mapped_column(String(255))
     media_type: Mapped[MediaType] = mapped_column(SAEnum(MediaType, name="media_type"))
     uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    description: Mapped[str] = mapped_column(Text)
 
     entry: Mapped[ObjectLogEntryRecord] = relationship(back_populates="attachments")
 
@@ -229,7 +229,7 @@ class OccurrenceEntryAttachmentRecord(Base):
     file_name: Mapped[str] = mapped_column(String(255))
     media_type: Mapped[MediaType] = mapped_column(SAEnum(MediaType, name="media_type"))
     uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    description: Mapped[str] = mapped_column(Text)
 
     entry: Mapped[ObjectOccurrenceEntryRecord] = relationship(
         back_populates="attachments"
@@ -289,7 +289,7 @@ class PublicationEntryAttachmentRecord(Base):
     file_name: Mapped[str] = mapped_column(String(255))
     media_type: Mapped[MediaType] = mapped_column(SAEnum(MediaType, name="media_type"))
     uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    description: Mapped[str] = mapped_column(Text)
 
     entry: Mapped[PublicationLogEntryRecord] = relationship(
         back_populates="attachments"

@@ -240,6 +240,9 @@
                                         attachment.fileName
                                       }}</span>
                                       <span class="attachment-link__meta">{{
+                                        attachment.attachmentDescription
+                                      }}</span>
+                                      <span class="attachment-link__meta">{{
                                         attachment.mediaType
                                       }}</span>
                                       @if (
@@ -311,11 +314,21 @@
                               (change)="onObjectAttachmentFileInput(entry.id, $event)"
                               aria-label="Object entry file"
                             />
+                            <input
+                              type="text"
+                              class="entry-upload__note"
+                              placeholder="Description"
+                              aria-label="Object attachment description"
+                              [disabled]="!canEditObjectEntries()"
+                              [value]="objectAttachmentDescription(entry.id)"
+                              (input)="onObjectAttachmentDescriptionInput(entry.id, $event)"
+                            />
                             <button
                               type="submit"
                               [disabled]="
                                 !canEditObjectEntries() ||
                                 !objectAttachmentFiles()[entry.id] ||
+                                !objectAttachmentDescription(entry.id).trim() ||
                                 objectAttachmentUploading()[entry.id]
                               "
                             >

@@ -883,6 +883,7 @@ async def test_log_entry_attachment_invalid_media_type_does_not_save_file() -> N
                 file_content=b"invalid",
                 file_name="upload.bin",
                 media_type="NOT_A_MEDIA_TYPE",
+                description="Invalid media attachment",
             )
         )
 
@@ -1100,6 +1101,7 @@ async def test_occurrence_attachment_invalid_media_type_does_not_save_file() -> 
                 file_content=b"invalid",
                 file_name="upload.bin",
                 media_type="NOT_A_MEDIA_TYPE",
+                description="Invalid media attachment",
             )
         )
 
@@ -1246,6 +1248,7 @@ async def test_add_log_entry_attachment_deletes_file_when_save_fails() -> None:
                 file_content=b"jpeg",
                 file_name="photo.jpg",
                 media_type="IMAGE",
+                description="Photo attachment",
             )
         )
 
@@ -1288,6 +1291,7 @@ async def test_add_occurrence_entry_attachment_deletes_file_when_save_fails() ->
                 file_content=b"jpeg",
                 file_name="photo.jpg",
                 media_type="IMAGE",
+                description="Photo attachment",
             )
         )
 
@@ -1326,6 +1330,7 @@ async def test_add_publication_entry_attachment_deletes_file_when_save_fails() -
                 file_content=b"pdf",
                 file_name="paper.pdf",
                 media_type="DOCUMENT",
+                description="Paper attachment",
             )
         )
 
