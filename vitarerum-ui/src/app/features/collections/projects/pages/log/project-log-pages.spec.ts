@@ -452,7 +452,7 @@ describe('project log pages', () => {
     const service = TestBed.inject(PROJECT_API_SERVICE);
     await firstValueFrom(
       service.createObjectOccurrenceEntry('proj-3', {
-        inventoryNumber: 'INV-ZOO-1892-001',
+        collectionUseObjectId: 'INV-ZOO-1892-001',
         numberOfObjects: 1,
         occurrenceDate: '2026-06-12T10:30:00Z',
         location: 'Research room 2',
@@ -558,7 +558,7 @@ describe('project log pages', () => {
     const projectService = TestBed.inject(PROJECT_API_SERVICE);
     const entry = await firstValueFrom(
       projectService.createObjectOccurrenceEntry('proj-3', {
-        inventoryNumber: 'INV-ZOO-1892-001',
+        collectionUseObjectId: 'INV-ZOO-1892-001',
         numberOfObjects: 1,
         occurrenceDate: '2026-06-03T11:30',
         location: 'Reading room',
@@ -630,7 +630,7 @@ describe('project log pages', () => {
     const projectService = TestBed.inject(PROJECT_API_SERVICE);
     const entry = await firstValueFrom(
       projectService.createObjectOccurrenceEntry('proj-3', {
-        inventoryNumber: 'INV-ZOO-1892-001',
+        collectionUseObjectId: 'INV-ZOO-1892-001',
         numberOfObjects: 1,
         occurrenceDate: '2026-06-03T11:30',
         location: 'Reading room',

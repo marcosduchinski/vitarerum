@@ -242,3 +242,39 @@ class AddPublicationEntryAttachment:
             await self._storage.delete(attachment.file_reference)
             raise
         return attachment
+
+
+@dataclass(slots=True)
+class RemovePublicationEntryAttachmentInput:
+    project_id: CollectionUseProjectId
+    entry_id: PublicationLogEntryId
+    caller: Actor
+    file_reference: str
+
+
+class RemovePublicationEntryAttachment:
+    def __init__(
+        self,
+        project_repository: CollectionUseProjectRepository,
+        publication_log_repository: PublicationLogRepository,
+    ) -> None:
+        self._project_repo = project_repository
+        self._repo = publication_log_repository
+
+    async def execute(self, data: RemovePublicationEntryAttachmentInput) -> Attachment:
+        project = await self._project_repo.get_by_id(data.project_id)
+        if project is None:
+            raise LookupError(f"No project found with id {data.project_id}")
+        _check_publication_entry_allowed(project, data.caller)
+        entry = await self._repo.get_entry_by_id(data.entry_id)
+        if entry is None:
+            raise LookupError(f"No entry found with id {data.entry_id}")
+        publication_log = await self._repo.get_by_id(entry.publication_log_id)
+        if (
+            publication_log is None
+            or publication_log.collection_use_project_id != data.project_id
+        ):
+            raise LookupError(f"No entry found with id {data.entry_id}")
+        attachment = entry.remove_attachment(data.file_reference)
+        await self._repo.save_entry(entry)
+        return attachment

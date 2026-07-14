@@ -740,6 +740,7 @@ export const SEED_PROJECT_LOG_ENTRIES: Record<string, ObjectLogEntry[]> = {
   'proj-3': [
     {
       id: 'entry-101',
+      collectionUseObjectId: 'INV-ZOO-1892-001',
       objectReference: {
         inventoryNumber: 'INV-ZOO-1892-001',
         displayTitle: 'Atlantic forest field notebook',
@@ -755,6 +756,7 @@ export const SEED_PROJECT_LOG_ENTRIES: Record<string, ObjectLogEntry[]> = {
     },
     {
       id: 'entry-102',
+      collectionUseObjectId: 'INV-ZOO-1892-002',
       objectReference: {
         inventoryNumber: 'INV-ZOO-1892-002',
         displayTitle: 'Field sketch set',

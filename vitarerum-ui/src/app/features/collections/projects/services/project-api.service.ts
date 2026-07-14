@@ -199,6 +199,20 @@ export class ProjectApiService {
     );
   }
 
+  deleteLogEntryAttachment(
+    projectId: string,
+    entryId: string,
+    fileReference: string,
+  ): Observable<void> {
+    return this.http.delete<void>(
+      this.url(
+        `/collection-use-projects/${projectId}/log-entries/${entryId}/attachments/${encodeURIComponent(
+          fileReference,
+        )}`,
+      ),
+    );
+  }
+
   createObjectOccurrenceEntry(
     projectId: string,
     request: CreateObjectOccurrenceEntryRequest,
@@ -269,6 +283,20 @@ export class ProjectApiService {
     );
   }
 
+  deleteOccurrenceEntryAttachment(
+    projectId: string,
+    entryId: string,
+    fileReference: string,
+  ): Observable<void> {
+    return this.http.delete<void>(
+      this.url(
+        `/collection-use-projects/${projectId}/occurrence-entries/${entryId}/attachments/${encodeURIComponent(
+          fileReference,
+        )}`,
+      ),
+    );
+  }
+
   createPublicationEntry(projectId: string, request: NoteRequest): Observable<PublicationLogEntry> {
     return this.http.post<PublicationLogEntry>(
       this.url(`/collection-use-projects/${projectId}/publication-entries`),
@@ -335,6 +363,20 @@ export class ProjectApiService {
         )}`,
       ),
       { responseType: 'blob' },
+    );
+  }
+
+  deletePublicationEntryAttachment(
+    projectId: string,
+    entryId: string,
+    fileReference: string,
+  ): Observable<void> {
+    return this.http.delete<void>(
+      this.url(
+        `/collection-use-projects/${projectId}/publication-entries/${entryId}/attachments/${encodeURIComponent(
+          fileReference,
+        )}`,
+      ),
     );
   }
 

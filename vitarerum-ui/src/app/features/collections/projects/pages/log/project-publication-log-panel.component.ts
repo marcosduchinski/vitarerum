@@ -112,6 +112,8 @@ export class ProjectPublicationLogPanelComponent {
   protected readonly attachmentErrors = signal<Record<string, ApiError | null>>({});
   protected readonly attachmentDownloading = signal<Record<string, boolean>>({});
   protected readonly attachmentDownloadErrors = signal<Record<string, ApiError | null>>({});
+  protected readonly attachmentDeleting = signal<Record<string, boolean>>({});
+  protected readonly attachmentDeleteErrors = signal<Record<string, ApiError | null>>({});
 
   protected onAddNoteInput(event: Event): void {
     this.addNote.set((event.target as HTMLTextAreaElement).value);
@@ -257,6 +259,24 @@ export class ProjectPublicationLogPanelComponent {
       this.setEntryRecord(this.attachmentDownloadErrors, ref, toApiError(err));
     } finally {
       this.setEntryRecord(this.attachmentDownloading, ref, false);
+    }
+  }
+
+  protected async deleteAttachment(entryId: string, attachment: Attachment): Promise<void> {
+    const ref = attachment.fileReference;
+    if (this.attachmentDeleting()[ref] || !this.canWriteEntries()) return;
+
+    this.setEntryRecord(this.attachmentDeleting, ref, true);
+    this.setEntryRecord(this.attachmentDeleteErrors, ref, null);
+    try {
+      await firstValueFrom(
+        this.projectService.deletePublicationEntryAttachment(this.projectId(), entryId, ref),
+      );
+      this.publicationResource.reload();
+    } catch (err) {
+      this.setEntryRecord(this.attachmentDeleteErrors, ref, toApiError(err));
+    } finally {
+      this.setEntryRecord(this.attachmentDeleting, ref, false);
     }
   }
 

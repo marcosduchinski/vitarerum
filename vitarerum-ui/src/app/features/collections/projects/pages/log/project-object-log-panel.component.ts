@@ -100,6 +100,8 @@ export class ProjectObjectLogPanelComponent {
   // Download state is keyed by the attachment's fileReference.
   protected readonly objectAttachmentDownloading = signal<Record<string, boolean>>({});
   protected readonly objectAttachmentDownloadErrors = signal<Record<string, ApiError | null>>({});
+  protected readonly objectAttachmentDeleting = signal<Record<string, boolean>>({});
+  protected readonly objectAttachmentDeleteErrors = signal<Record<string, ApiError | null>>({});
   protected readonly expandedObjectEntryId = signal<string | null>(null);
 
   protected draftAddedAt(entry: ObjectLogEntry): string {
@@ -215,6 +217,24 @@ export class ProjectObjectLogPanelComponent {
       this.setEntryRecord(this.objectAttachmentDownloadErrors, ref, toApiError(err));
     } finally {
       this.setEntryRecord(this.objectAttachmentDownloading, ref, false);
+    }
+  }
+
+  protected async deleteObjectAttachment(entryId: string, attachment: Attachment): Promise<void> {
+    const ref = attachment.fileReference;
+    if (this.objectAttachmentDeleting()[ref] || !this.canEditObjectEntries()) return;
+
+    this.setEntryRecord(this.objectAttachmentDeleting, ref, true);
+    this.setEntryRecord(this.objectAttachmentDeleteErrors, ref, null);
+    try {
+      await firstValueFrom(
+        this.projectService.deleteLogEntryAttachment(this.projectId(), entryId, ref),
+      );
+      this.logResource.reload();
+    } catch (err) {
+      this.setEntryRecord(this.objectAttachmentDeleteErrors, ref, toApiError(err));
+    } finally {
+      this.setEntryRecord(this.objectAttachmentDeleting, ref, false);
     }
   }
 

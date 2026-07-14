@@ -446,6 +446,14 @@
   max-width: 100%;
 }
 
+.attachment-list__row {
+  display: inline-flex;
+  gap: 0.35rem;
+  align-items: stretch;
+  min-width: 0;
+  max-width: 100%;
+}
+
 // File chips read as links: a media-type icon, the file name (the click target
 // that triggers the download), a media-type tag, and a trailing download glyph
 // that swaps to a spinner while fetching.
@@ -526,6 +534,33 @@
 
 .attachment-link:hover:not(:disabled) :is(.attachment-link__icon, .attachment-link__action) {
   color: var(--color-accent-strong);
+}
+
+.attachment-remove {
+  display: inline-grid;
+  width: 2.15rem;
+  min-width: 2.15rem;
+  place-items: center;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-cta);
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    border-color: var(--color-cta);
+    background: color-mix(in srgb, var(--color-cta) 10%, var(--color-bg));
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+  }
+
+  &:disabled {
+    cursor: progress;
+    opacity: 0.55;
+  }
 }
 
 .entry-upload {

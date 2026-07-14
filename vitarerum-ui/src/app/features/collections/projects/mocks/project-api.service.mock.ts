@@ -162,10 +162,10 @@ export class ProjectApiServiceMock {
     }
     const inUse =
       (this.state.logEntries.get(projectId) ?? []).some(
-        (entry) => entry.requestedObjectId === objectId,
+        (entry) => entry.collectionUseObjectId === objectId || entry.requestedObjectId === objectId,
       ) ||
       (this.state.occurrenceEntries.get(projectId) ?? []).some(
-        (entry) => entry.requestedObjectId === objectId,
+        (entry) => entry.collectionUseObjectId === objectId || entry.requestedObjectId === objectId,
       );
     if (inUse) return throwError(() => ({ status: 409, error: 'PROJECT_OBJECT_IN_USE' }));
     p.objects = (p.objects ?? []).filter((object) => object.id !== objectId);
@@ -189,8 +189,9 @@ export class ProjectApiServiceMock {
     this.ensureObjectAccessLog(projectId);
     const entry: ObjectLogEntry = {
       id: this.state.nextEntryId(),
+      collectionUseObjectId: request.collectionUseObjectId,
       objectReference: {
-        inventoryNumber: request.inventoryNumber,
+        inventoryNumber: this.collectionUseObjectInventoryNumber(p, request.collectionUseObjectId),
         displayTitle: null,
         objectName: null,
         briefDescriptionSnapshot: null,
@@ -199,7 +200,7 @@ export class ProjectApiServiceMock {
       addedAt: new Date().toISOString(),
       addedBy: currentPrincipal,
       observations: request.observations ?? null,
-      requestedObjectId: request.requestedObjectId ?? null,
+      requestedObjectId: request.collectionUseObjectId,
       attachments: [],
     };
     const current = this.state.logEntries.get(projectId) ?? [];
@@ -324,6 +325,35 @@ export class ProjectApiServiceMock {
     return of(this.mockAttachmentBlob(attachment.fileName));
   }
 
+  deleteLogEntryAttachment(
+    projectId: string,
+    entryId: string,
+    fileReference: string,
+  ): Observable<void> {
+    const p = this.state.projects.get(projectId);
+    if (!p) return throwError(() => ({ status: 404, error: 'NOT_FOUND' }));
+    if (this.currentPrincipal().group === 'EXTERNAL' && p.status !== 'IN_PROGRESS') {
+      return throwError(() => ({
+        status: 409,
+        error: 'INVALID_TRANSITION',
+        message: 'Entries can only be edited while the project is IN_PROGRESS',
+      }));
+    }
+    const allEntries = this.state.logEntries.get(projectId) ?? [];
+    const idx = allEntries.findIndex((e) => e.id === entryId);
+    if (idx < 0) return throwError(() => ({ status: 404, error: 'ENTRY_NOT_FOUND' }));
+    const entry = allEntries[idx];
+    if (!entry.attachments.some((a) => a.fileReference === fileReference)) {
+      return throwError(() => ({ status: 404, error: 'ATTACHMENT_NOT_FOUND' }));
+    }
+    allEntries[idx] = {
+      ...entry,
+      attachments: entry.attachments.filter((a) => a.fileReference !== fileReference),
+    };
+    this.state.logEntries.set(projectId, allEntries);
+    return of(void 0);
+  }
+
   createObjectOccurrenceEntry(
     projectId: string,
     request: CreateObjectOccurrenceEntryRequest,
@@ -341,8 +371,9 @@ export class ProjectApiServiceMock {
     this.ensureObjectOccurrenceLog(projectId);
     const entry: ObjectOccurrenceEntry = {
       id: this.state.nextEntryId(),
+      collectionUseObjectId: request.collectionUseObjectId,
       objectReference: {
-        inventoryNumber: request.inventoryNumber,
+        inventoryNumber: this.collectionUseObjectInventoryNumber(p, request.collectionUseObjectId),
         displayTitle: null,
         objectName: null,
         briefDescriptionSnapshot: null,
@@ -353,7 +384,7 @@ export class ProjectApiServiceMock {
       reportedBy: currentPrincipal,
       detailedDescription: request.detailedDescription,
       testimonial: request.testimonial ?? null,
-      requestedObjectId: request.requestedObjectId ?? null,
+      requestedObjectId: request.collectionUseObjectId,
       attachments: [],
     };
     const current = this.state.occurrenceEntries.get(projectId) ?? [];
@@ -488,6 +519,35 @@ export class ProjectApiServiceMock {
     return of(this.mockAttachmentBlob(attachment.fileName));
   }
 
+  deleteOccurrenceEntryAttachment(
+    projectId: string,
+    entryId: string,
+    fileReference: string,
+  ): Observable<void> {
+    const p = this.state.projects.get(projectId);
+    if (!p) return throwError(() => ({ status: 404, error: 'NOT_FOUND' }));
+    if (this.currentPrincipal().group === 'EXTERNAL' && p.status !== 'IN_PROGRESS') {
+      return throwError(() => ({
+        status: 409,
+        error: 'INVALID_TRANSITION',
+        message: 'Entries can only be edited while the project is IN_PROGRESS',
+      }));
+    }
+    const allEntries = this.state.occurrenceEntries.get(projectId) ?? [];
+    const idx = allEntries.findIndex((e) => e.id === entryId);
+    if (idx < 0) return throwError(() => ({ status: 404, error: 'ENTRY_NOT_FOUND' }));
+    const entry = allEntries[idx];
+    if (!entry.attachments.some((a) => a.fileReference === fileReference)) {
+      return throwError(() => ({ status: 404, error: 'ATTACHMENT_NOT_FOUND' }));
+    }
+    allEntries[idx] = {
+      ...entry,
+      attachments: entry.attachments.filter((a) => a.fileReference !== fileReference),
+    };
+    this.state.occurrenceEntries.set(projectId, allEntries);
+    return of(void 0);
+  }
+
   private mockAttachmentBlob(fileName: string): Blob {
     return new Blob([`Mock attachment content for ${fileName}\n`], { type: 'text/plain' });
   }
@@ -612,6 +672,30 @@ export class ProjectApiServiceMock {
     return of(this.mockAttachmentBlob(attachment.fileName));
   }
 
+  deletePublicationEntryAttachment(
+    projectId: string,
+    entryId: string,
+    fileReference: string,
+  ): Observable<void> {
+    const p = this.state.projects.get(projectId);
+    if (!p) return throwError(() => ({ status: 404, error: 'NOT_FOUND' }));
+    const gate = this.publicationWriteError(p.status);
+    if (gate) return throwError(() => gate);
+    const allEntries = this.state.publicationEntries.get(projectId) ?? [];
+    const idx = allEntries.findIndex((e) => e.id === entryId);
+    if (idx < 0) return throwError(() => ({ status: 404, error: 'ENTRY_NOT_FOUND' }));
+    const entry = allEntries[idx];
+    if (!entry.attachments.some((a) => a.fileReference === fileReference)) {
+      return throwError(() => ({ status: 404, error: 'ATTACHMENT_NOT_FOUND' }));
+    }
+    allEntries[idx] = {
+      ...entry,
+      attachments: entry.attachments.filter((a) => a.fileReference !== fileReference),
+    };
+    this.state.publicationEntries.set(projectId, allEntries);
+    return of(void 0);
+  }
+
   // Publication entries flip the usual log gate: the external requester writes
   // while IN_PROGRESS; curatorial/collections/direction staff write once
   // COMPLETED. Any other status rejects everyone with 409. Returns the error to
@@ -688,6 +772,19 @@ export class ProjectApiServiceMock {
         assignedTo: p.proposalAssignedTo,
       },
     };
+  }
+
+  private collectionUseObjectInventoryNumber(
+    p: MutableProjectState,
+    collectionUseObjectId: string,
+  ): string {
+    const projectObject = p.objects?.find((object) => object.id === collectionUseObjectId);
+    if (projectObject) return projectObject.inventoryNumber;
+
+    const proposalObject = this.state.proposals
+      .get(p.proposalId)
+      ?.requestedObjects.find((object) => object.id === collectionUseObjectId);
+    return proposalObject?.objectReference.inventoryNumber ?? collectionUseObjectId;
   }
 
   private toDetail(p: MutableProjectState): CollectionUseProjectDetail {

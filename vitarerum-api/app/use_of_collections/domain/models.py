@@ -123,6 +123,12 @@ class ObjectLogEntry:
     def add_attachment(self, attachment: Attachment) -> None:
         self.attachments.append(attachment)
 
+    def remove_attachment(self, file_reference: str) -> Attachment:
+        for index, attachment in enumerate(self.attachments):
+            if attachment.file_reference == file_reference:
+                return self.attachments.pop(index)
+        raise LookupError(f"No attachment found with file reference {file_reference}")
+
     def edit(
         self,
         *,
@@ -190,6 +196,12 @@ class ObjectOccurrenceEntry:
     def add_attachment(self, attachment: Attachment) -> None:
         self.attachments.append(attachment)
 
+    def remove_attachment(self, file_reference: str) -> Attachment:
+        for index, attachment in enumerate(self.attachments):
+            if attachment.file_reference == file_reference:
+                return self.attachments.pop(index)
+        raise LookupError(f"No attachment found with file reference {file_reference}")
+
     def edit(
         self,
         *,
@@ -256,6 +268,12 @@ class PublicationLogEntry:
 
     def add_attachment(self, attachment: Attachment) -> None:
         self.attachments.append(attachment)
+
+    def remove_attachment(self, file_reference: str) -> Attachment:
+        for index, attachment in enumerate(self.attachments):
+            if attachment.file_reference == file_reference:
+                return self.attachments.pop(index)
+        raise LookupError(f"No attachment found with file reference {file_reference}")
 
     def edit(self, *, note: str) -> None:
         if not note:

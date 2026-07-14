@@ -326,6 +326,14 @@
   max-width: 100%;
 }
 
+.attachment-list__row {
+  display: inline-flex;
+  gap: 0.35rem;
+  align-items: stretch;
+  min-width: 0;
+  max-width: 100%;
+}
+
 .attachment-link {
   display: inline-flex;
   align-items: center;
@@ -392,6 +400,33 @@
   margin-left: 0.1rem;
   font-size: 0.8rem;
   color: var(--color-muted);
+}
+
+.attachment-remove {
+  display: inline-grid;
+  width: 2.15rem;
+  min-width: 2.15rem;
+  place-items: center;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-cta);
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    border-color: var(--color-cta);
+    background: color-mix(in srgb, var(--color-cta) 10%, var(--color-bg));
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+  }
+
+  &:disabled {
+    cursor: progress;
+    opacity: 0.55;
+  }
 }
 
 .entry-upload {

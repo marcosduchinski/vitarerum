@@ -161,41 +161,67 @@
                     <ul class="attachment-list" aria-label="Publication entry attachments">
                       @for (attachment of entry.attachments; track attachment.fileReference) {
                         <li>
-                          <button
-                            type="button"
-                            class="attachment-link"
-                            [disabled]="attachmentDownloading()[attachment.fileReference]"
-                            [attr.aria-label]="'Download ' + attachment.fileName"
-                            (click)="downloadAttachment(entry.id, attachment)"
-                          >
-                            <span
-                              class="attachment-link__icon pi"
-                              [class.pi-image]="attachment.mediaType === 'IMAGE'"
-                              [class.pi-video]="attachment.mediaType === 'VIDEO'"
-                              [class.pi-file]="
-                                attachment.mediaType !== 'IMAGE' && attachment.mediaType !== 'VIDEO'
+                          <div class="attachment-list__row">
+                            <button
+                              type="button"
+                              class="attachment-link"
+                              [disabled]="
+                                attachmentDownloading()[attachment.fileReference] ||
+                                attachmentDeleting()[attachment.fileReference]
                               "
-                              aria-hidden="true"
-                            ></span>
-                            <span class="attachment-link__name">{{ attachment.fileName }}</span>
-                            @if (attachment.note) {
-                              <span class="attachment-link__meta">{{ attachment.note }}</span>
-                            }
-                            @if (attachmentDownloading()[attachment.fileReference]) {
+                              [attr.aria-label]="'Download ' + attachment.fileName"
+                              (click)="downloadAttachment(entry.id, attachment)"
+                            >
                               <span
-                                class="attachment-link__action pi pi-spin pi-spinner"
+                                class="attachment-link__icon pi"
+                                [class.pi-image]="attachment.mediaType === 'IMAGE'"
+                                [class.pi-video]="attachment.mediaType === 'VIDEO'"
+                                [class.pi-file]="
+                                  attachment.mediaType !== 'IMAGE' &&
+                                  attachment.mediaType !== 'VIDEO'
+                                "
                                 aria-hidden="true"
                               ></span>
-                            } @else {
-                              <span
-                                class="attachment-link__action pi pi-download"
-                                aria-hidden="true"
-                              ></span>
+                              <span class="attachment-link__name">{{ attachment.fileName }}</span>
+                              @if (attachment.note) {
+                                <span class="attachment-link__meta">{{ attachment.note }}</span>
+                              }
+                              @if (attachmentDownloading()[attachment.fileReference]) {
+                                <span
+                                  class="attachment-link__action pi pi-spin pi-spinner"
+                                  aria-hidden="true"
+                                ></span>
+                              } @else {
+                                <span
+                                  class="attachment-link__action pi pi-download"
+                                  aria-hidden="true"
+                                ></span>
+                              }
+                            </button>
+                            @if (canWriteEntries()) {
+                              <button
+                                type="button"
+                                class="attachment-remove"
+                                [disabled]="attachmentDeleting()[attachment.fileReference]"
+                                [attr.aria-label]="'Remove ' + attachment.fileName"
+                                (click)="deleteAttachment(entry.id, attachment)"
+                              >
+                                @if (attachmentDeleting()[attachment.fileReference]) {
+                                  <span class="pi pi-spin pi-spinner" aria-hidden="true"></span>
+                                } @else {
+                                  <span class="pi pi-trash" aria-hidden="true"></span>
+                                }
+                              </button>
                             }
-                          </button>
+                          </div>
                           @if (attachmentDownloadErrors()[attachment.fileReference]) {
                             <app-error-message
                               [apiError]="attachmentDownloadErrors()[attachment.fileReference]!"
+                            />
+                          }
+                          @if (attachmentDeleteErrors()[attachment.fileReference]) {
+                            <app-error-message
+                              [apiError]="attachmentDeleteErrors()[attachment.fileReference]!"
                             />
                           }
                         </li>

@@ -44,6 +44,12 @@ from app.use_of_collections.application.use_cases import (
     GetObjectOccurrenceLogInput,
     GetPublicationLog,
     GetPublicationLogInput,
+    RemoveLogEntryAttachment,
+    RemoveLogEntryAttachmentInput,
+    RemoveOccurrenceEntryAttachment,
+    RemoveOccurrenceEntryAttachmentInput,
+    RemovePublicationEntryAttachment,
+    RemovePublicationEntryAttachmentInput,
 )
 from app.use_of_collections.domain.models import (
     Attachment,
@@ -120,6 +126,14 @@ async def _download_attachment(
             "Content-Disposition": f'attachment; filename="{attachment.file_name}"'
         },
     )
+
+
+def _raise_attachment_or_entry_not_found(
+    exc: LookupError, entry_id: str, file_reference: str
+) -> None:
+    if "attachment" in str(exc).lower():
+        raise _not_found("attachment", file_reference) from exc
+    raise _not_found("entry", entry_id) from exc
 
 
 # ── Object log entries ─────────────────────────────────────────────────────--
@@ -352,6 +366,45 @@ async def download_log_entry_attachment(
     return await _download_attachment(entry.attachments, file_reference, file_storage)
 
 
+@projects_router.delete(
+    "/{project_id}/log-entries/{entry_id}/attachments/{file_reference:path}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def remove_log_entry_attachment(
+    project_id: str,
+    entry_id: str,
+    file_reference: str,
+    caller: CallerPermission,
+    project_repo: ProjectRepo,
+    proposal_repo: ProposalRepo,
+    access_log_repo: AccessLogRepo,
+    file_storage: FileStorage,
+    session: DBSession,
+) -> Response:
+    await _assert_existing_project_access(
+        project_id, caller, project_repo, proposal_repo
+    )
+    try:
+        attachment = await RemoveLogEntryAttachment(
+            project_repo, access_log_repo
+        ).execute(
+            RemoveLogEntryAttachmentInput(
+                project_id=CollectionUseProjectId(project_id),
+                entry_id=ObjectLogEntryId(entry_id),
+                caller=caller,
+                file_reference=file_reference,
+                restrict_to_in_progress=not _is_staff(caller),
+            )
+        )
+    except (InvalidTransition, ValueError) as exc:
+        _handle_domain_errors(exc)
+    except LookupError as exc:
+        _raise_attachment_or_entry_not_found(exc, entry_id, file_reference)
+    await session.commit()
+    await file_storage.delete(attachment.file_reference)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 # ── Object occurrence entries ──────────────────────────────────────────────--
 
 
@@ -507,7 +560,9 @@ async def get_object_occurrence_log(
     )
     occurrence_log = await GetObjectOccurrenceLog(
         project_repo, occurrence_log_repo
-    ).execute(GetObjectOccurrenceLogInput(project_id=CollectionUseProjectId(project_id)))
+    ).execute(
+        GetObjectOccurrenceLogInput(project_id=CollectionUseProjectId(project_id))
+    )
     if occurrence_log is None:
         raise _not_found("object_occurrence_log", project_id)
     return await _build_occurrence_log_response(occurrence_log, session)
@@ -580,19 +635,54 @@ async def download_occurrence_entry_attachment(
     await _assert_existing_project_access(
         project_id, caller, project_repo, proposal_repo
     )
-    entry = await occurrence_log_repo.get_entry_by_id(
-        ObjectOccurrenceEntryId(entry_id)
-    )
+    entry = await occurrence_log_repo.get_entry_by_id(ObjectOccurrenceEntryId(entry_id))
     if entry is None:
         raise _not_found("entry", entry_id)
-    occurrence_log = await occurrence_log_repo.get_by_id(
-        entry.object_occurrence_log_id
-    )
+    occurrence_log = await occurrence_log_repo.get_by_id(entry.object_occurrence_log_id)
     if occurrence_log is None or occurrence_log.collection_use_project_id != (
         CollectionUseProjectId(project_id)
     ):
         raise _not_found("entry", entry_id)
     return await _download_attachment(entry.attachments, file_reference, file_storage)
+
+
+@projects_router.delete(
+    "/{project_id}/occurrence-entries/{entry_id}/attachments/{file_reference:path}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def remove_occurrence_entry_attachment(
+    project_id: str,
+    entry_id: str,
+    file_reference: str,
+    caller: CallerPermission,
+    project_repo: ProjectRepo,
+    proposal_repo: ProposalRepo,
+    occurrence_log_repo: OccurrenceLogRepo,
+    file_storage: FileStorage,
+    session: DBSession,
+) -> Response:
+    await _assert_existing_project_access(
+        project_id, caller, project_repo, proposal_repo
+    )
+    try:
+        attachment = await RemoveOccurrenceEntryAttachment(
+            project_repo, occurrence_log_repo
+        ).execute(
+            RemoveOccurrenceEntryAttachmentInput(
+                project_id=CollectionUseProjectId(project_id),
+                entry_id=ObjectOccurrenceEntryId(entry_id),
+                caller=caller,
+                file_reference=file_reference,
+                restrict_to_in_progress=not _is_staff(caller),
+            )
+        )
+    except (InvalidTransition, ValueError) as exc:
+        _handle_domain_errors(exc)
+    except LookupError as exc:
+        _raise_attachment_or_entry_not_found(exc, entry_id, file_reference)
+    await session.commit()
+    await file_storage.delete(attachment.file_reference)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # ── Publication log entries ────────────────────────────────────────────────--
@@ -796,9 +886,7 @@ async def download_publication_entry_attachment(
     await _assert_existing_project_access(
         project_id, caller, project_repo, proposal_repo
     )
-    entry = await publication_log_repo.get_entry_by_id(
-        PublicationLogEntryId(entry_id)
-    )
+    entry = await publication_log_repo.get_entry_by_id(PublicationLogEntryId(entry_id))
     if entry is None:
         raise _not_found("entry", entry_id)
     publication_log = await publication_log_repo.get_by_id(entry.publication_log_id)
@@ -809,3 +897,39 @@ async def download_publication_entry_attachment(
     return await _download_attachment(entry.attachments, file_reference, file_storage)
 
 
+@projects_router.delete(
+    "/{project_id}/publication-entries/{entry_id}/attachments/{file_reference:path}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def remove_publication_entry_attachment(
+    project_id: str,
+    entry_id: str,
+    file_reference: str,
+    caller: CallerPermission,
+    project_repo: ProjectRepo,
+    proposal_repo: ProposalRepo,
+    publication_log_repo: PublicationLogRepo,
+    file_storage: FileStorage,
+    session: DBSession,
+) -> Response:
+    await _assert_existing_project_access(
+        project_id, caller, project_repo, proposal_repo
+    )
+    try:
+        attachment = await RemovePublicationEntryAttachment(
+            project_repo, publication_log_repo
+        ).execute(
+            RemovePublicationEntryAttachmentInput(
+                project_id=CollectionUseProjectId(project_id),
+                entry_id=PublicationLogEntryId(entry_id),
+                caller=caller,
+                file_reference=file_reference,
+            )
+        )
+    except LookupError as exc:
+        _raise_attachment_or_entry_not_found(exc, entry_id, file_reference)
+    except Exception as exc:
+        _handle_domain_errors(exc)
+    await session.commit()
+    await file_storage.delete(attachment.file_reference)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

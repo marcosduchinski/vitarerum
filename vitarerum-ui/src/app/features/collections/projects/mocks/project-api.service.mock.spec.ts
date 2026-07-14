@@ -151,7 +151,7 @@ describe('ProjectApiServiceMock', () => {
 
     const entry = await firstValueFrom(
       service.createObjectLogEntry('proj-4', {
-        inventoryNumber: 'INV-001',
+        collectionUseObjectId: 'INV-001',
         numberOfObjects: 2,
         observations: 'Session note.',
       }),
@@ -171,7 +171,7 @@ describe('ProjectApiServiceMock', () => {
 
     await firstValueFrom(
       service.createObjectLogEntry('proj-4', {
-        inventoryNumber: 'INV-002',
+        collectionUseObjectId: 'INV-002',
         numberOfObjects: 1,
       }),
     );
@@ -185,7 +185,7 @@ describe('ProjectApiServiceMock', () => {
     state.projects.get('proj-4')!.status = 'IN_PROGRESS';
     const entry = await firstValueFrom(
       service.createObjectLogEntry('proj-4', {
-        inventoryNumber: 'INV-EDIT-001',
+        collectionUseObjectId: 'INV-EDIT-001',
         numberOfObjects: 1,
         observations: 'Initial note.',
       }),
@@ -222,7 +222,7 @@ describe('ProjectApiServiceMock', () => {
 
     const entry = await firstValueFrom(
       service.createObjectLogEntry('proj-4', {
-        inventoryNumber: 'INV-003',
+        collectionUseObjectId: 'INV-003',
         numberOfObjects: 1,
       }),
     );
@@ -237,7 +237,7 @@ describe('ProjectApiServiceMock', () => {
 
       const entry = await firstValueFrom(
         service.createObjectLogEntry('proj-4', {
-          inventoryNumber: `INV-ACCESS-${status}`,
+          collectionUseObjectId: `INV-ACCESS-${status}`,
           numberOfObjects: 1,
         }),
       );
@@ -252,7 +252,7 @@ describe('ProjectApiServiceMock', () => {
 
     const entry = await firstValueFrom(
       service.createObjectOccurrenceEntry('proj-4', {
-        inventoryNumber: 'INV-010',
+        collectionUseObjectId: 'INV-010',
         numberOfObjects: 1,
         occurrenceDate: '2026-06-03T11:30:00Z',
         location: 'Reading room',
@@ -278,7 +278,7 @@ describe('ProjectApiServiceMock', () => {
 
     await firstValueFrom(
       service.createObjectOccurrenceEntry('proj-4', {
-        inventoryNumber: 'INV-011',
+        collectionUseObjectId: 'INV-011',
         numberOfObjects: 1,
         occurrenceDate: '2026-06-04T10:00:00Z',
         location: 'Conservation lab',
@@ -302,7 +302,7 @@ describe('ProjectApiServiceMock', () => {
     state.projects.get('proj-4')!.status = 'IN_PROGRESS';
     const entry = await firstValueFrom(
       service.createObjectOccurrenceEntry('proj-4', {
-        inventoryNumber: 'INV-012',
+        collectionUseObjectId: 'INV-012',
         numberOfObjects: 1,
         occurrenceDate: '2026-06-04T10:30:00Z',
         location: 'Reading room',
@@ -324,7 +324,7 @@ describe('ProjectApiServiceMock', () => {
 
     const entry = await firstValueFrom(
       service.createObjectOccurrenceEntry('proj-4', {
-        inventoryNumber: 'INV-013',
+        collectionUseObjectId: 'INV-013',
         numberOfObjects: 1,
         occurrenceDate: '2026-06-04T11:00:00Z',
         location: 'Collections office',
@@ -343,7 +343,7 @@ describe('ProjectApiServiceMock', () => {
 
       const entry = await firstValueFrom(
         service.createObjectOccurrenceEntry('proj-4', {
-          inventoryNumber: `INV-OCC-${status}`,
+          collectionUseObjectId: `INV-OCC-${status}`,
           numberOfObjects: 1,
           occurrenceDate: '2026-06-04T11:00:00Z',
           location: 'Collections office',
@@ -362,7 +362,7 @@ describe('ProjectApiServiceMock', () => {
     await expect(
       firstValueFrom(
         service.createObjectOccurrenceEntry('proj-4', {
-          inventoryNumber: 'INV-014',
+          collectionUseObjectId: 'INV-014',
           numberOfObjects: 1,
           occurrenceDate: '2026-06-04T11:30:00Z',
           location: 'Reading room',
@@ -442,13 +442,65 @@ describe('ProjectApiServiceMock', () => {
     ).rejects.toMatchObject({ status: 404, error: 'ATTACHMENT_NOT_FOUND' });
   });
 
+  it('deletes an uploaded log entry attachment', async () => {
+    session.set(staffSession());
+    const file = new File(['x'], 'evidence.pdf', { type: 'application/pdf' });
+    const attachment = await firstValueFrom(
+      service.uploadLogEntryAttachment('proj-3', 'entry-101', file, 'DOCUMENT'),
+    );
+
+    await firstValueFrom(
+      service.deleteLogEntryAttachment('proj-3', 'entry-101', attachment.fileReference),
+    );
+
+    const page = await firstValueFrom(service.listObjectLogEntries('proj-3'));
+    const entry = page.content.find((item) => item.id === 'entry-101');
+    expect(entry?.attachments.some((item) => item.fileReference === attachment.fileReference)).toBe(
+      false,
+    );
+    await expect(
+      firstValueFrom(
+        service.downloadLogEntryAttachment('proj-3', 'entry-101', attachment.fileReference),
+      ),
+    ).rejects.toMatchObject({ status: 404, error: 'ATTACHMENT_NOT_FOUND' });
+  });
+
+  it('deletes an uploaded occurrence entry attachment', async () => {
+    state.projects.get('proj-4')!.status = 'IN_PROGRESS';
+    const entry = await firstValueFrom(
+      service.createObjectOccurrenceEntry('proj-4', {
+        collectionUseObjectId: 'INV-OCC-DELETE',
+        numberOfObjects: 1,
+        occurrenceDate: '2026-06-04T11:30:00Z',
+        location: 'Reading room',
+        detailedDescription: 'Occurrence detail.',
+      }),
+    );
+    const attachment = await firstValueFrom(
+      service.uploadOccurrenceEntryAttachment(
+        'proj-4',
+        entry.id,
+        new File(['occ'], 'occurrence.pdf', { type: 'application/pdf' }),
+        'DOCUMENT',
+      ),
+    );
+
+    await firstValueFrom(
+      service.deleteOccurrenceEntryAttachment('proj-4', entry.id, attachment.fileReference),
+    );
+
+    const page = await firstValueFrom(service.listObjectOccurrenceEntries('proj-4'));
+    const stored = page.content.find((item) => item.id === entry.id);
+    expect(stored?.attachments).toHaveLength(0);
+  });
+
   it('rejects researcher object log entries outside IN_PROGRESS', async () => {
     state.projects.get('proj-4')!.status = 'COMPLETED';
 
     await expect(
       firstValueFrom(
         service.createObjectLogEntry('proj-4', {
-          inventoryNumber: 'INV-004',
+          collectionUseObjectId: 'INV-004',
           numberOfObjects: 1,
         }),
       ),
@@ -558,6 +610,12 @@ describe('ProjectApiServiceMock', () => {
     const page = await firstValueFrom(service.listPublicationEntries('proj-4'));
     const stored = page.content.find((e) => e.id === entry.id);
     expect(stored?.attachments.some((a) => a.fileName === 'publication.pdf')).toBe(true);
+
+    await firstValueFrom(
+      service.deletePublicationEntryAttachment('proj-4', entry.id, attachment.fileReference),
+    );
+    const afterDelete = await firstValueFrom(service.listPublicationEntries('proj-4'));
+    expect(afterDelete.content.find((e) => e.id === entry.id)?.attachments).toHaveLength(0);
   });
 
   it('rejects publication log lookup before the first entry', async () => {

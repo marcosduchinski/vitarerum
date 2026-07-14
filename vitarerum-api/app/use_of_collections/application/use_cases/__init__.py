@@ -25,6 +25,10 @@ from app.use_of_collections.application.use_cases.journal import (
     GetObjectAccessLogInput,
     GetObjectOccurrenceLog,
     GetObjectOccurrenceLogInput,
+    RemoveLogEntryAttachment,
+    RemoveLogEntryAttachmentInput,
+    RemoveOccurrenceEntryAttachment,
+    RemoveOccurrenceEntryAttachmentInput,
 )
 from app.use_of_collections.application.use_cases.project import (
     AddProjectObjects,
@@ -94,6 +98,8 @@ from app.use_of_collections.application.use_cases.publication import (
     EditPublicationLogEntryInput,
     GetPublicationLog,
     GetPublicationLogInput,
+    RemovePublicationEntryAttachment,
+    RemovePublicationEntryAttachmentInput,
 )
 
 __all__ = [
@@ -151,6 +157,12 @@ __all__ = [
     "RejectProposalOutput",
     "RemoveAmendmentDocument",
     "RemoveAmendmentDocumentInput",
+    "RemoveLogEntryAttachment",
+    "RemoveLogEntryAttachmentInput",
+    "RemoveOccurrenceEntryAttachment",
+    "RemoveOccurrenceEntryAttachmentInput",
+    "RemovePublicationEntryAttachment",
+    "RemovePublicationEntryAttachmentInput",
     "RemoveProjectObject",
     "RemoveProjectObjectInput",
     "RemoveRequestedObject",

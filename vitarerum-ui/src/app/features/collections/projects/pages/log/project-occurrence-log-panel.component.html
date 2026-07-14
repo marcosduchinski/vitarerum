@@ -274,60 +274,101 @@
                                                 track attachment.fileReference
                                               ) {
                                                 <li>
-                                                  <button
-                                                    type="button"
-                                                    class="attachment-link"
-                                                    [disabled]="
-                                                      occurrenceAttachmentDownloading()[
-                                                        attachment.fileReference
-                                                      ]
-                                                    "
-                                                    [attr.aria-label]="
-                                                      'Download ' + attachment.fileName
-                                                    "
-                                                    (click)="
-                                                      downloadOccurrenceAttachment(
-                                                        entry.id,
-                                                        attachment
-                                                      )
-                                                    "
-                                                  >
-                                                    <span
-                                                      class="attachment-link__icon pi"
-                                                      [class.pi-image]="
-                                                        attachment.mediaType === 'IMAGE'
+                                                  <div class="attachment-list__row">
+                                                    <button
+                                                      type="button"
+                                                      class="attachment-link"
+                                                      [disabled]="
+                                                        occurrenceAttachmentDownloading()[
+                                                          attachment.fileReference
+                                                        ] ||
+                                                        occurrenceAttachmentDeleting()[
+                                                          attachment.fileReference
+                                                        ]
                                                       "
-                                                      [class.pi-video]="
-                                                        attachment.mediaType === 'VIDEO'
+                                                      [attr.aria-label]="
+                                                        'Download ' + attachment.fileName
                                                       "
-                                                      [class.pi-file]="
-                                                        attachment.mediaType !== 'IMAGE' &&
-                                                        attachment.mediaType !== 'VIDEO'
+                                                      (click)="
+                                                        downloadOccurrenceAttachment(
+                                                          entry.id,
+                                                          attachment
+                                                        )
                                                       "
-                                                      aria-hidden="true"
-                                                    ></span>
-                                                    <span class="attachment-link__name">
-                                                      {{ attachment.fileName }}
-                                                    </span>
-                                                    <span class="attachment-link__meta">
-                                                      {{ attachment.mediaType }}
-                                                    </span>
-                                                    @if (
-                                                      occurrenceAttachmentDownloading()[
-                                                        attachment.fileReference
-                                                      ]
-                                                    ) {
+                                                    >
                                                       <span
-                                                        class="attachment-link__action pi pi-spin pi-spinner"
+                                                        class="attachment-link__icon pi"
+                                                        [class.pi-image]="
+                                                          attachment.mediaType === 'IMAGE'
+                                                        "
+                                                        [class.pi-video]="
+                                                          attachment.mediaType === 'VIDEO'
+                                                        "
+                                                        [class.pi-file]="
+                                                          attachment.mediaType !== 'IMAGE' &&
+                                                          attachment.mediaType !== 'VIDEO'
+                                                        "
                                                         aria-hidden="true"
                                                       ></span>
-                                                    } @else {
-                                                      <span
-                                                        class="attachment-link__action pi pi-download"
-                                                        aria-hidden="true"
-                                                      ></span>
+                                                      <span class="attachment-link__name">
+                                                        {{ attachment.fileName }}
+                                                      </span>
+                                                      <span class="attachment-link__meta">
+                                                        {{ attachment.mediaType }}
+                                                      </span>
+                                                      @if (
+                                                        occurrenceAttachmentDownloading()[
+                                                          attachment.fileReference
+                                                        ]
+                                                      ) {
+                                                        <span
+                                                          class="attachment-link__action pi pi-spin pi-spinner"
+                                                          aria-hidden="true"
+                                                        ></span>
+                                                      } @else {
+                                                        <span
+                                                          class="attachment-link__action pi pi-download"
+                                                          aria-hidden="true"
+                                                        ></span>
+                                                      }
+                                                    </button>
+                                                    @if (canAddOccurrenceEntries()) {
+                                                      <button
+                                                        type="button"
+                                                        class="attachment-remove"
+                                                        [disabled]="
+                                                          occurrenceAttachmentDeleting()[
+                                                            attachment.fileReference
+                                                          ]
+                                                        "
+                                                        [attr.aria-label]="
+                                                          'Remove ' + attachment.fileName
+                                                        "
+                                                        (click)="
+                                                          deleteOccurrenceAttachment(
+                                                            entry.id,
+                                                            attachment
+                                                          )
+                                                        "
+                                                      >
+                                                        @if (
+                                                          occurrenceAttachmentDeleting()[
+                                                            attachment.fileReference
+                                                          ]
+                                                        ) {
+                                                          <span
+                                                            class="pi pi-spin pi-spinner"
+                                                            aria-hidden="true"
+                                                          ></span>
+                                                        } @else {
+                                                          <span
+                                                            class="pi pi-trash"
+                                                            aria-hidden="true"
+                                                          ></span>
+                                                        }
+                                                      </button>
                                                     }
-                                                  </button>
+                                                  </div>
                                                   @if (
                                                     occurrenceAttachmentDownloadErrors()[
                                                       attachment.fileReference
@@ -336,6 +377,19 @@
                                                     <app-error-message
                                                       [apiError]="
                                                         occurrenceAttachmentDownloadErrors()[
+                                                          attachment.fileReference
+                                                        ]!
+                                                      "
+                                                    />
+                                                  }
+                                                  @if (
+                                                    occurrenceAttachmentDeleteErrors()[
+                                                      attachment.fileReference
+                                                    ]
+                                                  ) {
+                                                    <app-error-message
+                                                      [apiError]="
+                                                        occurrenceAttachmentDeleteErrors()[
                                                           attachment.fileReference
                                                         ]!
                                                       "

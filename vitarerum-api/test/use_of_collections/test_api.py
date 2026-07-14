@@ -436,6 +436,9 @@ class InMemoryFileStorage:
         except KeyError as exc:
             raise FileNotFoundError(file_reference) from exc
 
+    async def delete(self, file_reference: str) -> None:
+        self.files.pop(file_reference, None)
+
 
 class CommitOnlySession:
     def __init__(
@@ -2313,6 +2316,48 @@ async def test_download_log_entry_attachment_unknown_reference_returns_404() -> 
     assert response.json()["error"] == "ATTACHMENT_NOT_FOUND"
 
 
+async def test_delete_log_entry_attachment_removes_file() -> None:
+    async with client_with_repos(caller=_STAFF_CALLER) as (
+        client,
+        project_repo,
+        proposal_repo,
+        _,
+    ):
+        await project_repo.add(
+            _project(
+                "project-1",
+                status=UseStatus.IN_PROGRESS,
+                objects=[_collection_use_object()],
+            )
+        )
+        created = await client.post(
+            "/api/v1/collection-use-projects/project-1/log-entries",
+            json={"collectionUseObjectId": "cuo-1", "numberOfObjects": 1},
+            headers={"X-Permission-Id": "permission-staff"},
+        )
+        entry_id = created.json()["id"]
+        uploaded = await client.post(
+            f"/api/v1/collection-use-projects/project-1/log-entries/{entry_id}/attachments",
+            files={"file": ("report.pdf", b"%PDF-1.4 bytes", "application/pdf")},
+            data={"mediaType": "DOCUMENT"},
+            headers={"X-Permission-Id": "permission-staff"},
+        )
+        file_reference = uploaded.json()["fileReference"]
+
+        deleted = await client.delete(
+            f"/api/v1/collection-use-projects/project-1/log-entries/{entry_id}/attachments/{file_reference}",
+            headers={"X-Permission-Id": "permission-staff"},
+        )
+        download = await client.get(
+            f"/api/v1/collection-use-projects/project-1/log-entries/{entry_id}/attachments/{file_reference}",
+            headers={"X-Permission-Id": "permission-staff"},
+        )
+
+    assert deleted.status_code == 204
+    assert download.status_code == 404
+    assert download.json()["error"] == "ATTACHMENT_NOT_FOUND"
+
+
 async def test_download_occurrence_entry_attachment_returns_file() -> None:
     async with client_with_repos(caller=_STAFF_CALLER) as (
         client,
@@ -2356,6 +2401,54 @@ async def test_download_occurrence_entry_attachment_returns_file() -> None:
     assert download.content == b"jpegbytes"
     assert download.headers["content-type"].startswith("image/jpeg")
     assert "photo.jpg" in download.headers["content-disposition"]
+
+
+async def test_delete_occurrence_entry_attachment_removes_file() -> None:
+    async with client_with_repos(caller=_STAFF_CALLER) as (
+        client,
+        project_repo,
+        proposal_repo,
+        _,
+    ):
+        await project_repo.add(
+            _project(
+                "project-1",
+                status=UseStatus.IN_PROGRESS,
+                objects=[_collection_use_object()],
+            )
+        )
+        created = await client.post(
+            "/api/v1/collection-use-projects/project-1/occurrence-entries",
+            json={
+                "collectionUseObjectId": "cuo-1",
+                "numberOfObjects": 1,
+                "occurrenceDate": "2026-06-03T11:30:00Z",
+                "location": "Lab",
+                "detailedDescription": "desc",
+            },
+            headers={"X-Permission-Id": "permission-staff"},
+        )
+        entry_id = created.json()["id"]
+        uploaded = await client.post(
+            f"/api/v1/collection-use-projects/project-1/occurrence-entries/{entry_id}/attachments",
+            files={"file": ("photo.jpg", b"jpegbytes", "image/jpeg")},
+            data={"mediaType": "IMAGE"},
+            headers={"X-Permission-Id": "permission-staff"},
+        )
+        file_reference = uploaded.json()["fileReference"]
+
+        deleted = await client.delete(
+            f"/api/v1/collection-use-projects/project-1/occurrence-entries/{entry_id}/attachments/{file_reference}",
+            headers={"X-Permission-Id": "permission-staff"},
+        )
+        download = await client.get(
+            f"/api/v1/collection-use-projects/project-1/occurrence-entries/{entry_id}/attachments/{file_reference}",
+            headers={"X-Permission-Id": "permission-staff"},
+        )
+
+    assert deleted.status_code == 204
+    assert download.status_code == 404
+    assert download.json()["error"] == "ATTACHMENT_NOT_FOUND"
 
 
 async def test_add_log_entry_returns_201_with_access_log_created() -> None:
@@ -2936,6 +3029,43 @@ async def test_publication_entry_attachment_upload_and_download() -> None:
     assert download.status_code == 200
     assert download.content == b"%PDF-1.4 paper"
     assert "paper.pdf" in download.headers["content-disposition"]
+
+
+async def test_delete_publication_entry_attachment_removes_file() -> None:
+    async with client_with_repos(caller=_CALLER) as (
+        client,
+        project_repo,
+        proposal_repo,
+        _,
+    ):
+        await project_repo.add(_project("project-1", status=UseStatus.IN_PROGRESS))
+        await proposal_repo.add(_project_proposal())
+        created = await client.post(
+            "/api/v1/collection-use-projects/project-1/publication-entries",
+            json={"note": "with attachment"},
+            headers={"X-Permission-Id": "permission-1"},
+        )
+        entry_id = created.json()["id"]
+        uploaded = await client.post(
+            f"/api/v1/collection-use-projects/project-1/publication-entries/{entry_id}/attachments",
+            files={"file": ("paper.pdf", b"%PDF-1.4 paper", "application/pdf")},
+            data={"mediaType": "DOCUMENT", "note": "the publication itself"},
+            headers={"X-Permission-Id": "permission-1"},
+        )
+        file_reference = uploaded.json()["fileReference"]
+
+        deleted = await client.delete(
+            f"/api/v1/collection-use-projects/project-1/publication-entries/{entry_id}/attachments/{file_reference}",
+            headers={"X-Permission-Id": "permission-1"},
+        )
+        download = await client.get(
+            f"/api/v1/collection-use-projects/project-1/publication-entries/{entry_id}/attachments/{file_reference}",
+            headers={"X-Permission-Id": "permission-1"},
+        )
+
+    assert deleted.status_code == 204
+    assert download.status_code == 404
+    assert download.json()["error"] == "ATTACHMENT_NOT_FOUND"
 
 
 async def test_get_publication_log_returns_404_without_entries() -> None:

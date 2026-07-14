@@ -97,6 +97,7 @@ export interface PublicationLogEntry {
 
 export interface ObjectLogEntry {
   readonly id: string;
+  readonly collectionUseObjectId: string;
   readonly objectReference: ObjectReference;
   readonly numberOfObjects: number;
   readonly addedAt: string;
@@ -108,6 +109,7 @@ export interface ObjectLogEntry {
 
 export interface ObjectOccurrenceEntry {
   readonly id: string;
+  readonly collectionUseObjectId: string;
   readonly objectReference: ObjectReference;
   readonly numberOfObjects: number;
   readonly occurrenceDate: string;
@@ -289,10 +291,9 @@ export interface AddProjectObjectsRequest {
 }
 
 export interface CreateObjectLogEntryRequest {
-  readonly inventoryNumber: string;
+  readonly collectionUseObjectId: string;
   readonly numberOfObjects: number;
   readonly observations?: string;
-  readonly requestedObjectId?: string;
 }
 
 export interface UpdateObjectLogEntryRequest {
@@ -302,13 +303,12 @@ export interface UpdateObjectLogEntryRequest {
 }
 
 export interface CreateObjectOccurrenceEntryRequest {
-  readonly inventoryNumber: string;
+  readonly collectionUseObjectId: string;
   readonly numberOfObjects: number;
   readonly occurrenceDate: string;
   readonly location: string;
   readonly detailedDescription: string;
   readonly testimonial?: string;
-  readonly requestedObjectId?: string;
 }
 
 export interface UpdateObjectOccurrenceEntryRequest {

@@ -99,7 +99,7 @@ describe('ProjectApiService', () => {
   it('creates object log entries and completes projects', () => {
     service
       .createObjectLogEntry('project-1', {
-        inventoryNumber: 'INV-001',
+        collectionUseObjectId: 'cuo-1',
         numberOfObjects: 2,
         observations: 'Handled during reading room access.',
       })
@@ -111,12 +111,13 @@ describe('ProjectApiService', () => {
 
     expect(entryRequest.request.method).toBe('POST');
     expect(entryRequest.request.body).toEqual({
-      inventoryNumber: 'INV-001',
+      collectionUseObjectId: 'cuo-1',
       numberOfObjects: 2,
       observations: 'Handled during reading room access.',
     });
     entryRequest.flush({
       id: 'entry-1',
+      collectionUseObjectId: 'cuo-1',
       objectReference: {
         inventoryNumber: 'INV-001',
         displayTitle: null,
@@ -207,6 +208,7 @@ describe('ProjectApiService', () => {
     });
     request.flush({
       id: 'entry-1',
+      collectionUseObjectId: 'cuo-1',
       objectReference: {
         inventoryNumber: 'INV-001',
         displayTitle: null,
@@ -221,7 +223,6 @@ describe('ProjectApiService', () => {
         group: 'COLLECTIONS_MANAGEMENT',
       },
       observations: null,
-      requestedObjectId: null,
       attachments: [],
     });
   });
@@ -284,10 +285,21 @@ describe('ProjectApiService', () => {
     expect(received).toBe(blob);
   });
 
+  it('deletes a log entry attachment with an encoded file reference', () => {
+    service.deleteLogEntryAttachment('project-1', 'entry-1', 'att 12.jpg').subscribe();
+
+    const request = http.expectOne(
+      'https://api.example.test/collection-use-projects/project-1/log-entries/entry-1/attachments/att%2012.jpg',
+    );
+
+    expect(request.request.method).toBe('DELETE');
+    request.flush(null, { status: 204, statusText: 'No Content' });
+  });
+
   it('creates object occurrence entries with the revised contract payload', () => {
     service
       .createObjectOccurrenceEntry('project-1', {
-        inventoryNumber: 'INV-001',
+        collectionUseObjectId: 'cuo-1',
         numberOfObjects: 1,
         occurrenceDate: '2026-06-03T11:30:00',
         location: 'Conservation lab, room 2',
@@ -302,7 +314,7 @@ describe('ProjectApiService', () => {
 
     expect(request.request.method).toBe('POST');
     expect(request.request.body).toEqual({
-      inventoryNumber: 'INV-001',
+      collectionUseObjectId: 'cuo-1',
       numberOfObjects: 1,
       occurrenceDate: '2026-06-03T11:30:00',
       location: 'Conservation lab, room 2',
@@ -311,6 +323,7 @@ describe('ProjectApiService', () => {
     });
     request.flush({
       id: 'occurrence-1',
+      collectionUseObjectId: 'cuo-1',
       objectReference: {
         inventoryNumber: 'INV-001',
         displayTitle: null,
@@ -395,6 +408,17 @@ describe('ProjectApiService', () => {
     const blob = new Blob(['file-bytes']);
     request.flush(blob);
     expect(received).toBe(blob);
+  });
+
+  it('deletes an occurrence entry attachment with an encoded file reference', () => {
+    service.deleteOccurrenceEntryAttachment('project-1', 'entry-1', 'report 2024.pdf').subscribe();
+
+    const request = http.expectOne(
+      'https://api.example.test/collection-use-projects/project-1/occurrence-entries/entry-1/attachments/report%202024.pdf',
+    );
+
+    expect(request.request.method).toBe('DELETE');
+    request.flush(null, { status: 204, statusText: 'No Content' });
   });
 
   it('creates and lists publication entries with the publication log header', () => {
@@ -509,5 +533,18 @@ describe('ProjectApiService', () => {
     const blob = new Blob(['file-bytes']);
     request.flush(blob);
     expect(received).toBe(blob);
+  });
+
+  it('deletes a publication entry attachment with an encoded file reference', () => {
+    service
+      .deletePublicationEntryAttachment('project-1', 'pub-entry-1', 'paper 2024.pdf')
+      .subscribe();
+
+    const request = http.expectOne(
+      'https://api.example.test/collection-use-projects/project-1/publication-entries/pub-entry-1/attachments/paper%202024.pdf',
+    );
+
+    expect(request.request.method).toBe('DELETE');
+    request.flush(null, { status: 204, statusText: 'No Content' });
   });
 });

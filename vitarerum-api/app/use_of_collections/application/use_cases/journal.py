@@ -299,6 +299,44 @@ class AddLogEntryAttachment:
         return attachment
 
 
+@dataclass(slots=True)
+class RemoveLogEntryAttachmentInput:
+    project_id: CollectionUseProjectId
+    entry_id: ObjectLogEntryId
+    caller: Actor
+    file_reference: str
+    restrict_to_in_progress: bool = False
+
+
+class RemoveLogEntryAttachment:
+    def __init__(
+        self,
+        project_repository: CollectionUseProjectRepository,
+        access_log_repository: ObjectAccessLogRepository,
+    ) -> None:
+        self._project_repo = project_repository
+        self._repo = access_log_repository
+
+    async def execute(self, data: RemoveLogEntryAttachmentInput) -> Attachment:
+        await _load_writable_project(
+            self._project_repo, data.project_id, data.restrict_to_in_progress
+        )
+        entry = await self._repo.get_entry_by_id(data.entry_id)
+        if entry is None:
+            raise LookupError(f"No entry found with id {data.entry_id}")
+        access_log = await self._repo.get_by_id(entry.object_access_log_id)
+        _assert_entry_log_writable(
+            access_log,
+            data.project_id,
+            data.entry_id,
+            action="remove attachments from",
+            log_kind="object access log",
+        )
+        attachment = entry.remove_attachment(data.file_reference)
+        await self._repo.save_entry(entry)
+        return attachment
+
+
 # ── Object occurrence log ──────────────────────────────────────────────────────
 
 
@@ -507,4 +545,42 @@ class AddOccurrenceEntryAttachment:
             # Don't leave an orphaned file when the entry fails to persist.
             await self._storage.delete(attachment.file_reference)
             raise
+        return attachment
+
+
+@dataclass(slots=True)
+class RemoveOccurrenceEntryAttachmentInput:
+    project_id: CollectionUseProjectId
+    entry_id: ObjectOccurrenceEntryId
+    caller: Actor
+    file_reference: str
+    restrict_to_in_progress: bool = False
+
+
+class RemoveOccurrenceEntryAttachment:
+    def __init__(
+        self,
+        project_repository: CollectionUseProjectRepository,
+        occurrence_log_repository: ObjectOccurrenceLogRepository,
+    ) -> None:
+        self._project_repo = project_repository
+        self._repo = occurrence_log_repository
+
+    async def execute(self, data: RemoveOccurrenceEntryAttachmentInput) -> Attachment:
+        await _load_writable_project(
+            self._project_repo, data.project_id, data.restrict_to_in_progress
+        )
+        entry = await self._repo.get_entry_by_id(data.entry_id)
+        if entry is None:
+            raise LookupError(f"No entry found with id {data.entry_id}")
+        occurrence_log = await self._repo.get_by_id(entry.object_occurrence_log_id)
+        _assert_entry_log_writable(
+            occurrence_log,
+            data.project_id,
+            data.entry_id,
+            action="remove attachments from",
+            log_kind="object occurrence log",
+        )
+        attachment = entry.remove_attachment(data.file_reference)
+        await self._repo.save_entry(entry)
         return attachment

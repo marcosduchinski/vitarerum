@@ -22,6 +22,7 @@ import { PROJECT_API_SERVICE } from '../../services/project-api.service';
 
 interface OccurrenceObjectRow {
   readonly key: string;
+  readonly collectionUseObjectId: string;
   readonly objectReference: ObjectLogEntry['objectReference'];
   readonly requestedObjectId: string | null;
   readonly numberOfObjects: number;
@@ -152,6 +153,8 @@ export class ProjectOccurrenceLogPanelComponent {
   protected readonly occurrenceAttachmentDownloadErrors = signal<Record<string, ApiError | null>>(
     {},
   );
+  protected readonly occurrenceAttachmentDeleting = signal<Record<string, boolean>>({});
+  protected readonly occurrenceAttachmentDeleteErrors = signal<Record<string, ApiError | null>>({});
   protected readonly expandedOccurrenceEntryId = signal<string | null>(null);
 
   protected toggleObjectOccurrences(rowKey: string): void {
@@ -254,14 +257,11 @@ export class ProjectOccurrenceLogPanelComponent {
     try {
       const createdEntry = await firstValueFrom(
         this.projectService.createObjectOccurrenceEntry(this.projectId(), {
-          inventoryNumber: selectedObject.objectReference.inventoryNumber,
+          collectionUseObjectId: selectedObject.collectionUseObjectId,
           numberOfObjects: selectedObject.numberOfObjects,
           occurrenceDate,
           location,
           detailedDescription,
-          ...(selectedObject.requestedObjectId
-            ? { requestedObjectId: selectedObject.requestedObjectId }
-            : {}),
           ...(testimonial ? { testimonial } : {}),
         }),
       );
@@ -374,6 +374,27 @@ export class ProjectOccurrenceLogPanelComponent {
     }
   }
 
+  protected async deleteOccurrenceAttachment(
+    entryId: string,
+    attachment: Attachment,
+  ): Promise<void> {
+    const ref = attachment.fileReference;
+    if (this.occurrenceAttachmentDeleting()[ref] || !this.canAddOccurrenceEntries()) return;
+
+    this.setEntryRecord(this.occurrenceAttachmentDeleting, ref, true);
+    this.setEntryRecord(this.occurrenceAttachmentDeleteErrors, ref, null);
+    try {
+      await firstValueFrom(
+        this.projectService.deleteOccurrenceEntryAttachment(this.projectId(), entryId, ref),
+      );
+      this.occurrenceResource.reload();
+    } catch (err) {
+      this.setEntryRecord(this.occurrenceAttachmentDeleteErrors, ref, toApiError(err));
+    } finally {
+      this.setEntryRecord(this.occurrenceAttachmentDeleting, ref, false);
+    }
+  }
+
   protected downloadObjectOccurrenceLogDemo(): void {
     if (!this.canDownloadDocxDemo()) return;
 
@@ -449,13 +470,21 @@ export class ProjectOccurrenceLogPanelComponent {
   ): readonly OccurrenceObjectRow[] {
     const occurrencesByObject = new Map<string, ObjectOccurrenceEntry[]>();
     for (const entry of occurrenceEntries) {
-      const key = this.objectKey(entry.requestedObjectId, entry.objectReference.inventoryNumber);
+      const key = this.objectKey(
+        entry.collectionUseObjectId,
+        entry.requestedObjectId,
+        entry.objectReference.inventoryNumber,
+      );
       occurrencesByObject.set(key, [...(occurrencesByObject.get(key) ?? []), entry]);
     }
 
     const rowsByObject = new Map<string, OccurrenceObjectRow>();
     for (const entry of accessEntries) {
-      const key = this.objectKey(entry.requestedObjectId, entry.objectReference.inventoryNumber);
+      const key = this.objectKey(
+        entry.collectionUseObjectId,
+        entry.requestedObjectId,
+        entry.objectReference.inventoryNumber,
+      );
       const existing = rowsByObject.get(key);
       if (existing) {
         rowsByObject.set(key, {
@@ -468,6 +497,7 @@ export class ProjectOccurrenceLogPanelComponent {
 
       rowsByObject.set(key, {
         key,
+        collectionUseObjectId: entry.collectionUseObjectId,
         objectReference: entry.objectReference,
         requestedObjectId: entry.requestedObjectId ?? null,
         numberOfObjects: entry.numberOfObjects,
@@ -482,7 +512,12 @@ export class ProjectOccurrenceLogPanelComponent {
     }));
   }
 
-  private objectKey(requestedObjectId: string | null | undefined, inventoryNumber: string): string {
+  private objectKey(
+    collectionUseObjectId: string | null | undefined,
+    requestedObjectId: string | null | undefined,
+    inventoryNumber: string,
+  ): string {
+    if (collectionUseObjectId) return `collection-use-object:${collectionUseObjectId}`;
     return requestedObjectId ? `requested:${requestedObjectId}` : `inventory:${inventoryNumber}`;
   }
 }
