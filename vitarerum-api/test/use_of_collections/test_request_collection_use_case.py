@@ -176,6 +176,23 @@ class InMemoryAccessLogRepository:
     async def save_entry(self, entry: ObjectLogEntry) -> None:
         self.entries[entry.id] = entry
 
+    async def list_entries_for_object(self, project_id, collection_use_object_id):
+        log_ids = {
+            log.id
+            for log in self.items.values()
+            if log.collection_use_project_id == project_id
+        }
+        return [
+            entry
+            for entry in self.entries.values()
+            if entry.object_access_log_id in log_ids
+            and entry.collection_use_object_id == collection_use_object_id
+        ]
+
+    async def remove_entries(self, entry_ids):
+        for entry_id in entry_ids:
+            self.entries.pop(entry_id, None)
+
     async def list_entries_by_project(self, project_id, added_by, page, size):
         log_ids = {
             log.id
@@ -219,6 +236,23 @@ class InMemoryOccurrenceLogRepository:
 
     async def save_entry(self, entry: ObjectOccurrenceEntry) -> None:
         self.entries[entry.id] = entry
+
+    async def list_entries_for_object(self, project_id, collection_use_object_id):
+        log_ids = {
+            log.id
+            for log in self.items.values()
+            if log.collection_use_project_id == project_id
+        }
+        return [
+            entry
+            for entry in self.entries.values()
+            if entry.object_occurrence_log_id in log_ids
+            and entry.collection_use_object_id == collection_use_object_id
+        ]
+
+    async def remove_entries(self, entry_ids):
+        for entry_id in entry_ids:
+            self.entries.pop(entry_id, None)
 
     async def list_entries_by_project(self, project_id, reported_by, page, size):
         log_ids = {
@@ -556,6 +590,15 @@ async def test_approve_public_proposal_provisions_external_requester() -> None:
             name="Pedro Silva", email=EmailAddress("pedro@example.test")
         ),
         submitted_at=datetime(2026, 6, 1, tzinfo=UTC),
+        requested_objects=[
+            RequestedObject(
+                id=RequestedObjectId("requested-object-1"),
+                inventory_number="INV-001",
+                category="manuscript",
+                description="for study",
+                requested_at=datetime(2026, 6, 1, tzinfo=UTC),
+            )
+        ],
     )
     await proposal_repository.add(proposal)
     resolved = ResolvedExternalRequester(
@@ -620,6 +663,15 @@ async def test_approve_public_proposal_reused_user_sends_no_notification() -> No
             name="Pedro Silva", email=EmailAddress("pedro@example.test")
         ),
         submitted_at=datetime(2026, 6, 1, tzinfo=UTC),
+        requested_objects=[
+            RequestedObject(
+                id=RequestedObjectId("requested-object-1"),
+                inventory_number="INV-001",
+                category="manuscript",
+                description="for study",
+                requested_at=datetime(2026, 6, 1, tzinfo=UTC),
+            )
+        ],
     )
     await proposal_repository.add(proposal)
     resolved = ResolvedExternalRequester(
@@ -647,6 +699,44 @@ async def test_approve_public_proposal_reused_user_sends_no_notification() -> No
     )
 
     assert result.requester_access_notification is None
+
+
+async def test_approve_proposal_without_objects_fails() -> None:
+    proposal_repository = InMemoryProposalRepository()
+    project_repository = InMemoryCollectionUseProjectRepository()
+    proposal = Proposal(
+        id=ProposalId("proposal-1"),
+        reference_number=ReferenceNumber("VRP-20260601-0001"),
+        title="Proposal title",
+        collection_use_project_id="project-1",
+        intended_use=UseType.IN_SITU_VISIT,
+        begin_date=date(2026, 6, 1),
+        end_date=date(2026, 6, 7),
+        status=ProposalStatus.PENDING,
+        requested_by=PermissionId("permission-1"),
+        submitted_at=datetime(2026, 6, 1, tzinfo=UTC),
+    )
+    await proposal_repository.add(proposal)
+
+    use_case = ApproveProposal(
+        proposal_repository, project_repository, RecordingRequesterProvisioner()
+    )
+
+    try:
+        await use_case.execute(
+            ApproveProposalInput(
+                proposal_id=ProposalId("proposal-1"),
+                caller=_make_curator(),
+                title="Collection study",
+                purpose="To study the collection",
+                begin_date=date(2026, 7, 1),
+                end_date=date(2026, 7, 7),
+            )
+        )
+    except ValueError as exc:
+        assert "at least one requested object" in str(exc)
+    else:
+        raise AssertionError("expected approval without objects to fail")
 
 
 async def test_approve_non_pending_public_proposal_never_provisions_requester() -> None:
@@ -1214,6 +1304,12 @@ class _InMemoryPublicationLogRepository:
 
     async def save_entry(self, entry: PublicationLogEntry) -> None:
         raise RuntimeError("db unavailable")
+
+    async def list_entries_for_object(self, project_id, collection_use_object_id):
+        return []
+
+    async def remove_entries(self, entry_ids):
+        return None
 
 
 async def test_add_log_entry_attachment_deletes_file_when_save_fails() -> None:

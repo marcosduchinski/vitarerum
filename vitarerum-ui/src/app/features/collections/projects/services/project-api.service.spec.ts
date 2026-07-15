@@ -160,6 +160,26 @@ describe('ProjectApiService', () => {
     });
   });
 
+  it('removes project objects with cascade confirmation', () => {
+    service
+      .removeProjectObjectCascade('project-1', 'object-1', {
+        confirmCascade: true,
+        reason: 'Wrong object.',
+      })
+      .subscribe();
+
+    const request = http.expectOne(
+      'https://api.example.test/collection-use-projects/project-1/objects/object-1/remove',
+    );
+
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual({
+      confirmCascade: true,
+      reason: 'Wrong object.',
+    });
+    request.flush(null);
+  });
+
   it('lists object log entries with filters and access log metadata', () => {
     service
       .listObjectLogEntries('project-1', { addedBy: 'permission-1', page: 1, size: 10 })

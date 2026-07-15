@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -950,6 +950,41 @@ class SqlAlchemyObjectAccessLogRepository:
         await self._session.merge(log_entry_to_record(entry))
         await self._session.flush()
 
+    async def list_entries_for_object(
+        self,
+        project_id: CollectionUseProjectId,
+        collection_use_object_id: CollectionUseObjectId,
+    ) -> list[ObjectLogEntry]:
+        stmt = (
+            select(ObjectLogEntryRecord)
+            .join(
+                ObjectAccessLogRecord,
+                ObjectLogEntryRecord.access_log_id == ObjectAccessLogRecord.id,
+            )
+            .where(
+                ObjectAccessLogRecord.project_id == project_id,
+                ObjectLogEntryRecord.collection_use_object_id
+                == collection_use_object_id,
+            )
+            .options(*_LOG_ENTRY_EAGER)
+            .order_by(ObjectLogEntryRecord.added_at)
+        )
+        records = (await self._session.execute(stmt)).scalars().all()
+        return [log_entry_to_domain(record) for record in records]
+
+    async def remove_entries(self, entry_ids: list[ObjectLogEntryId]) -> None:
+        if not entry_ids:
+            return
+        await self._session.execute(
+            delete(LogEntryAttachmentRecord).where(
+                LogEntryAttachmentRecord.entry_id.in_(entry_ids)
+            )
+        )
+        await self._session.execute(
+            delete(ObjectLogEntryRecord).where(ObjectLogEntryRecord.id.in_(entry_ids))
+        )
+        await self._session.flush()
+
     async def list_entries_by_project(
         self,
         project_id: CollectionUseProjectId,
@@ -1049,6 +1084,46 @@ class SqlAlchemyObjectOccurrenceLogRepository:
 
     async def save_entry(self, entry: ObjectOccurrenceEntry) -> None:
         await self._session.merge(occurrence_entry_to_record(entry))
+        await self._session.flush()
+
+    async def list_entries_for_object(
+        self,
+        project_id: CollectionUseProjectId,
+        collection_use_object_id: CollectionUseObjectId,
+    ) -> list[ObjectOccurrenceEntry]:
+        stmt = (
+            select(ObjectOccurrenceEntryRecord)
+            .join(
+                ObjectOccurrenceLogRecord,
+                ObjectOccurrenceEntryRecord.occurrence_log_id
+                == ObjectOccurrenceLogRecord.id,
+            )
+            .where(
+                ObjectOccurrenceLogRecord.project_id == project_id,
+                ObjectOccurrenceEntryRecord.collection_use_object_id
+                == collection_use_object_id,
+            )
+            .options(*_OCCURRENCE_ENTRY_EAGER)
+            .order_by(ObjectOccurrenceEntryRecord.occurrence_date)
+        )
+        records = (await self._session.execute(stmt)).scalars().all()
+        return [occurrence_entry_to_domain(record) for record in records]
+
+    async def remove_entries(
+        self, entry_ids: list[ObjectOccurrenceEntryId]
+    ) -> None:
+        if not entry_ids:
+            return
+        await self._session.execute(
+            delete(OccurrenceEntryAttachmentRecord).where(
+                OccurrenceEntryAttachmentRecord.entry_id.in_(entry_ids)
+            )
+        )
+        await self._session.execute(
+            delete(ObjectOccurrenceEntryRecord).where(
+                ObjectOccurrenceEntryRecord.id.in_(entry_ids)
+            )
+        )
         await self._session.flush()
 
     async def list_entries_by_project(
@@ -1154,6 +1229,44 @@ class SqlAlchemyPublicationLogRepository:
 
     async def save_entry(self, entry: PublicationLogEntry) -> None:
         await self._session.merge(publication_entry_to_record(entry))
+        await self._session.flush()
+
+    async def list_entries_for_object(
+        self,
+        project_id: CollectionUseProjectId,
+        collection_use_object_id: CollectionUseObjectId,
+    ) -> list[PublicationLogEntry]:
+        stmt = (
+            select(PublicationLogEntryRecord)
+            .join(
+                PublicationLogRecord,
+                PublicationLogEntryRecord.publication_log_id
+                == PublicationLogRecord.id,
+            )
+            .where(
+                PublicationLogRecord.project_id == project_id,
+                PublicationLogEntryRecord.collection_use_object_id
+                == collection_use_object_id,
+            )
+            .options(*_PUBLICATION_ENTRY_EAGER)
+            .order_by(PublicationLogEntryRecord.added_at)
+        )
+        records = (await self._session.execute(stmt)).scalars().all()
+        return [publication_entry_to_domain(record) for record in records]
+
+    async def remove_entries(self, entry_ids: list[PublicationLogEntryId]) -> None:
+        if not entry_ids:
+            return
+        await self._session.execute(
+            delete(PublicationEntryAttachmentRecord).where(
+                PublicationEntryAttachmentRecord.entry_id.in_(entry_ids)
+            )
+        )
+        await self._session.execute(
+            delete(PublicationLogEntryRecord).where(
+                PublicationLogEntryRecord.id.in_(entry_ids)
+            )
+        )
         await self._session.flush()
 
     async def list_entries_by_project(

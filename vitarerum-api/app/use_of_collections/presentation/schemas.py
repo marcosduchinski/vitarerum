@@ -300,6 +300,11 @@ class AddProjectObjectsRequest(BaseModel):
     objects: list[RequestedObjectSnapshotInput]
 
 
+class RemoveProjectObjectRequest(BaseModel):
+    confirmCascade: bool = False
+    reason: str = ""
+
+
 class ForwardProposalRequest(BaseModel):
     targetPermissionId: str
     note: str | None = None

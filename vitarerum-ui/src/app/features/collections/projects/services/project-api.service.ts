@@ -30,6 +30,7 @@ import {
   PublicationLog,
   PublicationLogEntry,
   ReasonRequest,
+  RemoveProjectObjectRequest,
   UpdateProjectRequest,
   UpdateObjectLogEntryRequest,
   UpdateObjectOccurrenceEntryRequest,
@@ -125,6 +126,17 @@ export class ProjectApiService {
   removeProjectObject(projectId: string, objectId: string): Observable<void> {
     return this.http.delete<void>(
       this.url(`/collection-use-projects/${projectId}/objects/${objectId}`),
+    );
+  }
+
+  removeProjectObjectCascade(
+    projectId: string,
+    objectId: string,
+    request: RemoveProjectObjectRequest,
+  ): Observable<void> {
+    return this.http.post<void>(
+      this.url(`/collection-use-projects/${projectId}/objects/${objectId}/remove`),
+      request,
     );
   }
 

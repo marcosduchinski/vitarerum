@@ -22,6 +22,7 @@ import {
   ObjectOccurrenceEntry,
   ObjectOccurrenceLog,
   ProjectActionPermissions,
+  ProjectObjectDependencySummary,
   ProjectEventsPage,
   ProjectEventsQuery,
   ProjectListQuery,
@@ -31,6 +32,7 @@ import {
   PublicationLog,
   PublicationLogEntry,
   ReasonRequest,
+  RemoveProjectObjectRequest,
   UpdateProjectRequest,
   UpdateObjectLogEntryRequest,
   UpdateObjectOccurrenceEntryRequest,
@@ -149,29 +151,27 @@ export class ProjectApiServiceMock {
       description: object.description ?? '',
     }));
     p.objects = [...current, ...newObjects];
-    const accessLog = this.state.objectAccessLogs.get(projectId);
-    if (accessLog) {
-      const currentEntries = this.state.logEntries.get(projectId) ?? [];
-      const addedBy = this.currentPrincipal();
-      const addedAt = new Date().toISOString();
-      const syncedEntries: ObjectLogEntry[] = newObjects.map((object) => ({
-        id: this.state.nextEntryId(),
-        collectionUseObjectId: object.id,
-        objectReference: {
-          inventoryNumber: object.inventoryNumber,
-          displayTitle: object.displayTitle,
-          objectName: object.objectName,
-          briefDescriptionSnapshot: object.briefDescriptionSnapshot,
-        },
-        numberOfObjects: 1,
-        addedAt,
-        addedBy,
-        observations: null,
-        requestedObjectId: object.id,
-        attachments: [],
-      }));
-      this.state.logEntries.set(projectId, [...currentEntries, ...syncedEntries]);
-    }
+    this.ensureObjectAccessLog(projectId);
+    const currentEntries = this.state.logEntries.get(projectId) ?? [];
+    const addedBy = this.currentPrincipal();
+    const addedAt = new Date().toISOString();
+    const syncedEntries: ObjectLogEntry[] = newObjects.map((object) => ({
+      id: this.state.nextEntryId(),
+      collectionUseObjectId: object.id,
+      objectReference: {
+        inventoryNumber: object.inventoryNumber,
+        displayTitle: object.displayTitle,
+        objectName: object.objectName,
+        briefDescriptionSnapshot: object.briefDescriptionSnapshot,
+      },
+      numberOfObjects: 1,
+      addedAt,
+      addedBy,
+      observations: null,
+      requestedObjectId: object.id,
+      attachments: [],
+    }));
+    this.state.logEntries.set(projectId, [...currentEntries, ...syncedEntries]);
     return of(this.toDetail(p));
   }
 
@@ -181,14 +181,75 @@ export class ProjectApiServiceMock {
     if (p.status === 'COMPLETED' || p.status === 'CANCELLED') {
       return throwError(() => ({ status: 409, error: 'INVALID_TRANSITION' }));
     }
-    const inUse =
-      (this.state.logEntries.get(projectId) ?? []).some(
-        (entry) => entry.collectionUseObjectId === objectId || entry.requestedObjectId === objectId,
-      ) ||
-      (this.state.occurrenceEntries.get(projectId) ?? []).some(
-        (entry) => entry.collectionUseObjectId === objectId || entry.requestedObjectId === objectId,
+    const accessEntries = this.objectLogEntriesForObject(projectId, objectId);
+    const occurrenceEntries = this.objectOccurrenceEntriesForObject(projectId, objectId);
+    const publicationEntries = this.publicationEntriesForObject(projectId, objectId);
+    const dependencies = this.projectObjectDependencySummary(
+      accessEntries,
+      occurrenceEntries,
+      publicationEntries,
+    );
+    const hasDependencies =
+      occurrenceEntries.length > 0 ||
+      publicationEntries.length > 0 ||
+      !this.hasOnlyAutomaticAccessEntry(accessEntries, objectId);
+    if (hasDependencies) {
+      return throwError(() => ({
+        status: 409,
+        error: 'PROJECT_OBJECT_HAS_DEPENDENCIES',
+        message: 'This project object has related records.',
+        dependencies,
+      }));
+    }
+
+    if (accessEntries.length === 1) {
+      this.state.logEntries.set(
+        projectId,
+        (this.state.logEntries.get(projectId) ?? []).filter(
+          (entry) => entry.id !== accessEntries[0].id,
+        ),
       );
-    if (inUse) return throwError(() => ({ status: 409, error: 'PROJECT_OBJECT_IN_USE' }));
+    }
+    p.objects = (p.objects ?? []).filter((object) => object.id !== objectId);
+    return of(void 0);
+  }
+
+  removeProjectObjectCascade(
+    projectId: string,
+    objectId: string,
+    request: RemoveProjectObjectRequest,
+  ): Observable<void> {
+    const p = this.state.projects.get(projectId);
+    if (!p) return throwError(() => ({ status: 404, error: 'NOT_FOUND' }));
+    if (p.status === 'COMPLETED' || p.status === 'CANCELLED') {
+      return throwError(() => ({ status: 409, error: 'INVALID_TRANSITION' }));
+    }
+    if (!request.confirmCascade || !request.reason.trim()) {
+      return throwError(() => ({
+        status: 422,
+        error: 'VALIDATION_ERROR',
+        message: 'Cascade removal requires confirmation and a reason.',
+      }));
+    }
+
+    this.state.logEntries.set(
+      projectId,
+      (this.state.logEntries.get(projectId) ?? []).filter(
+        (entry) => !this.entryMatchesObject(entry, objectId),
+      ),
+    );
+    this.state.occurrenceEntries.set(
+      projectId,
+      (this.state.occurrenceEntries.get(projectId) ?? []).filter(
+        (entry) => !this.entryMatchesObject(entry, objectId),
+      ),
+    );
+    this.state.publicationEntries.set(
+      projectId,
+      (this.state.publicationEntries.get(projectId) ?? []).filter(
+        (entry) => entry.collectionUseObjectId !== objectId,
+      ),
+    );
     p.objects = (p.objects ?? []).filter((object) => object.id !== objectId);
     return of(void 0);
   }
@@ -596,6 +657,7 @@ export class ProjectApiServiceMock {
     this.ensurePublicationLog(projectId);
     const entry: PublicationLogEntry = {
       id: this.state.nextEntryId(),
+      collectionUseObjectId: null,
       addedAt: new Date().toISOString(),
       addedBy: this.currentPrincipal(),
       note: request.note,
@@ -943,6 +1005,66 @@ export class ProjectApiServiceMock {
             }
           : null,
     } satisfies ProjectStaffContext;
+  }
+
+  private objectLogEntriesForObject(projectId: string, objectId: string): ObjectLogEntry[] {
+    return (this.state.logEntries.get(projectId) ?? []).filter((entry) =>
+      this.entryMatchesObject(entry, objectId),
+    );
+  }
+
+  private objectOccurrenceEntriesForObject(
+    projectId: string,
+    objectId: string,
+  ): ObjectOccurrenceEntry[] {
+    return (this.state.occurrenceEntries.get(projectId) ?? []).filter((entry) =>
+      this.entryMatchesObject(entry, objectId),
+    );
+  }
+
+  private publicationEntriesForObject(projectId: string, objectId: string): PublicationLogEntry[] {
+    return (this.state.publicationEntries.get(projectId) ?? []).filter(
+      (entry) => entry.collectionUseObjectId === objectId,
+    );
+  }
+
+  private entryMatchesObject(
+    entry: ObjectLogEntry | ObjectOccurrenceEntry,
+    objectId: string,
+  ): boolean {
+    return entry.collectionUseObjectId === objectId || entry.requestedObjectId === objectId;
+  }
+
+  private hasOnlyAutomaticAccessEntry(
+    entries: readonly ObjectLogEntry[],
+    objectId: string,
+  ): boolean {
+    if (entries.length === 0) return true;
+    if (entries.length > 1) return false;
+    const [entry] = entries;
+    return (
+      entry.collectionUseObjectId === objectId &&
+      entry.requestedObjectId === objectId &&
+      entry.numberOfObjects === 1 &&
+      entry.observations === null &&
+      entry.attachments.length === 0
+    );
+  }
+
+  private projectObjectDependencySummary(
+    accessEntries: readonly ObjectLogEntry[],
+    occurrenceEntries: readonly ObjectOccurrenceEntry[],
+    publicationEntries: readonly PublicationLogEntry[],
+  ): ProjectObjectDependencySummary {
+    return {
+      accessLogEntries: accessEntries.length,
+      occurrenceEntries: occurrenceEntries.length,
+      publicationEntries: publicationEntries.length,
+      attachments:
+        accessEntries.reduce((total, entry) => total + entry.attachments.length, 0) +
+        occurrenceEntries.reduce((total, entry) => total + entry.attachments.length, 0) +
+        publicationEntries.reduce((total, entry) => total + entry.attachments.length, 0),
+    };
   }
 
   private transition(

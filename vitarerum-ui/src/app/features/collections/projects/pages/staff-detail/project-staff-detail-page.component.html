@@ -57,6 +57,41 @@
         (cancelled)="closeCancelConfirm()"
       />
 
+      <app-confirm-modal
+        [open]="cascadeRemoveObjectId() !== null"
+        title="Remove object and related records?"
+        [message]="
+          'Removing ' +
+          cascadeRemoveObjectName() +
+          ' will also delete the related records listed below.'
+        "
+        confirmLabel="Remove object and records"
+        cancelLabel="Keep object"
+        tone="danger"
+        [pending]="removingObjectId() !== null"
+        [confirmDisabled]="cascadeRemoveReasonInvalid()"
+        (confirmed)="confirmCascadeRemove()"
+        (cancelled)="closeCascadeRemoveConfirm()"
+      >
+        <div class="cascade-remove">
+          <p class="cascade-remove__summary">{{ cascadeRemoveSummary() }}</p>
+
+          @if (cascadeRemoveError()) {
+            <app-error-message [apiError]="cascadeRemoveError()!" />
+          }
+
+          <label class="cascade-remove__field">
+            <span>Reason</span>
+            <textarea
+              rows="3"
+              [value]="cascadeRemoveReason()"
+              placeholder="Explain why these related records should be removed."
+              (input)="onCascadeRemoveReasonInput($event)"
+            ></textarea>
+          </label>
+        </div>
+      </app-confirm-modal>
+
       <app-create-in-situ-visit-report-modal
         [open]="reportModalOpen()"
         [pending]="reportCreating()"

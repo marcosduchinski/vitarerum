@@ -132,6 +132,14 @@ class ObjectAccessLogRepository(Protocol):
 
     async def save_entry(self, entry: ObjectLogEntry) -> None: ...
 
+    async def list_entries_for_object(
+        self,
+        project_id: CollectionUseProjectId,
+        collection_use_object_id: CollectionUseObjectId,
+    ) -> list[ObjectLogEntry]: ...
+
+    async def remove_entries(self, entry_ids: list[ObjectLogEntryId]) -> None: ...
+
     async def list_entries_by_project(
         self,
         project_id: CollectionUseProjectId,
@@ -166,6 +174,16 @@ class ObjectOccurrenceLogRepository(Protocol):
 
     async def save_entry(self, entry: ObjectOccurrenceEntry) -> None: ...
 
+    async def list_entries_for_object(
+        self,
+        project_id: CollectionUseProjectId,
+        collection_use_object_id: CollectionUseObjectId,
+    ) -> list[ObjectOccurrenceEntry]: ...
+
+    async def remove_entries(
+        self, entry_ids: list[ObjectOccurrenceEntryId]
+    ) -> None: ...
+
     async def list_entries_by_project(
         self,
         project_id: CollectionUseProjectId,
@@ -199,6 +217,14 @@ class PublicationLogRepository(Protocol):
     async def save(self, publication_log: PublicationLog) -> None: ...
 
     async def save_entry(self, entry: PublicationLogEntry) -> None: ...
+
+    async def list_entries_for_object(
+        self,
+        project_id: CollectionUseProjectId,
+        collection_use_object_id: CollectionUseObjectId,
+    ) -> list[PublicationLogEntry]: ...
+
+    async def remove_entries(self, entry_ids: list[PublicationLogEntryId]) -> None: ...
 
     async def list_entries_by_project(
         self,

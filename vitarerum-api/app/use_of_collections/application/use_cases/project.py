@@ -16,9 +16,11 @@ from app.shared.authorization import require_group
 from app.use_of_collections.application.ports import (
     CollectionUseProjectRepository,
     ExternalRequesterProvisioner,
+    FileStoragePort,
     ObjectAccessLogRepository,
     ObjectOccurrenceLogRepository,
     ProposalRepository,
+    PublicationLogRepository,
 )
 from app.use_of_collections.application.use_cases._shared import (
     _new_access_log_reference_number,
@@ -37,10 +39,11 @@ from app.use_of_collections.domain.models import (
     ObjectAccessLogId,
     ObjectLogEntry,
     ObjectLogEntryId,
+    ObjectOccurrenceEntry,
     PermissionId,
-    ProjectObjectInUse,
     Proposal,
     ProposalId,
+    PublicationLogEntry,
     ReferenceNumber,
 )
 
@@ -77,6 +80,29 @@ class ApproveProposalOutput:
     requester_access_notification: RequesterAccessNotification | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class ProjectObjectDependencySummary:
+    access_log_entries: int = 0
+    occurrence_entries: int = 0
+    publication_entries: int = 0
+    attachments: int = 0
+
+    @property
+    def has_dependencies(self) -> bool:
+        return (
+            self.access_log_entries > 0
+            or self.occurrence_entries > 0
+            or self.publication_entries > 0
+            or self.attachments > 0
+        )
+
+
+class ProjectObjectHasDependencies(Exception):
+    def __init__(self, summary: ProjectObjectDependencySummary) -> None:
+        super().__init__("This project object has related records.")
+        self.summary = summary
+
+
 class ApproveProposal:
     def __init__(
         self,
@@ -100,6 +126,10 @@ class ApproveProposal:
         # public proposal must never provision a requester for a decision
         # that was never going to succeed.
         proposal.ensure_approvable()
+        if not proposal.requested_objects:
+            raise ValueError(
+                "Proposal must have at least one requested object before approval"
+            )
         requester_access_notification: RequesterAccessNotification | None = None
         if proposal.requested_by is None:
             # Public proposal: Identity provisioning is deferred until this
@@ -315,9 +345,22 @@ class AddProjectObjects:
                 raise ValueError("displayTitle is required.")
             if not item.object_name or not item.object_name.strip():
                 raise ValueError("objectName is required.")
+        access_log = None
+        if objects:
+            access_log = await self._access_log_repo.get_by_project_id(data.project_id)
+            if access_log is None:
+                access_log = ObjectAccessLog(
+                    id=ObjectAccessLogId(_new_id()),
+                    reference_number=ReferenceNumber(_new_access_log_reference_number()),
+                    collection_use_project_id=data.project_id,
+                )
+                await self._access_log_repo.add(access_log)
+            if access_log.is_concluded:
+                raise InvalidTransition(
+                    "Cannot add project objects to a concluded object access log"
+                )
         project.add_objects(objects)
         await self._repo.save(project)
-        access_log = await self._access_log_repo.get_by_project_id(data.project_id)
         if access_log is not None:
             for obj in objects:
                 entry = ObjectLogEntry(
@@ -328,13 +371,7 @@ class AddProjectObjects:
                     added_at=now,
                     added_by=data.caller.id,
                 )
-                try:
-                    access_log.add_object_log_entry(entry)
-                except InvalidTransition:
-                    # Adding a project object stays valid even if the access log
-                    # has already been concluded; in that defensive case there is
-                    # no writable log to synchronize with.
-                    continue
+                access_log.add_object_log_entry(entry)
                 await self._access_log_repo.save_entry(entry)
         return project
 
@@ -352,27 +389,168 @@ class RemoveProjectObject:
         project_repository: CollectionUseProjectRepository,
         access_log_repository: ObjectAccessLogRepository,
         occurrence_log_repository: ObjectOccurrenceLogRepository,
+        publication_log_repository: PublicationLogRepository,
     ) -> None:
         self._project_repo = project_repository
         self._access_log_repo = access_log_repository
         self._occurrence_log_repo = occurrence_log_repository
+        self._publication_log_repo = publication_log_repository
 
     async def execute(self, data: RemoveProjectObjectInput) -> CollectionUseProject:
         project = await self._project_repo.get_by_id(data.project_id)
         if project is None:
             raise LookupError(f"No project found with id {data.project_id}")
-        if await self._access_log_repo.has_entries_for_object(
-            data.project_id, data.collection_use_object_id
-        ) or await self._occurrence_log_repo.has_entries_for_object(
-            data.project_id, data.collection_use_object_id
-        ):
-            raise ProjectObjectInUse(
-                f"Project object {data.collection_use_object_id} has log or "
-                "occurrence entries"
+        (
+            access_entries,
+            occurrence_entries,
+            publication_entries,
+        ) = await self._load_dependency_entries(data)
+        access_log_is_concluded = False
+        if access_entries:
+            access_log = await self._access_log_repo.get_by_id(
+                access_entries[0].object_access_log_id
             )
+            access_log_is_concluded = access_log.is_concluded if access_log else False
+        if (
+            occurrence_entries
+            or publication_entries
+            or not _is_automatic_access_entry(access_entries)
+            or access_log_is_concluded
+        ):
+            summary = _dependency_summary(
+                access_entries, occurrence_entries, publication_entries
+            )
+            raise ProjectObjectHasDependencies(
+                summary
+                if summary.has_dependencies
+                else ProjectObjectDependencySummary(access_log_entries=1)
+            )
+        if access_entries:
+            await self._access_log_repo.remove_entries([access_entries[0].id])
         project.remove_object(data.collection_use_object_id)
         await self._project_repo.save(project)
         return project
+
+    async def _load_dependency_entries(
+        self, data: RemoveProjectObjectInput
+    ) -> tuple[
+        list[ObjectLogEntry],
+        list[ObjectOccurrenceEntry],
+        list[PublicationLogEntry],
+    ]:
+        access_entries = await self._access_log_repo.list_entries_for_object(
+            data.project_id, data.collection_use_object_id
+        )
+        occurrence_entries = await self._occurrence_log_repo.list_entries_for_object(
+            data.project_id, data.collection_use_object_id
+        )
+        publication_entries = await self._publication_log_repo.list_entries_for_object(
+            data.project_id, data.collection_use_object_id
+        )
+        return access_entries, occurrence_entries, publication_entries
+
+
+@dataclass(slots=True)
+class RemoveProjectObjectCascadeInput:
+    project_id: CollectionUseProjectId
+    collection_use_object_id: CollectionUseObjectId
+    caller: Actor
+    reason: str
+    confirm_cascade: bool
+
+
+class RemoveProjectObjectCascade:
+    def __init__(
+        self,
+        project_repository: CollectionUseProjectRepository,
+        access_log_repository: ObjectAccessLogRepository,
+        occurrence_log_repository: ObjectOccurrenceLogRepository,
+        publication_log_repository: PublicationLogRepository,
+        file_storage: FileStoragePort,
+    ) -> None:
+        self._project_repo = project_repository
+        self._access_log_repo = access_log_repository
+        self._occurrence_log_repo = occurrence_log_repository
+        self._publication_log_repo = publication_log_repository
+        self._file_storage = file_storage
+
+    async def execute(
+        self, data: RemoveProjectObjectCascadeInput
+    ) -> CollectionUseProject:
+        if not data.confirm_cascade:
+            raise ValueError("confirmCascade must be true.")
+        if not data.reason.strip():
+            raise ValueError("reason is required.")
+        project = await self._project_repo.get_by_id(data.project_id)
+        if project is None:
+            raise LookupError(f"No project found with id {data.project_id}")
+        access_entries = await self._access_log_repo.list_entries_for_object(
+            data.project_id, data.collection_use_object_id
+        )
+        occurrence_entries = await self._occurrence_log_repo.list_entries_for_object(
+            data.project_id, data.collection_use_object_id
+        )
+        publication_entries = await self._publication_log_repo.list_entries_for_object(
+            data.project_id, data.collection_use_object_id
+        )
+        attachment_references: list[str] = []
+        for access_entry in access_entries:
+            attachment_references.extend(
+                attachment.file_reference for attachment in access_entry.attachments
+            )
+        for occurrence_entry in occurrence_entries:
+            attachment_references.extend(
+                attachment.file_reference
+                for attachment in occurrence_entry.attachments
+            )
+        for publication_entry in publication_entries:
+            attachment_references.extend(
+                attachment.file_reference
+                for attachment in publication_entry.attachments
+            )
+        await self._access_log_repo.remove_entries(
+            [entry.id for entry in access_entries]
+        )
+        await self._occurrence_log_repo.remove_entries(
+            [entry.id for entry in occurrence_entries]
+        )
+        await self._publication_log_repo.remove_entries(
+            [entry.id for entry in publication_entries]
+        )
+        project.remove_object(data.collection_use_object_id)
+        await self._project_repo.save(project)
+        for file_reference in attachment_references:
+            await self._file_storage.delete(file_reference)
+        return project
+
+
+def _is_automatic_access_entry(entries: list[ObjectLogEntry]) -> bool:
+    if not entries:
+        return True
+    if len(entries) != 1:
+        return False
+    entry = entries[0]
+    return (
+        entry.number_of_objects == 1
+        and entry.observations is None
+        and not entry.attachments
+    )
+
+
+def _dependency_summary(
+    access_entries: list[ObjectLogEntry],
+    occurrence_entries: list[ObjectOccurrenceEntry],
+    publication_entries: list[PublicationLogEntry],
+) -> ProjectObjectDependencySummary:
+    attachments = sum(len(entry.attachments) for entry in access_entries)
+    attachments += sum(len(entry.attachments) for entry in occurrence_entries)
+    attachments += sum(len(entry.attachments) for entry in publication_entries)
+    return ProjectObjectDependencySummary(
+        access_log_entries=len(access_entries),
+        occurrence_entries=len(occurrence_entries),
+        publication_entries=len(publication_entries),
+        attachments=attachments,
+    )
 
 
 @dataclass(slots=True)

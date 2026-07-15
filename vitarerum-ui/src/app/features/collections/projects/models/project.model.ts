@@ -87,6 +87,7 @@ export interface PublicationLog {
 
 export interface PublicationLogEntry {
   readonly id: string;
+  readonly collectionUseObjectId?: string | null;
   readonly addedAt: string;
   readonly addedBy: PermissionPrincipal;
   readonly note: string;
@@ -286,6 +287,18 @@ export interface ProjectObjectSnapshotInput {
 
 export interface AddProjectObjectsRequest {
   readonly objects: readonly ProjectObjectSnapshotInput[];
+}
+
+export interface RemoveProjectObjectRequest {
+  readonly confirmCascade: boolean;
+  readonly reason: string;
+}
+
+export interface ProjectObjectDependencySummary {
+  readonly accessLogEntries: number;
+  readonly occurrenceEntries: number;
+  readonly publicationEntries: number;
+  readonly attachments: number;
 }
 
 export interface CreateObjectLogEntryRequest {

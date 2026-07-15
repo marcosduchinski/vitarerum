@@ -184,6 +184,12 @@ Uvicorn command if so). Scale out with replicas or Uvicorn `--workers`.
 uv run pytest
 ```
 
+## API Contracts
+
+Contract-sensitive behavior is documented under `docs/api_contracts/`.
+The collection-use project object lifecycle, including guarded cascade removal,
+is described in `docs/api_contracts/use_of_collections.md`.
+
 ## Lint
 
 ```bash

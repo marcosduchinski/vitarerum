@@ -7,6 +7,7 @@ import {
   resource,
   signal,
 } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
 import { Router, RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 
@@ -30,7 +31,10 @@ import {
   CreateInSituVisitReportRequest,
   InSituVisitReport,
 } from '../../../reports/models/report.model';
-import { AddProjectObjectsRequest } from '../../models/project.model';
+import {
+  AddProjectObjectsRequest,
+  ProjectObjectDependencySummary,
+} from '../../models/project.model';
 import { REPORTS_API_SERVICE } from '../../../reports/services/reports-api.service';
 import { PROJECT_API_SERVICE } from '../../services/project-api.service';
 
@@ -79,6 +83,40 @@ const START_NOTE = 'Started from staff project detail.';
 const COMPLETE_NOTE = 'Completed from staff project detail.';
 type ProjectDetailTab = 'actions' | 'objects' | 'todo';
 const PROJECT_DETAIL_TABS: readonly ProjectDetailTab[] = ['actions', 'objects', 'todo'];
+const EMPTY_PROJECT_OBJECT_DEPENDENCIES: ProjectObjectDependencySummary = {
+  accessLogEntries: 0,
+  occurrenceEntries: 0,
+  publicationEntries: 0,
+  attachments: 0,
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function numericValue(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+function extractProjectObjectDependencySummary(
+  error: unknown,
+): ProjectObjectDependencySummary | null {
+  const body = error instanceof HttpErrorResponse ? error.error : error;
+  if (!isRecord(body)) return null;
+
+  const errorCode = typeof body['error'] === 'string' ? body['error'] : null;
+  if (errorCode !== 'PROJECT_OBJECT_HAS_DEPENDENCIES') return null;
+
+  const dependencies = body['dependencies'];
+  if (!isRecord(dependencies)) return EMPTY_PROJECT_OBJECT_DEPENDENCIES;
+
+  return {
+    accessLogEntries: numericValue(dependencies['accessLogEntries']),
+    occurrenceEntries: numericValue(dependencies['occurrenceEntries']),
+    publicationEntries: numericValue(dependencies['publicationEntries']),
+    attachments: numericValue(dependencies['attachments']),
+  };
+}
 
 @Component({
   selector: 'app-project-staff-detail-page',
@@ -220,7 +258,30 @@ export class ProjectStaffDetailPageComponent {
   protected readonly removingObjectId = signal<string | null>(null);
   protected readonly addObjectsError = signal<ApiError | null>(null);
   protected readonly removeObjectError = signal<ApiError | null>(null);
+  protected readonly cascadeRemoveObjectId = signal<string | null>(null);
+  protected readonly cascadeRemoveDependencies = signal<ProjectObjectDependencySummary | null>(
+    null,
+  );
+  protected readonly cascadeRemoveReason = signal('');
+  protected readonly cascadeRemoveError = signal<ApiError | null>(null);
   protected readonly activeTab = signal<ProjectDetailTab>('actions');
+  protected readonly cascadeRemoveObjectName = computed(() => {
+    const objectId = this.cascadeRemoveObjectId();
+    const object = this.project()?.objects?.find((item) => item.id === objectId);
+    return object?.displayTitle ?? object?.objectName ?? object?.inventoryNumber ?? 'this object';
+  });
+  protected readonly cascadeRemoveReasonInvalid = computed(
+    () => this.cascadeRemoveReason().trim().length === 0,
+  );
+  protected readonly cascadeRemoveSummary = computed(() => {
+    const dependencies = this.cascadeRemoveDependencies() ?? EMPTY_PROJECT_OBJECT_DEPENDENCIES;
+    return [
+      `Access log entries: ${dependencies.accessLogEntries}`,
+      `Occurrence entries: ${dependencies.occurrenceEntries}`,
+      `Publication entries: ${dependencies.publicationEntries}`,
+      `Attachments: ${dependencies.attachments}`,
+    ].join(' · ');
+  });
 
   protected readonly formatDate = formatDate;
   protected readonly formatDateTime = formatDateTime;
@@ -343,14 +404,64 @@ export class ProjectStaffDetailPageComponent {
     this.removingObjectId.set(objectId);
     this.addObjectsError.set(null);
     this.removeObjectError.set(null);
+    this.clearCascadeRemoveState();
     try {
       await firstValueFrom(this.projectService.removeProjectObject(this.id(), objectId));
       this.projectResource.reload();
     } catch (err) {
-      this.removeObjectError.set(toApiError(err));
+      const dependencies = extractProjectObjectDependencySummary(err);
+      if (dependencies) {
+        this.cascadeRemoveObjectId.set(objectId);
+        this.cascadeRemoveDependencies.set(dependencies);
+        this.cascadeRemoveReason.set('');
+        this.cascadeRemoveError.set(null);
+      } else {
+        this.removeObjectError.set(toApiError(err));
+      }
     } finally {
       this.removingObjectId.set(null);
     }
+  }
+
+  protected onCascadeRemoveReasonInput(event: Event): void {
+    this.cascadeRemoveReason.set((event.target as HTMLTextAreaElement).value);
+  }
+
+  protected closeCascadeRemoveConfirm(): void {
+    if (this.removingObjectId()) return;
+    this.clearCascadeRemoveState();
+  }
+
+  protected async confirmCascadeRemove(): Promise<void> {
+    const objectId = this.cascadeRemoveObjectId();
+    const reason = this.cascadeRemoveReason().trim();
+    if (!objectId || !reason || this.removingObjectId() || !this.canEditProject()) return;
+
+    this.removingObjectId.set(objectId);
+    this.cascadeRemoveError.set(null);
+    this.removeObjectError.set(null);
+
+    try {
+      await firstValueFrom(
+        this.projectService.removeProjectObjectCascade(this.id(), objectId, {
+          confirmCascade: true,
+          reason,
+        }),
+      );
+      this.clearCascadeRemoveState();
+      this.projectResource.reload();
+    } catch (err) {
+      this.cascadeRemoveError.set(toApiError(err));
+    } finally {
+      this.removingObjectId.set(null);
+    }
+  }
+
+  private clearCascadeRemoveState(): void {
+    this.cascadeRemoveObjectId.set(null);
+    this.cascadeRemoveDependencies.set(null);
+    this.cascadeRemoveReason.set('');
+    this.cascadeRemoveError.set(null);
   }
 
   protected async start(): Promise<void> {

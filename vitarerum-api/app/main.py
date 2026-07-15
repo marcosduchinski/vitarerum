@@ -107,6 +107,8 @@ async def http_exception_handler(
             body["errors"] = detail["errors"]
         if "fieldErrors" in detail:
             body["fieldErrors"] = detail["fieldErrors"]
+        if "dependencies" in detail:
+            body["dependencies"] = detail["dependencies"]
     else:
         body = {"message": str(detail)}
     return JSONResponse(

@@ -221,10 +221,10 @@ describe('ProjectApiServiceMock', () => {
     expect(synced.every((entry) => entry.addedBy.permissionId === 'perm-bob')).toBe(true);
   });
 
-  it('does not create an object access log when adding project objects before one exists', async () => {
+  it('creates an object access log and automatic entry when adding project objects', async () => {
     session.set(staffSession());
 
-    await firstValueFrom(
+    const detail = await firstValueFrom(
       service.addProjectObjects('proj-4', {
         objects: [
           {
@@ -236,9 +236,102 @@ describe('ProjectApiServiceMock', () => {
       }),
     );
     const entries = await firstValueFrom(service.listObjectLogEntries('proj-4'));
+    const addedObject = detail.objects?.find((object) => object.inventoryNumber === 'INV-MOCK-004');
 
-    expect(entries.accessLog).toBeNull();
-    expect(entries.content).toEqual([]);
+    expect(entries.accessLog?.referenceNumber).toMatch(/^OAL-/);
+    expect(entries.content).toEqual([
+      expect.objectContaining({
+        collectionUseObjectId: addedObject?.id,
+        numberOfObjects: 1,
+        observations: null,
+        requestedObjectId: addedObject?.id,
+        attachments: [],
+      }),
+    ]);
+  });
+
+  it('removes automatic object entries with a simple project object removal', async () => {
+    session.set(staffSession());
+    const detail = await firstValueFrom(
+      service.addProjectObjects('proj-4', {
+        objects: [
+          {
+            inventoryNumber: 'INV-MOCK-REMOVE',
+            displayTitle: 'Mock removal object',
+            objectName: 'Object',
+          },
+        ],
+      }),
+    );
+    const addedObject = detail.objects!.find(
+      (object) => object.inventoryNumber === 'INV-MOCK-REMOVE',
+    )!;
+
+    await firstValueFrom(service.removeProjectObject('proj-4', addedObject.id));
+
+    const updated = await firstValueFrom(service.getProject('proj-4'));
+    const entries = await firstValueFrom(service.listObjectLogEntries('proj-4'));
+    expect(updated.objects?.some((object) => object.id === addedObject.id)).toBe(false);
+    expect(entries.content.some((entry) => entry.collectionUseObjectId === addedObject.id)).toBe(
+      false,
+    );
+  });
+
+  it('requires cascade confirmation when removing project objects with related entries', async () => {
+    session.set(staffSession());
+    state.projects.get('proj-4')!.status = 'IN_PROGRESS';
+    const detail = await firstValueFrom(
+      service.addProjectObjects('proj-4', {
+        objects: [
+          {
+            inventoryNumber: 'INV-MOCK-CASCADE',
+            displayTitle: 'Mock cascade object',
+            objectName: 'Object',
+          },
+        ],
+      }),
+    );
+    const addedObject = detail.objects!.find(
+      (object) => object.inventoryNumber === 'INV-MOCK-CASCADE',
+    )!;
+    await firstValueFrom(
+      service.createObjectOccurrenceEntry('proj-4', {
+        collectionUseObjectId: addedObject.id,
+        numberOfObjects: 1,
+        occurrenceDate: '2026-06-04T11:30:00Z',
+        location: 'Reading room',
+        detailedDescription: 'Occurrence detail.',
+      }),
+    );
+
+    await expect(
+      firstValueFrom(service.removeProjectObject('proj-4', addedObject.id)),
+    ).rejects.toMatchObject({
+      status: 409,
+      error: 'PROJECT_OBJECT_HAS_DEPENDENCIES',
+      dependencies: {
+        accessLogEntries: 1,
+        occurrenceEntries: 1,
+      },
+    });
+
+    await firstValueFrom(
+      service.removeProjectObjectCascade('proj-4', addedObject.id, {
+        confirmCascade: true,
+        reason: 'Wrong project.',
+      }),
+    );
+
+    const updated = await firstValueFrom(service.getProject('proj-4'));
+    const logEntries = await firstValueFrom(service.listObjectLogEntries('proj-4'));
+    const occurrenceEntries = await firstValueFrom(service.listObjectOccurrenceEntries('proj-4'));
+    expect(updated.objects?.some((object) => object.id === addedObject.id)).toBe(false);
+    expect(logEntries.content.some((entry) => entry.collectionUseObjectId === addedObject.id)).toBe(
+      false,
+    );
+    expect(
+      occurrenceEntries.content.some((entry) => entry.collectionUseObjectId === addedObject.id),
+    ).toBe(false);
   });
 
   it('updates editable object log entry fields', async () => {

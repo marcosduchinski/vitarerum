@@ -34,8 +34,11 @@ from app.use_of_collections.application.use_cases import (
     CompleteProjectInput,
     EditProjectDetails,
     EditProjectDetailsInput,
+    ProjectObjectHasDependencies,
     ProjectObjectSnapshotInput,
     RemoveProjectObject,
+    RemoveProjectObjectCascade,
+    RemoveProjectObjectCascadeInput,
     RemoveProjectObjectInput,
     StartProject,
     StartProjectInput,
@@ -48,7 +51,6 @@ from app.use_of_collections.domain.enums import (
 from app.use_of_collections.domain.models import (
     CollectionUseObjectId,
     CollectionUseProjectId,
-    ProjectObjectInUse,
 )
 from app.use_of_collections.presentation.common import (
     _assert_existing_project_access,
@@ -62,11 +64,13 @@ from app.use_of_collections.presentation.common import (
 from app.use_of_collections.presentation.dependencies import (
     AccessLogRepo,
     DBSession,
+    FileStorage,
     ListProjectsQuery,
     OccurrenceLogRepo,
     ProjectDetailQuery,
     ProjectRepo,
     ProposalRepo,
+    PublicationLogRepo,
 )
 from app.use_of_collections.presentation.schemas import (
     AddProjectObjectsRequest,
@@ -79,6 +83,7 @@ from app.use_of_collections.presentation.schemas import (
     ProjectListItemResponse,
     ProposalRefSummary,
     ReasonRequest,
+    RemoveProjectObjectRequest,
     UpdateProjectRequest,
     UseEventResponse,
 )
@@ -324,6 +329,7 @@ async def remove_project_object(
     proposal_repo: ProposalRepo,
     access_log_repo: AccessLogRepo,
     occurrence_log_repo: OccurrenceLogRepo,
+    publication_log_repo: PublicationLogRepo,
     session: DBSession,
 ) -> Response:
     await _assert_existing_project_access(
@@ -332,7 +338,10 @@ async def remove_project_object(
     require_staff(caller)
     try:
         await RemoveProjectObject(
-            project_repo, access_log_repo, occurrence_log_repo
+            project_repo,
+            access_log_repo,
+            occurrence_log_repo,
+            publication_log_repo,
         ).execute(
             RemoveProjectObjectInput(
                 project_id=CollectionUseProjectId(project_id),
@@ -340,18 +349,74 @@ async def remove_project_object(
                 caller=caller,
             )
         )
-    except ProjectObjectInUse as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={
-                "error": "PROJECT_OBJECT_IN_USE",
-                "message": str(exc),
-            },
-        ) from exc
+    except ProjectObjectHasDependencies as exc:
+        _raise_project_object_has_dependencies(exc)
     except Exception as exc:
         _handle_domain_errors(exc)
     await session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@projects_router.post(
+    "/{project_id}/objects/{object_id}/remove",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def remove_project_object_cascade(
+    project_id: str,
+    object_id: str,
+    body: RemoveProjectObjectRequest,
+    caller: CallerPermission,
+    project_repo: ProjectRepo,
+    proposal_repo: ProposalRepo,
+    access_log_repo: AccessLogRepo,
+    occurrence_log_repo: OccurrenceLogRepo,
+    publication_log_repo: PublicationLogRepo,
+    file_storage: FileStorage,
+    session: DBSession,
+) -> Response:
+    await _assert_existing_project_access(
+        project_id, caller, project_repo, proposal_repo
+    )
+    require_staff(caller)
+    try:
+        await RemoveProjectObjectCascade(
+            project_repo,
+            access_log_repo,
+            occurrence_log_repo,
+            publication_log_repo,
+            file_storage,
+        ).execute(
+            RemoveProjectObjectCascadeInput(
+                project_id=CollectionUseProjectId(project_id),
+                collection_use_object_id=CollectionUseObjectId(object_id),
+                caller=caller,
+                reason=body.reason,
+                confirm_cascade=body.confirmCascade,
+            )
+        )
+    except Exception as exc:
+        _handle_domain_errors(exc)
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+def _raise_project_object_has_dependencies(
+    exc: ProjectObjectHasDependencies,
+) -> None:
+    summary = exc.summary
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail={
+            "error": "PROJECT_OBJECT_HAS_DEPENDENCIES",
+            "message": str(exc),
+            "dependencies": {
+                "accessLogEntries": summary.access_log_entries,
+                "occurrenceEntries": summary.occurrence_entries,
+                "publicationEntries": summary.publication_entries,
+                "attachments": summary.attachments,
+            },
+        },
+    ) from exc
 
 
 def _project_command_response(

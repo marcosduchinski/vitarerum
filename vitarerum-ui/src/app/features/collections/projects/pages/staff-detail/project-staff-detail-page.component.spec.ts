@@ -1,12 +1,18 @@
 import { signal } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
 import { Router, provideRouter } from '@angular/router';
 import { TestBed } from '@angular/core/testing';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 
 import { IDENTITY_SERVICE } from '@core/auth/identity.service';
 import { OBJECT_SEARCH_SERVICE } from '@features/objects/services/object-search.service';
 
-import { CollectionUseProjectDetail, ProjectEventsPage } from '../../models/project.model';
+import {
+  CollectionUseProjectDetail,
+  ProjectEventsPage,
+  ProjectObjectDependencySummary,
+  RemoveProjectObjectRequest,
+} from '../../models/project.model';
 import { PROJECT_API_SERVICE } from '../../services/project-api.service';
 import { REPORTS_API_SERVICE } from '../../../reports/services/reports-api.service';
 import { ProjectStaffDetailPageComponent } from './project-staff-detail-page.component';
@@ -66,6 +72,12 @@ class ProjectApiServiceStub {
   readonly completed: { id: string; note: string }[] = [];
   readonly addedObjects: { id: string; request: unknown }[] = [];
   readonly removedObjects: { id: string; objectId: string }[] = [];
+  readonly cascadeRemovedObjects: {
+    id: string;
+    objectId: string;
+    request: RemoveProjectObjectRequest;
+  }[] = [];
+  removeConflict: ProjectObjectDependencySummary | null = null;
 
   getProject() {
     return of(currentProject);
@@ -96,6 +108,24 @@ class ProjectApiServiceStub {
 
   removeProjectObject(id: string, objectId: string) {
     this.removedObjects.push({ id, objectId });
+    if (this.removeConflict) {
+      return throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 409,
+            error: {
+              error: 'PROJECT_OBJECT_HAS_DEPENDENCIES',
+              message: 'This project object has related records.',
+              dependencies: this.removeConflict,
+            },
+          }),
+      );
+    }
+    return of(void 0);
+  }
+
+  removeProjectObjectCascade(id: string, objectId: string, request: RemoveProjectObjectRequest) {
+    this.cascadeRemovedObjects.push({ id, objectId, request });
     return of(void 0);
   }
 }
@@ -291,11 +321,83 @@ describe('ProjectStaffDetailPageComponent', () => {
       { id: PROJECT.id, objectId: 'project-object-1' },
     ]);
   });
+
+  it('requires a reason before removing project objects with related records', async () => {
+    currentProject = {
+      ...PROJECT,
+      objects: [
+        {
+          id: 'project-object-1',
+          inventoryNumber: 'INV-001',
+          displayTitle: 'Book of Hours',
+          objectName: 'Illuminated manuscript',
+          briefDescriptionSnapshot: null,
+          category: 'manuscript',
+          description: '',
+        },
+      ],
+    };
+    projectService.removeConflict = {
+      accessLogEntries: 1,
+      occurrenceEntries: 2,
+      publicationEntries: 1,
+      attachments: 3,
+    };
+    const fixture = TestBed.createComponent(ProjectStaffDetailPageComponent);
+    fixture.componentRef.setInput('id', PROJECT.id);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const el: HTMLElement = fixture.nativeElement;
+    buttonByText(el, 'Objects').click();
+    fixture.detectChanges();
+
+    el.querySelector<HTMLButtonElement>('.object-row__remove')!.click();
+    fixture.detectChanges();
+    exactButtonByText(el, 'Remove object').click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(el.textContent).toContain('Remove object and related records?');
+    expect(el.textContent).toContain('Access log entries: 1');
+    expect(el.textContent).toContain('Occurrence entries: 2');
+    expect(el.textContent).toContain('Publication entries: 1');
+    expect(exactButtonByText(el, 'Remove object and records').disabled).toBe(true);
+
+    const reason = el.querySelector<HTMLTextAreaElement>('.cascade-remove__field textarea')!;
+    reason.value = 'Object was added to the wrong project.';
+    reason.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    expect(exactButtonByText(el, 'Remove object and records').disabled).toBe(false);
+    exactButtonByText(el, 'Remove object and records').click();
+    await fixture.whenStable();
+
+    expect(projectService.cascadeRemovedObjects).toEqual([
+      {
+        id: PROJECT.id,
+        objectId: 'project-object-1',
+        request: {
+          confirmCascade: true,
+          reason: 'Object was added to the wrong project.',
+        },
+      },
+    ]);
+  });
 });
 
 function buttonByText(root: HTMLElement, label: string): HTMLButtonElement {
   const button = Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find((item) =>
     item.textContent?.includes(label),
+  );
+  expect(button).not.toBeNull();
+  return button!;
+}
+
+function exactButtonByText(root: HTMLElement, label: string): HTMLButtonElement {
+  const button = Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find(
+    (item) => item.textContent?.trim() === label,
   );
   expect(button).not.toBeNull();
   return button!;

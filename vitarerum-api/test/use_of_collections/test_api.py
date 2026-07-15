@@ -44,12 +44,18 @@ from app.use_of_collections.domain.models import (
     ObjectLogEntry,
     ObjectLogEntryId,
     ObjectOccurrenceEntry,
+    ObjectOccurrenceEntryId,
     ObjectOccurrenceLog,
+    ObjectOccurrenceLogId,
     Proposal,
     ProposalId,
     PublicationLog,
     PublicationLogEntry,
+    PublicationLogEntryId,
+    PublicationLogId,
     ReferenceNumber,
+    RequestedObject,
+    RequestedObjectId,
     RequesterContact,
 )
 from app.use_of_collections.presentation.dependencies import (
@@ -301,6 +307,23 @@ class InMemoryAccessLogRepository:
     async def save_entry(self, entry: ObjectLogEntry) -> None:
         self.entries[entry.id] = entry
 
+    async def list_entries_for_object(self, project_id, collection_use_object_id):
+        log_ids = {
+            log.id
+            for log in self.items.values()
+            if log.collection_use_project_id == project_id
+        }
+        return [
+            entry
+            for entry in self.entries.values()
+            if entry.object_access_log_id in log_ids
+            and entry.collection_use_object_id == collection_use_object_id
+        ]
+
+    async def remove_entries(self, entry_ids):
+        for entry_id in entry_ids:
+            self.entries.pop(entry_id, None)
+
     async def list_entries_by_project(self, project_id, added_by, page, size):
         log_ids = {
             log.id
@@ -354,6 +377,23 @@ class InMemoryOccurrenceLogRepository:
     async def save_entry(self, entry: ObjectOccurrenceEntry) -> None:
         self.entries[entry.id] = entry
 
+    async def list_entries_for_object(self, project_id, collection_use_object_id):
+        log_ids = {
+            log.id
+            for log in self.items.values()
+            if log.collection_use_project_id == project_id
+        }
+        return [
+            entry
+            for entry in self.entries.values()
+            if entry.object_occurrence_log_id in log_ids
+            and entry.collection_use_object_id == collection_use_object_id
+        ]
+
+    async def remove_entries(self, entry_ids):
+        for entry_id in entry_ids:
+            self.entries.pop(entry_id, None)
+
     async def list_entries_by_project(self, project_id, reported_by, page, size):
         log_ids = {
             log.id
@@ -406,6 +446,23 @@ class InMemoryPublicationLogRepository:
 
     async def save_entry(self, entry: PublicationLogEntry) -> None:
         self.entries[entry.id] = entry
+
+    async def list_entries_for_object(self, project_id, collection_use_object_id):
+        log_ids = {
+            log.id
+            for log in self.items.values()
+            if log.collection_use_project_id == project_id
+        }
+        return [
+            entry
+            for entry in self.entries.values()
+            if entry.publication_log_id in log_ids
+            and entry.collection_use_object_id == collection_use_object_id
+        ]
+
+    async def remove_entries(self, entry_ids):
+        for entry_id in entry_ids:
+            self.entries.pop(entry_id, None)
 
     async def list_entries_by_project(self, project_id, added_by, page, size):
         log_ids = {
@@ -1822,7 +1879,7 @@ async def test_add_project_objects_syncs_new_objects_to_existing_access_log() ->
     assert sum(entry["collectionUseObjectId"] == "cuo-1" for entry in entries) == 1
 
 
-async def test_add_project_objects_does_not_create_access_log_when_missing() -> None:
+async def test_add_project_objects_creates_access_log_when_missing() -> None:
     async with client_with_repos(caller=_STAFF_CALLER) as (
         client,
         project_repo,
@@ -1850,11 +1907,15 @@ async def test_add_project_objects_does_not_create_access_log_when_missing() -> 
 
     assert added.status_code == 201
     assert listing.status_code == 200
-    assert listing.json()["accessLog"] is None
-    assert listing.json()["content"] == []
+    assert listing.json()["accessLog"]["referenceNumber"].startswith("OAL-")
+    assert len(listing.json()["content"]) == 1
+    assert listing.json()["content"][0]["collectionUseObjectId"] == (
+        added.json()["objects"][-1]["id"]
+    )
+    assert listing.json()["content"][0]["numberOfObjects"] == 1
 
 
-async def test_add_project_objects_skips_sync_when_access_log_concluded() -> None:
+async def test_add_project_objects_blocks_when_access_log_concluded() -> None:
     async with client_with_repos(caller=_STAFF_CALLER) as (
         client,
         project_repo,
@@ -1873,7 +1934,7 @@ async def test_add_project_objects_skips_sync_when_access_log_concluded() -> Non
             )
         )
 
-        added = await client.post(
+        response = await client.post(
             "/api/v1/collection-use-projects/proj-1/objects",
             json={
                 "objects": [
@@ -1885,15 +1946,12 @@ async def test_add_project_objects_skips_sync_when_access_log_concluded() -> Non
                 ]
             },
         )
-        listing = await client.get(
-            "/api/v1/collection-use-projects/proj-1/log-entries"
-        )
+        project = await project_repo.get_by_id(CollectionUseProjectId("proj-1"))
 
-    assert added.status_code == 201
-    assert added.json()["objects"][-1]["inventoryNumber"] == "INV-002"
-    assert listing.status_code == 200
-    assert listing.json()["accessLog"]["dateConclusion"] is not None
-    assert listing.json()["content"] == []
+    assert response.status_code == 409
+    assert response.json()["error"] == "INVALID_TRANSITION"
+    assert project is not None
+    assert project.objects == []
 
 
 async def test_staff_can_remove_unused_project_object() -> None:
@@ -1917,7 +1975,7 @@ async def test_staff_can_remove_unused_project_object() -> None:
     assert project.objects == []
 
 
-async def test_remove_project_object_blocks_when_log_entry_references_it() -> None:
+async def test_remove_project_object_removes_automatic_log_entry() -> None:
     project_object = _collection_use_object()
     async with client_with_repos(caller=_STAFF_CALLER) as (
         client,
@@ -1949,11 +2007,121 @@ async def test_remove_project_object_blocks_when_log_entry_references_it() -> No
             "/api/v1/collection-use-projects/proj-1/objects/cuo-1",
         )
         project = await project_repo.get_by_id(CollectionUseProjectId("proj-1"))
+        entries, total = await access_log_repo.list_entries_by_project(
+            CollectionUseProjectId("proj-1"), None, 0, 10
+        )
+
+    assert response.status_code == 204
+    assert project is not None
+    assert project.objects == []
+    assert total == 0
+    assert entries == []
+
+
+async def test_remove_project_object_blocks_with_dependencies() -> None:
+    project_object = _collection_use_object()
+    async with client_with_repos(caller=_STAFF_CALLER) as (
+        client,
+        project_repo,
+        proposal_repo,
+        _,
+    ):
+        await project_repo.add(_project(objects=[project_object]))
+        await proposal_repo.add(_proposal())
+        occurrence_log_repo = app.dependency_overrides[get_occurrence_log_repo]()
+        occurrence_log = ObjectOccurrenceLog(
+            id=ObjectOccurrenceLogId("occ-log-1"),
+            reference_number=ReferenceNumber("OOL-ABCDEFG1"),
+            collection_use_project_id=CollectionUseProjectId("proj-1"),
+        )
+        await occurrence_log_repo.add(occurrence_log)
+        await occurrence_log_repo.save_entry(
+            ObjectOccurrenceEntry(
+                id=ObjectOccurrenceEntryId("occ-entry-1"),
+                object_occurrence_log_id=ObjectOccurrenceLogId("occ-log-1"),
+                collection_use_object_id=CollectionUseObjectId("cuo-1"),
+                number_of_objects=1,
+                occurrence_date=datetime(2026, 6, 2, tzinfo=UTC),
+                location="Gallery",
+                reported_by=PermissionId("permission-staff"),
+                detailed_description="Object observed during use.",
+            )
+        )
+
+        response = await client.delete(
+            "/api/v1/collection-use-projects/proj-1/objects/cuo-1",
+        )
+        project = await project_repo.get_by_id(CollectionUseProjectId("proj-1"))
 
     assert response.status_code == 409
-    assert response.json()["error"] == "PROJECT_OBJECT_IN_USE"
+    assert response.json()["error"] == "PROJECT_OBJECT_HAS_DEPENDENCIES"
+    assert response.json()["dependencies"]["occurrenceEntries"] == 1
     assert project is not None
     assert len(project.objects) == 1
+
+
+async def test_remove_project_object_cascade_requires_confirmation() -> None:
+    project_object = _collection_use_object()
+    async with client_with_repos(caller=_STAFF_CALLER) as (
+        client,
+        project_repo,
+        proposal_repo,
+        _,
+    ):
+        await project_repo.add(_project(objects=[project_object]))
+        await proposal_repo.add(_proposal())
+
+        response = await client.post(
+            "/api/v1/collection-use-projects/proj-1/objects/cuo-1/remove",
+            json={"confirmCascade": False, "reason": "Wrong object."},
+        )
+
+    assert response.status_code == 422
+    assert response.json()["error"] == "VALIDATION_ERROR"
+
+
+async def test_remove_project_object_cascade_removes_dependencies() -> None:
+    project_object = _collection_use_object()
+    async with client_with_repos(caller=_STAFF_CALLER) as (
+        client,
+        project_repo,
+        proposal_repo,
+        _,
+    ):
+        await project_repo.add(_project(objects=[project_object]))
+        await proposal_repo.add(_proposal())
+        publication_log_repo = app.dependency_overrides[get_publication_log_repo]()
+        publication_log = PublicationLog(
+            id=PublicationLogId("pub-log-1"),
+            reference_number=ReferenceNumber("PUB-ABCDEFG1"),
+            collection_use_project_id=CollectionUseProjectId("proj-1"),
+        )
+        await publication_log_repo.add(publication_log)
+        await publication_log_repo.save_entry(
+            PublicationLogEntry(
+                id=PublicationLogEntryId("pub-entry-1"),
+                publication_log_id=PublicationLogId("pub-log-1"),
+                added_at=datetime(2026, 6, 2, tzinfo=UTC),
+                added_by=PermissionId("permission-staff"),
+                note="Publication mentions this object.",
+                collection_use_object_id=CollectionUseObjectId("cuo-1"),
+            )
+        )
+
+        response = await client.post(
+            "/api/v1/collection-use-projects/proj-1/objects/cuo-1/remove",
+            json={"confirmCascade": True, "reason": "Wrong object."},
+        )
+        project = await project_repo.get_by_id(CollectionUseProjectId("proj-1"))
+        publication_entries, total = await publication_log_repo.list_entries_by_project(
+            CollectionUseProjectId("proj-1"), None, 0, 10
+        )
+
+    assert response.status_code == 204
+    assert project is not None
+    assert project.objects == []
+    assert total == 0
+    assert publication_entries == []
 
 
 async def test_approve_proposal_invalid_date_range_returns_422() -> None:
@@ -2025,6 +2193,15 @@ async def test_approve_public_proposal_sends_access_email_after_commit() -> None
                     name="Pedro Silva", email=EmailAddress("pedro@example.test")
                 ),
                 submitted_at=datetime(2026, 6, 7, tzinfo=UTC),
+                requested_objects=[
+                    RequestedObject(
+                        id=RequestedObjectId("requested-object-1"),
+                        inventory_number="INV-001",
+                        category="manuscript",
+                        description="for study",
+                        requested_at=datetime(2026, 6, 1, tzinfo=UTC),
+                    )
+                ],
             )
         )
 
