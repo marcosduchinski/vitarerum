@@ -286,7 +286,11 @@ def _build_attachment_nodes(
 ) -> list[dict[str, Any]]:
     graph: list[dict[str, Any]] = []
     att_spec = spec["attachments"]
-    extras = {"_visit_id": raw_visit_id, "_parent_id": parent_id}
+    extras = {
+        "_visit_id": raw_visit_id,
+        "_parent_id": parent_id,
+        "related_object_source_id": getattr(item, "related_object_source_id", None),
+    }
     for attachment in getattr(item, att_spec["source_collection"]):
         att_id = _resolve(attachment, extras, att_spec["id_template"])
         extra: dict[str, Any] = {}
@@ -301,6 +305,10 @@ def _build_attachment_nodes(
             label=_resolve(attachment, extras, att_spec["label_template"]),
             extra=extra,
         )
+        _apply_field_mappings(
+            attachment, extras, node, att_spec.get("field_mappings", [])
+        )
+        _apply_related_object_link(attachment, extras, node, att_spec)
         predicate = att_spec["link"]["predicate"]
         _set_predicate_value(node, predicate, reference(parent_id))
         _set_predicate_value(node, predicate, reference(visit_id))

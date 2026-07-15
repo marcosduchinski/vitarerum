@@ -115,6 +115,17 @@ def test_attachments_carry_content_url() -> None:
     assert urls == {"foto.jpeg", "log-ref", "Teste"}
 
 
+def test_attachments_carry_description_as_note() -> None:
+    doc = map_record_to_cidoc(_sample_record())
+    attachment_notes = {
+        n["crm:P3_has_note"]
+        for n in doc["@graph"]
+        if n["@id"].startswith("ex:document/")
+        and n["@id"].find("-attachment/") != -1
+    }
+    assert attachment_notes == {"foto", "log", "paper"}
+
+
 def test_visit_links_to_actor_place_timespan_and_type() -> None:
     doc = map_record_to_cidoc(_sample_record())
     visit = next(
@@ -201,6 +212,38 @@ def test_publication_information_object_links_to_related_object_when_present() -
     # not the E65 Creation event — P129's domain wouldn't accept the latter.
     assert "crm:P129_is_about" not in creation
     assert information_object["crm:P129_is_about"] == {"@id": object_id}
+
+
+def test_attachments_link_to_related_object_when_parent_has_one() -> None:
+    record = InSituVisitRecord.create(
+        code="VS-0004",
+        visit_begin_date=date(2026, 6, 19),
+        visit_end_date=date(2026, 6, 20),
+        visitor_name="Maria do Rosário",
+        place_name="MUSEU",
+        requested_objects=[ChildData("XL01", "Aguia-calçada", 1)],
+        in_situ_occurrences=[
+            ChildData(
+                "OC-10",
+                "observacao",
+                0,
+                [AttachmentData("IMG01", "fotografia dorsal da ave", "aguia.png", 0)],
+                related_object_source_id="XL01",
+            )
+        ],
+    )
+    doc = map_record_to_cidoc(record)
+    object_id = next(
+        n["@id"] for n in doc["@graph"] if n["@type"] == "crm:E20_Biological_Object"
+    )
+    attachment = next(
+        n
+        for n in doc["@graph"]
+        if n["@id"].startswith("ex:document/occurrence-attachment/")
+    )
+
+    assert attachment["crm:P3_has_note"] == "fotografia dorsal da ave"
+    assert attachment["crm:P129_is_about"] == {"@id": object_id}
 
 
 class _StubRepo:
