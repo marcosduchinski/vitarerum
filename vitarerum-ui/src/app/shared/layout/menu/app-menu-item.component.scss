@@ -34,6 +34,18 @@ button:hover:not(:disabled) {
   color: #f5f4ef;
 }
 
+button[aria-expanded='true'] {
+  background: rgba(245, 244, 239, 0.055);
+  color: #f5f4ef;
+  font-weight: 600;
+}
+
+ul {
+  margin: 0.25rem 0 0.35rem 0.625rem;
+  padding: 0 0 0 0.625rem;
+  border-left: 1px solid rgba(231, 236, 242, 0.14);
+}
+
 button:disabled {
   cursor: not-allowed;
   opacity: 0.45;
