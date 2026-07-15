@@ -6,7 +6,7 @@ import {
   resource,
   signal,
 } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { MenuItem } from 'primeng/api';
 import { firstValueFrom } from 'rxjs';
 
@@ -53,6 +53,7 @@ function formatDate(iso: string): string {
   selector: 'app-visits-in-situ-report-page',
   standalone: true,
   imports: [
+    RouterLink,
     RowActionsComponent,
     PageHeaderComponent,
     LoadingStateComponent,

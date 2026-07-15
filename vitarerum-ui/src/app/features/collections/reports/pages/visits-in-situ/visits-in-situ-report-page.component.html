@@ -41,9 +41,17 @@
               @for (report of rows(); track report.id) {
                 <tr>
                   <td class="report-table__code">
-                    <span [class.report-table__unavailable]="!report.code">
+                    <a
+                      class="report-table__code-link"
+                      [class.report-table__unavailable]="!report.code"
+                      [routerLink]="[
+                        '/p/collections/reports/visits-in-situ',
+                        report.projectId,
+                        report.id,
+                      ]"
+                    >
                       {{ valueOrUnavailable(report.code) }}
-                    </span>
+                    </a>
                     <small [title]="report.id">Report {{ report.id }}</small>
                   </td>
                   <td [class.report-table__unavailable]="!report.visitorName">

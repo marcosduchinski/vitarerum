@@ -23,6 +23,18 @@ class FeedbackHostComponent {
   readonly dismissed = signal(false);
 }
 
+@Component({
+  standalone: true,
+  imports: [FeedbackMessageComponent],
+  template: `
+    <app-feedback-message title="Created" tone="success">
+      <p>Report <a href="/reports/report-1">report-1</a> was created.</p>
+    </app-feedback-message>
+  `,
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
+class FeedbackProjectedHostComponent {}
+
 describe('FeedbackMessageComponent', () => {
   it('renders success feedback as a polite status message', async () => {
     await TestBed.configureTestingModule({ imports: [FeedbackHostComponent] }).compileComponents();
@@ -67,5 +79,19 @@ describe('FeedbackMessageComponent', () => {
     dismiss.click();
 
     expect(fixture.componentInstance.dismissed()).toBe(true);
+  });
+
+  it('renders projected message content', async () => {
+    await TestBed.configureTestingModule({
+      imports: [FeedbackProjectedHostComponent],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(FeedbackProjectedHostComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const link = fixture.nativeElement.querySelector('a') as HTMLAnchorElement;
+
+    expect(fixture.nativeElement.textContent).toContain('Report report-1 was created.');
+    expect(link.getAttribute('href')).toBe('/reports/report-1');
   });
 });

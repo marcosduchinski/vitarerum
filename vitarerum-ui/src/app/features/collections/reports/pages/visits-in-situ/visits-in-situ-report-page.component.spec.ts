@@ -94,6 +94,11 @@ describe('VisitsInSituReportPageComponent', () => {
     expect(
       compiled.querySelector('[aria-label="More actions for report report-1"]'),
     ).not.toBeNull();
+    const visitCodeLink = compiled.querySelector<HTMLAnchorElement>('.report-table__code-link');
+    expect(visitCodeLink?.textContent?.trim()).toBe('CUP-0001');
+    expect(visitCodeLink?.getAttribute('href')).toBe(
+      '/p/collections/reports/visits-in-situ/project-1/report-1',
+    );
   });
 
   it('opens the row menu and navigates to report details', async () => {

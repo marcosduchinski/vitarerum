@@ -354,6 +354,11 @@ describe('ProjectCuratorialDetailPageComponent', () => {
     ]);
     expect(compiled.textContent).toContain('In-situ visit report created');
     expect(compiled.textContent).toContain('report-1');
+    const reportLink = compiled.querySelector<HTMLAnchorElement>('.report-created-link');
+    expect(reportLink?.textContent?.trim()).toBe('report-1');
+    expect(reportLink?.getAttribute('href')).toBe(
+      '/p/collections/reports/visits-in-situ/proj-22/report-1',
+    );
   });
 
   it('confirms cancellation and navigates to cancelled projects', async () => {

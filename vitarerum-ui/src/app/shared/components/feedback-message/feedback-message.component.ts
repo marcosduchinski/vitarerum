@@ -11,7 +11,7 @@ export type FeedbackMessageTone = 'success' | 'info' | 'warning' | 'danger';
 })
 export class FeedbackMessageComponent {
   readonly title = input.required<string>();
-  readonly message = input.required<string>();
+  readonly message = input<string | null>(null);
   readonly tone = input<FeedbackMessageTone>('info');
   readonly dismissible = input(false);
   readonly dismissed = output<void>();

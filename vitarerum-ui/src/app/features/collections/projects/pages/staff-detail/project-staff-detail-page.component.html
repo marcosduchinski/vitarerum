@@ -378,15 +378,25 @@
                 @if (createdReport()) {
                   <app-feedback-message
                     title="In-situ visit report created"
-                    [message]="
-                      'Report ' +
-                      createdReport()!.id +
-                      ' was created. Creating again will produce a separate report.'
-                    "
                     tone="success"
                     [dismissible]="true"
                     (dismissed)="dismissCreatedReport()"
-                  />
+                  >
+                    <p>
+                      Report
+                      <a
+                        class="report-created-link"
+                        [routerLink]="[
+                          '/p/collections/reports/visits-in-situ',
+                          createdReport()!.projectId,
+                          createdReport()!.id,
+                        ]"
+                      >
+                        {{ createdReport()!.id }}
+                      </a>
+                      was created. Creating again will produce a separate report.
+                    </p>
+                  </app-feedback-message>
                 }
 
                 <div class="task-row task-row--report" aria-labelledby="report-task-heading">
