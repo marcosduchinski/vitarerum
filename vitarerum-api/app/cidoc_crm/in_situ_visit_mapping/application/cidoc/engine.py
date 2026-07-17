@@ -101,19 +101,23 @@ def _source_value(scope: Any, extras: dict[str, Any], field: str) -> Any:
 
 
 def _resolve(scope: Any, extras: dict[str, Any], expression: str) -> str:
-    """Resolve ``{field}``, ``{field|slug}``, ``{field|fallback}`` placeholders."""
+    """Resolve placeholders with optional fallback chain and slug modifier."""
     resolved = expression
     for match in re.finditer(r"{([^{}]+)}", expression):
         parts = match.group(1).split("|")
-        value = _source_value(scope, extras, parts[0])
-        if len(parts) > 1:
-            modifier = parts[1]
-            if modifier == "slug":
-                value = normalize_identifier(_format(value))
-            elif value in (None, ""):
-                value = _source_value(scope, extras, modifier)
+        slug = "slug" in parts[1:]
+        value = None
+        for part in parts:
+            if part == "slug":
+                continue
+            candidate = _source_value(scope, extras, part)
+            if candidate is not None and str(candidate).strip() != "":
+                value = candidate
+                break
         if value is None:
             value = ""
+        if slug:
+            value = normalize_identifier(_format(value))
         resolved = resolved.replace(match.group(0), _format(value))
     return resolved
 
@@ -145,7 +149,9 @@ def _policy_value(
 ) -> Any:
     policy = field_mapping["value_policy"]
     if policy == "note_literal":
-        return _source_value(scope, extras, field_mapping["source_field"])
+        return _format(_source_value(scope, extras, field_mapping["source_field"]))
+    if policy == "time_primitive":
+        return _format(_source_value(scope, extras, field_mapping["source_field"]))
     if policy == "declared_interval":
         begin = _format(_source_value(scope, extras, field_mapping["begin_field"]))
         end = _format(_source_value(scope, extras, field_mapping["end_field"]))
@@ -216,6 +222,9 @@ def _apply_links(
     for link in mapping.get("links", []):
         subject = nodes_by_key.get(link["subject"])
         if subject is None:
+            continue
+        condition = link.get("when")
+        if condition and condition.get("object") not in node_ids:
             continue
         if link.get("object_vocab"):
             target = vocab_ids.get(link["object_vocab"])
@@ -316,6 +325,43 @@ def _build_attachment_nodes(
     return graph
 
 
+def _build_child_nodes(
+    item: Any,
+    extras: dict[str, Any],
+    parent_node: dict[str, Any],
+    parent_id: str,
+    spec: dict[str, Any],
+) -> list[dict[str, Any]]:
+    graph: list[dict[str, Any]] = []
+    nodes_by_id: dict[str, dict[str, Any]] = {parent_id: parent_node}
+    for child_spec in spec.get("child_nodes", []):
+        if not _should_generate(item, extras, child_spec):
+            continue
+        child_id = _resolve(item, extras, child_spec["id_template"])
+        child_node = make_labelled_node(
+            node_id=child_id,
+            node_type=child_spec["type"],
+            label=_resolve(item, extras, child_spec["label_template"]),
+        )
+        _apply_field_mappings(
+            item, extras, child_node, child_spec.get("field_mappings", [])
+        )
+        link_parent_id = _resolve(item, extras, child_spec.get("parent", parent_id))
+        link_parent_node = nodes_by_id.get(link_parent_id, parent_node)
+        link = child_spec["link"]
+        if link["direction"] == "from_parent":
+            _set_predicate_value(
+                link_parent_node, link["predicate"], reference(child_id)
+            )
+        else:
+            _set_predicate_value(
+                child_node, link["predicate"], reference(link_parent_id)
+            )
+        graph.append(child_node)
+        nodes_by_id[child_id] = child_node
+    return graph
+
+
 def _build_collection_nodes(
     record: InSituVisitRecord,
     mapping: dict[str, Any],
@@ -331,6 +377,7 @@ def _build_collection_nodes(
             item_id = item_node["@id"]
             _link_node(visit_node, visit_id, item_node, item_id, spec["link"])
             graph.append(item_node)
+            graph.extend(_build_child_nodes(item, extras, item_node, item_id, spec))
 
             primary_id = item_id
             creates = spec.get("creates")

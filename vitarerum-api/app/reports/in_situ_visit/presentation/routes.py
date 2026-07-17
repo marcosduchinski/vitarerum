@@ -6,6 +6,7 @@ transaction. Maps the composed steps' domain errors onto the spec's HTTP
 statuses via ``HTTPException(detail=...)`` and ``main.py``'s normaliser:
 - project missing            → 404 PROJECT_NOT_FOUND
 - project not IN_SITU_VISIT  → 409 INVALID_USE_TYPE
+- visit not evidenced        → 409 VISIT_NOT_EVIDENCED
 - unsupported style          → 400 INVALID_NARRATIVE_TYPE
 - reasoner/SHACL rejection   → 422 SEMANTIC_VALIDATION_FAILED
 - model unreachable / slow   → 503 / 504
@@ -18,15 +19,16 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, status
 
-from app.ai.museum_narrative.domain.ports import (
+from app.ai.museum_narrative.public import (
     ModelTimeout,
     ModelUnavailable,
     SemanticValidationFailed,
     UnsupportedNarrativeType,
 )
-from app.cidoc_crm.in_situ_visit_mapping.application.use_cases import (
+from app.cidoc_crm.public import (
     NotInSituVisit,
     ProjectNotFound,
+    VisitNotEvidenced,
 )
 from app.reports.in_situ_visit.application.use_cases import (
     GenerateInSituVisitReportInput,
@@ -102,6 +104,11 @@ async def create_in_situ_visit_report(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={"error": "INVALID_USE_TYPE", "message": str(exc)},
+        ) from None
+    except VisitNotEvidenced as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"error": "VISIT_NOT_EVIDENCED", "message": str(exc)},
         ) from None
     except UnsupportedNarrativeType as exc:
         raise HTTPException(

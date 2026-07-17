@@ -49,6 +49,14 @@ function formatDate(date: string): string {
   }
 }
 
+function formatJsonPayload(payload: string): string {
+  try {
+    return JSON.stringify(JSON.parse(payload), null, 2);
+  } catch {
+    return payload;
+  }
+}
+
 @Component({
   selector: 'app-in-situ-visit-report-detail-page',
   standalone: true,
@@ -94,6 +102,10 @@ export class InSituVisitReportDetailPageComponent {
     () => this.detail()?.record?.visitorName ?? 'In-situ visit report',
   );
   protected readonly code = computed(() => this.detail()?.record?.code ?? null);
+  protected readonly factsPayload = computed(() => {
+    const payload = this.detail()?.narrative?.factsSnapshot?.payloadJson;
+    return payload ? formatJsonPayload(payload) : null;
+  });
 
   protected readonly cidocDialogOpen = signal(false);
   protected readonly cidocRecordId = signal<string | null>(null);

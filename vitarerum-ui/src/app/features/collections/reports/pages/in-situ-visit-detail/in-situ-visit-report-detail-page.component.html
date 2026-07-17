@@ -77,6 +77,33 @@
         </div>
       </dl>
     </details>
+
+    @if (report.narrative?.factsSnapshot; as snapshot) {
+      <details class="report-detail__refs report-detail__facts">
+        <summary>Facts used in narrative</summary>
+        <dl>
+          <div>
+            <dt>Snapshot ID</dt>
+            <dd>{{ snapshot.id }}</dd>
+          </div>
+          <div>
+            <dt>Builder version</dt>
+            <dd>{{ snapshot.builderVersion }}</dd>
+          </div>
+          <div>
+            <dt>Prompt version</dt>
+            <dd>{{ snapshot.promptVersion }}</dd>
+          </div>
+          <div>
+            <dt>Payload hash</dt>
+            <dd>{{ snapshot.payloadHash }}</dd>
+          </div>
+        </dl>
+        @if (factsPayload(); as payload) {
+          <pre class="report-detail__facts-payload">{{ payload }}</pre>
+        }
+      </details>
+    }
   }
 </div>
 

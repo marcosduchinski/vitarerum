@@ -1,9 +1,9 @@
 """In-Situ Visit Report ingestion — a cross-context inbound orchestrator.
 
-It composes two existing use cases — ``ExportInSituVisitFromProject`` (CIDOC-CRM
-mapping) and ``GenerateNarrative`` (KG-RAG) — and persists the linkage as an
-``InSituVisitReport``. As a cross-context inbound orchestrator it owns only its
-own aggregate and never touches another context's aggregates directly.
+It composes this context's ports for CIDOC-CRM export and KG-RAG narrative
+generation, then persists the linkage as an ``InSituVisitReport``. As a
+cross-context inbound orchestrator it owns only its own aggregate and never
+touches another context's aggregates directly.
 
 The whole chain runs under a single transaction (the route commits once at the
 end), so a narrative failure leaves no orphaned record.
@@ -15,17 +15,11 @@ from dataclasses import dataclass
 from datetime import date
 from typing import TYPE_CHECKING
 
-from app.ai.museum_narrative.application.use_cases import (
-    GenerateNarrative,
-    GenerateNarrativeInput,
-)
-from app.cidoc_crm.in_situ_visit_mapping.application.use_cases import (
-    ExportInSituVisitFromProject,
-    ExportInSituVisitInput,
-)
 from app.reports.in_situ_visit.application.ports import (
+    InSituVisitRecordExporter,
     InSituVisitRecordReader,
     InSituVisitReportRepository,
+    NarrativeGenerator,
     NarrativeReader,
 )
 from app.reports.in_situ_visit.domain.models import (
@@ -60,35 +54,31 @@ class GenerateInSituVisitReportInput:
 class GenerateInSituVisitReport:
     def __init__(
         self,
-        export_use_case: ExportInSituVisitFromProject,
-        narrative_use_case: GenerateNarrative,
+        record_exporter: InSituVisitRecordExporter,
+        narrative_generator: NarrativeGenerator,
         report_repository: InSituVisitReportRepository,
     ) -> None:
-        self._export = export_use_case
-        self._narrative = narrative_use_case
+        self._record_exporter = record_exporter
+        self._narrative_generator = narrative_generator
         self._report_repo = report_repository
 
     async def execute(self, data: GenerateInSituVisitReportInput) -> InSituVisitReport:
         # 1. Export the project to a fresh CIDOC-CRM record (404 / 409 bubble up).
-        record = await self._export.execute(
-            ExportInSituVisitInput(project_id=data.project_id)
-        )
+        record = await self._record_exporter.export(data.project_id)
 
         # 2. Generate a narrative from that record (400 / 422 / 503 / 504 bubble up).
-        narrative = await self._narrative.execute(
-            GenerateNarrativeInput(
-                record_id=record.id,
-                narrative_type=data.narrative_type,
-                target_language=data.target_language,
-                creativity_temperature=data.creativity_temperature,
-            )
+        narrative = await self._narrative_generator.generate(
+            record.id,
+            narrative_type=data.narrative_type,
+            target_language=data.target_language,
+            creativity_temperature=data.creativity_temperature,
         )
 
         # 3. Persist the linkage. Commit happens in the route (single transaction).
         report = InSituVisitReport.create(
             created_by=data.created_by,
             project_id=data.project_id,
-            narrative_id=narrative.id,
+            narrative_id=narrative.narrative_id,
             in_situ_visit_record_id=record.id,
         )
         await self._report_repo.add(report)

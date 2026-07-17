@@ -28,8 +28,26 @@ interface NarrativeDto {
     readonly target_language: string;
     readonly creativity_temperature: number;
     readonly llm_model: string;
+    readonly facts_snapshot_id?: string | null;
+    readonly prompt_version?: string | null;
+    readonly model_response_hash?: string | null;
+    readonly validation_conforms?: boolean | null;
+    readonly validation_findings?: readonly {
+      readonly code: string;
+      readonly message: string;
+      readonly evidence: string;
+    }[];
   };
   readonly data: { readonly narrative?: string };
+  readonly facts_snapshot?: {
+    readonly id: string;
+    readonly record_id: string;
+    readonly payload_json: string;
+    readonly payload_hash: string;
+    readonly builder_version: string;
+    readonly prompt_version: string;
+    readonly created_at: string;
+  } | null;
 }
 
 interface AttachmentDto {
@@ -56,6 +74,18 @@ interface InSituVisitRecordDto {
   readonly visitorName: string;
   readonly placeName: string;
   readonly generatedAt: string;
+  readonly recordSchemaVersion?: number | null;
+  readonly sourceProjectId?: string | null;
+  readonly sourceProjectTitle?: string | null;
+  readonly sourceProjectPurpose?: string | null;
+  readonly plannedBeginDate?: string | null;
+  readonly plannedEndDate?: string | null;
+  readonly executionEvidenceType?: string | null;
+  readonly executionOccurredAt?: string | null;
+  readonly executionRecordedBy?: string | null;
+  readonly executionEvidenceGaps?: readonly string[];
+  readonly mappingVersion?: string | null;
+  readonly crmVersion?: string | null;
   readonly requestedObjects: readonly EvidenceItemDto[];
   readonly inSituOccurrences: readonly EvidenceItemDto[];
   readonly inSituLogs: readonly EvidenceItemDto[];
@@ -150,8 +180,24 @@ export class ReportsApiService {
         targetLanguage: narrative.meta.target_language,
         creativityTemperature: narrative.meta.creativity_temperature,
         llmModel: narrative.meta.llm_model,
+        factsSnapshotId: narrative.meta.facts_snapshot_id ?? null,
+        promptVersion: narrative.meta.prompt_version ?? null,
+        modelResponseHash: narrative.meta.model_response_hash ?? null,
+        validationConforms: narrative.meta.validation_conforms ?? null,
+        validationFindings: narrative.meta.validation_findings ?? [],
       },
       text: narrative.data.narrative ?? '',
+      factsSnapshot: narrative.facts_snapshot
+        ? {
+            id: narrative.facts_snapshot.id,
+            recordId: narrative.facts_snapshot.record_id,
+            payloadJson: narrative.facts_snapshot.payload_json,
+            payloadHash: narrative.facts_snapshot.payload_hash,
+            builderVersion: narrative.facts_snapshot.builder_version,
+            promptVersion: narrative.facts_snapshot.prompt_version,
+            createdAt: narrative.facts_snapshot.created_at,
+          }
+        : null,
     };
   }
 
@@ -164,6 +210,18 @@ export class ReportsApiService {
       visitorName: record.visitorName,
       placeName: record.placeName,
       generatedAt: record.generatedAt,
+      recordSchemaVersion: record.recordSchemaVersion ?? null,
+      sourceProjectId: record.sourceProjectId ?? null,
+      sourceProjectTitle: record.sourceProjectTitle ?? null,
+      sourceProjectPurpose: record.sourceProjectPurpose ?? null,
+      plannedBeginDate: record.plannedBeginDate ?? null,
+      plannedEndDate: record.plannedEndDate ?? null,
+      executionEvidenceType: record.executionEvidenceType ?? null,
+      executionOccurredAt: record.executionOccurredAt ?? null,
+      executionRecordedBy: record.executionRecordedBy ?? null,
+      executionEvidenceGaps: record.executionEvidenceGaps ?? [],
+      mappingVersion: record.mappingVersion ?? null,
+      crmVersion: record.crmVersion ?? null,
       requestedObjects: record.requestedObjects.map((item) => this.toEvidenceItem(item)),
       inSituOccurrences: record.inSituOccurrences.map((item) => this.toEvidenceItem(item)),
       inSituLogs: record.inSituLogs.map((item) => this.toEvidenceItem(item)),

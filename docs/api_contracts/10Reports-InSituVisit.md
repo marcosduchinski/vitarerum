@@ -99,6 +99,7 @@ union of their failures. All share the `{ "error": CODE, "message": str }` shape
 | `403`  | `INSUFFICIENT_GROUP`         | Non-staff caller.                               |
 | `404`  | `PROJECT_NOT_FOUND`          | No project with `project_id`.                   |
 | `409`  | `INVALID_USE_TYPE`           | The project's `useType` is not `IN_SITU_VISIT`. |
+| `409`  | `VISIT_NOT_EVIDENCED`        | The project lacks minimum operational evidence that the in-situ visit was executed. |
 | `400`  | `INVALID_NARRATIVE_TYPE`     | Unknown `narrative_type`.                       |
 | `422`  | `SEMANTIC_VALIDATION_FAILED` | The reasoner/SHACL rejected the graph.          |
 | `503`  | `MODEL_UNAVAILABLE`          | The local LLM could not be reached or returned an empty narrative. |
@@ -273,9 +274,23 @@ report_id  : UUID (required) — the InSituVisitReport id
       "resolution_source": "default",
       "target_language": "pt",
       "creativity_temperature": 0.3,
-      "llm_model": "llama3.1:8b"
+      "llm_model": "llama3.1:8b",
+      "facts_snapshot_id": "facts-snapshot-uuid",
+      "prompt_version": "museum-narrative-canonical-v1",
+      "model_response_hash": "sha256...",
+      "validation_conforms": true,
+      "validation_findings": []
     },
-    "data": { "narrative": "…" }
+    "data": { "narrative": "…" },
+    "facts_snapshot": {
+      "id": "facts-snapshot-uuid",
+      "record_id": "record-uuid",
+      "payload_json": "{\"project_reference\":\"CUP-ABCD1234\"}",
+      "payload_hash": "sha256...",
+      "builder_version": "canonical-visit-facts-v1",
+      "prompt_version": "museum-narrative-canonical-v1",
+      "created_at": "2026-06-22T10:30:00Z"
+    }
   },
   "record": {
     "id": "record-uuid",
@@ -285,6 +300,18 @@ report_id  : UUID (required) — the InSituVisitReport id
     "visitorName": "Maria do Rosário",
     "placeName": "Museum",
     "generatedAt": "2026-06-22T10:30:00Z",
+    "recordSchemaVersion": 2,
+    "sourceProjectId": "project-uuid",
+    "sourceProjectTitle": "Research visit",
+    "sourceProjectPurpose": "Comparative research",
+    "plannedBeginDate": "2026-06-01",
+    "plannedEndDate": "2026-06-03",
+    "executionEvidenceType": "project_completed",
+    "executionOccurredAt": "2026-06-03T16:30:00Z",
+    "executionRecordedBy": "permission-uuid",
+    "executionEvidenceGaps": [],
+    "mappingVersion": "in-situ-visit-cidoc-v2",
+    "crmVersion": "7.1.3",
     "requestedObjects": [{ "id": "...", "sourceId": "INV-1", "description": "…", "position": 0 }],
     "inSituOccurrences": [
       {

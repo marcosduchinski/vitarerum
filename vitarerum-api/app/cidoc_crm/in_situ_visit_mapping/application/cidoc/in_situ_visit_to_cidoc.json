@@ -1,7 +1,7 @@
 {
   "metadata": {
     "mapping_id": "in-situ-visit-record-to-cidoc-crm",
-    "mapping_version": "0.5.0",
+    "mapping_version": "0.6.1",
     "crm_version": "7.1.3",
     "crm_context_url": "https://cidoc-crm.org/rdfs/7.1.3/CIDOC_CRM_v7.1.3_JSON-LD_Context.jsonld",
     "institution": "Museu Nacional de História Natural e da Ciência de Lisboa",
@@ -36,14 +36,14 @@
       "key": "timespan",
       "id_template": "ex:timespan/visit-{id}",
       "type": "crm:E52_Time-Span",
-      "label_template": "{visit_begin_date} - {visit_end_date}",
+      "label_template": "Execution evidence time for visit {code}",
+      "when": {"field": "execution_occurred_at", "policy": "non_null"},
       "field_mappings": [
         {
           "predicate": "crm:P170i_time_is_defined_by",
-          "value_policy": "declared_interval",
-          "begin_field": "visit_begin_date",
-          "end_field": "visit_end_date",
-          "rationale": "CRM 7.1.3 models a declared interval with an E61 Time Primitive linked via P170 (here the inverse P170i on the time-span), not P82a/P82b."
+          "value_policy": "time_primitive",
+          "source_field": "execution_occurred_at",
+          "rationale": "The visit activity uses execution evidence time, not planned project dates."
         }
       ]
     }
@@ -62,7 +62,8 @@
     {
       "subject": "visit",
       "predicate": "crm:P4_has_time-span",
-      "object": "timespan"
+      "object": "timespan",
+      "when": {"object": "timespan"}
     },
     {
       "subject": "visit",
@@ -96,8 +97,22 @@
       "source_collection": "requested_objects",
       "id_template": "ex:object/visit-{_visit_id}/{source_id|slug}",
       "type": "crm:E20_Biological_Object",
-      "label_template": "{description|source_id}",
-      "link": {"predicate": "crm:P16_used_specific_object", "direction": "from_visit"}
+      "label_template": "{display_title|object_name|description|source_id}",
+      "link": {"predicate": "crm:P16_used_specific_object", "direction": "from_visit"},
+      "field_mappings": [
+        {
+          "predicate": "crm:P3_has_note",
+          "value_policy": "note_literal",
+          "source_field": "brief_description_snapshot",
+          "when": {"field": "brief_description_snapshot", "policy": "non_empty"}
+        },
+        {
+          "predicate": "crm:P3_has_note",
+          "value_policy": "note_literal",
+          "source_field": "description",
+          "when": {"field": "description", "policy": "non_empty"}
+        }
+      ]
     },
     {
       "key": "occurrence",
@@ -112,6 +127,43 @@
           "value_policy": "note_literal",
           "source_field": "description",
           "when": {"field": "description", "policy": "non_empty"}
+        },
+        {
+          "predicate": "crm:P3_has_note",
+          "value_policy": "note_literal",
+          "source_field": "testimonial",
+          "when": {"field": "testimonial", "policy": "non_empty"}
+        }
+      ],
+      "child_nodes": [
+        {
+          "id_template": "ex:timespan/occurrence-{_visit_id}/{source_id|slug}",
+          "type": "crm:E52_Time-Span",
+          "label_template": "Time of occurrence {source_id}",
+          "when": {"field": "occurrence_date", "policy": "non_null"},
+          "link": {"predicate": "crm:P4_has_time-span", "direction": "from_parent"},
+          "field_mappings": [
+            {
+              "predicate": "crm:P170i_time_is_defined_by",
+              "value_policy": "time_primitive",
+              "source_field": "occurrence_date",
+              "when": {"field": "occurrence_date", "policy": "non_null"}
+            }
+          ]
+        },
+        {
+          "id_template": "ex:place/occurrence-{_visit_id}/{source_id|slug}",
+          "type": "crm:E53_Place",
+          "label_template": "{location}",
+          "when": {"field": "location", "policy": "non_empty"},
+          "link": {"predicate": "crm:P7_took_place_at", "direction": "from_parent"}
+        },
+        {
+          "id_template": "ex:actor/{reported_by|slug}",
+          "type": "crm:E21_Person",
+          "label_template": "{reported_by}",
+          "when": {"field": "reported_by", "policy": "non_empty"},
+          "link": {"predicate": "crm:P14_carried_out_by", "direction": "from_parent"}
         }
       ],
       "related_object_link": {
@@ -142,7 +194,7 @@
       }
     },
     {
-      "key": "log",
+      "key": "access_log",
       "source_collection": "in_situ_logs",
       "id_template": "ex:document/log-{_visit_id}/{source_id|slug}",
       "type": "crm:E31_Document",
@@ -155,6 +207,47 @@
           "value_policy": "note_literal",
           "source_field": "description",
           "when": {"field": "description", "policy": "non_empty"}
+        }
+      ],
+      "child_nodes": [
+        {
+          "id_template": "ex:activity/access-log-{_visit_id}/{source_id|slug}",
+          "type": "crm:E7_Activity",
+          "label_template": "Access log entry {source_id}",
+          "when": {"field": "added_at", "policy": "non_null"},
+          "link": {"predicate": "crm:P70_documents", "direction": "from_parent"},
+          "field_mappings": [
+            {
+              "predicate": "crm:P3_has_note",
+              "value_policy": "note_literal",
+              "source_field": "description",
+              "when": {"field": "description", "policy": "non_empty"}
+            }
+          ]
+        },
+        {
+          "id_template": "ex:timespan/access-log-{_visit_id}/{source_id|slug}",
+          "type": "crm:E52_Time-Span",
+          "label_template": "Time of access log entry {source_id}",
+          "when": {"field": "added_at", "policy": "non_null"},
+          "link": {"predicate": "crm:P4_has_time-span", "direction": "from_parent"},
+          "parent": "ex:activity/access-log-{_visit_id}/{source_id|slug}",
+          "field_mappings": [
+            {
+              "predicate": "crm:P170i_time_is_defined_by",
+              "value_policy": "time_primitive",
+              "source_field": "added_at",
+              "when": {"field": "added_at", "policy": "non_null"}
+            }
+          ]
+        },
+        {
+          "id_template": "ex:actor/{added_by|slug}",
+          "type": "crm:E21_Person",
+          "label_template": "{added_by}",
+          "when": {"field": "added_by", "policy": "non_empty"},
+          "link": {"predicate": "crm:P14_carried_out_by", "direction": "from_parent"},
+          "parent": "ex:activity/access-log-{_visit_id}/{source_id|slug}"
         }
       ],
       "related_object_link": {
@@ -191,6 +284,30 @@
       "type": "crm:E65_Creation",
       "label_template": "Creation of scientific return {source_id}",
       "link": {"predicate": "crm:P9_consists_of", "direction": "from_visit"},
+      "child_nodes": [
+        {
+          "id_template": "ex:timespan/publication-{_visit_id}/{source_id|slug}",
+          "type": "crm:E52_Time-Span",
+          "label_template": "Time of scientific return {source_id}",
+          "when": {"field": "added_at", "policy": "non_null"},
+          "link": {"predicate": "crm:P4_has_time-span", "direction": "from_parent"},
+          "field_mappings": [
+            {
+              "predicate": "crm:P170i_time_is_defined_by",
+              "value_policy": "time_primitive",
+              "source_field": "added_at",
+              "when": {"field": "added_at", "policy": "non_null"}
+            }
+          ]
+        },
+        {
+          "id_template": "ex:actor/{added_by|slug}",
+          "type": "crm:E21_Person",
+          "label_template": "{added_by}",
+          "when": {"field": "added_by", "policy": "non_empty"},
+          "link": {"predicate": "crm:P14_carried_out_by", "direction": "from_parent"}
+        }
+      ],
       "creates": {
         "predicate": "crm:P94_has_created",
         "node": {

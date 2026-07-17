@@ -13,15 +13,16 @@ from types import SimpleNamespace
 
 from httpx import ASGITransport, AsyncClient
 
-from app.ai.museum_narrative.domain.ports import (
+from app.ai.museum_narrative.public import (
     ModelTimeout,
     ModelUnavailable,
     SemanticValidationFailed,
     UnsupportedNarrativeType,
 )
-from app.cidoc_crm.in_situ_visit_mapping.application.use_cases import (
+from app.cidoc_crm.public import (
     NotInSituVisit,
     ProjectNotFound,
+    VisitNotEvidenced,
 )
 from app.database import get_async_session
 from app.identity.public import Actor, GroupName, PermissionId
@@ -46,7 +47,7 @@ class _FakeExport:
         self._record = record or SimpleNamespace(id="rec-1")
         self._error = error
 
-    async def execute(self, data):  # noqa: ANN001
+    async def export(self, project_id: str):
         if self._error is not None:
             raise self._error
         return self._record
@@ -54,10 +55,17 @@ class _FakeExport:
 
 class _FakeNarrative:
     def __init__(self, *, narrative=None, error: Exception | None = None) -> None:
-        self._narrative = narrative or SimpleNamespace(id="nar-1")
+        self._narrative = narrative or SimpleNamespace(narrative_id="nar-1")
         self._error = error
 
-    async def execute(self, data):  # noqa: ANN001
+    async def generate(
+        self,
+        record_id: str,
+        *,
+        narrative_type: str | None,
+        target_language: str,
+        creativity_temperature: float,
+    ):
         if self._error is not None:
             raise self._error
         return self._narrative
@@ -85,8 +93,8 @@ async def _client(
 ) -> AsyncIterator[tuple[AsyncClient, _CapturingRepo]]:
     repo = _CapturingRepo()
     use_case = GenerateInSituVisitReport(
-        _FakeExport(error=export_error),  # type: ignore[arg-type]
-        _FakeNarrative(error=narrative_error),  # type: ignore[arg-type]
+        _FakeExport(error=export_error),
+        _FakeNarrative(error=narrative_error),
         repo,
     )
     app.dependency_overrides[get_caller_permission] = lambda: caller
@@ -136,6 +144,17 @@ async def test_wrong_use_type_maps_to_409() -> None:
         resp = await client.post(_URL, json={})
     assert resp.status_code == 409
     assert resp.json()["error"] == "INVALID_USE_TYPE"
+    assert repo.added is None
+
+
+async def test_visit_without_execution_evidence_maps_to_409() -> None:
+    async with _client(export_error=VisitNotEvidenced("planned only")) as (
+        client,
+        repo,
+    ):
+        resp = await client.post(_URL, json={})
+    assert resp.status_code == 409
+    assert resp.json()["error"] == "VISIT_NOT_EVIDENCED"
     assert repo.added is None
 
 

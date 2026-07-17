@@ -37,6 +37,7 @@ from app.ai.museum_narrative.presentation.dependencies import (
     UpdateUseCase,
 )
 from app.ai.museum_narrative.presentation.mappers import (
+    fact_snapshot_response,
     narrative_meta,
     stored_narrative_response,
 )
@@ -116,6 +117,7 @@ async def generate_narrative(
         generated_at=result.generated_at,
         meta=narrative_meta(result),
         data=NarrativeData(narrative=result.narrative),
+        facts_snapshot=fact_snapshot_response(result),
     )
 
 

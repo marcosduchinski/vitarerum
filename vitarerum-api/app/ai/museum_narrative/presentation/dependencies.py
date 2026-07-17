@@ -1,7 +1,8 @@
 """Composition root for the museum-narrative inbound adapter.
 
-Wires the CIDOC ACL (over cidoc_crm.public) and the Ollama model adapter to the
-``GenerateNarrative`` use case. Route handlers depend only on ``NarrativeUseCase``.
+Wires the CIDOC facts ACL (over cidoc_crm.public) and the Ollama model adapter to
+the ``GenerateNarrative`` use case. Route handlers depend only on
+``NarrativeUseCase``.
 """
 
 from typing import Annotated
@@ -16,11 +17,11 @@ from app.ai.museum_narrative.application.use_cases import (
     UpdateNarrative,
 )
 from app.ai.museum_narrative.domain.ports import (
-    CidocGraphPort,
+    NarrativeFactsPort,
     NarrativeModelPort,
     NarrativeRepository,
 )
-from app.ai.museum_narrative.infrastructure.cidoc_acl import CidocGraphAdapter
+from app.ai.museum_narrative.infrastructure.cidoc_acl import NarrativeFactsAdapter
 from app.ai.museum_narrative.infrastructure.model_ollama import OllamaNarrativeAdapter
 from app.ai.museum_narrative.infrastructure.repositories import (
     SqlAlchemyNarrativeRepository,
@@ -31,8 +32,8 @@ from app.database import get_async_session
 DBSession = Annotated[AsyncSession, Depends(get_async_session)]
 
 
-def get_cidoc_port(session: DBSession) -> CidocGraphPort:
-    return CidocGraphAdapter(session)
+def get_facts_port(session: DBSession) -> NarrativeFactsPort:
+    return NarrativeFactsAdapter(session)
 
 
 def get_model_port() -> NarrativeModelPort:
@@ -48,15 +49,15 @@ def get_narrative_repository(session: DBSession) -> NarrativeRepository:
     return SqlAlchemyNarrativeRepository(session)
 
 
-CidocPort = Annotated[CidocGraphPort, Depends(get_cidoc_port)]
+FactsPort = Annotated[NarrativeFactsPort, Depends(get_facts_port)]
 ModelPort = Annotated[NarrativeModelPort, Depends(get_model_port)]
 Repository = Annotated[NarrativeRepository, Depends(get_narrative_repository)]
 
 
 def get_narrative_use_case(
-    cidoc: CidocPort, model: ModelPort, repository: Repository
+    facts: FactsPort, model: ModelPort, repository: Repository
 ) -> GenerateNarrative:
-    return GenerateNarrative(cidoc, model, repository, settings.narrative_model)
+    return GenerateNarrative(facts, model, repository, settings.narrative_model)
 
 
 def get_list_use_case(repository: Repository) -> ListNarratives:

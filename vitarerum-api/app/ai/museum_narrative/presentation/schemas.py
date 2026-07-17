@@ -35,10 +35,25 @@ class NarrativeMeta(BaseModel):
     target_language: str
     creativity_temperature: float
     llm_model: str
+    facts_snapshot_id: str | None = None
+    prompt_version: str | None = None
+    model_response_hash: str | None = None
+    validation_conforms: bool | None = None
+    validation_findings: list[dict[str, str]] = Field(default_factory=list)
 
 
 class NarrativeData(BaseModel):
     narrative: str
+
+
+class NarrativeFactSnapshotResponse(BaseModel):
+    id: str
+    record_id: str
+    payload_json: str
+    payload_hash: str
+    builder_version: str
+    prompt_version: str
+    created_at: datetime
 
 
 class NarrativeResponse(BaseModel):
@@ -48,6 +63,7 @@ class NarrativeResponse(BaseModel):
     generated_at: datetime
     meta: NarrativeMeta
     data: NarrativeData
+    facts_snapshot: NarrativeFactSnapshotResponse | None = None
 
 
 class StoredNarrativeResponse(BaseModel):
@@ -56,6 +72,7 @@ class StoredNarrativeResponse(BaseModel):
     generated_at: datetime
     meta: NarrativeMeta
     data: NarrativeData
+    facts_snapshot: NarrativeFactSnapshotResponse | None = None
 
 
 class PaginatedNarrativesResponse(BaseModel):

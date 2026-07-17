@@ -2,6 +2,9 @@ from datetime import UTC, date, datetime
 
 import pytest
 
+from app.use_of_collections.application.context_views import (
+    build_visit_execution_evidence,
+)
 from app.use_of_collections.domain.enums import (
     DocumentCorrectionStatus,
     ProposalEventType,
@@ -80,6 +83,40 @@ def test_submitted_project_records_requested_event() -> None:
     assert project.status == UseStatus.CREATED
     assert project.events[0].type == UseEventType.REQUESTED
     assert project.events[0].triggered_by == "permission-1"
+
+
+def test_visit_execution_evidence_rejects_created_project() -> None:
+    project = _make_project(status=UseStatus.CREATED)
+
+    evidence = build_visit_execution_evidence(project)
+
+    assert evidence.occurred is False
+    assert evidence.gaps == ["project_status_not_completed", "completed_event_missing"]
+
+
+def test_visit_execution_evidence_rejects_in_progress_project() -> None:
+    project = _make_project(status=UseStatus.IN_PROGRESS)
+
+    evidence = build_visit_execution_evidence(project)
+
+    assert evidence.occurred is False
+    assert evidence.gaps == ["project_status_not_completed", "completed_event_missing"]
+
+
+def test_visit_execution_evidence_accepts_completed_project_with_event() -> None:
+    project = _make_project(status=UseStatus.IN_PROGRESS)
+    project.record_completed(
+        occurred_at=_now(),
+        triggered_by=PermissionId("permission-1"),
+    )
+
+    evidence = build_visit_execution_evidence(project)
+
+    assert evidence.occurred is True
+    assert evidence.evidence_type == "project_completed_event"
+    assert evidence.occurred_at == _now()
+    assert evidence.recorded_by == "permission-1"
+    assert evidence.gaps == []
 
 
 def test_submitted_proposal_records_submitted_event() -> None:

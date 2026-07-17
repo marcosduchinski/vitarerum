@@ -65,6 +65,7 @@ class AttachmentResponse(BaseModel):
     description: str
     reference: str
     position: int
+    mediaType: str | None = None
 
 
 class RequestedObjectResponse(BaseModel):
@@ -72,6 +73,9 @@ class RequestedObjectResponse(BaseModel):
     sourceId: str
     description: str
     position: int
+    displayTitle: str | None = None
+    objectName: str | None = None
+    briefDescriptionSnapshot: str | None = None
 
 
 class OccurrenceResponse(BaseModel):
@@ -79,6 +83,14 @@ class OccurrenceResponse(BaseModel):
     sourceId: str
     description: str
     position: int
+    relatedObjectSourceId: str | None = None
+    numberOfObjects: int | None = None
+    occurrenceDate: datetime | None = None
+    location: str | None = None
+    reportedBy: str | None = None
+    testimonial: str | None = None
+    occurrenceLogDateConclusion: datetime | None = None
+    occurrenceLogCurator: str | None = None
     attachments: list[AttachmentResponse]
 
 
@@ -87,6 +99,12 @@ class LogResponse(BaseModel):
     sourceId: str
     description: str
     position: int
+    relatedObjectSourceId: str | None = None
+    numberOfObjects: int | None = None
+    addedAt: datetime | None = None
+    addedBy: str | None = None
+    accessLogDateConclusion: datetime | None = None
+    accessLogCurator: str | None = None
     attachments: list[AttachmentResponse]
 
 
@@ -95,6 +113,9 @@ class PublicationResponse(BaseModel):
     sourceId: str
     description: str
     position: int
+    relatedObjectSourceId: str | None = None
+    addedAt: datetime | None = None
+    addedBy: str | None = None
     attachments: list[AttachmentResponse]
 
 
@@ -106,6 +127,21 @@ class InSituVisitRecordResponse(BaseModel):
     visitorName: str
     placeName: str
     generatedAt: datetime
+    recordSchemaVersion: int | None = None
+    sourceProjectId: str | None = None
+    sourceProjectTitle: str | None = None
+    sourceProjectPurpose: str | None = None
+    plannedBeginDate: date | None = None
+    plannedEndDate: date | None = None
+    executionEvidenceType: str | None = None
+    executionOccurredAt: datetime | None = None
+    executionRecordedBy: str | None = None
+    executionEvidenceGaps: list[str] = Field(default_factory=list)
+    mappingVersion: str | None = None
+    crmVersion: str | None = None
+    approvedAt: datetime | None = None
+    approvedBy: str | None = None
+    approvalNote: str | None = None
     requestedObjects: list[RequestedObjectResponse]
     inSituOccurrences: list[OccurrenceResponse]
     inSituLogs: list[LogResponse]

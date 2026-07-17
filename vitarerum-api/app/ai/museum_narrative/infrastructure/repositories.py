@@ -11,11 +11,80 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.museum_narrative.domain.models import (
     GeneratedNarrative,
+    GeneratedNarrativeRevision,
+    NarrativeFactSnapshot,
+    NarrativeFactSnapshotId,
     NarrativeId,
     NarrativeType,
     ResolutionSource,
 )
-from app.ai.museum_narrative.infrastructure.models import GeneratedNarrativeOrm
+from app.ai.museum_narrative.domain.validation import (
+    NarrativeFinding,
+    NarrativeFindingCode,
+)
+from app.ai.museum_narrative.infrastructure.models import (
+    GeneratedNarrativeOrm,
+    GeneratedNarrativeRevisionOrm,
+    NarrativeFactSnapshotOrm,
+)
+
+
+def facts_snapshot_to_orm(snapshot: NarrativeFactSnapshot) -> NarrativeFactSnapshotOrm:
+    return NarrativeFactSnapshotOrm(
+        id=snapshot.id,
+        record_id=snapshot.record_id,
+        payload_json=snapshot.payload_json,
+        payload_hash=snapshot.payload_hash,
+        builder_version=snapshot.builder_version,
+        prompt_version=snapshot.prompt_version,
+        created_at=snapshot.created_at,
+    )
+
+
+def facts_snapshot_to_domain(orm: NarrativeFactSnapshotOrm) -> NarrativeFactSnapshot:
+    return NarrativeFactSnapshot(
+        id=NarrativeFactSnapshotId(orm.id),
+        record_id=orm.record_id,
+        payload_json=orm.payload_json,
+        payload_hash=orm.payload_hash,
+        builder_version=orm.builder_version,
+        prompt_version=orm.prompt_version,
+        created_at=orm.created_at,
+    )
+
+
+def revision_to_orm(
+    revision: GeneratedNarrativeRevision,
+) -> GeneratedNarrativeRevisionOrm:
+    return GeneratedNarrativeRevisionOrm(
+        id=revision.id,
+        narrative_id=revision.narrative_id,
+        previous_narrative=revision.previous_narrative,
+        revised_narrative=revision.revised_narrative,
+        created_at=revision.created_at,
+    )
+
+
+def findings_to_json(findings: list[NarrativeFinding]) -> list[dict[str, str]]:
+    return [
+        {
+            "code": finding.code.value,
+            "message": finding.message,
+            "evidence": finding.evidence,
+        }
+        for finding in findings
+    ]
+
+
+def findings_to_domain(items: list[dict[str, str]] | None) -> list[NarrativeFinding]:
+    return [
+        NarrativeFinding(
+            code=NarrativeFindingCode(item["code"]),
+            message=item["message"],
+            evidence=item["evidence"],
+        )
+        for item in (items or [])
+    ]
 
 
 def narrative_to_orm(narrative: GeneratedNarrative) -> GeneratedNarrativeOrm:
@@ -29,6 +98,11 @@ def narrative_to_orm(narrative: GeneratedNarrative) -> GeneratedNarrativeOrm:
         creativity_temperature=narrative.creativity_temperature,
         llm_model=narrative.llm_model,
         generated_at=narrative.generated_at,
+        facts_snapshot_id=narrative.facts_snapshot_id,
+        prompt_version=narrative.prompt_version,
+        model_response_hash=narrative.model_response_hash,
+        validation_conforms=narrative.validation_conforms,
+        validation_findings=findings_to_json(narrative.validation_findings),
     )
 
 
@@ -43,12 +117,34 @@ def narrative_to_domain(orm: GeneratedNarrativeOrm) -> GeneratedNarrative:
         creativity_temperature=orm.creativity_temperature,
         llm_model=orm.llm_model,
         generated_at=orm.generated_at,
+        facts_snapshot_id=(
+            NarrativeFactSnapshotId(orm.facts_snapshot_id)
+            if orm.facts_snapshot_id
+            else None
+        ),
+        prompt_version=orm.prompt_version,
+        model_response_hash=orm.model_response_hash,
+        validation_conforms=orm.validation_conforms,
+        validation_findings=findings_to_domain(orm.validation_findings),
     )
 
 
 class SqlAlchemyNarrativeRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+
+    async def add_facts_snapshot(self, snapshot: NarrativeFactSnapshot) -> None:
+        self._session.add(facts_snapshot_to_orm(snapshot))
+        await self._session.flush()
+
+    async def get_facts_snapshot(
+        self, snapshot_id: NarrativeFactSnapshotId
+    ) -> NarrativeFactSnapshot | None:
+        stmt = select(NarrativeFactSnapshotOrm).where(
+            NarrativeFactSnapshotOrm.id == snapshot_id
+        )
+        orm = (await self._session.execute(stmt)).scalar_one_or_none()
+        return facts_snapshot_to_domain(orm) if orm else None
 
     async def add(self, narrative: GeneratedNarrative) -> None:
         self._session.add(narrative_to_orm(narrative))
@@ -58,12 +154,28 @@ class SqlAlchemyNarrativeRepository:
         await self._session.merge(narrative_to_orm(narrative))
         await self._session.flush()
 
+    async def add_revision(self, revision: GeneratedNarrativeRevision) -> None:
+        self._session.add(revision_to_orm(revision))
+        await self._session.flush()
+
+    async def _with_snapshot(
+        self, narrative: GeneratedNarrative
+    ) -> GeneratedNarrative:
+        if narrative.facts_snapshot_id is None:
+            return narrative
+        narrative.facts_snapshot = await self.get_facts_snapshot(
+            narrative.facts_snapshot_id
+        )
+        return narrative
+
     async def get_by_id(self, narrative_id: NarrativeId) -> GeneratedNarrative | None:
         stmt = select(GeneratedNarrativeOrm).where(
             GeneratedNarrativeOrm.id == narrative_id
         )
         orm = (await self._session.execute(stmt)).scalar_one_or_none()
-        return narrative_to_domain(orm) if orm else None
+        if orm is None:
+            return None
+        return await self._with_snapshot(narrative_to_domain(orm))
 
     async def list_by_record(
         self, record_id: str, page: int, size: int
@@ -82,4 +194,7 @@ class SqlAlchemyNarrativeRepository:
             .limit(size)
         )
         orms = (await self._session.execute(data_stmt)).scalars().all()
-        return [narrative_to_domain(orm) for orm in orms], total
+        narratives = [
+            await self._with_snapshot(narrative_to_domain(orm)) for orm in orms
+        ]
+        return narratives, total

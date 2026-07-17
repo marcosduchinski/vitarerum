@@ -11,6 +11,12 @@ const RECORD: InSituVisitRecord = {
   visitorName: 'Maria do Rosário',
   placeName: 'Museum',
   generatedAt: '2026-06-22T10:30:00Z',
+  recordSchemaVersion: 2,
+  executionEvidenceType: 'project_completed',
+  executionOccurredAt: '2026-06-03T16:30:00Z',
+  executionEvidenceGaps: ['No access-log conclusion date was recorded.'],
+  mappingVersion: 'in-situ-visit-cidoc-v2',
+  crmVersion: '7.1.3',
   requestedObjects: [
     { id: 'o-1', sourceId: 'INV-1', description: 'Specimen', position: 0, attachments: [] },
     { id: 'o-2', sourceId: 'INV-2', description: 'Specimen', position: 1, attachments: [] },
@@ -32,6 +38,19 @@ const NARRATIVE: InSituVisitReportNarrative = {
     targetLanguage: 'pt',
     creativityTemperature: 0.3,
     llmModel: 'llama3.1:8b',
+    factsSnapshotId: 'facts-1',
+    promptVersion: 'museum-narrative-canonical-v1',
+    validationConforms: true,
+    validationFindings: [],
+  },
+  factsSnapshot: {
+    id: 'facts-1',
+    recordId: 'record-1',
+    payloadJson: '{"project_reference":"CUP-ABCD1234"}',
+    payloadHash: 'sha256:facts',
+    builderVersion: 'canonical-visit-facts-v1',
+    promptVersion: 'museum-narrative-canonical-v1',
+    createdAt: '2026-06-22T10:30:00Z',
   },
   text: 'Narrative.',
 };
@@ -60,6 +79,10 @@ describe('InSituVisitReportRailComponent', () => {
     // Provenance is surfaced here, not in the narrative body.
     expect(text).toContain('institutional');
     expect(text).toContain('llama3.1:8b');
+    expect(text).toContain('in-situ-visit-cidoc-v2');
+    expect(text).toContain('7.1.3');
+    expect(text).toContain('facts-1');
+    expect(text).toContain('No access-log conclusion date was recorded.');
   });
 
   it('renders nothing when no record or narrative is supplied', () => {

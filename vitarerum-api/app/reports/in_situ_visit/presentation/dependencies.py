@@ -1,9 +1,8 @@
 """Composition root for the in-situ visit report inbound adapter.
 
-Reuses the export and narrative use-case providers from their own contexts
-(so the institution name and Ollama config are wired in one place each) and
-combines them with this context's repository into ``GenerateInSituVisitReport``.
-Route handlers depend only on ``ReportUseCase``.
+Composes this context's repository with adapters that call other contexts only
+through their published languages. Route handlers depend only on
+``ReportUseCase``.
 """
 
 from typing import Annotated
@@ -11,8 +10,6 @@ from typing import Annotated
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai.museum_narrative.presentation.dependencies import NarrativeUseCase
-from app.cidoc_crm.in_situ_visit_mapping.presentation.dependencies import ExportUseCase
 from app.database import get_async_session
 from app.reports.in_situ_visit.application.ports import InSituVisitReportRepository
 from app.reports.in_situ_visit.application.use_cases import (
@@ -23,7 +20,9 @@ from app.reports.in_situ_visit.application.use_cases import (
     ListInSituVisitReports,
 )
 from app.reports.in_situ_visit.infrastructure.readers import (
+    CidocRecordExporter,
     CidocRecordReader,
+    MuseumNarrativeGenerator,
     MuseumNarrativeReader,
 )
 from app.reports.in_situ_visit.infrastructure.repositories import (
@@ -41,11 +40,14 @@ Repository = Annotated[InSituVisitReportRepository, Depends(get_repository)]
 
 
 def get_report_use_case(
-    export_use_case: ExportUseCase,
-    narrative_use_case: NarrativeUseCase,
+    session: DBSession,
     repository: Repository,
 ) -> GenerateInSituVisitReport:
-    return GenerateInSituVisitReport(export_use_case, narrative_use_case, repository)
+    return GenerateInSituVisitReport(
+        CidocRecordExporter(session),
+        MuseumNarrativeGenerator(session),
+        repository,
+    )
 
 
 ReportUseCase = Annotated[GenerateInSituVisitReport, Depends(get_report_use_case)]

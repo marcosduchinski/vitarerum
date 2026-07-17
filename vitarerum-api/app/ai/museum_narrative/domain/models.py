@@ -1,19 +1,23 @@
 """Domain model for the KG-RAG museum-narrative context.
 
 ``narrative_type`` is a *rendering style* (the LLM persona), not a fact about the
-visit: the same CIDOC-CRM graph is retold in different tones. When the caller
+visit: the same canonical facts are retold in different tones. When the caller
 omits it, the pipeline defaults to ``INSTITUTIONAL``.
 """
 
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import NewType
 
+from app.ai.museum_narrative.domain.validation import NarrativeFinding
+
 NarrativeId = NewType("NarrativeId", str)
+NarrativeFactSnapshotId = NewType("NarrativeFactSnapshotId", str)
+NarrativeRevisionId = NewType("NarrativeRevisionId", str)
 
 
 class NarrativeType(StrEnum):
@@ -32,6 +36,66 @@ class ResolutionSource(StrEnum):
 DEFAULT_NARRATIVE_TYPE = NarrativeType.INSTITUTIONAL
 
 
+@dataclass(frozen=True, slots=True)
+class NarrativeFactSnapshot:
+    """Immutable copy of the factual payload used for one narrative generation."""
+
+    id: NarrativeFactSnapshotId
+    record_id: str
+    payload_json: str
+    payload_hash: str
+    builder_version: str
+    prompt_version: str
+    created_at: datetime
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        record_id: str,
+        payload_json: str,
+        payload_hash: str,
+        builder_version: str,
+        prompt_version: str,
+    ) -> NarrativeFactSnapshot:
+        return cls(
+            id=NarrativeFactSnapshotId(str(uuid.uuid4())),
+            record_id=record_id,
+            payload_json=payload_json,
+            payload_hash=payload_hash,
+            builder_version=builder_version,
+            prompt_version=prompt_version,
+            created_at=datetime.now(UTC),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class GeneratedNarrativeRevision:
+    """Append-only editorial revision preserving the previous narrative text."""
+
+    id: NarrativeRevisionId
+    narrative_id: NarrativeId
+    previous_narrative: str
+    revised_narrative: str
+    created_at: datetime
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        narrative_id: NarrativeId,
+        previous_narrative: str,
+        revised_narrative: str,
+    ) -> GeneratedNarrativeRevision:
+        return cls(
+            id=NarrativeRevisionId(str(uuid.uuid4())),
+            narrative_id=narrative_id,
+            previous_narrative=previous_narrative,
+            revised_narrative=revised_narrative,
+            created_at=datetime.now(UTC),
+        )
+
+
 @dataclass(slots=True)
 class GeneratedNarrative:
     """A persisted narrative generation — one immutable row per run. The same
@@ -47,6 +111,12 @@ class GeneratedNarrative:
     creativity_temperature: float
     llm_model: str
     generated_at: datetime
+    facts_snapshot_id: NarrativeFactSnapshotId | None = None
+    prompt_version: str | None = None
+    model_response_hash: str | None = None
+    facts_snapshot: NarrativeFactSnapshot | None = None
+    validation_conforms: bool | None = None
+    validation_findings: list[NarrativeFinding] = field(default_factory=list)
 
     @classmethod
     def create(
@@ -59,6 +129,12 @@ class GeneratedNarrative:
         target_language: str,
         creativity_temperature: float,
         llm_model: str,
+        facts_snapshot_id: NarrativeFactSnapshotId | None = None,
+        prompt_version: str | None = None,
+        model_response_hash: str | None = None,
+        facts_snapshot: NarrativeFactSnapshot | None = None,
+        validation_conforms: bool | None = None,
+        validation_findings: list[NarrativeFinding] | None = None,
     ) -> GeneratedNarrative:
         """Build a fresh generation, assigning the id and stamping ``generated_at``."""
         return cls(
@@ -71,11 +147,23 @@ class GeneratedNarrative:
             creativity_temperature=creativity_temperature,
             llm_model=llm_model,
             generated_at=datetime.now(UTC),
+            facts_snapshot_id=facts_snapshot_id,
+            prompt_version=prompt_version,
+            model_response_hash=model_response_hash,
+            facts_snapshot=facts_snapshot,
+            validation_conforms=validation_conforms,
+            validation_findings=validation_findings or [],
         )
 
-    def edit_narrative(self, narrative: str) -> None:
-        """Replace the narrative text (manual editorial correction)."""
+    def edit_narrative(self, narrative: str) -> GeneratedNarrativeRevision:
+        """Replace the narrative text and return the append-only revision."""
         text = narrative.strip()
         if not text:
             raise ValueError("narrative must not be empty.")
+        revision = GeneratedNarrativeRevision.create(
+            narrative_id=self.id,
+            previous_narrative=self.narrative,
+            revised_narrative=text,
+        )
         self.narrative = text
+        return revision

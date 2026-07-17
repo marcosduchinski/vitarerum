@@ -1,6 +1,11 @@
+from datetime import date
+
 import pytest
 
-from app.ai.museum_narrative.application.prompts import build_system_prompt
+from app.ai.museum_narrative.application.prompts import (
+    build_system_prompt,
+    build_user_prompt,
+)
 from app.ai.museum_narrative.application.use_cases import (
     GenerateNarrative,
     GenerateNarrativeInput,
@@ -11,8 +16,19 @@ from app.ai.museum_narrative.application.use_cases import (
     UpdateNarrative,
     UpdateNarrativeInput,
 )
+from app.ai.museum_narrative.domain.facts import (
+    AccessFact,
+    CanonicalVisitFacts,
+    EvidenceGap,
+    MissingFact,
+    ObjectFact,
+    PersonFact,
+)
 from app.ai.museum_narrative.domain.models import (
     GeneratedNarrative,
+    GeneratedNarrativeRevision,
+    NarrativeFactSnapshot,
+    NarrativeFactSnapshotId,
     NarrativeId,
     NarrativeType,
     ResolutionSource,
@@ -22,39 +38,79 @@ from app.ai.museum_narrative.domain.ports import (
     NarrativeNotFound,
     UnsupportedNarrativeType,
 )
+from app.ai.museum_narrative.infrastructure import cidoc_acl
+from app.ai.museum_narrative.infrastructure.cidoc_acl import NarrativeFactsAdapter
 
 
-class _FakeCidoc:
-    def __init__(self) -> None:
+def _facts(record_id: str = "r1") -> CanonicalVisitFacts:
+    return CanonicalVisitFacts(
+        report_subject="In-situ visit CUP-1",
+        project_reference="CUP-1",
+        project_title="Wolf study",
+        project_purpose="Taxonomic review",
+        planned_begin_date=None,
+        planned_end_date=None,
+        requester=PersonFact(name="Dr. Ana Ribeiro"),
+        approval=MissingFact(reason="No approval was recorded in this snapshot."),
+        execution=MissingFact(reason="No execution evidence was recorded."),
+        evidence_gaps=[
+            EvidenceGap(
+                message="Não foi registado local específico da ocorrência OCC-1."
+            )
+        ],
+        source_snapshot_id=record_id,
+        source_version="2",
+    )
+
+
+class _FakeFacts:
+    def __init__(self, facts: CanonicalVisitFacts | None = None) -> None:
         self.seen: str | None = None
+        self._facts = facts
 
-    async def prepare(self, record_id: str) -> dict:
+    async def prepare(self, record_id: str) -> CanonicalVisitFacts:
         self.seen = record_id
-        return {"@graph": [{"@id": "ex:visit/" + record_id}]}
+        return self._facts or _facts(record_id)
 
 
 class _FakeModel:
-    def __init__(self) -> None:
+    def __init__(self, text: str = "  a narrative  ") -> None:
         self.system_prompt = ""
+        self.user_prompt = ""
         self.temperature = 0.0
+        self._text = text
 
     async def generate(
         self, *, system_prompt: str, user_prompt: str, temperature: float
     ) -> str:
         self.system_prompt = system_prompt
+        self.user_prompt = user_prompt
         self.temperature = temperature
-        return "  a narrative  "
+        return self._text
 
 
 class _FakeRepo:
     def __init__(self) -> None:
         self.stored: list[GeneratedNarrative] = []
+        self.snapshots: list[NarrativeFactSnapshot] = []
+        self.revisions: list[GeneratedNarrativeRevision] = []
+
+    async def add_facts_snapshot(self, snapshot: NarrativeFactSnapshot) -> None:
+        self.snapshots.append(snapshot)
+
+    async def get_facts_snapshot(
+        self, snapshot_id: NarrativeFactSnapshotId
+    ) -> NarrativeFactSnapshot | None:
+        return next((s for s in self.snapshots if s.id == snapshot_id), None)
 
     async def add(self, narrative: GeneratedNarrative) -> None:
         self.stored.append(narrative)
 
     async def save(self, narrative: GeneratedNarrative) -> None:
         self.stored = [narrative if n.id == narrative.id else n for n in self.stored]
+
+    async def add_revision(self, revision: GeneratedNarrativeRevision) -> None:
+        self.revisions.append(revision)
 
     async def get_by_id(
         self, narrative_id: NarrativeId
@@ -71,7 +127,15 @@ class _FakeRepo:
 def _use_case() -> tuple[GenerateNarrative, _FakeModel, _FakeRepo]:
     model = _FakeModel()
     repo = _FakeRepo()
-    return GenerateNarrative(_FakeCidoc(), model, repo, "llama3.1:8b"), model, repo
+    return GenerateNarrative(_FakeFacts(), model, repo, "llama3.1:8b"), model, repo
+
+
+def _use_case_with_facts(
+    facts: CanonicalVisitFacts, model_text: str = "  a narrative  "
+) -> tuple[GenerateNarrative, _FakeModel, _FakeRepo]:
+    model = _FakeModel(model_text)
+    repo = _FakeRepo()
+    return GenerateNarrative(_FakeFacts(facts), model, repo, "llama3.1:8b"), model, repo
 
 
 async def test_omitted_type_defaults_to_institutional_and_persists() -> None:
@@ -83,8 +147,144 @@ async def test_omitted_type_defaults_to_institutional_and_persists() -> None:
     assert result.llm_model == "llama3.1:8b"
     # persisted with the generation parameters
     assert repo.stored == [result]
+    assert len(repo.snapshots) == 1
+    assert result.facts_snapshot_id == repo.snapshots[0].id
+    assert result.prompt_version == repo.snapshots[0].prompt_version
+    assert result.model_response_hash
     assert result.id
     assert result.target_language == "pt"
+
+
+async def test_fact_snapshot_freezes_payload_used_for_generation() -> None:
+    initial_facts = _facts("r1")
+    use_case, _, repo = _use_case_with_facts(initial_facts)
+
+    result = await use_case.execute(GenerateNarrativeInput(record_id="r1"))
+    snapshot = await repo.get_facts_snapshot(result.facts_snapshot_id)
+
+    initial_facts.evidence_gaps.append(
+        EvidenceGap(message="later builder/source change")
+    )
+    assert snapshot is not None
+    assert "Wolf study" in snapshot.payload_json
+    assert "later builder/source change" not in snapshot.payload_json
+
+
+async def test_narrative_with_invented_date_is_marked_for_review() -> None:
+    use_case, _, _ = _use_case_with_facts(
+        _facts("r1"),
+        model_text="The visit produced a result on 2027-05-01.",
+    )
+
+    result = await use_case.execute(GenerateNarrativeInput(record_id="r1"))
+
+    assert result.validation_conforms is False
+    assert result.validation_findings[0].code.value == "invented_date"
+    assert result.validation_findings[0].evidence == "2027-05-01"
+
+
+async def test_planned_date_as_execution_is_marked_for_review() -> None:
+    facts = CanonicalVisitFacts(
+        report_subject="In-situ visit CUP-1",
+        project_reference="CUP-1",
+        project_title="Wolf study",
+        project_purpose="Taxonomic review",
+        planned_begin_date=date(2026, 1, 10),
+        planned_end_date=date(2026, 1, 11),
+        requester=PersonFact(name="Dr. Ana Ribeiro"),
+        approval=MissingFact(reason="No approval was recorded."),
+        execution=MissingFact(reason="No execution evidence was recorded."),
+        source_snapshot_id="r1",
+        source_version="2",
+    )
+    use_case, _, _ = _use_case_with_facts(
+        facts,
+        model_text="A visita ocorreu em 2026-01-10.",
+    )
+
+    result = await use_case.execute(GenerateNarrativeInput(record_id="r1"))
+
+    assert result.validation_conforms is False
+    assert any(
+        finding.code.value == "planned_date_as_executed"
+        for finding in result.validation_findings
+    )
+
+
+async def test_date_inside_planned_interval_is_allowed() -> None:
+    facts = CanonicalVisitFacts(
+        report_subject="In-situ visit CUP-1",
+        project_reference="CUP-1",
+        project_title="Wolf study",
+        project_purpose="Taxonomic review",
+        planned_begin_date=date(2026, 6, 1),
+        planned_end_date=date(2026, 6, 3),
+        requester=PersonFact(name="Dr. Ana Ribeiro"),
+        approval=MissingFact(reason="No approval was recorded."),
+        execution=MissingFact(reason="No execution evidence was recorded."),
+        source_snapshot_id="r1",
+        source_version="2",
+    )
+    use_case, _, _ = _use_case_with_facts(
+        facts,
+        model_text="No segundo dia planeado, 2026-06-02, a equipa reviu os dados.",
+    )
+
+    result = await use_case.execute(GenerateNarrativeInput(record_id="r1"))
+
+    assert result.validation_conforms is True
+    assert result.validation_findings == []
+
+
+async def test_invented_person_object_and_place_are_marked_for_review() -> None:
+    facts = CanonicalVisitFacts(
+        report_subject="In-situ visit CUP-1",
+        project_reference="CUP-1",
+        project_title="Wolf study",
+        project_purpose="Taxonomic review",
+        planned_begin_date=None,
+        planned_end_date=None,
+        requester=PersonFact(name="Dr. Ana Ribeiro"),
+        approval=MissingFact(reason="No approval was recorded."),
+        execution=MissingFact(reason="No execution evidence was recorded."),
+        objects=[
+            ObjectFact(
+                source_id="INV-001",
+                label="Iberian wolf",
+                description=None,
+                position=0,
+            )
+        ],
+        access_logs=[
+            AccessFact(
+                source_id="LOG-1",
+                description=None,
+                related_object_source_id="INV-001",
+                number_of_objects=1,
+                added_at=None,
+                added_by=None,
+                conclusion_at=None,
+                curator=None,
+                position=0,
+            )
+        ],
+        source_snapshot_id="r1",
+        source_version="2",
+    )
+    use_case, _, _ = _use_case_with_facts(
+        facts,
+        model_text=(
+            "Dr. Miguel Silva examined INV-999 in Gallery B during the visit."
+        ),
+    )
+
+    result = await use_case.execute(GenerateNarrativeInput(record_id="r1"))
+
+    codes = {finding.code.value for finding in result.validation_findings}
+    assert result.validation_conforms is False
+    assert "invented_person" in codes
+    assert "invented_object" in codes
+    assert "invented_place" in codes
 
 
 async def test_explicit_type_is_used_with_request_body_source() -> None:
@@ -101,6 +301,20 @@ async def test_explicit_type_is_used_with_request_body_source() -> None:
     assert "social_media" in model.system_prompt
 
 
+async def test_user_prompt_receives_canonical_facts_and_declared_absence() -> None:
+    use_case, model, _ = _use_case()
+    await use_case.execute(GenerateNarrativeInput(record_id="r1"))
+    assert "[CANONICAL VISIT FACTS]" in model.user_prompt
+    assert "CIDOC-CRM Validated Graph" not in model.user_prompt
+    assert (
+        "Não foi registado local específico da ocorrência OCC-1."
+        in model.user_prompt
+    )
+    assert "crm:" not in model.user_prompt
+    assert "http://www.cidoc-crm.org" not in model.user_prompt
+    assert "ex:visit" not in model.user_prompt
+
+
 async def test_unsupported_type_raises_and_persists_nothing() -> None:
     use_case, _, repo = _use_case()
     with pytest.raises(UnsupportedNarrativeType):
@@ -112,7 +326,7 @@ async def test_unsupported_type_raises_and_persists_nothing() -> None:
 
 async def test_list_and_get_use_cases() -> None:
     repo = _FakeRepo()
-    gen = GenerateNarrative(_FakeCidoc(), _FakeModel(), repo, "llama3.1:8b")
+    gen = GenerateNarrative(_FakeFacts(), _FakeModel(), repo, "llama3.1:8b")
     created = await gen.execute(GenerateNarrativeInput(record_id="r1"))
 
     listed, total = await ListNarratives(repo).execute(
@@ -136,7 +350,7 @@ async def test_get_missing_narrative_raises() -> None:
 
 async def test_get_under_wrong_record_raises() -> None:
     repo = _FakeRepo()
-    gen = GenerateNarrative(_FakeCidoc(), _FakeModel(), repo, "llama3.1:8b")
+    gen = GenerateNarrative(_FakeFacts(), _FakeModel(), repo, "llama3.1:8b")
     created = await gen.execute(GenerateNarrativeInput(record_id="r1"))
     with pytest.raises(NarrativeNotFound):
         await GetNarrative(repo).execute(
@@ -146,7 +360,7 @@ async def test_get_under_wrong_record_raises() -> None:
 
 async def test_update_narrative_edits_text_and_persists() -> None:
     repo = _FakeRepo()
-    gen = GenerateNarrative(_FakeCidoc(), _FakeModel(), repo, "llama3.1:8b")
+    gen = GenerateNarrative(_FakeFacts(), _FakeModel(), repo, "llama3.1:8b")
     created = await gen.execute(GenerateNarrativeInput(record_id="r1"))
 
     updated = await UpdateNarrative(repo).execute(
@@ -156,6 +370,9 @@ async def test_update_narrative_edits_text_and_persists() -> None:
     )
     assert updated.narrative == "edited"  # stripped
     assert repo.stored[0].narrative == "edited"
+    assert len(repo.revisions) == 1
+    assert repo.revisions[0].previous_narrative == "a narrative"
+    assert repo.revisions[0].revised_narrative == "edited"
 
 
 async def test_update_missing_narrative_raises() -> None:
@@ -167,7 +384,7 @@ async def test_update_missing_narrative_raises() -> None:
 
 async def test_update_under_wrong_record_raises() -> None:
     repo = _FakeRepo()
-    gen = GenerateNarrative(_FakeCidoc(), _FakeModel(), repo, "llama3.1:8b")
+    gen = GenerateNarrative(_FakeFacts(), _FakeModel(), repo, "llama3.1:8b")
     created = await gen.execute(GenerateNarrativeInput(record_id="r1"))
     with pytest.raises(NarrativeNotFound):
         await UpdateNarrative(repo).execute(
@@ -185,12 +402,73 @@ async def test_blank_model_output_is_rejected_before_persistence() -> None:
         async def generate(self, *, system_prompt, user_prompt, temperature) -> str:
             return "   "
 
-    gen = GenerateNarrative(_FakeCidoc(), _BlankModel(), repo, "llama3.1:8b")
+    gen = GenerateNarrative(_FakeFacts(), _BlankModel(), repo, "llama3.1:8b")
     with pytest.raises(ModelUnavailable):
         await gen.execute(GenerateNarrativeInput(record_id="r1"))
     assert repo.stored == []
 
 
+async def test_facts_adapter_validates_cidoc_before_facts(monkeypatch) -> None:
+    compact_doc = {"@context": {"ex": "http://example.org/"}, "@graph": []}
+    calls: list[str] = []
+
+    async def build(_session, record_id: str) -> dict:
+        calls.append(record_id)
+        return compact_doc
+
+    async def view(_session, record_id: str):
+        assert record_id == "r1"
+        return type(
+            "RecordView",
+            (),
+            {
+                "id": "r1",
+                "code": "CUP-1",
+                "sourceProjectTitle": "Wolf study",
+                "sourceProjectPurpose": "Taxonomic review",
+                "plannedBeginDate": None,
+                "plannedEndDate": None,
+                "visitBeginDate": None,
+                "visitEndDate": None,
+                "visitorName": "Dr. Ana Ribeiro",
+                "approvedAt": None,
+                "approvedBy": None,
+                "approvalNote": None,
+                "executionEvidenceType": None,
+                "executionOccurredAt": None,
+                "executionRecordedBy": None,
+                "executionEvidenceGaps": [],
+                "requestedObjects": [],
+                "inSituOccurrences": [],
+                "inSituLogs": [],
+                "inSituPublications": [],
+                "recordSchemaVersion": 2,
+            },
+        )()
+
+    def validate(doc: dict) -> tuple[bool, str]:
+        assert doc is compact_doc
+        return True, "ok"
+
+    monkeypatch.setattr(cidoc_acl, "build_in_situ_visit_cidoc", build)
+    monkeypatch.setattr(cidoc_acl, "get_in_situ_visit_record_view", view)
+    monkeypatch.setattr(cidoc_acl, "validate_cidoc", validate)
+
+    result = await NarrativeFactsAdapter(object()).prepare("r1")
+
+    assert result.source_snapshot_id == "r1"
+    assert result.project_reference == "CUP-1"
+    assert calls == ["r1"]
+
+
 def test_each_persona_prompt_names_its_type() -> None:
     for nt in NarrativeType:
         assert nt.value in build_system_prompt(nt)
+
+
+def test_user_prompt_labels_compact_declared_data() -> None:
+    prompt = build_user_prompt(_facts(), "pt")
+    assert "[CANONICAL VISIT FACTS]" in prompt
+    assert "CIDOC-CRM Validated Graph" not in prompt
+    assert '"evidence_gaps"' in prompt
+    assert "crm:" not in prompt

@@ -52,6 +52,27 @@ export interface InSituVisitReportNarrativeMeta {
   readonly targetLanguage: string;
   readonly creativityTemperature: number;
   readonly llmModel: string;
+  readonly factsSnapshotId?: string | null;
+  readonly promptVersion?: string | null;
+  readonly modelResponseHash?: string | null;
+  readonly validationConforms?: boolean | null;
+  readonly validationFindings?: readonly InSituVisitNarrativeValidationFinding[];
+}
+
+export interface InSituVisitNarrativeValidationFinding {
+  readonly code: string;
+  readonly message: string;
+  readonly evidence: string;
+}
+
+export interface InSituVisitNarrativeFactSnapshot {
+  readonly id: string;
+  readonly recordId: string;
+  readonly payloadJson: string;
+  readonly payloadHash: string;
+  readonly builderVersion: string;
+  readonly promptVersion: string;
+  readonly createdAt: string;
 }
 
 export interface InSituVisitReportNarrative {
@@ -60,6 +81,7 @@ export interface InSituVisitReportNarrative {
   readonly generatedAt: string;
   readonly meta: InSituVisitReportNarrativeMeta;
   readonly text: string;
+  readonly factsSnapshot?: InSituVisitNarrativeFactSnapshot | null;
 }
 
 export interface InSituVisitReportAttachment {
@@ -86,6 +108,18 @@ export interface InSituVisitRecord {
   readonly visitorName: string;
   readonly placeName: string;
   readonly generatedAt: string;
+  readonly recordSchemaVersion?: number | null;
+  readonly sourceProjectId?: string | null;
+  readonly sourceProjectTitle?: string | null;
+  readonly sourceProjectPurpose?: string | null;
+  readonly plannedBeginDate?: string | null;
+  readonly plannedEndDate?: string | null;
+  readonly executionEvidenceType?: string | null;
+  readonly executionOccurredAt?: string | null;
+  readonly executionRecordedBy?: string | null;
+  readonly executionEvidenceGaps?: readonly string[];
+  readonly mappingVersion?: string | null;
+  readonly crmVersion?: string | null;
   readonly requestedObjects: readonly InSituVisitReportEvidenceItem[];
   readonly inSituOccurrences: readonly InSituVisitReportEvidenceItem[];
   readonly inSituLogs: readonly InSituVisitReportEvidenceItem[];

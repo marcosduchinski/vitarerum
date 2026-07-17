@@ -29,6 +29,19 @@ const DETAIL: InSituVisitReportDetail = {
       targetLanguage: 'pt',
       creativityTemperature: 0.3,
       llmModel: 'llama3.1:8b',
+      factsSnapshotId: 'facts-1',
+      promptVersion: 'museum-narrative-canonical-v1',
+      validationConforms: true,
+      validationFindings: [],
+    },
+    factsSnapshot: {
+      id: 'facts-1',
+      recordId: 'record-1',
+      payloadJson: '{"project_reference":"CUP-ABCD1234","visitor_name":"Maria do Rosário"}',
+      payloadHash: 'sha256:facts',
+      builderVersion: 'canonical-visit-facts-v1',
+      promptVersion: 'museum-narrative-canonical-v1',
+      createdAt: '2026-06-22T10:30:00Z',
     },
     text: 'The generated report narrative.',
   },
@@ -40,6 +53,8 @@ const DETAIL: InSituVisitReportDetail = {
     visitorName: 'Maria do Rosário',
     placeName: 'Museum',
     generatedAt: '2026-06-22T10:30:00Z',
+    mappingVersion: 'in-situ-visit-cidoc-v2',
+    crmVersion: '7.1.3',
     requestedObjects: [],
     inSituOccurrences: [],
     inSituLogs: [],
@@ -112,6 +127,9 @@ describe('InSituVisitReportDetailPageComponent', () => {
     expect(compiled.querySelector('h1')?.textContent).toContain('Maria do Rosário');
     expect(compiled.querySelector('.report-detail__code')?.textContent).toContain('CUP-ABCD1234');
     expect(compiled.textContent).toContain('The generated report narrative.');
+    expect(compiled.textContent).toContain('Facts used in narrative');
+    expect(compiled.textContent).toContain('canonical-visit-facts-v1');
+    expect(compiled.textContent).toContain('"project_reference": "CUP-ABCD1234"');
     expect(compiled.textContent).toContain('report-1');
     expect(compiled.textContent).toContain('project-1');
     expect(

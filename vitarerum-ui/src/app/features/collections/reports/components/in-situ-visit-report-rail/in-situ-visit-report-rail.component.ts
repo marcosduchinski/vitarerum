@@ -60,6 +60,7 @@ export class InSituVisitReportRailComponent {
   protected readonly evidenceTotal = computed(() =>
     this.totals().reduce((sum, total) => sum + total.count, 0),
   );
+  protected readonly evidenceGaps = computed(() => this.record()?.executionEvidenceGaps ?? []);
 
   protected readonly formatDate = formatDate;
   protected readonly formatDateTime = formatDateTime;

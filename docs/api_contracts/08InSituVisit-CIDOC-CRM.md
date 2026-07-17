@@ -85,6 +85,17 @@ visitBeginDate  : date (required, YYYY-MM-DD)
 visitEndDate    : date (required, YYYY-MM-DD)
 visitorName     : string (required)
 placeName       : string (required)
+recordSchemaVersion      : integer|null (response only)
+sourceProjectId          : string|null  (response only)
+sourceProjectTitle       : string|null  (response only)
+plannedBeginDate         : date|null    (response only)
+plannedEndDate           : date|null    (response only)
+executionEvidenceType    : string|null  (response only)
+executionOccurredAt      : datetime|null(response only)
+executionRecordedBy      : string|null  (response only)
+executionEvidenceGaps    : string[]     (response only)
+mappingVersion           : string|null  (response only)
+crmVersion               : string|null  (response only)
 requestedObjects   : array (optional, default [])
 inSituOccurrences  : array (optional, default [])
 inSituLogs         : array (optional, default [])
@@ -108,6 +119,18 @@ URL/locator), and `position`. `requestedObjects` have no attachments.
   "visitorName": "Dr. Ana Ribeiro",
   "placeName": "Reserve room B",
   "generatedAt": "2026-06-19T10:30:00Z",
+  "recordSchemaVersion": 2,
+  "sourceProjectId": "project-uuid",
+  "sourceProjectTitle": "Reserve-room research visit",
+  "sourceProjectPurpose": "Comparative research",
+  "plannedBeginDate": "2026-01-15",
+  "plannedEndDate": "2026-01-17",
+  "executionEvidenceType": "project_completed",
+  "executionOccurredAt": "2026-01-17T16:30:00Z",
+  "executionRecordedBy": "permission-uuid",
+  "executionEvidenceGaps": [],
+  "mappingVersion": "in-situ-visit-cidoc-v2",
+  "crmVersion": "7.1.3",
   "requestedObjects": [
     {
       "id": "uuid",
@@ -236,6 +259,11 @@ literal. Each `requestedObject` becomes an `E20_Biological_Object`
 `E31_Document` (`P70_documents`); each attachment an `E31_Document` with
 `schema:contentUrl` taken from its `reference`. Read-only; persists nothing.
 
+The endpoint validates the generated JSON-LD against the CIDOC-CRM SHACL shapes
+by default. Pass `?validate=false` only for diagnostic reads where returning a
+non-conforming graph is explicitly desired. If validation is enabled and the
+graph does not conform, the endpoint returns `422 SEMANTIC_VALIDATION_FAILED`.
+
 > Targets the stable CIDOC-CRM **7.1.3** release. `P82a`/`P82b` are not used — 7.1.3
 > defines the declared interval through `P170 defines time`.
 
@@ -243,6 +271,12 @@ literal. Each `requestedObject` becomes an `E20_Biological_Object`
 
 ```
 record_id : UUID (required) — the InSituVisitRecord id returned by POST
+```
+
+**Query parameters**
+
+```
+validate : boolean (optional, default true) — run SHACL/RDFS validation before returning
 ```
 
 **Response 200 OK** — a raw JSON-LD document (`application/json`; no Pydantic
@@ -357,6 +391,16 @@ There is no request body; `place_name` comes from the `INSTITUTION_NAME` setting
 {
   "error": "INVALID_USE_TYPE",
   "message": "Project intended use must be IN_SITU_VISIT to export an in-situ visit record"
+}
+```
+
+**Response 409 Conflict** — the project is an in-situ visit but has no minimum
+operational evidence that the visit was executed:
+
+```json
+{
+  "error": "VISIT_NOT_EVIDENCED",
+  "message": "Project lacks minimum operational evidence that the in-situ visit was executed: ..."
 }
 ```
 

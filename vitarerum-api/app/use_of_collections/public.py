@@ -11,11 +11,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from app.use_of_collections.application.context_views import (
+    ApprovalView,
     ExportAttachmentView,
     ExportEntryView,
     ExportObjectView,
     ProjectExportReader,
     ProjectExportView,
+    VisitExecutionEvidenceView,
 )
 
 if TYPE_CHECKING:
@@ -32,10 +34,12 @@ def get_project_export_reader(session: AsyncSession) -> ProjectExportReader:
 
 
 __all__ = [
+    "ApprovalView",
     "ExportAttachmentView",
     "ExportEntryView",
     "ExportObjectView",
     "ProjectExportReader",
     "ProjectExportView",
+    "VisitExecutionEvidenceView",
     "get_project_export_reader",
 ]

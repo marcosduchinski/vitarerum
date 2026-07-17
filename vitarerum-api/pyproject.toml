@@ -203,24 +203,17 @@ source_modules = ["app.reports"]
 forbidden_modules = ["app.cidoc_crm", "app.ai", "app.museum_questions"]
 ignore_imports = [
     # Permanent: the published languages are the report aggregator's only doors
-    # into the record (CIDOC-CRM) and narrative (KG-RAG) read models.
+    # into the record (CIDOC-CRM) and narrative (KG-RAG) contexts.
     "app.reports.in_situ_visit.infrastructure.readers -> app.cidoc_crm.public",
     "app.reports.in_situ_visit.infrastructure.readers -> app.ai.museum_narrative.public",
+    # The route maps public error vocabularies returned by those facades.
+    "app.reports.in_situ_visit.presentation.routes -> app.cidoc_crm.public",
+    "app.reports.in_situ_visit.presentation.routes -> app.ai.museum_narrative.public",
     # The detail response embeds the two contexts' published presentation DTOs
     # (single source of truth for the record/narrative shapes) instead of
     # re-declaring them.
     "app.reports.in_situ_visit.presentation.schemas -> app.cidoc_crm.in_situ_visit_mapping.presentation.schemas",
     "app.reports.in_situ_visit.presentation.schemas -> app.ai.museum_narrative.presentation.schemas",
-    # Known composition-root coupling: the report orchestrator wires the CIDOC-CRM
-    # export and the KG-RAG narrative use cases of two other contexts directly.
-    # Tracked for extraction behind published facades; these ignores stop NEW
-    # drift meanwhile.
-    "app.reports.in_situ_visit.application.use_cases -> app.cidoc_crm.in_situ_visit_mapping.application.use_cases",
-    "app.reports.in_situ_visit.application.use_cases -> app.ai.museum_narrative.application.use_cases",
-    "app.reports.in_situ_visit.presentation.routes -> app.cidoc_crm.in_situ_visit_mapping.application.use_cases",
-    "app.reports.in_situ_visit.presentation.routes -> app.ai.museum_narrative.domain.ports",
-    "app.reports.in_situ_visit.presentation.dependencies -> app.cidoc_crm.in_situ_visit_mapping.presentation.dependencies",
-    "app.reports.in_situ_visit.presentation.dependencies -> app.ai.museum_narrative.presentation.dependencies",
 ]
 
 [[tool.importlinter.contracts]]

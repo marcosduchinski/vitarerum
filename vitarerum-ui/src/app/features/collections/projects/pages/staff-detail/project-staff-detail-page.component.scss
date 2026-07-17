@@ -55,6 +55,12 @@
     var(--color-panel);
 }
 
+.task-row__desc--muted {
+  margin-top: 0.35rem;
+  color: var(--color-muted);
+  font-size: 0.84rem;
+}
+
 .action-btn--report {
   border-color: var(--color-accent);
   background: var(--color-accent);

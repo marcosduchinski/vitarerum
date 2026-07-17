@@ -19,6 +19,18 @@
           <dt>Visit code</dt>
           <dd class="report-rail__code">{{ value.code }}</dd>
         </div>
+        @if (value.executionEvidenceType) {
+          <div>
+            <dt>Execution evidence</dt>
+            <dd>{{ value.executionEvidenceType }}</dd>
+          </div>
+        }
+        @if (value.executionOccurredAt) {
+          <div>
+            <dt>Observed execution</dt>
+            <dd>{{ formatDateTime(value.executionOccurredAt) }}</dd>
+          </div>
+        }
       </dl>
     </section>
 
@@ -35,6 +47,40 @@
           </li>
         }
       </ul>
+    </section>
+
+    @if (evidenceGaps().length) {
+      <section
+        class="report-rail__block report-rail__block--warning"
+        aria-labelledby="rail-gaps-heading"
+      >
+        <h2 id="rail-gaps-heading" class="report-rail__title">Evidence gaps</h2>
+        <ul class="report-rail__gaps">
+          @for (gap of evidenceGaps(); track gap) {
+            <li>{{ gap }}</li>
+          }
+        </ul>
+      </section>
+    }
+
+    <section class="report-rail__block" aria-labelledby="rail-cidoc-heading">
+      <h2 id="rail-cidoc-heading" class="report-rail__title">CIDOC mapping</h2>
+      <dl class="report-rail__list">
+        <div>
+          <dt>Mapping version</dt>
+          <dd>{{ value.mappingVersion ?? 'Unavailable' }}</dd>
+        </div>
+        <div>
+          <dt>CRM version</dt>
+          <dd>{{ value.crmVersion ?? 'Unavailable' }}</dd>
+        </div>
+        @if (value.recordSchemaVersion !== null && value.recordSchemaVersion !== undefined) {
+          <div>
+            <dt>Record schema</dt>
+            <dd>{{ value.recordSchemaVersion }}</dd>
+          </div>
+        }
+      </dl>
     </section>
   }
 
@@ -61,6 +107,20 @@
           <dt>Model</dt>
           <dd>{{ value.meta.llmModel }}</dd>
         </div>
+        <div>
+          <dt>Fact snapshot</dt>
+          <dd>{{ value.meta.factsSnapshotId ?? value.factsSnapshot?.id ?? 'Unavailable' }}</dd>
+        </div>
+        <div>
+          <dt>Prompt version</dt>
+          <dd>{{ value.meta.promptVersion ?? value.factsSnapshot?.promptVersion ?? 'Unavailable' }}</dd>
+        </div>
+        @if (value.meta.validationConforms !== null && value.meta.validationConforms !== undefined) {
+          <div>
+            <dt>Validation</dt>
+            <dd>{{ value.meta.validationConforms ? 'Conforms' : 'Needs review' }}</dd>
+          </div>
+        }
         <div>
           <dt>Resolution</dt>
           <dd>{{ value.meta.resolutionSource }}</dd>

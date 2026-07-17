@@ -24,6 +24,10 @@
   background: var(--color-panel-muted);
 }
 
+.report-rail__block--warning {
+  background: color-mix(in srgb, var(--color-warning, #a15c00) 8%, var(--color-panel));
+}
+
 .report-rail__title {
   display: flex;
   align-items: center;
@@ -126,4 +130,14 @@
 
 .report-rail__totals li.is-empty .report-rail__count-label {
   color: var(--color-subtle);
+}
+
+.report-rail__gaps {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+  padding-left: 1rem;
+  color: var(--color-muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
 }

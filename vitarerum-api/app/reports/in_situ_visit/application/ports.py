@@ -32,6 +32,25 @@ class InSituVisitReportRepository(Protocol):
     ) -> tuple[list[InSituVisitReport], int]: ...
 
 
+class InSituVisitRecordExporter(Protocol):
+    """Exports a collection-use project into the CIDOC-CRM record read model."""
+
+    async def export(self, project_id: str) -> InSituVisitRecordResponse: ...
+
+
+class NarrativeGenerator(Protocol):
+    """Generates and stores a narrative for an exported CIDOC-CRM record."""
+
+    async def generate(
+        self,
+        record_id: str,
+        *,
+        narrative_type: str | None,
+        target_language: str,
+        creativity_temperature: float,
+    ) -> StoredNarrativeResponse: ...
+
+
 class InSituVisitRecordReader(Protocol):
     """Reads the exported record's presentation DTO from the CIDOC-CRM context
     (via ``app.cidoc_crm.public``)."""

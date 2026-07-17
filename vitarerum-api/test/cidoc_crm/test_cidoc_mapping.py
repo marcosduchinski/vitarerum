@@ -1,5 +1,5 @@
 import json
-from datetime import date
+from datetime import UTC, date, datetime
 
 import pytest
 
@@ -69,7 +69,7 @@ def test_full_expansion_emits_a_node_per_child() -> None:
     assert counts["crm:E7_Activity"] == 2
     assert counts["crm:E21_Person"] == 1
     assert counts["crm:E53_Place"] == 1
-    assert counts["crm:E52_Time-Span"] == 1
+    assert counts.get("crm:E52_Time-Span", 0) == 0
     assert counts["crm:E20_Biological_Object"] == 1
     assert counts["crm:E65_Creation"] == 1
     # publication's created Information Object + the provenance graph node
@@ -78,15 +78,39 @@ def test_full_expansion_emits_a_node_per_child() -> None:
     assert counts["crm:E31_Document"] == 4
 
 
-def test_timespan_uses_p170_not_p82() -> None:
+def test_planned_dates_are_not_asserted_as_visit_timespan_without_evidence() -> None:
     doc = map_record_to_cidoc(_sample_record())
-    timespan = next(
-        n for n in doc["@graph"] if n["@type"] == "crm:E52_Time-Span"
+    visit = next(
+        n
+        for n in doc["@graph"]
+        if n["@type"] == "crm:E7_Activity" and n["@id"].startswith("ex:visit/")
     )
-    # The term name must match the official 7.1.3 context exactly.
-    assert timespan["crm:P170i_time_is_defined_by"] == "2026-06-19/2026-06-20"
-    # 7.1.3's definition models declared intervals with P170, not P82a/P82b.
+    assert "crm:P4_has_time-span" not in visit
+    assert "2026-06-19/2026-06-20" not in json.dumps(doc["@graph"])
     assert "P82" not in json.dumps(doc["@graph"])
+
+
+def test_visit_timespan_uses_execution_evidence_not_planned_interval() -> None:
+    record = InSituVisitRecord.create(
+        code="VS-0006",
+        visit_begin_date=date(2026, 6, 19),
+        visit_end_date=date(2026, 6, 20),
+        visitor_name="Maria do Rosário",
+        place_name="MUSEU",
+        execution_occurred_at=datetime(2026, 6, 21, 15, 0, tzinfo=UTC),
+    )
+
+    doc = map_record_to_cidoc(record)
+    visit = next(
+        n
+        for n in doc["@graph"]
+        if n["@type"] == "crm:E7_Activity" and n["@id"].startswith("ex:visit/")
+    )
+    timespan_id = visit["crm:P4_has_time-span"]["@id"]
+    timespan = next(n for n in doc["@graph"] if n["@id"] == timespan_id)
+
+    assert timespan["crm:P170i_time_is_defined_by"].startswith("2026-06-21T15:00:00")
+    assert "2026-06-19/2026-06-20" not in json.dumps(doc["@graph"])
 
 
 def test_context_is_inlined_official_713_plus_local_prefixes() -> None:
@@ -126,7 +150,7 @@ def test_attachments_carry_description_as_note() -> None:
     assert attachment_notes == {"foto", "log", "paper"}
 
 
-def test_visit_links_to_actor_place_timespan_and_type() -> None:
+def test_visit_links_to_actor_place_and_type() -> None:
     doc = map_record_to_cidoc(_sample_record())
     visit = next(
         n
@@ -135,7 +159,6 @@ def test_visit_links_to_actor_place_timespan_and_type() -> None:
     )
     assert "crm:P14_carried_out_by" in visit
     assert "crm:P7_took_place_at" in visit
-    assert "crm:P4_has_time-span" in visit
     assert visit["crm:P2_has_type"] == {"@id": "ex:type/in-situ-visit"}
 
 
@@ -244,6 +267,124 @@ def test_attachments_link_to_related_object_when_parent_has_one() -> None:
 
     assert attachment["crm:P3_has_note"] == "fotografia dorsal da ave"
     assert attachment["crm:P129_is_about"] == {"@id": object_id}
+
+
+def test_enriched_snapshot_fields_shape_cidoc_labels_and_occurrence_context() -> None:
+    record = InSituVisitRecord.create(
+        code="VS-0005",
+        visit_begin_date=date(2026, 6, 19),
+        visit_end_date=date(2026, 6, 20),
+        visitor_name="Maria do Rosário",
+        place_name="MUSEU",
+        requested_objects=[
+            ChildData(
+                "XL01",
+                "lupus lupus",
+                1,
+                display_title="Iberian wolf",
+                object_name="Canis lupus signatus",
+                brief_description_snapshot="Mounted specimen",
+            )
+        ],
+        in_situ_occurrences=[
+            ChildData(
+                "OC-10",
+                "observed handling",
+                0,
+                related_object_source_id="XL01",
+                occurrence_date=datetime(2026, 6, 19, 10, 30, tzinfo=UTC),
+                location="Gallery A",
+                reported_by="perm-reporter",
+                testimonial="Observed during handling.",
+            )
+        ],
+        in_situ_publications=[
+            ChildData(
+                "PUB01",
+                "paper draft",
+                0,
+                added_at=datetime(2026, 6, 20, 9, 0, tzinfo=UTC),
+                added_by="perm-pub",
+            )
+        ],
+    )
+
+    doc = map_record_to_cidoc(record)
+
+    obj = next(n for n in doc["@graph"] if n["@type"] == "crm:E20_Biological_Object")
+    assert obj["rdfs:label"] == "Iberian wolf"
+    assert "Mounted specimen" in obj["crm:P3_has_note"]
+
+    occurrence = next(n for n in doc["@graph"] if n["@id"].startswith("ex:occurrence/"))
+    occurrence_timespan_id = occurrence["crm:P4_has_time-span"]["@id"]
+    occurrence_place_id = occurrence["crm:P7_took_place_at"]["@id"]
+    occurrence_actor_id = occurrence["crm:P14_carried_out_by"]["@id"]
+
+    occurrence_timespan = next(
+        n for n in doc["@graph"] if n["@id"] == occurrence_timespan_id
+    )
+    occurrence_place = next(n for n in doc["@graph"] if n["@id"] == occurrence_place_id)
+    occurrence_actor = next(n for n in doc["@graph"] if n["@id"] == occurrence_actor_id)
+
+    assert occurrence_timespan["@type"] == "crm:E52_Time-Span"
+    assert occurrence_timespan["crm:P170i_time_is_defined_by"].startswith(
+        "2026-06-19T10:30:00"
+    )
+    assert occurrence_place["rdfs:label"] == "Gallery A"
+    assert occurrence_actor["rdfs:label"] == "perm-reporter"
+
+    creation = next(n for n in doc["@graph"] if n["@type"] == "crm:E65_Creation")
+    publication_timespan_id = creation["crm:P4_has_time-span"]["@id"]
+    publication_actor_id = creation["crm:P14_carried_out_by"]["@id"]
+    publication_timespan = next(
+        n for n in doc["@graph"] if n["@id"] == publication_timespan_id
+    )
+    publication_actor = next(
+        n for n in doc["@graph"] if n["@id"] == publication_actor_id
+    )
+    assert publication_timespan["crm:P170i_time_is_defined_by"].startswith(
+        "2026-06-20T09:00:00"
+    )
+    assert publication_actor["rdfs:label"] == "perm-pub"
+
+
+def test_access_log_added_at_and_added_by_are_modelled_as_activity_context() -> None:
+    record = InSituVisitRecord.create(
+        code="VS-0007",
+        visit_begin_date=date(2026, 6, 19),
+        visit_end_date=date(2026, 6, 20),
+        visitor_name="Maria do Rosário",
+        place_name="MUSEU",
+        in_situ_logs=[
+            ChildData(
+                "LOG01",
+                "object examined",
+                0,
+                added_at=datetime(2026, 6, 19, 11, 0, tzinfo=UTC),
+                added_by="perm-log",
+            )
+        ],
+    )
+
+    doc = map_record_to_cidoc(record)
+
+    log_document = next(
+        n for n in doc["@graph"] if n["@id"].startswith("ex:document/log-")
+    )
+    access_activity = next(
+        n for n in doc["@graph"] if n["@id"].startswith("ex:activity/access-log-")
+    )
+    documented_targets = log_document["crm:P70_documents"]
+    assert {"@id": access_activity["@id"]} in documented_targets
+
+    timespan_id = access_activity["crm:P4_has_time-span"]["@id"]
+    actor_id = access_activity["crm:P14_carried_out_by"]["@id"]
+    timespan = next(n for n in doc["@graph"] if n["@id"] == timespan_id)
+    actor = next(n for n in doc["@graph"] if n["@id"] == actor_id)
+
+    assert timespan["crm:P170i_time_is_defined_by"].startswith("2026-06-19T11:00:00")
+    assert actor["rdfs:label"] == "perm-log"
+    assert "2026-06-19T11:00:00" not in log_document.get("crm:P3_has_note", [])
 
 
 class _StubRepo:

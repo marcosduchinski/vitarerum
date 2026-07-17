@@ -9,6 +9,7 @@ from __future__ import annotations
 from app.ai.museum_narrative.domain.models import GeneratedNarrative
 from app.ai.museum_narrative.presentation.schemas import (
     NarrativeData,
+    NarrativeFactSnapshotResponse,
     NarrativeMeta,
     StoredNarrativeResponse,
 )
@@ -21,6 +22,35 @@ def narrative_meta(record: GeneratedNarrative) -> NarrativeMeta:
         target_language=record.target_language,
         creativity_temperature=record.creativity_temperature,
         llm_model=record.llm_model,
+        facts_snapshot_id=record.facts_snapshot_id,
+        prompt_version=record.prompt_version,
+        model_response_hash=record.model_response_hash,
+        validation_conforms=record.validation_conforms,
+        validation_findings=[
+            {
+                "code": finding.code.value,
+                "message": finding.message,
+                "evidence": finding.evidence,
+            }
+            for finding in record.validation_findings
+        ],
+    )
+
+
+def fact_snapshot_response(
+    record: GeneratedNarrative,
+) -> NarrativeFactSnapshotResponse | None:
+    snapshot = record.facts_snapshot
+    if snapshot is None:
+        return None
+    return NarrativeFactSnapshotResponse(
+        id=snapshot.id,
+        record_id=snapshot.record_id,
+        payload_json=snapshot.payload_json,
+        payload_hash=snapshot.payload_hash,
+        builder_version=snapshot.builder_version,
+        prompt_version=snapshot.prompt_version,
+        created_at=snapshot.created_at,
     )
 
 
@@ -31,4 +61,5 @@ def stored_narrative_response(record: GeneratedNarrative) -> StoredNarrativeResp
         generated_at=record.generated_at,
         meta=narrative_meta(record),
         data=NarrativeData(narrative=record.narrative),
+        facts_snapshot=fact_snapshot_response(record),
     )

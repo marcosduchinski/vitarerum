@@ -65,6 +65,21 @@ def record_to_orm(record: InSituVisitRecord) -> InSituVisitRecordOrm:
         visitor_name=record.visitor_name,
         place_name=record.place_name,
         generated_at=record.generated_at,
+        record_schema_version=record.record_schema_version,
+        mapping_version=record.mapping_version,
+        crm_version=record.crm_version,
+        source_project_id=record.source_project_id,
+        project_title=record.project_title,
+        project_purpose=record.project_purpose,
+        planned_begin_date=record.planned_begin_date,
+        planned_end_date=record.planned_end_date,
+        execution_evidence_type=record.execution_evidence_type,
+        execution_occurred_at=record.execution_occurred_at,
+        execution_recorded_by=record.execution_recorded_by,
+        execution_evidence_gaps=record.execution_evidence_gaps,
+        approved_at=record.approved_at,
+        approved_by=record.approved_by,
+        approval_note=record.approval_note,
         requested_objects=[
             RequestedObjectRecordOrm(
                 id=ro.id,
@@ -72,6 +87,9 @@ def record_to_orm(record: InSituVisitRecord) -> InSituVisitRecordOrm:
                 source_id=ro.source_id,
                 description=ro.description,
                 position=ro.position,
+                display_title=ro.display_title,
+                object_name=ro.object_name,
+                brief_description_snapshot=ro.brief_description_snapshot,
             )
             for ro in record.requested_objects
         ],
@@ -83,6 +101,13 @@ def record_to_orm(record: InSituVisitRecord) -> InSituVisitRecordOrm:
                 description=occ.description,
                 position=occ.position,
                 related_object_source_id=occ.related_object_source_id,
+                number_of_objects=occ.number_of_objects,
+                occurrence_date=occ.occurrence_date,
+                location=occ.location,
+                reported_by=occ.reported_by,
+                testimonial=occ.testimonial,
+                occurrence_log_date_conclusion=occ.occurrence_log_date_conclusion,
+                occurrence_log_curator=occ.occurrence_log_curator,
                 attachments=[
                     InSituOccurrenceAttachmentRecordOrm(
                         id=att.id,
@@ -91,6 +116,7 @@ def record_to_orm(record: InSituVisitRecord) -> InSituVisitRecordOrm:
                         description=att.description,
                         reference=att.reference,
                         position=att.position,
+                        media_type=att.media_type,
                     )
                     for att in occ.attachments
                 ],
@@ -105,6 +131,11 @@ def record_to_orm(record: InSituVisitRecord) -> InSituVisitRecordOrm:
                 description=log.description,
                 position=log.position,
                 related_object_source_id=log.related_object_source_id,
+                number_of_objects=log.number_of_objects,
+                added_at=log.added_at,
+                added_by=log.added_by,
+                access_log_date_conclusion=log.access_log_date_conclusion,
+                access_log_curator=log.access_log_curator,
                 attachments=[
                     InSituLogAttachmentRecordOrm(
                         id=att.id,
@@ -113,6 +144,7 @@ def record_to_orm(record: InSituVisitRecord) -> InSituVisitRecordOrm:
                         description=att.description,
                         reference=att.reference,
                         position=att.position,
+                        media_type=att.media_type,
                     )
                     for att in log.attachments
                 ],
@@ -127,6 +159,8 @@ def record_to_orm(record: InSituVisitRecord) -> InSituVisitRecordOrm:
                 description=pub.description,
                 position=pub.position,
                 related_object_source_id=pub.related_object_source_id,
+                added_at=pub.added_at,
+                added_by=pub.added_by,
                 attachments=[
                     InSituPublicationAttachmentRecordOrm(
                         id=att.id,
@@ -135,6 +169,7 @@ def record_to_orm(record: InSituVisitRecord) -> InSituVisitRecordOrm:
                         description=att.description,
                         reference=att.reference,
                         position=att.position,
+                        media_type=att.media_type,
                     )
                     for att in pub.attachments
                 ],
@@ -156,6 +191,21 @@ def record_to_domain(orm: InSituVisitRecordOrm) -> InSituVisitRecord:
         visitor_name=orm.visitor_name,
         place_name=orm.place_name,
         generated_at=orm.generated_at,
+        record_schema_version=orm.record_schema_version,
+        mapping_version=orm.mapping_version,
+        crm_version=orm.crm_version,
+        source_project_id=orm.source_project_id,
+        project_title=orm.project_title,
+        project_purpose=orm.project_purpose,
+        planned_begin_date=orm.planned_begin_date,
+        planned_end_date=orm.planned_end_date,
+        execution_evidence_type=orm.execution_evidence_type,
+        execution_occurred_at=orm.execution_occurred_at,
+        execution_recorded_by=orm.execution_recorded_by,
+        execution_evidence_gaps=orm.execution_evidence_gaps or [],
+        approved_at=orm.approved_at,
+        approved_by=orm.approved_by,
+        approval_note=orm.approval_note,
         requested_objects=[
             RequestedObjectRecord(
                 id=RequestedObjectRecordId(ro.id),
@@ -163,6 +213,9 @@ def record_to_domain(orm: InSituVisitRecordOrm) -> InSituVisitRecord:
                 source_id=ro.source_id,
                 description=ro.description,
                 position=ro.position,
+                display_title=ro.display_title,
+                object_name=ro.object_name,
+                brief_description_snapshot=ro.brief_description_snapshot,
             )
             for ro in orm.requested_objects
         ],
@@ -174,6 +227,13 @@ def record_to_domain(orm: InSituVisitRecordOrm) -> InSituVisitRecord:
                 description=occ.description,
                 position=occ.position,
                 related_object_source_id=occ.related_object_source_id,
+                number_of_objects=occ.number_of_objects,
+                occurrence_date=occ.occurrence_date,
+                location=occ.location,
+                reported_by=occ.reported_by,
+                testimonial=occ.testimonial,
+                occurrence_log_date_conclusion=occ.occurrence_log_date_conclusion,
+                occurrence_log_curator=occ.occurrence_log_curator,
                 attachments=[
                     InSituOccurrenceAttachmentRecord(
                         id=InSituOccurrenceAttachmentId(att.id),
@@ -182,6 +242,7 @@ def record_to_domain(orm: InSituVisitRecordOrm) -> InSituVisitRecord:
                         description=att.description,
                         reference=att.reference,
                         position=att.position,
+                        media_type=att.media_type,
                     )
                     for att in occ.attachments
                 ],
@@ -196,6 +257,11 @@ def record_to_domain(orm: InSituVisitRecordOrm) -> InSituVisitRecord:
                 description=log.description,
                 position=log.position,
                 related_object_source_id=log.related_object_source_id,
+                number_of_objects=log.number_of_objects,
+                added_at=log.added_at,
+                added_by=log.added_by,
+                access_log_date_conclusion=log.access_log_date_conclusion,
+                access_log_curator=log.access_log_curator,
                 attachments=[
                     InSituLogAttachmentRecord(
                         id=InSituLogAttachmentId(att.id),
@@ -204,6 +270,7 @@ def record_to_domain(orm: InSituVisitRecordOrm) -> InSituVisitRecord:
                         description=att.description,
                         reference=att.reference,
                         position=att.position,
+                        media_type=att.media_type,
                     )
                     for att in log.attachments
                 ],
@@ -218,6 +285,8 @@ def record_to_domain(orm: InSituVisitRecordOrm) -> InSituVisitRecord:
                 description=pub.description,
                 position=pub.position,
                 related_object_source_id=pub.related_object_source_id,
+                added_at=pub.added_at,
+                added_by=pub.added_by,
                 attachments=[
                     InSituPublicationAttachmentRecord(
                         id=InSituPublicationAttachmentId(att.id),
@@ -226,6 +295,7 @@ def record_to_domain(orm: InSituVisitRecordOrm) -> InSituVisitRecord:
                         description=att.description,
                         reference=att.reference,
                         position=att.position,
+                        media_type=att.media_type,
                     )
                     for att in pub.attachments
                 ],

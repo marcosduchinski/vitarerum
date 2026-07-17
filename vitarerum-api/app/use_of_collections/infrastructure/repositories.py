@@ -11,6 +11,8 @@ from app.use_of_collections.application.context_views import (
     ExportEntryView,
     ExportObjectView,
     ProjectExportView,
+    build_approval_view,
+    build_visit_execution_evidence,
 )
 from app.use_of_collections.application.ports import ProjectFilters, ProposalFilters
 from app.use_of_collections.domain.enums import DocumentCorrectionStatus
@@ -1305,6 +1307,7 @@ def _attachment_views(attachments: list[Attachment]) -> list[ExportAttachmentVie
             description=att.description,
             reference=att.file_reference,
             position=index,
+            media_type=att.media_type.value,
         )
         for index, att in enumerate(attachments)
     ]
@@ -1348,19 +1351,24 @@ class SqlAlchemyProjectExportReader:
         return ProjectExportView(
             project_id=str(project.id),
             reference_number=project.reference_number.value,
+            title=project.title,
+            purpose=project.purpose,
             begin_date=project.begin_date,
             end_date=project.end_date,
             intended_use=project.intended_use,
             visitor_name=await self._visitor_name(project.requested_by),
+            visit_execution_evidence=build_visit_execution_evidence(project),
+            approval=build_approval_view(proposal),
             requested_objects=[
                 ExportObjectView(
                     source_id=ro.inventory_number,
                     description=ro.description,
                     position=index,
+                    display_title=ro.display_title,
+                    object_name=ro.object_name,
+                    brief_description_snapshot=ro.brief_description_snapshot,
                 )
-                for index, ro in enumerate(
-                    proposal.requested_objects if proposal else []
-                )
+                for index, ro in enumerate(project.objects)
             ],
             in_situ_occurrences=[
                 ExportEntryView(
@@ -1368,6 +1376,17 @@ class SqlAlchemyProjectExportReader:
                     description=entry.detailed_description,
                     position=index,
                     attachments=_attachment_views(entry.attachments),
+                    number_of_objects=entry.number_of_objects,
+                    occurrence_date=entry.occurrence_date,
+                    location=entry.location,
+                    reported_by=entry.reported_by,
+                    testimonial=entry.testimonial,
+                    occurrence_log_date_conclusion=(
+                        occurrence_log.date_conclusion if occurrence_log else None
+                    ),
+                    occurrence_log_curator=(
+                        occurrence_log.curator if occurrence_log else None
+                    ),
                     object_source_id=inventory_by_object_id.get(
                         entry.collection_use_object_id
                     ),
@@ -1382,6 +1401,13 @@ class SqlAlchemyProjectExportReader:
                     description=entry.observations or "",
                     position=index,
                     attachments=_attachment_views(entry.attachments),
+                    number_of_objects=entry.number_of_objects,
+                    added_at=entry.added_at,
+                    added_by=entry.added_by,
+                    access_log_date_conclusion=(
+                        access_log.date_conclusion if access_log else None
+                    ),
+                    access_log_curator=access_log.curator if access_log else None,
                     object_source_id=inventory_by_object_id.get(
                         entry.collection_use_object_id
                     ),
@@ -1394,6 +1420,8 @@ class SqlAlchemyProjectExportReader:
                     description=entry.note,
                     position=index,
                     attachments=_attachment_views(entry.attachments),
+                    added_at=entry.added_at,
+                    added_by=entry.added_by,
                     object_source_id=(
                         inventory_by_object_id.get(entry.collection_use_object_id)
                         if entry.collection_use_object_id is not None

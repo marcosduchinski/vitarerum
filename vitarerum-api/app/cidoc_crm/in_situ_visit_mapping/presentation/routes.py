@@ -23,6 +23,7 @@ from app.cidoc_crm.in_situ_visit_mapping.application.use_cases import (
     NotInSituVisit,
     ProjectNotFound,
     RecordInSituVisitInput,
+    VisitNotEvidenced,
 )
 from app.cidoc_crm.in_situ_visit_mapping.domain.models import (
     AttachmentData,
@@ -44,6 +45,7 @@ from app.cidoc_crm.in_situ_visit_mapping.presentation.schemas import (
     PublicationRequest,
     RequestedObjectRequest,
 )
+from app.cidoc_crm.public import validate_cidoc
 from app.database import get_async_session
 from app.shared.authorization import require_staff
 from app.shared.dependencies import CallerPermission
@@ -136,16 +138,25 @@ async def get_in_situ_visit_cidoc(
     record_id: str,
     caller: CallerPermission,
     use_case: CidocUseCase,
+    validate: Annotated[bool, Query()] = True,
 ) -> dict[str, Any]:
     """Return the CIDOC-CRM 7.1.3 JSON-LD representation of a stored record."""
     require_staff(caller)
     try:
-        return await use_case.execute(BuildInSituVisitCidocInput(record_id=record_id))
+        doc = await use_case.execute(BuildInSituVisitCidocInput(record_id=record_id))
     except InSituVisitRecordNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"error": "IN_SITU_VISIT_NOT_FOUND", "message": str(exc)},
         ) from None
+    if validate:
+        conforms, report = validate_cidoc(doc)
+        if not conforms:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail={"error": "SEMANTIC_VALIDATION_FAILED", "message": report},
+            )
+    return doc
 
 
 @project_export_router.post(
@@ -172,6 +183,11 @@ async def export_in_situ_visit_record(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={"error": "INVALID_USE_TYPE", "message": str(exc)},
+        ) from None
+    except VisitNotEvidenced as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"error": "VISIT_NOT_EVIDENCED", "message": str(exc)},
         ) from None
     await session.commit()
     return record_to_response(record)

@@ -1,36 +1,44 @@
 """KG-RAG narrative application service.
 
-Orchestrates the pipeline: resolve the rendering style → build/expand/validate the
-CIDOC-CRM graph (via the ACL) → select the persona prompt → run the local LLM.
-``execute`` takes an ``Input`` dataclass, per the repo-wide convention.
+Orchestrates the pipeline: resolve the rendering style → validate the CIDOC-CRM
+projection and prepare canonical facts (via the ACL) → select the persona prompt
+→ run the local LLM. ``execute`` takes an ``Input`` dataclass, per the repo-wide
+convention.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import hashlib
+import json
+from dataclasses import asdict, dataclass
 
 from app.ai.museum_narrative.application.prompts import (
     build_system_prompt,
     build_user_prompt,
 )
+from app.ai.museum_narrative.domain.facts import CanonicalVisitFacts
 from app.ai.museum_narrative.domain.models import (
     DEFAULT_NARRATIVE_TYPE,
     GeneratedNarrative,
+    NarrativeFactSnapshot,
     NarrativeId,
     NarrativeType,
     ResolutionSource,
 )
 from app.ai.museum_narrative.domain.ports import (
-    CidocGraphPort,
     ModelUnavailable,
+    NarrativeFactsPort,
     NarrativeModelPort,
     NarrativeNotFound,
     NarrativeRepository,
     UnsupportedNarrativeType,
 )
+from app.ai.museum_narrative.domain.validation import validate_generated_narrative
 
 _DEFAULT_TEMPERATURE = 0.3
 _DEFAULT_LANGUAGE = "pt"
+_FACTS_BUILDER_VERSION = "canonical-visit-facts-v1"
+_PROMPT_VERSION = "museum-narrative-canonical-v1"
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,31 +82,49 @@ def _resolve_type(raw: str | None) -> tuple[NarrativeType, ResolutionSource]:
         ) from exc
 
 
+def _facts_payload(facts: CanonicalVisitFacts) -> str:
+    return json.dumps(asdict(facts), ensure_ascii=False, default=str, sort_keys=True)
+
+
+def _sha256(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
 class GenerateNarrative:
     def __init__(
         self,
-        cidoc: CidocGraphPort,
+        facts: NarrativeFactsPort,
         model: NarrativeModelPort,
         repository: NarrativeRepository,
         model_name: str,
     ) -> None:
-        self._cidoc = cidoc
+        self._facts = facts
         self._model = model
         self._repository = repository
         self._model_name = model_name
 
     async def execute(self, data: GenerateNarrativeInput) -> GeneratedNarrative:
         narrative_type, source = _resolve_type(data.narrative_type)
-        graph = await self._cidoc.prepare(data.record_id)
+        facts = await self._facts.prepare(data.record_id)
+        payload_json = _facts_payload(facts)
+        fact_snapshot = NarrativeFactSnapshot.create(
+            record_id=data.record_id,
+            payload_json=payload_json,
+            payload_hash=_sha256(payload_json),
+            builder_version=_FACTS_BUILDER_VERSION,
+            prompt_version=_PROMPT_VERSION,
+        )
+        await self._repository.add_facts_snapshot(fact_snapshot)
         narrative = await self._model.generate(
             system_prompt=build_system_prompt(narrative_type),
-            user_prompt=build_user_prompt(graph, data.target_language),
+            user_prompt=build_user_prompt(facts, data.target_language),
             temperature=data.creativity_temperature,
         )
         text = narrative.strip()
         if not text:
             # An empty generation is a model failure, not a stored narrative.
             raise ModelUnavailable("The language model returned an empty narrative")
+        validation = validate_generated_narrative(text, facts)
         record = GeneratedNarrative.create(
             record_id=data.record_id,
             narrative=text,
@@ -107,6 +133,12 @@ class GenerateNarrative:
             target_language=data.target_language,
             creativity_temperature=data.creativity_temperature,
             llm_model=self._model_name,
+            facts_snapshot_id=fact_snapshot.id,
+            prompt_version=_PROMPT_VERSION,
+            model_response_hash=_sha256(text),
+            facts_snapshot=fact_snapshot,
+            validation_conforms=validation.conforms,
+            validation_findings=validation.findings,
         )
         await self._repository.add(record)
         return record
@@ -155,6 +187,7 @@ class UpdateNarrative:
                 f"No narrative found with id {data.narrative_id} "
                 f"for record {data.record_id}"
             )
-        record.edit_narrative(data.narrative)
+        revision = record.edit_narrative(data.narrative)
+        await self._repository.add_revision(revision)
         await self._repository.save(record)
         return record

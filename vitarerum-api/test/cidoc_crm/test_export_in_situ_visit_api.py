@@ -1,12 +1,15 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import date
+from datetime import UTC, date, datetime
 
 from httpx import ASGITransport, AsyncClient
 
 from app.cidoc_crm.in_situ_visit_mapping.application.ports import (
+    ExportAttachment,
+    ExportEntry,
     ExportObject,
     ProjectExportData,
+    VisitExecutionEvidence,
 )
 from app.cidoc_crm.in_situ_visit_mapping.application.use_cases import (
     ExportInSituVisitFromProject,
@@ -33,16 +36,64 @@ _EXTERNAL = Actor(
     id=PermissionId("perm-ext"), group=GroupName.EXTERNAL, email="r@uni.pt"
 )
 _INSTITUTION = "Test Museum"
+_COMPLETED_AT = datetime(2026, 6, 3, 17, 0, tzinfo=UTC)
 
 
-def _export(use_type: UseType = UseType.IN_SITU_VISIT) -> ProjectExportData:
+def _evidenced() -> VisitExecutionEvidence:
+    return VisitExecutionEvidence(
+        occurred=True,
+        evidence_type="project_completed_event",
+        occurred_at=_COMPLETED_AT,
+        recorded_by=PermissionId("perm-staff"),
+    )
+
+
+def _not_evidenced(*gaps: str) -> VisitExecutionEvidence:
+    return VisitExecutionEvidence(
+        occurred=False,
+        evidence_type="insufficient_operational_evidence",
+        gaps=list(gaps),
+    )
+
+
+def _export(
+    use_type: UseType = UseType.IN_SITU_VISIT,
+    evidence: VisitExecutionEvidence | None = None,
+) -> ProjectExportData:
     return ProjectExportData(
+        project_id="p1",
         reference_number="CUP-ABCD1234",
+        title="Wolf study",
+        purpose="Study collection objects in situ",
         begin_date=date(2026, 6, 1),
         end_date=date(2026, 6, 3),
         use_type=use_type,
         visitor_name="Maria do Rosário",
-        requested_objects=[ExportObject("INV-1", "lupus", 0)],
+        visit_execution_evidence=evidence or _evidenced(),
+        requested_objects=[
+            ExportObject(
+                "INV-1",
+                "lupus",
+                0,
+                display_title="Iberian wolf",
+                object_name="Canis lupus signatus",
+                brief_description_snapshot="Mounted specimen",
+            )
+        ],
+        in_situ_occurrences=[
+            ExportEntry(
+                "occ-1",
+                "an occurrence",
+                0,
+                [ExportAttachment("att-1", "a photo", "photo.jpg", 0, "IMAGE")],
+                related_object_source_id="INV-1",
+                number_of_objects=1,
+                occurrence_date=datetime(2026, 6, 2, 10, 0, tzinfo=UTC),
+                location="Gallery A",
+                reported_by=PermissionId("perm-reporter"),
+                testimonial="Observed during handling.",
+            )
+        ],
     )
 
 
@@ -106,9 +157,24 @@ async def test_export_happy_path_returns_201_with_mapped_record() -> None:
     assert resp.status_code == 201
     body = resp.json()
     assert body["code"] == "CUP-ABCD1234"
+    assert body["recordSchemaVersion"] == 2
+    assert body["sourceProjectId"] == "p1"
+    assert body["sourceProjectTitle"] == "Wolf study"
+    assert body["sourceProjectPurpose"] == "Study collection objects in situ"
+    assert body["plannedBeginDate"] == "2026-06-01"
+    assert body["plannedEndDate"] == "2026-06-03"
+    assert body["executionEvidenceType"] == "project_completed_event"
+    assert body["executionRecordedBy"] == "perm-staff"
     assert body["placeName"] == _INSTITUTION
     assert body["visitorName"] == "Maria do Rosário"
     assert [ro["sourceId"] for ro in body["requestedObjects"]] == ["INV-1"]
+    assert body["requestedObjects"][0]["displayTitle"] == "Iberian wolf"
+    assert body["requestedObjects"][0]["objectName"] == "Canis lupus signatus"
+    assert body["inSituOccurrences"][0]["relatedObjectSourceId"] == "INV-1"
+    assert body["inSituOccurrences"][0]["numberOfObjects"] == 1
+    assert body["inSituOccurrences"][0]["location"] == "Gallery A"
+    assert body["inSituOccurrences"][0]["reportedBy"] == "perm-reporter"
+    assert body["inSituOccurrences"][0]["attachments"][0]["mediaType"] == "IMAGE"
 
 
 async def test_export_forbidden_for_external() -> None:
@@ -129,3 +195,12 @@ async def test_export_wrong_use_type_409() -> None:
         resp = await client.post(_URL)
     assert resp.status_code == 409
     assert resp.json()["error"] == "INVALID_USE_TYPE"
+
+
+async def test_export_without_execution_evidence_409() -> None:
+    async with _client(
+        data=_export(evidence=_not_evidenced("project_status_not_completed"))
+    ) as client:
+        resp = await client.post(_URL)
+    assert resp.status_code == 409
+    assert resp.json()["error"] == "VISIT_NOT_EVIDENCED"

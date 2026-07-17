@@ -3,7 +3,18 @@ from contextlib import asynccontextmanager
 
 from httpx import ASGITransport, AsyncClient
 
-from app.ai.museum_narrative.domain.models import GeneratedNarrative, NarrativeId
+from app.ai.museum_narrative.domain.facts import (
+    CanonicalVisitFacts,
+    MissingFact,
+    PersonFact,
+)
+from app.ai.museum_narrative.domain.models import (
+    GeneratedNarrative,
+    GeneratedNarrativeRevision,
+    NarrativeFactSnapshot,
+    NarrativeFactSnapshotId,
+    NarrativeId,
+)
 from app.ai.museum_narrative.domain.ports import (
     ModelTimeout,
     ModelUnavailable,
@@ -11,7 +22,7 @@ from app.ai.museum_narrative.domain.ports import (
     SemanticValidationFailed,
 )
 from app.ai.museum_narrative.presentation.dependencies import (
-    get_cidoc_port,
+    get_facts_port,
     get_model_port,
     get_narrative_repository,
 )
@@ -28,14 +39,26 @@ _EXTERNAL = Actor(
 )
 
 
-class _FakeCidoc:
+class _FakeFacts:
     def __init__(self, *, error: Exception | None = None) -> None:
         self._error = error
 
-    async def prepare(self, record_id: str) -> dict:
+    async def prepare(self, record_id: str) -> CanonicalVisitFacts:
         if self._error is not None:
             raise self._error
-        return {"@graph": [{"@id": "ex:visit/" + record_id}]}
+        return CanonicalVisitFacts(
+            report_subject="In-situ visit CUP-1",
+            project_reference="CUP-1",
+            project_title=None,
+            project_purpose=None,
+            planned_begin_date=None,
+            planned_end_date=None,
+            requester=PersonFact(name="Dr. Ana Ribeiro"),
+            approval=MissingFact(reason="No approval was recorded."),
+            execution=MissingFact(reason="No execution evidence was recorded."),
+            source_snapshot_id=record_id,
+            source_version="2",
+        )
 
 
 class _FakeModel:
@@ -52,12 +75,25 @@ class _FakeModel:
 class _FakeRepo:
     def __init__(self) -> None:
         self.stored: list[GeneratedNarrative] = []
+        self.snapshots: list[NarrativeFactSnapshot] = []
+        self.revisions: list[GeneratedNarrativeRevision] = []
+
+    async def add_facts_snapshot(self, snapshot: NarrativeFactSnapshot) -> None:
+        self.snapshots.append(snapshot)
+
+    async def get_facts_snapshot(
+        self, snapshot_id: NarrativeFactSnapshotId
+    ) -> NarrativeFactSnapshot | None:
+        return next((s for s in self.snapshots if s.id == snapshot_id), None)
 
     async def add(self, narrative: GeneratedNarrative) -> None:
         self.stored.append(narrative)
 
     async def save(self, narrative: GeneratedNarrative) -> None:
         self.stored = [narrative if n.id == narrative.id else n for n in self.stored]
+
+    async def add_revision(self, revision: GeneratedNarrativeRevision) -> None:
+        self.revisions.append(revision)
 
     async def get_by_id(
         self, narrative_id: NarrativeId
@@ -80,10 +116,10 @@ class _FakeSession:
 
 @asynccontextmanager
 async def _client(
-    *, caller: Actor = _STAFF, cidoc=None, model=None, repo: _FakeRepo | None = None
+    *, caller: Actor = _STAFF, facts=None, model=None, repo: _FakeRepo | None = None
 ) -> AsyncIterator[AsyncClient]:
     app.dependency_overrides[get_caller_permission] = lambda: caller
-    app.dependency_overrides[get_cidoc_port] = lambda: cidoc or _FakeCidoc()
+    app.dependency_overrides[get_facts_port] = lambda: facts or _FakeFacts()
     app.dependency_overrides[get_model_port] = lambda: model or _FakeModel()
     app.dependency_overrides[get_narrative_repository] = lambda: repo or _FakeRepo()
     app.dependency_overrides[get_async_session] = lambda: _FakeSession()
@@ -104,6 +140,13 @@ async def test_default_type_returns_institutional() -> None:
     assert body["record_id"] == "r1"
     assert body["meta"]["resolved_narrative_type"] == "institutional"
     assert body["meta"]["resolution_source"] == "default"
+    assert body["meta"]["facts_snapshot_id"]
+    assert body["meta"]["prompt_version"]
+    assert body["meta"]["model_response_hash"]
+    assert body["meta"]["validation_conforms"] is True
+    assert body["meta"]["validation_findings"] == []
+    assert body["facts_snapshot"]["id"] == body["meta"]["facts_snapshot_id"]
+    assert "CUP-1" in body["facts_snapshot"]["payload_json"]
     assert body["data"]["narrative"] == "narrative text"
 
 
@@ -129,16 +172,16 @@ async def test_temperature_above_one_is_422() -> None:
 
 
 async def test_missing_record_is_404() -> None:
-    cidoc = _FakeCidoc(error=RecordNotFound("nope"))
-    async with _client(cidoc=cidoc) as client:
+    facts = _FakeFacts(error=RecordNotFound("nope"))
+    async with _client(facts=facts) as client:
         resp = await client.post(_URL, json={})
     assert resp.status_code == 404
     assert resp.json()["error"] == "IN_SITU_VISIT_NOT_FOUND"
 
 
 async def test_semantic_failure_is_422() -> None:
-    cidoc = _FakeCidoc(error=SemanticValidationFailed("bad graph"))
-    async with _client(cidoc=cidoc) as client:
+    facts = _FakeFacts(error=SemanticValidationFailed("bad graph"))
+    async with _client(facts=facts) as client:
         resp = await client.post(_URL, json={})
     assert resp.status_code == 422
     assert resp.json()["error"] == "SEMANTIC_VALIDATION_FAILED"
@@ -206,6 +249,11 @@ async def test_get_stored_narrative_by_id() -> None:
     body = resp.json()
     assert body["narrative_id"] == narrative_id
     assert body["data"]["narrative"] == "narrative text"
+    assert body["facts_snapshot"]["id"] == created["facts_snapshot"]["id"]
+    assert (
+        body["facts_snapshot"]["payload_json"]
+        == created["facts_snapshot"]["payload_json"]
+    )
 
 
 async def test_get_unknown_narrative_is_404() -> None:
@@ -231,6 +279,8 @@ async def test_patch_updates_narrative_text() -> None:
     assert resp.status_code == 200
     assert resp.json()["data"]["narrative"] == "edited text"
     assert repo.stored[0].narrative == "edited text"
+    assert repo.revisions[0].previous_narrative == "narrative text"
+    assert repo.revisions[0].revised_narrative == "edited text"
 
 
 async def test_patch_unknown_narrative_is_404() -> None:

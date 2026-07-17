@@ -2,21 +2,30 @@
 
 A Knowledge-Graph-Augmented-Generation endpoint that turns a stored in-situ visit
 into a human narrative. It reuses the CIDOC-CRM 7.1.3 mapping (see
-`08InSituVisit-CIDOC-CRM.md`), expands + validates the graph (`rdflib` + `owlrl` +
-`pyshacl`), selects a persona prompt by `narrative_type`, and runs a local
+`08InSituVisit-CIDOC-CRM.md`), validates the graph (`rdflib` + `pyshacl`) as the
+semantic gate, converts the stored snapshot into canonical visit facts, selects
+a persona prompt by `narrative_type`, and runs a local
 **Llama 3.1:8b** model via Ollama. Lives in its own context
 (`app/ai/museum_narrative`) and reads the mapping through `app.cidoc_crm.public`.
 
 `narrative_type` is a **rendering style** (the LLM persona), not a property of the
 visit: the same facts are retold in different tones. The graph is the model's only
-permitted source of facts. Same auth as the rest of the API (`Authorization` +
-`X-Permission-Id`); **staff-only**. Errors use `{ "error": CODE, "message": str }`.
+permitted semantic validation gate, but the model prompt receives only canonical
+facts, never CIDOC IRIs or expanded JSON-LD. Same auth as the rest of the API
+(`Authorization` + `X-Permission-Id`); **staff-only**. Errors use
+`{ "error": CODE, "message": str }`.
 
 Every generation is **persisted** as a stored history row: the same record can be
 retold many times in different styles/languages/temperatures, and each run is
 kept. A manual `PATCH` may later correct only the narrative text; the generation
 metadata stays unchanged. The `POST` returns the new `narrative_id`; the two
 `GET` endpoints below read the stored history back.
+
+The backend also persists the exact `facts_snapshot` used to build the prompt and
+runs deterministic narrative checks against it. `meta.validation_findings[]`
+contains zero or more findings with `code`, `message`, and `evidence`. Current
+codes include invented dates, planned dates asserted as executed, invented
+people, invented objects, and invented places.
 
 ---
 
@@ -72,10 +81,22 @@ and `generated_at`.
     "resolution_source": "request_body",
     "target_language": "pt",
     "creativity_temperature": 0.3,
-    "llm_model": "llama3.1:8b"
+    "llm_model": "llama3.1:8b",
+    "facts_snapshot_id": "facts-snapshot-uuid",
+    "prompt_version": "museum-narrative-canonical-v1",
+    "model_response_hash": "sha256...",
+    "validation_conforms": true,
+    "validation_findings": []
   },
-  "data": {
-    "narrative": "🐋 Ciência em ação no Museu! …"
+  "data": { "narrative": "🐋 Ciência em ação no Museu! …" },
+  "facts_snapshot": {
+    "id": "facts-snapshot-uuid",
+    "record_id": "9481a-2026",
+    "payload_json": "{\"project_reference\":\"CUP-...\"}",
+    "payload_hash": "sha256...",
+    "builder_version": "canonical-visit-facts-v1",
+    "prompt_version": "museum-narrative-canonical-v1",
+    "created_at": "2026-06-21T10:30:00Z"
   }
 }
 ```
@@ -134,9 +155,23 @@ size : integer (optional, default 20, 1..100)
         "resolution_source": "request_body",
         "target_language": "pt",
         "creativity_temperature": 0.3,
-        "llm_model": "llama3.1:8b"
+        "llm_model": "llama3.1:8b",
+        "facts_snapshot_id": "facts-snapshot-uuid",
+        "prompt_version": "museum-narrative-canonical-v1",
+        "model_response_hash": "sha256...",
+        "validation_conforms": true,
+        "validation_findings": []
       },
-      "data": { "narrative": "🐋 …" }
+      "data": { "narrative": "🐋 …" },
+      "facts_snapshot": {
+        "id": "facts-snapshot-uuid",
+        "record_id": "9481a-2026",
+        "payload_json": "{\"project_reference\":\"CUP-...\"}",
+        "payload_hash": "sha256...",
+        "builder_version": "canonical-visit-facts-v1",
+        "prompt_version": "museum-narrative-canonical-v1",
+        "created_at": "2026-06-21T10:30:00Z"
+      }
     }
   ],
   "page": 0,

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Date, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -26,6 +26,31 @@ class InSituVisitRecordOrm(Base):
     visitor_name: Mapped[str] = mapped_column(String(255))
     place_name: Mapped[str] = mapped_column(String(255))
     generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    record_schema_version: Mapped[int | None] = mapped_column(Integer, default=None)
+    mapping_version: Mapped[str | None] = mapped_column(String(64), default=None)
+    crm_version: Mapped[str | None] = mapped_column(String(64), default=None)
+    source_project_id: Mapped[str | None] = mapped_column(String(36), default=None)
+    project_title: Mapped[str | None] = mapped_column(String(255), default=None)
+    project_purpose: Mapped[str | None] = mapped_column(Text, default=None)
+    planned_begin_date: Mapped[date | None] = mapped_column(Date, default=None)
+    planned_end_date: Mapped[date | None] = mapped_column(Date, default=None)
+    execution_evidence_type: Mapped[str | None] = mapped_column(
+        String(255), default=None
+    )
+    execution_occurred_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None
+    )
+    execution_recorded_by: Mapped[str | None] = mapped_column(
+        String(255), default=None
+    )
+    execution_evidence_gaps: Mapped[list[str] | None] = mapped_column(
+        JSON, default=None
+    )
+    approved_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None
+    )
+    approved_by: Mapped[str | None] = mapped_column(String(255), default=None)
+    approval_note: Mapped[str | None] = mapped_column(Text, default=None)
 
     requested_objects: Mapped[list[RequestedObjectRecordOrm]] = relationship(
         back_populates="visit",
@@ -59,6 +84,9 @@ class RequestedObjectRecordOrm(Base):
     source_id: Mapped[str] = mapped_column(String(255))
     description: Mapped[str] = mapped_column(Text, default="")
     position: Mapped[int] = mapped_column(Integer)
+    display_title: Mapped[str | None] = mapped_column(String(255), default=None)
+    object_name: Mapped[str | None] = mapped_column(String(255), default=None)
+    brief_description_snapshot: Mapped[str | None] = mapped_column(Text, default=None)
 
     visit: Mapped[InSituVisitRecordOrm] = relationship(
         back_populates="requested_objects"
@@ -76,6 +104,19 @@ class InSituOccurrenceRecordOrm(Base):
     description: Mapped[str] = mapped_column(Text, default="")
     position: Mapped[int] = mapped_column(Integer)
     related_object_source_id: Mapped[str | None] = mapped_column(
+        String(255), default=None
+    )
+    number_of_objects: Mapped[int | None] = mapped_column(Integer, default=None)
+    occurrence_date: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None
+    )
+    location: Mapped[str | None] = mapped_column(String(255), default=None)
+    reported_by: Mapped[str | None] = mapped_column(String(255), default=None)
+    testimonial: Mapped[str | None] = mapped_column(Text, default=None)
+    occurrence_log_date_conclusion: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None
+    )
+    occurrence_log_curator: Mapped[str | None] = mapped_column(
         String(255), default=None
     )
 
@@ -98,6 +139,7 @@ class InSituOccurrenceAttachmentRecordOrm(Base):
     description: Mapped[str] = mapped_column(Text, default="")
     reference: Mapped[str] = mapped_column(String(1024))
     position: Mapped[int] = mapped_column(Integer)
+    media_type: Mapped[str | None] = mapped_column(String(64), default=None)
 
     occurrence: Mapped[InSituOccurrenceRecordOrm] = relationship(
         back_populates="attachments"
@@ -117,6 +159,15 @@ class InSituLogRecordOrm(Base):
     related_object_source_id: Mapped[str | None] = mapped_column(
         String(255), default=None
     )
+    number_of_objects: Mapped[int | None] = mapped_column(Integer, default=None)
+    added_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None
+    )
+    added_by: Mapped[str | None] = mapped_column(String(255), default=None)
+    access_log_date_conclusion: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None
+    )
+    access_log_curator: Mapped[str | None] = mapped_column(String(255), default=None)
 
     visit: Mapped[InSituVisitRecordOrm] = relationship(back_populates="logs")
     attachments: Mapped[list[InSituLogAttachmentRecordOrm]] = relationship(
@@ -137,6 +188,7 @@ class InSituLogAttachmentRecordOrm(Base):
     description: Mapped[str] = mapped_column(Text, default="")
     reference: Mapped[str] = mapped_column(String(1024))
     position: Mapped[int] = mapped_column(Integer)
+    media_type: Mapped[str | None] = mapped_column(String(64), default=None)
 
     log: Mapped[InSituLogRecordOrm] = relationship(back_populates="attachments")
 
@@ -154,6 +206,10 @@ class InSituPublicationRecordOrm(Base):
     related_object_source_id: Mapped[str | None] = mapped_column(
         String(255), default=None
     )
+    added_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None
+    )
+    added_by: Mapped[str | None] = mapped_column(String(255), default=None)
 
     visit: Mapped[InSituVisitRecordOrm] = relationship(back_populates="publications")
     attachments: Mapped[list[InSituPublicationAttachmentRecordOrm]] = relationship(
@@ -174,6 +230,7 @@ class InSituPublicationAttachmentRecordOrm(Base):
     description: Mapped[str] = mapped_column(Text, default="")
     reference: Mapped[str] = mapped_column(String(1024))
     position: Mapped[int] = mapped_column(Integer)
+    media_type: Mapped[str | None] = mapped_column(String(64), default=None)
 
     publication: Mapped[InSituPublicationRecordOrm] = relationship(
         back_populates="attachments"
