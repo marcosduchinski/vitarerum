@@ -1,0 +1,104 @@
+@startuml in-situ-visit-cidoc-narrative-flow
+title In Situ Visit — from source data to CIDOC-CRM to narrative
+
+start
+
+partition "use_of_collections (source of truth)" {
+  :CollectionUseProject + journals\n(occurrence / access / publication logs)\n+ Proposal.events;
+  :SqlAlchemyProjectExportReader.load();
+  :build_visit_execution_evidence(project)\n→ status COMPLETED + UseEvent COMPLETED;
+  :build_approval_view(proposal)\n→ latest ProposalEvent.APPROVED;
+  :ProjectExportView\n(rich fields: display_title, occurrence_date,\nlocation, reported_by, added_by/curator, ...);
+}
+
+partition "cidoc_crm — export" {
+  :UseOfCollectionsExportAdapter (ACL)\n→ ProjectExportData;
+
+  if (intended_use == IN_SITU_VISIT?) then (no)
+    :409 INVALID_USE_TYPE;
+    stop
+  endif
+
+  if (visit_execution_evidence.occurred?) then (no)
+    :409 VISIT_NOT_EVIDENCED;
+    stop
+  endif
+
+  :capture mapping_version / crm_version once\n(frozen into the snapshot);
+  :InSituVisitRecord.create(...)\n→ rich persisted snapshot;
+  :SqlAlchemyInSituVisitRecordRepository.add();
+}
+
+partition "cidoc_crm — semantic projection" {
+  :map_record_to_cidoc()\n(engine.py + in_situ_visit_to_cidoc.json);
+
+  if (execution_occurred_at present?) then (yes)
+    :E7_Activity gets P4_has_time-span\n(observed execution time);
+  else (no)
+    :E7_Activity gets NO time-span\n(planned dates never asserted as factual);
+  endif
+
+  :compact CIDOC-CRM JSON-LD;
+  :validate_cidoc(doc)\n(SHACL over parsed graph, no OWL-RL expansion materialised);
+
+  if (conforms?) then (no)
+    :422 SEMANTIC_VALIDATION_FAILED\n(GET /cidoc-crm, validate=true by default);
+  else (yes)
+  endif
+}
+
+partition "ai.museum_narrative — canonical facts" {
+  :NarrativeFactsAdapter.prepare();
+  :build_in_situ_visit_cidoc() + validate_cidoc()\n← SHACL gate preserved even though\nthe LLM never sees this graph;
+
+  if (conforms?) then (no)
+    :422 SEMANTIC_VALIDATION_FAILED;
+    stop
+  endif
+
+  :get_in_situ_visit_record_view()\n(presentation DTO, not the RDF graph);
+  :_record_view_to_facts()\n→ CanonicalVisitFacts\n(deterministic ordering, evidence_gaps declared);
+}
+
+partition "ai.museum_narrative — generation" {
+  :NarrativeFactSnapshot.create()\n(payload_json + sha256 hash + builder_version);
+  :persist facts snapshot;
+  :build_system_prompt() + build_user_prompt()\n(canonical facts only — no CIDOC IRIs, no RDF);
+  :Ollama LLM generates narrative;
+  :validate_generated_narrative(text, facts)\n(invented dates/people/objects/places,\nplanned date treated as executed);
+
+  if (conforms?) then (no)
+    :validation_conforms = false\n(persisted, marked for review — not rejected);
+  else (yes)
+    :validation_conforms = true;
+  endif
+
+  :GeneratedNarrative.create(...)\n(facts_snapshot_id, prompt_version, model_response_hash);
+  :persist narrative;
+}
+
+partition "reports.in_situ_visit — aggregator" {
+  :GenerateInSituVisitReport.execute();
+  :CidocRecordExporter.export()\n→ cidoc_crm.public.export_in_situ_visit_record();
+  :MuseumNarrativeGenerator.generate()\n→ ai.museum_narrative.public.generate_narrative();
+  :InSituVisitReport.create()\n(links record + narrative);
+}
+
+partition "UI — report detail" {
+  :show mapping / record schema version;
+  :show evidence-gaps warning (if any);
+  :show "facts used in narrative" tab;
+  :show validation badge (Conforms / Needs review);
+  :link to validated CIDOC-CRM graph;
+}
+
+stop
+
+note right
+  Cross-context boundaries are published languages only:
+  cidoc_crm.public and ai.museum_narrative.public.
+  reports never imports the other contexts' internal
+  use cases or presentation.dependencies.
+end note
+
+@enduml
