@@ -4,9 +4,18 @@ from typing import Literal
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from app.ai.museum_question_triage.domain.models import UseCategory
-
 _LOCAL_ENVS = {"local", "test", "development"}
+_USE_CATEGORY_VALUES = {
+    "EXHIBITION",
+    "PUBLISHING_IMAGES",
+    "LEARNING_EVENTS",
+    "ANSWERING_ENQUIRIES",
+    "RESEARCH_PROJECTS",
+    "OPERATING_MACHINERY",
+    "PLAYING_INSTRUMENTS",
+    "FILMING",
+    "INSPIRING_NEW_WORK",
+}
 
 
 class Settings(BaseSettings):
@@ -116,9 +125,7 @@ class Settings(BaseSettings):
             category_value,
             threshold,
         ) in self.use_category_cascade_category_high_thresholds.items():
-            try:
-                UseCategory(category_value)
-            except ValueError:
+            if category_value not in _USE_CATEGORY_VALUES:
                 errors.append(f"unknown use category {category_value!r}")
             if not 0 <= threshold <= 1:
                 errors.append(
