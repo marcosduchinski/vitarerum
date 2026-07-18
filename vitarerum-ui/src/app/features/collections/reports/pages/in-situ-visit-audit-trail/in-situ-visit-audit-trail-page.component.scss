@@ -200,6 +200,24 @@
   overflow-wrap: anywhere;
 }
 
+.audit-link {
+  color: var(--color-accent);
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.18em;
+}
+
+.audit-link:hover {
+  color: var(--color-accent-strong);
+}
+
+.audit-link:focus-visible {
+  border-radius: var(--radius-xs);
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
 .audit-counts {
   display: flex;
   flex-wrap: wrap;

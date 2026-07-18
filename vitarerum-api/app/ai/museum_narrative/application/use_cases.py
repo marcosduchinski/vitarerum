@@ -11,9 +11,9 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
 
 from app.ai.museum_narrative.application.prompts import (
-    build_system_prompt,
     build_user_prompt,
 )
 from app.ai.museum_narrative.domain.facts import CanonicalVisitFacts
@@ -31,16 +31,19 @@ from app.ai.museum_narrative.domain.ports import (
     NarrativeFactsPort,
     NarrativeModelPort,
     NarrativeNotFound,
+    NarrativePromptPort,
     NarrativeRepository,
     UnsupportedNarrativeType,
 )
-from app.ai.museum_narrative.domain.validation import validate_generated_narrative
+from app.ai.museum_narrative.domain.validation import (
+    NarrativeFinding,
+    validate_generated_narrative,
+)
 from app.shared.kernel import PermissionId
 
 _DEFAULT_TEMPERATURE = 0.3
 _DEFAULT_LANGUAGE = "pt"
 _FACTS_BUILDER_VERSION = "canonical-visit-facts-v1"
-_PROMPT_VERSION = "museum-narrative-canonical-v1"
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,6 +83,33 @@ class UpdateNarrativeInput:
     edited_by: str
 
 
+@dataclass(frozen=True, slots=True)
+class PreviewNarrativeInput:
+    record_id: str
+    prompt_version_id: str
+    narrative_type: str | None = None
+    target_language: str = _DEFAULT_LANGUAGE
+    creativity_temperature: float | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PreviewNarrativeResult:
+    record_id: str
+    narrative: str
+    generated_at: datetime
+    resolved_narrative_type: NarrativeType
+    resolution_source: ResolutionSource
+    target_language: str
+    creativity_temperature: float
+    llm_model: str
+    prompt_version_id: str
+    prompt_version: str
+    prompt_status: str
+    model_response_hash: str
+    validation_conforms: bool
+    validation_findings: list[NarrativeFinding]
+
+
 def _resolve_type(raw: str | None) -> tuple[NarrativeType, ResolutionSource]:
     if raw is None:
         return DEFAULT_NARRATIVE_TYPE, ResolutionSource.DEFAULT
@@ -105,17 +135,20 @@ class GenerateNarrative:
     def __init__(
         self,
         facts: NarrativeFactsPort,
+        prompts: NarrativePromptPort,
         model: NarrativeModelPort,
         repository: NarrativeRepository,
         model_name: str,
     ) -> None:
         self._facts = facts
+        self._prompts = prompts
         self._model = model
         self._repository = repository
         self._model_name = model_name
 
     async def execute(self, data: GenerateNarrativeInput) -> GeneratedNarrative:
         narrative_type, source = _resolve_type(data.narrative_type)
+        prompt = await self._prompts.get_published(narrative_type)
         prepared = await self._facts.prepare(data.record_id)
         facts = prepared.facts
         payload_json = _facts_payload(facts)
@@ -124,14 +157,14 @@ class GenerateNarrative:
             payload_json=payload_json,
             payload_hash=_sha256(payload_json),
             builder_version=_FACTS_BUILDER_VERSION,
-            prompt_version=_PROMPT_VERSION,
+            prompt_version=prompt.version_label,
             cidoc_document_json=prepared.cidoc_document_json,
             cidoc_validation_report=prepared.cidoc_validation_report,
             cidoc_conforms=prepared.cidoc_conforms,
         )
         await self._repository.add_facts_snapshot(fact_snapshot)
         narrative = await self._model.generate(
-            system_prompt=build_system_prompt(narrative_type),
+            system_prompt=prompt.content,
             user_prompt=build_user_prompt(facts, data.target_language),
             temperature=data.creativity_temperature,
         )
@@ -149,7 +182,8 @@ class GenerateNarrative:
             creativity_temperature=data.creativity_temperature,
             llm_model=self._model_name,
             facts_snapshot_id=fact_snapshot.id,
-            prompt_version=_PROMPT_VERSION,
+            prompt_version_id=prompt.version_id,
+            prompt_version=prompt.version_label,
             model_response_hash=_sha256(text),
             facts_snapshot=fact_snapshot,
             validation_conforms=validation.conforms,
@@ -157,6 +191,53 @@ class GenerateNarrative:
         )
         await self._repository.add(record)
         return record
+
+
+class PreviewNarrative:
+    def __init__(
+        self,
+        facts: NarrativeFactsPort,
+        prompts: NarrativePromptPort,
+        model: NarrativeModelPort,
+        model_name: str,
+    ) -> None:
+        self._facts = facts
+        self._prompts = prompts
+        self._model = model
+        self._model_name = model_name
+
+    async def execute(self, data: PreviewNarrativeInput) -> PreviewNarrativeResult:
+        narrative_type, source = _resolve_type(data.narrative_type)
+        prompt = await self._prompts.get_version(data.prompt_version_id, narrative_type)
+        prepared = await self._facts.prepare(data.record_id)
+        temperature = data.creativity_temperature
+        if temperature is None:
+            temperature = _DEFAULT_TEMPERATURE
+        narrative = await self._model.generate(
+            system_prompt=prompt.content,
+            user_prompt=build_user_prompt(prepared.facts, data.target_language),
+            temperature=temperature,
+        )
+        text = narrative.strip()
+        if not text:
+            raise ModelUnavailable("The language model returned an empty narrative")
+        validation = validate_generated_narrative(text, prepared.facts)
+        return PreviewNarrativeResult(
+            record_id=data.record_id,
+            narrative=text,
+            generated_at=datetime.now(UTC),
+            resolved_narrative_type=narrative_type,
+            resolution_source=source,
+            target_language=data.target_language,
+            creativity_temperature=temperature,
+            llm_model=self._model_name,
+            prompt_version_id=prompt.version_id,
+            prompt_version=prompt.version_label,
+            prompt_status=prompt.status,
+            model_response_hash=_sha256(text),
+            validation_conforms=validation.conforms,
+            validation_findings=list(validation.findings),
+        )
 
 
 class ListNarratives:

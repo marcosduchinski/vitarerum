@@ -1,6 +1,8 @@
 from datetime import date
+from typing import Any, cast
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.museum_narrative.application.prompts import (
     build_system_prompt,
@@ -15,6 +17,8 @@ from app.ai.museum_narrative.application.use_cases import (
     ListNarrativeRevisionsInput,
     ListNarratives,
     ListNarrativesInput,
+    PreviewNarrative,
+    PreviewNarrativeInput,
     UpdateNarrative,
     UpdateNarrativeInput,
 )
@@ -39,6 +43,8 @@ from app.ai.museum_narrative.domain.models import (
 from app.ai.museum_narrative.domain.ports import (
     ModelUnavailable,
     NarrativeNotFound,
+    NarrativePromptUnavailable,
+    NarrativePromptVersionMismatch,
     UnsupportedNarrativeType,
 )
 from app.ai.museum_narrative.infrastructure import cidoc_acl
@@ -100,6 +106,59 @@ class _FakeModel:
         return self._text
 
 
+class _FakePrompt:
+    def __init__(
+        self, narrative_type: NarrativeType, *, status: str = "published"
+    ) -> None:
+        self.version_id = f"pver-test-{narrative_type.value}-v1"
+        self.version_label = f"museum-narrative-{narrative_type.value}-v1"
+        self.status = status
+        self.content = f"Published system prompt for {narrative_type.value} narrative."
+
+
+class _FakePrompts:
+    def __init__(self, *, unavailable: bool = False) -> None:
+        self.seen: list[NarrativeType] = []
+        self.seen_versions: list[str] = []
+        self.unavailable = unavailable
+
+    async def get_published(self, narrative_type: NarrativeType) -> _FakePrompt:
+        self.seen.append(narrative_type)
+        if self.unavailable:
+            raise NarrativePromptUnavailable("No published prompt")
+        return _FakePrompt(narrative_type)
+
+    async def get_version(
+        self, version_id: str, narrative_type: NarrativeType
+    ) -> _FakePrompt:
+        self.seen_versions.append(version_id)
+        prompt = _FakePrompt(NarrativeType.INSTITUTIONAL, status="draft")
+        prompt.version_id = version_id
+        prompt.version_label = "museum-narrative-institutional-draft"
+        prompt.content = "Draft system prompt."
+        return prompt
+
+
+class _MutablePrompts:
+    def __init__(self, prompt: _FakePrompt) -> None:
+        self.current = prompt
+
+    async def get_published(self, narrative_type: NarrativeType) -> _FakePrompt:
+        return self.current
+
+    async def get_version(
+        self, version_id: str, narrative_type: NarrativeType
+    ) -> _FakePrompt:
+        return self.current
+
+
+class _MismatchedPrompts(_FakePrompts):
+    async def get_version(
+        self, version_id: str, narrative_type: NarrativeType
+    ) -> _FakePrompt:
+        raise NarrativePromptVersionMismatch("mismatch")
+
+
 class _FakeRepo:
     def __init__(self) -> None:
         self.stored: list[GeneratedNarrative] = []
@@ -133,9 +192,7 @@ class _FakeRepo:
         matches.sort(key=lambda revision: revision.created_at)
         return matches[page * size : page * size + size], len(matches)
 
-    async def get_by_id(
-        self, narrative_id: NarrativeId
-    ) -> GeneratedNarrative | None:
+    async def get_by_id(self, narrative_id: NarrativeId) -> GeneratedNarrative | None:
         return next((n for n in self.stored if n.id == narrative_id), None)
 
     async def list_by_record(
@@ -148,7 +205,11 @@ class _FakeRepo:
 def _use_case() -> tuple[GenerateNarrative, _FakeModel, _FakeRepo]:
     model = _FakeModel()
     repo = _FakeRepo()
-    return GenerateNarrative(_FakeFacts(), model, repo, "llama3.1:8b"), model, repo
+    return (
+        GenerateNarrative(_FakeFacts(), _FakePrompts(), model, repo, "llama3.1:8b"),
+        model,
+        repo,
+    )
 
 
 def _use_case_with_facts(
@@ -156,7 +217,13 @@ def _use_case_with_facts(
 ) -> tuple[GenerateNarrative, _FakeModel, _FakeRepo]:
     model = _FakeModel(model_text)
     repo = _FakeRepo()
-    return GenerateNarrative(_FakeFacts(facts), model, repo, "llama3.1:8b"), model, repo
+    return (
+        GenerateNarrative(
+            _FakeFacts(facts), _FakePrompts(), model, repo, "llama3.1:8b"
+        ),
+        model,
+        repo,
+    )
 
 
 async def test_omitted_type_defaults_to_institutional_and_persists() -> None:
@@ -170,6 +237,8 @@ async def test_omitted_type_defaults_to_institutional_and_persists() -> None:
     assert repo.stored == [result]
     assert len(repo.snapshots) == 1
     assert result.facts_snapshot_id == repo.snapshots[0].id
+    assert result.prompt_version_id == "pver-test-institutional-v1"
+    assert result.prompt_version == "museum-narrative-institutional-v1"
     assert result.prompt_version == repo.snapshots[0].prompt_version
     assert result.model_response_hash
     assert result.id
@@ -181,6 +250,7 @@ async def test_fact_snapshot_freezes_payload_used_for_generation() -> None:
     use_case, _, repo = _use_case_with_facts(initial_facts)
 
     result = await use_case.execute(GenerateNarrativeInput(record_id="r1"))
+    assert result.facts_snapshot_id is not None
     snapshot = await repo.get_facts_snapshot(result.facts_snapshot_id)
 
     initial_facts.evidence_gaps.append(
@@ -191,13 +261,114 @@ async def test_fact_snapshot_freezes_payload_used_for_generation() -> None:
     assert "later builder/source change" not in snapshot.payload_json
 
 
+async def test_generation_uses_published_prompt_registry_output() -> None:
+    use_case, model, repo = _use_case()
+
+    result = await use_case.execute(
+        GenerateNarrativeInput(record_id="r1", narrative_type="scientific")
+    )
+
+    assert model.system_prompt == "Published system prompt for scientific narrative."
+    assert result.prompt_version_id == "pver-test-scientific-v1"
+    assert result.prompt_version == "museum-narrative-scientific-v1"
+    assert repo.snapshots[0].prompt_version == "museum-narrative-scientific-v1"
+
+
+async def test_preview_uses_prompt_version_without_persisting_narrative() -> None:
+    facts = _FakeFacts()
+    prompts = _FakePrompts()
+    model = _FakeModel(" preview narrative ")
+    repo = _FakeRepo()
+    use_case = PreviewNarrative(facts, prompts, model, "llama3.1:8b")
+
+    result = await use_case.execute(
+        PreviewNarrativeInput(
+            record_id="r1",
+            prompt_version_id="draft-version-1",
+            narrative_type="institutional",
+            creativity_temperature=None,
+        )
+    )
+
+    assert facts.seen == "r1"
+    assert prompts.seen_versions == ["draft-version-1"]
+    assert model.system_prompt == "Draft system prompt."
+    assert model.temperature == 0.3
+    assert result.narrative == "preview narrative"
+    assert result.prompt_version_id == "draft-version-1"
+    assert result.prompt_version == "museum-narrative-institutional-draft"
+    assert result.prompt_status == "draft"
+    assert result.llm_model == "llama3.1:8b"
+    assert result.model_response_hash
+    assert repo.stored == []
+    assert repo.snapshots == []
+
+
+async def test_preview_rejects_prompt_version_for_another_narrative_type() -> None:
+    facts = _FakeFacts()
+    model = _FakeModel()
+    use_case = PreviewNarrative(facts, _MismatchedPrompts(), model, "llama3.1:8b")
+
+    with pytest.raises(NarrativePromptVersionMismatch):
+        await use_case.execute(
+            PreviewNarrativeInput(
+                record_id="r1",
+                prompt_version_id="social-media-draft",
+                narrative_type="institutional",
+            )
+        )
+
+    assert facts.seen is None
+    assert model.system_prompt == ""
+
+
+async def test_existing_narrative_keeps_prompt_version_after_new_publish() -> None:
+    prompts = _MutablePrompts(_FakePrompt(NarrativeType.INSTITUTIONAL))
+    model = _FakeModel(" first narrative ")
+    repo = _FakeRepo()
+    use_case = GenerateNarrative(_FakeFacts(), prompts, model, repo, "llama3.1:8b")
+
+    first = await use_case.execute(GenerateNarrativeInput(record_id="r1"))
+    prompts.current = _FakePrompt(NarrativeType.SCIENTIFIC)
+    second = await use_case.execute(GenerateNarrativeInput(record_id="r2"))
+
+    assert first.prompt_version_id == "pver-test-institutional-v1"
+    assert first.prompt_version == "museum-narrative-institutional-v1"
+    assert second.prompt_version_id == "pver-test-scientific-v1"
+    assert second.prompt_version == "museum-narrative-scientific-v1"
+    assert repo.stored[0].prompt_version_id == "pver-test-institutional-v1"
+    assert repo.stored[0].prompt_version == "museum-narrative-institutional-v1"
+
+
+async def test_missing_published_prompt_fails_without_hardcoded_fallback() -> None:
+    facts = _FakeFacts()
+    repo = _FakeRepo()
+    model = _FakeModel()
+    use_case = GenerateNarrative(
+        facts,
+        _FakePrompts(unavailable=True),
+        model,
+        repo,
+        "llama3.1:8b",
+    )
+
+    with pytest.raises(NarrativePromptUnavailable):
+        await use_case.execute(GenerateNarrativeInput(record_id="r1"))
+
+    assert facts.seen is None
+    assert model.system_prompt == ""
+    assert repo.snapshots == []
+    assert repo.stored == []
+
+
 async def test_fact_snapshot_freezes_cidoc_gate_output_used_for_generation() -> None:
     facts = _FakeFacts()
     model = _FakeModel()
     repo = _FakeRepo()
-    use_case = GenerateNarrative(facts, model, repo, "llama3.1:8b")
+    use_case = GenerateNarrative(facts, _FakePrompts(), model, repo, "llama3.1:8b")
 
     result = await use_case.execute(GenerateNarrativeInput(record_id="r1"))
+    assert result.facts_snapshot_id is not None
     snapshot = await repo.get_facts_snapshot(result.facts_snapshot_id)
 
     facts.cidoc_document_json = '{"@graph":[{"later":"mapping change"}]}'
@@ -313,9 +484,7 @@ async def test_invented_person_object_and_place_are_marked_for_review() -> None:
     )
     use_case, _, _ = _use_case_with_facts(
         facts,
-        model_text=(
-            "Dr. Miguel Silva examined INV-999 in Gallery B during the visit."
-        ),
+        model_text=("Dr. Miguel Silva examined INV-999 in Gallery B during the visit."),
     )
 
     result = await use_case.execute(GenerateNarrativeInput(record_id="r1"))
@@ -347,8 +516,7 @@ async def test_user_prompt_receives_canonical_facts_and_declared_absence() -> No
     assert "[CANONICAL VISIT FACTS]" in model.user_prompt
     assert "CIDOC-CRM Validated Graph" not in model.user_prompt
     assert (
-        "Não foi registado local específico da ocorrência OCC-1."
-        in model.user_prompt
+        "Não foi registado local específico da ocorrência OCC-1." in model.user_prompt
     )
     assert "crm:" not in model.user_prompt
     assert "http://www.cidoc-crm.org" not in model.user_prompt
@@ -366,7 +534,9 @@ async def test_unsupported_type_raises_and_persists_nothing() -> None:
 
 async def test_list_and_get_use_cases() -> None:
     repo = _FakeRepo()
-    gen = GenerateNarrative(_FakeFacts(), _FakeModel(), repo, "llama3.1:8b")
+    gen = GenerateNarrative(
+        _FakeFacts(), _FakePrompts(), _FakeModel(), repo, "llama3.1:8b"
+    )
     created = await gen.execute(GenerateNarrativeInput(record_id="r1"))
 
     listed, total = await ListNarratives(repo).execute(
@@ -390,7 +560,9 @@ async def test_get_missing_narrative_raises() -> None:
 
 async def test_get_under_wrong_record_raises() -> None:
     repo = _FakeRepo()
-    gen = GenerateNarrative(_FakeFacts(), _FakeModel(), repo, "llama3.1:8b")
+    gen = GenerateNarrative(
+        _FakeFacts(), _FakePrompts(), _FakeModel(), repo, "llama3.1:8b"
+    )
     created = await gen.execute(GenerateNarrativeInput(record_id="r1"))
     with pytest.raises(NarrativeNotFound):
         await GetNarrative(repo).execute(
@@ -400,7 +572,9 @@ async def test_get_under_wrong_record_raises() -> None:
 
 async def test_update_narrative_edits_text_and_persists() -> None:
     repo = _FakeRepo()
-    gen = GenerateNarrative(_FakeFacts(), _FakeModel(), repo, "llama3.1:8b")
+    gen = GenerateNarrative(
+        _FakeFacts(), _FakePrompts(), _FakeModel(), repo, "llama3.1:8b"
+    )
     created = await gen.execute(GenerateNarrativeInput(record_id="r1"))
 
     updated = await UpdateNarrative(repo).execute(
@@ -421,7 +595,9 @@ async def test_update_narrative_edits_text_and_persists() -> None:
 
 async def test_list_revisions_empty_for_never_edited_narrative() -> None:
     repo = _FakeRepo()
-    gen = GenerateNarrative(_FakeFacts(), _FakeModel(), repo, "llama3.1:8b")
+    gen = GenerateNarrative(
+        _FakeFacts(), _FakePrompts(), _FakeModel(), repo, "llama3.1:8b"
+    )
     created = await gen.execute(GenerateNarrativeInput(record_id="r1"))
 
     revisions, total = await ListNarrativeRevisions(repo).execute(
@@ -434,7 +610,9 @@ async def test_list_revisions_empty_for_never_edited_narrative() -> None:
 
 async def test_list_revisions_returns_chronological_editorial_history() -> None:
     repo = _FakeRepo()
-    gen = GenerateNarrative(_FakeFacts(), _FakeModel(), repo, "llama3.1:8b")
+    gen = GenerateNarrative(
+        _FakeFacts(), _FakePrompts(), _FakeModel(), repo, "llama3.1:8b"
+    )
     created = await gen.execute(GenerateNarrativeInput(record_id="r1"))
     update = UpdateNarrative(repo)
 
@@ -485,7 +663,9 @@ async def test_update_missing_narrative_raises() -> None:
 
 async def test_update_under_wrong_record_raises() -> None:
     repo = _FakeRepo()
-    gen = GenerateNarrative(_FakeFacts(), _FakeModel(), repo, "llama3.1:8b")
+    gen = GenerateNarrative(
+        _FakeFacts(), _FakePrompts(), _FakeModel(), repo, "llama3.1:8b"
+    )
     created = await gen.execute(GenerateNarrativeInput(record_id="r1"))
     with pytest.raises(NarrativeNotFound):
         await UpdateNarrative(repo).execute(
@@ -501,7 +681,9 @@ async def test_update_under_wrong_record_raises() -> None:
 
 async def test_list_revisions_under_wrong_record_raises() -> None:
     repo = _FakeRepo()
-    gen = GenerateNarrative(_FakeFacts(), _FakeModel(), repo, "llama3.1:8b")
+    gen = GenerateNarrative(
+        _FakeFacts(), _FakePrompts(), _FakeModel(), repo, "llama3.1:8b"
+    )
     created = await gen.execute(GenerateNarrativeInput(record_id="r1"))
     await UpdateNarrative(repo).execute(
         UpdateNarrativeInput(
@@ -522,24 +704,30 @@ async def test_blank_model_output_is_rejected_before_persistence() -> None:
     repo = _FakeRepo()
 
     class _BlankModel:
-        async def generate(self, *, system_prompt, user_prompt, temperature) -> str:
+        async def generate(
+            self, *, system_prompt: str, user_prompt: str, temperature: float
+        ) -> str:
             return "   "
 
-    gen = GenerateNarrative(_FakeFacts(), _BlankModel(), repo, "llama3.1:8b")
+    gen = GenerateNarrative(
+        _FakeFacts(), _FakePrompts(), _BlankModel(), repo, "llama3.1:8b"
+    )
     with pytest.raises(ModelUnavailable):
         await gen.execute(GenerateNarrativeInput(record_id="r1"))
     assert repo.stored == []
 
 
-async def test_facts_adapter_validates_cidoc_before_facts(monkeypatch) -> None:
+async def test_facts_adapter_validates_cidoc_before_facts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     compact_doc = {"@context": {"ex": "http://example.org/"}, "@graph": []}
     calls: list[str] = []
 
-    async def build(_session, record_id: str) -> dict:
+    async def build(_session: AsyncSession, record_id: str) -> dict[str, Any]:
         calls.append(record_id)
         return compact_doc
 
-    async def view(_session, record_id: str):
+    async def view(_session: AsyncSession, record_id: str) -> object:
         assert record_id == "r1"
         return type(
             "RecordView",
@@ -569,7 +757,7 @@ async def test_facts_adapter_validates_cidoc_before_facts(monkeypatch) -> None:
             },
         )()
 
-    def validate(doc: dict) -> tuple[bool, str]:
+    def validate(doc: dict[str, Any]) -> tuple[bool, str]:
         assert doc is compact_doc
         return True, "ok"
 
@@ -577,7 +765,7 @@ async def test_facts_adapter_validates_cidoc_before_facts(monkeypatch) -> None:
     monkeypatch.setattr(cidoc_acl, "get_in_situ_visit_record_view", view)
     monkeypatch.setattr(cidoc_acl, "validate_cidoc", validate)
 
-    result = await NarrativeFactsAdapter(object()).prepare("r1")
+    result = await NarrativeFactsAdapter(cast(AsyncSession, object())).prepare("r1")
 
     assert result.facts.source_snapshot_id == "r1"
     assert result.facts.project_reference == "CUP-1"

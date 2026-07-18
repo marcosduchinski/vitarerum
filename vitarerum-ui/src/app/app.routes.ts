@@ -107,6 +107,18 @@ export const routes: Routes = [
       },
 
       {
+        path: 'ai',
+        children: [
+          { path: '', pathMatch: 'full', redirectTo: 'prompts' },
+          {
+            path: 'prompts',
+            loadChildren: () =>
+              import('@features/ai/prompts/ai-prompts.routes').then((m) => m.AI_PROMPTS_ROUTES),
+          },
+        ],
+      },
+
+      {
         path: 'admin',
         loadChildren: () => import('@features/admin/admin.routes').then((m) => m.ADMIN_ROUTES),
       },

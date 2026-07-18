@@ -125,6 +125,7 @@ class GeneratedNarrative:
     llm_model: str
     generated_at: datetime
     facts_snapshot_id: NarrativeFactSnapshotId | None = None
+    prompt_version_id: str | None = None
     prompt_version: str | None = None
     model_response_hash: str | None = None
     facts_snapshot: NarrativeFactSnapshot | None = None
@@ -143,6 +144,7 @@ class GeneratedNarrative:
         creativity_temperature: float,
         llm_model: str,
         facts_snapshot_id: NarrativeFactSnapshotId | None = None,
+        prompt_version_id: str | None = None,
         prompt_version: str | None = None,
         model_response_hash: str | None = None,
         facts_snapshot: NarrativeFactSnapshot | None = None,
@@ -161,6 +163,7 @@ class GeneratedNarrative:
             llm_model=llm_model,
             generated_at=datetime.now(UTC),
             facts_snapshot_id=facts_snapshot_id,
+            prompt_version_id=prompt_version_id,
             prompt_version=prompt_version,
             model_response_hash=model_response_hash,
             facts_snapshot=facts_snapshot,

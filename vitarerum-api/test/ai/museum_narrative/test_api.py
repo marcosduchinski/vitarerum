@@ -1,5 +1,6 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Any
 
 from httpx import ASGITransport, AsyncClient
 
@@ -19,6 +20,8 @@ from app.ai.museum_narrative.domain.models import (
 from app.ai.museum_narrative.domain.ports import (
     ModelTimeout,
     ModelUnavailable,
+    NarrativePromptUnavailable,
+    NarrativePromptVersionMismatch,
     RecordNotFound,
     SemanticValidationFailed,
 )
@@ -26,6 +29,7 @@ from app.ai.museum_narrative.presentation.dependencies import (
     get_facts_port,
     get_model_port,
     get_narrative_repository,
+    get_prompt_port,
 )
 from app.database import get_async_session
 from app.identity.public import Actor, GroupName, PermissionId
@@ -68,14 +72,55 @@ class _FakeFacts:
 
 
 class _FakeModel:
-    def __init__(self, *, text: str = "narrative text", error=None) -> None:
+    def __init__(
+        self, *, text: str = "narrative text", error: Exception | None = None
+    ) -> None:
         self._text = text
         self._error = error
+        self.system_prompt = ""
+        self.temperature = 0.0
 
-    async def generate(self, *, system_prompt, user_prompt, temperature) -> str:
+    async def generate(
+        self, *, system_prompt: str, user_prompt: str, temperature: float
+    ) -> str:
         if self._error is not None:
             raise self._error
+        self.system_prompt = system_prompt
+        self.temperature = temperature
         return self._text
+
+
+class _FakePrompt:
+    version_id = "pver-test-institutional-v1"
+    version_label = "museum-narrative-institutional-v1"
+    status = "published"
+    content = "Published system prompt."
+
+
+class _FakeDraftPrompt:
+    version_id = "pver-draft-1"
+    version_label = "museum-narrative-institutional-draft"
+    status = "draft"
+    content = "Draft system prompt."
+
+
+class _FakePrompts:
+    def __init__(self, *, error: Exception | None = None) -> None:
+        self._error = error
+        self.seen_versions: list[str] = []
+
+    async def get_published(self, narrative_type: object) -> _FakePrompt:
+        if self._error is not None:
+            raise self._error
+        return _FakePrompt()
+
+    async def get_version(
+        self, version_id: str, narrative_type: object
+    ) -> _FakeDraftPrompt:
+        if self._error is not None:
+            raise self._error
+        self.seen_versions.append(version_id)
+        return _FakeDraftPrompt()
 
 
 class _FakeRepo:
@@ -112,9 +157,7 @@ class _FakeRepo:
         total = len(matches)
         return matches[page * size : page * size + size], total
 
-    async def get_by_id(
-        self, narrative_id: NarrativeId
-    ) -> GeneratedNarrative | None:
+    async def get_by_id(self, narrative_id: NarrativeId) -> GeneratedNarrative | None:
         return next((n for n in self.stored if n.id == narrative_id), None)
 
     async def list_by_record(
@@ -133,10 +176,16 @@ class _FakeSession:
 
 @asynccontextmanager
 async def _client(
-    *, caller: Actor = _STAFF, facts=None, model=None, repo: _FakeRepo | None = None
+    *,
+    caller: Actor = _STAFF,
+    facts: Any = None,
+    prompts: Any = None,
+    model: Any = None,
+    repo: _FakeRepo | None = None,
 ) -> AsyncIterator[AsyncClient]:
     app.dependency_overrides[get_caller_permission] = lambda: caller
     app.dependency_overrides[get_facts_port] = lambda: facts or _FakeFacts()
+    app.dependency_overrides[get_prompt_port] = lambda: prompts or _FakePrompts()
     app.dependency_overrides[get_model_port] = lambda: model or _FakeModel()
     app.dependency_overrides[get_narrative_repository] = lambda: repo or _FakeRepo()
     app.dependency_overrides[get_async_session] = lambda: _FakeSession()
@@ -147,6 +196,7 @@ async def _client(
 
 
 _URL = "/api/v1/cidoc-mapping/in-situ-visit/r1/narrative"
+_PREVIEW_URL = "/api/v1/cidoc-mapping/in-situ-visit/r1/narrative/preview"
 
 
 async def test_default_type_returns_institutional() -> None:
@@ -158,6 +208,7 @@ async def test_default_type_returns_institutional() -> None:
     assert body["meta"]["resolved_narrative_type"] == "institutional"
     assert body["meta"]["resolution_source"] == "default"
     assert body["meta"]["facts_snapshot_id"]
+    assert body["meta"]["prompt_version_id"] == "pver-test-institutional-v1"
     assert body["meta"]["prompt_version"]
     assert body["meta"]["model_response_hash"]
     assert body["meta"]["validation_conforms"] is True
@@ -215,6 +266,14 @@ async def test_model_unavailable_is_503() -> None:
     assert resp.json()["error"] == "MODEL_UNAVAILABLE"
 
 
+async def test_missing_published_prompt_is_503() -> None:
+    prompts = _FakePrompts(error=NarrativePromptUnavailable("missing prompt"))
+    async with _client(prompts=prompts) as client:
+        resp = await client.post(_URL, json={})
+    assert resp.status_code == 503
+    assert resp.json()["error"] == "NARRATIVE_PROMPT_UNAVAILABLE"
+
+
 async def test_model_timeout_is_504() -> None:
     model = _FakeModel(error=ModelTimeout("slow"))
     async with _client(model=model) as client:
@@ -227,6 +286,55 @@ async def test_external_caller_is_403() -> None:
     async with _client(caller=_EXTERNAL) as client:
         resp = await client.post(_URL, json={})
     assert resp.status_code == 403
+
+
+async def test_preview_returns_draft_metadata_without_persisting() -> None:
+    repo = _FakeRepo()
+    prompts = _FakePrompts()
+    model = _FakeModel(text=" preview text ")
+    async with _client(repo=repo, prompts=prompts, model=model) as client:
+        resp = await client.post(
+            _PREVIEW_URL,
+            json={
+                "prompt_version_id": "pver-draft-1",
+                "narrative_type": "institutional",
+            },
+        )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "preview"
+    assert body["record_id"] == "r1"
+    assert body["data"]["narrative"] == "preview text"
+    assert body["meta"]["prompt_version_id"] == "pver-draft-1"
+    assert body["meta"]["prompt_version"] == "museum-narrative-institutional-draft"
+    assert body["meta"]["prompt_status"] == "draft"
+    assert body["meta"]["llm_model"] == "llama3.1:8b"
+    assert body["meta"]["creativity_temperature"] == 0.3
+    assert body["meta"]["model_response_hash"]
+    assert prompts.seen_versions == ["pver-draft-1"]
+    assert model.system_prompt == "Draft system prompt."
+    assert model.temperature == 0.3
+    assert repo.stored == []
+    assert repo.snapshots == []
+
+
+async def test_preview_rejects_prompt_version_for_another_narrative_type() -> None:
+    repo = _FakeRepo()
+    prompts = _FakePrompts(error=NarrativePromptVersionMismatch("wrong type"))
+    async with _client(repo=repo, prompts=prompts) as client:
+        resp = await client.post(
+            _PREVIEW_URL,
+            json={
+                "prompt_version_id": "pver-social-draft",
+                "narrative_type": "institutional",
+            },
+        )
+
+    assert resp.status_code == 422
+    assert resp.json()["error"] == "PROMPT_VERSION_NARRATIVE_TYPE_MISMATCH"
+    assert repo.stored == []
+    assert repo.snapshots == []
 
 
 # ── persistence ──────────────────────────────────────────────────────────────-
@@ -372,9 +480,7 @@ async def test_list_revisions_under_wrong_record_is_404() -> None:
     repo = _FakeRepo()
     async with _client(repo=repo) as client:
         narrative_id = (await client.post(_URL, json={})).json()["narrative_id"]
-        await client.patch(
-            f"{_LIST_URL}/{narrative_id}", json={"narrative": "edited"}
-        )
+        await client.patch(f"{_LIST_URL}/{narrative_id}", json={"narrative": "edited"})
         resp = await client.get(
             f"/api/v1/cidoc-mapping/in-situ-visit/other/narratives/{narrative_id}/revisions"
         )
@@ -399,9 +505,7 @@ async def test_patch_empty_narrative_is_422() -> None:
     repo = _FakeRepo()
     async with _client(repo=repo) as client:
         narrative_id = (await client.post(_URL, json={})).json()["narrative_id"]
-        resp = await client.patch(
-            f"{_LIST_URL}/{narrative_id}", json={"narrative": ""}
-        )
+        resp = await client.patch(f"{_LIST_URL}/{narrative_id}", json={"narrative": ""})
     assert resp.status_code == 422
 
 
@@ -425,9 +529,7 @@ async def test_blank_model_output_is_503() -> None:
 
 async def test_patch_forbidden_for_external() -> None:
     async with _client(caller=_EXTERNAL) as client:
-        resp = await client.patch(
-            f"{_LIST_URL}/whatever", json={"narrative": "x"}
-        )
+        resp = await client.patch(f"{_LIST_URL}/whatever", json={"narrative": "x"})
     assert resp.status_code == 403
 
 

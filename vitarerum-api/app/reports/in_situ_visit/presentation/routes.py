@@ -22,6 +22,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 from app.ai.museum_narrative.public import (
     ModelTimeout,
     ModelUnavailable,
+    NarrativePromptUnavailable,
     SemanticValidationFailed,
     UnsupportedNarrativeType,
 )
@@ -139,6 +140,11 @@ async def create_in_situ_visit_report(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail={"error": "MODEL_UNAVAILABLE", "message": str(exc)},
         ) from None
+    except NarrativePromptUnavailable as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"error": "NARRATIVE_PROMPT_UNAVAILABLE", "message": str(exc)},
+        ) from None
     except ModelTimeout as exc:
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
@@ -223,6 +229,7 @@ def _to_audit_trail_response(
             targetLanguage=meta.target_language if meta else None,
             creativityTemperature=meta.creativity_temperature if meta else None,
             llmModel=meta.llm_model if meta else None,
+            promptVersionId=meta.prompt_version_id if meta else None,
             promptVersion=meta.prompt_version if meta else None,
             responseHash=meta.model_response_hash if meta else None,
         ),

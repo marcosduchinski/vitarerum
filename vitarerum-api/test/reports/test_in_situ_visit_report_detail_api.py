@@ -101,7 +101,8 @@ async def _client(
         creativity_temperature=0.3,
         llm_model="llama3.1:8b",
         facts_snapshot_id=None,
-        prompt_version="museum-narrative-canonical-v1",
+        prompt_version_id="pver-insitu-institutional-v1",
+        prompt_version="museum-narrative-institutional-v1",
         model_response_hash="sha256:narrative",
         validation_conforms=True,
     )
@@ -110,7 +111,7 @@ async def _client(
         payload_json='{"project_reference":"CUP-XYZ","evidence_gaps":[]}',
         payload_hash="sha256:facts",
         builder_version="canonical-visit-facts-v1",
-        prompt_version="museum-narrative-canonical-v1",
+        prompt_version="museum-narrative-institutional-v1",
         cidoc_document_json='{"@graph":[]}',
         cidoc_validation_report="Validation Report\nConforms: True",
         cidoc_conforms=True,
@@ -188,7 +189,8 @@ async def test_audit_trail_embeds_six_stage_inputs_without_recomputing_cidoc() -
     assert body["facts"]["payloadJson"] == (
         '{"project_reference":"CUP-XYZ","evidence_gaps":[]}'
     )
-    assert body["generation"]["promptVersion"] == "museum-narrative-canonical-v1"
+    assert body["generation"]["promptVersionId"] == "pver-insitu-institutional-v1"
+    assert body["generation"]["promptVersion"] == "museum-narrative-institutional-v1"
     assert body["generation"]["responseHash"] == "sha256:narrative"
     assert body["validation"]["conforms"] is True
     assert body["revisions"]["total_elements"] == 1

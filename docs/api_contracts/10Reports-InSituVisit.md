@@ -276,7 +276,8 @@ report_id  : UUID (required) — the InSituVisitReport id
       "creativity_temperature": 0.3,
       "llm_model": "llama3.1:8b",
       "facts_snapshot_id": "facts-snapshot-uuid",
-      "prompt_version": "museum-narrative-canonical-v1",
+      "prompt_version_id": "pver-insitu-institutional-v1",
+      "prompt_version": "museum-narrative-institutional-v1",
       "model_response_hash": "sha256...",
       "validation_conforms": true,
       "validation_findings": []
@@ -288,7 +289,7 @@ report_id  : UUID (required) — the InSituVisitReport id
       "payload_json": "{\"project_reference\":\"CUP-ABCD1234\"}",
       "payload_hash": "sha256...",
       "builder_version": "canonical-visit-facts-v1",
-      "prompt_version": "museum-narrative-canonical-v1",
+      "prompt_version": "museum-narrative-institutional-v1",
       "cidoc_document_json": "{\"@context\":\"...\",\"@graph\":[]}",
       "cidoc_validation_report": "Validation Report\nConforms: True",
       "cidoc_conforms": true,
@@ -403,7 +404,7 @@ revisions_size : integer (optional, default 100, 1..100)
       "payload_json": "{\"project_reference\":\"CUP-ABCD1234\"}",
       "payload_hash": "sha256...",
       "builder_version": "canonical-visit-facts-v1",
-      "prompt_version": "museum-narrative-canonical-v1",
+      "prompt_version": "museum-narrative-institutional-v1",
       "cidoc_document_json": "{\"@context\":\"...\",\"@graph\":[]}",
       "cidoc_validation_report": "Validation Report\nConforms: True",
       "cidoc_conforms": true,
@@ -435,7 +436,7 @@ revisions_size : integer (optional, default 100, 1..100)
     "payloadJson": "{\"project_reference\":\"CUP-ABCD1234\"}",
     "payloadHash": "sha256...",
     "builderVersion": "canonical-visit-facts-v1",
-    "promptVersion": "museum-narrative-canonical-v1",
+    "promptVersion": "museum-narrative-institutional-v1",
     "createdAt": "2026-06-22T10:30:00Z"
   },
   "generation": {
@@ -446,7 +447,8 @@ revisions_size : integer (optional, default 100, 1..100)
     "targetLanguage": "pt",
     "creativityTemperature": 0.3,
     "llmModel": "llama3.1:8b",
-    "promptVersion": "museum-narrative-canonical-v1",
+    "promptVersionId": "pver-insitu-institutional-v1",
+    "promptVersion": "museum-narrative-institutional-v1",
     "responseHash": "sha256..."
   },
   "validation": {

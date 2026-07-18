@@ -43,7 +43,8 @@ const AUDIT: InSituVisitReportAuditTrail = {
       creativityTemperature: 0.3,
       llmModel: 'llama3.1:8b',
       factsSnapshotId: 'facts-1',
-      promptVersion: 'museum-narrative-canonical-v1',
+      promptVersionId: 'pver-insitu-institutional-v1',
+      promptVersion: 'museum-narrative-institutional-v1',
       modelResponseHash: 'sha256:narrative',
       validationConforms: true,
       validationFindings: [],
@@ -76,7 +77,7 @@ const AUDIT: InSituVisitReportAuditTrail = {
     payloadJson: '{"project_reference":"CUP-ABCD1234","evidence_gaps":[]}',
     payloadHash: 'sha256:facts',
     builderVersion: 'canonical-visit-facts-v1',
-    promptVersion: 'museum-narrative-canonical-v1',
+    promptVersion: 'museum-narrative-institutional-v1',
     createdAt: '2026-06-22T10:30:00Z',
   },
   generation: {
@@ -87,7 +88,8 @@ const AUDIT: InSituVisitReportAuditTrail = {
     targetLanguage: 'pt',
     creativityTemperature: 0.3,
     llmModel: 'llama3.1:8b',
-    promptVersion: 'museum-narrative-canonical-v1',
+    promptVersionId: 'pver-insitu-institutional-v1',
+    promptVersion: 'museum-narrative-institutional-v1',
     responseHash: 'sha256:narrative',
   },
   validation: { conforms: true, findings: [] },
@@ -160,6 +162,38 @@ describe('InSituVisitAuditTrailPageComponent', () => {
     expect(
       compiled.querySelector<HTMLAnchorElement>('.audit-trail__report-link')?.getAttribute('href'),
     ).toBe('/p/collections/reports/visits-in-situ/project-1/report-1');
+  });
+
+  it('links only the generation prompt version to the exact prompt version', async () => {
+    const compiled = await render();
+    const promptLinks = Array.from(compiled.querySelectorAll<HTMLAnchorElement>('.audit-link'));
+
+    expect(promptLinks).toHaveLength(1);
+    expect(promptLinks[0]?.textContent?.trim()).toBe('museum-narrative-institutional-v1');
+    expect(promptLinks[0]?.getAttribute('href')).toBe(
+      '/p/ai/prompts/versions/pver-insitu-institutional-v1',
+    );
+
+    const factsStage = compiled
+      .querySelector<HTMLElement>('#audit-facts-heading')
+      ?.closest('section');
+    expect(factsStage?.textContent).toContain('museum-narrative-institutional-v1');
+    expect(factsStage?.querySelector('.audit-link')).toBeNull();
+  });
+
+  it('keeps a legacy prompt version textual when no prompt version id exists', async () => {
+    reportsService.response = of({
+      ...AUDIT,
+      generation: {
+        ...AUDIT.generation,
+        promptVersionId: null,
+      },
+    });
+
+    const compiled = await render();
+
+    expect(compiled.textContent).toContain('museum-narrative-institutional-v1');
+    expect(compiled.querySelector('.audit-link')).toBeNull();
   });
 
   it('highlights findings only in the original generated narrative and escapes HTML', async () => {

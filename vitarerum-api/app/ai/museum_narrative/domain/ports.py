@@ -17,6 +17,7 @@ if TYPE_CHECKING:
         NarrativeFactSnapshot,
         NarrativeFactSnapshotId,
         NarrativeId,
+        NarrativeType,
     )
 
 
@@ -44,6 +45,44 @@ class ModelTimeout(Exception):
     """The narrative model did not respond in time."""
 
 
+class NarrativePromptUnavailable(Exception):
+    """No published prompt is available for the requested narrative style."""
+
+
+class NarrativePromptVersionNotFound(Exception):
+    """No prompt version matches the requested preview id."""
+
+
+class NarrativePromptVersionMismatch(Exception):
+    """A prompt version does not belong to the requested narrative style."""
+
+
+class PublishedNarrativePrompt(Protocol):
+    @property
+    def version_id(self) -> str: ...
+
+    @property
+    def version_label(self) -> str: ...
+
+    @property
+    def status(self) -> str: ...
+
+    @property
+    def content(self) -> str: ...
+
+
+class NarrativePromptPort(Protocol):
+    """Resolve the published system prompt for a narrative type."""
+
+    async def get_published(
+        self, narrative_type: NarrativeType
+    ) -> PublishedNarrativePrompt: ...
+
+    async def get_version(
+        self, version_id: str, narrative_type: NarrativeType
+    ) -> PublishedNarrativePrompt: ...
+
+
 class NarrativeFactsPort(Protocol):
     """Validate the CIDOC-CRM projection and prepare narrative facts. Raises
     :class:`RecordNotFound` / :class:`SemanticValidationFailed`."""
@@ -62,9 +101,7 @@ class NarrativeModelPort(Protocol):
 class NarrativeRepository(Protocol):
     """Persists and reads back generated narratives (append-only history)."""
 
-    async def add_facts_snapshot(
-        self, snapshot: NarrativeFactSnapshot
-    ) -> None: ...
+    async def add_facts_snapshot(self, snapshot: NarrativeFactSnapshot) -> None: ...
 
     async def get_facts_snapshot(
         self, snapshot_id: NarrativeFactSnapshotId

@@ -53,6 +53,7 @@ export interface InSituVisitReportNarrativeMeta {
   readonly creativityTemperature: number;
   readonly llmModel: string;
   readonly factsSnapshotId?: string | null;
+  readonly promptVersionId?: string | null;
   readonly promptVersion?: string | null;
   readonly modelResponseHash?: string | null;
   readonly validationConforms?: boolean | null;
@@ -173,6 +174,7 @@ export interface InSituVisitAuditGeneration {
   readonly targetLanguage: string | null;
   readonly creativityTemperature: number | null;
   readonly llmModel: string | null;
+  readonly promptVersionId: string | null;
   readonly promptVersion: string | null;
   readonly responseHash: string | null;
 }

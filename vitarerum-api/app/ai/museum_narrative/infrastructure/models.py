@@ -43,6 +43,7 @@ class GeneratedNarrativeOrm(Base):
     llm_model: Mapped[str] = mapped_column(String(128))
     generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     facts_snapshot_id: Mapped[str | None] = mapped_column(String(36), index=True)
+    prompt_version_id: Mapped[str | None] = mapped_column(String(36), index=True)
     prompt_version: Mapped[str | None] = mapped_column(String(64))
     model_response_hash: Mapped[str | None] = mapped_column(String(64))
     validation_conforms: Mapped[bool | None] = mapped_column(Boolean)

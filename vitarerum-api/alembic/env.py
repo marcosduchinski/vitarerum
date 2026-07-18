@@ -11,6 +11,9 @@ from app.ai.museum_narrative.infrastructure import (
 from app.ai.museum_question_triage.infrastructure import (
     models as museum_question_triage_models,  # noqa: F401
 )
+from app.ai.prompts.infrastructure import (
+    models as ai_prompts_models,  # noqa: F401
+)
 from app.cidoc_crm.in_situ_visit_mapping.infrastructure import (
     models as in_situ_visit_models,  # noqa: F401
 )

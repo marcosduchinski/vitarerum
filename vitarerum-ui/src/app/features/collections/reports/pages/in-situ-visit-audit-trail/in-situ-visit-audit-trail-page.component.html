@@ -242,7 +242,18 @@
             </div>
             <div>
               <dt>Prompt version</dt>
-              <dd>{{ valueOrUnavailable(value.generation.promptVersion) }}</dd>
+              <dd>
+                @if (value.generation.promptVersionId) {
+                  <a
+                    class="audit-link"
+                    [routerLink]="['/p/ai/prompts/versions', value.generation.promptVersionId]"
+                  >
+                    {{ valueOrUnavailable(value.generation.promptVersion) }}
+                  </a>
+                } @else {
+                  {{ valueOrUnavailable(value.generation.promptVersion) }}
+                }
+              </dd>
             </div>
             <div>
               <dt>Response hash</dt>

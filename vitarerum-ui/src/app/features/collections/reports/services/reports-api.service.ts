@@ -31,6 +31,7 @@ interface NarrativeDto {
     readonly creativity_temperature: number;
     readonly llm_model: string;
     readonly facts_snapshot_id?: string | null;
+    readonly prompt_version_id?: string | null;
     readonly prompt_version?: string | null;
     readonly model_response_hash?: string | null;
     readonly validation_conforms?: boolean | null;
@@ -157,6 +158,7 @@ interface InSituVisitAuditTrailDto extends InSituVisitReportDetailDto {
     readonly targetLanguage: string | null;
     readonly creativityTemperature: number | null;
     readonly llmModel: string | null;
+    readonly promptVersionId: string | null;
     readonly promptVersion: string | null;
     readonly responseHash: string | null;
   };
@@ -263,6 +265,7 @@ export class ReportsApiService {
         creativityTemperature: narrative.meta.creativity_temperature,
         llmModel: narrative.meta.llm_model,
         factsSnapshotId: narrative.meta.facts_snapshot_id ?? null,
+        promptVersionId: narrative.meta.prompt_version_id ?? null,
         promptVersion: narrative.meta.prompt_version ?? null,
         modelResponseHash: narrative.meta.model_response_hash ?? null,
         validationConforms: narrative.meta.validation_conforms ?? null,

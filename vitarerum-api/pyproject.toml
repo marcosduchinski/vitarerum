@@ -187,6 +187,30 @@ ignore_imports = [
 ]
 
 [[tool.importlinter.contracts]]
+name = "AI Prompts layers (presentation > infrastructure > application > domain)"
+type = "layers"
+layers = [
+    "app.ai.prompts.presentation",
+    "app.ai.prompts.infrastructure",
+    "app.ai.prompts.application",
+    "app.ai.prompts.domain",
+]
+
+[[tool.importlinter.contracts]]
+name = "AI Prompt consumers may import prompts only via prompts.public"
+type = "forbidden"
+source_modules = ["app.ai.museum_narrative"]
+forbidden_modules = [
+    "app.ai.prompts.application",
+    "app.ai.prompts.domain",
+    "app.ai.prompts.infrastructure",
+    "app.ai.prompts.presentation",
+]
+ignore_imports = [
+    "app.ai.museum_narrative.infrastructure.prompt_acl -> app.ai.prompts.public",
+]
+
+[[tool.importlinter.contracts]]
 name = "Reports layers (presentation > infrastructure > application > domain)"
 type = "layers"
 layers = [
@@ -328,6 +352,7 @@ source_modules = [
     "app.use_of_collections.domain",
     "app.ai.museum_narrative.domain",
     "app.ai.museum_question_triage.domain",
+    "app.ai.prompts.domain",
     "app.cidoc_crm.in_situ_visit_mapping.domain",
     "app.reports.in_situ_visit.domain",
     "app.public_submission.domain",
@@ -345,6 +370,7 @@ source_modules = [
     "app.identity.application",
     "app.ai.museum_narrative.application",
     "app.ai.museum_question_triage.application",
+    "app.ai.prompts.application",
     "app.cidoc_crm.in_situ_visit_mapping.application",
     "app.reports.in_situ_visit.application",
     "app.public_submission.application",

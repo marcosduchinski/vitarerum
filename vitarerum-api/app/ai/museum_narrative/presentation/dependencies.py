@@ -15,15 +15,18 @@ from app.ai.museum_narrative.application.use_cases import (
     GetNarrative,
     ListNarrativeRevisions,
     ListNarratives,
+    PreviewNarrative,
     UpdateNarrative,
 )
 from app.ai.museum_narrative.domain.ports import (
     NarrativeFactsPort,
     NarrativeModelPort,
+    NarrativePromptPort,
     NarrativeRepository,
 )
 from app.ai.museum_narrative.infrastructure.cidoc_acl import NarrativeFactsAdapter
 from app.ai.museum_narrative.infrastructure.model_ollama import OllamaNarrativeAdapter
+from app.ai.museum_narrative.infrastructure.prompt_acl import AiPromptRegistryAdapter
 from app.ai.museum_narrative.infrastructure.repositories import (
     SqlAlchemyNarrativeRepository,
 )
@@ -35,6 +38,10 @@ DBSession = Annotated[AsyncSession, Depends(get_async_session)]
 
 def get_facts_port(session: DBSession) -> NarrativeFactsPort:
     return NarrativeFactsAdapter(session)
+
+
+def get_prompt_port(session: DBSession) -> NarrativePromptPort:
+    return AiPromptRegistryAdapter(session)
 
 
 def get_model_port() -> NarrativeModelPort:
@@ -51,14 +58,23 @@ def get_narrative_repository(session: DBSession) -> NarrativeRepository:
 
 
 FactsPort = Annotated[NarrativeFactsPort, Depends(get_facts_port)]
+PromptPort = Annotated[NarrativePromptPort, Depends(get_prompt_port)]
 ModelPort = Annotated[NarrativeModelPort, Depends(get_model_port)]
 Repository = Annotated[NarrativeRepository, Depends(get_narrative_repository)]
 
 
 def get_narrative_use_case(
-    facts: FactsPort, model: ModelPort, repository: Repository
+    facts: FactsPort, prompts: PromptPort, model: ModelPort, repository: Repository
 ) -> GenerateNarrative:
-    return GenerateNarrative(facts, model, repository, settings.narrative_model)
+    return GenerateNarrative(
+        facts, prompts, model, repository, settings.narrative_model
+    )
+
+
+def get_preview_use_case(
+    facts: FactsPort, prompts: PromptPort, model: ModelPort
+) -> PreviewNarrative:
+    return PreviewNarrative(facts, prompts, model, settings.narrative_model)
 
 
 def get_list_use_case(repository: Repository) -> ListNarratives:
@@ -78,6 +94,7 @@ def get_update_use_case(repository: Repository) -> UpdateNarrative:
 
 
 NarrativeUseCase = Annotated[GenerateNarrative, Depends(get_narrative_use_case)]
+PreviewUseCase = Annotated[PreviewNarrative, Depends(get_preview_use_case)]
 ListUseCase = Annotated[ListNarratives, Depends(get_list_use_case)]
 RevisionListUseCase = Annotated[
     ListNarrativeRevisions, Depends(get_revision_list_use_case)

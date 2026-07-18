@@ -118,6 +118,7 @@ class InSituVisitAuditGenerationResponse(BaseModel):
     targetLanguage: str | None
     creativityTemperature: float | None
     llmModel: str | None
+    promptVersionId: str | None
     promptVersion: str | None
     responseHash: str | None
 

@@ -98,6 +98,17 @@ describe('AppMenuComponent', () => {
     expect(questionsLink.getAttribute('href')).toBe('/p/museum-questions');
   });
 
+  it('shows AI prompts for staff who can generate narratives', () => {
+    activeSession.set(sessionForGroup('CURATORIAL'));
+    const fixture = TestBed.createComponent(AppMenuComponent);
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    const promptsLink = linkByText(compiled, 'Prompts');
+    expect(compiled.textContent).toContain('AI');
+    expect(promptsLink.getAttribute('href')).toBe('/p/ai/prompts');
+  });
+
   it('does not show reports for external users', () => {
     activeSession.set(sessionForGroup('EXTERNAL'));
     const fixture = TestBed.createComponent(AppMenuComponent);
@@ -107,6 +118,7 @@ describe('AppMenuComponent', () => {
 
     expect(compiled.textContent).not.toContain('Reports');
     expect(compiled.textContent).not.toContain('Visits in situ');
+    expect(compiled.textContent).not.toContain('AI');
   });
 });
 

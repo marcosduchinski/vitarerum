@@ -20,12 +20,16 @@ from app.ai.museum_narrative.application.use_cases import (
     GetNarrativeInput,
     ListNarrativeRevisionsInput,
     ListNarrativesInput,
+    PreviewNarrativeInput,
     UpdateNarrativeInput,
 )
 from app.ai.museum_narrative.domain.ports import (
     ModelTimeout,
     ModelUnavailable,
     NarrativeNotFound,
+    NarrativePromptUnavailable,
+    NarrativePromptVersionMismatch,
+    NarrativePromptVersionNotFound,
     RecordNotFound,
     SemanticValidationFailed,
     UnsupportedNarrativeType,
@@ -35,6 +39,7 @@ from app.ai.museum_narrative.presentation.dependencies import (
     GetUseCase,
     ListUseCase,
     NarrativeUseCase,
+    PreviewUseCase,
     RevisionListUseCase,
     UpdateUseCase,
 )
@@ -42,10 +47,13 @@ from app.ai.museum_narrative.presentation.mappers import (
     fact_snapshot_response,
     narrative_meta,
     narrative_revision_response,
+    preview_narrative_meta,
     stored_narrative_response,
 )
 from app.ai.museum_narrative.presentation.schemas import (
     NarrativeData,
+    NarrativePreviewRequest,
+    NarrativePreviewResponse,
     NarrativeRequest,
     NarrativeResponse,
     PaginatedNarrativeRevisionsResponse,
@@ -107,6 +115,11 @@ async def generate_narrative(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail={"error": "MODEL_UNAVAILABLE", "message": str(exc)},
         ) from None
+    except NarrativePromptUnavailable as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"error": "NARRATIVE_PROMPT_UNAVAILABLE", "message": str(exc)},
+        ) from None
     except ModelTimeout as exc:
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
@@ -122,6 +135,85 @@ async def generate_narrative(
         meta=narrative_meta(result),
         data=NarrativeData(narrative=result.narrative),
         facts_snapshot=fact_snapshot_response(result),
+    )
+
+
+@museum_narrative_router.post(
+    "/{record_id}/narrative/preview", response_model=NarrativePreviewResponse
+)
+async def preview_narrative(
+    record_id: str,
+    body: NarrativePreviewRequest,
+    caller: CallerPermission,
+    use_case: PreviewUseCase,
+) -> NarrativePreviewResponse:
+    require_staff(caller)
+    try:
+        result = await use_case.execute(
+            PreviewNarrativeInput(
+                record_id=record_id,
+                prompt_version_id=body.prompt_version_id,
+                narrative_type=body.narrative_type,
+                target_language=body.target_language,
+                creativity_temperature=body.creativity_temperature,
+            )
+        )
+    except UnsupportedNarrativeType as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "INVALID_NARRATIVE_TYPE", "message": str(exc)},
+        ) from None
+    except NarrativePromptVersionNotFound as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": "PROMPT_VERSION_NOT_FOUND", "message": str(exc)},
+        ) from None
+    except NarrativePromptVersionMismatch as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={
+                "error": "PROMPT_VERSION_NARRATIVE_TYPE_MISMATCH",
+                "message": str(exc),
+            },
+        ) from None
+    except NarrativePromptUnavailable as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"error": "NARRATIVE_PROMPT_UNAVAILABLE", "message": str(exc)},
+        ) from None
+    except RecordNotFound as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": "IN_SITU_VISIT_NOT_FOUND", "message": str(exc)},
+        ) from None
+    except SemanticValidationFailed:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={
+                "error": "SEMANTIC_VALIDATION_FAILED",
+                "message": (
+                    "The reasoner rejected the generated graph due to ontology "
+                    "constraints."
+                ),
+            },
+        ) from None
+    except ModelUnavailable as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"error": "MODEL_UNAVAILABLE", "message": str(exc)},
+        ) from None
+    except ModelTimeout as exc:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail={"error": "MODEL_TIMEOUT", "message": str(exc)},
+        ) from None
+
+    return NarrativePreviewResponse(
+        record_id=result.record_id,
+        status="preview",
+        generated_at=result.generated_at,
+        meta=preview_narrative_meta(result),
+        data=NarrativeData(narrative=result.narrative),
     )
 
 

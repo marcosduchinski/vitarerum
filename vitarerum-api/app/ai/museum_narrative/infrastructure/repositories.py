@@ -121,6 +121,7 @@ def narrative_to_orm(narrative: GeneratedNarrative) -> GeneratedNarrativeOrm:
         llm_model=narrative.llm_model,
         generated_at=narrative.generated_at,
         facts_snapshot_id=narrative.facts_snapshot_id,
+        prompt_version_id=narrative.prompt_version_id,
         prompt_version=narrative.prompt_version,
         model_response_hash=narrative.model_response_hash,
         validation_conforms=narrative.validation_conforms,
@@ -144,6 +145,7 @@ def narrative_to_domain(orm: GeneratedNarrativeOrm) -> GeneratedNarrative:
             if orm.facts_snapshot_id
             else None
         ),
+        prompt_version_id=orm.prompt_version_id,
         prompt_version=orm.prompt_version,
         model_response_hash=orm.model_response_hash,
         validation_conforms=orm.validation_conforms,

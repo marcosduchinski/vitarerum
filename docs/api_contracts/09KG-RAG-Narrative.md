@@ -86,7 +86,8 @@ and `generated_at`.
     "creativity_temperature": 0.3,
     "llm_model": "llama3.1:8b",
     "facts_snapshot_id": "facts-snapshot-uuid",
-    "prompt_version": "museum-narrative-canonical-v1",
+    "prompt_version_id": "pver-insitu-social-media-v1",
+    "prompt_version": "museum-narrative-social-media-v1",
     "model_response_hash": "sha256...",
     "validation_conforms": true,
     "validation_findings": []
@@ -98,7 +99,7 @@ and `generated_at`.
     "payload_json": "{\"project_reference\":\"CUP-...\"}",
     "payload_hash": "sha256...",
     "builder_version": "canonical-visit-facts-v1",
-    "prompt_version": "museum-narrative-canonical-v1",
+    "prompt_version": "museum-narrative-social-media-v1",
     "created_at": "2026-06-21T10:30:00Z",
     "cidoc_document_json": "{\"@context\":{...},\"@graph\":[...]}",
     "cidoc_validation_report": "Validation Report\\nConforms: True\\n...",
@@ -135,6 +136,69 @@ local LLM could not be reached or returned an empty narrative. **504
 
 ---
 
+## POST /api/v1/cidoc-mapping/in-situ-visit/{record_id}/narrative/preview
+
+Runs a controlled test generation for staff reviewing an AI prompt version. This
+endpoint uses the selected prompt version, canonical facts from the existing
+visit record, and the narrative model, but **does not persist** a
+`generated_narratives` row or a `facts_snapshot`.
+
+**Request body**
+
+```json
+{
+  "prompt_version_id": "pver-draft-uuid",
+  "target_language": "pt",
+  "narrative_type": "institutional",
+  "creativity_temperature": 0.3
+}
+```
+
+```
+prompt_version_id       : UUID/string (required) — draft or published prompt version to test
+target_language         : string      (default "pt")
+narrative_type          : enum        (optional; omitted → "institutional")
+creativity_temperature  : number|null (optional, 0.0–1.0; omitted/null → 0.3)
+```
+
+**Response 200 OK** — returns preview text and the exact execution metadata.
+
+```json
+{
+  "record_id": "9481a-2026",
+  "status": "preview",
+  "generated_at": "2026-06-21T10:30:00Z",
+  "meta": {
+    "resolved_narrative_type": "institutional",
+    "resolution_source": "request_body",
+    "target_language": "pt",
+    "creativity_temperature": 0.3,
+    "llm_model": "llama3.1:8b",
+    "facts_snapshot_id": null,
+    "prompt_version_id": "pver-draft-uuid",
+    "prompt_version": "museum-narrative-institutional-v2",
+    "prompt_status": "draft",
+    "model_response_hash": "sha256...",
+    "validation_conforms": true,
+    "validation_findings": []
+  },
+  "data": { "narrative": "Preview narrative text..." }
+}
+```
+
+**404 `PROMPT_VERSION_NOT_FOUND`** — no prompt version with
+`prompt_version_id`.
+
+**422 `PROMPT_VERSION_NARRATIVE_TYPE_MISMATCH`** — the prompt version exists but
+belongs to another narrative persona/template than the requested
+`narrative_type`.
+
+Other errors mirror the persisted generation endpoint:
+`INVALID_NARRATIVE_TYPE`, `IN_SITU_VISIT_NOT_FOUND`,
+`SEMANTIC_VALIDATION_FAILED`, `MODEL_UNAVAILABLE`, and `MODEL_TIMEOUT`.
+
+---
+
 ## GET /api/v1/cidoc-mapping/in-situ-visit/{record_id}/narratives
 
 Lists the stored narratives for an in-situ visit record, **newest first**,
@@ -163,7 +227,8 @@ size : integer (optional, default 20, 1..100)
         "creativity_temperature": 0.3,
         "llm_model": "llama3.1:8b",
         "facts_snapshot_id": "facts-snapshot-uuid",
-        "prompt_version": "museum-narrative-canonical-v1",
+        "prompt_version_id": "pver-insitu-social-media-v1",
+        "prompt_version": "museum-narrative-social-media-v1",
         "model_response_hash": "sha256...",
         "validation_conforms": true,
         "validation_findings": []
@@ -175,7 +240,7 @@ size : integer (optional, default 20, 1..100)
         "payload_json": "{\"project_reference\":\"CUP-...\"}",
         "payload_hash": "sha256...",
         "builder_version": "canonical-visit-facts-v1",
-        "prompt_version": "museum-narrative-canonical-v1",
+        "prompt_version": "museum-narrative-social-media-v1",
         "created_at": "2026-06-21T10:30:00Z",
         "cidoc_document_json": "{\"@context\":{...},\"@graph\":[...]}",
         "cidoc_validation_report": "Validation Report\\nConforms: True\\n...",

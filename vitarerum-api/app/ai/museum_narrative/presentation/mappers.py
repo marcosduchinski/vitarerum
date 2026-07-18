@@ -6,6 +6,7 @@ language (``app.ai.museum_narrative.public``) without pulling in the router.
 
 from __future__ import annotations
 
+from app.ai.museum_narrative.application.use_cases import PreviewNarrativeResult
 from app.ai.museum_narrative.domain.models import (
     GeneratedNarrative,
     GeneratedNarrativeRevision,
@@ -14,6 +15,7 @@ from app.ai.museum_narrative.presentation.schemas import (
     NarrativeData,
     NarrativeFactSnapshotResponse,
     NarrativeMeta,
+    NarrativePreviewMeta,
     NarrativeRevisionResponse,
     StoredNarrativeResponse,
 )
@@ -27,6 +29,7 @@ def narrative_meta(record: GeneratedNarrative) -> NarrativeMeta:
         creativity_temperature=record.creativity_temperature,
         llm_model=record.llm_model,
         facts_snapshot_id=record.facts_snapshot_id,
+        prompt_version_id=record.prompt_version_id,
         prompt_version=record.prompt_version,
         model_response_hash=record.model_response_hash,
         validation_conforms=record.validation_conforms,
@@ -37,6 +40,30 @@ def narrative_meta(record: GeneratedNarrative) -> NarrativeMeta:
                 "evidence": finding.evidence,
             }
             for finding in record.validation_findings
+        ],
+    )
+
+
+def preview_narrative_meta(result: PreviewNarrativeResult) -> NarrativePreviewMeta:
+    return NarrativePreviewMeta(
+        resolved_narrative_type=result.resolved_narrative_type.value,
+        resolution_source=result.resolution_source.value,
+        target_language=result.target_language,
+        creativity_temperature=result.creativity_temperature,
+        llm_model=result.llm_model,
+        facts_snapshot_id=None,
+        prompt_version_id=result.prompt_version_id,
+        prompt_version=result.prompt_version,
+        prompt_status=result.prompt_status,
+        model_response_hash=result.model_response_hash,
+        validation_conforms=result.validation_conforms,
+        validation_findings=[
+            {
+                "code": finding.code.value,
+                "message": finding.message,
+                "evidence": finding.evidence,
+            }
+            for finding in result.validation_findings
         ],
     )
 

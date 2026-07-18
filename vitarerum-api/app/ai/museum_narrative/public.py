@@ -22,6 +22,7 @@ if TYPE_CHECKING:
 from app.ai.museum_narrative.domain.ports import (
     ModelTimeout,
     ModelUnavailable,
+    NarrativePromptUnavailable,
     RecordNotFound,
     SemanticValidationFailed,
     UnsupportedNarrativeType,
@@ -51,6 +52,9 @@ async def generate_narrative(
     from app.ai.museum_narrative.infrastructure.model_ollama import (
         OllamaNarrativeAdapter,
     )
+    from app.ai.museum_narrative.infrastructure.prompt_acl import (
+        AiPromptRegistryAdapter,
+    )
     from app.ai.museum_narrative.infrastructure.repositories import (
         SqlAlchemyNarrativeRepository,
     )
@@ -68,6 +72,7 @@ async def generate_narrative(
     )
     use_case = GenerateNarrative(
         NarrativeFactsAdapter(session),
+        AiPromptRegistryAdapter(session),
         model,
         repository,
         settings.narrative_model,
@@ -148,6 +153,7 @@ __all__ = [
     "list_narrative_revisions",
     "ModelTimeout",
     "ModelUnavailable",
+    "NarrativePromptUnavailable",
     "NarrativeGenerationOptions",
     "RecordNotFound",
     "SemanticValidationFailed",

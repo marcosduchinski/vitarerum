@@ -124,6 +124,12 @@ const MESSAGES_STAFF: MenuNode = {
   ],
 };
 
+const AI_PROMPTS_STAFF: MenuNode = {
+  label: 'AI',
+  icon: 'pi pi-sparkles',
+  items: [{ label: 'Prompts', icon: 'pi pi-comment-edit', routerLink: '/p/ai/prompts' }],
+};
+
 const COLLECTION_DATA_SOURCES_ITEM: MenuNode = {
   label: 'Collection Data Sources',
   icon: 'pi pi-database',
@@ -159,12 +165,20 @@ const MENUS: Record<GroupName, readonly MenuNode[]> = {
     HOME,
     USE_OF_COLLECTIONS_STAFF,
     MESSAGES_STAFF,
+    AI_PROMPTS_STAFF,
     OBJECTS_STAFF,
     STAFF_ADMIN_MENU,
   ],
-  CURATORIAL: [HOME, USE_OF_COLLECTIONS_STAFF, MESSAGES_STAFF, OBJECTS_STAFF, STAFF_ADMIN_MENU],
-  DIRECTION: [HOME, USE_OF_COLLECTIONS_STAFF, MESSAGES_STAFF, OBJECTS_STAFF],
-  SYS_ADMIN: [HOME, MESSAGES_STAFF, OBJECTS_STAFF, SYS_ADMIN_MENU],
+  CURATORIAL: [
+    HOME,
+    USE_OF_COLLECTIONS_STAFF,
+    MESSAGES_STAFF,
+    AI_PROMPTS_STAFF,
+    OBJECTS_STAFF,
+    STAFF_ADMIN_MENU,
+  ],
+  DIRECTION: [HOME, USE_OF_COLLECTIONS_STAFF, MESSAGES_STAFF, AI_PROMPTS_STAFF, OBJECTS_STAFF],
+  SYS_ADMIN: [HOME, MESSAGES_STAFF, AI_PROMPTS_STAFF, OBJECTS_STAFF, SYS_ADMIN_MENU],
 };
 
 @Component({
