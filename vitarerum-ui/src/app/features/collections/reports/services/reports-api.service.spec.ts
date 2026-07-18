@@ -6,6 +6,7 @@ import { API_BASE_URL } from '@core/config/app-config.model';
 import {
   CidocCrmJsonObject,
   InSituVisitReport,
+  InSituVisitReportAuditTrail,
   InSituVisitReportDetail,
 } from '../models/report.model';
 import { ReportsApiService } from './reports-api.service';
@@ -111,6 +112,9 @@ describe('ReportsApiService', () => {
           payload_hash: 'sha256:facts',
           builder_version: 'canonical-visit-facts-v1',
           prompt_version: 'museum-narrative-canonical-v1',
+          cidoc_document_json: '{"@graph":[]}',
+          cidoc_validation_report: 'Validation Report\nConforms: True',
+          cidoc_conforms: true,
           created_at: '2026-06-22T10:30:00Z',
         },
       },
@@ -181,6 +185,8 @@ describe('ReportsApiService', () => {
         factsSnapshot: {
           builderVersion: 'canonical-visit-facts-v1',
           payloadHash: 'sha256:facts',
+          cidocDocumentJson: '{"@graph":[]}',
+          cidocConforms: true,
         },
       },
       record: {
@@ -222,6 +228,107 @@ describe('ReportsApiService', () => {
     });
 
     expect(received).toMatchObject({ narrative: null, record: null });
+  });
+
+  it('loads and normalizes an in-situ visit report audit trail', () => {
+    let received: InSituVisitReportAuditTrail | null = null;
+
+    service
+      .getInSituVisitReportAuditTrail('project-1', 'report-1')
+      .subscribe((audit) => (received = audit));
+
+    const request = http.expectOne(
+      'https://api.example.test/reports/collection-use/project-1/in_situ_visit/report-1/audit-trail',
+    );
+    expect(request.request.method).toBe('GET');
+    request.flush({
+      id: 'report-1',
+      createdAt: '2026-06-22T10:30:00Z',
+      createdBy: 'permission-1',
+      projectId: 'project-1',
+      narrativeId: 'narrative-1',
+      inSituVisitRecordId: 'record-1',
+      record: null,
+      narrative: null,
+      evidence: {
+        recordId: 'record-1',
+        projectId: 'project-1',
+        code: 'CUP-ABCD1234',
+        executionEvidenceType: 'project_completed',
+        executionOccurredAt: '2026-06-03T16:30:00Z',
+        executionRecordedBy: 'permission-1',
+        executionEvidenceGaps: ['Missing publication link.'],
+        approvedAt: null,
+        approvedBy: null,
+        approvalNote: null,
+      },
+      cidoc: {
+        documentJson: '{"@graph":[]}',
+        mappingVersion: 'in-situ-visit-cidoc-v2',
+        crmVersion: '7.1.3',
+        recordSchemaVersion: 2,
+        conforms: true,
+        validationReport: 'Validation Report\nConforms: True',
+      },
+      facts: {
+        snapshotId: 'facts-1',
+        payloadJson: '{"project_reference":"CUP-ABCD1234"}',
+        payloadHash: 'sha256:facts',
+        builderVersion: 'canonical-visit-facts-v1',
+        promptVersion: 'museum-narrative-canonical-v1',
+        createdAt: '2026-06-22T10:30:00Z',
+      },
+      generation: {
+        narrativeId: 'narrative-1',
+        generatedAt: '2026-06-22T10:30:00Z',
+        narrativeType: 'institutional',
+        resolutionSource: 'default',
+        targetLanguage: 'pt',
+        creativityTemperature: 0.3,
+        llmModel: 'llama3.1:8b',
+        promptVersion: 'museum-narrative-canonical-v1',
+        responseHash: 'sha256:narrative',
+      },
+      validation: {
+        conforms: true,
+        findings: [],
+      },
+      revisions: {
+        content: [
+          {
+            id: 'revision-1',
+            narrative_id: 'narrative-1',
+            record_id: 'record-1',
+            previous_narrative: 'Before.',
+            revised_narrative: 'After.',
+            edited_by: 'permission-1',
+            edited_at: '2026-06-22T11:00:00Z',
+          },
+        ],
+        page: 0,
+        size: 100,
+        total_elements: 1,
+        total_pages: 1,
+      },
+    });
+
+    expect(received).toMatchObject({
+      id: 'report-1',
+      evidence: { code: 'CUP-ABCD1234', executionEvidenceGaps: ['Missing publication link.'] },
+      cidoc: { documentJson: '{"@graph":[]}', conforms: true },
+      facts: { snapshotId: 'facts-1', payloadHash: 'sha256:facts' },
+      generation: { responseHash: 'sha256:narrative' },
+      revisions: {
+        totalElements: 1,
+        content: [
+          {
+            previousNarrative: 'Before.',
+            revisedNarrative: 'After.',
+            editedBy: 'permission-1',
+          },
+        ],
+      },
+    });
   });
 
   it('loads the CIDOC-CRM JSON-LD document for an in-situ visit record', () => {

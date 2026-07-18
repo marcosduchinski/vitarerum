@@ -11,6 +11,8 @@ from app.ai.museum_narrative.application.use_cases import (
     GenerateNarrativeInput,
     GetNarrative,
     GetNarrativeInput,
+    ListNarrativeRevisions,
+    ListNarrativeRevisionsInput,
     ListNarratives,
     ListNarrativesInput,
     UpdateNarrative,
@@ -23,6 +25,7 @@ from app.ai.museum_narrative.domain.facts import (
     MissingFact,
     ObjectFact,
     PersonFact,
+    PreparedNarrativeFacts,
 )
 from app.ai.museum_narrative.domain.models import (
     GeneratedNarrative,
@@ -67,10 +70,18 @@ class _FakeFacts:
     def __init__(self, facts: CanonicalVisitFacts | None = None) -> None:
         self.seen: str | None = None
         self._facts = facts
+        self.cidoc_document_json = '{"@graph":[]}'
+        self.cidoc_validation_report = "Conforms: True"
+        self.cidoc_conforms = True
 
-    async def prepare(self, record_id: str) -> CanonicalVisitFacts:
+    async def prepare(self, record_id: str) -> PreparedNarrativeFacts:
         self.seen = record_id
-        return self._facts or _facts(record_id)
+        return PreparedNarrativeFacts(
+            facts=self._facts or _facts(record_id),
+            cidoc_document_json=self.cidoc_document_json,
+            cidoc_validation_report=self.cidoc_validation_report,
+            cidoc_conforms=self.cidoc_conforms,
+        )
 
 
 class _FakeModel:
@@ -111,6 +122,16 @@ class _FakeRepo:
 
     async def add_revision(self, revision: GeneratedNarrativeRevision) -> None:
         self.revisions.append(revision)
+
+    async def list_revisions(
+        self, record_id: str, narrative_id: NarrativeId, page: int, size: int
+    ) -> tuple[list[GeneratedNarrativeRevision], int] | None:
+        narrative = await self.get_by_id(narrative_id)
+        if narrative is None or narrative.record_id != record_id:
+            return None
+        matches = [r for r in self.revisions if r.narrative_id == narrative_id]
+        matches.sort(key=lambda revision: revision.created_at)
+        return matches[page * size : page * size + size], len(matches)
 
     async def get_by_id(
         self, narrative_id: NarrativeId
@@ -168,6 +189,25 @@ async def test_fact_snapshot_freezes_payload_used_for_generation() -> None:
     assert snapshot is not None
     assert "Wolf study" in snapshot.payload_json
     assert "later builder/source change" not in snapshot.payload_json
+
+
+async def test_fact_snapshot_freezes_cidoc_gate_output_used_for_generation() -> None:
+    facts = _FakeFacts()
+    model = _FakeModel()
+    repo = _FakeRepo()
+    use_case = GenerateNarrative(facts, model, repo, "llama3.1:8b")
+
+    result = await use_case.execute(GenerateNarrativeInput(record_id="r1"))
+    snapshot = await repo.get_facts_snapshot(result.facts_snapshot_id)
+
+    facts.cidoc_document_json = '{"@graph":[{"later":"mapping change"}]}'
+    facts.cidoc_validation_report = "later SHACL report"
+    facts.cidoc_conforms = False
+
+    assert snapshot is not None
+    assert snapshot.cidoc_document_json == '{"@graph":[]}'
+    assert snapshot.cidoc_validation_report == "Conforms: True"
+    assert snapshot.cidoc_conforms is True
 
 
 async def test_narrative_with_invented_date_is_marked_for_review() -> None:
@@ -365,7 +405,10 @@ async def test_update_narrative_edits_text_and_persists() -> None:
 
     updated = await UpdateNarrative(repo).execute(
         UpdateNarrativeInput(
-            record_id="r1", narrative_id=created.id, narrative="  edited  "
+            record_id="r1",
+            narrative_id=created.id,
+            narrative="  edited  ",
+            edited_by="perm-staff",
         )
     )
     assert updated.narrative == "edited"  # stripped
@@ -373,12 +416,70 @@ async def test_update_narrative_edits_text_and_persists() -> None:
     assert len(repo.revisions) == 1
     assert repo.revisions[0].previous_narrative == "a narrative"
     assert repo.revisions[0].revised_narrative == "edited"
+    assert repo.revisions[0].edited_by == "perm-staff"
+
+
+async def test_list_revisions_empty_for_never_edited_narrative() -> None:
+    repo = _FakeRepo()
+    gen = GenerateNarrative(_FakeFacts(), _FakeModel(), repo, "llama3.1:8b")
+    created = await gen.execute(GenerateNarrativeInput(record_id="r1"))
+
+    revisions, total = await ListNarrativeRevisions(repo).execute(
+        ListNarrativeRevisionsInput(record_id="r1", narrative_id=created.id)
+    )
+
+    assert revisions == []
+    assert total == 0
+
+
+async def test_list_revisions_returns_chronological_editorial_history() -> None:
+    repo = _FakeRepo()
+    gen = GenerateNarrative(_FakeFacts(), _FakeModel(), repo, "llama3.1:8b")
+    created = await gen.execute(GenerateNarrativeInput(record_id="r1"))
+    update = UpdateNarrative(repo)
+
+    await update.execute(
+        UpdateNarrativeInput(
+            record_id="r1",
+            narrative_id=created.id,
+            narrative="first edit",
+            edited_by="perm-a",
+        )
+    )
+    await update.execute(
+        UpdateNarrativeInput(
+            record_id="r1",
+            narrative_id=created.id,
+            narrative="second edit",
+            edited_by="perm-b",
+        )
+    )
+
+    revisions, total = await ListNarrativeRevisions(repo).execute(
+        ListNarrativeRevisionsInput(record_id="r1", narrative_id=created.id)
+    )
+
+    assert total == 2
+    assert [revision.previous_narrative for revision in revisions] == [
+        "a narrative",
+        "first edit",
+    ]
+    assert [revision.revised_narrative for revision in revisions] == [
+        "first edit",
+        "second edit",
+    ]
+    assert [revision.edited_by for revision in revisions] == ["perm-a", "perm-b"]
 
 
 async def test_update_missing_narrative_raises() -> None:
     with pytest.raises(NarrativeNotFound):
         await UpdateNarrative(_FakeRepo()).execute(
-            UpdateNarrativeInput(record_id="r1", narrative_id="x", narrative="text")
+            UpdateNarrativeInput(
+                record_id="r1",
+                narrative_id="x",
+                narrative="text",
+                edited_by="perm-staff",
+            )
         )
 
 
@@ -389,10 +490,32 @@ async def test_update_under_wrong_record_raises() -> None:
     with pytest.raises(NarrativeNotFound):
         await UpdateNarrative(repo).execute(
             UpdateNarrativeInput(
-                record_id="other", narrative_id=created.id, narrative="edited"
+                record_id="other",
+                narrative_id=created.id,
+                narrative="edited",
+                edited_by="perm-staff",
             )
         )
     assert repo.stored[0].narrative != "edited"
+
+
+async def test_list_revisions_under_wrong_record_raises() -> None:
+    repo = _FakeRepo()
+    gen = GenerateNarrative(_FakeFacts(), _FakeModel(), repo, "llama3.1:8b")
+    created = await gen.execute(GenerateNarrativeInput(record_id="r1"))
+    await UpdateNarrative(repo).execute(
+        UpdateNarrativeInput(
+            record_id="r1",
+            narrative_id=created.id,
+            narrative="edited",
+            edited_by="perm-staff",
+        )
+    )
+
+    with pytest.raises(NarrativeNotFound):
+        await ListNarrativeRevisions(repo).execute(
+            ListNarrativeRevisionsInput(record_id="other", narrative_id=created.id)
+        )
 
 
 async def test_blank_model_output_is_rejected_before_persistence() -> None:
@@ -456,8 +579,13 @@ async def test_facts_adapter_validates_cidoc_before_facts(monkeypatch) -> None:
 
     result = await NarrativeFactsAdapter(object()).prepare("r1")
 
-    assert result.source_snapshot_id == "r1"
-    assert result.project_reference == "CUP-1"
+    assert result.facts.source_snapshot_id == "r1"
+    assert result.facts.project_reference == "CUP-1"
+    assert result.cidoc_document_json == (
+        '{"@context": {"ex": "http://example.org/"}, "@graph": []}'
+    )
+    assert result.cidoc_validation_report == "ok"
+    assert result.cidoc_conforms is True
     assert calls == ["r1"]
 
 

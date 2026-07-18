@@ -40,78 +40,36 @@
       <p class="report-detail__generated">
         Report generated {{ formatDateTime(report.createdAt) }}
       </p>
+      <div class="report-detail__reading-context">
+        @if (narrativeContext(); as context) {
+          <span>{{ context }}</span>
+        }
+        <span
+          class="report-detail__validation"
+          [class.report-detail__validation--ok]="validationState() === 'ok'"
+          [class.report-detail__validation--warning]="validationState() === 'warning'"
+          [class.report-detail__validation--unknown]="validationState() === 'unknown'"
+        >
+          {{ validationLabel() }}
+        </span>
+      </div>
     </header>
 
-    <div class="report-detail__body">
-      <main class="report-detail__main">
-        <app-in-situ-visit-report-narrative
-          [narrative]="report.narrative"
-          [recordId]="report.inSituVisitRecordId"
-          (viewCidocCrm)="openCidocDialog($event)"
-          (editNarrative)="openNarrativeEditor($event)"
-        />
-        <app-in-situ-visit-report-record [record]="report.record" />
-      </main>
-
-      <app-in-situ-visit-report-rail [record]="report.record" [narrative]="report.narrative" />
-    </div>
-
-    <details class="report-detail__refs">
-      <summary>Technical references</summary>
-      <dl>
-        <div>
-          <dt>Report ID</dt>
-          <dd>{{ report.id }}</dd>
-        </div>
-        <div>
-          <dt>Project ID</dt>
-          <dd>{{ report.projectId }}</dd>
-        </div>
-        <div>
-          <dt>Narrative ID</dt>
-          <dd>{{ report.narrativeId }}</dd>
-        </div>
-        <div>
-          <dt>Record ID</dt>
-          <dd>{{ report.inSituVisitRecordId }}</dd>
-        </div>
-      </dl>
-    </details>
-
-    @if (report.narrative?.factsSnapshot; as snapshot) {
-      <details class="report-detail__refs report-detail__facts">
-        <summary>Facts used in narrative</summary>
-        <dl>
-          <div>
-            <dt>Snapshot ID</dt>
-            <dd>{{ snapshot.id }}</dd>
-          </div>
-          <div>
-            <dt>Builder version</dt>
-            <dd>{{ snapshot.builderVersion }}</dd>
-          </div>
-          <div>
-            <dt>Prompt version</dt>
-            <dd>{{ snapshot.promptVersion }}</dd>
-          </div>
-          <div>
-            <dt>Payload hash</dt>
-            <dd>{{ snapshot.payloadHash }}</dd>
-          </div>
-        </dl>
-        @if (factsPayload(); as payload) {
-          <pre class="report-detail__facts-payload">{{ payload }}</pre>
-        }
-      </details>
-    }
+    <main class="report-detail__main">
+      <app-in-situ-visit-report-narrative
+        [narrative]="report.narrative"
+        [auditTrailLink]="[
+          '/p/collections/reports/visits-in-situ',
+          projectId(),
+          reportId(),
+          'audit-trail',
+        ]"
+        (editNarrative)="openNarrativeEditor($event)"
+      />
+      <app-in-situ-visit-report-record [record]="report.record" />
+    </main>
   }
 </div>
-
-<app-in-situ-visit-cidoc-dialog
-  [open]="cidocDialogOpen()"
-  [recordId]="cidocRecordId()"
-  (closed)="closeCidocDialog()"
-/>
 
 <app-edit-in-situ-visit-narrative-dialog
   [open]="narrativeEditorOpen()"

@@ -54,6 +54,9 @@ class NarrativeFactSnapshotResponse(BaseModel):
     builder_version: str
     prompt_version: str
     created_at: datetime
+    cidoc_document_json: str | None = None
+    cidoc_validation_report: str | None = None
+    cidoc_conforms: bool | None = None
 
 
 class NarrativeResponse(BaseModel):
@@ -75,8 +78,25 @@ class StoredNarrativeResponse(BaseModel):
     facts_snapshot: NarrativeFactSnapshotResponse | None = None
 
 
+class NarrativeRevisionResponse(BaseModel):
+    id: str
+    narrative_id: str
+    previous_narrative: str
+    revised_narrative: str
+    created_at: datetime
+    edited_by: str | None = None
+
+
 class PaginatedNarrativesResponse(BaseModel):
     content: list[StoredNarrativeResponse]
+    page: int
+    size: int
+    total_elements: int
+    total_pages: int
+
+
+class PaginatedNarrativeRevisionsResponse(BaseModel):
+    content: list[NarrativeRevisionResponse]
     page: int
     size: int
     total_elements: int

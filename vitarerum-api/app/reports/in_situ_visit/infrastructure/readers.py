@@ -13,7 +13,10 @@ from typing import TYPE_CHECKING
 from sqlalchemy.ext.asyncio import AsyncSession
 
 if TYPE_CHECKING:
-    from app.ai.museum_narrative.presentation.schemas import StoredNarrativeResponse
+    from app.ai.museum_narrative.presentation.schemas import (
+        PaginatedNarrativeRevisionsResponse,
+        StoredNarrativeResponse,
+    )
     from app.cidoc_crm.in_situ_visit_mapping.presentation.schemas import (
         InSituVisitRecordResponse,
     )
@@ -49,6 +52,20 @@ class MuseumNarrativeReader:
         from app.ai.museum_narrative.public import get_narrative_view
 
         return await get_narrative_view(self._session, record_id, narrative_id)
+
+
+class MuseumNarrativeRevisionReader:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def list(
+        self, record_id: str, narrative_id: str, page: int, size: int
+    ) -> PaginatedNarrativeRevisionsResponse | None:
+        from app.ai.museum_narrative.public import list_narrative_revisions
+
+        return await list_narrative_revisions(
+            self._session, record_id, narrative_id, page, size
+        )
 
 
 class MuseumNarrativeGenerator:

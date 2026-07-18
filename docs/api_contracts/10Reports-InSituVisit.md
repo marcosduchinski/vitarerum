@@ -289,6 +289,9 @@ report_id  : UUID (required) — the InSituVisitReport id
       "payload_hash": "sha256...",
       "builder_version": "canonical-visit-facts-v1",
       "prompt_version": "museum-narrative-canonical-v1",
+      "cidoc_document_json": "{\"@context\":\"...\",\"@graph\":[]}",
+      "cidoc_validation_report": "Validation Report\nConforms: True",
+      "cidoc_conforms": true,
       "created_at": "2026-06-22T10:30:00Z"
     }
   },
@@ -338,6 +341,144 @@ report_id  : UUID (required) — the InSituVisitReport id
 
 `narrative` / `record` are normally always present (artifacts are append-only and
 never deleted); they are nullable only to guard against a broken link.
+
+**Response `404 REPORT_NOT_FOUND`** — no report with `report_id` under this
+`project_id`. `403 INSUFFICIENT_GROUP` for non-staff callers.
+
+---
+
+## GET /api/v1/reports/collection-use/{project_id}/in_situ_visit/{report_id}/audit-trail
+
+Returns the audit trail for one generated report. Staff-only; same
+project-ownership rule and `404 REPORT_NOT_FOUND` as the plain get-by-id above.
+
+This endpoint is an aggregate read model for the audit view. It fans out through
+the same published languages as `/detail`, but organizes the result by the
+production chain:
+
+1. **Evidence** — human/source evidence from the in-situ visit record.
+2. **CIDOC** — the persisted CIDOC document and SHACL result captured at
+   narrative-generation time; it is not recomputed live.
+3. **Facts** — the canonical fact snapshot passed to narrative generation.
+4. **Generation** — prompt, model, response hash, style/language and generation
+   metadata.
+5. **Validation** — narrative validation status and findings.
+6. **Revisions** — editorial history for the narrative.
+
+The embedded `record` and `narrative` remain available as reference payloads so
+the audit UI can render both the domain content and the production trace without
+making extra calls.
+
+**Path parameters**
+
+```
+project_id : UUID (required) — the owning CollectionUseProject
+report_id  : UUID (required) — the InSituVisitReport id
+```
+
+**Query parameters**
+
+```
+revisions_page : integer (optional, default 0,   min 0)
+revisions_size : integer (optional, default 100, 1..100)
+```
+
+**Response `200 OK`**
+
+```json
+{
+  "id": "a1b2c3d4-...",
+  "createdAt": "2026-06-22T10:30:00Z",
+  "createdBy": "permission-uuid",
+  "projectId": "project-uuid",
+  "narrativeId": "narrative-uuid",
+  "inSituVisitRecordId": "record-uuid",
+  "record": { "id": "record-uuid", "code": "CUP-ABCD1234" },
+  "narrative": {
+    "narrative_id": "narrative-uuid",
+    "record_id": "record-uuid",
+    "data": { "narrative": "..." },
+    "facts_snapshot": {
+      "id": "facts-snapshot-uuid",
+      "payload_json": "{\"project_reference\":\"CUP-ABCD1234\"}",
+      "payload_hash": "sha256...",
+      "builder_version": "canonical-visit-facts-v1",
+      "prompt_version": "museum-narrative-canonical-v1",
+      "cidoc_document_json": "{\"@context\":\"...\",\"@graph\":[]}",
+      "cidoc_validation_report": "Validation Report\nConforms: True",
+      "cidoc_conforms": true,
+      "created_at": "2026-06-22T10:30:00Z"
+    }
+  },
+  "evidence": {
+    "recordId": "record-uuid",
+    "projectId": "project-uuid",
+    "code": "CUP-ABCD1234",
+    "executionEvidenceType": "project_completed",
+    "executionOccurredAt": "2026-06-03T16:30:00Z",
+    "executionRecordedBy": "permission-uuid",
+    "executionEvidenceGaps": [],
+    "approvedAt": "2026-06-04T09:00:00Z",
+    "approvedBy": "permission-uuid",
+    "approvalNote": "Checked by curator."
+  },
+  "cidoc": {
+    "documentJson": "{\"@context\":\"...\",\"@graph\":[]}",
+    "mappingVersion": "in-situ-visit-cidoc-v2",
+    "crmVersion": "7.1.3",
+    "recordSchemaVersion": 2,
+    "conforms": true,
+    "validationReport": "Validation Report\nConforms: True"
+  },
+  "facts": {
+    "snapshotId": "facts-snapshot-uuid",
+    "payloadJson": "{\"project_reference\":\"CUP-ABCD1234\"}",
+    "payloadHash": "sha256...",
+    "builderVersion": "canonical-visit-facts-v1",
+    "promptVersion": "museum-narrative-canonical-v1",
+    "createdAt": "2026-06-22T10:30:00Z"
+  },
+  "generation": {
+    "narrativeId": "narrative-uuid",
+    "generatedAt": "2026-06-22T10:30:00Z",
+    "narrativeType": "institutional",
+    "resolutionSource": "default",
+    "targetLanguage": "pt",
+    "creativityTemperature": 0.3,
+    "llmModel": "llama3.1:8b",
+    "promptVersion": "museum-narrative-canonical-v1",
+    "responseHash": "sha256..."
+  },
+  "validation": {
+    "conforms": true,
+    "findings": []
+  },
+  "revisions": {
+    "content": [
+      {
+        "id": "revision-uuid",
+        "narrative_id": "narrative-uuid",
+        "record_id": "record-uuid",
+        "previous_narrative": "Previous text.",
+        "revised_narrative": "Revised text.",
+        "edited_by": "permission-uuid",
+        "edited_at": "2026-06-22T11:00:00Z"
+      }
+    ],
+    "page": 0,
+    "size": 100,
+    "total_elements": 1,
+    "total_pages": 1
+  }
+}
+```
+
+`cidoc.documentJson`, `cidoc.validationReport`, and `cidoc.conforms` are copied
+from `narrative.facts_snapshot`; clients must treat them as the frozen generation
+artifact. The endpoint does not call the CIDOC exporter or SHACL gate.
+
+`record`, `narrative`, `narrative.facts_snapshot`, and `revisions` are nullable
+only to guard against broken cross-context links in historical data.
 
 **Response `404 REPORT_NOT_FOUND`** — no report with `report_id` under this
 `project_id`. `403 INSUFFICIENT_GROUP` for non-staff callers.

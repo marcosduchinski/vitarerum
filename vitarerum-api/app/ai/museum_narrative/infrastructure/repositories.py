@@ -15,6 +15,7 @@ from app.ai.museum_narrative.domain.models import (
     NarrativeFactSnapshot,
     NarrativeFactSnapshotId,
     NarrativeId,
+    NarrativeRevisionId,
     NarrativeType,
     ResolutionSource,
 )
@@ -27,6 +28,7 @@ from app.ai.museum_narrative.infrastructure.models import (
     GeneratedNarrativeRevisionOrm,
     NarrativeFactSnapshotOrm,
 )
+from app.shared.kernel import PermissionId
 
 
 def facts_snapshot_to_orm(snapshot: NarrativeFactSnapshot) -> NarrativeFactSnapshotOrm:
@@ -38,6 +40,9 @@ def facts_snapshot_to_orm(snapshot: NarrativeFactSnapshot) -> NarrativeFactSnaps
         builder_version=snapshot.builder_version,
         prompt_version=snapshot.prompt_version,
         created_at=snapshot.created_at,
+        cidoc_document_json=snapshot.cidoc_document_json,
+        cidoc_validation_report=snapshot.cidoc_validation_report,
+        cidoc_conforms=snapshot.cidoc_conforms,
     )
 
 
@@ -50,6 +55,9 @@ def facts_snapshot_to_domain(orm: NarrativeFactSnapshotOrm) -> NarrativeFactSnap
         builder_version=orm.builder_version,
         prompt_version=orm.prompt_version,
         created_at=orm.created_at,
+        cidoc_document_json=orm.cidoc_document_json,
+        cidoc_validation_report=orm.cidoc_validation_report,
+        cidoc_conforms=orm.cidoc_conforms,
     )
 
 
@@ -62,6 +70,20 @@ def revision_to_orm(
         previous_narrative=revision.previous_narrative,
         revised_narrative=revision.revised_narrative,
         created_at=revision.created_at,
+        edited_by=str(revision.edited_by) if revision.edited_by else None,
+    )
+
+
+def revision_to_domain(
+    orm: GeneratedNarrativeRevisionOrm,
+) -> GeneratedNarrativeRevision:
+    return GeneratedNarrativeRevision(
+        id=NarrativeRevisionId(orm.id),
+        narrative_id=NarrativeId(orm.narrative_id),
+        previous_narrative=orm.previous_narrative,
+        revised_narrative=orm.revised_narrative,
+        created_at=orm.created_at,
+        edited_by=PermissionId(orm.edited_by) if orm.edited_by else None,
     )
 
 
@@ -198,3 +220,25 @@ class SqlAlchemyNarrativeRepository:
             await self._with_snapshot(narrative_to_domain(orm)) for orm in orms
         ]
         return narratives, total
+
+    async def list_revisions(
+        self, record_id: str, narrative_id: NarrativeId, page: int, size: int
+    ) -> tuple[list[GeneratedNarrativeRevision], int] | None:
+        narrative = await self.get_by_id(narrative_id)
+        if narrative is None or narrative.record_id != record_id:
+            return None
+        count_stmt = (
+            select(func.count())
+            .select_from(GeneratedNarrativeRevisionOrm)
+            .where(GeneratedNarrativeRevisionOrm.narrative_id == narrative_id)
+        )
+        total = (await self._session.execute(count_stmt)).scalar_one()
+        data_stmt = (
+            select(GeneratedNarrativeRevisionOrm)
+            .where(GeneratedNarrativeRevisionOrm.narrative_id == narrative_id)
+            .order_by(GeneratedNarrativeRevisionOrm.created_at.asc())
+            .offset(page * size)
+            .limit(size)
+        )
+        orms = (await self._session.execute(data_stmt)).scalars().all()
+        return [revision_to_domain(orm) for orm in orms], total

@@ -8,11 +8,13 @@ import {
   CreateInSituVisitReportRequest,
   InSituVisitRecord,
   InSituVisitReport,
+  InSituVisitReportAuditTrail,
   InSituVisitReportDetail,
   InSituVisitReportEvidenceItem,
   InSituVisitReportListItem,
   InSituVisitReportListPage,
   InSituVisitReportNarrative,
+  InSituVisitNarrativeRevision,
   InSituVisitReportsQuery,
   InSituVisitReportNarrativeType,
   InSituVisitReportTargetLanguage,
@@ -32,6 +34,7 @@ export class ReportsApiServiceMock {
   private readonly state = inject(MockProjectState);
   private readonly generatedReports: InSituVisitReport[] = [];
   private readonly generatedDetails = new Map<string, InSituVisitReportDetail>();
+  private readonly revisions = new Map<string, InSituVisitNarrativeRevision[]>();
   private reportSequence = 0;
 
   listInSituVisitReports(
@@ -129,6 +132,84 @@ export class ReportsApiServiceMock {
     return of(structuredClone(detail));
   }
 
+  getInSituVisitReportAuditTrail(
+    projectId: string,
+    reportId: string,
+  ): Observable<InSituVisitReportAuditTrail> {
+    if (!this.identity.isStaff()) {
+      return this.fail(403, 'ACCESS_DENIED', 'Reports are restricted to staff');
+    }
+
+    const detail = this.generatedDetails.get(reportId);
+    if (!detail || detail.projectId !== projectId) {
+      return this.fail(
+        404,
+        'REPORT_NOT_FOUND',
+        `No report found with id ${reportId} for project ${projectId}`,
+      );
+    }
+
+    const record = detail.record;
+    const narrative = detail.narrative;
+    const content = this.revisions.get(reportId) ?? [];
+    return of(
+      structuredClone({
+        ...detail,
+        evidence: {
+          recordId: record?.id ?? null,
+          projectId,
+          code: record?.code ?? null,
+          executionEvidenceType: record?.executionEvidenceType ?? 'project_completed',
+          executionOccurredAt: record?.executionOccurredAt ?? detail.createdAt,
+          executionRecordedBy: record?.executionRecordedBy ?? detail.createdBy,
+          executionEvidenceGaps: record?.executionEvidenceGaps ?? [],
+          approvedAt: null,
+          approvedBy: null,
+          approvalNote: null,
+        },
+        cidoc: {
+          documentJson: narrative?.factsSnapshot?.cidocDocumentJson ?? '{"@graph":[]}',
+          mappingVersion: record?.mappingVersion ?? 'in-situ-visit-cidoc-v2',
+          crmVersion: record?.crmVersion ?? '7.1.3',
+          recordSchemaVersion: record?.recordSchemaVersion ?? 2,
+          conforms: narrative?.factsSnapshot?.cidocConforms ?? true,
+          validationReport:
+            narrative?.factsSnapshot?.cidocValidationReport ?? 'Validation Report\nConforms: True',
+        },
+        facts: {
+          snapshotId: narrative?.factsSnapshot?.id ?? null,
+          payloadJson: narrative?.factsSnapshot?.payloadJson ?? null,
+          payloadHash: narrative?.factsSnapshot?.payloadHash ?? null,
+          builderVersion: narrative?.factsSnapshot?.builderVersion ?? null,
+          promptVersion: narrative?.factsSnapshot?.promptVersion ?? null,
+          createdAt: narrative?.factsSnapshot?.createdAt ?? null,
+        },
+        generation: {
+          narrativeId: narrative?.narrativeId ?? null,
+          generatedAt: narrative?.generatedAt ?? null,
+          narrativeType: narrative?.meta.resolvedNarrativeType ?? null,
+          resolutionSource: narrative?.meta.resolutionSource ?? null,
+          targetLanguage: narrative?.meta.targetLanguage ?? null,
+          creativityTemperature: narrative?.meta.creativityTemperature ?? null,
+          llmModel: narrative?.meta.llmModel ?? null,
+          promptVersion: narrative?.meta.promptVersion ?? null,
+          responseHash: narrative?.meta.modelResponseHash ?? null,
+        },
+        validation: {
+          conforms: narrative?.meta.validationConforms ?? true,
+          findings: narrative?.meta.validationFindings ?? [],
+        },
+        revisions: {
+          content,
+          page: 0,
+          size: 100,
+          totalElements: content.length,
+          totalPages: content.length ? 1 : 0,
+        },
+      }),
+    );
+  }
+
   getInSituVisitCidocCrm(recordId: string): Observable<CidocCrmJsonObject> {
     if (!this.identity.isStaff()) {
       return this.fail(403, 'ACCESS_DENIED', 'Staff access required');
@@ -169,6 +250,18 @@ export class ReportsApiServiceMock {
 
     const narrative = { ...detail.narrative, text: narrativeText };
     this.generatedDetails.set(detail.id, { ...detail, narrative });
+    this.revisions.set(detail.id, [
+      {
+        id: `mock-revision-${detail.id}-${Date.now()}`,
+        narrativeId,
+        recordId,
+        previousNarrative: detail.narrative.text,
+        revisedNarrative: narrativeText,
+        editedBy: this.identity.getPermissionId(),
+        editedAt: new Date().toISOString(),
+      },
+      ...(this.revisions.get(detail.id) ?? []),
+    ]);
     return of(structuredClone(narrative));
   }
 
@@ -219,6 +312,18 @@ export class ReportsApiServiceMock {
       visitorName: project.requestedBy.user.name,
       placeName: 'MUHNAC',
       generatedAt: report.createdAt,
+      recordSchemaVersion: 2,
+      sourceProjectId: report.projectId,
+      sourceProjectTitle: project.title,
+      sourceProjectPurpose: project.purpose,
+      plannedBeginDate: project.beginDate,
+      plannedEndDate: project.endDate,
+      executionEvidenceType: 'project_completed',
+      executionOccurredAt: report.createdAt,
+      executionRecordedBy: report.createdBy,
+      executionEvidenceGaps: [],
+      mappingVersion: 'in-situ-visit-cidoc-v2',
+      crmVersion: '7.1.3',
       requestedObjects: [requestedObject],
       inSituOccurrences: [],
       inSituLogs: [],
@@ -237,6 +342,31 @@ export class ReportsApiServiceMock {
           targetLanguage: request.targetLanguage,
           creativityTemperature: request.creativityTemperature,
           llmModel: 'llama3.1:8b',
+          factsSnapshotId: `mock-facts-${suffix}`,
+          promptVersion: 'museum-narrative-canonical-v1',
+          modelResponseHash: `sha256:mock-response-${suffix}`,
+          validationConforms: true,
+          validationFindings: [],
+        },
+        factsSnapshot: {
+          id: `mock-facts-${suffix}`,
+          recordId: report.inSituVisitRecordId,
+          payloadJson: JSON.stringify({
+            project_reference: project.referenceNumber,
+            visitor_name: project.requestedBy.user.name,
+            requested_objects: [project.title],
+            occurrences: [],
+            logs: [],
+            publications: [],
+            evidence_gaps: [],
+          }),
+          payloadHash: `sha256:mock-facts-${suffix}`,
+          builderVersion: 'canonical-visit-facts-v1',
+          promptVersion: 'museum-narrative-canonical-v1',
+          cidocDocumentJson: JSON.stringify({ '@graph': [{ '@id': `ex:visit/${report.id}` }] }),
+          cidocValidationReport: 'Validation Report\nConforms: True',
+          cidocConforms: true,
+          createdAt: report.createdAt,
         },
         text: `Generated ${request.narrativeType} narrative for ${project.title}. ${project.purpose}`,
       },

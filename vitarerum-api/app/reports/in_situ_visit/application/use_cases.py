@@ -21,6 +21,7 @@ from app.reports.in_situ_visit.application.ports import (
     InSituVisitReportRepository,
     NarrativeGenerator,
     NarrativeReader,
+    NarrativeRevisionReader,
 )
 from app.reports.in_situ_visit.domain.models import (
     InSituVisitReport,
@@ -29,7 +30,10 @@ from app.reports.in_situ_visit.domain.models import (
 from app.shared.kernel import PermissionId
 
 if TYPE_CHECKING:
-    from app.ai.museum_narrative.presentation.schemas import StoredNarrativeResponse
+    from app.ai.museum_narrative.presentation.schemas import (
+        PaginatedNarrativeRevisionsResponse,
+        StoredNarrativeResponse,
+    )
     from app.cidoc_crm.in_situ_visit_mapping.presentation.schemas import (
         InSituVisitRecordResponse,
     )
@@ -194,6 +198,16 @@ class InSituVisitReportDetail:
     narrative: StoredNarrativeResponse | None
 
 
+@dataclass(frozen=True, slots=True)
+class InSituVisitReportAuditTrail:
+    """The assembled audit trail for one report generation."""
+
+    report: InSituVisitReport
+    record: InSituVisitRecordResponse | None
+    narrative: StoredNarrativeResponse | None
+    revisions: PaginatedNarrativeRevisionsResponse | None
+
+
 class GetInSituVisitReportDetail:
     """Assemble a report's full detail by fanning out to the CIDOC-CRM record and
     the generated narrative through their published languages."""
@@ -222,4 +236,48 @@ class GetInSituVisitReportDetail:
         )
         return InSituVisitReportDetail(
             report=report, record=record, narrative=narrative
+        )
+
+
+class GetInSituVisitReportAuditTrail:
+    """Assemble the audit trail by composing published views from dependent
+    contexts. It never recomputes CIDOC-CRM; the route reads the persisted
+    snapshot embedded in the narrative response."""
+
+    def __init__(
+        self,
+        repository: InSituVisitReportRepository,
+        record_reader: InSituVisitRecordReader,
+        narrative_reader: NarrativeReader,
+        revision_reader: NarrativeRevisionReader,
+    ) -> None:
+        self._repository = repository
+        self._record_reader = record_reader
+        self._narrative_reader = narrative_reader
+        self._revision_reader = revision_reader
+
+    async def execute(
+        self, data: GetInSituVisitReportInput, revisions_page: int, revisions_size: int
+    ) -> InSituVisitReportAuditTrail:
+        report = await self._repository.get_by_id(InSituVisitReportId(data.report_id))
+        if report is None or report.project_id != data.project_id:
+            raise InSituVisitReportNotFound(
+                f"No report found with id {data.report_id} "
+                f"for project {data.project_id}"
+            )
+        record = await self._record_reader.get(report.in_situ_visit_record_id)
+        narrative = await self._narrative_reader.get(
+            report.in_situ_visit_record_id, report.narrative_id
+        )
+        revisions = await self._revision_reader.list(
+            report.in_situ_visit_record_id,
+            report.narrative_id,
+            revisions_page,
+            revisions_size,
+        )
+        return InSituVisitReportAuditTrail(
+            report=report,
+            record=record,
+            narrative=narrative,
+            revisions=revisions,
         )

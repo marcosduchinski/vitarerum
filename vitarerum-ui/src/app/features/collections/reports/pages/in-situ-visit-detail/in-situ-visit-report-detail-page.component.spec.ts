@@ -4,7 +4,6 @@ import { provideRouter } from '@angular/router';
 import { Observable, of, throwError } from 'rxjs';
 
 import {
-  CidocCrmJsonObject,
   InSituVisitReportDetail,
   InSituVisitReportNarrative,
   UpdateInSituVisitNarrativeRequest,
@@ -41,6 +40,9 @@ const DETAIL: InSituVisitReportDetail = {
       payloadHash: 'sha256:facts',
       builderVersion: 'canonical-visit-facts-v1',
       promptVersion: 'museum-narrative-canonical-v1',
+      cidocDocumentJson: '{"@graph":[]}',
+      cidocValidationReport: 'Validation Report\nConforms: True',
+      cidocConforms: true,
       createdAt: '2026-06-22T10:30:00Z',
     },
     text: 'The generated report narrative.',
@@ -55,7 +57,15 @@ const DETAIL: InSituVisitReportDetail = {
     generatedAt: '2026-06-22T10:30:00Z',
     mappingVersion: 'in-situ-visit-cidoc-v2',
     crmVersion: '7.1.3',
-    requestedObjects: [],
+    requestedObjects: [
+      {
+        id: 'object-1',
+        sourceId: 'INV-1',
+        description: 'Requested vase',
+        position: 0,
+        attachments: [],
+      },
+    ],
     inSituOccurrences: [],
     inSituLogs: [],
     inSituPublications: [],
@@ -64,7 +74,6 @@ const DETAIL: InSituVisitReportDetail = {
 
 class ReportsApiServiceStub {
   readonly calls: { projectId: string; reportId: string }[] = [];
-  readonly cidocCalls: string[] = [];
   readonly updateCalls: {
     recordId: string;
     narrativeId: string;
@@ -75,14 +84,6 @@ class ReportsApiServiceStub {
   getInSituVisitReportDetail(projectId: string, reportId: string) {
     this.calls.push({ projectId, reportId });
     return this.response;
-  }
-
-  getInSituVisitCidocCrm(recordId: string) {
-    this.cidocCalls.push(recordId);
-    return of<CidocCrmJsonObject>({
-      '@context': { crm: 'http://www.cidoc-crm.org/cidoc-crm/' },
-      '@graph': [{ '@id': `ex:visit/${recordId}`, '@type': 'crm:E7_Activity' }],
-    });
   }
 
   updateInSituVisitNarrative(
@@ -127,14 +128,20 @@ describe('InSituVisitReportDetailPageComponent', () => {
     expect(compiled.querySelector('h1')?.textContent).toContain('Maria do Rosário');
     expect(compiled.querySelector('.report-detail__code')?.textContent).toContain('CUP-ABCD1234');
     expect(compiled.textContent).toContain('The generated report narrative.');
-    expect(compiled.textContent).toContain('Facts used in narrative');
-    expect(compiled.textContent).toContain('canonical-visit-facts-v1');
-    expect(compiled.textContent).toContain('"project_reference": "CUP-ABCD1234"');
-    expect(compiled.textContent).toContain('report-1');
-    expect(compiled.textContent).toContain('project-1');
+    expect(compiled.textContent).toContain('institutional · pt · Generated');
+    expect(compiled.textContent).toContain('Conforms');
+    expect(compiled.textContent).not.toContain('Facts used in narrative');
+    expect(compiled.textContent).not.toContain('canonical-visit-facts-v1');
+    expect(compiled.textContent).not.toContain('"project_reference": "CUP-ABCD1234"');
+    expect(compiled.textContent).not.toContain('Technical references');
     expect(
       compiled.querySelector<HTMLAnchorElement>('.report-detail__back')?.getAttribute('href'),
     ).toBe('/p/collections/reports/visits-in-situ');
+    expect(
+      compiled
+        .querySelector<HTMLAnchorElement>('a[aria-label="View audit trail"]')
+        ?.getAttribute('href'),
+    ).toBe('/p/collections/reports/visits-in-situ/project-1/report-1/audit-trail');
   });
 
   it('renders API errors from the detail resource', async () => {
@@ -152,7 +159,12 @@ describe('InSituVisitReportDetailPageComponent', () => {
     expect(compiled.textContent).toContain('The requested resource no longer exists.');
   });
 
-  it('opens the CIDOC-CRM viewer and loads the current record without navigation', async () => {
+  it('exports only the simple report content without audit artifacts', async () => {
+    const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:report');
+    const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    const click = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => undefined);
     const fixture = TestBed.createComponent(InSituVisitReportDetailPageComponent);
     fixture.componentRef.setInput('projectId', 'project-1');
     fixture.componentRef.setInput('reportId', 'report-1');
@@ -161,15 +173,34 @@ describe('InSituVisitReportDetailPageComponent', () => {
     fixture.detectChanges();
 
     (fixture.nativeElement as HTMLElement)
-      .querySelector<HTMLButtonElement>('[aria-label="View CIDOC-CRM data"]')
+      .querySelector<HTMLButtonElement>('.report-action--primary')
       ?.click();
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
 
-    expect(reportsService.cidocCalls).toEqual(['record-1']);
-    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Knowledge graph source');
-    expect((fixture.nativeElement as HTMLElement).textContent).toContain('crm:E7_Activity');
+    expect(createObjectURL).toHaveBeenCalledOnce();
+    const blob = createObjectURL.mock.calls[0][0] as Blob;
+    const exported = JSON.parse(await blob.text()) as Record<string, unknown>;
+    const serialized = JSON.stringify(exported);
+
+    expect(exported['code']).toBe('CUP-ABCD1234');
+    expect(serialized).toContain('The generated report narrative.');
+    expect(serialized).toContain('Requested vase');
+    expect(serialized).not.toContain('factsSnapshot');
+    expect(serialized).not.toContain('payloadJson');
+    expect(serialized).not.toContain('cidocDocumentJson');
+    expect(serialized).not.toContain('cidocValidationReport');
+    expect(serialized).not.toContain('validationFindings');
+    expect(serialized).not.toContain('promptVersion');
+    expect(serialized).not.toContain('modelResponseHash');
+    expect(serialized).not.toContain('llmModel');
+    expect(serialized).not.toContain('mappingVersion');
+    expect(serialized).not.toContain('crmVersion');
+    expect(serialized).not.toContain('executionEvidenceGaps');
+    expect(click).toHaveBeenCalledOnce();
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:report');
+
+    createObjectURL.mockRestore();
+    revokeObjectURL.mockRestore();
+    click.mockRestore();
   });
 
   it('edits the narrative in place while preserving the rest of the report', async () => {

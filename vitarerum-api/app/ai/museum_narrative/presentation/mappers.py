@@ -6,11 +6,15 @@ language (``app.ai.museum_narrative.public``) without pulling in the router.
 
 from __future__ import annotations
 
-from app.ai.museum_narrative.domain.models import GeneratedNarrative
+from app.ai.museum_narrative.domain.models import (
+    GeneratedNarrative,
+    GeneratedNarrativeRevision,
+)
 from app.ai.museum_narrative.presentation.schemas import (
     NarrativeData,
     NarrativeFactSnapshotResponse,
     NarrativeMeta,
+    NarrativeRevisionResponse,
     StoredNarrativeResponse,
 )
 
@@ -51,6 +55,9 @@ def fact_snapshot_response(
         builder_version=snapshot.builder_version,
         prompt_version=snapshot.prompt_version,
         created_at=snapshot.created_at,
+        cidoc_document_json=snapshot.cidoc_document_json,
+        cidoc_validation_report=snapshot.cidoc_validation_report,
+        cidoc_conforms=snapshot.cidoc_conforms,
     )
 
 
@@ -62,4 +69,17 @@ def stored_narrative_response(record: GeneratedNarrative) -> StoredNarrativeResp
         meta=narrative_meta(record),
         data=NarrativeData(narrative=record.narrative),
         facts_snapshot=fact_snapshot_response(record),
+    )
+
+
+def narrative_revision_response(
+    revision: GeneratedNarrativeRevision,
+) -> NarrativeRevisionResponse:
+    return NarrativeRevisionResponse(
+        id=revision.id,
+        narrative_id=revision.narrative_id,
+        previous_narrative=revision.previous_narrative,
+        revised_narrative=revision.revised_narrative,
+        created_at=revision.created_at,
+        edited_by=revision.edited_by,
     )

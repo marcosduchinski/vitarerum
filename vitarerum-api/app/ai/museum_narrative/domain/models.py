@@ -14,6 +14,7 @@ from enum import StrEnum
 from typing import NewType
 
 from app.ai.museum_narrative.domain.validation import NarrativeFinding
+from app.shared.kernel import PermissionId
 
 NarrativeId = NewType("NarrativeId", str)
 NarrativeFactSnapshotId = NewType("NarrativeFactSnapshotId", str)
@@ -47,6 +48,9 @@ class NarrativeFactSnapshot:
     builder_version: str
     prompt_version: str
     created_at: datetime
+    cidoc_document_json: str | None = None
+    cidoc_validation_report: str | None = None
+    cidoc_conforms: bool | None = None
 
     @classmethod
     def create(
@@ -57,6 +61,9 @@ class NarrativeFactSnapshot:
         payload_hash: str,
         builder_version: str,
         prompt_version: str,
+        cidoc_document_json: str | None = None,
+        cidoc_validation_report: str | None = None,
+        cidoc_conforms: bool | None = None,
     ) -> NarrativeFactSnapshot:
         return cls(
             id=NarrativeFactSnapshotId(str(uuid.uuid4())),
@@ -66,6 +73,9 @@ class NarrativeFactSnapshot:
             builder_version=builder_version,
             prompt_version=prompt_version,
             created_at=datetime.now(UTC),
+            cidoc_document_json=cidoc_document_json,
+            cidoc_validation_report=cidoc_validation_report,
+            cidoc_conforms=cidoc_conforms,
         )
 
 
@@ -78,6 +88,7 @@ class GeneratedNarrativeRevision:
     previous_narrative: str
     revised_narrative: str
     created_at: datetime
+    edited_by: PermissionId | None = None
 
     @classmethod
     def create(
@@ -86,6 +97,7 @@ class GeneratedNarrativeRevision:
         narrative_id: NarrativeId,
         previous_narrative: str,
         revised_narrative: str,
+        edited_by: PermissionId | None = None,
     ) -> GeneratedNarrativeRevision:
         return cls(
             id=NarrativeRevisionId(str(uuid.uuid4())),
@@ -93,6 +105,7 @@ class GeneratedNarrativeRevision:
             previous_narrative=previous_narrative,
             revised_narrative=revised_narrative,
             created_at=datetime.now(UTC),
+            edited_by=edited_by,
         )
 
 
@@ -155,7 +168,9 @@ class GeneratedNarrative:
             validation_findings=validation_findings or [],
         )
 
-    def edit_narrative(self, narrative: str) -> GeneratedNarrativeRevision:
+    def edit_narrative(
+        self, narrative: str, edited_by: PermissionId
+    ) -> GeneratedNarrativeRevision:
         """Replace the narrative text and return the append-only revision."""
         text = narrative.strip()
         if not text:
@@ -164,6 +179,7 @@ class GeneratedNarrative:
             narrative_id=self.id,
             previous_narrative=self.narrative,
             revised_narrative=text,
+            edited_by=edited_by,
         )
         self.narrative = text
         return revision

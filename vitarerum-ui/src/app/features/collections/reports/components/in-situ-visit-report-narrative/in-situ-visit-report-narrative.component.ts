@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
+import { RouterLink } from '@angular/router';
 
 import { InSituVisitReportNarrative } from '../../models/report.model';
 
@@ -19,27 +20,18 @@ function formatDateTime(iso: string): string {
 @Component({
   selector: 'app-in-situ-visit-report-narrative',
   standalone: true,
+  imports: [RouterLink],
   templateUrl: './in-situ-visit-report-narrative.component.html',
   styleUrl: './in-situ-visit-report-narrative.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class InSituVisitReportNarrativeComponent {
   readonly narrative = input<InSituVisitReportNarrative | null>(null);
-  readonly recordId = input<string | null>(null);
+  readonly auditTrailLink = input<readonly unknown[] | string | null>(null);
 
-  readonly viewCidocCrm = output<string>();
   readonly editNarrative = output<InSituVisitReportNarrative>();
 
-  protected readonly effectiveRecordId = computed(
-    () => this.recordId() ?? this.narrative()?.recordId ?? null,
-  );
-
   protected readonly formatDateTime = formatDateTime;
-
-  protected requestCidocCrm(): void {
-    const recordId = this.effectiveRecordId();
-    if (recordId) this.viewCidocCrm.emit(recordId);
-  }
 
   protected requestNarrativeEdit(): void {
     const narrative = this.narrative();

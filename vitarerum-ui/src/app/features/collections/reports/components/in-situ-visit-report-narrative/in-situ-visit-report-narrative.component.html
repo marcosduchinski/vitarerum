@@ -7,16 +7,16 @@
       </div>
 
       <div class="narrative__actions" aria-label="Narrative actions">
-        <button
-          type="button"
-          class="narrative__action"
-          aria-label="View CIDOC-CRM data"
-          data-tooltip="View CIDOC-CRM data"
-          [disabled]="!effectiveRecordId()"
-          (click)="requestCidocCrm()"
-        >
-          <span class="pi pi-eye" aria-hidden="true"></span>
-        </button>
+        @if (auditTrailLink(); as link) {
+          <a
+            class="narrative__action"
+            aria-label="View audit trail"
+            data-tooltip="View audit trail"
+            [routerLink]="link"
+          >
+            <span class="pi pi-shield" aria-hidden="true"></span>
+          </a>
+        }
         <button
           type="button"
           class="narrative__action"

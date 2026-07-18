@@ -101,7 +101,7 @@ describe('VisitsInSituReportPageComponent', () => {
     );
   });
 
-  it('opens the row menu and navigates to report details', async () => {
+  it('opens the row menu and navigates to the report audit trail', async () => {
     const navigateSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true);
     const fixture = TestBed.createComponent(VisitsInSituReportPageComponent);
     fixture.detectChanges();
@@ -114,15 +114,16 @@ describe('VisitsInSituReportPageComponent', () => {
     fixture.detectChanges();
     await fixture.whenStable();
 
-    const details = Array.from(
+    const auditTrail = Array.from(
       document.body.querySelectorAll<HTMLElement>('.p-menu a, .p-menu button'),
-    ).find((item) => item.textContent?.trim() === 'Details');
-    details!.click();
+    ).find((item) => item.textContent?.trim() === 'Audit trail');
+    auditTrail!.click();
 
     expect(navigateSpy).toHaveBeenCalledWith([
       '/p/collections/reports/visits-in-situ',
       'project-1',
       'report-1',
+      'audit-trail',
     ]);
   });
 

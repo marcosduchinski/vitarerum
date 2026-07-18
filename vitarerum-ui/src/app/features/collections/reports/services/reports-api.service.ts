@@ -9,11 +9,13 @@ import {
   CreateInSituVisitReportRequest,
   InSituVisitRecord,
   InSituVisitReport,
+  InSituVisitReportAuditTrail,
   InSituVisitReportAttachment,
   InSituVisitReportDetail,
   InSituVisitReportEvidenceItem,
   InSituVisitReportListPage,
   InSituVisitReportNarrative,
+  InSituVisitNarrativeRevision,
   InSituVisitReportsQuery,
   UpdateInSituVisitNarrativeRequest,
 } from '../models/report.model';
@@ -46,6 +48,9 @@ interface NarrativeDto {
     readonly payload_hash: string;
     readonly builder_version: string;
     readonly prompt_version: string;
+    readonly cidoc_document_json?: string | null;
+    readonly cidoc_validation_report?: string | null;
+    readonly cidoc_conforms?: boolean | null;
     readonly created_at: string;
   } | null;
 }
@@ -97,6 +102,75 @@ interface InSituVisitReportDetailDto extends InSituVisitReport {
   readonly record: InSituVisitRecordDto | null;
 }
 
+interface NarrativeRevisionDto {
+  readonly id: string;
+  readonly narrative_id: string;
+  readonly record_id: string;
+  readonly previous_narrative: string;
+  readonly revised_narrative: string;
+  readonly edited_by?: string | null;
+  readonly edited_at: string;
+}
+
+interface NarrativeRevisionPageDto {
+  readonly content: readonly NarrativeRevisionDto[];
+  readonly page: number;
+  readonly size: number;
+  readonly total_elements: number;
+  readonly total_pages: number;
+}
+
+interface InSituVisitAuditTrailDto extends InSituVisitReportDetailDto {
+  readonly evidence: {
+    readonly recordId: string | null;
+    readonly projectId: string;
+    readonly code: string | null;
+    readonly executionEvidenceType: string | null;
+    readonly executionOccurredAt: string | null;
+    readonly executionRecordedBy: string | null;
+    readonly executionEvidenceGaps: readonly string[];
+    readonly approvedAt: string | null;
+    readonly approvedBy: string | null;
+    readonly approvalNote: string | null;
+  };
+  readonly cidoc: {
+    readonly documentJson: string | null;
+    readonly mappingVersion: string | null;
+    readonly crmVersion: string | null;
+    readonly recordSchemaVersion: number | null;
+    readonly conforms: boolean | null;
+    readonly validationReport: string | null;
+  };
+  readonly facts: {
+    readonly snapshotId: string | null;
+    readonly payloadJson: string | null;
+    readonly payloadHash: string | null;
+    readonly builderVersion: string | null;
+    readonly promptVersion: string | null;
+    readonly createdAt: string | null;
+  };
+  readonly generation: {
+    readonly narrativeId: string | null;
+    readonly generatedAt: string | null;
+    readonly narrativeType: string | null;
+    readonly resolutionSource: string | null;
+    readonly targetLanguage: string | null;
+    readonly creativityTemperature: number | null;
+    readonly llmModel: string | null;
+    readonly promptVersion: string | null;
+    readonly responseHash: string | null;
+  };
+  readonly validation: {
+    readonly conforms: boolean | null;
+    readonly findings: readonly {
+      readonly code: string;
+      readonly message: string;
+      readonly evidence: string;
+    }[];
+  };
+  readonly revisions: NarrativeRevisionPageDto | null;
+}
+
 export const REPORTS_API_SERVICE = new InjectionToken<ReportsApiService>('REPORTS_API_SERVICE');
 
 @Injectable()
@@ -128,6 +202,14 @@ export class ReportsApiService {
         this.url(`/reports/collection-use/${projectId}/in_situ_visit/${reportId}/detail`),
       )
       .pipe(map((detail) => this.toDetail(detail)));
+  }
+
+  getInSituVisitReportAuditTrail(projectId: string, reportId: string) {
+    return this.http
+      .get<InSituVisitAuditTrailDto>(
+        this.url(`/reports/collection-use/${projectId}/in_situ_visit/${reportId}/audit-trail`),
+      )
+      .pipe(map((audit) => this.toAuditTrail(audit)));
   }
 
   getInSituVisitCidocCrm(recordId: string) {
@@ -195,6 +277,9 @@ export class ReportsApiService {
             payloadHash: narrative.facts_snapshot.payload_hash,
             builderVersion: narrative.facts_snapshot.builder_version,
             promptVersion: narrative.facts_snapshot.prompt_version,
+            cidocDocumentJson: narrative.facts_snapshot.cidoc_document_json ?? null,
+            cidocValidationReport: narrative.facts_snapshot.cidoc_validation_report ?? null,
+            cidocConforms: narrative.facts_snapshot.cidoc_conforms ?? null,
             createdAt: narrative.facts_snapshot.created_at,
           }
         : null,
@@ -241,6 +326,45 @@ export class ReportsApiService {
 
   private toAttachment(attachment: AttachmentDto): InSituVisitReportAttachment {
     return { ...attachment };
+  }
+
+  private toAuditTrail(audit: InSituVisitAuditTrailDto): InSituVisitReportAuditTrail {
+    return {
+      id: audit.id,
+      createdAt: audit.createdAt,
+      createdBy: audit.createdBy,
+      projectId: audit.projectId,
+      narrativeId: audit.narrativeId,
+      inSituVisitRecordId: audit.inSituVisitRecordId,
+      record: audit.record ? this.toRecord(audit.record) : null,
+      narrative: audit.narrative ? this.toNarrative(audit.narrative) : null,
+      evidence: { ...audit.evidence },
+      cidoc: { ...audit.cidoc },
+      facts: { ...audit.facts },
+      generation: { ...audit.generation },
+      validation: { ...audit.validation },
+      revisions: audit.revisions
+        ? {
+            content: audit.revisions.content.map((revision) => this.toRevision(revision)),
+            page: audit.revisions.page,
+            size: audit.revisions.size,
+            totalElements: audit.revisions.total_elements,
+            totalPages: audit.revisions.total_pages,
+          }
+        : null,
+    };
+  }
+
+  private toRevision(revision: NarrativeRevisionDto): InSituVisitNarrativeRevision {
+    return {
+      id: revision.id,
+      narrativeId: revision.narrative_id,
+      recordId: revision.record_id,
+      previousNarrative: revision.previous_narrative,
+      revisedNarrative: revision.revised_narrative,
+      editedBy: revision.edited_by ?? null,
+      editedAt: revision.edited_at,
+    };
   }
 
   private url(path: string): string {

@@ -96,13 +96,14 @@ export class VisitsInSituReportPageComponent {
   protected actionItemsFor(report: InSituVisitReportListItem): MenuItem[] {
     return [
       {
-        label: 'Details',
-        icon: 'pi pi-eye',
+        label: 'Audit trail',
+        icon: 'pi pi-list-check',
         command: () => {
           void this.router.navigate([
             '/p/collections/reports/visits-in-situ',
             report.projectId,
             report.id,
+            'audit-trail',
           ]);
         },
       },

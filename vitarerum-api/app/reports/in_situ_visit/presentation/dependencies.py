@@ -15,6 +15,7 @@ from app.reports.in_situ_visit.application.ports import InSituVisitReportReposit
 from app.reports.in_situ_visit.application.use_cases import (
     GenerateInSituVisitReport,
     GetInSituVisitReport,
+    GetInSituVisitReportAuditTrail,
     GetInSituVisitReportDetail,
     ListAllInSituVisitReportSummaries,
     ListInSituVisitReports,
@@ -24,6 +25,7 @@ from app.reports.in_situ_visit.infrastructure.readers import (
     CidocRecordReader,
     MuseumNarrativeGenerator,
     MuseumNarrativeReader,
+    MuseumNarrativeRevisionReader,
 )
 from app.reports.in_situ_visit.infrastructure.repositories import (
     SqlAlchemyInSituVisitReportRepository,
@@ -85,3 +87,19 @@ def get_detail_use_case(
 
 
 DetailUseCase = Annotated[GetInSituVisitReportDetail, Depends(get_detail_use_case)]
+
+
+def get_audit_trail_use_case(
+    session: DBSession, repository: Repository
+) -> GetInSituVisitReportAuditTrail:
+    return GetInSituVisitReportAuditTrail(
+        repository,
+        CidocRecordReader(session),
+        MuseumNarrativeReader(session),
+        MuseumNarrativeRevisionReader(session),
+    )
+
+
+AuditTrailUseCase = Annotated[
+    GetInSituVisitReportAuditTrail, Depends(get_audit_trail_use_case)
+]

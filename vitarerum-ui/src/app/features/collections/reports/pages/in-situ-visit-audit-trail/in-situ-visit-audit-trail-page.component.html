@@ -1,0 +1,369 @@
+<div class="audit-trail">
+  <div class="audit-trail__toolbar">
+    <a class="audit-trail__back" routerLink="/p/collections/reports/visits-in-situ">
+      <span aria-hidden="true">←</span> Back to in-situ visit reports
+    </a>
+
+    @if (audit(); as value) {
+      <a
+        class="audit-trail__report-link"
+        [routerLink]="['/p/collections/reports/visits-in-situ', value.projectId, value.id]"
+      >
+        <span class="pi pi-file" aria-hidden="true"></span>
+        Report
+      </a>
+    }
+  </div>
+
+  @if (auditResource.isLoading()) {
+    <app-loading-state label="Loading audit trail..." />
+  } @else if (auditError()) {
+    <div class="audit-trail__error">
+      <app-error-message [apiError]="auditError()!" (retry)="auditResource.reload()" />
+    </div>
+  } @else if (audit(); as value) {
+    <header class="audit-trail__masthead">
+      <p class="audit-trail__eyebrow">Audit trail</p>
+      <h1>{{ code() ?? value.id }}</h1>
+      <p class="audit-trail__deck">
+        Generation chain for the in-situ visit narrative created
+        {{ formatDateTime(value.createdAt) }}.
+      </p>
+      <div class="audit-trail__summary" aria-label="Audit stage summary">
+        @for (stage of stages(); track stage.number) {
+          <span>
+            <strong>{{ stage.number }}</strong>
+            {{ stage.title }}
+            <small>{{ stage.status }}</small>
+          </span>
+        }
+      </div>
+    </header>
+
+    <main class="audit-trail__stages">
+      <section class="audit-stage" aria-labelledby="audit-evidence-heading">
+        <div class="audit-stage__marker">01</div>
+        <div class="audit-stage__body">
+          <header class="audit-stage__header">
+            <div>
+              <p class="audit-stage__eyebrow">Source evidence</p>
+              <h2 id="audit-evidence-heading">Execution and approval</h2>
+            </div>
+            <span class="audit-stage__badge">
+              {{ value.evidence.executionEvidenceGaps.length ? 'Needs review' : 'Recorded' }}
+            </span>
+          </header>
+
+          <dl class="audit-dl">
+            <div>
+              <dt>Evidence type</dt>
+              <dd>{{ valueOrUnavailable(value.evidence.executionEvidenceType) }}</dd>
+            </div>
+            <div>
+              <dt>Observed execution</dt>
+              <dd>{{ formatDateTime(value.evidence.executionOccurredAt) }}</dd>
+            </div>
+            <div>
+              <dt>Recorded by</dt>
+              <dd>{{ valueOrUnavailable(value.evidence.executionRecordedBy) }}</dd>
+            </div>
+            <div>
+              <dt>Approved at</dt>
+              <dd>{{ formatDateTime(value.evidence.approvedAt) }}</dd>
+            </div>
+            <div>
+              <dt>Approved by</dt>
+              <dd>{{ valueOrUnavailable(value.evidence.approvedBy) }}</dd>
+            </div>
+            <div>
+              <dt>Approval note</dt>
+              <dd>{{ valueOrUnavailable(value.evidence.approvalNote) }}</dd>
+            </div>
+          </dl>
+
+          <div class="audit-counts" aria-label="Record evidence counts">
+            <span
+              >Objects <strong>{{ countEvidence(value.record?.requestedObjects) }}</strong></span
+            >
+            <span
+              >Occurrences
+              <strong>{{ countEvidence(value.record?.inSituOccurrences) }}</strong></span
+            >
+            <span
+              >Logs <strong>{{ countEvidence(value.record?.inSituLogs) }}</strong></span
+            >
+            <span
+              >Publications
+              <strong>{{ countEvidence(value.record?.inSituPublications) }}</strong></span
+            >
+          </div>
+
+          @if (value.evidence.executionEvidenceGaps.length) {
+            <ul class="audit-list audit-list--warning">
+              @for (gap of value.evidence.executionEvidenceGaps; track gap) {
+                <li>{{ gap }}</li>
+              }
+            </ul>
+          }
+        </div>
+      </section>
+
+      <section class="audit-stage" aria-labelledby="audit-cidoc-heading">
+        <div class="audit-stage__marker">02</div>
+        <div class="audit-stage__body">
+          <header class="audit-stage__header">
+            <div>
+              <p class="audit-stage__eyebrow">Persisted semantic artifact</p>
+              <h2 id="audit-cidoc-heading">CIDOC-CRM and SHACL</h2>
+            </div>
+            <span class="audit-stage__badge">{{
+              value.cidoc.conforms === false ? 'Needs review' : 'Persisted'
+            }}</span>
+          </header>
+
+          <dl class="audit-dl">
+            <div>
+              <dt>Mapping version</dt>
+              <dd>{{ valueOrUnavailable(value.cidoc.mappingVersion) }}</dd>
+            </div>
+            <div>
+              <dt>CRM version</dt>
+              <dd>{{ valueOrUnavailable(value.cidoc.crmVersion) }}</dd>
+            </div>
+            <div>
+              <dt>Record schema</dt>
+              <dd>{{ valueOrUnavailable(value.cidoc.recordSchemaVersion) }}</dd>
+            </div>
+            <div>
+              <dt>SHACL result</dt>
+              <dd>{{ value.cidoc.conforms === false ? 'Needs review' : 'Conforms' }}</dd>
+            </div>
+          </dl>
+
+          @if (value.cidoc.validationReport) {
+            <details class="audit-details">
+              <summary>SHACL report</summary>
+              <pre>{{ value.cidoc.validationReport }}</pre>
+            </details>
+          }
+          @if (cidocDocument(); as document) {
+            <details class="audit-details">
+              <summary>Persisted JSON-LD</summary>
+              <pre>{{ document }}</pre>
+            </details>
+          }
+        </div>
+      </section>
+
+      <section class="audit-stage" aria-labelledby="audit-facts-heading">
+        <div class="audit-stage__marker">03</div>
+        <div class="audit-stage__body">
+          <header class="audit-stage__header">
+            <div>
+              <p class="audit-stage__eyebrow">Frozen inputs</p>
+              <h2 id="audit-facts-heading">Facts used in narrative</h2>
+            </div>
+            <span class="audit-stage__badge">{{
+              value.facts.snapshotId ? 'Frozen' : 'Unavailable'
+            }}</span>
+          </header>
+
+          <dl class="audit-dl">
+            <div>
+              <dt>Snapshot</dt>
+              <dd>{{ valueOrUnavailable(value.facts.snapshotId) }}</dd>
+            </div>
+            <div>
+              <dt>Builder</dt>
+              <dd>{{ valueOrUnavailable(value.facts.builderVersion) }}</dd>
+            </div>
+            <div>
+              <dt>Prompt</dt>
+              <dd>{{ valueOrUnavailable(value.facts.promptVersion) }}</dd>
+            </div>
+            <div>
+              <dt>Payload hash</dt>
+              <dd>{{ valueOrUnavailable(value.facts.payloadHash) }}</dd>
+            </div>
+          </dl>
+
+          @if (factSections().length) {
+            <div class="fact-grid">
+              @for (section of factSections(); track section.key) {
+                <article class="fact-cell">
+                  <h3>{{ section.label }}</h3>
+                  <pre>{{ valuePreview(section.value) }}</pre>
+                </article>
+              }
+            </div>
+          }
+          @if (factsPayload(); as payload) {
+            <details class="audit-details">
+              <summary>Raw facts JSON</summary>
+              <pre>{{ payload }}</pre>
+            </details>
+          }
+        </div>
+      </section>
+
+      <section class="audit-stage" aria-labelledby="audit-generation-heading">
+        <div class="audit-stage__marker">04</div>
+        <div class="audit-stage__body">
+          <header class="audit-stage__header">
+            <div>
+              <p class="audit-stage__eyebrow">LLM production trace</p>
+              <h2 id="audit-generation-heading">Generation</h2>
+            </div>
+            <span class="audit-stage__badge">{{
+              value.generation.responseHash ? 'Hashed' : 'Recorded'
+            }}</span>
+          </header>
+
+          <dl class="audit-dl">
+            <div>
+              <dt>Narrative type</dt>
+              <dd>{{ formatLabel(value.generation.narrativeType) }}</dd>
+            </div>
+            <div>
+              <dt>Language</dt>
+              <dd>{{ valueOrUnavailable(value.generation.targetLanguage) }}</dd>
+            </div>
+            <div>
+              <dt>Generated at</dt>
+              <dd>{{ formatDateTime(value.generation.generatedAt) }}</dd>
+            </div>
+            <div>
+              <dt>Creativity</dt>
+              <dd>{{ valueOrUnavailable(value.generation.creativityTemperature) }}</dd>
+            </div>
+            <div>
+              <dt>Model</dt>
+              <dd>{{ valueOrUnavailable(value.generation.llmModel) }}</dd>
+            </div>
+            <div>
+              <dt>Prompt version</dt>
+              <dd>{{ valueOrUnavailable(value.generation.promptVersion) }}</dd>
+            </div>
+            <div>
+              <dt>Response hash</dt>
+              <dd>{{ valueOrUnavailable(value.generation.responseHash) }}</dd>
+            </div>
+            <div>
+              <dt>Resolution</dt>
+              <dd>{{ formatLabel(value.generation.resolutionSource) }}</dd>
+            </div>
+          </dl>
+        </div>
+      </section>
+
+      <section class="audit-stage" aria-labelledby="audit-validation-heading">
+        <div class="audit-stage__marker">05</div>
+        <div class="audit-stage__body">
+          <header class="audit-stage__header">
+            <div>
+              <p class="audit-stage__eyebrow">Narrative validation</p>
+              <h2 id="audit-validation-heading">Validation findings</h2>
+            </div>
+            <span class="audit-stage__badge">{{ conformanceLabel() }}</span>
+          </header>
+
+          <div class="audit-narrative">
+            <h3>Original generated narrative</h3>
+            @if (highlightedOriginalNarrative(); as html) {
+              <p [innerHTML]="html"></p>
+            }
+          </div>
+
+          @if (hasEditedNarrative(value)) {
+            <div class="audit-narrative audit-narrative--current">
+              <h3>Current narrative</h3>
+              <p>{{ currentNarrative(value) }}</p>
+            </div>
+          }
+
+          @if (value.validation.findings.length) {
+            <ul class="audit-list audit-list--warning">
+              @for (finding of value.validation.findings; track finding.code + finding.evidence) {
+                <li>
+                  <strong>{{ finding.code }}</strong>
+                  <span>{{ finding.message }}</span>
+                  <small>{{ finding.evidence }}</small>
+                </li>
+              }
+            </ul>
+          } @else {
+            <p class="audit-empty">No validation findings recorded.</p>
+          }
+        </div>
+      </section>
+
+      <section class="audit-stage" aria-labelledby="audit-revisions-heading">
+        <div class="audit-stage__marker">06</div>
+        <div class="audit-stage__body">
+          <header class="audit-stage__header">
+            <div>
+              <p class="audit-stage__eyebrow">Editorial history</p>
+              <h2 id="audit-revisions-heading">Revisions</h2>
+            </div>
+            <span class="audit-stage__badge">{{ value.revisions?.totalElements ?? 0 }} edits</span>
+          </header>
+
+          @if (value.revisions?.content?.length) {
+            <div class="revision-list">
+              @for (revision of value.revisions!.content; track revision.id) {
+                <article class="revision-item">
+                  <header>
+                    <strong>{{ formatDateTime(revision.editedAt) }}</strong>
+                    <span>{{ valueOrUnavailable(revision.editedBy) }}</span>
+                  </header>
+                  <dl>
+                    <div>
+                      <dt>Before</dt>
+                      <dd>{{ revision.previousNarrative }}</dd>
+                    </div>
+                    <div>
+                      <dt>After</dt>
+                      <dd>{{ revision.revisedNarrative }}</dd>
+                    </div>
+                  </dl>
+                </article>
+              }
+            </div>
+          } @else {
+            <p class="audit-empty">No editorial revisions recorded.</p>
+          }
+        </div>
+      </section>
+
+      <section class="audit-stage" aria-labelledby="audit-refs-heading">
+        <div class="audit-stage__marker">ID</div>
+        <div class="audit-stage__body">
+          <header class="audit-stage__header">
+            <div>
+              <p class="audit-stage__eyebrow">Technical references</p>
+              <h2 id="audit-refs-heading">Linked artifacts</h2>
+            </div>
+          </header>
+          <dl class="audit-dl">
+            <div>
+              <dt>Report ID</dt>
+              <dd>{{ value.id }}</dd>
+            </div>
+            <div>
+              <dt>Project ID</dt>
+              <dd>{{ value.projectId }}</dd>
+            </div>
+            <div>
+              <dt>Record ID</dt>
+              <dd>{{ value.inSituVisitRecordId }}</dd>
+            </div>
+            <div>
+              <dt>Narrative ID</dt>
+              <dd>{{ value.narrativeId }}</dd>
+            </div>
+          </dl>
+        </div>
+      </section>
+    </main>
+  }
+</div>

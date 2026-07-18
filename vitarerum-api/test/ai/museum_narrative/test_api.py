@@ -7,6 +7,7 @@ from app.ai.museum_narrative.domain.facts import (
     CanonicalVisitFacts,
     MissingFact,
     PersonFact,
+    PreparedNarrativeFacts,
 )
 from app.ai.museum_narrative.domain.models import (
     GeneratedNarrative,
@@ -43,21 +44,26 @@ class _FakeFacts:
     def __init__(self, *, error: Exception | None = None) -> None:
         self._error = error
 
-    async def prepare(self, record_id: str) -> CanonicalVisitFacts:
+    async def prepare(self, record_id: str) -> PreparedNarrativeFacts:
         if self._error is not None:
             raise self._error
-        return CanonicalVisitFacts(
-            report_subject="In-situ visit CUP-1",
-            project_reference="CUP-1",
-            project_title=None,
-            project_purpose=None,
-            planned_begin_date=None,
-            planned_end_date=None,
-            requester=PersonFact(name="Dr. Ana Ribeiro"),
-            approval=MissingFact(reason="No approval was recorded."),
-            execution=MissingFact(reason="No execution evidence was recorded."),
-            source_snapshot_id=record_id,
-            source_version="2",
+        return PreparedNarrativeFacts(
+            facts=CanonicalVisitFacts(
+                report_subject="In-situ visit CUP-1",
+                project_reference="CUP-1",
+                project_title=None,
+                project_purpose=None,
+                planned_begin_date=None,
+                planned_end_date=None,
+                requester=PersonFact(name="Dr. Ana Ribeiro"),
+                approval=MissingFact(reason="No approval was recorded."),
+                execution=MissingFact(reason="No execution evidence was recorded."),
+                source_snapshot_id=record_id,
+                source_version="2",
+            ),
+            cidoc_document_json='{"@graph":[]}',
+            cidoc_validation_report="Conforms: True",
+            cidoc_conforms=True,
         )
 
 
@@ -94,6 +100,17 @@ class _FakeRepo:
 
     async def add_revision(self, revision: GeneratedNarrativeRevision) -> None:
         self.revisions.append(revision)
+
+    async def list_revisions(
+        self, record_id: str, narrative_id: NarrativeId, page: int, size: int
+    ) -> tuple[list[GeneratedNarrativeRevision], int] | None:
+        narrative = await self.get_by_id(narrative_id)
+        if narrative is None or narrative.record_id != record_id:
+            return None
+        matches = [r for r in self.revisions if r.narrative_id == narrative_id]
+        matches.sort(key=lambda revision: revision.created_at)
+        total = len(matches)
+        return matches[page * size : page * size + size], total
 
     async def get_by_id(
         self, narrative_id: NarrativeId
@@ -147,6 +164,9 @@ async def test_default_type_returns_institutional() -> None:
     assert body["meta"]["validation_findings"] == []
     assert body["facts_snapshot"]["id"] == body["meta"]["facts_snapshot_id"]
     assert "CUP-1" in body["facts_snapshot"]["payload_json"]
+    assert body["facts_snapshot"]["cidoc_document_json"] == '{"@graph":[]}'
+    assert body["facts_snapshot"]["cidoc_validation_report"] == "Conforms: True"
+    assert body["facts_snapshot"]["cidoc_conforms"] is True
     assert body["data"]["narrative"] == "narrative text"
 
 
@@ -254,6 +274,15 @@ async def test_get_stored_narrative_by_id() -> None:
         body["facts_snapshot"]["payload_json"]
         == created["facts_snapshot"]["payload_json"]
     )
+    assert (
+        body["facts_snapshot"]["cidoc_document_json"]
+        == created["facts_snapshot"]["cidoc_document_json"]
+    )
+    assert (
+        body["facts_snapshot"]["cidoc_validation_report"]
+        == created["facts_snapshot"]["cidoc_validation_report"]
+    )
+    assert body["facts_snapshot"]["cidoc_conforms"] is True
 
 
 async def test_get_unknown_narrative_is_404() -> None:
@@ -281,6 +310,41 @@ async def test_patch_updates_narrative_text() -> None:
     assert repo.stored[0].narrative == "edited text"
     assert repo.revisions[0].previous_narrative == "narrative text"
     assert repo.revisions[0].revised_narrative == "edited text"
+    assert repo.revisions[0].edited_by == _STAFF.id
+
+
+async def test_list_revisions_empty_for_never_edited_narrative() -> None:
+    repo = _FakeRepo()
+    async with _client(repo=repo) as client:
+        narrative_id = (await client.post(_URL, json={})).json()["narrative_id"]
+        resp = await client.get(f"{_LIST_URL}/{narrative_id}/revisions")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["content"] == []
+    assert body["total_elements"] == 0
+
+
+async def test_list_revisions_returns_original_text_first_and_editor() -> None:
+    repo = _FakeRepo()
+    async with _client(repo=repo) as client:
+        narrative_id = (await client.post(_URL, json={})).json()["narrative_id"]
+        await client.patch(
+            f"{_LIST_URL}/{narrative_id}", json={"narrative": "first edit"}
+        )
+        await client.patch(
+            f"{_LIST_URL}/{narrative_id}", json={"narrative": "second edit"}
+        )
+        resp = await client.get(f"{_LIST_URL}/{narrative_id}/revisions")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total_elements"] == 2
+    assert body["content"][0]["previous_narrative"] == "narrative text"
+    assert body["content"][0]["revised_narrative"] == "first edit"
+    assert body["content"][0]["edited_by"] == "perm-staff"
+    assert body["content"][1]["previous_narrative"] == "first edit"
+    assert body["content"][1]["revised_narrative"] == "second edit"
 
 
 async def test_patch_unknown_narrative_is_404() -> None:
@@ -300,6 +364,21 @@ async def test_get_under_wrong_record_is_404() -> None:
         resp = await client.get(
             f"/api/v1/cidoc-mapping/in-situ-visit/other/narratives/{narrative_id}"
         )
+    assert resp.status_code == 404
+    assert resp.json()["error"] == "NARRATIVE_NOT_FOUND"
+
+
+async def test_list_revisions_under_wrong_record_is_404() -> None:
+    repo = _FakeRepo()
+    async with _client(repo=repo) as client:
+        narrative_id = (await client.post(_URL, json={})).json()["narrative_id"]
+        await client.patch(
+            f"{_LIST_URL}/{narrative_id}", json={"narrative": "edited"}
+        )
+        resp = await client.get(
+            f"/api/v1/cidoc-mapping/in-situ-visit/other/narratives/{narrative_id}/revisions"
+        )
+
     assert resp.status_code == 404
     assert resp.json()["error"] == "NARRATIVE_NOT_FOUND"
 
@@ -349,4 +428,10 @@ async def test_patch_forbidden_for_external() -> None:
         resp = await client.patch(
             f"{_LIST_URL}/whatever", json={"narrative": "x"}
         )
+    assert resp.status_code == 403
+
+
+async def test_list_revisions_forbidden_for_external() -> None:
+    async with _client(caller=_EXTERNAL) as client:
+        resp = await client.get(f"{_LIST_URL}/whatever/revisions")
     assert resp.status_code == 403

@@ -16,6 +16,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.ai.museum_narrative.domain.models import (
     GeneratedNarrative,
+    NarrativeFactSnapshot,
     NarrativeType,
     ResolutionSource,
 )
@@ -99,6 +100,24 @@ async def _client(
         target_language="pt",
         creativity_temperature=0.3,
         llm_model="llama3.1:8b",
+        facts_snapshot_id=None,
+        prompt_version="museum-narrative-canonical-v1",
+        model_response_hash="sha256:narrative",
+        validation_conforms=True,
+    )
+    snapshot = NarrativeFactSnapshot.create(
+        record_id=record.id,
+        payload_json='{"project_reference":"CUP-XYZ","evidence_gaps":[]}',
+        payload_hash="sha256:facts",
+        builder_version="canonical-visit-facts-v1",
+        prompt_version="museum-narrative-canonical-v1",
+        cidoc_document_json='{"@graph":[]}',
+        cidoc_validation_report="Validation Report\nConforms: True",
+        cidoc_conforms=True,
+    )
+    narrative.facts_snapshot_id = snapshot.id
+    revision = narrative.edit_narrative(
+        "A fine vase, edited.", edited_by=PermissionId("perm-staff")
     )
     report = InSituVisitReport.create(
         created_by=PermissionId("perm-staff"),
@@ -107,8 +126,11 @@ async def _client(
         in_situ_visit_record_id=record.id,
     )
     async with session_factory() as session:
+        narrative_repo = SqlAlchemyNarrativeRepository(session)
         await SqlAlchemyInSituVisitRecordRepository(session).add(record)
-        await SqlAlchemyNarrativeRepository(session).add(narrative)
+        await narrative_repo.add_facts_snapshot(snapshot)
+        await narrative_repo.add(narrative)
+        await narrative_repo.add_revision(revision)
         await SqlAlchemyInSituVisitReportRepository(session).add(report)
         await session.commit()
 
@@ -139,13 +161,59 @@ async def test_detail_embeds_narrative_and_record_with_attachment() -> None:
     assert body["narrativeId"] == report.narrative_id
     assert body["inSituVisitRecordId"] == report.in_situ_visit_record_id
     # Embedded narrative.
-    assert body["narrative"]["data"]["narrative"] == "A fine vase."
+    assert body["narrative"]["data"]["narrative"] == "A fine vase, edited."
     assert body["narrative"]["meta"]["resolved_narrative_type"] == "institutional"
     # Embedded record + nested attachment.
     assert body["record"]["code"] == "CUP-XYZ"
     assert body["record"]["requestedObjects"][0]["sourceId"] == "INV-1"
     attachment = body["record"]["inSituOccurrences"][0]["attachments"][0]
     assert attachment["reference"] == "https://files/img.jpg"
+
+
+async def test_audit_trail_embeds_six_stage_inputs_without_recomputing_cidoc() -> None:
+    async with _client() as (client, report):
+        resp = await client.get(
+            f"/api/v1/reports/collection-use/p1/in_situ_visit/{report.id}/audit-trail"
+        )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["id"] == report.id
+    assert body["record"]["code"] == "CUP-XYZ"
+    assert body["narrative"]["data"]["narrative"] == "A fine vase, edited."
+    assert body["evidence"]["recordId"] == report.in_situ_visit_record_id
+    assert body["evidence"]["projectId"] == "p1"
+    assert body["cidoc"]["documentJson"] == '{"@graph":[]}'
+    assert body["cidoc"]["validationReport"] == "Validation Report\nConforms: True"
+    assert body["cidoc"]["conforms"] is True
+    assert body["facts"]["payloadJson"] == (
+        '{"project_reference":"CUP-XYZ","evidence_gaps":[]}'
+    )
+    assert body["generation"]["promptVersion"] == "museum-narrative-canonical-v1"
+    assert body["generation"]["responseHash"] == "sha256:narrative"
+    assert body["validation"]["conforms"] is True
+    assert body["revisions"]["total_elements"] == 1
+    assert body["revisions"]["content"][0]["previous_narrative"] == "A fine vase."
+    assert body["revisions"]["content"][0]["revised_narrative"] == (
+        "A fine vase, edited."
+    )
+    assert body["revisions"]["content"][0]["edited_by"] == "perm-staff"
+
+
+async def test_audit_trail_wrong_project_is_404() -> None:
+    async with _client() as (client, report):
+        resp = await client.get(
+            f"/api/v1/reports/collection-use/p2/in_situ_visit/{report.id}/audit-trail"
+        )
+    assert resp.status_code == 404
+    assert resp.json()["error"] == "REPORT_NOT_FOUND"
+
+
+async def test_audit_trail_forbidden_for_external() -> None:
+    async with _client(caller=_EXTERNAL) as (client, report):
+        resp = await client.get(
+            f"/api/v1/reports/collection-use/p1/in_situ_visit/{report.id}/audit-trail"
+        )
+    assert resp.status_code == 403
 
 
 async def test_detail_unknown_report_is_404() -> None:

@@ -7,7 +7,10 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, Field
 
-from app.ai.museum_narrative.presentation.schemas import StoredNarrativeResponse
+from app.ai.museum_narrative.presentation.schemas import (
+    PaginatedNarrativeRevisionsResponse,
+    StoredNarrativeResponse,
+)
 from app.cidoc_crm.in_situ_visit_mapping.presentation.schemas import (
     InSituVisitRecordResponse,
 )
@@ -74,3 +77,68 @@ class InSituVisitReportDetailResponse(BaseModel):
     inSituVisitRecordId: str
     narrative: StoredNarrativeResponse | None
     record: InSituVisitRecordResponse | None
+
+
+class InSituVisitAuditEvidenceResponse(BaseModel):
+    recordId: str | None
+    projectId: str
+    code: str | None
+    executionEvidenceType: str | None
+    executionOccurredAt: datetime | None
+    executionRecordedBy: str | None
+    executionEvidenceGaps: list[str] = Field(default_factory=list)
+    approvedAt: datetime | None
+    approvedBy: str | None
+    approvalNote: str | None
+
+
+class InSituVisitAuditCidocResponse(BaseModel):
+    documentJson: str | None
+    mappingVersion: str | None
+    crmVersion: str | None
+    recordSchemaVersion: int | None
+    conforms: bool | None
+    validationReport: str | None
+
+
+class InSituVisitAuditFactsResponse(BaseModel):
+    snapshotId: str | None
+    payloadJson: str | None
+    payloadHash: str | None
+    builderVersion: str | None
+    promptVersion: str | None
+    createdAt: datetime | None
+
+
+class InSituVisitAuditGenerationResponse(BaseModel):
+    narrativeId: str | None
+    generatedAt: datetime | None
+    narrativeType: str | None
+    resolutionSource: str | None
+    targetLanguage: str | None
+    creativityTemperature: float | None
+    llmModel: str | None
+    promptVersion: str | None
+    responseHash: str | None
+
+
+class InSituVisitAuditValidationResponse(BaseModel):
+    conforms: bool | None
+    findings: list[dict[str, str]] = Field(default_factory=list)
+
+
+class InSituVisitAuditTrailResponse(BaseModel):
+    id: str
+    createdAt: datetime
+    createdBy: str
+    projectId: str
+    narrativeId: str
+    inSituVisitRecordId: str
+    record: InSituVisitRecordResponse | None
+    narrative: StoredNarrativeResponse | None
+    evidence: InSituVisitAuditEvidenceResponse
+    cidoc: InSituVisitAuditCidocResponse
+    facts: InSituVisitAuditFactsResponse
+    generation: InSituVisitAuditGenerationResponse
+    validation: InSituVisitAuditValidationResponse
+    revisions: PaginatedNarrativeRevisionsResponse | None

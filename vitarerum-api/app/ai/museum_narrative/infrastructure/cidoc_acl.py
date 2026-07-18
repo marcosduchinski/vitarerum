@@ -7,6 +7,7 @@ CIDOC IRIs or the JSON-LD graph.
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from typing import Any
 
@@ -23,6 +24,7 @@ from app.ai.museum_narrative.domain.facts import (
     ObjectFact,
     OccurrenceFact,
     PersonFact,
+    PreparedNarrativeFacts,
     PublicationFact,
 )
 from app.ai.museum_narrative.domain.ports import (
@@ -214,7 +216,7 @@ class NarrativeFactsAdapter:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def prepare(self, record_id: str) -> CanonicalVisitFacts:
+    async def prepare(self, record_id: str) -> PreparedNarrativeFacts:
         doc = await build_in_situ_visit_cidoc(self._session, record_id)
         if doc is None:
             raise RecordNotFound(f"No in-situ visit record found with id {record_id}")
@@ -224,4 +226,11 @@ class NarrativeFactsAdapter:
         view = await get_in_situ_visit_record_view(self._session, record_id)
         if view is None:
             raise RecordNotFound(f"No in-situ visit record found with id {record_id}")
-        return _record_view_to_facts(view)
+        return PreparedNarrativeFacts(
+            facts=_record_view_to_facts(view),
+            cidoc_document_json=json.dumps(
+                doc, ensure_ascii=False, default=str, sort_keys=True
+            ),
+            cidoc_validation_report=report,
+            cidoc_conforms=conforms,
+        )

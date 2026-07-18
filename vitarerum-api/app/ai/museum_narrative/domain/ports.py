@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
-    from app.ai.museum_narrative.domain.facts import CanonicalVisitFacts
+    from app.ai.museum_narrative.domain.facts import PreparedNarrativeFacts
     from app.ai.museum_narrative.domain.models import (
         GeneratedNarrative,
         GeneratedNarrativeRevision,
@@ -48,7 +48,7 @@ class NarrativeFactsPort(Protocol):
     """Validate the CIDOC-CRM projection and prepare narrative facts. Raises
     :class:`RecordNotFound` / :class:`SemanticValidationFailed`."""
 
-    async def prepare(self, record_id: str) -> CanonicalVisitFacts: ...
+    async def prepare(self, record_id: str) -> PreparedNarrativeFacts: ...
 
 
 class NarrativeModelPort(Protocol):
@@ -75,6 +75,10 @@ class NarrativeRepository(Protocol):
     async def save(self, narrative: GeneratedNarrative) -> None: ...
 
     async def add_revision(self, revision: GeneratedNarrativeRevision) -> None: ...
+
+    async def list_revisions(
+        self, record_id: str, narrative_id: NarrativeId, page: int, size: int
+    ) -> tuple[list[GeneratedNarrativeRevision], int] | None: ...
 
     async def get_by_id(
         self, narrative_id: NarrativeId

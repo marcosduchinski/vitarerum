@@ -3,6 +3,14 @@ import { Routes } from '@angular/router';
 export const REPORTS_ROUTES: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'visits-in-situ' },
   {
+    path: 'visits-in-situ/:projectId/:reportId/audit-trail',
+    title: 'In-situ visit report audit trail',
+    loadComponent: () =>
+      import('./pages/in-situ-visit-audit-trail/in-situ-visit-audit-trail-page.component').then(
+        (m) => m.InSituVisitAuditTrailPageComponent,
+      ),
+  },
+  {
     path: 'visits-in-situ/:projectId/:reportId',
     title: 'In-situ visit report details',
     loadComponent: () =>

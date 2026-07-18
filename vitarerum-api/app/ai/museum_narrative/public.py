@@ -14,7 +14,10 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
-    from app.ai.museum_narrative.presentation.schemas import StoredNarrativeResponse
+    from app.ai.museum_narrative.presentation.schemas import (
+        PaginatedNarrativeRevisionsResponse,
+        StoredNarrativeResponse,
+    )
 
 from app.ai.museum_narrative.domain.ports import (
     ModelTimeout,
@@ -101,9 +104,48 @@ async def get_narrative_view(
     return stored_narrative_response(record)
 
 
+async def list_narrative_revisions(
+    session: AsyncSession,
+    record_id: str,
+    narrative_id: str,
+    page: int = 0,
+    size: int = 20,
+) -> PaginatedNarrativeRevisionsResponse | None:
+    """Return editorial revisions for a stored narrative, or ``None`` if the
+    narrative does not exist under ``record_id``."""
+    import math
+
+    from app.ai.museum_narrative.domain.models import NarrativeId
+    from app.ai.museum_narrative.infrastructure.repositories import (
+        SqlAlchemyNarrativeRepository,
+    )
+    from app.ai.museum_narrative.presentation.mappers import (
+        narrative_revision_response,
+    )
+    from app.ai.museum_narrative.presentation.schemas import (
+        PaginatedNarrativeRevisionsResponse,
+    )
+
+    repository = SqlAlchemyNarrativeRepository(session)
+    result = await repository.list_revisions(
+        record_id, NarrativeId(narrative_id), page, size
+    )
+    if result is None:
+        return None
+    revisions, total = result
+    return PaginatedNarrativeRevisionsResponse(
+        content=[narrative_revision_response(revision) for revision in revisions],
+        page=page,
+        size=size,
+        total_elements=total,
+        total_pages=math.ceil(total / size) if size > 0 else 0,
+    )
+
+
 __all__ = [
     "generate_narrative",
     "get_narrative_view",
+    "list_narrative_revisions",
     "ModelTimeout",
     "ModelUnavailable",
     "NarrativeGenerationOptions",

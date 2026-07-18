@@ -20,6 +20,7 @@ from app.ai.museum_narrative.domain.facts import CanonicalVisitFacts
 from app.ai.museum_narrative.domain.models import (
     DEFAULT_NARRATIVE_TYPE,
     GeneratedNarrative,
+    GeneratedNarrativeRevision,
     NarrativeFactSnapshot,
     NarrativeId,
     NarrativeType,
@@ -34,6 +35,7 @@ from app.ai.museum_narrative.domain.ports import (
     UnsupportedNarrativeType,
 )
 from app.ai.museum_narrative.domain.validation import validate_generated_narrative
+from app.shared.kernel import PermissionId
 
 _DEFAULT_TEMPERATURE = 0.3
 _DEFAULT_LANGUAGE = "pt"
@@ -57,6 +59,14 @@ class ListNarrativesInput:
 
 
 @dataclass(frozen=True, slots=True)
+class ListNarrativeRevisionsInput:
+    record_id: str
+    narrative_id: str
+    page: int = 0
+    size: int = 20
+
+
+@dataclass(frozen=True, slots=True)
 class GetNarrativeInput:
     record_id: str
     narrative_id: str
@@ -67,6 +77,7 @@ class UpdateNarrativeInput:
     record_id: str
     narrative_id: str
     narrative: str
+    edited_by: str
 
 
 def _resolve_type(raw: str | None) -> tuple[NarrativeType, ResolutionSource]:
@@ -105,7 +116,8 @@ class GenerateNarrative:
 
     async def execute(self, data: GenerateNarrativeInput) -> GeneratedNarrative:
         narrative_type, source = _resolve_type(data.narrative_type)
-        facts = await self._facts.prepare(data.record_id)
+        prepared = await self._facts.prepare(data.record_id)
+        facts = prepared.facts
         payload_json = _facts_payload(facts)
         fact_snapshot = NarrativeFactSnapshot.create(
             record_id=data.record_id,
@@ -113,6 +125,9 @@ class GenerateNarrative:
             payload_hash=_sha256(payload_json),
             builder_version=_FACTS_BUILDER_VERSION,
             prompt_version=_PROMPT_VERSION,
+            cidoc_document_json=prepared.cidoc_document_json,
+            cidoc_validation_report=prepared.cidoc_validation_report,
+            cidoc_conforms=prepared.cidoc_conforms,
         )
         await self._repository.add_facts_snapshot(fact_snapshot)
         narrative = await self._model.generate(
@@ -158,6 +173,26 @@ class ListNarratives:
         )
 
 
+class ListNarrativeRevisions:
+    """Return editorial revisions for one narrative in chronological order."""
+
+    def __init__(self, repository: NarrativeRepository) -> None:
+        self._repository = repository
+
+    async def execute(
+        self, data: ListNarrativeRevisionsInput
+    ) -> tuple[list[GeneratedNarrativeRevision], int]:
+        result = await self._repository.list_revisions(
+            data.record_id, NarrativeId(data.narrative_id), data.page, data.size
+        )
+        if result is None:
+            raise NarrativeNotFound(
+                f"No narrative found with id {data.narrative_id} "
+                f"for record {data.record_id}"
+            )
+        return result
+
+
 class GetNarrative:
     """Return one stored narrative by id, or raise ``NarrativeNotFound``."""
 
@@ -187,7 +222,9 @@ class UpdateNarrative:
                 f"No narrative found with id {data.narrative_id} "
                 f"for record {data.record_id}"
             )
-        revision = record.edit_narrative(data.narrative)
+        revision = record.edit_narrative(
+            data.narrative, edited_by=PermissionId(data.edited_by)
+        )
         await self._repository.add_revision(revision)
         await self._repository.save(record)
         return record

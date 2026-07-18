@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.ai.museum_narrative.application.use_cases import (
     GenerateNarrative,
     GetNarrative,
+    ListNarrativeRevisions,
     ListNarratives,
     UpdateNarrative,
 )
@@ -64,6 +65,10 @@ def get_list_use_case(repository: Repository) -> ListNarratives:
     return ListNarratives(repository)
 
 
+def get_revision_list_use_case(repository: Repository) -> ListNarrativeRevisions:
+    return ListNarrativeRevisions(repository)
+
+
 def get_narrative_by_id_use_case(repository: Repository) -> GetNarrative:
     return GetNarrative(repository)
 
@@ -74,5 +79,8 @@ def get_update_use_case(repository: Repository) -> UpdateNarrative:
 
 NarrativeUseCase = Annotated[GenerateNarrative, Depends(get_narrative_use_case)]
 ListUseCase = Annotated[ListNarratives, Depends(get_list_use_case)]
+RevisionListUseCase = Annotated[
+    ListNarrativeRevisions, Depends(get_revision_list_use_case)
+]
 GetUseCase = Annotated[GetNarrative, Depends(get_narrative_by_id_use_case)]
 UpdateUseCase = Annotated[UpdateNarrative, Depends(get_update_use_case)]

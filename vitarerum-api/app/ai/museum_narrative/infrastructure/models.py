@@ -25,6 +25,9 @@ class NarrativeFactSnapshotOrm(Base):
     builder_version: Mapped[str] = mapped_column(String(64))
     prompt_version: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    cidoc_document_json: Mapped[str | None] = mapped_column(Text)
+    cidoc_validation_report: Mapped[str | None] = mapped_column(Text)
+    cidoc_conforms: Mapped[bool | None] = mapped_column(Boolean)
 
 
 class GeneratedNarrativeOrm(Base):
@@ -54,3 +57,4 @@ class GeneratedNarrativeRevisionOrm(Base):
     previous_narrative: Mapped[str] = mapped_column(Text)
     revised_narrative: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    edited_by: Mapped[str | None] = mapped_column(String(36))

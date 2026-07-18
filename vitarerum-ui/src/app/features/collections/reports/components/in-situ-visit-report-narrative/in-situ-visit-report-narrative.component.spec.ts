@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 
 import { InSituVisitReportNarrative } from '../../models/report.model';
 import { InSituVisitReportNarrativeComponent } from './in-situ-visit-report-narrative.component';
@@ -21,6 +22,7 @@ describe('InSituVisitReportNarrativeComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [InSituVisitReportNarrativeComponent],
+      providers: [provideRouter([])],
     }).compileComponents();
   });
 
@@ -46,43 +48,51 @@ describe('InSituVisitReportNarrativeComponent', () => {
     );
   });
 
-  it('renders accessible view and edit actions and emits their typed payloads', () => {
+  it('renders an accessible edit action and emits the typed payload', () => {
     const fixture = TestBed.createComponent(InSituVisitReportNarrativeComponent);
-    const viewRequested = vi.fn();
     const editRequested = vi.fn();
     fixture.componentRef.setInput('narrative', NARRATIVE);
-    fixture.componentInstance.viewCidocCrm.subscribe(viewRequested);
     fixture.componentInstance.editNarrative.subscribe(editRequested);
     fixture.detectChanges();
 
     const element = fixture.nativeElement as HTMLElement;
-    const viewButton = element.querySelector<HTMLButtonElement>(
-      'button[aria-label="View CIDOC-CRM data"]',
-    );
     const editButton = element.querySelector<HTMLButtonElement>(
       'button[aria-label="Edit narrative"]',
     );
 
-    expect(viewButton?.disabled).toBe(false);
     expect(editButton?.disabled).toBe(false);
-    viewButton?.click();
     editButton?.click();
 
-    expect(viewRequested).toHaveBeenCalledWith('record-1');
     expect(editRequested).toHaveBeenCalledWith(NARRATIVE);
   });
 
-  it('keeps CIDOC viewing available for a record when the narrative is unavailable', () => {
+  it('renders an accessible audit trail link when provided', () => {
     const fixture = TestBed.createComponent(InSituVisitReportNarrativeComponent);
-    fixture.componentRef.setInput('recordId', 'record-1');
+    fixture.componentRef.setInput('narrative', NARRATIVE);
+    fixture.componentRef.setInput('auditTrailLink', [
+      '/p/collections/reports/visits-in-situ',
+      'project-1',
+      'report-1',
+      'audit-trail',
+    ]);
+    fixture.detectChanges();
+
+    const element = fixture.nativeElement as HTMLElement;
+    const auditLink = element.querySelector<HTMLAnchorElement>(
+      'a[aria-label="View audit trail"]',
+    );
+
+    expect(auditLink?.getAttribute('href')).toBe(
+      '/p/collections/reports/visits-in-situ/project-1/report-1/audit-trail',
+    );
+  });
+
+  it('disables editing when the narrative is unavailable', () => {
+    const fixture = TestBed.createComponent(InSituVisitReportNarrativeComponent);
     fixture.componentRef.setInput('narrative', null);
     fixture.detectChanges();
 
     const element = fixture.nativeElement as HTMLElement;
-    expect(
-      element.querySelector<HTMLButtonElement>('button[aria-label="View CIDOC-CRM data"]')
-        ?.disabled,
-    ).toBe(false);
     expect(
       element.querySelector<HTMLButtonElement>('button[aria-label="Edit narrative"]')?.disabled,
     ).toBe(true);

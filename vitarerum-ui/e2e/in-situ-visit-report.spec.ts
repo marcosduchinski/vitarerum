@@ -136,7 +136,7 @@ test.describe('in-situ visit report creation', () => {
     expect(permissionHeader).toBe('perm-curatorial');
   });
 
-  test('staff opens an enriched list row and loads its report dossier', async ({ page }) => {
+  test('staff opens an enriched list row through the report code link', async ({ page }) => {
     await authenticateAs(page, 'CURATORIAL', 'perm-curatorial');
 
     await page.route('**/reports/collection-use/in_situ_visit?**', async (route) => {
@@ -232,19 +232,23 @@ test.describe('in-situ visit report creation', () => {
     await expect(page.getByText('Maria do Rosário', { exact: true })).toBeVisible();
     await expect(page.getByText('MUHNAC', { exact: true })).toBeVisible();
 
-    await page.getByRole('button', { name: `More actions for report ${REPORT_ID}` }).click();
-    await page.getByRole('menuitem', { name: 'Details', exact: true }).click();
+    await page.getByRole('link', { name: 'CUP-ABCD1234', exact: true }).click();
 
     await expect(page).toHaveURL(
       new RegExp(`/p/collections/reports/visits-in-situ/${PROJECT_ID}/${REPORT_ID}$`),
     );
-    await expect(page.getByRole('heading', { name: 'Maria do Rosário', exact: true })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Maria do Rosário', exact: true }),
+    ).toBeVisible();
     await expect(page.locator('.report-detail__code')).toHaveText('CUP-ABCD1234');
     await expect(
       page.getByText('A scientific account of the documented collection visit.', {
         exact: true,
       }),
     ).toBeVisible();
+    await expect(page.getByText('Facts used in narrative', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('Technical references', { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'View CIDOC-CRM data' })).toHaveCount(0);
     await expect(page.getByText('INV-1', { exact: true })).toBeVisible();
 
     await page.getByText('INV-1', { exact: true }).click();
@@ -256,7 +260,7 @@ test.describe('in-situ visit report creation', () => {
     expect(detailPermissionHeader).toBe('perm-curatorial');
   });
 
-  test('staff views CIDOC-CRM data and corrects the narrative in place', async ({ page }) => {
+  test('staff corrects the narrative in place on the simple report route', async ({ page }) => {
     await authenticateAs(page, 'CURATORIAL', 'perm-curatorial');
 
     let detailRequestCount = 0;
@@ -303,25 +307,6 @@ test.describe('in-situ visit report creation', () => {
       },
     );
 
-    let cidocRequestCount = 0;
-    let cidocPermissionHeader: string | undefined;
-    await page.route('**/cidoc-mapping/in-situ-visit/record-1/cidoc-crm', async (route) => {
-      cidocRequestCount += 1;
-      cidocPermissionHeader = route.request().headers()['x-permission-id'];
-      await route.fulfill({
-        json: {
-          '@context': { crm: 'http://www.cidoc-crm.org/cidoc-crm/' },
-          '@graph': [
-            {
-              '@id': 'ex:visit/record-1',
-              '@type': 'crm:E7_Activity',
-              'rdfs:label': 'In situ visit CUP-ABCD1234',
-            },
-          ],
-        },
-      });
-    });
-
     let patchRequestBody: unknown;
     let patchPermissionHeader: string | undefined;
     await page.route(
@@ -352,14 +337,7 @@ test.describe('in-situ visit report creation', () => {
     await expect(
       page.getByText('The original generated museum narrative.', { exact: true }),
     ).toBeVisible();
-
-    await page.getByRole('button', { name: 'View CIDOC-CRM data', exact: true }).click();
-    const cidocDialog = page.getByRole('dialog', { name: 'Knowledge graph source' });
-    await expect(cidocDialog).toBeVisible();
-    await expect(cidocDialog.getByText(/crm:E7_Activity/)).toBeVisible();
-    await expect(page).toHaveURL(new RegExp(`${detailUrl}$`));
-    await cidocDialog.getByRole('button', { name: 'Close CIDOC-CRM viewer' }).click();
-    await expect(cidocDialog).not.toBeVisible();
+    await expect(page.getByRole('button', { name: 'View CIDOC-CRM data' })).toHaveCount(0);
 
     await page.getByRole('button', { name: 'Edit narrative', exact: true }).click();
     const editor = page.getByRole('dialog', { name: 'Edit narrative' });
@@ -376,8 +354,6 @@ test.describe('in-situ visit report creation', () => {
     ).toBeVisible();
     await expect(page).toHaveURL(new RegExp(`${detailUrl}$`));
     expect(detailRequestCount).toBe(1);
-    expect(cidocRequestCount).toBe(1);
-    expect(cidocPermissionHeader).toBe('perm-curatorial');
     expect(patchPermissionHeader).toBe('perm-curatorial');
     expect(patchRequestBody).toEqual({
       narrative: 'A carefully corrected museum narrative.',

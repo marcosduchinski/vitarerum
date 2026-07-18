@@ -18,14 +18,17 @@ facts, never CIDOC IRIs or expanded JSON-LD. Same auth as the rest of the API
 Every generation is **persisted** as a stored history row: the same record can be
 retold many times in different styles/languages/temperatures, and each run is
 kept. A manual `PATCH` may later correct only the narrative text; the generation
-metadata stays unchanged. The `POST` returns the new `narrative_id`; the two
-`GET` endpoints below read the stored history back.
+metadata stays unchanged and an append-only editorial revision records the
+previous text, revised text, editor, and edit time. The `POST` returns the new
+`narrative_id`; the `GET` endpoints below read the stored history back.
 
-The backend also persists the exact `facts_snapshot` used to build the prompt and
-runs deterministic narrative checks against it. `meta.validation_findings[]`
-contains zero or more findings with `code`, `message`, and `evidence`. Current
-codes include invented dates, planned dates asserted as executed, invented
-people, invented objects, and invented places.
+The backend also persists the exact `facts_snapshot` used to build the prompt,
+including the compact CIDOC-CRM JSON-LD document and SHACL validation report that
+gated the generation at that moment. It runs deterministic narrative checks
+against the canonical facts. `meta.validation_findings[]` contains zero or more
+findings with `code`, `message`, and `evidence`. Current codes include invented
+dates, planned dates asserted as executed, invented people, invented objects, and
+invented places.
 
 ---
 
@@ -55,13 +58,13 @@ creativity_temperature : number  (default 0.3, 0.0–1.0) — LLM temperature
 
 ### Narrative types
 
-| Value | Audience | Tone |
-| --- | --- | --- |
-| `institutional` | Curators, board, open-data portals | Formal, bureaucratic, compliance-focused. |
-| `scientific` | Researchers | Rigorous, objective, methodology & outputs. |
-| `audioguide_adult` | General visitors | Engaging, clear, low jargon. |
-| `audioguide_child` | Young learners | Storytelling, pedagogical, enthusiastic. |
-| `social_media` | Digital community | Concise, hook-driven, emojis, CTA. |
+| Value              | Audience                           | Tone                                        |
+| ------------------ | ---------------------------------- | ------------------------------------------- |
+| `institutional`    | Curators, board, open-data portals | Formal, bureaucratic, compliance-focused.   |
+| `scientific`       | Researchers                        | Rigorous, objective, methodology & outputs. |
+| `audioguide_adult` | General visitors                   | Engaging, clear, low jargon.                |
+| `audioguide_child` | Young learners                     | Storytelling, pedagogical, enthusiastic.    |
+| `social_media`     | Digital community                  | Concise, hook-driven, emojis, CTA.          |
 
 If `narrative_type` is omitted, the backend defaults to **`institutional`**
 (`resolution_source: "default"`); when supplied it is echoed with
@@ -96,7 +99,10 @@ and `generated_at`.
     "payload_hash": "sha256...",
     "builder_version": "canonical-visit-facts-v1",
     "prompt_version": "museum-narrative-canonical-v1",
-    "created_at": "2026-06-21T10:30:00Z"
+    "created_at": "2026-06-21T10:30:00Z",
+    "cidoc_document_json": "{\"@context\":{...},\"@graph\":[...]}",
+    "cidoc_validation_report": "Validation Report\\nConforms: True\\n...",
+    "cidoc_conforms": true
   }
 }
 ```
@@ -170,7 +176,10 @@ size : integer (optional, default 20, 1..100)
         "payload_hash": "sha256...",
         "builder_version": "canonical-visit-facts-v1",
         "prompt_version": "museum-narrative-canonical-v1",
-        "created_at": "2026-06-21T10:30:00Z"
+        "created_at": "2026-06-21T10:30:00Z",
+        "cidoc_document_json": "{\"@context\":{...},\"@graph\":[...]}",
+        "cidoc_validation_report": "Validation Report\\nConforms: True\\n...",
+        "cidoc_conforms": true
       }
     }
   ],
@@ -227,6 +236,52 @@ narrative : string (required, non-empty) — the replacement text (trimmed)
 
 **422** — empty/blank `narrative` (validation). **403 `INSUFFICIENT_GROUP`** —
 non-staff caller.
+
+---
+
+## GET /api/v1/cidoc-mapping/in-situ-visit/{record_id}/narratives/{narrative_id}/revisions
+
+Lists the manual editorial revisions for one narrative in chronological order
+(oldest first). A narrative that was never edited returns an empty page. Staff-only.
+
+**Query parameters**
+
+```
+page : integer (optional, default 0,  min 0)
+size : integer (optional, default 20, 1..100)
+```
+
+**Response 200 OK**
+
+```json
+{
+  "content": [
+    {
+      "id": "revision-uuid",
+      "narrative_id": "f1e2d3c4-...",
+      "record_id": "9481a-2026",
+      "previous_narrative": "Original LLM text.",
+      "revised_narrative": "Corrected narrative text.",
+      "edited_at": "2026-06-21T11:00:00Z",
+      "edited_by": "permission-uuid"
+    }
+  ],
+  "page": 0,
+  "size": 20,
+  "total_elements": 1,
+  "total_pages": 1
+}
+```
+
+The first revision, when present, preserves the original LLM text in
+`previous_narrative`. Revisions created before revision-editor tracking may have
+`edited_by: null`.
+
+**404 `NARRATIVE_NOT_FOUND`** — no stored narrative with `narrative_id` under this
+`record_id`; the endpoint must not return revisions for a narrative addressed
+under a different visit record.
+
+**403 `INSUFFICIENT_GROUP`** — non-staff caller.
 
 ---
 

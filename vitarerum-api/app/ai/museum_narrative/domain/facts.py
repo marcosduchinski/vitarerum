@@ -116,3 +116,11 @@ class CanonicalVisitFacts:
     evidence_gaps: list[EvidenceGap] = field(default_factory=list)
     source_snapshot_id: str = ""
     source_version: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedNarrativeFacts:
+    facts: CanonicalVisitFacts
+    cidoc_document_json: str
+    cidoc_validation_report: str
+    cidoc_conforms: bool

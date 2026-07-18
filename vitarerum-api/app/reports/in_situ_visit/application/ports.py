@@ -10,7 +10,10 @@ from app.reports.in_situ_visit.domain.models import (
 )
 
 if TYPE_CHECKING:
-    from app.ai.museum_narrative.presentation.schemas import StoredNarrativeResponse
+    from app.ai.museum_narrative.presentation.schemas import (
+        PaginatedNarrativeRevisionsResponse,
+        StoredNarrativeResponse,
+    )
     from app.cidoc_crm.in_situ_visit_mapping.presentation.schemas import (
         InSituVisitRecordResponse,
     )
@@ -65,3 +68,11 @@ class NarrativeReader(Protocol):
     async def get(
         self, record_id: str, narrative_id: str
     ) -> StoredNarrativeResponse | None: ...
+
+
+class NarrativeRevisionReader(Protocol):
+    """Reads editorial revisions from the museum-narrative context."""
+
+    async def list(
+        self, record_id: str, narrative_id: str, page: int, size: int
+    ) -> PaginatedNarrativeRevisionsResponse | None: ...

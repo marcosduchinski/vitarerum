@@ -33,6 +33,7 @@ from app.cidoc_crm.public import (
 from app.reports.in_situ_visit.application.use_cases import (
     GenerateInSituVisitReportInput,
     GetInSituVisitReportInput,
+    InSituVisitReportAuditTrail,
     InSituVisitReportNotFound,
     InSituVisitReportSummary,
     ListAllInSituVisitReportsInput,
@@ -40,6 +41,7 @@ from app.reports.in_situ_visit.application.use_cases import (
 )
 from app.reports.in_situ_visit.domain.models import InSituVisitReport
 from app.reports.in_situ_visit.presentation.dependencies import (
+    AuditTrailUseCase,
     DBSession,
     DetailUseCase,
     GetUseCase,
@@ -48,6 +50,12 @@ from app.reports.in_situ_visit.presentation.dependencies import (
     ReportUseCase,
 )
 from app.reports.in_situ_visit.presentation.schemas import (
+    InSituVisitAuditCidocResponse,
+    InSituVisitAuditEvidenceResponse,
+    InSituVisitAuditFactsResponse,
+    InSituVisitAuditGenerationResponse,
+    InSituVisitAuditTrailResponse,
+    InSituVisitAuditValidationResponse,
     InSituVisitReportDetailResponse,
     InSituVisitReportRequest,
     InSituVisitReportResponse,
@@ -160,6 +168,72 @@ def _to_summary(
     )
 
 
+def _to_audit_trail_response(
+    audit: InSituVisitReportAuditTrail,
+) -> InSituVisitAuditTrailResponse:
+    report = audit.report
+    record = audit.record
+    narrative = audit.narrative
+    meta = narrative.meta if narrative else None
+    snapshot = narrative.facts_snapshot if narrative else None
+    return InSituVisitAuditTrailResponse(
+        id=report.id,
+        createdAt=report.created_at,
+        createdBy=report.created_by,
+        projectId=report.project_id,
+        narrativeId=report.narrative_id,
+        inSituVisitRecordId=report.in_situ_visit_record_id,
+        record=record,
+        narrative=narrative,
+        evidence=InSituVisitAuditEvidenceResponse(
+            recordId=record.id if record else None,
+            projectId=report.project_id,
+            code=record.code if record else None,
+            executionEvidenceType=record.executionEvidenceType if record else None,
+            executionOccurredAt=record.executionOccurredAt if record else None,
+            executionRecordedBy=record.executionRecordedBy if record else None,
+            executionEvidenceGaps=record.executionEvidenceGaps if record else [],
+            approvedAt=record.approvedAt if record else None,
+            approvedBy=record.approvedBy if record else None,
+            approvalNote=record.approvalNote if record else None,
+        ),
+        cidoc=InSituVisitAuditCidocResponse(
+            documentJson=snapshot.cidoc_document_json if snapshot else None,
+            mappingVersion=record.mappingVersion if record else None,
+            crmVersion=record.crmVersion if record else None,
+            recordSchemaVersion=record.recordSchemaVersion if record else None,
+            conforms=snapshot.cidoc_conforms if snapshot else None,
+            validationReport=(
+                snapshot.cidoc_validation_report if snapshot else None
+            ),
+        ),
+        facts=InSituVisitAuditFactsResponse(
+            snapshotId=snapshot.id if snapshot else None,
+            payloadJson=snapshot.payload_json if snapshot else None,
+            payloadHash=snapshot.payload_hash if snapshot else None,
+            builderVersion=snapshot.builder_version if snapshot else None,
+            promptVersion=snapshot.prompt_version if snapshot else None,
+            createdAt=snapshot.created_at if snapshot else None,
+        ),
+        generation=InSituVisitAuditGenerationResponse(
+            narrativeId=narrative.narrative_id if narrative else None,
+            generatedAt=narrative.generated_at if narrative else None,
+            narrativeType=meta.resolved_narrative_type if meta else None,
+            resolutionSource=meta.resolution_source if meta else None,
+            targetLanguage=meta.target_language if meta else None,
+            creativityTemperature=meta.creativity_temperature if meta else None,
+            llmModel=meta.llm_model if meta else None,
+            promptVersion=meta.prompt_version if meta else None,
+            responseHash=meta.model_response_hash if meta else None,
+        ),
+        validation=InSituVisitAuditValidationResponse(
+            conforms=meta.validation_conforms if meta else None,
+            findings=meta.validation_findings if meta else [],
+        ),
+        revisions=audit.revisions,
+    )
+
+
 @reports_router.get(
     "/in_situ_visit",
     response_model=PaginatedInSituVisitReportSummariesResponse,
@@ -267,3 +341,31 @@ async def get_in_situ_visit_report_detail(
         narrative=detail.narrative,
         record=detail.record,
     )
+
+
+@reports_router.get(
+    "/{project_id}/in_situ_visit/{report_id}/audit-trail",
+    response_model=InSituVisitAuditTrailResponse,
+)
+async def get_in_situ_visit_report_audit_trail(
+    project_id: str,
+    report_id: str,
+    caller: CallerPermission,
+    use_case: AuditTrailUseCase,
+    revisions_page: Annotated[int, Query(ge=0)] = 0,
+    revisions_size: Annotated[int, Query(ge=1, le=100)] = 100,
+) -> InSituVisitAuditTrailResponse:
+    """Return the complete audit trail for one generated in-situ visit report."""
+    require_staff(caller)
+    try:
+        audit = await use_case.execute(
+            GetInSituVisitReportInput(project_id=project_id, report_id=report_id),
+            revisions_page=revisions_page,
+            revisions_size=revisions_size,
+        )
+    except InSituVisitReportNotFound as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": "REPORT_NOT_FOUND", "message": str(exc)},
+        ) from None
+    return _to_audit_trail_response(audit)

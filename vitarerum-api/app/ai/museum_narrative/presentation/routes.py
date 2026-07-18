@@ -18,6 +18,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 from app.ai.museum_narrative.application.use_cases import (
     GenerateNarrativeInput,
     GetNarrativeInput,
+    ListNarrativeRevisionsInput,
     ListNarrativesInput,
     UpdateNarrativeInput,
 )
@@ -34,17 +35,20 @@ from app.ai.museum_narrative.presentation.dependencies import (
     GetUseCase,
     ListUseCase,
     NarrativeUseCase,
+    RevisionListUseCase,
     UpdateUseCase,
 )
 from app.ai.museum_narrative.presentation.mappers import (
     fact_snapshot_response,
     narrative_meta,
+    narrative_revision_response,
     stored_narrative_response,
 )
 from app.ai.museum_narrative.presentation.schemas import (
     NarrativeData,
     NarrativeRequest,
     NarrativeResponse,
+    PaginatedNarrativeRevisionsResponse,
     PaginatedNarrativesResponse,
     StoredNarrativeResponse,
     UpdateNarrativeRequest,
@@ -169,6 +173,43 @@ async def get_narrative(
     return stored_narrative_response(record)
 
 
+@museum_narrative_router.get(
+    "/{record_id}/narratives/{narrative_id}/revisions",
+    response_model=PaginatedNarrativeRevisionsResponse,
+)
+async def list_narrative_revisions(
+    record_id: str,
+    narrative_id: str,
+    caller: CallerPermission,
+    use_case: RevisionListUseCase,
+    page: Annotated[int, Query(ge=0)] = 0,
+    size: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> PaginatedNarrativeRevisionsResponse:
+    """List editorial revisions for one narrative, oldest first."""
+    require_staff(caller)
+    try:
+        revisions, total = await use_case.execute(
+            ListNarrativeRevisionsInput(
+                record_id=record_id,
+                narrative_id=narrative_id,
+                page=page,
+                size=size,
+            )
+        )
+    except NarrativeNotFound as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": "NARRATIVE_NOT_FOUND", "message": str(exc)},
+        ) from None
+    return PaginatedNarrativeRevisionsResponse(
+        content=[narrative_revision_response(revision) for revision in revisions],
+        page=page,
+        size=size,
+        total_elements=total,
+        total_pages=math.ceil(total / size) if size > 0 else 0,
+    )
+
+
 @museum_narrative_router.patch(
     "/{record_id}/narratives/{narrative_id}",
     response_model=StoredNarrativeResponse,
@@ -189,6 +230,7 @@ async def update_narrative(
                 record_id=record_id,
                 narrative_id=narrative_id,
                 narrative=body.narrative,
+                edited_by=str(caller.id),
             )
         )
     except NarrativeNotFound as exc:
