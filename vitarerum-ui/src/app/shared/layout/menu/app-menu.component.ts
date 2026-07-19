@@ -107,6 +107,12 @@ const OBJECT_SEARCH_ITEM: MenuNode = {
   routerLink: '/p/objects/search',
 };
 
+const USE_OF_COLLECTIONS_OBJECTS: MenuNode = {
+  label: 'Objects',
+  icon: 'pi pi-box',
+  items: [OBJECT_SEARCH_ITEM],
+};
+
 const MUSEUM_QUESTIONS_ITEM: MenuNode = {
   label: 'Public Inquiries',
   icon: 'pi pi-question-circle',
@@ -120,7 +126,7 @@ const USE_OF_COLLECTIONS_STAFF: MenuNode = {
     COLLECTION_PROPOSALS_STAFF,
     COLLECTION_PROJECTS_STAFF,
     COLLECTION_REPORTS_STAFF,
-    OBJECT_SEARCH_ITEM,
+    USE_OF_COLLECTIONS_OBJECTS,
   ],
 };
 

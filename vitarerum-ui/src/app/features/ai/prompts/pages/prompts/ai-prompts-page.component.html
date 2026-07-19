@@ -13,9 +13,9 @@
     <app-error-message [apiError]="actionError()!" />
   }
 
-  <div class="ai-prompts__layout">
-    <aside class="prompt-list" aria-label="Prompt templates">
-      <div class="filters">
+  @if (isListRoute()) {
+    <section class="prompts-list-panel" aria-label="Prompt templates list">
+      <div class="prompts-toolbar">
         <label class="field">
           <span class="field__label">Purpose</span>
           <select
@@ -47,48 +47,89 @@
       @if (loadingTemplates()) {
         <app-loading-state />
       } @else if (templates().length === 0) {
-        <p class="empty">No prompt templates match these filters.</p>
+        <app-empty-state
+          title="No prompts found"
+          message="No prompt templates match the current filters."
+        />
       } @else {
-        <ul class="template-list">
-          @for (template of templates(); track template.id) {
-            <li>
-              <a
-                class="template-link"
-                [class.template-link--active]="selectedTemplate()?.id === template.id"
-                [routerLink]="['/p/ai/prompts', template.id]"
-              >
-                <span class="template-link__name">{{ template.name }}</span>
-                <span class="template-link__meta">{{ purposeLabel(template.purpose) }}</span>
-                <span
-                  class="status-pill"
-                  [class]="'status-pill--' + (currentStatus(template) ?? 'none')"
-                >
-                  {{ statusLabel(currentStatus(template)) }}
-                </span>
-                <span class="template-link__meta">
-                  Last published:
-                  {{
-                    lastPublishedFor(template)?.publishedAt
-                      ? (lastPublishedFor(template)?.publishedAt | date: 'mediumDate')
-                      : 'Never'
-                  }}
-                </span>
-                <span class="template-link__meta">
-                  Published by: {{ lastPublishedFor(template)?.publishedBy ?? 'Unavailable' }}
-                </span>
-              </a>
-            </li>
-          }
-        </ul>
+        <div class="prompts-table-shell">
+          <table class="prompts-table" aria-label="Prompt templates">
+            <colgroup>
+              <col class="prompts-table__col-name" />
+              <col class="prompts-table__col-purpose" />
+              <col class="prompts-table__col-status" />
+              <col class="prompts-table__col-version" />
+              <col class="prompts-table__col-published" />
+              <col class="prompts-table__col-user" />
+              <col class="prompts-table__col-actions" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th scope="col">Prompt</th>
+                <th scope="col">Purpose</th>
+                <th scope="col">Status</th>
+                <th scope="col">Active version</th>
+                <th scope="col">Last published</th>
+                <th scope="col">Published by</th>
+                <th scope="col" class="prompts-table__actions-header">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (template of templates(); track template.id) {
+                <tr>
+                  <td>
+                    <a class="prompts-table__title" [routerLink]="['/p/ai/prompts', template.id]">
+                      {{ template.name }}
+                    </a>
+                    <span class="prompts-table__key">{{ template.key }}</span>
+                  </td>
+                  <td>{{ purposeLabel(template.purpose) }}</td>
+                  <td>
+                    <span
+                      class="status-pill"
+                      [class]="'status-pill--' + (currentStatus(template) ?? 'none')"
+                    >
+                      {{ statusLabel(currentStatus(template)) }}
+                    </span>
+                  </td>
+                  <td>{{ activeVersionFor(template)?.versionLabel ?? 'Unavailable' }}</td>
+                  <td>
+                    {{
+                      lastPublishedFor(template)?.publishedAt
+                        ? (lastPublishedFor(template)?.publishedAt | date: 'mediumDate')
+                        : 'Never'
+                    }}
+                  </td>
+                  <td>{{ lastPublishedFor(template)?.publishedBy ?? 'Unavailable' }}</td>
+                  <td>
+                    <div class="prompts-table__actions">
+                      <app-row-actions
+                        [items]="actionItemsFor(template)"
+                        ariaLabel="More actions for {{ template.name }}"
+                      />
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
       }
-    </aside>
-
+    </section>
+  } @else {
     <main class="prompt-detail">
-      @if (!selectedTemplate()) {
-        <section class="placeholder">
-          <span class="pi pi-sparkles" aria-hidden="true"></span>
-          <p>Select a prompt template to inspect its versions.</p>
-        </section>
+      <a class="back-link" routerLink="/p/ai/prompts">
+        <span class="pi pi-arrow-left" aria-hidden="true"></span>
+        Prompts
+      </a>
+
+      @if (loadingTemplates() && !selectedTemplate()) {
+        <app-loading-state />
+      } @else if (!selectedTemplate()) {
+        <app-empty-state
+          title="Prompt not found"
+          message="No prompt template could be resolved for this route."
+        />
       } @else {
         @if (selectedTemplate(); as template) {
           <section class="detail-head">
@@ -196,7 +237,7 @@
                       <div>
                         <h4>{{ version.versionLabel }}</h4>
                         <p>
-                          Version {{ version.version }} · Created
+                          Version {{ version.version }} - Created
                           {{ version.createdAt | date: 'medium' }} by {{ version.createdBy }}
                         </p>
                         <p>
@@ -312,5 +353,5 @@
         }
       }
     </main>
-  </div>
+  }
 </section>

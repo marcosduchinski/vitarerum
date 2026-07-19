@@ -9,12 +9,15 @@ import {
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { MenuItem } from 'primeng/api';
 import { firstValueFrom, map } from 'rxjs';
 
 import { ApiError, toApiError } from '@core/http/api-error.model';
+import { EmptyStateComponent } from '@shared/components/empty-state/empty-state.component';
 import { ErrorMessageComponent } from '@shared/components/error-message/error-message.component';
 import { LoadingStateComponent } from '@shared/components/loading-state/loading-state.component';
 import { PageHeaderComponent } from '@shared/components/page-header/page-header.component';
+import { RowActionsComponent } from '@shared/components/row-actions/row-actions.component';
 
 import {
   AiPromptPreviewResult,
@@ -53,8 +56,10 @@ const NARRATIVE_TYPE_BY_TEMPLATE_KEY: Readonly<Record<string, string>> = {
     DatePipe,
     RouterLink,
     PageHeaderComponent,
+    EmptyStateComponent,
     ErrorMessageComponent,
     LoadingStateComponent,
+    RowActionsComponent,
   ],
   templateUrl: './ai-prompts-page.component.html',
   styleUrl: './ai-prompts-page.component.scss',
@@ -76,7 +81,7 @@ export class AiPromptsPageComponent {
 
   protected readonly purposeOptions = PURPOSE_OPTIONS;
   protected readonly statusOptions = STATUS_OPTIONS;
-  protected readonly purposeFilter = signal<AiPromptPurpose | null>('in_situ_narrative');
+  protected readonly purposeFilter = signal<AiPromptPurpose | null>(null);
   protected readonly statusFilter = signal<AiPromptStatus | null>(null);
 
   protected readonly templates = signal<readonly AiPromptTemplate[]>([]);
@@ -95,6 +100,9 @@ export class AiPromptsPageComponent {
   protected readonly previewTargetLanguage = signal('pt');
   protected readonly previewResult = signal<AiPromptPreviewResult | null>(null);
   protected readonly isReadonlyVersionRoute = computed(() => !!this.selectedVersionId());
+  protected readonly isListRoute = computed(
+    () => !this.selectedTemplateId() && !this.selectedVersionId(),
+  );
 
   protected readonly selectedTemplate = computed(() => {
     const id = this.selectedTemplateId() ?? this.readonlyVersion()?.templateId;
@@ -201,6 +209,18 @@ export class AiPromptsPageComponent {
 
   protected versionsFor(template: AiPromptTemplate): readonly AiPromptVersion[] {
     return this.versionsByTemplate()[template.id] ?? [];
+  }
+
+  protected actionItemsFor(template: AiPromptTemplate): MenuItem[] {
+    return [
+      {
+        label: 'Details',
+        icon: 'pi pi-eye',
+        command: () => {
+          void this.router.navigate(['/p/ai/prompts', template.id]);
+        },
+      },
+    ];
   }
 
   protected duplicateVersion(version: AiPromptVersion): void {

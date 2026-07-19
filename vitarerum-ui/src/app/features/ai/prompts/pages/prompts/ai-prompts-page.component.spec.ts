@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
+import { ActivatedRoute, convertToParamMap, provideRouter, Router } from '@angular/router';
+import { MenuItem } from 'primeng/api';
 import { BehaviorSubject, of } from 'rxjs';
 
 import {
@@ -171,7 +172,47 @@ describe('AiPromptsPageComponent', () => {
     }).compileComponents();
   });
 
-  it('renders the prompt list and the selected template detail', async () => {
+  it('renders a simple prompt list on the base route', async () => {
+    paramMap.next(convertToParamMap({}));
+
+    fixture = TestBed.createComponent(AiPromptsPageComponent);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const root = fixture.nativeElement as HTMLElement;
+    const text = root.textContent ?? '';
+    expect(text).toContain('Institutional narrative');
+    expect(text).toContain('Proposal summary');
+    expect(text).toContain('Purpose');
+    expect(text).toContain('Status');
+    expect(text).toContain('Active version');
+    expect(text).toContain('Last published');
+    expect(text).not.toContain('Variables schema');
+    expect(text).not.toContain('Draft editor');
+    expect(root.querySelectorAll('app-row-actions').length).toBe(2);
+    expect(
+      root.querySelector('button[aria-label="More actions for Institutional narrative"]'),
+    ).not.toBeNull();
+  });
+
+  it('navigates to prompt detail from the row actions menu', async () => {
+    paramMap.next(convertToParamMap({}));
+
+    fixture = TestBed.createComponent(AiPromptsPageComponent);
+    await fixture.whenStable();
+
+    const router = TestBed.inject(Router);
+    const navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+    const component = fixture.componentInstance as unknown as {
+      actionItemsFor(template: AiPromptTemplate): MenuItem[];
+    };
+
+    component.actionItemsFor(TEMPLATE)[0].command?.({ originalEvent: undefined, item: undefined });
+
+    expect(navigate).toHaveBeenCalledWith(['/p/ai/prompts', 'tpl-1']);
+  });
+
+  it('renders the selected template detail on a template route', async () => {
     fixture = TestBed.createComponent(AiPromptsPageComponent);
     await fixture.whenStable();
     fixture.detectChanges();
@@ -182,9 +223,12 @@ describe('AiPromptsPageComponent', () => {
     expect(text).toContain('Published prompt.');
     expect(text).toContain('Published by');
     expect(text).toContain('system');
+    expect(text).toContain('Variables schema');
   });
 
   it('labels a template with only draft versions as draft', async () => {
+    paramMap.next(convertToParamMap({}));
+
     fixture = TestBed.createComponent(AiPromptsPageComponent);
     await fixture.whenStable();
     fixture.detectChanges();

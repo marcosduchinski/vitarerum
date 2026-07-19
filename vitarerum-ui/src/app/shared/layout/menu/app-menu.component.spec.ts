@@ -98,6 +98,20 @@ describe('AppMenuComponent', () => {
     expect(questionsLink.getAttribute('href')).toBe('/p/museum-questions');
   });
 
+  it('groups object search under objects inside use of collections for staff', () => {
+    activeSession.set(sessionForGroup('COLLECTIONS_MANAGEMENT'));
+    const fixture = TestBed.createComponent(AppMenuComponent);
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.textContent).toContain('Use of Collections');
+    buttonByText(compiled, 'Objects').click();
+    fixture.detectChanges();
+
+    const objectSearchLink = linkByText(compiled, 'Object Search');
+    expect(objectSearchLink.getAttribute('href')).toBe('/p/objects/search');
+  });
+
   it('shows AI prompts for staff who can generate narratives', () => {
     activeSession.set(sessionForGroup('CURATORIAL'));
     const fixture = TestBed.createComponent(AppMenuComponent);
