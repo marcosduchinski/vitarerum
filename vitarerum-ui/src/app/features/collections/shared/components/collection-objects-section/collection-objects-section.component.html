@@ -125,6 +125,22 @@
               {{ searching() ? 'Searching...' : 'Search' }}
             </button>
           </form>
+          <details class="search-explainer">
+            <summary>
+              <span class="pi pi-info-circle" aria-hidden="true"></span>
+              How search works
+            </summary>
+            <div class="search-explainer__body">
+              <span class="search-method search-method--exact">Exact</span>
+              <span class="search-method search-method--text">Text</span>
+              <span class="search-method search-method--approximate">Approximate</span>
+              <p>
+                Search runs automatically across the selected searchable columns for each
+                imported file. It checks exact values, contained phrases, text matches and
+                approximate similarities. Semantic search is not enabled yet.
+              </p>
+            </div>
+          </details>
 
           @if (searchResults().length) {
             <ul class="search-results">
@@ -151,6 +167,9 @@
                       <span class="search-hit__highlight" [innerHTML]="highlightHtml(hit)"></span>
                       <span class="search-hit__provenance">
                         {{ hit.collectionName }} / {{ hit.fileName }} / {{ hit.sheet }}
+                      </span>
+                      <span [class]="matchReasonClass(hit)">
+                        {{ matchReasonText(hit) }}
                       </span>
                       @if (adapterReason(hit); as reason) {
                         <span class="search-hit__warning">{{ reason }}</span>

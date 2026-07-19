@@ -13,6 +13,10 @@ import { firstValueFrom } from 'rxjs';
 import { ApiError, toApiError } from '@core/http/api-error.model';
 import { ObjectSearchHit } from '@features/objects/models/object-search.model';
 import { OBJECT_SEARCH_SERVICE } from '@features/objects/services/object-search.service';
+import {
+  objectSearchMatchReasonClass,
+  objectSearchMatchReasonText,
+} from '@features/objects/utils/object-search-match-reason.util';
 import { ConfirmModalComponent } from '@shared/components/confirm-modal/confirm-modal.component';
 import { ErrorMessageComponent } from '@shared/components/error-message/error-message.component';
 import { highlightToSafeMarkup } from '@shared/utils/highlight-html.util';
@@ -124,6 +128,14 @@ export class CollectionObjectsSectionComponent {
   protected adapterReason(hit: ObjectSearchHit): string | null {
     const result = adaptSearchHitToObjectSnapshot(hit);
     return result.ok ? null : result.reason;
+  }
+
+  protected matchReasonText(hit: ObjectSearchHit): string {
+    return objectSearchMatchReasonText(hit);
+  }
+
+  protected matchReasonClass(hit: ObjectSearchHit): string {
+    return objectSearchMatchReasonClass(hit, 'search-hit__match-badge');
   }
 
   protected canAddHit(hit: ObjectSearchHit): boolean {

@@ -51,6 +51,7 @@ describe('ProposalObjectsSectionComponent', () => {
             briefDescriptionSnapshot: 'Large cat.',
             category: 'Zoology',
           },
+          matchReasons: [{ method: 'exact', label: 'Exact', columns: ['Name'] }],
         },
         {
           collectionId: 'col-arc',
@@ -62,6 +63,7 @@ describe('ProposalObjectsSectionComponent', () => {
           cells: { Code: 'ARC-001' },
           highlight: '<b>ARC-001</b>',
           objectSnapshot: null,
+          matchReasons: [{ method: 'approximate', label: 'Approximate', columns: [] }],
         },
       ],
     };
@@ -146,6 +148,15 @@ describe('ProposalObjectsSectionComponent', () => {
     fixture.detectChanges();
 
     expect(el.textContent).toContain('Jaguar');
+    expect(el.querySelector('.search-explainer summary')?.textContent).toContain('How search works');
+    expect(el.textContent).toContain('Exact');
+    expect(el.textContent).toContain('Text');
+    expect(el.textContent).toContain('Approximate');
+    expect(el.textContent).toContain(
+      'Search runs automatically across the selected searchable columns',
+    );
+    expect(el.textContent).toContain('Matched by Exact - Name');
+    expect(el.textContent).toContain('Matched by Approximate');
     expect(el.textContent).toContain('Cannot add this row');
 
     const checkbox = el.querySelector<HTMLInputElement>('.search-hit input[type="checkbox"]')!;

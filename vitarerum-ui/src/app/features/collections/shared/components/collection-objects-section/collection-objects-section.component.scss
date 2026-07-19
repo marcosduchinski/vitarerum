@@ -226,6 +226,77 @@
   }
 }
 
+.search-explainer {
+  margin-top: -0.35rem;
+  width: fit-content;
+  max-width: 100%;
+  border: 1px solid var(--color-line);
+  border-radius: 0.5rem;
+  background: var(--color-panel-muted);
+  color: var(--color-text);
+  font-size: 0.84rem;
+
+  summary {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-height: 2.35rem;
+    padding: 0 0.7rem;
+    cursor: pointer;
+    font-weight: 700;
+  }
+}
+
+.search-explainer__body {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  max-width: 760px;
+  padding: 0 0.75rem 0.75rem;
+
+  p {
+    flex-basis: 100%;
+    margin: 0;
+    color: var(--color-muted);
+    line-height: 1.45;
+  }
+}
+
+.search-method {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 1.45rem;
+  padding: 0.12rem 0.45rem;
+  border: 1px solid var(--color-line);
+  border-radius: 999px;
+  background: var(--color-panel-muted);
+  color: var(--color-muted);
+  font-size: 0.72rem;
+  font-weight: 750;
+  line-height: 1.2;
+}
+
+.search-method--exact {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.search-method--text {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #166534;
+}
+
+.search-method--approximate {
+  background: #fff7ed;
+  border-color: #fed7aa;
+  color: #9a3412;
+}
+
 .object-search__empty {
   display: flex;
   flex-direction: column;
@@ -293,6 +364,42 @@
 
 .search-hit__highlight {
   overflow-wrap: anywhere;
+}
+
+.search-hit__match-badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 1.45rem;
+  padding: 0.12rem 0.45rem;
+  border: 1px solid var(--color-line);
+  border-radius: 999px;
+  background: var(--color-panel-muted);
+  color: var(--color-muted);
+  font-size: 0.72rem;
+  font-weight: 750;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.search-hit__match-badge--exact {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.search-hit__match-badge--text,
+.search-hit__match-badge--substring {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #166534;
+}
+
+.search-hit__match-badge--approximate {
+  background: #fff7ed;
+  border-color: #fed7aa;
+  color: #9a3412;
 }
 
 .search-hit__warning {

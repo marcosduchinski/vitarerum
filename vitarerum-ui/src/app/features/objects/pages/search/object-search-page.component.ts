@@ -18,11 +18,14 @@ import { highlightToSafeMarkup } from '@shared/utils/highlight-html.util';
 
 import {
   ObjectSearchHit,
-  ObjectSearchMatchReason,
   ObjectSearchQuery,
   SearchableCollection,
 } from '../../models/object-search.model';
 import { OBJECT_SEARCH_SERVICE } from '../../services/object-search.service';
+import {
+  objectSearchMatchReasonClass,
+  objectSearchMatchReasonText,
+} from '../../utils/object-search-match-reason.util';
 
 const PAGE_SIZE = 20;
 
@@ -131,19 +134,11 @@ export class ObjectSearchPageComponent {
     return this.sanitizer.bypassSecurityTrustHtml(highlightToSafeMarkup(hit.highlight));
   }
 
-  protected primaryMatchReason(hit: ObjectSearchHit): ObjectSearchMatchReason | null {
-    return hit.matchReasons?.[0] ?? null;
-  }
-
   protected matchReasonText(hit: ObjectSearchHit): string {
-    const reason = this.primaryMatchReason(hit);
-    if (!reason) return 'Matched by automatic search';
-    const columns = reason.columns?.filter(Boolean) ?? [];
-    return columns.length ? `Matched by ${reason.label} - ${columns.join(', ')}` : `Matched by ${reason.label}`;
+    return objectSearchMatchReasonText(hit);
   }
 
   protected matchReasonClass(hit: ObjectSearchHit): string {
-    const method = this.primaryMatchReason(hit)?.method ?? 'automatic';
-    return `result__match-badge result__match-badge--${method}`;
+    return objectSearchMatchReasonClass(hit, 'result__match-badge');
   }
 }
