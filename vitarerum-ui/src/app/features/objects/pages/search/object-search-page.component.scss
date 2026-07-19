@@ -79,6 +79,24 @@
   }
 }
 
+.search-explainer__examples {
+  flex-basis: 100%;
+  margin: 0.2rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  color: var(--color-subtle, #6b7280);
+  line-height: 1.45;
+
+  em {
+    font-style: normal;
+    font-weight: 650;
+    color: var(--color-text, #111827);
+  }
+}
+
 .search-method,
 .result__match-badge {
   display: inline-flex;

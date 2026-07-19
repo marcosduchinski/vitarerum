@@ -6,14 +6,14 @@ export const MUSEUM_QUESTIONS_ROUTES: Routes = [
   {
     path: '',
     pathMatch: 'full',
-    title: 'Museum Questions',
+    title: 'Public Inquiries',
     canMatch: [staffGuard],
     loadComponent: () =>
       import('./pages/museum-questions-page.component').then((m) => m.MuseumQuestionsPageComponent),
   },
   {
     path: ':id',
-    title: 'Museum Question',
+    title: 'Public Inquiry',
     canMatch: [staffGuard],
     loadComponent: () =>
       import('./pages/detail/museum-question-detail-page.component').then(

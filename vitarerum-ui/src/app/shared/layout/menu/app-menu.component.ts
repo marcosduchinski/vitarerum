@@ -101,27 +101,42 @@ const USE_OF_COLLECTIONS_EXTERNAL: MenuNode = {
   items: [COLLECTION_PROPOSALS_EXTERNAL, COLLECTION_PROJECTS_EXTERNAL],
 };
 
-const USE_OF_COLLECTIONS_STAFF: MenuNode = {
-  label: 'Use of Collections',
-  items: [COLLECTION_PROPOSALS_STAFF, COLLECTION_PROJECTS_STAFF, COLLECTION_REPORTS_STAFF],
+const OBJECT_SEARCH_ITEM: MenuNode = {
+  label: 'Object Search',
+  icon: 'pi pi-search',
+  routerLink: '/p/objects/search',
 };
 
+const MUSEUM_QUESTIONS_ITEM: MenuNode = {
+  label: 'Public Inquiries',
+  icon: 'pi pi-question-circle',
+  routerLink: '/p/museum-questions',
+};
+
+const USE_OF_COLLECTIONS_STAFF: MenuNode = {
+  label: 'Use of Collections',
+  items: [
+    MUSEUM_QUESTIONS_ITEM,
+    COLLECTION_PROPOSALS_STAFF,
+    COLLECTION_PROJECTS_STAFF,
+    COLLECTION_REPORTS_STAFF,
+    OBJECT_SEARCH_ITEM,
+  ],
+};
+
+// SYS_ADMIN has no "Use of Collections" section (it doesn't use collections),
+// so Object Search and Public Inquiries keep their own top-level sections
+// only for that group.
 const OBJECTS_STAFF: MenuNode = {
   label: 'Objects',
   icon: 'pi pi-box',
-  items: [{ label: 'Search', icon: 'pi pi-search', routerLink: '/p/objects/search' }],
+  items: [OBJECT_SEARCH_ITEM],
 };
 
 const MESSAGES_STAFF: MenuNode = {
   label: 'Messages',
   icon: 'pi pi-comments',
-  items: [
-    {
-      label: 'Museum Questions',
-      icon: 'pi pi-question-circle',
-      routerLink: '/p/museum-questions',
-    },
-  ],
+  items: [MUSEUM_QUESTIONS_ITEM],
 };
 
 const AI_PROMPTS_STAFF: MenuNode = {
@@ -161,23 +176,9 @@ const STAFF_ADMIN_MENU: MenuNode = {
 
 const MENUS: Record<GroupName, readonly MenuNode[]> = {
   EXTERNAL: [HOME, USE_OF_COLLECTIONS_EXTERNAL],
-  COLLECTIONS_MANAGEMENT: [
-    HOME,
-    USE_OF_COLLECTIONS_STAFF,
-    MESSAGES_STAFF,
-    AI_PROMPTS_STAFF,
-    OBJECTS_STAFF,
-    STAFF_ADMIN_MENU,
-  ],
-  CURATORIAL: [
-    HOME,
-    USE_OF_COLLECTIONS_STAFF,
-    MESSAGES_STAFF,
-    AI_PROMPTS_STAFF,
-    OBJECTS_STAFF,
-    STAFF_ADMIN_MENU,
-  ],
-  DIRECTION: [HOME, USE_OF_COLLECTIONS_STAFF, MESSAGES_STAFF, AI_PROMPTS_STAFF, OBJECTS_STAFF],
+  COLLECTIONS_MANAGEMENT: [HOME, USE_OF_COLLECTIONS_STAFF, AI_PROMPTS_STAFF, STAFF_ADMIN_MENU],
+  CURATORIAL: [HOME, USE_OF_COLLECTIONS_STAFF, AI_PROMPTS_STAFF, STAFF_ADMIN_MENU],
+  DIRECTION: [HOME, USE_OF_COLLECTIONS_STAFF, AI_PROMPTS_STAFF],
   SYS_ADMIN: [HOME, MESSAGES_STAFF, AI_PROMPTS_STAFF, OBJECTS_STAFF, SYS_ADMIN_MENU],
 };
 

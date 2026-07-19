@@ -87,14 +87,14 @@ describe('AppMenuComponent', () => {
     expect(visitsLink.getAttribute('href')).toBe('/p/collections/reports/visits-in-situ');
   });
 
-  it('shows museum questions inside the messages menu for staff', () => {
+  it('shows public inquiries inside use of collections for staff', () => {
     activeSession.set(sessionForGroup('COLLECTIONS_MANAGEMENT'));
     const fixture = TestBed.createComponent(AppMenuComponent);
     fixture.detectChanges();
 
     const compiled = fixture.nativeElement as HTMLElement;
-    const questionsLink = linkByText(compiled, 'Museum Questions');
-    expect(compiled.textContent).toContain('Messages');
+    const questionsLink = linkByText(compiled, 'Public Inquiries');
+    expect(compiled.textContent).toContain('Use of Collections');
     expect(questionsLink.getAttribute('href')).toBe('/p/museum-questions');
   });
 
