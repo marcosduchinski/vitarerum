@@ -51,13 +51,14 @@ export interface UpdateCollectionRequest {
 export interface SourceDocumentObjectMapping {
   readonly inventoryNumberColumn: string;
   readonly displayTitleColumn: string;
+  readonly displayTitleColumns?: readonly string[];
   readonly objectNameColumn: string | null;
   readonly descriptionColumns: readonly string[];
 }
 
 export interface UpdateSourceDocumentObjectMappingRequest {
   readonly inventoryNumberColumn: string;
-  readonly displayTitleColumn: string;
+  readonly displayTitleColumns: readonly string[];
   readonly objectNameColumn: string | null;
   readonly descriptionColumns: readonly string[];
 }

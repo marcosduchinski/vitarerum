@@ -390,7 +390,7 @@ class UpdateSourceDocumentObjectMappingInput:
     caller: Actor
     document_id: SourceDocumentId
     inventory_number_column: str
-    display_title_column: str
+    display_title_columns: tuple[str, ...]
     object_name_column: str | None
     description_columns: tuple[str, ...]
 
@@ -442,7 +442,7 @@ class UpdateSourceDocumentObjectMapping:
         )
         mapping = ObjectSnapshotMapping(
             inventory_number_column=data.inventory_number_column,
-            display_title_column=data.display_title_column,
+            display_title_columns=data.display_title_columns,
             object_name_column=data.object_name_column,
             description_columns=data.description_columns,
         )
@@ -458,7 +458,7 @@ def _validate_mapping_columns(
 ) -> None:
     required = [
         mapping.inventory_number_column,
-        mapping.display_title_column,
+        *mapping.display_title_columns,
         *(column for column in [mapping.object_name_column] if column is not None),
         *mapping.description_columns,
     ]

@@ -50,13 +50,15 @@ class SourceDocumentMappingInvalid(ValueError):
 @dataclass(frozen=True, slots=True)
 class ObjectSnapshotMapping:
     inventory_number_column: str
-    display_title_column: str
+    display_title_columns: tuple[str, ...]
     object_name_column: str | None = None
     description_columns: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         inventory = self.inventory_number_column.strip()
-        title = self.display_title_column.strip()
+        titles = tuple(
+            column.strip() for column in self.display_title_columns if column.strip()
+        )
         object_name = (
             self.object_name_column.strip() if self.object_name_column else None
         )
@@ -65,12 +67,17 @@ class ObjectSnapshotMapping:
         )
         if not inventory:
             raise SourceDocumentMappingInvalid("inventoryNumberColumn is required.")
-        if not title:
-            raise SourceDocumentMappingInvalid("displayTitleColumn is required.")
+        if not titles:
+            raise SourceDocumentMappingInvalid("displayTitleColumns is required.")
         object.__setattr__(self, "inventory_number_column", inventory)
-        object.__setattr__(self, "display_title_column", title)
+        object.__setattr__(self, "display_title_columns", titles)
         object.__setattr__(self, "object_name_column", object_name)
         object.__setattr__(self, "description_columns", descriptions)
+
+    @property
+    def display_title_column(self) -> str:
+        """Backward-compatible single-column view used by older API clients."""
+        return self.display_title_columns[0]
 
 
 @dataclass(slots=True)

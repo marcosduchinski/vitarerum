@@ -105,7 +105,7 @@ export class CollectionDataSourceService implements CollectionDataSourceApi {
   ): Observable<SourceDocument> {
     return this.http.put<SourceDocument>(this.url(`/documents/${documentId}/object-mapping`), {
       inventoryNumberColumn: request.inventoryNumberColumn,
-      displayTitleColumn: request.displayTitleColumn,
+      displayTitleColumns: [...request.displayTitleColumns],
       objectNameColumn: request.objectNameColumn,
       descriptionColumns: [...request.descriptionColumns],
     });
@@ -119,7 +119,7 @@ export class CollectionDataSourceService implements CollectionDataSourceApi {
     const form = new FormData();
     form.append('file', file, file.name);
     form.append('inventoryNumberColumn', objectMapping.inventoryNumberColumn);
-    form.append('displayTitleColumn', objectMapping.displayTitleColumn);
+    form.append('displayTitleColumns', JSON.stringify(objectMapping.displayTitleColumns));
     form.append('objectNameColumn', objectMapping.objectNameColumn ?? '');
     form.append('descriptionColumns', JSON.stringify(objectMapping.descriptionColumns));
     return this.http.post<SourceDocument>(this.url(`/collections/${collectionId}/documents`), form);

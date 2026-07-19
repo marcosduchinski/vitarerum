@@ -178,7 +178,8 @@ export class CollectionDataSourceServiceMock implements CollectionDataSourceApi 
       indexedAt: new Date().toISOString(),
       objectMapping: {
         inventoryNumberColumn: objectMapping.inventoryNumberColumn,
-        displayTitleColumn: objectMapping.displayTitleColumn,
+        displayTitleColumn: objectMapping.displayTitleColumns[0],
+        displayTitleColumns: [...objectMapping.displayTitleColumns],
         objectNameColumn: objectMapping.objectNameColumn,
         descriptionColumns: [...objectMapping.descriptionColumns],
       },
@@ -204,7 +205,8 @@ export class CollectionDataSourceServiceMock implements CollectionDataSourceApi 
         ...found,
         objectMapping: {
           inventoryNumberColumn: request.inventoryNumberColumn,
-          displayTitleColumn: request.displayTitleColumn,
+          displayTitleColumn: request.displayTitleColumns[0],
+          displayTitleColumns: [...request.displayTitleColumns],
           objectNameColumn: request.objectNameColumn,
           descriptionColumns: [...request.descriptionColumns],
         },

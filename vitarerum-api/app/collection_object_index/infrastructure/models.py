@@ -84,6 +84,7 @@ class SourceDocumentRecord(Base):
         String(255), nullable=True
     )
     display_title_column: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    display_title_columns: Mapped[list[str]] = mapped_column(JSON, default=list)
     object_name_column: Mapped[str | None] = mapped_column(String(255), nullable=True)
     description_columns: Mapped[list[str]] = mapped_column(JSON, default=list)
 

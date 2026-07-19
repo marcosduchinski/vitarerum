@@ -60,6 +60,7 @@ class CuratorCandidateResponse(BaseModel):
 class SourceDocumentObjectMappingResponse(BaseModel):
     inventoryNumberColumn: str
     displayTitleColumn: str
+    displayTitleColumns: list[str] = Field(default_factory=list)
     objectNameColumn: str | None = None
     descriptionColumns: list[str] = Field(default_factory=list)
 
@@ -79,7 +80,8 @@ class SourceDocumentResponse(BaseModel):
 
 class UpdateSourceDocumentObjectMappingRequest(BaseModel):
     inventoryNumberColumn: str = Field(min_length=1, max_length=255)
-    displayTitleColumn: str = Field(min_length=1, max_length=255)
+    displayTitleColumn: str | None = Field(default=None, min_length=1, max_length=255)
+    displayTitleColumns: list[str] = Field(default_factory=list)
     objectNameColumn: str | None = Field(default=None, max_length=255)
     descriptionColumns: list[str] = Field(default_factory=list)
 

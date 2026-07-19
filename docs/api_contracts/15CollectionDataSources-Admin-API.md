@@ -241,6 +241,7 @@ Source document responses include the optional semantic mapping used by
   "objectMapping": {
     "inventoryNumberColumn": "Inventory No",
     "displayTitleColumn": "Name",
+    "displayTitleColumns": ["Name"],
     "objectNameColumn": null,
     "descriptionColumns": ["Description", "Notes"]
   }
@@ -266,7 +267,7 @@ Uploads and synchronously indexes a spreadsheet. Content type: `multipart/form-d
 `file` field (real `.xlsx`, magic-byte validated), plus the required semantic object mapping:
 
 - `inventoryNumberColumn`
-- `displayTitleColumn`
+- `displayTitleColumns` (one or more columns; `displayTitleColumn` remains accepted for older clients)
 - `objectNameColumn` (empty string means fallback to display title)
 - `descriptionColumns` (JSON string list, e.g. `["Description", "Notes"]`)
 
@@ -338,13 +339,16 @@ Stores the semantic column mapping used to build `objectSnapshot` on search hits
 {
   "inventoryNumberColumn": "Inventory No",
   "displayTitleColumn": "Name",
+  "displayTitleColumns": ["Name", "Scientific name"],
   "objectNameColumn": null,
   "descriptionColumns": ["Description", "Notes"]
 }
 ```
 
-`inventoryNumberColumn` and `displayTitleColumn` are required. `objectNameColumn`
-is optional and falls back to `displayTitleColumn` at search time. All supplied
+`inventoryNumberColumn` and at least one display title column are required.
+`displayTitleColumn` is kept as the first-column compatibility field;
+new clients should send `displayTitleColumns`. `objectNameColumn` is optional
+and falls back to the composed display title at search time. All supplied
 columns must exist in the indexed column list for the document.
 
 **Response `200`** — the updated source document. **`422 SOURCE_DOCUMENT_MAPPING_INVALID`** —

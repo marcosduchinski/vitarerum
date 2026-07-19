@@ -105,7 +105,7 @@ class _Seed:
                     uploaded_at=_NOW,
                     indexed_at=_NOW,
                     inventory_number_column="Inventory No",
-                    display_title_column="Name",
+                    display_title_columns=("Name",),
                     object_name_column=None,
                     description_columns=["Notes"],
                 )

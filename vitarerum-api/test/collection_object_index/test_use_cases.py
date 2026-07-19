@@ -207,7 +207,7 @@ async def _upload(
                 content=_xlsx(rows if rows is not None else [["ZOO-1", "Jaguar"]]),
                 object_mapping=ObjectSnapshotMapping(
                     inventory_number_column="Inventory No",
-                    display_title_column="Name",
+                    display_title_columns=("Name",),
                     description_columns=("Name",),
                 ),
             )
@@ -256,7 +256,7 @@ async def test_list_columns_and_update_object_mapping() -> None:
                 caller=_ADMIN,
                 document_id=uploaded.document.id,
                 inventory_number_column="Inventory No",
-                display_title_column="Name",
+                display_title_columns=("Name",),
                 object_name_column=None,
                 description_columns=("Name",),
             )
@@ -292,7 +292,7 @@ async def test_update_object_mapping_rejects_unknown_columns() -> None:
                     caller=_ADMIN,
                     document_id=uploaded.document.id,
                     inventory_number_column="Missing",
-                    display_title_column="Name",
+                    display_title_columns=("Name",),
                     object_name_column=None,
                     description_columns=(),
                 )

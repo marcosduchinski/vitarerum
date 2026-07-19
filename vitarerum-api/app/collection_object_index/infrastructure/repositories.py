@@ -69,14 +69,18 @@ def _to_assignment(record: CuratorRecord) -> CuratorAssignment:
 
 
 def _to_document(record: SourceDocumentRecord) -> SourceDocument:
+    display_title_columns = tuple(
+        record.display_title_columns
+        or ([record.display_title_column] if record.display_title_column else [])
+    )
     mapping = (
         ObjectSnapshotMapping(
             inventory_number_column=record.inventory_number_column,
-            display_title_column=record.display_title_column,
+            display_title_columns=display_title_columns,
             object_name_column=record.object_name_column,
             description_columns=tuple(record.description_columns or ()),
         )
-        if record.inventory_number_column and record.display_title_column
+        if record.inventory_number_column and display_title_columns
         else None
     )
     return SourceDocument(
@@ -120,6 +124,9 @@ def _apply_document(record: SourceDocumentRecord, document: SourceDocument) -> N
     )
     record.display_title_column = (
         mapping.display_title_column if mapping is not None else None
+    )
+    record.display_title_columns = (
+        list(mapping.display_title_columns) if mapping is not None else []
     )
     record.object_name_column = (
         mapping.object_name_column if mapping is not None else None
@@ -299,6 +306,11 @@ class SqlAlchemySourceDocumentRepository:
                     if document.object_snapshot_mapping is not None
                     else None
                 ),
+                display_title_columns=(
+                    list(document.object_snapshot_mapping.display_title_columns)
+                    if document.object_snapshot_mapping is not None
+                    else []
+                ),
                 object_name_column=(
                     document.object_snapshot_mapping.object_name_column
                     if document.object_snapshot_mapping is not None
@@ -416,6 +428,7 @@ _SEARCH_SELECT_SQL = text(
         sd.file_name,
         sd.inventory_number_column,
         sd.display_title_column,
+        sd.display_title_columns,
         sd.object_name_column,
         sd.description_columns,
         co.sheet,
@@ -542,7 +555,12 @@ def _cell(cells: dict[str, str], column: str | None) -> str:
 
 def _object_snapshot_from_row(row: Any) -> ObjectSnapshot | None:
     inventory = _cell(row.cells, row.inventory_number_column)
-    display_title = _cell(row.cells, row.display_title_column)
+    display_title_columns = row.display_title_columns or [row.display_title_column]
+    display_title = " · ".join(
+        part
+        for part in (_cell(row.cells, column) for column in display_title_columns)
+        if part
+    )
     object_name = _cell(row.cells, row.object_name_column) or display_title
     if not inventory or not display_title or not object_name:
         return None

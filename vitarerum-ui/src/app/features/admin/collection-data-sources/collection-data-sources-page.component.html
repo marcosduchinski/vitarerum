@@ -360,7 +360,7 @@
                                 </span>
                                 <p class="documents__mapping">
                                   {{ doc.objectMapping.inventoryNumberColumn }} /
-                                  {{ doc.objectMapping.displayTitleColumn }}
+                                  {{ displayTitleColumnsText(doc.objectMapping) }}
                                 </p>
                               } @else {
                                 <span class="badge badge--muted">
@@ -432,19 +432,34 @@
                                         }
                                       </select>
                                     </label>
-                                    <label class="mapping-field">
+                                    <div class="mapping-field">
                                       <span>Display title <em>required</em></span>
-                                      <select
-                                        [value]="mappingTitleColumn()"
-                                        [disabled]="busy()"
-                                        (change)="mappingTitleColumn.set($any($event.target).value)"
-                                      >
-                                        <option value="">Select column…</option>
+                                      <details class="mapping-combo">
+                                        <summary
+                                          class="mapping-combo__summary"
+                                          [attr.aria-disabled]="busy()"
+                                        >
+                                          <span>{{ mappingTitleColumnsLabel() }}</span>
+                                          <span class="pi pi-chevron-down" aria-hidden="true"></span>
+                                        </summary>
+                                        <div class="mapping-combo__menu">
                                         @for (column of mappingColumns(doc); track column) {
-                                          <option [value]="column">{{ column }}</option>
+                                          <label
+                                            class="mapping-combo__option"
+                                            [class.mapping-combo__option--checked]="isTitleColumnSelected(column)"
+                                          >
+                                            <input
+                                              type="checkbox"
+                                              [checked]="isTitleColumnSelected(column)"
+                                              [disabled]="busy()"
+                                              (change)="toggleTitleColumn(column, $any($event.target).checked)"
+                                            />
+                                            <span>{{ column }}</span>
+                                          </label>
                                         }
-                                      </select>
-                                    </label>
+                                        </div>
+                                      </details>
+                                    </div>
                                     <label class="mapping-field">
                                       <span>Object name</span>
                                       <select
@@ -633,19 +648,34 @@
                   }
                 </select>
               </label>
-              <label class="mapping-field">
+              <div class="mapping-field">
                 <span>Display title <em>required</em></span>
-                <select
-                  [value]="mappingTitleColumn()"
-                  [disabled]="busy()"
-                  (change)="mappingTitleColumn.set($any($event.target).value)"
-                >
-                  <option value="">Select column…</option>
+                <details class="mapping-combo">
+                  <summary
+                    class="mapping-combo__summary"
+                    [attr.aria-disabled]="busy()"
+                  >
+                    <span>{{ mappingTitleColumnsLabel() }}</span>
+                    <span class="pi pi-chevron-down" aria-hidden="true"></span>
+                  </summary>
+                  <div class="mapping-combo__menu">
                   @for (column of pendingUploadColumns(); track column) {
-                    <option [value]="column">{{ column }}</option>
+                    <label
+                      class="mapping-combo__option"
+                      [class.mapping-combo__option--checked]="isTitleColumnSelected(column)"
+                    >
+                      <input
+                        type="checkbox"
+                        [checked]="isTitleColumnSelected(column)"
+                        [disabled]="busy()"
+                        (change)="toggleTitleColumn(column, $any($event.target).checked)"
+                      />
+                      <span>{{ column }}</span>
+                    </label>
                   }
-                </select>
-              </label>
+                  </div>
+                </details>
+              </div>
               <label class="mapping-field">
                 <span>Object name</span>
                 <select

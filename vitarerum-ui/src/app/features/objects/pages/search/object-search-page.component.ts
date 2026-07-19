@@ -100,10 +100,6 @@ export class ObjectSearchPageComponent {
     this.currentPage.update((p) => Math.min(this.totalPages() - 1, p + 1));
   }
 
-  protected cellEntries(hit: ObjectSearchHit): [string, string][] {
-    return Object.entries(hit.cells);
-  }
-
   protected highlightHtml(hit: ObjectSearchHit): SafeHtml {
     // Safe: highlightToSafeMarkup() escapes the whole string and only re-opens
     // <mark> for the backend's own <b> markers — never trust hit.highlight raw.

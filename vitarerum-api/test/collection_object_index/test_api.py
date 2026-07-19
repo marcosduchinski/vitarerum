@@ -235,18 +235,19 @@ async def test_configure_source_document_object_mapping() -> None:
             f"/admin/collection-data-sources/documents/{document_id}/object-mapping",
             json={
                 "inventoryNumberColumn": "Inventory No",
-                "displayTitleColumn": "Name",
+                "displayTitleColumns": ["Name", "Inventory No"],
                 "objectNameColumn": None,
                 "descriptionColumns": ["Name"],
             },
         )
         assert mapping.status_code == 200, mapping.text
-        assert mapping.json()["objectMapping"] == {
-            "inventoryNumberColumn": "Inventory No",
-            "displayTitleColumn": "Name",
-            "objectNameColumn": None,
-            "descriptionColumns": ["Name"],
-        }
+    assert mapping.json()["objectMapping"] == {
+        "inventoryNumberColumn": "Inventory No",
+        "displayTitleColumn": "Name",
+        "displayTitleColumns": ["Name", "Inventory No"],
+        "objectNameColumn": None,
+        "descriptionColumns": ["Name"],
+    }
 
 
 async def test_configure_source_document_object_mapping_rejects_unknown_column() -> (

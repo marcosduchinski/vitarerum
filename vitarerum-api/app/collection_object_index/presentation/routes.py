@@ -214,6 +214,7 @@ def _document_response(document: SourceDocument) -> SourceDocumentResponse:
             SourceDocumentObjectMappingResponse(
                 inventoryNumberColumn=mapping.inventory_number_column,
                 displayTitleColumn=mapping.display_title_column,
+                displayTitleColumns=list(mapping.display_title_columns),
                 objectNameColumn=mapping.object_name_column,
                 descriptionColumns=list(mapping.description_columns),
             )
@@ -226,7 +227,8 @@ def _document_response(document: SourceDocument) -> SourceDocumentResponse:
 def _mapping_from_form(
     *,
     inventory_number_column: str,
-    display_title_column: str,
+    display_title_column: str | None,
+    display_title_columns_json: str | None,
     object_name_column: str | None,
     description_columns_json: str,
 ) -> ObjectSnapshotMapping:
@@ -238,9 +240,26 @@ def _mapping_from_form(
         isinstance(column, str) for column in raw_description_columns
     ):
         raise SourceDocumentMappingInvalid("descriptionColumns must be a string list.")
+    display_title_columns: tuple[str, ...]
+    if display_title_columns_json:
+        try:
+            raw_display_title_columns = json.loads(display_title_columns_json)
+        except json.JSONDecodeError as exc:
+            raise SourceDocumentMappingInvalid(
+                "displayTitleColumns must be JSON."
+            ) from exc
+        if not isinstance(raw_display_title_columns, list) or not all(
+            isinstance(column, str) for column in raw_display_title_columns
+        ):
+            raise SourceDocumentMappingInvalid(
+                "displayTitleColumns must be a string list."
+            )
+        display_title_columns = tuple(raw_display_title_columns)
+    else:
+        display_title_columns = (display_title_column or "",)
     return ObjectSnapshotMapping(
         inventory_number_column=inventory_number_column,
-        display_title_column=display_title_column,
+        display_title_columns=display_title_columns,
         object_name_column=object_name_column,
         description_columns=tuple(raw_description_columns),
     )
@@ -587,7 +606,8 @@ async def upload_collection_document(
     session: DBSession,
     file: Annotated[UploadFile, File()],
     inventoryNumberColumn: Annotated[str, Form(min_length=1, max_length=255)],
-    displayTitleColumn: Annotated[str, Form(min_length=1, max_length=255)],
+    displayTitleColumn: Annotated[str | None, Form(max_length=255)] = None,
+    displayTitleColumns: Annotated[str | None, Form()] = None,
     objectNameColumn: Annotated[str | None, Form(max_length=255)] = None,
     descriptionColumns: Annotated[str, Form()] = "[]",
 ) -> SourceDocumentResponse:
@@ -598,6 +618,7 @@ async def upload_collection_document(
         mapping = _mapping_from_form(
             inventory_number_column=inventoryNumberColumn,
             display_title_column=displayTitleColumn,
+            display_title_columns_json=displayTitleColumns,
             object_name_column=objectNameColumn,
             description_columns_json=descriptionColumns,
         )
@@ -761,7 +782,14 @@ async def update_source_document_object_mapping(
                 caller=caller,
                 document_id=SourceDocumentId(document_id),
                 inventory_number_column=payload.inventoryNumberColumn,
-                display_title_column=payload.displayTitleColumn,
+                display_title_columns=tuple(
+                    payload.displayTitleColumns
+                    or (
+                        [payload.displayTitleColumn]
+                        if payload.displayTitleColumn
+                        else []
+                    )
+                ),
                 object_name_column=payload.objectNameColumn,
                 description_columns=tuple(payload.descriptionColumns),
             )

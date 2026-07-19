@@ -22,6 +22,7 @@ import {
   CollectionDataSource,
   CuratorCandidate,
   SourceDocument,
+  SourceDocumentObjectMapping,
 } from '../models/collection-data-source.model';
 import { COLLECTION_DATA_SOURCE_SERVICE } from '../services/collection-data-source.service';
 
@@ -141,7 +142,7 @@ export class CollectionDataSourcesPageComponent {
   protected readonly mappingDocumentId = signal<string | null>(null);
   protected readonly mappingColumnsByDocument = signal<Record<string, readonly string[]>>({});
   protected readonly mappingInventoryColumn = signal('');
-  protected readonly mappingTitleColumn = signal('');
+  protected readonly mappingTitleColumns = signal<readonly string[]>([]);
   protected readonly mappingObjectNameColumn = signal('');
   protected readonly mappingDescriptionColumns = signal<readonly string[]>([]);
   protected readonly pendingUploadCollectionId = signal<string | null>(null);
@@ -307,7 +308,7 @@ export class CollectionDataSourcesPageComponent {
       this.pendingUploadColumns.set(columns);
       this.mappingDocumentId.set(null);
       this.mappingInventoryColumn.set('');
-      this.mappingTitleColumn.set('');
+      this.mappingTitleColumns.set([]);
       this.mappingObjectNameColumn.set('');
       this.mappingDescriptionColumns.set([]);
     } catch (err) {
@@ -337,7 +338,9 @@ export class CollectionDataSourcesPageComponent {
     this.mappingDocumentId.set(sourceDocument.id);
     const mapping = sourceDocument.objectMapping;
     this.mappingInventoryColumn.set(mapping?.inventoryNumberColumn ?? '');
-    this.mappingTitleColumn.set(mapping?.displayTitleColumn ?? '');
+    this.mappingTitleColumns.set(
+      mapping?.displayTitleColumns ?? (mapping ? [mapping.displayTitleColumn] : []),
+    );
     this.mappingObjectNameColumn.set(mapping?.objectNameColumn ?? '');
     this.mappingDescriptionColumns.set(mapping?.descriptionColumns ?? []);
     if (this.mappingColumnsByDocument()[sourceDocument.id]) return;
@@ -367,7 +370,31 @@ export class CollectionDataSourcesPageComponent {
   }
 
   protected mappingCanSave(): boolean {
-    return Boolean(this.mappingInventoryColumn() && this.mappingTitleColumn());
+    return Boolean(this.mappingInventoryColumn() && this.mappingTitleColumns().length > 0);
+  }
+
+  protected mappingTitleColumnsLabel(): string {
+    const columns = this.mappingTitleColumns();
+    if (columns.length === 0) return 'Select columns...';
+    if (columns.length === 1) return columns[0];
+    return `${columns.length} columns selected`;
+  }
+
+  protected displayTitleColumnsText(mapping: SourceDocumentObjectMapping): string {
+    return (mapping.displayTitleColumns ?? [mapping.displayTitleColumn]).join(' + ');
+  }
+
+  protected isTitleColumnSelected(column: string): boolean {
+    return this.mappingTitleColumns().includes(column);
+  }
+
+  protected toggleTitleColumn(column: string, checked: boolean): void {
+    this.mappingTitleColumns.update((current) => {
+      if (checked) {
+        return current.includes(column) ? current : [...current, column];
+      }
+      return current.filter((value) => value !== column);
+    });
   }
 
   protected isDescriptionColumnSelected(column: string): boolean {
@@ -389,7 +416,7 @@ export class CollectionDataSourcesPageComponent {
       firstValueFrom(
         this.service.updateObjectMapping(sourceDocument.id, {
           inventoryNumberColumn: this.mappingInventoryColumn(),
-          displayTitleColumn: this.mappingTitleColumn(),
+          displayTitleColumns: this.mappingTitleColumns(),
           objectNameColumn: this.mappingObjectNameColumn() || null,
           descriptionColumns: this.mappingDescriptionColumns(),
         }),
@@ -406,7 +433,7 @@ export class CollectionDataSourcesPageComponent {
       firstValueFrom(
         this.service.upload(collectionId, file, {
           inventoryNumberColumn: this.mappingInventoryColumn(),
-          displayTitleColumn: this.mappingTitleColumn(),
+          displayTitleColumns: this.mappingTitleColumns(),
           objectNameColumn: this.mappingObjectNameColumn() || null,
           descriptionColumns: this.mappingDescriptionColumns(),
         }),

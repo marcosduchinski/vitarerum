@@ -22,7 +22,7 @@ function makeResult(overrides: Partial<ObjectSearchResult> = {}): ObjectSearchRe
         fileName: 'zoo.xlsx',
         sheet: 'Objects',
         rowNumber: 2,
-        cells: { 'Inventory No': 'ZOO-1', Name: 'Jaguar' },
+        cells: { 'Inventory No': 'ZOO-1', Name: 'Jaguar', Internal: 'Do not render' },
         highlight: '<b>Jaguar</b> found near the river',
         objectSnapshot: {
           inventoryNumber: 'ZOO-1',
@@ -100,7 +100,10 @@ describe('ObjectSearchPageComponent', () => {
     expect(el.querySelector('.result__highlight mark')?.textContent).toContain('Jaguar');
     expect(el.querySelector('.result__snapshot')?.textContent).toContain('ZOO-1');
     expect(el.querySelector('.result__snapshot')?.textContent).toContain('Jaguar');
+    expect(el.querySelector('.result__description')?.textContent).toContain('found near the river');
     expect(el.textContent).toContain('ZOO-1');
+    expect(el.querySelector('.result__cells')).toBeNull();
+    expect(el.textContent).not.toContain('Do not render');
   });
 
   it('shows when a result has no proposal object snapshot', async () => {

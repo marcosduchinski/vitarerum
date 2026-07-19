@@ -309,6 +309,7 @@ describe('CollectionDataSourcesPageComponent', () => {
         objectMapping: {
           inventoryNumberColumn: 'Inventory No',
           displayTitleColumn: 'Name',
+          displayTitleColumns: ['Name', 'Description'],
           objectNameColumn: null,
           descriptionColumns: ['Description'],
         },
@@ -317,7 +318,7 @@ describe('CollectionDataSourcesPageComponent', () => {
     await expand(el);
 
     expect(el.textContent).toContain('Configured');
-    expect(el.textContent).toContain('Inventory No / Name');
+    expect(el.textContent).toContain('Inventory No / Name + Description');
   });
 
   it('shows the error message for a failed document', async () => {
@@ -349,8 +350,10 @@ describe('CollectionDataSourcesPageComponent', () => {
     const selects = dialog.querySelectorAll<HTMLSelectElement>('.mapping-field select');
     selects[0].value = 'Inventory No';
     selects[0].dispatchEvent(new Event('change'));
-    selects[1].value = 'Name';
-    selects[1].dispatchEvent(new Event('change'));
+    const title = Array.from(dialog.querySelectorAll<HTMLInputElement>('.mapping-combo__option input'))
+      .find((input) => input.nextElementSibling?.textContent?.trim() === 'Name')!;
+    title.checked = true;
+    title.dispatchEvent(new Event('change'));
     fixture.detectChanges();
 
     Array.from(dialog.querySelectorAll<HTMLButtonElement>('.admin-btn'))
@@ -414,10 +417,12 @@ describe('CollectionDataSourcesPageComponent', () => {
     const selects = el.querySelectorAll<HTMLSelectElement>('.mapping-field select');
     selects[0].value = 'Inventory No';
     selects[0].dispatchEvent(new Event('change'));
+    const title = Array.from(el.querySelectorAll<HTMLInputElement>('.mapping-combo__option input'))
+      .find((input) => input.nextElementSibling?.textContent?.trim() === 'Name')!;
+    title.checked = true;
+    title.dispatchEvent(new Event('change'));
     selects[1].value = 'Name';
     selects[1].dispatchEvent(new Event('change'));
-    selects[2].value = 'Name';
-    selects[2].dispatchEvent(new Event('change'));
     const description = Array.from(
       el.querySelectorAll<HTMLInputElement>('.mapping-descriptions input'),
     ).find((input) => input.nextElementSibling?.textContent?.trim() === 'Description')!;
@@ -435,7 +440,7 @@ describe('CollectionDataSourcesPageComponent', () => {
         'doc-1',
         {
           inventoryNumberColumn: 'Inventory No',
-          displayTitleColumn: 'Name',
+          displayTitleColumns: ['Name'],
           objectNameColumn: 'Name',
           descriptionColumns: ['Description'],
         },
