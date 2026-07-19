@@ -63,6 +63,7 @@ class SourceDocumentObjectMappingResponse(BaseModel):
     displayTitleColumns: list[str] = Field(default_factory=list)
     objectNameColumn: str | None = None
     descriptionColumns: list[str] = Field(default_factory=list)
+    searchableColumns: list[str] = Field(default_factory=list)
 
 
 class SourceDocumentResponse(BaseModel):
@@ -75,6 +76,7 @@ class SourceDocumentResponse(BaseModel):
     rowCount: int | None = None
     uploadedAt: datetime
     indexedAt: datetime | None = None
+    contentMatchesSearchableColumns: bool = True
     objectMapping: SourceDocumentObjectMappingResponse | None = None
 
 
@@ -84,6 +86,7 @@ class UpdateSourceDocumentObjectMappingRequest(BaseModel):
     displayTitleColumns: list[str] = Field(default_factory=list)
     objectNameColumn: str | None = Field(default=None, max_length=255)
     descriptionColumns: list[str] = Field(default_factory=list)
+    searchableColumns: list[str] = Field(default_factory=list)
 
 
 class SourceDocumentColumnsResponse(BaseModel):

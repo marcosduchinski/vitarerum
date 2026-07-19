@@ -79,6 +79,7 @@ def _to_document(record: SourceDocumentRecord) -> SourceDocument:
             display_title_columns=display_title_columns,
             object_name_column=record.object_name_column,
             description_columns=tuple(record.description_columns or ()),
+            searchable_columns=tuple(record.searchable_columns or ()),
         )
         if record.inventory_number_column and display_title_columns
         else None
@@ -98,6 +99,11 @@ def _to_document(record: SourceDocumentRecord) -> SourceDocument:
         indexed_at=record.indexed_at,
         deleted_at=record.deleted_at,
         object_snapshot_mapping=mapping,
+        content_matches_searchable_columns=(
+            record.content_matches_searchable_columns
+            if record.content_matches_searchable_columns is not None
+            else True
+        ),
     )
 
 
@@ -133,6 +139,12 @@ def _apply_document(record: SourceDocumentRecord, document: SourceDocument) -> N
     )
     record.description_columns = (
         list(mapping.description_columns) if mapping is not None else []
+    )
+    record.searchable_columns = (
+        list(mapping.searchable_columns) if mapping is not None else []
+    )
+    record.content_matches_searchable_columns = (
+        document.content_matches_searchable_columns
     )
 
 
@@ -320,6 +332,14 @@ class SqlAlchemySourceDocumentRepository:
                     list(document.object_snapshot_mapping.description_columns)
                     if document.object_snapshot_mapping is not None
                     else []
+                ),
+                searchable_columns=(
+                    list(document.object_snapshot_mapping.searchable_columns)
+                    if document.object_snapshot_mapping is not None
+                    else []
+                ),
+                content_matches_searchable_columns=(
+                    document.content_matches_searchable_columns
                 ),
             )
         )

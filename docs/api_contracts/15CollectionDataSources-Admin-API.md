@@ -238,20 +238,25 @@ Source document responses include the optional semantic mapping used by
   "rowCount": 42,
   "uploadedAt": "2026-07-01T10:00:00Z",
   "indexedAt": "2026-07-01T10:00:02Z",
+  "contentMatchesSearchableColumns": true,
   "objectMapping": {
     "inventoryNumberColumn": "Inventory No",
     "displayTitleColumn": "Name",
     "displayTitleColumns": ["Name"],
     "objectNameColumn": null,
-    "descriptionColumns": ["Description", "Notes"]
+    "descriptionColumns": ["Description", "Notes"],
+    "searchableColumns": ["Inventory No", "Name", "Description"]
   }
 }
 ```
 
 New uploads must provide `objectMapping` before indexing. Existing documents may
 still have `objectMapping: null` until they are corrected. The mapping is stored
-on the source document, not on indexed rows; changing it affects the next search
-response without reindexing.
+on the source document. `searchableColumns` controls which cell values are
+concatenated into `collection_index_object.content`, so changing it rebuilds
+the document's indexed rows. `contentMatchesSearchableColumns=false` marks a
+legacy document whose persisted `content` has not yet been rebuilt under the
+named-column rule.
 
 ### `GET /admin/collection-data-sources/collections/{collectionId}/documents`
 
@@ -270,6 +275,7 @@ Uploads and synchronously indexes a spreadsheet. Content type: `multipart/form-d
 - `displayTitleColumns` (one or more columns; `displayTitleColumn` remains accepted for older clients)
 - `objectNameColumn` (empty string means fallback to display title)
 - `descriptionColumns` (JSON string list, e.g. `["Description", "Notes"]`)
+- `searchableColumns` (JSON string list; must contain at least one known column)
 
 The UI should call the columns-preview endpoint first, let the user choose the
 mapping, then call this upload endpoint. The backend validates the mapping
@@ -284,6 +290,7 @@ Idempotency by content hash:
 
 **Response `201`** — the source document. **`404 COLLECTION_NOT_FOUND`**. **`415`** — not a real
 `.xlsx`. **`422 SOURCE_DOCUMENT_MAPPING_INVALID`** — missing/unknown mapping columns.
+**`422 SOURCE_DOCUMENT_SEARCHABLE_COLUMNS_EMPTY`** — no searchable columns supplied.
 **`403`** — caller lacks scope for this collection.
 
 ### `POST /admin/collection-data-sources/collections/{collectionId}/documents/columns-preview`
@@ -311,7 +318,8 @@ reclaimed only after the delete commits.
 
 ### `POST /admin/collection-data-sources/documents/{documentId}/reindex`
 
-Re-reads the stored file and rebuilds its indexed rows (e.g. after fixing an `ERROR` status).
+Re-reads the stored file and rebuilds its indexed rows using `searchableColumns`
+(e.g. after fixing an `ERROR` status or after a legacy backfill).
 
 **Response `200`** — the updated source document. **`404 SOURCE_DOCUMENT_NOT_FOUND`** — unknown
 document or its stored file is missing. **`403`** — out of scope.
@@ -341,18 +349,22 @@ Stores the semantic column mapping used to build `objectSnapshot` on search hits
   "displayTitleColumn": "Name",
   "displayTitleColumns": ["Name", "Scientific name"],
   "objectNameColumn": null,
-  "descriptionColumns": ["Description", "Notes"]
+  "descriptionColumns": ["Description", "Notes"],
+  "searchableColumns": ["Inventory No", "Name", "Scientific name"]
 }
 ```
 
 `inventoryNumberColumn` and at least one display title column are required.
 `displayTitleColumn` is kept as the first-column compatibility field;
 new clients should send `displayTitleColumns`. `objectNameColumn` is optional
-and falls back to the composed display title at search time. All supplied
-columns must exist in the indexed column list for the document.
+and falls back to the composed display title at search time. `searchableColumns`
+must contain at least one column. All supplied columns must exist in the parsed
+column list for the document. Saving this mapping re-reads the stored file and
+rebuilds the document's indexed rows atomically with the mapping change.
 
 **Response `200`** — the updated source document. **`422 SOURCE_DOCUMENT_MAPPING_INVALID`** —
-unknown or invalid columns. **`404 SOURCE_DOCUMENT_NOT_FOUND`**. **`403`** — out of scope.
+unknown or invalid columns. **`422 SOURCE_DOCUMENT_SEARCHABLE_COLUMNS_EMPTY`** — no searchable
+columns supplied. **`404 SOURCE_DOCUMENT_NOT_FOUND`**. **`403`** — out of scope.
 
 ---
 

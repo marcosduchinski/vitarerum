@@ -41,6 +41,7 @@ export interface SourceDocument {
   readonly rowCount: number | null;
   readonly uploadedAt: string;
   readonly indexedAt: string | null;
+  readonly contentMatchesSearchableColumns: boolean;
   readonly objectMapping: SourceDocumentObjectMapping | null;
 }
 
@@ -54,6 +55,7 @@ export interface SourceDocumentObjectMapping {
   readonly displayTitleColumns?: readonly string[];
   readonly objectNameColumn: string | null;
   readonly descriptionColumns: readonly string[];
+  readonly searchableColumns: readonly string[];
 }
 
 export interface UpdateSourceDocumentObjectMappingRequest {
@@ -61,6 +63,7 @@ export interface UpdateSourceDocumentObjectMappingRequest {
   readonly displayTitleColumns: readonly string[];
   readonly objectNameColumn: string | null;
   readonly descriptionColumns: readonly string[];
+  readonly searchableColumns: readonly string[];
 }
 
 /** A permission in the CURATORIAL group, eligible to be assigned as a curator. */

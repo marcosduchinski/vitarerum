@@ -164,6 +164,7 @@ def _upload_data() -> dict[str, str]:
         "displayTitleColumn": "Name",
         "objectNameColumn": "",
         "descriptionColumns": '["Name"]',
+        "searchableColumns": '["Inventory No","Name"]',
     }
 
 
@@ -238,6 +239,7 @@ async def test_configure_source_document_object_mapping() -> None:
                 "displayTitleColumns": ["Name", "Inventory No"],
                 "objectNameColumn": None,
                 "descriptionColumns": ["Name"],
+                "searchableColumns": ["Inventory No", "Name"],
             },
         )
         assert mapping.status_code == 200, mapping.text
@@ -247,6 +249,7 @@ async def test_configure_source_document_object_mapping() -> None:
         "displayTitleColumns": ["Name", "Inventory No"],
         "objectNameColumn": None,
         "descriptionColumns": ["Name"],
+        "searchableColumns": ["Inventory No", "Name"],
     }
 
 
@@ -265,10 +268,24 @@ async def test_configure_source_document_object_mapping_rejects_unknown_column()
                 "inventoryNumberColumn": "Missing",
                 "displayTitleColumn": "Name",
                 "descriptionColumns": [],
+                "searchableColumns": ["Name"],
             },
         )
     assert response.status_code == 422
     assert response.json()["error"] == "SOURCE_DOCUMENT_MAPPING_INVALID"
+
+
+async def test_upload_rejects_empty_searchable_columns_with_specific_error() -> None:
+    data = {**_upload_data(), "searchableColumns": "[]"}
+    async with _client(_ADMIN) as (client, _):
+        response = await client.post(
+            f"/admin/collection-data-sources/collections/{_REPTILES_ID}/documents",
+            data=data,
+            files=_upload_files([["ZOO-1", "Jaguar"]]),
+        )
+
+    assert response.status_code == 422
+    assert response.json()["error"] == "SOURCE_DOCUMENT_SEARCHABLE_COLUMNS_EMPTY"
 
 
 async def test_upload_rejects_non_xlsx_content() -> None:

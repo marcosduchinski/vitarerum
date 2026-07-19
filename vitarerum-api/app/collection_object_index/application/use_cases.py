@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
+from datetime import datetime
 from uuid import uuid4
 
 from app.collection_object_index.application.authorization import (
@@ -54,6 +55,7 @@ from app.collection_object_index.domain.models import (
     SourceDocumentId,
     SourceDocumentMappingInvalid,
     SourceDocumentNotFound,
+    SourceDocumentSearchableColumnsEmpty,
 )
 from app.identity.public import Actor, GroupName, PermissionReader, PermissionView
 from app.shared.authorization import require_staff
@@ -231,10 +233,21 @@ class UploadSourceDocument:
         )
         if existing is not None:
             rows = self._parser.parse(data.content)
+            if len(rows) > MAX_INDEXED_ROWS:
+                raise InvalidSpreadsheet(
+                    f"Spreadsheet has {len(rows)} rows; "
+                    f"the limit is {MAX_INDEXED_ROWS}."
+                )
             _validate_mapping_columns(
                 data.object_mapping, set(_columns_from_rows(rows))
             )
             existing.configure_object_snapshot(data.object_mapping)
+            await _reindex_rows(
+                document=existing,
+                rows=rows,
+                index=self._index,
+                indexed_at=self._clock.now(),
+            )
             await self._documents.save(existing)
             return UploadSourceDocumentResult(
                 document=existing, created=False, replaced_file_reference=None
@@ -292,11 +305,14 @@ class UploadSourceDocument:
             _validate_mapping_columns(
                 document.object_snapshot_mapping, set(_columns_from_rows(rows))
             )
-            count = await self._index.index(document.id, document.collection_id, rows)
+            await _reindex_rows(
+                document=document,
+                rows=rows,
+                index=self._index,
+                indexed_at=self._clock.now(),
+            )
         except InvalidSpreadsheet as exc:
             document.mark_error(str(exc))
-        else:
-            document.mark_indexed(indexed_at=self._clock.now(), row_count=count)
 
 
 def _columns_from_rows(rows: list[ParsedRow]) -> list[str]:
@@ -368,7 +384,6 @@ class ReindexSourceDocument:
             await _curated_ids(caller, self._collections),
         )
         content = await self._storage.read(document.file_reference)
-        await self._index.remove_document(document.id)
         try:
             rows = self._parser.parse(content)
             if len(rows) > MAX_INDEXED_ROWS:
@@ -376,11 +391,21 @@ class ReindexSourceDocument:
                     f"Spreadsheet has {len(rows)} rows; "
                     f"the limit is {MAX_INDEXED_ROWS}."
                 )
-            count = await self._index.index(document.id, document.collection_id, rows)
+            if document.object_snapshot_mapping is None:
+                raise SourceDocumentMappingInvalid("Object mapping is required.")
+            _validate_mapping_columns(
+                document.object_snapshot_mapping,
+                set(_columns_from_rows(rows)),
+                require_searchable_columns=False,
+            )
+            await _reindex_rows(
+                document=document,
+                rows=rows,
+                index=self._index,
+                indexed_at=self._clock.now(),
+            )
         except InvalidSpreadsheet as exc:
             document.mark_error(str(exc))
-        else:
-            document.mark_indexed(indexed_at=self._clock.now(), row_count=count)
         await self._documents.save(document)
         return document
 
@@ -393,6 +418,7 @@ class UpdateSourceDocumentObjectMappingInput:
     display_title_columns: tuple[str, ...]
     object_name_column: str | None
     description_columns: tuple[str, ...]
+    searchable_columns: tuple[str, ...]
 
 
 class ListSourceDocumentColumns:
@@ -423,11 +449,17 @@ class UpdateSourceDocumentObjectMapping:
         self,
         collections: CollectionRepository,
         documents: SourceDocumentRepository,
+        storage: FileStorage,
+        parser: CollectionObjectParserPort,
         index: CollectionObjectIndexPort,
+        clock: Clock,
     ) -> None:
         self._collections = collections
         self._documents = documents
+        self._storage = storage
+        self._parser = parser
         self._index = index
+        self._clock = clock
 
     async def execute(
         self, data: UpdateSourceDocumentObjectMappingInput
@@ -445,28 +477,82 @@ class UpdateSourceDocumentObjectMapping:
             display_title_columns=data.display_title_columns,
             object_name_column=data.object_name_column,
             description_columns=data.description_columns,
+            searchable_columns=data.searchable_columns,
         )
-        columns = set(await self._index.list_columns(document.id))
+        content = await self._storage.read(document.file_reference)
+        rows = self._parser.parse(content)
+        if len(rows) > MAX_INDEXED_ROWS:
+            raise InvalidSpreadsheet(
+                f"Spreadsheet has {len(rows)} rows; the limit is {MAX_INDEXED_ROWS}."
+            )
+        columns = set(_columns_from_rows(rows))
         _validate_mapping_columns(mapping, columns)
         document.configure_object_snapshot(mapping)
+        await _reindex_rows(
+            document=document,
+            rows=rows,
+            index=self._index,
+            indexed_at=self._clock.now(),
+        )
         await self._documents.save(document)
         return document
 
 
 def _validate_mapping_columns(
-    mapping: ObjectSnapshotMapping, columns: set[str]
+    mapping: ObjectSnapshotMapping,
+    columns: set[str],
+    *,
+    require_searchable_columns: bool = True,
 ) -> None:
+    if require_searchable_columns and not mapping.searchable_columns:
+        raise SourceDocumentSearchableColumnsEmpty(
+            "searchableColumns must include at least one column."
+        )
     required = [
         mapping.inventory_number_column,
         *mapping.display_title_columns,
         *(column for column in [mapping.object_name_column] if column is not None),
         *mapping.description_columns,
+        *mapping.searchable_columns,
     ]
     missing = [column for column in required if column not in columns]
     if missing:
         raise SourceDocumentMappingInvalid(
             "Unknown source document columns: " + ", ".join(missing)
         )
+
+
+def _rows_with_searchable_content(
+    rows: list[ParsedRow], mapping: ObjectSnapshotMapping
+) -> list[ParsedRow]:
+    searchable_columns = mapping.searchable_columns or tuple(_columns_from_rows(rows))
+    return [
+        ParsedRow(
+            sheet=row.sheet,
+            row_number=row.row_number,
+            content=" ".join(
+                row.cells[column]
+                for column in searchable_columns
+                if row.cells.get(column)
+            ),
+            cells=row.cells,
+        )
+        for row in rows
+    ]
+
+
+async def _reindex_rows(
+    *,
+    document: SourceDocument,
+    rows: list[ParsedRow],
+    index: CollectionObjectIndexPort,
+    indexed_at: datetime,
+) -> None:
+    if document.object_snapshot_mapping is None:
+        raise SourceDocumentMappingInvalid("Object mapping is required.")
+    indexed_rows = _rows_with_searchable_content(rows, document.object_snapshot_mapping)
+    count = await index.index(document.id, document.collection_id, indexed_rows)
+    document.mark_indexed(indexed_at=indexed_at, row_count=count)
 
 
 class AssignCollectionCurator:

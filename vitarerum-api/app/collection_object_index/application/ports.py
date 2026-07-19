@@ -31,8 +31,8 @@ class InvalidSpreadsheet(ValueError):
 @dataclass(frozen=True, slots=True)
 class ParsedRow:
     """One spreadsheet row normalised for indexing: ``cells`` is keyed by the
-    sheet's header row; ``content`` is the row's cells concatenated for
-    full-text matching."""
+    sheet's header row; ``content`` is populated by the indexing use case from
+    the document's searchable-column mapping."""
 
     sheet: str
     row_number: int

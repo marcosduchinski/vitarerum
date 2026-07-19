@@ -145,6 +145,7 @@ export class CollectionDataSourcesPageComponent {
   protected readonly mappingTitleColumns = signal<readonly string[]>([]);
   protected readonly mappingObjectNameColumn = signal('');
   protected readonly mappingDescriptionColumns = signal<readonly string[]>([]);
+  protected readonly mappingSearchableColumns = signal<readonly string[]>([]);
   protected readonly pendingUploadCollectionId = signal<string | null>(null);
   protected readonly pendingUploadFile = signal<File | null>(null);
   protected readonly pendingUploadColumns = signal<readonly string[]>([]);
@@ -311,6 +312,7 @@ export class CollectionDataSourcesPageComponent {
       this.mappingTitleColumns.set([]);
       this.mappingObjectNameColumn.set('');
       this.mappingDescriptionColumns.set([]);
+      this.mappingSearchableColumns.set([]);
     } catch (err) {
       this.actionError.set(toApiError(err));
     } finally {
@@ -327,6 +329,7 @@ export class CollectionDataSourcesPageComponent {
   }
 
   protected async reindex(sourceDocument: SourceDocument): Promise<void> {
+    if (!this.confirmLegacySearchableReindex(sourceDocument)) return;
     await this.run(() => firstValueFrom(this.service.reindex(sourceDocument.id)));
   }
 
@@ -343,6 +346,7 @@ export class CollectionDataSourcesPageComponent {
     );
     this.mappingObjectNameColumn.set(mapping?.objectNameColumn ?? '');
     this.mappingDescriptionColumns.set(mapping?.descriptionColumns ?? []);
+    this.mappingSearchableColumns.set(mapping?.searchableColumns ?? []);
     if (this.mappingColumnsByDocument()[sourceDocument.id]) return;
     this.busy.set(true);
     this.actionError.set(null);
@@ -370,7 +374,28 @@ export class CollectionDataSourcesPageComponent {
   }
 
   protected mappingCanSave(): boolean {
-    return Boolean(this.mappingInventoryColumn() && this.mappingTitleColumns().length > 0);
+    return Boolean(
+      this.mappingInventoryColumn() &&
+        this.mappingTitleColumns().length > 0 &&
+        this.mappingSearchableColumns().length > 0,
+    );
+  }
+
+  protected searchableColumnsSummary(): string {
+    const count = this.mappingSearchableColumns().length;
+    if (count === 0) return 'No searchable columns selected';
+    if (count === 1) return '1 searchable column';
+    return `${count} searchable columns`;
+  }
+
+  protected setMappingInventoryColumn(column: string): void {
+    this.mappingInventoryColumn.set(column);
+    this.includeSearchableColumn(column);
+  }
+
+  protected setMappingObjectNameColumn(column: string): void {
+    this.mappingObjectNameColumn.set(column);
+    this.includeSearchableColumn(column);
   }
 
   protected mappingTitleColumnsLabel(): string {
@@ -391,6 +416,7 @@ export class CollectionDataSourcesPageComponent {
   protected toggleTitleColumn(column: string, checked: boolean): void {
     this.mappingTitleColumns.update((current) => {
       if (checked) {
+        this.includeSearchableColumn(column);
         return current.includes(column) ? current : [...current, column];
       }
       return current.filter((value) => value !== column);
@@ -404,6 +430,20 @@ export class CollectionDataSourcesPageComponent {
   protected toggleDescriptionColumn(column: string, checked: boolean): void {
     this.mappingDescriptionColumns.update((current) => {
       if (checked) {
+        this.includeSearchableColumn(column);
+        return current.includes(column) ? current : [...current, column];
+      }
+      return current.filter((value) => value !== column);
+    });
+  }
+
+  protected isSearchableColumnSelected(column: string): boolean {
+    return this.mappingSearchableColumns().includes(column);
+  }
+
+  protected toggleSearchableColumn(column: string, checked: boolean): void {
+    this.mappingSearchableColumns.update((current) => {
+      if (checked) {
         return current.includes(column) ? current : [...current, column];
       }
       return current.filter((value) => value !== column);
@@ -412,6 +452,7 @@ export class CollectionDataSourcesPageComponent {
 
   protected async saveMapping(sourceDocument: SourceDocument): Promise<void> {
     if (!this.mappingCanSave()) return;
+    if (!this.confirmLegacySearchableReindex(sourceDocument)) return;
     await this.run(() =>
       firstValueFrom(
         this.service.updateObjectMapping(sourceDocument.id, {
@@ -419,6 +460,7 @@ export class CollectionDataSourcesPageComponent {
           displayTitleColumns: this.mappingTitleColumns(),
           objectNameColumn: this.mappingObjectNameColumn() || null,
           descriptionColumns: this.mappingDescriptionColumns(),
+          searchableColumns: this.mappingSearchableColumns(),
         }),
       ),
     );
@@ -429,6 +471,7 @@ export class CollectionDataSourcesPageComponent {
     const file = this.pendingUploadFile();
     const collectionId = this.pendingUploadCollectionId();
     if (!file || !collectionId || !this.mappingCanSave()) return;
+    if (!this.confirmLegacyUploadReindex(collectionId)) return;
     const saved = await this.run(() =>
       firstValueFrom(
         this.service.upload(collectionId, file, {
@@ -436,10 +479,41 @@ export class CollectionDataSourcesPageComponent {
           displayTitleColumns: this.mappingTitleColumns(),
           objectNameColumn: this.mappingObjectNameColumn() || null,
           descriptionColumns: this.mappingDescriptionColumns(),
+          searchableColumns: this.mappingSearchableColumns(),
         }),
       ),
     );
     if (saved) this.cancelUploadMapping();
+  }
+
+  private includeSearchableColumn(column: string): void {
+    const normalized = column.trim();
+    if (!normalized) return;
+    this.mappingSearchableColumns.update((current) =>
+      current.includes(normalized) ? current : [...current, normalized],
+    );
+  }
+
+  private confirmLegacySearchableReindex(sourceDocument: SourceDocument): boolean {
+    if (sourceDocument.contentMatchesSearchableColumns !== false) return true;
+    return (
+      this.document.defaultView?.confirm(
+        `Reindexing "${sourceDocument.fileName}" will rebuild search using named columns only. Values outside the header range will no longer be searchable.`,
+      ) ?? false
+    );
+  }
+
+  private confirmLegacyUploadReindex(collectionId: string): boolean {
+    const hasLegacyDocument = this.documents().some(
+      (doc) =>
+        doc.collectionId === collectionId && doc.contentMatchesSearchableColumns === false,
+    );
+    if (!hasLegacyDocument) return true;
+    return (
+      this.document.defaultView?.confirm(
+        'Uploading this file may update an existing legacy document with the same content. Search will be rebuilt using named columns only, and values outside the header range will no longer be searchable.',
+      ) ?? false
+    );
   }
 
   protected formatDate(value: string | null): string {

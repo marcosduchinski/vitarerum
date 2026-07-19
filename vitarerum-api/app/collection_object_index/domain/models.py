@@ -47,12 +47,17 @@ class SourceDocumentMappingInvalid(ValueError):
     """Raised when object snapshot columns do not match indexed columns."""
 
 
+class SourceDocumentSearchableColumnsEmpty(SourceDocumentMappingInvalid):
+    """Raised when a user command submits no searchable columns."""
+
+
 @dataclass(frozen=True, slots=True)
 class ObjectSnapshotMapping:
     inventory_number_column: str
     display_title_columns: tuple[str, ...]
     object_name_column: str | None = None
     description_columns: tuple[str, ...] = ()
+    searchable_columns: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         inventory = self.inventory_number_column.strip()
@@ -65,6 +70,9 @@ class ObjectSnapshotMapping:
         descriptions = tuple(
             column.strip() for column in self.description_columns if column.strip()
         )
+        searchable = tuple(
+            column.strip() for column in self.searchable_columns if column.strip()
+        )
         if not inventory:
             raise SourceDocumentMappingInvalid("inventoryNumberColumn is required.")
         if not titles:
@@ -73,6 +81,7 @@ class ObjectSnapshotMapping:
         object.__setattr__(self, "display_title_columns", titles)
         object.__setattr__(self, "object_name_column", object_name)
         object.__setattr__(self, "description_columns", descriptions)
+        object.__setattr__(self, "searchable_columns", searchable)
 
     @property
     def display_title_column(self) -> str:
@@ -172,6 +181,7 @@ class SourceDocument:
     indexed_at: datetime | None = None
     deleted_at: datetime | None = None
     object_snapshot_mapping: ObjectSnapshotMapping | None = None
+    content_matches_searchable_columns: bool = True
 
     @property
     def is_deleted(self) -> bool:
@@ -182,6 +192,7 @@ class SourceDocument:
         self.indexed_at = indexed_at
         self.row_count = row_count
         self.error_message = None
+        self.content_matches_searchable_columns = True
 
     def mark_error(self, message: str) -> None:
         self.status = SourceDocumentStatus.ERROR

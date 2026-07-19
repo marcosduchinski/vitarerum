@@ -12,6 +12,7 @@ import {
   CollectionDataSource,
   CuratorCandidate,
   SourceDocument,
+  UpdateSourceDocumentObjectMappingRequest,
 } from '../models/collection-data-source.model';
 import { COLLECTION_DATA_SOURCE_SERVICE } from '../services/collection-data-source.service';
 import { CollectionDataSourcesPageComponent } from './collection-data-sources-page.component';
@@ -56,6 +57,7 @@ function makeDocument(overrides: Partial<SourceDocument> = {}): SourceDocument {
     rowCount: 42,
     uploadedAt: '2026-07-01T10:00:00Z',
     indexedAt: '2026-07-01T10:00:02Z',
+    contentMatchesSearchableColumns: true,
     objectMapping: null,
     ...overrides,
   };
@@ -169,12 +171,19 @@ class ServiceStub {
     return of(['Inventory No', 'Name', 'Description', 'Notes']);
   }
 
-  updateObjectMapping(documentId: string, request: unknown) {
+  updateObjectMapping(documentId: string, request: UpdateSourceDocumentObjectMappingRequest) {
     this.updateObjectMappingCalls.push([documentId, request]);
     return of(
       makeDocument({
         id: documentId,
-        objectMapping: request as SourceDocument['objectMapping'],
+        objectMapping: {
+          inventoryNumberColumn: request.inventoryNumberColumn,
+          displayTitleColumn: request.displayTitleColumns[0],
+          displayTitleColumns: request.displayTitleColumns,
+          objectNameColumn: request.objectNameColumn,
+          descriptionColumns: request.descriptionColumns,
+          searchableColumns: request.searchableColumns,
+        },
       }),
     );
   }
@@ -184,9 +193,26 @@ class ServiceStub {
     return of(['Inventory No', 'Name', 'Description', 'Notes']);
   }
 
-  upload(collectionId: string, file: File, objectMapping: SourceDocument['objectMapping']) {
+  upload(
+    collectionId: string,
+    file: File,
+    objectMapping: UpdateSourceDocumentObjectMappingRequest,
+  ) {
     this.uploadCalls.push([collectionId, file]);
-    return of(makeDocument({ id: 'doc-new', fileName: file.name, objectMapping }));
+    return of(
+      makeDocument({
+        id: 'doc-new',
+        fileName: file.name,
+        objectMapping: {
+          inventoryNumberColumn: objectMapping.inventoryNumberColumn,
+          displayTitleColumn: objectMapping.displayTitleColumns[0],
+          displayTitleColumns: objectMapping.displayTitleColumns,
+          objectNameColumn: objectMapping.objectNameColumn,
+          descriptionColumns: objectMapping.descriptionColumns,
+          searchableColumns: objectMapping.searchableColumns,
+        },
+      }),
+    );
   }
 
   remove(documentId: string) {
@@ -312,6 +338,7 @@ describe('CollectionDataSourcesPageComponent', () => {
           displayTitleColumns: ['Name', 'Description'],
           objectNameColumn: null,
           descriptionColumns: ['Description'],
+          searchableColumns: ['Inventory No', 'Name'],
         },
       }),
     ]);
@@ -364,6 +391,38 @@ describe('CollectionDataSourcesPageComponent', () => {
     expect(service.uploadCalls).toEqual([['col-zoo', file]]);
   });
 
+  it('confirms before upload can dedupe and reindex a legacy document', async () => {
+    const el = await setup(undefined, [
+      makeDocument({ contentMatchesSearchableColumns: false }),
+    ]);
+    await expand(el);
+    const file = new File(['x'], 'new.xlsx');
+    const input = el.querySelector<HTMLInputElement>('.upload input[type="file"]')!;
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    input.dispatchEvent(new Event('change'));
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const dialog = el.querySelector<HTMLElement>('[role="dialog"]')!;
+    const selects = dialog.querySelectorAll<HTMLSelectElement>('.mapping-field select');
+    selects[0].value = 'Inventory No';
+    selects[0].dispatchEvent(new Event('change'));
+    const title = Array.from(dialog.querySelectorAll<HTMLInputElement>('.mapping-combo__option input'))
+      .find((checkbox) => checkbox.nextElementSibling?.textContent?.trim() === 'Name')!;
+    title.checked = true;
+    title.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    Array.from(dialog.querySelectorAll<HTMLButtonElement>('.admin-btn'))
+      .find((button) => button.textContent?.includes('Upload and index'))!
+      .click();
+    await fixture.whenStable();
+
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(service.uploadCalls).toEqual([]);
+  });
+
   it('asks for confirmation before deleting', async () => {
     const el = await setup();
     await expand(el);
@@ -400,6 +459,22 @@ describe('CollectionDataSourcesPageComponent', () => {
       .click();
     await fixture.whenStable();
     expect(service.reindexCalls).toEqual(['doc-1']);
+  });
+
+  it('confirms before reindexing a legacy searchable-content document', async () => {
+    const el = await setup(undefined, [
+      makeDocument({ contentMatchesSearchableColumns: false }),
+    ]);
+    await expand(el);
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+
+    Array.from(el.querySelectorAll<HTMLButtonElement>('.doc-btn'))
+      .find((b) => b.textContent?.includes('Reindex'))!
+      .click();
+    await fixture.whenStable();
+
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(service.reindexCalls).toEqual([]);
   });
 
   it('configures object snapshot columns for a document', async () => {
@@ -443,6 +518,7 @@ describe('CollectionDataSourcesPageComponent', () => {
           displayTitleColumns: ['Name'],
           objectNameColumn: 'Name',
           descriptionColumns: ['Description'],
+          searchableColumns: ['Inventory No', 'Name', 'Description'],
         },
       ],
     ]);

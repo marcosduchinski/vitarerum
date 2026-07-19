@@ -79,6 +79,7 @@ from app.collection_object_index.domain.models import (
     SourceDocumentId,
     SourceDocumentMappingInvalid,
     SourceDocumentNotFound,
+    SourceDocumentSearchableColumnsEmpty,
 )
 from app.collection_object_index.presentation.dependencies import (
     CollectionRepo,
@@ -210,6 +211,7 @@ def _document_response(document: SourceDocument) -> SourceDocumentResponse:
         rowCount=document.row_count,
         uploadedAt=document.uploaded_at,
         indexedAt=document.indexed_at,
+        contentMatchesSearchableColumns=document.content_matches_searchable_columns,
         objectMapping=(
             SourceDocumentObjectMappingResponse(
                 inventoryNumberColumn=mapping.inventory_number_column,
@@ -217,6 +219,7 @@ def _document_response(document: SourceDocument) -> SourceDocumentResponse:
                 displayTitleColumns=list(mapping.display_title_columns),
                 objectNameColumn=mapping.object_name_column,
                 descriptionColumns=list(mapping.description_columns),
+                searchableColumns=list(mapping.searchable_columns),
             )
             if mapping is not None
             else None
@@ -231,6 +234,7 @@ def _mapping_from_form(
     display_title_columns_json: str | None,
     object_name_column: str | None,
     description_columns_json: str,
+    searchable_columns_json: str,
 ) -> ObjectSnapshotMapping:
     try:
         raw_description_columns = json.loads(description_columns_json)
@@ -240,6 +244,14 @@ def _mapping_from_form(
         isinstance(column, str) for column in raw_description_columns
     ):
         raise SourceDocumentMappingInvalid("descriptionColumns must be a string list.")
+    try:
+        raw_searchable_columns = json.loads(searchable_columns_json)
+    except json.JSONDecodeError as exc:
+        raise SourceDocumentMappingInvalid("searchableColumns must be JSON.") from exc
+    if not isinstance(raw_searchable_columns, list) or not all(
+        isinstance(column, str) for column in raw_searchable_columns
+    ):
+        raise SourceDocumentMappingInvalid("searchableColumns must be a string list.")
     display_title_columns: tuple[str, ...]
     if display_title_columns_json:
         try:
@@ -262,6 +274,19 @@ def _mapping_from_form(
         display_title_columns=display_title_columns,
         object_name_column=object_name_column,
         description_columns=tuple(raw_description_columns),
+        searchable_columns=tuple(raw_searchable_columns),
+    )
+
+
+def _mapping_error(exc: SourceDocumentMappingInvalid) -> HTTPException:
+    error = (
+        "SOURCE_DOCUMENT_SEARCHABLE_COLUMNS_EMPTY"
+        if isinstance(exc, SourceDocumentSearchableColumnsEmpty)
+        else "SOURCE_DOCUMENT_MAPPING_INVALID"
+    )
+    return HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        detail={"error": error, "message": str(exc)},
     )
 
 
@@ -610,6 +635,7 @@ async def upload_collection_document(
     displayTitleColumns: Annotated[str | None, Form()] = None,
     objectNameColumn: Annotated[str | None, Form(max_length=255)] = None,
     descriptionColumns: Annotated[str, Form()] = "[]",
+    searchableColumns: Annotated[str, Form()] = "[]",
 ) -> SourceDocumentResponse:
     require_staff(caller)
     content = await read_upload_capped(file)
@@ -621,6 +647,7 @@ async def upload_collection_document(
             display_title_columns_json=displayTitleColumns,
             object_name_column=objectNameColumn,
             description_columns_json=descriptionColumns,
+            searchable_columns_json=searchableColumns,
         )
         result = await UploadSourceDocument(
             collections, documents, storage, parser, index, clock
@@ -636,9 +663,11 @@ async def upload_collection_document(
     except CollectionNotFound as exc:
         raise _not_found("collection", "COLLECTION_NOT_FOUND", collection_id) from exc
     except SourceDocumentMappingInvalid as exc:
+        raise _mapping_error(exc) from exc
+    except InvalidSpreadsheet as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail={"error": "SOURCE_DOCUMENT_MAPPING_INVALID", "message": str(exc)},
+            detail={"error": "INVALID_SPREADSHEET", "message": str(exc)},
         ) from exc
     try:
         await session.commit()
@@ -735,6 +764,8 @@ async def reindex_collection_document(
         raise _not_found(
             "source document file", "SOURCE_DOCUMENT_NOT_FOUND", document_id
         ) from exc
+    except SourceDocumentMappingInvalid as exc:
+        raise _mapping_error(exc) from exc
     await session.commit()
     return _document_response(document)
 
@@ -770,13 +801,16 @@ async def update_source_document_object_mapping(
     caller: CallerPermission,
     collections: CollectionRepo,
     documents: SourceDocumentRepo,
+    storage: SourceFileStorage,
+    parser: SourceParser,
     index: ObjectIndex,
+    clock: IndexClock,
     session: DBSession,
 ) -> SourceDocumentResponse:
     require_staff(caller)
     try:
         document = await UpdateSourceDocumentObjectMapping(
-            collections, documents, index
+            collections, documents, storage, parser, index, clock
         ).execute(
             UpdateSourceDocumentObjectMappingInput(
                 caller=caller,
@@ -792,6 +826,7 @@ async def update_source_document_object_mapping(
                 ),
                 object_name_column=payload.objectNameColumn,
                 description_columns=tuple(payload.descriptionColumns),
+                searchable_columns=tuple(payload.searchableColumns),
             )
         )
     except SourceDocumentNotFound as exc:
@@ -799,9 +834,15 @@ async def update_source_document_object_mapping(
             "source document", "SOURCE_DOCUMENT_NOT_FOUND", document_id
         ) from exc
     except SourceDocumentMappingInvalid as exc:
+        raise _mapping_error(exc) from exc
+    except InvalidSpreadsheet as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail={"error": "SOURCE_DOCUMENT_MAPPING_INVALID", "message": str(exc)},
+            detail={"error": "INVALID_SPREADSHEET", "message": str(exc)},
+        ) from exc
+    except FileNotFoundError as exc:
+        raise _not_found(
+            "source document file", "SOURCE_DOCUMENT_NOT_FOUND", document_id
         ) from exc
     await session.commit()
     return _document_response(document)

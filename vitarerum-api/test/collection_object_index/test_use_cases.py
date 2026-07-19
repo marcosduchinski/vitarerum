@@ -52,11 +52,13 @@ from app.collection_object_index.domain.models import (
     CollectionNotFound,
     ObjectSnapshotMapping,
     SourceDocumentMappingInvalid,
+    SourceDocumentSearchableColumnsEmpty,
 )
 from app.collection_object_index.infrastructure.models import (
     CollectionAreaRecord,
     CollectionObjectRecord,
     CollectionRecord,
+    SourceDocumentRecord,
 )
 from app.collection_object_index.infrastructure.parser_openpyxl import (
     OpenpyxlCollectionObjectParser,
@@ -197,6 +199,7 @@ async def _upload(
     collection_id: CollectionId = _REPTILES,
     file_name: str = "zoo.xlsx",
     rows: list[list[str]] | None = None,
+    content: bytes | None = None,
 ):
     async with factory() as session:
         result = await _uploader(session, storage).execute(
@@ -204,11 +207,14 @@ async def _upload(
                 caller=caller,
                 collection_id=collection_id,
                 file_name=file_name,
-                content=_xlsx(rows if rows is not None else [["ZOO-1", "Jaguar"]]),
+                content=content
+                if content is not None
+                else _xlsx(rows if rows is not None else [["ZOO-1", "Jaguar"]]),
                 object_mapping=ObjectSnapshotMapping(
                     inventory_number_column="Inventory No",
                     display_title_columns=("Name",),
                     description_columns=("Name",),
+                    searchable_columns=("Inventory No", "Name"),
                 ),
             )
         )
@@ -235,6 +241,36 @@ async def test_upload_indexes_rows_and_marks_indexed() -> None:
     assert rows[0].collection_id == str(_REPTILES)
 
 
+async def test_upload_indexes_only_searchable_columns_in_content() -> None:
+    factory = await _session_factory()
+    storage = _FakeStorage()
+    async with factory() as session:
+        result = await _uploader(session, storage).execute(
+            UploadSourceDocumentInput(
+                caller=_ADMIN,
+                collection_id=_REPTILES,
+                file_name="zoo.xlsx",
+                content=_xlsx([["ZOO-1", "Jaguar", "internal-note"]]),
+                object_mapping=ObjectSnapshotMapping(
+                    inventory_number_column="Inventory No",
+                    display_title_columns=("Name",),
+                    searchable_columns=("Name",),
+                ),
+            )
+        )
+        await session.commit()
+
+    assert result.document.status == SourceDocumentStatus.INDEXED
+    async with factory() as session:
+        rows = await _object_rows(session)
+    assert rows[0].content == "Jaguar"
+    assert rows[0].cells == {
+        "Inventory No": "ZOO-1",
+        "Name": "Jaguar",
+        "Column 3": "internal-note",
+    }
+
+
 async def test_list_columns_and_update_object_mapping() -> None:
     factory = await _session_factory()
     storage = _FakeStorage()
@@ -250,7 +286,12 @@ async def test_list_columns_and_update_object_mapping() -> None:
         assert columns == ["Inventory No", "Name"]
 
         document = await UpdateSourceDocumentObjectMapping(
-            collections, documents, index
+            collections,
+            documents,
+            storage,
+            OpenpyxlCollectionObjectParser(),
+            index,
+            _FakeClock(),
         ).execute(
             UpdateSourceDocumentObjectMappingInput(
                 caller=_ADMIN,
@@ -259,6 +300,7 @@ async def test_list_columns_and_update_object_mapping() -> None:
                 display_title_columns=("Name",),
                 object_name_column=None,
                 description_columns=("Name",),
+                searchable_columns=("Inventory No", "Name"),
             )
         )
         await session.commit()
@@ -276,6 +318,80 @@ async def test_list_columns_and_update_object_mapping() -> None:
     assert saved.object_snapshot_mapping.display_title_column == "Name"
 
 
+async def test_update_object_mapping_reindexes_searchable_content() -> None:
+    factory = await _session_factory()
+    storage = _FakeStorage()
+    uploaded = await _upload(factory, storage, rows=[["ZOO-1", "Jaguar"]])
+
+    async with factory() as session:
+        await UpdateSourceDocumentObjectMapping(
+            SqlAlchemyCollectionRepository(session),
+            SqlAlchemySourceDocumentRepository(session),
+            storage,
+            OpenpyxlCollectionObjectParser(),
+            SqlAlchemyCollectionObjectIndex(session),
+            _FakeClock(),
+        ).execute(
+            UpdateSourceDocumentObjectMappingInput(
+                caller=_ADMIN,
+                document_id=uploaded.document.id,
+                inventory_number_column="Inventory No",
+                display_title_columns=("Name",),
+                object_name_column=None,
+                description_columns=(),
+                searchable_columns=("Name",),
+            )
+        )
+        await session.commit()
+
+    async with factory() as session:
+        rows = await _object_rows(session)
+    assert rows[0].content == "Jaguar"
+
+
+async def test_failed_update_object_mapping_preserves_mapping_and_legacy_flag() -> None:
+    factory = await _session_factory()
+    storage = _FakeStorage()
+    uploaded = await _upload(factory, storage, rows=[["ZOO-1", "Jaguar"]])
+
+    async with factory() as session:
+        record = await session.get(SourceDocumentRecord, str(uploaded.document.id))
+        assert record is not None
+        record.content_matches_searchable_columns = False
+        await session.commit()
+
+    async with factory() as session:
+        with pytest.raises(SourceDocumentMappingInvalid):
+            await UpdateSourceDocumentObjectMapping(
+                SqlAlchemyCollectionRepository(session),
+                SqlAlchemySourceDocumentRepository(session),
+                storage,
+                OpenpyxlCollectionObjectParser(),
+                SqlAlchemyCollectionObjectIndex(session),
+                _FakeClock(),
+            ).execute(
+                UpdateSourceDocumentObjectMappingInput(
+                    caller=_ADMIN,
+                    document_id=uploaded.document.id,
+                    inventory_number_column="Inventory No",
+                    display_title_columns=("Name",),
+                    object_name_column=None,
+                    description_columns=(),
+                    searchable_columns=("Missing",),
+                )
+            )
+        await session.rollback()
+
+    async with factory() as session:
+        saved = await SqlAlchemySourceDocumentRepository(session).get_by_id(
+            uploaded.document.id
+        )
+    assert saved is not None
+    assert saved.content_matches_searchable_columns is False
+    assert saved.object_snapshot_mapping is not None
+    assert saved.object_snapshot_mapping.searchable_columns == ("Inventory No", "Name")
+
+
 async def test_update_object_mapping_rejects_unknown_columns() -> None:
     factory = await _session_factory()
     storage = _FakeStorage()
@@ -286,7 +402,10 @@ async def test_update_object_mapping_rejects_unknown_columns() -> None:
             await UpdateSourceDocumentObjectMapping(
                 SqlAlchemyCollectionRepository(session),
                 SqlAlchemySourceDocumentRepository(session),
+                storage,
+                OpenpyxlCollectionObjectParser(),
                 SqlAlchemyCollectionObjectIndex(session),
+                _FakeClock(),
             ).execute(
                 UpdateSourceDocumentObjectMappingInput(
                     caller=_ADMIN,
@@ -295,6 +414,27 @@ async def test_update_object_mapping_rejects_unknown_columns() -> None:
                     display_title_columns=("Name",),
                     object_name_column=None,
                     description_columns=(),
+                    searchable_columns=("Name",),
+                )
+            )
+
+
+async def test_searchable_columns_empty_is_rejected_for_user_commands() -> None:
+    factory = await _session_factory()
+    storage = _FakeStorage()
+    async with factory() as session:
+        with pytest.raises(SourceDocumentSearchableColumnsEmpty):
+            await _uploader(session, storage).execute(
+                UploadSourceDocumentInput(
+                    caller=_ADMIN,
+                    collection_id=_REPTILES,
+                    file_name="zoo.xlsx",
+                    content=_xlsx([["ZOO-1", "Jaguar"]]),
+                    object_mapping=ObjectSnapshotMapping(
+                        inventory_number_column="Inventory No",
+                        display_title_columns=("Name",),
+                        searchable_columns=(),
+                    ),
                 )
             )
 
@@ -302,13 +442,39 @@ async def test_update_object_mapping_rejects_unknown_columns() -> None:
 async def test_identical_reupload_dedupes() -> None:
     factory = await _session_factory()
     storage = _FakeStorage()
-    first = await _upload(factory, storage)
-    second = await _upload(factory, storage)
+    content = _xlsx([["ZOO-1", "Jaguar"]])
+    first = await _upload(factory, storage, content=content)
+    second = await _upload(factory, storage, content=content)
 
     assert second.created is False
     assert second.document.id == first.document.id
     async with factory() as session:
         assert len(await _object_rows(session)) == 1
+
+
+async def test_deduped_reupload_reindexes_and_marks_legacy_flag_true() -> None:
+    factory = await _session_factory()
+    storage = _FakeStorage()
+    content = _xlsx([["ZOO-1", "Jaguar"]])
+    first = await _upload(factory, storage, content=content)
+
+    async with factory() as session:
+        record = await session.get(SourceDocumentRecord, str(first.document.id))
+        assert record is not None
+        record.content_matches_searchable_columns = False
+        await session.commit()
+
+    second = await _upload(factory, storage, content=content)
+
+    assert second.created is False
+    assert second.document.id == first.document.id
+    assert second.document.content_matches_searchable_columns is True
+    async with factory() as session:
+        saved = await SqlAlchemySourceDocumentRepository(session).get_by_id(
+            first.document.id
+        )
+    assert saved is not None
+    assert saved.content_matches_searchable_columns is True
 
 
 async def test_new_version_replaces_previous_source_and_rows() -> None:
@@ -376,6 +542,37 @@ async def test_reindex_rebuilds_rows_from_stored_file() -> None:
     assert document.row_count == 1
     async with factory() as session:
         assert len(await _object_rows(session)) == 1
+
+
+async def test_reindex_success_marks_legacy_flag_true() -> None:
+    factory = await _session_factory()
+    storage = _FakeStorage()
+    uploaded = await _upload(factory, storage, rows=[["ZOO-1", "Jaguar"]])
+
+    async with factory() as session:
+        record = await session.get(SourceDocumentRecord, str(uploaded.document.id))
+        assert record is not None
+        record.content_matches_searchable_columns = False
+        await session.commit()
+
+    async with factory() as session:
+        document = await ReindexSourceDocument(
+            SqlAlchemyCollectionRepository(session),
+            SqlAlchemySourceDocumentRepository(session),
+            storage,
+            OpenpyxlCollectionObjectParser(),
+            SqlAlchemyCollectionObjectIndex(session),
+            _FakeClock(),
+        ).execute(_ADMIN, uploaded.document.id)
+        await session.commit()
+
+    assert document.content_matches_searchable_columns is True
+    async with factory() as session:
+        saved = await SqlAlchemySourceDocumentRepository(session).get_by_id(
+            uploaded.document.id
+        )
+    assert saved is not None
+    assert saved.content_matches_searchable_columns is True
 
 
 async def test_curator_cannot_manage_unassigned_collection() -> None:
@@ -493,7 +690,34 @@ async def test_error_status_when_stored_file_is_not_a_spreadsheet() -> None:
     assert document.error_message is not None
     async with factory() as session:
         count = await session.scalar(select(func.count(CollectionObjectRecord.id)))
-    assert count == 0
+    assert count == 1
+
+
+async def test_failed_reindex_preserves_legacy_flag() -> None:
+    factory = await _session_factory()
+    storage = _FakeStorage()
+    uploaded = await _upload(factory, storage)
+    storage.saved[uploaded.document.file_reference] = b"corrupted"
+
+    async with factory() as session:
+        record = await session.get(SourceDocumentRecord, str(uploaded.document.id))
+        assert record is not None
+        record.content_matches_searchable_columns = False
+        await session.commit()
+
+    async with factory() as session:
+        document = await ReindexSourceDocument(
+            SqlAlchemyCollectionRepository(session),
+            SqlAlchemySourceDocumentRepository(session),
+            storage,
+            OpenpyxlCollectionObjectParser(),
+            SqlAlchemyCollectionObjectIndex(session),
+            _FakeClock(),
+        ).execute(_ADMIN, uploaded.document.id)
+        await session.commit()
+
+    assert document.status == SourceDocumentStatus.ERROR
+    assert document.content_matches_searchable_columns is False
 
 
 # ── Collection catalog admin (SYS_ADMIN only) ───────────────────────────────

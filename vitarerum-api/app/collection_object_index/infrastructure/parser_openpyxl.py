@@ -80,13 +80,11 @@ class OpenpyxlCollectionObjectParser:
                         for header, value in zip(headers, values, strict=False)
                         if value
                     }
-                    # Cells beyond the header width still count for full-text.
-                    content_text = " ".join(value for value in values if value)
                     rows.append(
                         ParsedRow(
                             sheet=sheet.title,
                             row_number=row_number,
-                            content=content_text,
+                            content="",
                             cells=cells,
                         )
                     )

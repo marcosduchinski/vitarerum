@@ -362,6 +362,11 @@
                                   {{ doc.objectMapping.inventoryNumberColumn }} /
                                   {{ displayTitleColumnsText(doc.objectMapping) }}
                                 </p>
+                                <p class="documents__mapping documents__mapping--searchable">
+                                  <span class="pi pi-search" aria-hidden="true"></span>
+                                  {{ doc.objectMapping.searchableColumns.length }}
+                                  {{ doc.objectMapping.searchableColumns.length === 1 ? 'search column' : 'search columns' }}
+                                </p>
                               } @else {
                                 <span class="badge badge--muted">
                                   <span class="pi pi-info-circle" aria-hidden="true"></span>
@@ -424,7 +429,7 @@
                                       <select
                                         [value]="mappingInventoryColumn()"
                                         [disabled]="busy()"
-                                        (change)="mappingInventoryColumn.set($any($event.target).value)"
+                                        (change)="setMappingInventoryColumn($any($event.target).value)"
                                       >
                                         <option value="">Select column…</option>
                                         @for (column of mappingColumns(doc); track column) {
@@ -465,7 +470,7 @@
                                       <select
                                         [value]="mappingObjectNameColumn()"
                                         [disabled]="busy()"
-                                        (change)="mappingObjectNameColumn.set($any($event.target).value)"
+                                        (change)="setMappingObjectNameColumn($any($event.target).value)"
                                       >
                                         <option value="">Use display title</option>
                                         @for (column of mappingColumns(doc); track column) {
@@ -494,6 +499,36 @@
                                       }
                                     </div>
                                   </fieldset>
+
+                                  <fieldset class="mapping-descriptions mapping-descriptions--searchable">
+                                    <legend>
+                                      Searchable columns
+                                      <span>{{ searchableColumnsSummary() }}</span>
+                                    </legend>
+                                    <div class="mapping-descriptions__list">
+                                      @for (column of mappingColumns(doc); track column) {
+                                        <label
+                                          class="mapping-descriptions__option"
+                                          [class.mapping-descriptions__option--checked]="isSearchableColumnSelected(column)"
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            [checked]="isSearchableColumnSelected(column)"
+                                            [disabled]="busy()"
+                                            (change)="toggleSearchableColumn(column, $any($event.target).checked)"
+                                          />
+                                          <span>{{ column }}</span>
+                                        </label>
+                                      }
+                                    </div>
+                                  </fieldset>
+
+                                  @if (doc.contentMatchesSearchableColumns === false) {
+                                    <p class="mapping-panel__warning">
+                                      <span class="pi pi-exclamation-triangle" aria-hidden="true"></span>
+                                      Reindexing this legacy file will rebuild search using named columns only.
+                                    </p>
+                                  }
 
                                   <div class="mapping-panel__actions">
                                     <button
@@ -640,7 +675,7 @@
                 <select
                   [value]="mappingInventoryColumn()"
                   [disabled]="busy()"
-                  (change)="mappingInventoryColumn.set($any($event.target).value)"
+                  (change)="setMappingInventoryColumn($any($event.target).value)"
                 >
                   <option value="">Select column…</option>
                   @for (column of pendingUploadColumns(); track column) {
@@ -681,7 +716,7 @@
                 <select
                   [value]="mappingObjectNameColumn()"
                   [disabled]="busy()"
-                  (change)="mappingObjectNameColumn.set($any($event.target).value)"
+                  (change)="setMappingObjectNameColumn($any($event.target).value)"
                 >
                   <option value="">Use display title</option>
                   @for (column of pendingUploadColumns(); track column) {
@@ -704,6 +739,29 @@
                       [checked]="isDescriptionColumnSelected(column)"
                       [disabled]="busy()"
                       (change)="toggleDescriptionColumn(column, $any($event.target).checked)"
+                    />
+                    <span>{{ column }}</span>
+                  </label>
+                }
+              </div>
+            </fieldset>
+
+            <fieldset class="mapping-descriptions mapping-descriptions--searchable">
+              <legend>
+                Searchable columns
+                <span>{{ searchableColumnsSummary() }}</span>
+              </legend>
+              <div class="mapping-descriptions__list">
+                @for (column of pendingUploadColumns(); track column) {
+                  <label
+                    class="mapping-descriptions__option"
+                    [class.mapping-descriptions__option--checked]="isSearchableColumnSelected(column)"
+                  >
+                    <input
+                      type="checkbox"
+                      [checked]="isSearchableColumnSelected(column)"
+                      [disabled]="busy()"
+                      (change)="toggleSearchableColumn(column, $any($event.target).checked)"
                     />
                     <span>{{ column }}</span>
                   </label>

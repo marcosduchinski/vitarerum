@@ -39,7 +39,7 @@ def test_header_becomes_cell_keys_and_rows_keep_coordinates() -> None:
         "Taxon": "Panthera onca",
         "Collected": "1998-05-04",
     }
-    assert "Panthera onca" in first.content
+    assert first.content == ""
     # Empty cell is omitted from cells but the row still indexes.
     assert rows[1].cells == {"Inventory No": "ZOO-002", "Taxon": "Ara ararauna"}
 

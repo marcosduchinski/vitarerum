@@ -108,6 +108,7 @@ export class CollectionDataSourceService implements CollectionDataSourceApi {
       displayTitleColumns: [...request.displayTitleColumns],
       objectNameColumn: request.objectNameColumn,
       descriptionColumns: [...request.descriptionColumns],
+      searchableColumns: [...request.searchableColumns],
     });
   }
 
@@ -122,6 +123,7 @@ export class CollectionDataSourceService implements CollectionDataSourceApi {
     form.append('displayTitleColumns', JSON.stringify(objectMapping.displayTitleColumns));
     form.append('objectNameColumn', objectMapping.objectNameColumn ?? '');
     form.append('descriptionColumns', JSON.stringify(objectMapping.descriptionColumns));
+    form.append('searchableColumns', JSON.stringify(objectMapping.searchableColumns));
     return this.http.post<SourceDocument>(this.url(`/collections/${collectionId}/documents`), form);
   }
 

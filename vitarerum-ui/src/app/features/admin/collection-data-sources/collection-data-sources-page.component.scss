@@ -503,7 +503,6 @@
   margin: 0.3rem 0 0;
   color: var(--color-subtle);
   font-size: 0.76rem;
-  font-variant-numeric: tabular-nums;
 }
 
 .documents__actions {
@@ -679,7 +678,6 @@
   overflow: auto;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
   padding: 0.45rem;
   border: 1px solid var(--color-line-strong);
   border-radius: var(--radius-sm);
@@ -714,9 +712,13 @@
 
   legend {
     padding: 0 0.3rem;
+    display: flex;
+    align-items: baseline;
+    gap: 0.45rem;
     font-size: 0.78rem;
     font-weight: 700;
     color: var(--color-subtle);
+
   }
 }
 

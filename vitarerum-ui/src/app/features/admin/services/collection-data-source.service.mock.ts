@@ -50,6 +50,7 @@ export class CollectionDataSourceServiceMock implements CollectionDataSourceApi 
           rowCount: 412,
           uploadedAt: '2026-06-20T10:00:00Z',
           indexedAt: '2026-06-20T10:00:03Z',
+          contentMatchesSearchableColumns: true,
           objectMapping: null,
         },
       ],
@@ -176,12 +177,14 @@ export class CollectionDataSourceServiceMock implements CollectionDataSourceApi 
       rowCount: 42,
       uploadedAt: new Date().toISOString(),
       indexedAt: new Date().toISOString(),
+      contentMatchesSearchableColumns: true,
       objectMapping: {
         inventoryNumberColumn: objectMapping.inventoryNumberColumn,
         displayTitleColumn: objectMapping.displayTitleColumns[0],
         displayTitleColumns: [...objectMapping.displayTitleColumns],
         objectNameColumn: objectMapping.objectNameColumn,
         descriptionColumns: [...objectMapping.descriptionColumns],
+        searchableColumns: [...objectMapping.searchableColumns],
       },
     };
     this.documents.set(collectionId, [document, ...(this.documents.get(collectionId) ?? [])]);
@@ -209,7 +212,9 @@ export class CollectionDataSourceServiceMock implements CollectionDataSourceApi 
           displayTitleColumns: [...request.displayTitleColumns],
           objectNameColumn: request.objectNameColumn,
           descriptionColumns: [...request.descriptionColumns],
+          searchableColumns: [...request.searchableColumns],
         },
+        contentMatchesSearchableColumns: true,
       };
       this.documents.set(
         collectionId,
@@ -237,7 +242,13 @@ export class CollectionDataSourceServiceMock implements CollectionDataSourceApi 
   reindex(documentId: string): Observable<SourceDocument> {
     for (const docs of this.documents.values()) {
       const found = docs.find((d) => d.id === documentId);
-      if (found) return of({ ...found, indexedAt: new Date().toISOString() }).pipe(delay(300));
+      if (found) {
+        return of({
+          ...found,
+          indexedAt: new Date().toISOString(),
+          contentMatchesSearchableColumns: true,
+        }).pipe(delay(300));
+      }
     }
     return throwError(() => ({ status: 404, error: { message: 'Not found' } }));
   }

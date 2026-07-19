@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -87,6 +87,10 @@ class SourceDocumentRecord(Base):
     display_title_columns: Mapped[list[str]] = mapped_column(JSON, default=list)
     object_name_column: Mapped[str | None] = mapped_column(String(255), nullable=True)
     description_columns: Mapped[list[str]] = mapped_column(JSON, default=list)
+    searchable_columns: Mapped[list[str]] = mapped_column(JSON, default=list)
+    content_matches_searchable_columns: Mapped[bool] = mapped_column(
+        Boolean, default=True
+    )
 
 
 class CollectionObjectRecord(Base):
