@@ -102,6 +102,7 @@ from app.collection_object_index.presentation.schemas import (
     ObjectSearchSnapshotResponse,
     SearchableCollectionResponse,
     SearchHitResponse,
+    SearchMatchReasonResponse,
     SearchResultResponse,
     SourceDocumentColumnsResponse,
     SourceDocumentObjectMappingResponse,
@@ -931,6 +932,14 @@ def _search_hit_response(hit: SearchHit) -> SearchHitResponse:
             if snapshot is not None
             else None
         ),
+        matchReasons=[
+            SearchMatchReasonResponse(
+                method=reason.method,
+                label=reason.label,
+                columns=list(reason.columns),
+            )
+            for reason in hit.match_reasons
+        ],
     )
 
 
@@ -940,9 +949,18 @@ def _search_hit_response(hit: SearchHit) -> SearchHitResponse:
 async def list_searchable_collections(
     caller: CallerPermission,
     collections: CollectionRepo,
+    index: ObjectIndex,
 ) -> list[SearchableCollectionResponse]:
-    results = await ListSearchableCollections(collections).execute(caller)
-    return [SearchableCollectionResponse(id=c.id, name=c.name) for c in results]
+    results = await ListSearchableCollections(collections, index).execute(caller)
+    return [
+        SearchableCollectionResponse(
+            id=c.id,
+            name=c.name,
+            searchableColumns=list(c.searchable_columns),
+            searchableColumnsTotal=c.searchable_columns_total,
+        )
+        for c in results
+    ]
 
 
 @object_search_router.get("/search", response_model=SearchResultResponse)

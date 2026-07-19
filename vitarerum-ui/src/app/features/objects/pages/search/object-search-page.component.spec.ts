@@ -31,6 +31,7 @@ function makeResult(overrides: Partial<ObjectSearchResult> = {}): ObjectSearchRe
           briefDescriptionSnapshot: 'found near the river',
           category: 'Zoology',
         },
+        matchReasons: [{ method: 'exact', label: 'Exact', columns: ['Name'] }],
       },
     ],
     ...overrides,
@@ -40,8 +41,13 @@ function makeResult(overrides: Partial<ObjectSearchResult> = {}): ObjectSearchRe
 class ServiceStub {
   result: ObjectSearchResult = makeResult();
   collections: SearchableCollection[] = [
-    { id: 'col-zoo', name: 'Zoology' },
-    { id: 'col-bot', name: 'Botany' },
+    {
+      id: 'col-zoo',
+      name: 'Zoology',
+      searchableColumns: ['Inventory No', 'Name', 'Locality', 'Taxon', 'Collector'],
+      searchableColumnsTotal: 5,
+    },
+    { id: 'col-bot', name: 'Botany', searchableColumns: ['Sample', 'Name'] },
   ];
   readonly searchCalls: ObjectSearchQuery[] = [];
 
@@ -89,6 +95,17 @@ describe('ObjectSearchPageComponent', () => {
     expect(el.textContent).toContain('Search for an object');
   });
 
+  it('explains the automatic search methods without exposing semantic search as active', async () => {
+    const el = await setup();
+    const explainer = el.querySelector<HTMLDetailsElement>('.search-explainer')!;
+    expect(explainer.open).toBe(false);
+    expect(explainer.textContent).toContain('How search works');
+    expect(explainer.textContent).toContain('Exact');
+    expect(explainer.textContent).toContain('Text');
+    expect(explainer.textContent).toContain('Approximate');
+    expect(explainer.textContent).toContain('Semantic search is not enabled yet');
+  });
+
   it('renders results with the sanitised highlight after a search', async () => {
     const el = await setup();
     await typeAndSearch(el, 'jaguar');
@@ -102,8 +119,25 @@ describe('ObjectSearchPageComponent', () => {
     expect(el.querySelector('.result__snapshot')?.textContent).toContain('Jaguar');
     expect(el.querySelector('.result__description')?.textContent).toContain('found near the river');
     expect(el.textContent).toContain('ZOO-1');
+    expect(el.textContent).toContain('1-1 of 1 objects for "jaguar"');
+    expect(el.textContent).toContain('Automatic search: exact, text, approximate');
+    expect(el.querySelector('.result__match-badge')?.textContent).toContain(
+      'Matched by Exact - Name',
+    );
     expect(el.querySelector('.result__cells')).toBeNull();
     expect(el.textContent).not.toContain('Do not render');
+  });
+
+  it('falls back when a result has no match reasons', async () => {
+    const el = await setup();
+    service.result = makeResult({
+      items: [{ ...makeResult().items[0], matchReasons: undefined }],
+    });
+    await typeAndSearch(el, 'jaguar');
+
+    expect(el.querySelector('.result__match-badge')?.textContent).toContain(
+      'Matched by automatic search',
+    );
   });
 
   it('shows when a result has no proposal object snapshot', async () => {
@@ -150,6 +184,7 @@ describe('ObjectSearchPageComponent', () => {
     await typeAndSearch(el, 'quercus');
 
     expect(service.searchCalls.at(-1)?.collectionId).toBe('col-bot');
+    expect(el.textContent).toContain('Searching Botany: Sample, Name.');
   });
 
   it('does not search on an empty query', async () => {

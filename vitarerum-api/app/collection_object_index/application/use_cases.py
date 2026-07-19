@@ -34,6 +34,7 @@ from app.collection_object_index.application.ports import (
     FileStorage,
     InvalidSpreadsheet,
     ParsedRow,
+    SearchableColumnScope,
     SourceDocumentRepository,
 )
 from app.collection_object_index.application.read_models import (
@@ -846,15 +847,49 @@ class RemoveCollectionArea:
 # above governs who may *change* the index, not who may search it.
 
 
+@dataclass(frozen=True, slots=True)
+class SearchableCollectionView:
+    id: CollectionId
+    name: str
+    searchable_columns: tuple[str, ...]
+    searchable_columns_total: int
+
+
+_EMPTY_SCOPE = SearchableColumnScope(
+    collection_id=CollectionId(""),
+    searchable_columns=(),
+    searchable_columns_total=0,
+)
+
+
 class ListSearchableCollections:
     """The collection catalogue, for the search screen's facet."""
 
-    def __init__(self, collections: CollectionRepository) -> None:
+    def __init__(
+        self, collections: CollectionRepository, index: CollectionObjectIndexPort
+    ) -> None:
         self._collections = collections
+        self._index = index
 
-    async def execute(self, caller: Actor) -> list[Collection]:
+    async def execute(self, caller: Actor) -> list[SearchableCollectionView]:
         require_staff(caller)
-        return await self._collections.list_all()
+        collections = await self._collections.list_all()
+        scopes = await self._index.list_searchable_collection_scopes(
+            [collection.id for collection in collections], limit=12
+        )
+        return [
+            SearchableCollectionView(
+                id=collection.id,
+                name=collection.name,
+                searchable_columns=scopes.get(
+                    collection.id, _EMPTY_SCOPE
+                ).searchable_columns,
+                searchable_columns_total=scopes.get(
+                    collection.id, _EMPTY_SCOPE
+                ).searchable_columns_total,
+            )
+            for collection in collections
+        ]
 
 
 class SearchCollectionObjects:

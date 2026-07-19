@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import delete, func, select, text
+from sqlalchemy import bindparam, delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.collection_object_index.application.ports import (
@@ -14,7 +14,9 @@ from app.collection_object_index.application.ports import (
     CollectionObjectSearchResult,
     ObjectSnapshot,
     ParsedRow,
+    SearchableColumnScope,
     SearchHit,
+    SearchMatchReason,
 )
 from app.collection_object_index.domain.enums import (
     SourceDocumentStatus,
@@ -451,6 +453,7 @@ _SEARCH_SELECT_SQL = text(
         sd.display_title_columns,
         sd.object_name_column,
         sd.description_columns,
+        sd.searchable_columns,
         co.sheet,
         co.row_number,
         co.cells,
@@ -458,6 +461,9 @@ _SEARCH_SELECT_SQL = text(
             'simple', co.content, plainto_tsquery('simple', :q),
             'MaxFragments=1, MaxWords=20, MinWords=5'
         ) AS highlight,
+        co.tsv @@ plainto_tsquery('simple', :q) AS matched_text,
+        co.content ILIKE '%' || :q || '%' AS matched_substring,
+        word_similarity(:q, co.content) > :threshold AS matched_approximate,
         -- Provisional ranking: ts_rank (~0.0x) and word_similarity (0..1) have
         -- different scales; summed as a starting point, to be calibrated with
         -- real data rather than tuned with made-up weights now.
@@ -481,6 +487,63 @@ _SEARCH_COUNT_SQL = text(
     WHERE {_SEARCH_MATCH_SQL}
     """
 )
+
+_SEARCHABLE_COLLECTION_SCOPES_SQL = text(
+    """
+    WITH source_columns AS (
+        SELECT
+            sd.id AS source_document_id,
+            sd.collection_id,
+            CASE
+                WHEN jsonb_array_length(
+                    COALESCE(sd.searchable_columns::jsonb, '[]'::jsonb)
+                ) > 0
+                    THEN sd.searchable_columns::jsonb
+                ELSE COALESCE(
+                    (
+                        SELECT jsonb_agg(
+                            DISTINCT cell_key.column_name
+                            ORDER BY cell_key.column_name
+                        )
+                        FROM collection_index_object co
+                        CROSS JOIN LATERAL jsonb_object_keys(co.cells)
+                            AS cell_key(column_name)
+                        WHERE co.source_document_id = sd.id
+                    ),
+                    '[]'::jsonb
+                )
+            END AS columns
+        FROM collection_index_source_document sd
+        WHERE sd.deleted_at IS NULL
+          AND sd.collection_id IN :collection_ids
+    ),
+    distinct_columns AS (
+        SELECT source_columns.collection_id, searchable_column.column_name
+        FROM source_columns
+        CROSS JOIN LATERAL jsonb_array_elements_text(source_columns.columns)
+            AS searchable_column(column_name)
+        GROUP BY source_columns.collection_id, searchable_column.column_name
+    ),
+    ranked AS (
+        SELECT
+            collection_id,
+            column_name,
+            row_number() OVER (
+                PARTITION BY collection_id
+                ORDER BY lower(column_name), column_name
+            ) AS row_number,
+            count(*) OVER (PARTITION BY collection_id) AS total
+        FROM distinct_columns
+    )
+    SELECT
+        collection_id,
+        array_agg(column_name ORDER BY row_number)
+            FILTER (WHERE row_number <= :limit) AS searchable_columns,
+        max(total) AS searchable_columns_total
+    FROM ranked
+    GROUP BY collection_id
+    """
+).bindparams(bindparam("collection_ids", expanding=True))
 
 
 class SqlAlchemyCollectionObjectIndex:
@@ -538,6 +601,30 @@ class SqlAlchemyCollectionObjectIndex:
             columns.update(str(key) for key in cells.keys())
         return sorted(columns, key=str.casefold)
 
+    async def list_searchable_collection_scopes(
+        self, collection_ids: Sequence[CollectionId], limit: int
+    ) -> dict[CollectionId, SearchableColumnScope]:
+        if not collection_ids:
+            return {}
+        result = await self._session.execute(
+            _SEARCHABLE_COLLECTION_SCOPES_SQL,
+            {
+                "collection_ids": [
+                    str(collection_id) for collection_id in collection_ids
+                ],
+                "limit": limit,
+            },
+        )
+        scopes: dict[CollectionId, SearchableColumnScope] = {}
+        for row in result:
+            collection_id = CollectionId(row.collection_id)
+            scopes[collection_id] = SearchableColumnScope(
+                collection_id=collection_id,
+                searchable_columns=tuple(row.searchable_columns or ()),
+                searchable_columns_total=row.searchable_columns_total or 0,
+            )
+        return scopes
+
     async def search(
         self, query: CollectionObjectSearchQuery
     ) -> CollectionObjectSearchResult:
@@ -561,6 +648,7 @@ class SqlAlchemyCollectionObjectIndex:
                 cells=row.cells,
                 highlight=row.highlight,
                 object_snapshot=_object_snapshot_from_row(row),
+                match_reasons=_match_reasons_from_row(row, query.q),
             )
             for row in rows
         ]
@@ -571,6 +659,82 @@ def _cell(cells: dict[str, str], column: str | None) -> str:
     if column is None:
         return ""
     return str(cells.get(column, "")).strip()
+
+
+_MATCH_LABELS = {
+    "exact": "Exact",
+    "substring": "Contains phrase",
+    "text": "Text match",
+    "approximate": "Approximate",
+}
+
+
+def _normalise_match_text(value: str) -> str:
+    return " ".join(value.strip().casefold().split())
+
+
+def _effective_searchable_columns(row: Any) -> tuple[str, ...]:
+    cells = row.cells or {}
+    searchable_columns = tuple(row.searchable_columns or ())
+    if searchable_columns:
+        return searchable_columns
+    return tuple(str(column) for column in cells.keys())
+
+
+def _columns_matching_exact(row: Any, query: str) -> tuple[str, ...]:
+    q = _normalise_match_text(query)
+    if not q:
+        return ()
+    cells = row.cells or {}
+    return tuple(
+        column
+        for column in _effective_searchable_columns(row)
+        if _normalise_match_text(str(cells.get(column, ""))) == q
+    )
+
+
+def _columns_matching_substring(row: Any, query: str) -> tuple[str, ...]:
+    q = _normalise_match_text(query)
+    if not q:
+        return ()
+    cells = row.cells or {}
+    return tuple(
+        column
+        for column in _effective_searchable_columns(row)
+        if q in _normalise_match_text(str(cells.get(column, "")))
+    )
+
+
+def _match_reasons_from_row(row: Any, query: str) -> tuple[SearchMatchReason, ...]:
+    exact_columns = _columns_matching_exact(row, query)
+    if exact_columns:
+        return (
+            SearchMatchReason(
+                method="exact", label=_MATCH_LABELS["exact"], columns=exact_columns
+            ),
+        )
+
+    substring_columns = _columns_matching_substring(row, query)
+    if bool(row.matched_substring):
+        return (
+            SearchMatchReason(
+                method="substring",
+                label=_MATCH_LABELS["substring"],
+                columns=substring_columns,
+            ),
+        )
+
+    if bool(row.matched_text):
+        return (SearchMatchReason(method="text", label=_MATCH_LABELS["text"]),)
+
+    if bool(row.matched_approximate):
+        return (
+            SearchMatchReason(
+                method="approximate", label=_MATCH_LABELS["approximate"]
+            ),
+        )
+
+    return ()
 
 
 def _object_snapshot_from_row(row: Any) -> ObjectSnapshot | None:

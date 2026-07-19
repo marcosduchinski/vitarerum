@@ -368,6 +368,76 @@ columns supplied. **`404 SOURCE_DOCUMENT_NOT_FOUND`**. **`403`** — out of scop
 
 ---
 
+## Objects search read side
+
+### `GET /objects/search/collections`
+
+Lists searchable collections for the search facet, with a compact summary of
+the columns that can be searched.
+
+```json
+[
+  {
+    "id": "col-zoo",
+    "name": "Zoology",
+    "searchableColumns": ["Inventory No", "Name", "Locality"],
+    "searchableColumnsTotal": 3
+  }
+]
+```
+
+For legacy documents where `searchableColumns` is empty, the backend treats the
+indexed row's `cells` keys as the effective searchable column set. The response
+may truncate `searchableColumns`; `searchableColumnsTotal` reports the full
+distinct count.
+
+### `GET /objects/search`
+
+Each search hit includes `matchReasons`, a compact explanation of why the row
+was included. The MVP returns at most one reason, chosen by priority:
+`exact > substring > text > approximate`.
+
+```json
+{
+  "total": 1,
+  "page": 0,
+  "size": 20,
+  "items": [
+    {
+      "collectionId": "col-zoo",
+      "collectionName": "Zoology",
+      "sourceDocumentId": "doc-1",
+      "fileName": "zoology.xlsx",
+      "sheet": "Objects",
+      "rowNumber": 2,
+      "cells": { "Inventory No": "ZOO-1", "Name": "Jaguar" },
+      "highlight": "...<b>Jaguar</b>...",
+      "objectSnapshot": {
+        "inventoryNumber": "ZOO-1",
+        "displayTitle": "Jaguar",
+        "objectName": "Jaguar",
+        "briefDescriptionSnapshot": null,
+        "category": "Zoology"
+      },
+      "matchReasons": [
+        {
+          "method": "exact",
+          "label": "Exact",
+          "columns": ["Name"]
+        }
+      ]
+    }
+  ]
+}
+```
+
+`method` is one of `exact`, `substring`, `text`, or `approximate`. `semantic`
+is intentionally not returned while semantic search is not implemented.
+`columns` can be empty when the method is known but the specific source column
+cannot be attributed reliably.
+
+---
+
 ## Notes
 
 - Object search (`/objects/search`, `/objects/search/collections`) is a separate, broadly

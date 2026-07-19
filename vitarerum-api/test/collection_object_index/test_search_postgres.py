@@ -136,6 +136,13 @@ class _Seed:
             record.deleted_at = _NOW
             await session.commit()
 
+    async def set_searchable_columns(self, columns: list[str]) -> None:
+        async with self._factory() as session:
+            record = await session.get(SourceDocumentRecord, self.document_id)
+            assert record is not None
+            record.searchable_columns = columns
+            await session.commit()
+
     async def __aexit__(self, *exc_info: object) -> None:
         async with self._factory() as session:
             await session.execute(
@@ -207,6 +214,70 @@ async def test_search_matches_full_text() -> None:
             assert result.items[0].object_snapshot.category == expected_name
 
 
+async def test_search_match_reason_prioritises_exact_for_legacy_columns() -> None:
+    async with _live_session_factory() as factory:
+        async with _Seed(factory) as seed:
+            await seed.add_rows(
+                [
+                    (
+                        "Objects",
+                        2,
+                        "ZOO-1 Jaguar found near the river",
+                        {
+                            "Inventory No": "ZOO-1",
+                            "Name": "Jaguar",
+                            "Notes": "found near the river",
+                        },
+                    )
+                ]
+            )
+            async with factory() as session:
+                result = await SqlAlchemyCollectionObjectIndex(session).search(
+                    CollectionObjectSearchQuery(
+                        q="jaguar",
+                        collection_id=CollectionId(seed.collection_id),
+                        page=0,
+                        size=20,
+                    )
+            )
+            assert result.total == 1
+            assert len(result.items[0].match_reasons) == 1
+            reason = result.items[0].match_reasons[0]
+            assert reason.method == "exact"
+            assert reason.label == "Exact"
+            assert reason.columns == ("Name",)
+
+
+async def test_search_match_reason_uses_substring_before_text() -> None:
+    async with _live_session_factory() as factory:
+        async with _Seed(factory) as seed:
+            await seed.add_rows(
+                [
+                    (
+                        "Objects",
+                        2,
+                        "ZOO-1 blue mineral sample",
+                        {"Inventory No": "ZOO-1", "Name": "blue mineral sample"},
+                    )
+                ]
+            )
+            async with factory() as session:
+                result = await SqlAlchemyCollectionObjectIndex(session).search(
+                    CollectionObjectSearchQuery(
+                        q="mineral",
+                        collection_id=CollectionId(seed.collection_id),
+                        page=0,
+                        size=20,
+                    )
+                )
+            assert result.total == 1
+            assert len(result.items[0].match_reasons) == 1
+            reason = result.items[0].match_reasons[0]
+            assert reason.method == "substring"
+            assert reason.label == "Contains phrase"
+            assert reason.columns == ("Name",)
+
+
 async def test_search_matches_hyphenated_code_partially() -> None:
     """'abc123' must find a row whose code is stored as 'ABC-123' — the
     reason word_similarity, not a plain ILIKE substring, backs the match.
@@ -234,6 +305,82 @@ async def test_search_matches_hyphenated_code_partially() -> None:
                     )
                 )
             assert {"Code": "ABC-123"} in [item.cells for item in result.items]
+            seeded = next(
+                item for item in result.items if item.cells == {"Code": "ABC-123"}
+            )
+            assert len(seeded.match_reasons) == 1
+            reason = seeded.match_reasons[0]
+            assert reason.method == "approximate"
+            assert reason.label == "Approximate"
+            assert reason.columns == ()
+
+
+async def test_match_reason_columns_respect_searchable_columns() -> None:
+    async with _live_session_factory() as factory:
+        async with _Seed(factory) as seed:
+            await seed.set_searchable_columns(["Name"])
+            await seed.add_rows(
+                [
+                    (
+                        "Objects",
+                        2,
+                        "hidden jaguar searchable panthera",
+                        {"Name": "Panthera", "Hidden": "Jaguar"},
+                    )
+                ]
+            )
+            async with factory() as session:
+                result = await SqlAlchemyCollectionObjectIndex(session).search(
+                    CollectionObjectSearchQuery(
+                        q="jaguar",
+                        collection_id=CollectionId(seed.collection_id),
+                        page=0,
+                        size=20,
+                    )
+                )
+            assert result.total == 1
+            assert result.items[0].match_reasons[0].columns == ()
+
+
+async def test_searchable_collection_scope_summarises_columns() -> None:
+    async with _live_session_factory() as factory:
+        async with _Seed(factory) as explicit_seed, _Seed(factory) as legacy_seed:
+            await explicit_seed.set_searchable_columns(["Name"])
+            await explicit_seed.add_rows(
+                [
+                    (
+                        "Objects",
+                        2,
+                        "ignored content",
+                        {"Name": "Jaguar", "Hidden": "Internal"},
+                    )
+                ]
+            )
+            await legacy_seed.add_rows(
+                [
+                    (
+                        "Objects",
+                        2,
+                        "legacy content",
+                        {"Legacy Code": "ABC-123", "Legacy Name": "Onca"},
+                    )
+                ]
+            )
+            async with factory() as session:
+                index = SqlAlchemyCollectionObjectIndex(session)
+                scopes = await index.list_searchable_collection_scopes(
+                    [
+                        CollectionId(explicit_seed.collection_id),
+                        CollectionId(legacy_seed.collection_id),
+                    ],
+                    limit=12,
+                )
+            explicit = scopes[CollectionId(explicit_seed.collection_id)]
+            legacy = scopes[CollectionId(legacy_seed.collection_id)]
+            assert explicit.searchable_columns == ("Name",)
+            assert explicit.searchable_columns_total == 1
+            assert legacy.searchable_columns == ("Legacy Code", "Legacy Name")
+            assert legacy.searchable_columns_total == 2
 
 
 async def test_search_filters_by_collection() -> None:

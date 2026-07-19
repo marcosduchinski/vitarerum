@@ -100,6 +100,8 @@ class AssignCuratorRequest(BaseModel):
 class SearchableCollectionResponse(BaseModel):
     id: str
     name: str
+    searchableColumns: list[str] = Field(default_factory=list)
+    searchableColumnsTotal: int = 0
 
 
 class ObjectSearchSnapshotResponse(BaseModel):
@@ -108,6 +110,12 @@ class ObjectSearchSnapshotResponse(BaseModel):
     objectName: str
     briefDescriptionSnapshot: str | None = None
     category: str
+
+
+class SearchMatchReasonResponse(BaseModel):
+    method: str
+    label: str
+    columns: list[str] = Field(default_factory=list)
 
 
 class SearchHitResponse(BaseModel):
@@ -120,6 +128,7 @@ class SearchHitResponse(BaseModel):
     cells: dict[str, str]
     highlight: str
     objectSnapshot: ObjectSearchSnapshotResponse | None = None
+    matchReasons: list[SearchMatchReasonResponse] = Field(default_factory=list)
 
 
 class SearchResultResponse(BaseModel):

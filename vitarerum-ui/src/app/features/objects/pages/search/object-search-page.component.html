@@ -30,6 +30,23 @@
     </button>
   </form>
 
+  <details class="search-explainer">
+    <summary>
+      <span class="pi pi-info-circle" aria-hidden="true"></span>
+      How search works
+    </summary>
+    <div class="search-explainer__body">
+      <span class="search-method search-method--exact">Exact</span>
+      <span class="search-method search-method--text">Text</span>
+      <span class="search-method search-method--approximate">Approximate</span>
+      <p>
+        Search runs automatically across the selected searchable columns for each
+        imported file. It checks exact values, contained phrases, text matches and
+        approximate similarities. Semantic search is not enabled yet.
+      </p>
+    </div>
+  </details>
+
   @if (searchError()) {
     <app-error-message [apiError]="searchError()!" />
   } @else if (loading()) {
@@ -45,7 +62,10 @@
       message="Try a different term, or clear the collection filter."
     />
   } @else {
-    <p class="results-summary">{{ rangeStart() }}–{{ rangeEnd() }} of {{ total() }} objects</p>
+    <div class="results-summary">
+      <p>{{ rangeStart() }}-{{ rangeEnd() }} of {{ total() }} objects for "{{ appliedQuery() }}"</p>
+      <p>{{ searchScopeSummary() }} Automatic search: exact, text, approximate.</p>
+    </div>
 
     <ul class="results">
       @for (hit of items(); track hit.collectionId + hit.sourceDocumentId + hit.rowNumber) {
@@ -87,6 +107,11 @@
               <span>Object mapping missing for this source document.</span>
             </div>
           }
+          <p class="result__match">
+            <span [class]="matchReasonClass(hit)">
+              {{ matchReasonText(hit) }}
+            </span>
+          </p>
           <p class="result__highlight" [innerHTML]="highlightHtml(hit)"></p>
         </li>
       }

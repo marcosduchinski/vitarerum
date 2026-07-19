@@ -4,6 +4,8 @@
 export interface SearchableCollection {
   readonly id: string;
   readonly name: string;
+  readonly searchableColumns?: readonly string[];
+  readonly searchableColumnsTotal?: number;
 }
 
 export interface ObjectSearchHit {
@@ -16,6 +18,13 @@ export interface ObjectSearchHit {
   readonly cells: Record<string, string>;
   readonly highlight: string;
   readonly objectSnapshot: ObjectSearchSnapshot | null;
+  readonly matchReasons?: readonly ObjectSearchMatchReason[];
+}
+
+export interface ObjectSearchMatchReason {
+  readonly method: 'exact' | 'substring' | 'text' | 'approximate' | 'semantic' | string;
+  readonly label: string;
+  readonly columns: readonly string[];
 }
 
 export interface ObjectSearchSnapshot {

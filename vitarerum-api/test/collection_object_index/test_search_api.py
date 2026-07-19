@@ -18,7 +18,9 @@ from sqlalchemy.pool import StaticPool
 from app.collection_object_index.application.ports import (
     CollectionObjectSearchQuery,
     CollectionObjectSearchResult,
+    SearchableColumnScope,
     SearchHit,
+    SearchMatchReason,
 )
 from app.collection_object_index.domain.models import CollectionId, SourceDocumentId
 from app.collection_object_index.infrastructure.models import (
@@ -67,6 +69,22 @@ class _FakeIndex:
     async def list_columns(self, *args: object, **kwargs: object) -> list[str]:
         return []
 
+    async def list_searchable_collection_scopes(
+        self, *args: object, **kwargs: object
+    ) -> dict[CollectionId, SearchableColumnScope]:
+        return {
+            CollectionId("col-zoo"): SearchableColumnScope(
+                collection_id=CollectionId("col-zoo"),
+                searchable_columns=("Inventory No", "Name"),
+                searchable_columns_total=2,
+            ),
+            CollectionId("col-bot"): SearchableColumnScope(
+                collection_id=CollectionId("col-bot"),
+                searchable_columns=("Name", "Sample"),
+                searchable_columns_total=2,
+            ),
+        }
+
     async def search(
         self, query: CollectionObjectSearchQuery
     ) -> CollectionObjectSearchResult:
@@ -91,6 +109,13 @@ class _FakeIndex:
                     row_number=r.row_number,
                     cells=r.cells,
                     highlight=f"...<b>{query.q}</b>...",
+                    match_reasons=(
+                        SearchMatchReason(
+                            method="substring",
+                            label="Contains phrase",
+                            columns=("Name",),
+                        ),
+                    ),
                 )
                 for r in page
             ],
@@ -191,6 +216,9 @@ async def test_search_returns_matching_hits() -> None:
     assert body["items"][0]["fileName"] == "zoo.xlsx"
     assert body["items"][0]["cells"] == {"Inventory No": "ZOO-1", "Name": "Jaguar"}
     assert "<b>jaguar</b>" in body["items"][0]["highlight"]
+    assert body["items"][0]["matchReasons"] == [
+        {"method": "substring", "label": "Contains phrase", "columns": ["Name"]}
+    ]
 
 
 async def test_search_filters_by_collection() -> None:
@@ -237,8 +265,12 @@ async def test_searchable_collections_lists_full_catalogue() -> None:
     async with _client() as (client, _):
         response = await client.get("/objects/search/collections")
     assert response.status_code == 200
-    names = {c["name"] for c in response.json()}
+    body = response.json()
+    names = {c["name"] for c in body}
     assert names == {"REPTILES & AMPHIBIANS", "FISH"}
+    zoo = next(c for c in body if c["id"] == "col-zoo")
+    assert zoo["searchableColumns"] == ["Inventory No", "Name"]
+    assert zoo["searchableColumnsTotal"] == 2
 
 
 async def test_searchable_collections_rejects_non_staff() -> None:

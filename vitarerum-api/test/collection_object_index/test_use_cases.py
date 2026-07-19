@@ -14,6 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
+from app.collection_object_index.application.ports import SearchableColumnScope
 from app.collection_object_index.application.use_cases import (
     AssignCollectionCurator,
     CreateCollection,
@@ -112,6 +113,21 @@ class _FakeStorage:
     async def delete(self, file_reference: str) -> None:
         self.deleted.append(file_reference)
         self.saved.pop(file_reference, None)
+
+
+class _FakeSearchIndex:
+    async def list_searchable_collection_scopes(
+        self, collection_ids: list[CollectionId], limit: int
+    ) -> dict[CollectionId, SearchableColumnScope]:
+        assert limit == 12
+        return {
+            collection_id: SearchableColumnScope(
+                collection_id=collection_id,
+                searchable_columns=("Inventory No", "Name"),
+                searchable_columns_total=2,
+            )
+            for collection_id in collection_ids
+        }
 
 
 def _xlsx(rows: list[list[str]]) -> bytes:
@@ -928,8 +944,13 @@ async def test_list_searchable_collections_returns_full_catalogue() -> None:
     factory = await _session_factory()
     async with factory() as session:
         repo = SqlAlchemyCollectionRepository(session)
-        names = {c.name for c in await ListSearchableCollections(repo).execute(_ADMIN)}
+        result = await ListSearchableCollections(repo, _FakeSearchIndex()).execute(
+            _ADMIN
+        )
+        names = {c.name for c in result}
     assert names == {"REPTILES & AMPHIBIANS", "FISH"}
+    assert all(c.searchable_columns == ("Inventory No", "Name") for c in result)
+    assert all(c.searchable_columns_total == 2 for c in result)
 
 
 @pytest.mark.parametrize("caller", [_MANAGER, _CURATOR])

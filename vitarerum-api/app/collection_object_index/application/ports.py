@@ -58,6 +58,20 @@ class ObjectSnapshot:
 
 
 @dataclass(frozen=True, slots=True)
+class SearchMatchReason:
+    method: str
+    label: str
+    columns: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class SearchableColumnScope:
+    collection_id: CollectionId
+    searchable_columns: tuple[str, ...]
+    searchable_columns_total: int
+
+
+@dataclass(frozen=True, slots=True)
 class SearchHit:
     collection_id: CollectionId
     collection_name: str
@@ -68,6 +82,7 @@ class SearchHit:
     cells: Mapping[str, str]
     highlight: str
     object_snapshot: ObjectSnapshot | None = None
+    match_reasons: tuple[SearchMatchReason, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -179,6 +194,12 @@ class CollectionObjectIndexPort(Protocol):
 
     async def list_columns(self, source_document_id: SourceDocumentId) -> list[str]:
         """Return the union of indexed cell keys for one source document."""
+        ...
+
+    async def list_searchable_collection_scopes(
+        self, collection_ids: Sequence[CollectionId], limit: int
+    ) -> dict[CollectionId, SearchableColumnScope]:
+        """Return a compact per-collection summary of searchable columns."""
         ...
 
     async def search(

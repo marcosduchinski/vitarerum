@@ -14,9 +14,24 @@ interface MockRow extends ObjectSearchHit {
 }
 
 const COLLECTIONS: SearchableCollection[] = [
-  { id: 'col-zoo', name: 'Zoology' },
-  { id: 'col-bot', name: 'Botany' },
-  { id: 'col-arc', name: 'Archaeology' },
+  {
+    id: 'col-zoo',
+    name: 'Zoology',
+    searchableColumns: ['Inventory No', 'Taxon', 'Collected'],
+    searchableColumnsTotal: 3,
+  },
+  {
+    id: 'col-bot',
+    name: 'Botany',
+    searchableColumns: ['Sample', 'Name'],
+    searchableColumnsTotal: 2,
+  },
+  {
+    id: 'col-arc',
+    name: 'Archaeology',
+    searchableColumns: ['Code', 'Description'],
+    searchableColumnsTotal: 2,
+  },
 ];
 
 const ROWS: MockRow[] = [
@@ -36,6 +51,7 @@ const ROWS: MockRow[] = [
       briefDescriptionSnapshot: '1998-05-04',
       category: 'Zoology',
     },
+    matchReasons: [{ method: 'substring', label: 'Contains phrase', columns: ['Taxon'] }],
     content: 'ZOO-001 Panthera onca 1998-05-04',
   },
   {
@@ -54,6 +70,7 @@ const ROWS: MockRow[] = [
       briefDescriptionSnapshot: null,
       category: 'Zoology',
     },
+    matchReasons: [{ method: 'text', label: 'Text match', columns: ['Taxon'] }],
     content: 'ZOO-002 Ara ararauna',
   },
   {
@@ -72,6 +89,7 @@ const ROWS: MockRow[] = [
       briefDescriptionSnapshot: null,
       category: 'Botany',
     },
+    matchReasons: [{ method: 'exact', label: 'Exact', columns: ['Sample'] }],
     content: 'BOT-009 Quercus robur',
   },
   {
@@ -84,6 +102,7 @@ const ROWS: MockRow[] = [
     cells: { Code: 'ARC-2024/0012', Description: 'Ceramic shard, site 12' },
     highlight: '...<b>ARC-2024/0012</b> ceramic shard...',
     objectSnapshot: null,
+    matchReasons: [{ method: 'approximate', label: 'Approximate', columns: [] }],
     content: 'ARC-2024/0012 Ceramic shard, site 12',
   },
 ];

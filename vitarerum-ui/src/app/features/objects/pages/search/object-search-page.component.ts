@@ -16,7 +16,12 @@ import { LoadingStateComponent } from '@shared/components/loading-state/loading-
 import { PageHeaderComponent } from '@shared/components/page-header/page-header.component';
 import { highlightToSafeMarkup } from '@shared/utils/highlight-html.util';
 
-import { ObjectSearchHit, ObjectSearchQuery } from '../../models/object-search.model';
+import {
+  ObjectSearchHit,
+  ObjectSearchMatchReason,
+  ObjectSearchQuery,
+  SearchableCollection,
+} from '../../models/object-search.model';
 import { OBJECT_SEARCH_SERVICE } from '../../services/object-search.service';
 
 const PAGE_SIZE = 20;
@@ -37,6 +42,10 @@ export class ObjectSearchPageComponent {
     loader: () => firstValueFrom(this.service.listSearchableCollections()),
   });
   protected readonly collections = computed(() => this.collectionsResource.value() ?? []);
+  protected readonly selectedCollection = computed<SearchableCollection | null>(() => {
+    const id = this.collectionFilter();
+    return id ? (this.collections().find((collection) => collection.id === id) ?? null) : null;
+  });
 
   protected readonly queryDraft = signal('');
   protected readonly appliedQuery = signal('');
@@ -76,6 +85,22 @@ export class ObjectSearchPageComponent {
   protected readonly rangeEnd = computed(() =>
     Math.min((this.currentPage() + 1) * PAGE_SIZE, this.total()),
   );
+  protected readonly searchScopeSummary = computed(() => {
+    const collection = this.selectedCollection();
+    if (!collection) {
+      return 'Search runs across selected searchable columns in every imported file.';
+    }
+    const columns = collection.searchableColumns ?? [];
+    if (columns.length === 0) {
+      return `Searching ${collection.name}'s selected searchable columns.`;
+    }
+    const visible = columns.slice(0, 4);
+    const total = collection.searchableColumnsTotal ?? columns.length;
+    const hiddenCount = Math.max(0, total - visible.length);
+    return `Searching ${collection.name}: ${visible.join(', ')}${
+      hiddenCount ? ` + ${hiddenCount} more` : ''
+    }.`;
+  });
 
   protected onQueryInput(event: Event): void {
     this.queryDraft.set((event.target as HTMLInputElement).value);
@@ -104,5 +129,21 @@ export class ObjectSearchPageComponent {
     // Safe: highlightToSafeMarkup() escapes the whole string and only re-opens
     // <mark> for the backend's own <b> markers — never trust hit.highlight raw.
     return this.sanitizer.bypassSecurityTrustHtml(highlightToSafeMarkup(hit.highlight));
+  }
+
+  protected primaryMatchReason(hit: ObjectSearchHit): ObjectSearchMatchReason | null {
+    return hit.matchReasons?.[0] ?? null;
+  }
+
+  protected matchReasonText(hit: ObjectSearchHit): string {
+    const reason = this.primaryMatchReason(hit);
+    if (!reason) return 'Matched by automatic search';
+    const columns = reason.columns?.filter(Boolean) ?? [];
+    return columns.length ? `Matched by ${reason.label} - ${columns.join(', ')}` : `Matched by ${reason.label}`;
+  }
+
+  protected matchReasonClass(hit: ObjectSearchHit): string {
+    const method = this.primaryMatchReason(hit)?.method ?? 'automatic';
+    return `result__match-badge result__match-badge--${method}`;
   }
 }
