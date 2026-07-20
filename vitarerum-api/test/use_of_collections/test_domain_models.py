@@ -9,6 +9,7 @@ from app.use_of_collections.domain.enums import (
     DocumentCorrectionStatus,
     ProposalEventType,
     ProposalStatus,
+    SubmissionChannel,
     UseEventType,
     UseStatus,
     UseType,
@@ -67,6 +68,7 @@ def _make_proposal(**kwargs) -> Proposal:
         requested_by=PermissionId("permission-1"),
         assigned_to=None,
         submitted_at=_now(),
+        submission_channel=SubmissionChannel.AUTHENTICATED,
     )
     defaults.update(kwargs)
     return Proposal(**defaults)
@@ -159,6 +161,7 @@ def test_resolve_requester_sets_requested_by() -> None:
         requester_contact=RequesterContact(
             name="Pedro Silva", email=EmailAddress("pedro@example.test")
         ),
+        submission_channel=SubmissionChannel.PUBLIC,
     )
 
     proposal.resolve_requester(PermissionId("permission-external-1"))

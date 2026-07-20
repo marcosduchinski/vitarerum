@@ -29,12 +29,14 @@ describe('ProposalApiService', () => {
   });
 
   it('creates a proposal with the documented body', () => {
+    const document = new File(['support'], 'support.pdf', { type: 'application/pdf' });
     const body = {
       title: 'Specimen study',
       intendedUse: 'IN_SITU_VISIT' as const,
       purpose: 'Research',
       beginDate: '2026-06-01',
       endDate: '2026-06-30',
+      documents: [document],
     };
 
     service.createProposal(body).subscribe();
@@ -42,12 +44,20 @@ describe('ProposalApiService', () => {
     const request = http.expectOne('https://api.example.test/proposals');
 
     expect(request.request.method).toBe('POST');
-    expect(request.request.body).toEqual(body);
+    expect(formEntries(request.request.body)).toEqual([
+      ['title', 'Specimen study'],
+      ['intendedUse', 'IN_SITU_VISIT'],
+      ['purpose', 'Research'],
+      ['beginDate', '2026-06-01'],
+      ['endDate', '2026-06-30'],
+      ['documents', document],
+    ]);
     request.flush({
       proposal: {
         id: 'proposal-1',
         status: 'SUBMITTED',
         intendedUse: 'IN_SITU_VISIT',
+        submissionChannel: 'AUTHENTICATED',
         requestedBy: {
           permissionId: 'permission-1',
           user: { id: 'user-1', name: 'Ana', email: 'ana@example.test' },
@@ -82,7 +92,11 @@ describe('ProposalApiService', () => {
     const request = http.expectOne('https://api.example.test/proposals');
 
     expect(request.request.method).toBe('POST');
-    expect(request.request.body).toEqual(body);
+    expect(formEntries(request.request.body)).toEqual([
+      ['initialMessageRecipient', 'collections@example.test'],
+      ['initialMessageSubject', 'Archive access request'],
+      ['initialMessageBody', 'I would like to discuss access to archive materials.'],
+    ]);
     request.flush({
       proposal: {
         id: 'proposal-1',
@@ -90,6 +104,7 @@ describe('ProposalApiService', () => {
         title: 'Archive access request',
         status: 'SUBMITTED',
         type: 'OTHER',
+        submissionChannel: 'AUTHENTICATED',
         requestedBy: {
           permissionId: 'permission-1',
           user: { id: 'user-1', name: 'Ana', email: 'ana@example.test' },
@@ -453,3 +468,8 @@ describe('ProposalApiService', () => {
     });
   });
 });
+
+function formEntries(body: unknown): [string, FormDataEntryValue][] {
+  expect(body).toBeInstanceOf(FormData);
+  return Array.from((body as FormData).entries());
+}

@@ -21,6 +21,8 @@ from app.config import settings
 
 _UPLOAD_CHUNK = 1024 * 1024
 _CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
+ALLOWED_DOCUMENT_MAX_BYTES = 10 * 1024 * 1024
+ALLOWED_DOCUMENT_MAX_COUNT = 5
 
 
 def safe_basename(name: str, *, default: str = "file") -> str:
@@ -48,10 +50,10 @@ def content_disposition_attachment(filename: str, *, default: str = "file") -> s
     return f"attachment; filename=\"{ascii_fallback}\"; filename*=UTF-8''{quote(safe)}"
 
 
-async def read_upload_capped(file: UploadFile) -> bytes:
+async def read_upload_capped(file: UploadFile, *, limit: int | None = None) -> bytes:
     """Read an upload in chunks, rejecting anything over ``max_upload_bytes``
     (413) before the whole body is buffered."""
-    limit = settings.max_upload_bytes
+    limit = settings.max_upload_bytes if limit is None else limit
     chunks: list[bytes] = []
     total = 0
     while True:
@@ -61,7 +63,7 @@ async def read_upload_capped(file: UploadFile) -> bytes:
         total += len(chunk)
         if total > limit:
             raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
                 detail={
                     "error": "FILE_TOO_LARGE",
                     "message": f"File exceeds the {limit}-byte limit",
@@ -87,6 +89,26 @@ def ensure_docx(content: bytes) -> None:
                 "message": "Only valid .docx files are accepted",
             },
         )
+
+
+def ensure_allowed_document(content: bytes) -> None:
+    """Reject public/intake documents outside the supported PDF/image/DOCX set."""
+    if content.startswith(b"%PDF-"):
+        return
+    if content.startswith(b"\x89PNG\r\n\x1a\n"):
+        return
+    if content.startswith(b"\xff\xd8\xff"):
+        return
+    try:
+        ensure_docx(content)
+    except HTTPException:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail={
+                "error": "UNSUPPORTED_FILE_TYPE",
+                "message": "Only PDF, JPG, PNG, and DOCX files are accepted.",
+            },
+        ) from None
 
 
 def ensure_xlsx(content: bytes) -> None:

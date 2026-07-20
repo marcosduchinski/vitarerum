@@ -63,12 +63,20 @@ export class ProposalApiServiceMock {
     const title = request.title?.trim() || request.initialMessageSubject?.trim() || proposalRef;
     const purpose = request.purpose?.trim() || request.initialMessageBody?.trim() || '';
     const intendedUse = request.intendedUse ?? 'OTHER';
+    const submittedDocuments: Document[] = (request.documents ?? []).map((file, index) => ({
+      id: `doc-${id}-${index + 1}`,
+      type: 'REQUESTER_ATTACHMENT',
+      fileName: file.name,
+      submittedAt: now,
+      submittedBy: this.currentPrincipal(),
+    }));
 
     const proposal: ProposalDetail = {
       id,
       referenceNumber: proposalRef,
       title,
       status: 'SUBMITTED',
+      submissionChannel: 'AUTHENTICATED',
       type: intendedUse,
       intendedUse,
       beginDate: request.beginDate ?? undefined,
@@ -77,7 +85,7 @@ export class ProposalApiServiceMock {
       assignedTo: null,
       submittedAt: now,
       conversationId: convId,
-      documents: [],
+      documents: submittedDocuments,
       requestedObjects: [],
       correctionItems: [],
     };
@@ -106,6 +114,7 @@ export class ProposalApiServiceMock {
         referenceNumber: proposal.referenceNumber,
         title: proposal.title,
         status: proposal.status,
+        submissionChannel: proposal.submissionChannel,
         type: proposal.type,
         intendedUse: proposal.intendedUse,
         beginDate: proposal.beginDate,
@@ -141,6 +150,7 @@ export class ProposalApiServiceMock {
       referenceNumber: p.referenceNumber,
       title: p.title,
       status: p.status,
+      submissionChannel: p.submissionChannel,
       type: p.type,
       beginDate: p.beginDate,
       endDate: p.endDate,

@@ -30,6 +30,7 @@ from app.use_of_collections.application.use_cases import (
 from app.use_of_collections.domain.enums import (
     DocumentCorrectionStatus,
     ProposalStatus,
+    SubmissionChannel,
     UseType,
 )
 from app.use_of_collections.domain.models import (
@@ -109,6 +110,7 @@ def _pending_proposal(with_document: bool = True) -> Proposal:
         status=ProposalStatus.PENDING,
         requested_by=None,
         submitted_at=_NOW,
+        submission_channel=SubmissionChannel.PUBLIC,
         requester_contact=RequesterContact(
             name="Pedro Silva", email=EmailAddress("pedro@example.test")
         ),

@@ -107,7 +107,19 @@ export class ProposalApiService {
   private readonly apiBaseUrl = inject(API_BASE_URL);
 
   createProposal(request: CreateProposalRequest): Observable<CreateProposalResponse> {
-    return this.http.post<CreateProposalResponse>(this.url('/proposals'), request);
+    const form = new FormData();
+    this.appendOptional(form, 'title', request.title);
+    this.appendOptional(form, 'intendedUse', request.intendedUse);
+    this.appendOptional(form, 'purpose', request.purpose);
+    this.appendOptional(form, 'beginDate', request.beginDate);
+    this.appendOptional(form, 'endDate', request.endDate);
+    this.appendOptional(form, 'initialMessageRecipient', request.initialMessageRecipient);
+    this.appendOptional(form, 'initialMessageSubject', request.initialMessageSubject);
+    this.appendOptional(form, 'initialMessageBody', request.initialMessageBody);
+    for (const document of request.documents ?? []) {
+      form.append('documents', document, document.name);
+    }
+    return this.http.post<CreateProposalResponse>(this.url('/proposals'), form);
   }
 
   listProposals(query: ProposalListQuery = {}): Observable<Page<ProposalSummary>> {
@@ -286,5 +298,11 @@ export class ProposalApiService {
 
   private url(path: string): string {
     return buildApiUrl(this.apiBaseUrl, path);
+  }
+
+  private appendOptional(form: FormData, key: string, value: string | null | undefined): void {
+    if (value !== null && value !== undefined) {
+      form.append(key, value);
+    }
   }
 }

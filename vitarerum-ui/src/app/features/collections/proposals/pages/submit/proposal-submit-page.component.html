@@ -7,26 +7,67 @@
 
   <form class="submit-form" (submit)="submit($event)" novalidate>
     <fieldset class="submit-form__section">
+      <legend class="submit-form__section-title">Request details</legend>
+
+      <div class="field" [class.field--error]="useTypeError()">
+        <label class="field__label" for="useType"
+          >Intended use <span aria-hidden="true">*</span></label
+        >
+        <select
+          id="useType"
+          class="field__input"
+          [value]="useType()"
+          (change)="onUseTypeChange($event)"
+          [attr.aria-invalid]="useTypeError() || null"
+        >
+          <option value="" disabled>Select how you'll use the collection…</option>
+          @for (option of useTypeOptions; track option.value) {
+            <option [value]="option.value">{{ option.label }}</option>
+          }
+        </select>
+        @if (useTypeError()) {
+          <p class="field__error" role="alert">Please choose how you'll use the collection.</p>
+        }
+      </div>
+
+      <div
+        class="field"
+        [class.field--error]="beginDateError() || endDateError() || dateRangeError()"
+      >
+        <span class="field__label">Proposed dates <span aria-hidden="true">*</span></span>
+        <div class="field__row">
+          <label class="field__sublabel" for="proposedBeginDate">From</label>
+          <input
+            id="proposedBeginDate"
+            type="date"
+            class="field__input"
+            [value]="proposedBeginDate()"
+            (input)="onInput('proposedBeginDate', $event)"
+            [attr.aria-invalid]="beginDateError() || dateRangeError() || null"
+          />
+          <label class="field__sublabel" for="proposedEndDate">To</label>
+          <input
+            id="proposedEndDate"
+            type="date"
+            class="field__input"
+            [value]="proposedEndDate()"
+            (input)="onInput('proposedEndDate', $event)"
+            [attr.aria-invalid]="endDateError() || dateRangeError() || null"
+          />
+        </div>
+        @if (beginDateError() || endDateError()) {
+          <p class="field__error" role="alert">Please give both a start and an end date.</p>
+        } @else if (dateRangeError()) {
+          <p class="field__error" role="alert">The end date can't be before the start date.</p>
+        }
+      </div>
+    </fieldset>
+
+    <fieldset class="submit-form__section">
       <legend class="submit-form__section-title">Opening message</legend>
       <p class="submit-form__section-hint">
         Your proposal starts a conversation with the collections team. Write your first message below.
       </p>
-
-      <div class="field" [class.field--error]="recipientError()">
-        <label class="field__label" for="recipient">To <span aria-hidden="true">*</span></label>
-        <input
-          id="recipient"
-          type="email"
-          class="field__input"
-          placeholder="collections@museum.example"
-          [value]="recipient()"
-          (input)="onInput('recipient', $event)"
-          [attr.aria-invalid]="recipientError() || null"
-        />
-        @if (recipientError()) {
-          <p class="field__error" role="alert">A valid recipient email is required.</p>
-        }
-      </div>
 
       <div class="field" [class.field--error]="subjectError()">
         <label class="field__label" for="subject">Subject <span aria-hidden="true">*</span></label>
@@ -57,6 +98,46 @@
         ></textarea>
         @if (bodyError()) {
           <p class="field__error" role="alert">Message body is required.</p>
+        }
+      </div>
+    </fieldset>
+
+    <fieldset class="submit-form__section">
+      <legend class="submit-form__section-title">Supporting documents</legend>
+      <p class="submit-form__section-hint">
+        Attach any files that help the collections team understand your request.
+      </p>
+
+      <div class="field" [class.field--error]="documentsError()">
+        <label class="field__label" for="documents">Documents</label>
+        <input
+          id="documents"
+          type="file"
+          class="field__input"
+          multiple
+          accept=".pdf,.jpg,.jpeg,.png,.docx"
+          (change)="onDocumentsSelected($event)"
+          [attr.aria-invalid]="documentsError() || null"
+        />
+        @if (documents().length) {
+          <ul class="document-list" aria-label="Selected supporting documents">
+            @for (document of documents(); track document.name + document.size; let i = $index) {
+              <li class="document-list__item">
+                <span class="document-list__name">{{ document.name }}</span>
+                <span class="document-list__size">{{ formatFileSize(document.size) }}</span>
+                <button type="button" class="document-list__remove" (click)="removeDocument(i)">
+                  Remove
+                </button>
+              </li>
+            }
+          </ul>
+        }
+        @if (documentsError()) {
+          <p class="field__error" role="alert">{{ documentValidationMessage() }}</p>
+        } @else {
+          <p class="field__hint">
+            Attach up to 5 files. PDF, JPG, PNG, and DOCX are accepted, up to 10 MB each.
+          </p>
         }
       </div>
     </fieldset>

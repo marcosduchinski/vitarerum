@@ -27,6 +27,7 @@ const PROPOSAL: ProposalDetail = {
   referenceNumber: 'VRP-20260601-0001',
   title: 'Atlantic forest catalogue study',
   status: 'PENDING',
+  submissionChannel: 'AUTHENTICATED',
   type: 'IN_SITU_VISIT',
   intendedUse: 'IN_SITU_VISIT',
   beginDate: '2026-07-01',

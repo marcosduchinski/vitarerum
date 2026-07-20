@@ -17,6 +17,7 @@ const PROPOSAL: ProposalDetail = {
   referenceNumber: 'VR-2026-001',
   title: 'Photographic history of Rio de Janeiro port, 1890-1930',
   status: 'SUBMITTED',
+  submissionChannel: 'AUTHENTICATED',
   type: 'IN_SITU_VISIT',
   requestedBy: {
     permissionId: 'permission-external',

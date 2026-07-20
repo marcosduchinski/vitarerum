@@ -33,6 +33,7 @@ from app.use_of_collections.application.use_cases import (
     SubmitProposal,
     SubmitProposalInput,
 )
+from app.use_of_collections.domain.enums import SubmissionChannel
 from app.use_of_collections.domain.models import (
     Document,
     DocumentId,
@@ -313,6 +314,7 @@ class ConfirmPublicProposal:
                 begin_date=submission.proposed_begin_date,
                 end_date=submission.proposed_end_date,
                 requested_by=None,
+                submission_channel=SubmissionChannel.PUBLIC,
                 requester_contact=RequesterContact(
                     name=submission.citizen_name,
                     email=EmailAddress(submission.citizen_email),

@@ -21,6 +21,7 @@ class ProposalApiServiceStub {
         title: 'Collection use request: palaeontology specimen records',
         status: 'SUBMITTED',
         type: 'OTHER',
+        submissionChannel: 'AUTHENTICATED',
         requestedBy: {
           permissionId: 'permission-external',
           user: { id: 'user-1', name: 'Alice Ferreira', email: 'alice@example.test' },
@@ -53,31 +54,38 @@ describe('ProposalSubmitPageComponent', () => {
     vi.spyOn(router, 'navigate').mockResolvedValue(true);
   });
 
-  it('renders only the opening message fields', () => {
+  it('renders authenticated request details and opening message fields', () => {
     const fixture = TestBed.createComponent(ProposalSubmitPageComponent);
     fixture.detectChanges();
 
     const compiled = fixture.nativeElement as HTMLElement;
 
+    expect(compiled.textContent).toContain('Request details');
     expect(compiled.textContent).toContain('Opening message');
-    expect(compiled.querySelector('#recipient')).not.toBeNull();
+    expect(compiled.textContent).toContain('Supporting documents');
+    expect(compiled.querySelector('#useType')).not.toBeNull();
+    expect(compiled.querySelector('#proposedBeginDate')).not.toBeNull();
+    expect(compiled.querySelector('#proposedEndDate')).not.toBeNull();
     expect(compiled.querySelector('#subject')).not.toBeNull();
     expect(compiled.querySelector('#body')).not.toBeNull();
+    expect(compiled.querySelector('#documents')).not.toBeNull();
+    expect(compiled.querySelector('#recipient')).toBeNull();
     expect(compiled.querySelector('#title')).toBeNull();
     expect(compiled.querySelector('#purpose')).toBeNull();
-    expect(compiled.querySelector('#begin-date')).toBeNull();
-    expect(compiled.querySelector('#end-date')).toBeNull();
-    expect(compiled.querySelector('input[name="type"]')).toBeNull();
   });
 
-  it('submits only the opening message fields', async () => {
+  it('submits request details, opening message, and documents', async () => {
     const fixture = TestBed.createComponent(ProposalSubmitPageComponent);
     fixture.detectChanges();
 
     const compiled = fixture.nativeElement as HTMLElement;
-    setInputValue(compiled, '#recipient', 'collections@example.test');
+    const document = new File(['support'], 'support.pdf', { type: 'application/pdf' });
+    setSelectValue(compiled, '#useType', 'IN_SITU_VISIT');
+    setInputValue(compiled, '#proposedBeginDate', '2026-06-01');
+    setInputValue(compiled, '#proposedEndDate', '2026-06-07');
     setInputValue(compiled, '#subject', 'Archive access request');
     setInputValue(compiled, '#body', 'I would like to discuss access to archive materials.');
+    setFileInput(compiled, '#documents', [document]);
 
     compiled.querySelector<HTMLFormElement>('form')?.dispatchEvent(
       new Event('submit', { bubbles: true, cancelable: true }),
@@ -87,9 +95,12 @@ describe('ProposalSubmitPageComponent', () => {
 
     expect(proposalService.createCalls).toEqual([
       {
-        initialMessageRecipient: 'collections@example.test',
+        intendedUse: 'IN_SITU_VISIT',
+        beginDate: '2026-06-01',
+        endDate: '2026-06-07',
         initialMessageSubject: 'Archive access request',
         initialMessageBody: 'I would like to discuss access to archive materials.',
+        documents: [document],
       },
     ]);
     expect(router.navigate).toHaveBeenCalledWith(['/p/collections/proposals', 'proposal-1'], {
@@ -105,6 +116,9 @@ describe('ProposalSubmitPageComponent', () => {
     fixture.detectChanges();
 
     const compiled = fixture.nativeElement as HTMLElement;
+    setSelectValue(compiled, '#useType', 'IN_SITU_VISIT');
+    setInputValue(compiled, '#proposedBeginDate', '2026-06-01');
+    setInputValue(compiled, '#proposedEndDate', '2026-06-07');
     setInputValue(compiled, '#subject', '');
 
     compiled.querySelector<HTMLFormElement>('form')?.dispatchEvent(
@@ -122,4 +136,21 @@ function setInputValue(root: HTMLElement, selector: string, value: string): void
   expect(field).not.toBeNull();
   field!.value = value;
   field!.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function setSelectValue(root: HTMLElement, selector: string, value: string): void {
+  const field = root.querySelector<HTMLSelectElement>(selector);
+  expect(field).not.toBeNull();
+  field!.value = value;
+  field!.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+function setFileInput(root: HTMLElement, selector: string, files: readonly File[]): void {
+  const field = root.querySelector<HTMLInputElement>(selector);
+  expect(field).not.toBeNull();
+  Object.defineProperty(field, 'files', {
+    configurable: true,
+    value: files,
+  });
+  field!.dispatchEvent(new Event('change', { bubbles: true }));
 }

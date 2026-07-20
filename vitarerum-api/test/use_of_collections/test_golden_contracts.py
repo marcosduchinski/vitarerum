@@ -58,12 +58,14 @@ async def test_golden_submit_proposal_response_shape() -> None:
     async with client_with_repos() as (client, _, _, _):
         response = await client.post(
             "/api/v1/proposals",
-            json={
+            data={
                 "title": "Collection study",
                 "intendedUse": "IN_SITU_VISIT",
                 "purpose": "To study the collection",
                 "beginDate": "2026-06-01",
                 "endDate": "2026-06-07",
+                "initialMessageSubject": "Collection study",
+                "initialMessageBody": "To study the collection",
             },
         )
 
@@ -82,6 +84,7 @@ async def test_golden_submit_proposal_response_shape() -> None:
             "proposal.requesterContact",
             "proposal.assignedTo",
             "proposal.submittedAt",
+            "proposal.submissionChannel",
         }
         | _nested("proposal.requestedBy", _PERMISSION_DETAIL)
     )
@@ -125,6 +128,7 @@ async def test_golden_proposal_detail_response_shape() -> None:
             "requestedObjects.[]",
             "correctionItems.[]",
             "submittedAt",
+            "submissionChannel",
         }
         | _nested("requestedBy", _PERMISSION_DETAIL)
         | _nested("collectionUseProject.requestedBy", _PERMISSION_DETAIL)
@@ -160,6 +164,7 @@ async def test_golden_paginated_proposals_envelope_shape() -> None:
             "content[].requesterContact",
             "content[].assignedTo",
             "content[].submittedAt",
+            "content[].submissionChannel",
         }
         | _nested("content[].requestedBy", _PERMISSION_DETAIL)
     )

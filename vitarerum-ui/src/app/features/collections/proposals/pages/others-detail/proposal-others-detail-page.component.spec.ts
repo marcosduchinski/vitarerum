@@ -19,6 +19,7 @@ const PROPOSAL: ProposalDetail = {
   referenceNumber: 'VR-2026-002',
   title: 'Manuscript digitisation request',
   status: 'PENDING',
+  submissionChannel: 'AUTHENTICATED',
   type: 'IN_SITU_VISIT',
   beginDate: '2026-07-01',
   endDate: '2026-12-31',

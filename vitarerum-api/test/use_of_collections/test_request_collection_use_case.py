@@ -29,6 +29,7 @@ from app.use_of_collections.application.use_cases import (
 from app.use_of_collections.domain.enums import (
     ProposalEventType,
     ProposalStatus,
+    SubmissionChannel,
     UseEventType,
     UseStatus,
     UseType,
@@ -344,6 +345,7 @@ async def test_submit_proposal_persists_proposal_and_conversation() -> None:
             begin_date=date(2026, 6, 1),
             end_date=date(2026, 6, 7),
             requested_by=_make_caller(),
+            submission_channel=SubmissionChannel.AUTHENTICATED,
         )
     )
 
@@ -382,6 +384,7 @@ async def test_submit_proposal_accepts_other_use_type() -> None:
             begin_date=date(2026, 6, 1),
             end_date=date(2026, 6, 7),
             requested_by=_make_caller(),
+            submission_channel=SubmissionChannel.AUTHENTICATED,
         )
     )
 
@@ -406,6 +409,7 @@ async def test_submit_proposal_generates_daily_sequential_reference_number() -> 
             begin_date=date(2026, 6, 1),
             end_date=date(2026, 6, 7),
             requested_by=_make_caller(),
+            submission_channel=SubmissionChannel.AUTHENTICATED,
         )
     )
     second = await use_case.execute(
@@ -416,6 +420,7 @@ async def test_submit_proposal_generates_daily_sequential_reference_number() -> 
             begin_date=date(2026, 6, 1),
             end_date=date(2026, 6, 7),
             requested_by=_make_caller(),
+            submission_channel=SubmissionChannel.AUTHENTICATED,
         )
     )
 
@@ -441,6 +446,7 @@ async def test_submit_proposal_uses_valid_sender_fallback_without_user_email() -
             begin_date=date(2026, 6, 1),
             end_date=date(2026, 6, 7),
             requested_by=caller,
+            submission_channel=SubmissionChannel.AUTHENTICATED,
         )
     )
 
@@ -469,6 +475,7 @@ async def test_submit_public_contact_proposal_without_requester_or_project() -> 
                 name="Pedro Silva",
                 email=EmailAddress("pedro@example.test"),
             ),
+            submission_channel=SubmissionChannel.PUBLIC,
             initial_message_subject="Acesso a colecao",
             initial_message_body="Gostaria de estudar um especime.",
         )
@@ -528,6 +535,7 @@ async def test_approve_proposal_creates_requested_project() -> None:
         status=ProposalStatus.PENDING,
         requested_by=PermissionId("permission-1"),
         submitted_at=datetime(2026, 6, 1, tzinfo=UTC),
+        submission_channel=SubmissionChannel.AUTHENTICATED,
         requested_objects=[
             RequestedObject(
                 id=RequestedObjectId("requested-object-1"),
@@ -590,6 +598,7 @@ async def test_approve_public_proposal_provisions_external_requester() -> None:
             name="Pedro Silva", email=EmailAddress("pedro@example.test")
         ),
         submitted_at=datetime(2026, 6, 1, tzinfo=UTC),
+        submission_channel=SubmissionChannel.PUBLIC,
         requested_objects=[
             RequestedObject(
                 id=RequestedObjectId("requested-object-1"),
@@ -663,6 +672,7 @@ async def test_approve_public_proposal_reused_user_sends_no_notification() -> No
             name="Pedro Silva", email=EmailAddress("pedro@example.test")
         ),
         submitted_at=datetime(2026, 6, 1, tzinfo=UTC),
+        submission_channel=SubmissionChannel.PUBLIC,
         requested_objects=[
             RequestedObject(
                 id=RequestedObjectId("requested-object-1"),
@@ -715,6 +725,7 @@ async def test_approve_proposal_without_objects_fails() -> None:
         status=ProposalStatus.PENDING,
         requested_by=PermissionId("permission-1"),
         submitted_at=datetime(2026, 6, 1, tzinfo=UTC),
+        submission_channel=SubmissionChannel.AUTHENTICATED,
     )
     await proposal_repository.add(proposal)
 
@@ -759,6 +770,7 @@ async def test_approve_non_pending_public_proposal_never_provisions_requester() 
             name="Pedro Silva", email=EmailAddress("pedro@example.test")
         ),
         submitted_at=datetime(2026, 6, 1, tzinfo=UTC),
+        submission_channel=SubmissionChannel.PUBLIC,
     )
     await proposal_repository.add(proposal)
     requester_provisioner = RecordingRequesterProvisioner()
@@ -796,6 +808,7 @@ async def test_reject_proposal_sends_reason_message_to_requester() -> None:
         status=ProposalStatus.PENDING,
         requested_by=PermissionId("permission-1"),
         submitted_at=datetime(2026, 6, 1, tzinfo=UTC),
+        submission_channel=SubmissionChannel.AUTHENTICATED,
     )
     await proposal_repository.add(proposal)
     await conversation_repository.add(
@@ -852,6 +865,7 @@ async def test_reject_public_proposal_never_provisions_requester() -> None:
             name="Pedro Silva", email=EmailAddress("pedro@example.test")
         ),
         submitted_at=datetime(2026, 6, 1, tzinfo=UTC),
+        submission_channel=SubmissionChannel.PUBLIC,
     )
     await proposal_repository.add(proposal)
     await conversation_repository.add(
@@ -907,6 +921,7 @@ async def test_send_message_uses_valid_sender_fallback_without_user_email() -> N
         status=ProposalStatus.PENDING,
         requested_by=caller.id,
         submitted_at=datetime(2026, 6, 1, tzinfo=UTC),
+        submission_channel=SubmissionChannel.AUTHENTICATED,
     )
     await proposal_repository.add(proposal)
     await conversation_repository.add(

@@ -10,6 +10,7 @@ import {
 } from '@shared/models/collection-use-status.model';
 
 export type DocumentType = string;
+export type SubmissionChannel = 'PUBLIC' | 'AUTHENTICATED';
 
 export interface ProposalProjectSummary {
   readonly id: string;
@@ -35,6 +36,7 @@ export interface ProposalSummary {
   // collectionUseProject.title (empty until approval).
   readonly title: string;
   readonly status: ProposalStatus;
+  readonly submissionChannel: SubmissionChannel;
   readonly type: UseType;
   // Backend source for `type` — the service normalizes the bare `intendedUse`
   // use type into the flat `type` above.
@@ -155,6 +157,7 @@ export interface CreateProposalRequest {
   readonly initialMessageRecipient?: string;
   readonly initialMessageSubject?: string;
   readonly initialMessageBody?: string;
+  readonly documents?: readonly File[];
 }
 
 // Contract: POST /proposals returns only the proposal summary + conversationId.

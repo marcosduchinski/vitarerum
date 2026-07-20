@@ -6,6 +6,9 @@ common.py and composition in dependencies.py. Paths and contracts unchanged.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+from uuid import uuid4
+
 from fastapi import (
     APIRouter,
     HTTPException,
@@ -25,6 +28,7 @@ from app.shared.uploads import (
 )
 from app.shared.uploads import (
     guess_content_type,
+    safe_basename,
 )
 from app.shared.uploads import (
     read_upload_capped as read_upload_capped,
@@ -86,6 +90,18 @@ proposals_router = APIRouter(prefix="/proposals", tags=["proposals"])
 projects_router = APIRouter(
     prefix="/collection-use-projects", tags=["collection-use-projects"]
 )
+
+
+def route_now() -> datetime:
+    return datetime.now(UTC)
+
+
+def route_new_id() -> str:
+    return str(uuid4())
+
+
+def route_file_reference(subdir: str, owner_id: str, file_name: str) -> str:
+    return f"{subdir}/{owner_id}/{route_new_id()}_{safe_basename(file_name)}"
 
 
 def _is_staff(caller: Actor) -> bool:

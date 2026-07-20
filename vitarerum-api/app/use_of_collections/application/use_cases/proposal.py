@@ -24,7 +24,11 @@ from app.use_of_collections.application.use_cases._shared import (
     _new_id,
     _now,
 )
-from app.use_of_collections.domain.enums import ProposalStatus, UseType
+from app.use_of_collections.domain.enums import (
+    ProposalStatus,
+    SubmissionChannel,
+    UseType,
+)
 from app.use_of_collections.domain.models import (
     Conversation,
     ConversationId,
@@ -60,6 +64,7 @@ class SubmitProposalInput:
     begin_date: date | None
     end_date: date | None
     requested_by: Actor | None
+    submission_channel: SubmissionChannel
     requester_contact: RequesterContact | None = None
     initial_message_sender: str | None = None
     initial_message_recipient: str = "collections@museum.pt"
@@ -91,6 +96,11 @@ class SubmitProposal:
     async def execute(self, data: SubmitProposalInput) -> SubmitProposalOutput:
         if data.requested_by is None and data.requester_contact is None:
             raise ValueError("requester_contact is required without requested_by")
+        if (
+            data.submission_channel == SubmissionChannel.PUBLIC
+            and data.requested_by is not None
+        ):
+            raise ValueError("Public proposal creation cannot include requested_by")
         now = _now()
         proposal_id = ProposalId(_new_id())
         conversation_id = ConversationId(_new_id())
@@ -113,6 +123,7 @@ class SubmitProposal:
                 data.requested_by.id if data.requested_by is not None else None
             ),
             submitted_at=now,
+            submission_channel=data.submission_channel,
             requester_contact=data.requester_contact,
         )
         proposal.documents = list(data.documents)

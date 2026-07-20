@@ -15,6 +15,7 @@ const REJECTED_PROPOSAL: ProposalSummary = {
   referenceNumber: 'VR-2026-001',
   title: 'Rejected research request',
   status: 'REJECTED',
+  submissionChannel: 'AUTHENTICATED',
   type: 'IN_SITU_VISIT',
   requestedBy: {
     permissionId: 'permission-external',

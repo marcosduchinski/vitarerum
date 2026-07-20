@@ -384,6 +384,7 @@ def proposal_to_record(proposal: Proposal) -> ProposalRecord:
         begin_date=proposal.begin_date,
         end_date=proposal.end_date,
         status=proposal.status,
+        submission_channel=proposal.submission_channel,
         requested_by=proposal.requested_by,
         requester_name=(
             proposal.requester_contact.name if proposal.requester_contact else None
@@ -469,6 +470,7 @@ def proposal_to_domain(record: ProposalRecord) -> Proposal:
         begin_date=record.begin_date,
         end_date=record.end_date,
         status=record.status,
+        submission_channel=record.submission_channel,
         requested_by=PermissionId(record.requested_by)
         if record.requested_by is not None
         else None,

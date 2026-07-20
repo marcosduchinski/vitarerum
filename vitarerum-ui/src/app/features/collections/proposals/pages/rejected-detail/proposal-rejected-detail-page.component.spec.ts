@@ -18,6 +18,7 @@ const PROPOSAL: ProposalDetail = {
   referenceNumber: 'VR-2026-009',
   title: 'Out-of-scope reproduction request',
   status: 'REJECTED',
+  submissionChannel: 'AUTHENTICATED',
   type: 'IN_SITU_VISIT',
   beginDate: '2026-07-01',
   endDate: '2026-12-31',

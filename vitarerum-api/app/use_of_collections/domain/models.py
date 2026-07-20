@@ -36,6 +36,7 @@ from app.use_of_collections.domain.enums import (
     MediaType,
     ProposalEventType,
     ProposalStatus,
+    SubmissionChannel,
     UseEventType,
     UseResult,
     UseStatus,
@@ -590,6 +591,7 @@ class Proposal:
     status: ProposalStatus
     requested_by: PermissionId | None
     submitted_at: datetime
+    submission_channel: SubmissionChannel
     requester_contact: RequesterContact | None = None
     assigned_to: PermissionId | None = None
     events: list[ProposalEvent] = field(default_factory=list)
@@ -603,6 +605,16 @@ class Proposal:
             raise ValueError(
                 "Proposal must have either requested_by or requester_contact"
             )
+        if (
+            self.submission_channel == SubmissionChannel.PUBLIC
+            and self.requester_contact is None
+        ):
+            raise ValueError("Public proposals must have requester_contact")
+        if (
+            self.submission_channel == SubmissionChannel.AUTHENTICATED
+            and self.requested_by is None
+        ):
+            raise ValueError("Authenticated proposals must have requested_by")
 
     def resolve_requester(self, permission_id: PermissionId) -> None:
         """Bind a system requester to a proposal submitted via ``requester_contact``.

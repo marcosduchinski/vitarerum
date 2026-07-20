@@ -9,8 +9,6 @@ can render a message; only rate limiting / unexpected faults are non-2xx.
 
 from __future__ import annotations
 
-import io
-import zipfile
 from datetime import date
 from typing import Annotated
 
@@ -67,6 +65,11 @@ from app.public_submission.presentation.schemas import (
     PublicProposalSubmission,
     PublicSubmissionReceipt,
 )
+from app.shared.uploads import (
+    ALLOWED_DOCUMENT_MAX_BYTES,
+    ensure_allowed_document,
+    read_upload_capped,
+)
 from app.use_of_collections.application.use_cases import (
     CorrectionScopeError,
     RemoveAmendmentDocumentInput,
@@ -89,10 +92,6 @@ router = APIRouter(prefix="/public", tags=["public-proposals"])
 
 DBSession = Annotated[AsyncSession, Depends(get_async_session)]
 
-PUBLIC_UPLOAD_MAX_BYTES = 10 * 1024 * 1024
-_UPLOAD_CHUNK = 1024 * 1024
-
-
 def _client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
@@ -102,54 +101,6 @@ def _rate_limited(exc: RateLimitExceeded) -> HTTPException:
         status_code=status.HTTP_429_TOO_MANY_REQUESTS,
         detail={"message": str(exc)},
         headers={"Retry-After": str(exc.retry_after)},
-    )
-
-
-async def _read_public_upload(file: UploadFile) -> bytes:
-    chunks: list[bytes] = []
-    total = 0
-    while True:
-        chunk = await file.read(_UPLOAD_CHUNK)
-        if not chunk:
-            break
-        total += len(chunk)
-        if total > PUBLIC_UPLOAD_MAX_BYTES:
-            raise HTTPException(
-                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-                detail={
-                    "error": "FILE_TOO_LARGE",
-                    "message": (
-                        "Each public submission document must be 10 MB or smaller."
-                    ),
-                },
-            )
-        chunks.append(chunk)
-    return b"".join(chunks)
-
-
-def _is_docx(content: bytes) -> bool:
-    try:
-        with zipfile.ZipFile(io.BytesIO(content)) as archive:
-            return "[Content_Types].xml" in set(archive.namelist())
-    except zipfile.BadZipFile:
-        return False
-
-
-def _ensure_allowed_public_file(content: bytes) -> None:
-    if content.startswith(b"%PDF-"):
-        return
-    if content.startswith(b"\x89PNG\r\n\x1a\n"):
-        return
-    if content.startswith(b"\xff\xd8\xff"):
-        return
-    if _is_docx(content):
-        return
-    raise HTTPException(
-        status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-        detail={
-            "error": "UNSUPPORTED_FILE_TYPE",
-            "message": "Only PDF, JPG, PNG, and DOCX files are accepted.",
-        },
     )
 
 
@@ -172,8 +123,21 @@ async def _uploaded_documents(files: list[UploadFile]) -> list[UploadedDocument]
         )
     documents: list[UploadedDocument] = []
     for file in files:
-        content = await _read_public_upload(file)
-        _ensure_allowed_public_file(content)
+        try:
+            content = await read_upload_capped(file, limit=ALLOWED_DOCUMENT_MAX_BYTES)
+        except HTTPException as exc:
+            if exc.status_code == status.HTTP_413_CONTENT_TOO_LARGE:
+                raise HTTPException(
+                    status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                    detail={
+                        "error": "FILE_TOO_LARGE",
+                        "message": (
+                            "Each public submission document must be 10 MB or smaller."
+                        ),
+                    },
+                ) from exc
+            raise
+        ensure_allowed_document(content)
         documents.append(
             UploadedDocument(file_name=file.filename or "document", content=content)
         )
@@ -402,8 +366,8 @@ async def add_amendment_document(
     _record, _proposal, in_scope = await _load_amendment(
         token, token_repo, proposal_repo, clock
     )
-    content = await _read_public_upload(file)
-    _ensure_allowed_public_file(content)
+    content = await read_upload_capped(file, limit=ALLOWED_DOCUMENT_MAX_BYTES)
+    ensure_allowed_document(content)
     # Scope (uploaded type must match a still-open correction item) is enforced
     # inside the use case via allowed_document_types, derived here from the token.
     try:

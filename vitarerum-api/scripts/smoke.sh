@@ -56,6 +56,7 @@ TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 printf 'dummy form\n'  > "$TMP/form.docx"
 printf 'dummy image\n' > "$TMP/photo.jpg"
+printf '%%PDF-1.4\n'   > "$TMP/support.pdf"
 
 step() { printf '\n\033[1m== %s ==\033[0m\n' "$1"; }
 
@@ -70,19 +71,23 @@ post_json() { # url body header-array-expansion...
 }
 
 step "Submit proposal (EXTERNAL) — seeds the conversation's first message"
-submit="$(post_json "$BASE/proposals" '{
-  "title":"Manuscript study",
-  "intendedUse":{"useType":"OTHER","description":""},
-  "purpose":"Study the codex",
-  "beginDate":"2026-07-01","endDate":"2026-07-15",
-  "initialMessageSubject":"Research visit request",
-  "initialMessageBody":"Dear collections team, I would like to come on site to examine the medieval codex in the reading room for my palaeography research. I do not need to borrow it.",
-  "requestedObjects":[{"inventoryNumber":"INV-001","category":"manuscript","description":"Medieval codex"}]
-}' "${EXT[@]}")"
+submit="$(
+  curl -sS -w '\n%{http_code}' "${EXT[@]}" -X POST "$BASE/proposals" \
+    -F "title=Manuscript study" \
+    -F "intendedUse=OTHER" \
+    -F "purpose=Study the codex" \
+    -F "beginDate=2026-07-01" \
+    -F "endDate=2026-07-15" \
+    -F "initialMessageSubject=Research visit request" \
+    -F "initialMessageBody=Dear collections team, I would like to come on site to examine the medieval codex in the reading room for my palaeography research. I do not need to borrow it." \
+    -F "documents=@$TMP/support.pdf;type=application/pdf"
+)"
+code="${submit##*$'\n'}"; submit="${submit%$'\n'*}"
+if [[ "$code" != 2* ]]; then echo "FAILED ($code): $submit" >&2; exit 1; fi
 PID="$(jq -r .proposal.id <<<"$submit")"
 CONV="$(jq -r .conversationId <<<"$submit")"
 echo "proposal=$PID  conversation=$CONV"
-echo "proposal.status = $(jq -r .proposal.status <<<"$submit")  (current intendedUse: $(jq -r .proposal.intendedUse.useType <<<"$submit"))"
+echo "proposal.status = $(jq -r .proposal.status <<<"$submit")  (current intendedUse: $(jq -r .proposal.intendedUse <<<"$submit"))"
 
 step "ProposalChat AI triage (staff): read context, then suggest intendedUse"
 MID="$(curl -sS "${CUR[@]}" "$BASE/proposals/$PID/conversation" | jq -r '.messages[0].id')"

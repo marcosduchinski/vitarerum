@@ -4,6 +4,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, date, datetime
 
+import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.config import settings
@@ -23,6 +24,7 @@ from app.use_of_collections.application.ports import (
 )
 from app.use_of_collections.domain.enums import (
     ProposalStatus,
+    SubmissionChannel,
     UseStatus,
     UseType,
 )
@@ -125,6 +127,7 @@ def _proposal(
         status=status,
         requested_by=requested_by,
         submitted_at=datetime(2026, 6, 7, tzinfo=UTC),
+        submission_channel=SubmissionChannel.AUTHENTICATED,
         documents=documents or [],
     )
 
@@ -497,6 +500,18 @@ class InMemoryFileStorage:
         self.files.pop(file_reference, None)
 
 
+class FailingSecondSaveStorage(InMemoryFileStorage):
+    def __init__(self) -> None:
+        super().__init__()
+        self.save_calls = 0
+
+    async def save(self, content: bytes, filename: str) -> str:
+        self.save_calls += 1
+        if self.save_calls == 2:
+            raise RuntimeError("storage failed")
+        return await super().save(content, filename)
+
+
 class CommitOnlySession:
     def __init__(
         self, permission_records: dict[str, PermissionRecord] | None = None
@@ -576,6 +591,7 @@ async def client_with_repos(
     permission_records: dict[str, PermissionRecord] | None = None,
     requester_provisioner: RecordingRequesterProvisioner | None = None,
     access_email_sender: RecordingAccessEmailSender | None = None,
+    file_storage: InMemoryFileStorage | None = None,
 ) -> AsyncIterator[
     tuple[
         AsyncClient,
@@ -590,7 +606,7 @@ async def client_with_repos(
     access_log_repo = InMemoryAccessLogRepository()
     occurrence_log_repo = InMemoryOccurrenceLogRepository()
     publication_log_repo = InMemoryPublicationLogRepository()
-    file_storage = InMemoryFileStorage()
+    file_storage = file_storage or InMemoryFileStorage()
     session = CommitOnlySession(permission_records)
     requester_provisioner = requester_provisioner or RecordingRequesterProvisioner()
     access_email_sender = access_email_sender or RecordingAccessEmailSender()
@@ -622,12 +638,14 @@ async def test_submit_proposal_returns_201() -> None:
     async with client_with_repos() as (client, _, _, _):
         response = await client.post(
             "/api/v1/proposals",
-            json={
+            data={
                 "title": "Collection study",
                 "intendedUse": "IN_SITU_VISIT",
                 "purpose": "To study the collection",
                 "beginDate": "2026-06-01",
                 "endDate": "2026-06-07",
+                "initialMessageSubject": "Collection study",
+                "initialMessageBody": "To study the collection",
             },
             headers={"X-Permission-Id": "permission-1"},
         )
@@ -639,6 +657,7 @@ async def test_submit_proposal_returns_201() -> None:
     assert body["proposal"]["title"] == "Collection study"
     assert body["proposal"]["beginDate"] == "2026-06-01"
     assert body["proposal"]["endDate"] == "2026-06-07"
+    assert body["proposal"]["submissionChannel"] == "AUTHENTICATED"
     assert "conversationId" in body
 
 
@@ -646,12 +665,14 @@ async def test_submit_proposal_carries_intended_use_through_to_detail() -> None:
     async with client_with_repos() as (client, _, _, _):
         created = await client.post(
             "/api/v1/proposals",
-            json={
+            data={
                 "title": "Collection study",
                 "intendedUse": "EXHIBITION",
                 "purpose": "To exhibit the collection",
                 "beginDate": "2026-06-01",
                 "endDate": "2026-06-07",
+                "initialMessageSubject": "Collection study",
+                "initialMessageBody": "To exhibit the collection",
             },
             headers={"X-Permission-Id": "permission-1"},
         )
@@ -672,18 +693,177 @@ async def test_submit_proposal_invalid_date_range_returns_422() -> None:
     async with client_with_repos() as (client, _, _, _):
         response = await client.post(
             "/api/v1/proposals",
-            json={
+            data={
                 "title": "Collection study",
                 "intendedUse": "IN_SITU_VISIT",
                 "purpose": "To study the collection",
                 "beginDate": "2026-06-07",
                 "endDate": "2026-06-01",
+                "initialMessageSubject": "Collection study",
+                "initialMessageBody": "To study the collection",
             },
             headers={"X-Permission-Id": "permission-1"},
         )
 
     assert response.status_code == 422
     assert response.json()["message"] == "endDate must be after beginDate"
+
+
+async def test_submit_proposal_accepts_supporting_document_types() -> None:
+    storage = InMemoryFileStorage()
+    async with client_with_repos(file_storage=storage) as (
+        client,
+        _,
+        proposal_repo,
+        _,
+    ):
+        response = await client.post(
+            "/api/v1/proposals",
+            data={
+                "title": "Collection study",
+                "intendedUse": "IN_SITU_VISIT",
+                "beginDate": "2026-06-01",
+                "endDate": "2026-06-07",
+                "initialMessageSubject": "Collection study",
+                "initialMessageBody": "To study the collection",
+            },
+            files=[
+                ("documents", ("support.pdf", b"%PDF-1.4\n", "application/pdf")),
+                ("documents", ("photo.jpg", b"\xff\xd8\xff\xe0", "image/jpeg")),
+                ("documents", ("scan.png", b"\x89PNG\r\n\x1a\n", "image/png")),
+                (
+                    "documents",
+                    (
+                        "letter.docx",
+                        _docx_bytes(),
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    ),
+                ),
+            ],
+            headers={"X-Permission-Id": "permission-1"},
+        )
+
+        proposal_id = response.json()["proposal"]["id"]
+        saved_proposal = await proposal_repo.get_by_id(ProposalId(proposal_id))
+
+    assert response.status_code == 201
+    assert saved_proposal is not None
+    assert [document.file_name for document in saved_proposal.documents] == [
+        "support.pdf",
+        "photo.jpg",
+        "scan.png",
+        "letter.docx",
+    ]
+    assert {document.type.value for document in saved_proposal.documents} == {
+        "REQUESTER_ATTACHMENT"
+    }
+    assert {document.submitted_by for document in saved_proposal.documents} == {
+        "permission-1"
+    }
+    assert len(storage.files) == 4
+
+
+async def test_submit_proposal_rejects_unsupported_document_type() -> None:
+    async with client_with_repos() as (client, _, _, _):
+        response = await client.post(
+            "/api/v1/proposals",
+            data={
+                "intendedUse": "IN_SITU_VISIT",
+                "beginDate": "2026-06-01",
+                "endDate": "2026-06-07",
+                "initialMessageSubject": "Collection study",
+                "initialMessageBody": "To study the collection",
+            },
+            files=[
+                ("documents", ("notes.txt", b"plain text", "text/plain")),
+            ],
+            headers={"X-Permission-Id": "permission-1"},
+        )
+
+    assert response.status_code == 415
+    assert response.json()["error"] == "UNSUPPORTED_FILE_TYPE"
+
+
+async def test_submit_proposal_rejects_more_than_five_documents() -> None:
+    async with client_with_repos() as (client, _, _, _):
+        response = await client.post(
+            "/api/v1/proposals",
+            data={
+                "intendedUse": "IN_SITU_VISIT",
+                "beginDate": "2026-06-01",
+                "endDate": "2026-06-07",
+                "initialMessageSubject": "Collection study",
+                "initialMessageBody": "To study the collection",
+            },
+            files=[
+                (
+                    "documents",
+                    (f"support-{index}.pdf", b"%PDF-1.4\n", "application/pdf"),
+                )
+                for index in range(6)
+            ],
+            headers={"X-Permission-Id": "permission-1"},
+        )
+
+    assert response.status_code == 422
+    assert response.json()["errors"][0]["field"] == "documents"
+
+
+async def test_submit_proposal_rejects_oversized_document() -> None:
+    async with client_with_repos() as (client, _, _, _):
+        response = await client.post(
+            "/api/v1/proposals",
+            data={
+                "intendedUse": "IN_SITU_VISIT",
+                "beginDate": "2026-06-01",
+                "endDate": "2026-06-07",
+                "initialMessageSubject": "Collection study",
+                "initialMessageBody": "To study the collection",
+            },
+            files=[
+                (
+                    "documents",
+                    (
+                        "large.pdf",
+                        b"%PDF-1.4\n" + b"x" * (10 * 1024 * 1024),
+                        "application/pdf",
+                    ),
+                ),
+            ],
+            headers={"X-Permission-Id": "permission-1"},
+        )
+
+    assert response.status_code == 413
+    assert response.json()["error"] == "FILE_TOO_LARGE"
+
+
+async def test_submit_proposal_rolls_back_saved_documents_when_upload_fails() -> None:
+    storage = FailingSecondSaveStorage()
+    async with client_with_repos(file_storage=storage) as (client, _, _, _):
+        with pytest.raises(RuntimeError, match="storage failed"):
+            await client.post(
+                "/api/v1/proposals",
+                data={
+                    "intendedUse": "IN_SITU_VISIT",
+                    "beginDate": "2026-06-01",
+                    "endDate": "2026-06-07",
+                    "initialMessageSubject": "Collection study",
+                    "initialMessageBody": "To study the collection",
+                },
+                files=[
+                    (
+                        "documents",
+                        ("support-1.pdf", b"%PDF-1.4\n", "application/pdf"),
+                    ),
+                    (
+                        "documents",
+                        ("support-2.pdf", b"%PDF-1.4\n", "application/pdf"),
+                    ),
+                ],
+                headers={"X-Permission-Id": "permission-1"},
+            )
+
+    assert storage.files == {}
 
 
 async def test_list_proposals_serializes_populated_item() -> None:
@@ -700,6 +880,7 @@ async def test_list_proposals_serializes_populated_item() -> None:
                 status=ProposalStatus.SUBMITTED,
                 requested_by=PermissionId("permission-1"),
                 submitted_at=datetime(2026, 6, 7, tzinfo=UTC),
+                submission_channel=SubmissionChannel.AUTHENTICATED,
             )
         )
 
@@ -717,6 +898,7 @@ async def test_list_proposals_serializes_populated_item() -> None:
     assert item["title"] == "Proposal title"
     assert item["status"] == "SUBMITTED"
     assert item["intendedUse"] == "IN_SITU_VISIT"
+    assert item["submissionChannel"] == "AUTHENTICATED"
 
 
 async def test_list_proposals_paginates_results() -> None:
@@ -736,6 +918,7 @@ async def test_list_proposals_paginates_results() -> None:
                     status=ProposalStatus.SUBMITTED,
                     requested_by=PermissionId("permission-1"),
                     submitted_at=datetime(2026, 6, 7, index, tzinfo=UTC),
+                    submission_channel=SubmissionChannel.AUTHENTICATED,
                 )
             )
 
@@ -797,12 +980,14 @@ async def test_relate_searched_objects_surfaces_them_on_detail() -> None:
     async with client_with_repos() as (client, _, proposal_repo, _):
         create = await client.post(
             "/api/v1/proposals",
-            json={
+            data={
                 "title": "Manuscript study",
                 "intendedUse": "IN_SITU_VISIT",
                 "purpose": "To study the manuscript",
                 "beginDate": "2026-06-01",
                 "endDate": "2026-06-07",
+                "initialMessageSubject": "Manuscript study",
+                "initialMessageBody": "To study the manuscript",
             },
             headers={"X-Permission-Id": "permission-1"},
         )
@@ -847,12 +1032,14 @@ async def test_remove_requested_object_updates_proposal_detail() -> None:
     async with client_with_repos() as (client, _, _, _):
         create = await client.post(
             "/api/v1/proposals",
-            json={
+            data={
                 "title": "Manuscript study",
                 "intendedUse": "IN_SITU_VISIT",
                 "purpose": "To study the manuscript",
                 "beginDate": "2026-06-01",
                 "endDate": "2026-06-07",
+                "initialMessageSubject": "Manuscript study",
+                "initialMessageBody": "To study the manuscript",
             },
             headers={"X-Permission-Id": "permission-1"},
         )
@@ -903,6 +1090,7 @@ async def test_external_user_cannot_read_other_proposal_events() -> None:
                 status=ProposalStatus.SUBMITTED,
                 requested_by=PermissionId("permission-other"),
                 submitted_at=datetime(2026, 6, 7, tzinfo=UTC),
+                submission_channel=SubmissionChannel.AUTHENTICATED,
             )
         )
 
@@ -929,6 +1117,7 @@ async def test_external_user_cannot_read_other_proposal_documents() -> None:
                 status=ProposalStatus.SUBMITTED,
                 requested_by=PermissionId("permission-other"),
                 submitted_at=datetime(2026, 6, 7, tzinfo=UTC),
+                submission_channel=SubmissionChannel.AUTHENTICATED,
             )
         )
 
@@ -968,6 +1157,7 @@ async def test_external_user_cannot_read_other_project_events() -> None:
                 status=ProposalStatus.APPROVED,
                 requested_by=PermissionId("permission-other"),
                 submitted_at=datetime(2026, 6, 7, tzinfo=UTC),
+                submission_channel=SubmissionChannel.AUTHENTICATED,
             )
         )
 
@@ -1138,6 +1328,7 @@ async def test_external_owner_cannot_assign_proposal() -> None:
                 status=ProposalStatus.SUBMITTED,
                 requested_by=PermissionId("permission-1"),
                 submitted_at=datetime(2026, 6, 7, tzinfo=UTC),
+                submission_channel=SubmissionChannel.AUTHENTICATED,
             )
         )
 
@@ -1165,6 +1356,7 @@ async def test_external_owner_cannot_request_documents() -> None:
                 status=ProposalStatus.PENDING,
                 requested_by=PermissionId("permission-1"),
                 submitted_at=datetime(2026, 6, 7, tzinfo=UTC),
+                submission_channel=SubmissionChannel.AUTHENTICATED,
             )
         )
 
@@ -1201,6 +1393,7 @@ async def test_assign_proposal_rejects_unknown_target_permission() -> None:
                 status=ProposalStatus.SUBMITTED,
                 requested_by=PermissionId("permission-1"),
                 submitted_at=datetime(2026, 6, 7, tzinfo=UTC),
+                submission_channel=SubmissionChannel.AUTHENTICATED,
             )
         )
 
@@ -1234,6 +1427,7 @@ async def test_assign_proposal_rejects_external_target_permission() -> None:
                 status=ProposalStatus.SUBMITTED,
                 requested_by=PermissionId("permission-1"),
                 submitted_at=datetime(2026, 6, 7, tzinfo=UTC),
+                submission_channel=SubmissionChannel.AUTHENTICATED,
             )
         )
 
@@ -1267,6 +1461,7 @@ async def test_forward_proposal_rejects_external_target_permission() -> None:
                 status=ProposalStatus.PENDING,
                 requested_by=PermissionId("permission-1"),
                 submitted_at=datetime(2026, 6, 7, tzinfo=UTC),
+                submission_channel=SubmissionChannel.AUTHENTICATED,
             )
         )
 
@@ -1297,6 +1492,7 @@ async def test_reject_proposal_creates_message_to_requester() -> None:
             status=ProposalStatus.PENDING,
             requested_by=PermissionId("permission-1"),
             submitted_at=datetime(2026, 6, 7, tzinfo=UTC),
+            submission_channel=SubmissionChannel.AUTHENTICATED,
         )
         await proposal_repo.add(proposal)
         await conversation_repo.add(
@@ -1354,6 +1550,7 @@ async def test_staff_can_assign_proposal_to_staff_target() -> None:
                 status=ProposalStatus.SUBMITTED,
                 requested_by=PermissionId("permission-1"),
                 submitted_at=datetime(2026, 6, 7, tzinfo=UTC),
+                submission_channel=SubmissionChannel.AUTHENTICATED,
             )
         )
 
@@ -1393,6 +1590,7 @@ async def test_staff_can_forward_proposal_to_staff_target() -> None:
                 status=ProposalStatus.PENDING,
                 requested_by=PermissionId("permission-1"),
                 submitted_at=datetime(2026, 6, 7, tzinfo=UTC),
+                submission_channel=SubmissionChannel.AUTHENTICATED,
             )
         )
 
@@ -1429,6 +1627,7 @@ async def test_forward_proposal_rejects_non_pending_proposal() -> None:
                 status=ProposalStatus.APPROVED,
                 requested_by=PermissionId("permission-1"),
                 submitted_at=datetime(2026, 6, 7, tzinfo=UTC),
+                submission_channel=SubmissionChannel.AUTHENTICATED,
             )
         )
 
@@ -2143,6 +2342,7 @@ async def test_approve_proposal_invalid_date_range_returns_422() -> None:
                 status=ProposalStatus.PENDING,
                 requested_by=PermissionId("permission-1"),
                 submitted_at=datetime(2026, 6, 7, tzinfo=UTC),
+                submission_channel=SubmissionChannel.AUTHENTICATED,
             )
         )
 
@@ -2193,6 +2393,7 @@ async def test_approve_public_proposal_sends_access_email_after_commit() -> None
                     name="Pedro Silva", email=EmailAddress("pedro@example.test")
                 ),
                 submitted_at=datetime(2026, 6, 7, tzinfo=UTC),
+                submission_channel=SubmissionChannel.PUBLIC,
                 requested_objects=[
                     RequestedObject(
                         id=RequestedObjectId("requested-object-1"),
@@ -2321,6 +2522,7 @@ async def test_submit_document_empty_document_type_returns_422() -> None:
                 status=ProposalStatus.PENDING,
                 requested_by=PermissionId("permission-1"),
                 submitted_at=datetime(2026, 6, 7, tzinfo=UTC),
+                submission_channel=SubmissionChannel.AUTHENTICATED,
             )
         )
 
@@ -2347,6 +2549,7 @@ def _pending_proposal() -> "Proposal":
         status=ProposalStatus.PENDING,
         requested_by=PermissionId("permission-1"),
         submitted_at=datetime(2026, 6, 7, tzinfo=UTC),
+        submission_channel=SubmissionChannel.AUTHENTICATED,
     )
 
 
@@ -2483,6 +2686,7 @@ async def test_log_entry_attachment_invalid_media_type_returns_422() -> None:
                 status=ProposalStatus.APPROVED,
                 requested_by=PermissionId("permission-1"),
                 submitted_at=datetime(2026, 6, 7, tzinfo=UTC),
+                submission_channel=SubmissionChannel.AUTHENTICATED,
             )
         )
         log_repo = app.dependency_overrides[get_access_log_repo]()

@@ -6,23 +6,20 @@
 
 **Description** — Researcher submits a first contact request. Atomically creates a `Proposal` in `SUBMITTED` status and a `Conversation` seeded with the initial email message (Business Rule 01 — every proposal opens with an email). Records a `SUBMITTED` `ProposalEvent`. The caller's `PermissionId` is recorded as `requestedBy`. In the normal researcher flow the caller is an `EXTERNAL` group member. **No `CollectionUseProject` is created at this point** — the project is materialised only when a curator approves the proposal (`POST /proposals/{proposal_id}/approve`).
 
-**All proposal-defining fields are optional.** A proposal may be submitted as a stub — with none of `title`, `intendedUse`, `purpose`, `beginDate`, or `endDate` — and completed in a later step. Every field below may be omitted or sent as `null`; an empty `{}` body is accepted.
-
-**Request body**
-```json
-{
-  "title": "string | null",
-  "intendedUse": "EXHIBITION | IN_SITU_VISIT | OTHER",
-  "purpose": "string | null",
-  "beginDate": "2025-06-01 | null",
-  "endDate": "2025-06-30 | null",
-  "initialMessageRecipient": "collections@museum.pt",
-  "initialMessageSubject": "string",
-  "initialMessageBody": "string"
-}
+**Request body** — `multipart/form-data`
+```text
+title=string
+intendedUse=EXHIBITION | IN_SITU_VISIT | OTHER
+purpose=string
+beginDate=2025-06-01
+endDate=2025-06-30
+initialMessageRecipient=collections@museum.pt
+initialMessageSubject=string
+initialMessageBody=string
+documents=@file.pdf
 ```
 
-`title`, `intendedUse`, `purpose`, `beginDate`, and `endDate` are all optional and default to `null` when omitted. `intendedUse`, when present, is the categorised use type — one of `EXHIBITION`, `IN_SITU_VISIT`, or `OTHER`; when omitted it is `null`. `initialMessageRecipient` defaults to `collections@museum.pt` when omitted or blank. `initialMessageSubject` falls back to `title` (and `title`, when omitted, falls back to `initialMessageSubject`); `initialMessageBody` falls back to `purpose`; both default to an empty string when neither is given. The sender of the seeded message is resolved from the authenticated caller. The `endDate`-after-`beginDate` rule is only enforced when both dates are present.
+`title`, `intendedUse`, `purpose`, `beginDate`, and `endDate` are form fields and may be omitted. `intendedUse`, when present, is one of `EXHIBITION`, `IN_SITU_VISIT`, or `OTHER`; when omitted it is `null`. `initialMessageRecipient` is accepted for compatibility and defaults to `collections@museum.pt` when omitted or blank; the authenticated submit page does not ask the user for it. `initialMessageSubject` falls back to `title` (and `title`, when omitted, falls back to `initialMessageSubject`); `initialMessageBody` falls back to `purpose`; both default to an empty string when neither is given. The sender of the seeded message is resolved from the authenticated caller. The `endDate`-after-`beginDate` rule is only enforced when both dates are present. `documents` may be repeated up to 5 times; accepted types are PDF, JPG, PNG, and DOCX, up to 10 MB each. Uploaded files are stored as requester attachments.
 
 **A proposal is always created object-free.** The collection objects a researcher wants are described in prose in the initial message; they are attached as structured `RequestedObject` entries only later, once the researcher has searched the catalog and selected the matches, via `POST /proposals/{proposal_id}/requested-objects`. This endpoint accepts no `requestedObjects` field — any such field in the body is ignored.
 
@@ -47,13 +44,14 @@
       "group": "EXTERNAL"
     },
     "assignedTo": null,
-    "submittedAt": "2025-01-15T10:30:00"
+    "submittedAt": "2025-01-15T10:30:00",
+    "submissionChannel": "AUTHENTICATED"
   },
   "conversationId": "uuid"
 }
 ```
 
-The submit response carries only the `proposal` summary and the `conversationId`; there is no project yet. `title`, `intendedUse`, `beginDate`, and `endDate` are echoed back as stored and are `null` when they were not supplied. `beginDate` and `endDate`, when present, are the requested use period. The proposal reference follows `VRP-YYYYMMDD-XXXX`, where `XXXX` is sequential per submission date. The project (with its `CUP-XXXXXXXX` reference number) appears once the proposal is approved.
+The submit response carries only the `proposal` summary and the `conversationId`; there is no project yet. `title`, `intendedUse`, `beginDate`, and `endDate` are echoed back as stored and are `null` when they were not supplied. `beginDate` and `endDate`, when present, are the requested use period. `submissionChannel` is `AUTHENTICATED` for this endpoint; public confirmations materialise proposals with `PUBLIC`. The proposal reference follows `VRP-YYYYMMDD-XXXX`, where `XXXX` is sequential per submission date. The project (with its `CUP-XXXXXXXX` reference number) appears once the proposal is approved.
 
 **Response `422 Unprocessable Entity`**
 ```json
@@ -62,6 +60,41 @@ The submit response carries only the `proposal` summary and the `conversationId`
   "message": "endDate must be after beginDate"
 }
 ```
+
+**Response `413 Content Too Large`**
+```json
+{
+  "error": "FILE_TOO_LARGE",
+  "message": "File exceeds the 10485760-byte limit"
+}
+```
+
+Returned when any `documents` upload exceeds 10 MB.
+
+**Response `415 Unsupported Media Type`**
+```json
+{
+  "error": "UNSUPPORTED_FILE_TYPE",
+  "message": "Only PDF, JPG, PNG, and DOCX files are accepted."
+}
+```
+
+Returned when any `documents` upload is not a valid PDF, JPG, PNG, or DOCX file.
+
+**Response `422 Unprocessable Entity`**
+```json
+{
+  "message": "Validation failed",
+  "errors": [
+    {
+      "field": "documents",
+      "message": "Attach no more than five supporting documents."
+    }
+  ]
+}
+```
+
+Returned when more than 5 `documents` parts are submitted.
 
 ---
 
@@ -109,7 +142,8 @@ permission id. `page` is zero-based. `size` must be between 1 and 100.
         "group": "EXTERNAL"
       },
       "assignedTo": null,
-      "submittedAt": "2025-01-15T10:30:00"
+      "submittedAt": "2025-01-15T10:30:00",
+      "submissionChannel": "AUTHENTICATED"
     }
   ],
   "page": 0,
@@ -295,11 +329,12 @@ proposal_id : UUID (required)
       }
     }
   ],
-  "submittedAt": "2025-01-15T10:30:00"
+  "submittedAt": "2025-01-15T10:30:00",
+  "submissionChannel": "AUTHENTICATED"
 }
 ```
 
-`status` is a `ProposalStatus` — one of `SUBMITTED`, `PENDING`, `APPROVED`, `REJECTED`, `CANCELLED`. The top-level `referenceNumber` is the proposal reference (`VRP-YYYYMMDD-XXXX`), the top-level `title` is the title submitted with the proposal, and `beginDate` / `endDate` are the requested use period. `title`, `intendedUse`, `beginDate`, and `endDate` are nullable: a stub proposal submitted without them carries `null` until they are filled in (e.g. at approval). The `intendedUse` object is either fully present or `null` as a whole. Publicly submitted proposals that have not yet been approved may have `requestedBy: null` and a `requesterContact` object with the citizen's submitted `name` and `email`; authenticated proposals have `requestedBy` populated and `requesterContact: null`. Public submission documents may likewise have `submittedBy: null` until a system requester is provisioned at approval. `collectionUseProject` is always present in the shape, but until the proposal is approved no project exists yet: its `id`, `referenceNumber`, and `title` are empty strings, `status` is the placeholder `CREATED`, and `requestedBy` is `null`. After approval these reflect the real project (`CUP-XXXXXXXX`) and its `requestedBy` permission. `conversationId` may be `null` only if the persisted proposal has no conversation row. `requestedDocuments` lists the document types a staff attendant has formally requested (via `POST /proposals/{proposal_id}/request-documents`); `documents` lists the files actually uploaded; `requestedObjects` lists the collection objects the researcher asked to use (attached via `POST /proposals/{proposal_id}/requested-objects`). `submittedBy`, `requestedBy`, when present, are full permission objects, not bare ids. Proposal requested objects may have `requestedBy: null`; when a proposal is approved, project-owned object copies are attributed to the resolved project requester. Each requested object carries the inventory snapshot the client supplied from the catalog search result directly on the object — `inventoryNumber` is always present; `displayTitle`, `objectName`, and `briefDescriptionSnapshot` may be `null` in stored data, although the requested-object creation endpoint requires `displayTitle` and `objectName`.
+`status` is a `ProposalStatus` — one of `SUBMITTED`, `PENDING`, `APPROVED`, `REJECTED`, `CANCELLED`. `submissionChannel` is either `PUBLIC` or `AUTHENTICATED` and is the persisted origin marker for the proposal. The top-level `referenceNumber` is the proposal reference (`VRP-YYYYMMDD-XXXX`), the top-level `title` is the title submitted with the proposal, and `beginDate` / `endDate` are the requested use period. `title`, `intendedUse`, `beginDate`, and `endDate` are nullable: a stub proposal submitted without them carries `null` until they are filled in (e.g. at approval). The `intendedUse` object is either fully present or `null` as a whole. Publicly submitted proposals that have not yet been approved may have `requestedBy: null` and a `requesterContact` object with the citizen's submitted `name` and `email`; authenticated proposals have `requestedBy` populated and `requesterContact: null`. Public submission documents may likewise have `submittedBy: null` until a system requester is provisioned at approval. `collectionUseProject` is always present in the shape, but until the proposal is approved no project exists yet: its `id`, `referenceNumber`, and `title` are empty strings, `status` is the placeholder `CREATED`, and `requestedBy` is `null`. After approval these reflect the real project (`CUP-XXXXXXXX`) and its `requestedBy` permission. `conversationId` may be `null` only if the persisted proposal has no conversation row. `requestedDocuments` lists the document types a staff attendant has formally requested (via `POST /proposals/{proposal_id}/request-documents`); `documents` lists the files actually uploaded; `requestedObjects` lists the collection objects the researcher asked to use (attached via `POST /proposals/{proposal_id}/requested-objects`). `submittedBy`, `requestedBy`, when present, are full permission objects, not bare ids. Proposal requested objects may have `requestedBy: null`; when a proposal is approved, project-owned object copies are attributed to the resolved project requester. Each requested object carries the inventory snapshot the client supplied from the catalog search result directly on the object — `inventoryNumber` is always present; `displayTitle`, `objectName`, and `briefDescriptionSnapshot` may be `null` in stored data, although the requested-object creation endpoint requires `displayTitle` and `objectName`.
 
 **Response `404 Not Found`**
 ```json

@@ -97,33 +97,31 @@ Uses `X-Permission-Id` of the researcher submitting the form.
 # Proposal 1 — Alice, IN_SITU_VISIT
 curl -s -X POST http://localhost:8000/api/v1/proposals \
   -H "X-Permission-Id: perm-ext" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "title": "Study of 18th-century ceramics",
-    "type": "IN_SITU_VISIT",
-    "purpose": "Doctoral thesis on glazing techniques in Portuguese ceramics.",
-    "beginDate": "2026-07-01",
-    "endDate": "2026-07-31",
-    "initialMessageRecipient": "collections@museum.pt",
-    "initialMessageSubject": "Study of 18th-century ceramics",
-    "initialMessageBody": "Dear team, I would like to request access to study the 18th-century ceramics collection for my doctoral thesis on glazing techniques."
-  }' | python3 -m json.tool
+  -F "title=Study of 18th-century ceramics" \
+  -F "intendedUse=IN_SITU_VISIT" \
+  -F "purpose=Doctoral thesis on glazing techniques in Portuguese ceramics." \
+  -F "beginDate=2026-07-01" \
+  -F "endDate=2026-07-31" \
+  -F "initialMessageSubject=Study of 18th-century ceramics" \
+  -F "initialMessageBody=Dear team, I would like to request access to study the 18th-century ceramics collection for my doctoral thesis on glazing techniques." \
+  -F "documents=@/path/to/support.pdf" | python3 -m json.tool
 
 # Proposal 2 — Alice, EXHIBITION
 curl -s -X POST http://localhost:8000/api/v1/proposals \
   -H "X-Permission-Id: perm-ext" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "title": "Loan request for travelling exhibition",
-    "type": "EXHIBITION",
-    "purpose": "Temporary loan of three azulejo panels for a European travelling exhibition.",
-    "beginDate": "2026-09-01",
-    "endDate": "2026-12-31",
-    "initialMessageRecipient": "collections@museum.pt",
-    "initialMessageSubject": "Loan request — azulejo panels",
-    "initialMessageBody": "We are organising a travelling exhibition on Portuguese tile art and would like to request a temporary loan of three azulejo panels."
-  }' | python3 -m json.tool
+  -F "title=Loan request for travelling exhibition" \
+  -F "intendedUse=EXHIBITION" \
+  -F "purpose=Temporary loan of three azulejo panels for a European travelling exhibition." \
+  -F "beginDate=2026-09-01" \
+  -F "endDate=2026-12-31" \
+  -F "initialMessageSubject=Loan request for azulejo panels" \
+  -F "initialMessageBody=We are organising a travelling exhibition on Portuguese tile art and would like to request a temporary loan of three azulejo panels." | python3 -m json.tool
 ```
+
+Authenticated submissions use `multipart/form-data`. Name and e-mail are taken
+from the logged-in permission; the persisted proposal response includes
+`submissionChannel: "AUTHENTICATED"`. The public confirmation flow materialises
+proposals with `submissionChannel: "PUBLIC"`.
 
 ---
 

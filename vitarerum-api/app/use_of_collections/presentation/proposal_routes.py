@@ -27,6 +27,11 @@ from app.shared.authorization import (
 )
 from app.shared.dependencies import CallerPermission
 from app.shared.persistence import run_with_unique_retry
+from app.shared.uploads import (
+    ALLOWED_DOCUMENT_MAX_BYTES,
+    ALLOWED_DOCUMENT_MAX_COUNT,
+    ensure_allowed_document,
+)
 from app.use_of_collections.application.authorization import (
     assert_proposal_access,
 )
@@ -70,10 +75,14 @@ from app.use_of_collections.application.use_cases import (
 )
 from app.use_of_collections.domain.enums import (
     ProposalStatus,
+    SubmissionChannel,
     UseStatus,
     UseType,
 )
 from app.use_of_collections.domain.models import (
+    Document,
+    DocumentId,
+    DocumentType,
     PermissionId,
     ProposalId,
     RequestedObjectId,
@@ -95,6 +104,9 @@ from app.use_of_collections.presentation.common import (
     ensure_docx,
     proposals_router,
     read_upload_capped,
+    route_file_reference,
+    route_new_id,
+    route_now,
 )
 from app.use_of_collections.presentation.dependencies import (
     AccessEmailSender,
@@ -138,7 +150,6 @@ from app.use_of_collections.presentation.schemas import (
     RequestedDocumentResponse,
     RequestedObjectResponse,
     SendMessageRequest,
-    SubmitProposalRequest,
     SubmitProposalResponse,
     UpdateProposalRequest,
     UserSummary,
@@ -155,19 +166,23 @@ from app.use_of_collections.presentation.schemas import (
     response_model=SubmitProposalResponse,
 )
 async def submit_proposal(
-    request: SubmitProposalRequest,
     caller: CallerPermission,
-    project_repo: ProjectRepo,
     proposal_repo: ProposalRepo,
     conversation_repo: ConvRepo,
+    file_storage: FileStorage,
     session: DBSession,
+    documents: Annotated[list[UploadFile], File(default_factory=list)],
+    title: Annotated[str | None, Form()] = None,
+    intendedUse: Annotated[UseType | None, Form()] = None,
+    purpose: Annotated[str | None, Form()] = None,
+    beginDate: Annotated[date | None, Form()] = None,
+    endDate: Annotated[date | None, Form()] = None,
+    initialMessageRecipient: Annotated[str, Form()] = "",
+    initialMessageSubject: Annotated[str, Form()] = "",
+    initialMessageBody: Annotated[str, Form()] = "",
 ) -> SubmitProposalResponse:
     # Dates are optional on submit, but when both are given the range must be valid.
-    if (
-        request.beginDate is not None
-        and request.endDate is not None
-        and request.endDate < request.beginDate
-    ):
+    if beginDate is not None and endDate is not None and endDate < beginDate:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={
@@ -175,26 +190,77 @@ async def submit_proposal(
                 "message": "endDate must be after beginDate",
             },
         )
+    if len(documents) > ALLOWED_DOCUMENT_MAX_COUNT:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={
+                "message": "Validation failed",
+                "errors": [
+                    {
+                        "field": "documents",
+                        "message": (
+                            f"Attach no more than {ALLOWED_DOCUMENT_MAX_COUNT} "
+                            "supporting documents."
+                        ),
+                    }
+                ],
+            },
+        )
+
+    upload_namespace = route_new_id()
+    submitted_at = route_now()
+    saved_references: list[str] = []
+    submitted_documents: list[Document] = []
+    try:
+        for upload in documents:
+            content = await read_upload_capped(
+                upload, limit=ALLOWED_DOCUMENT_MAX_BYTES
+            )
+            ensure_allowed_document(content)
+            file_name = upload.filename or "document"
+            reference = route_file_reference("proposals", upload_namespace, file_name)
+            file_reference = await file_storage.save(content, reference)
+            saved_references.append(file_reference)
+            submitted_documents.append(
+                Document(
+                    id=DocumentId(route_new_id()),
+                    type=DocumentType("REQUESTER_ATTACHMENT"),
+                    file_name=file_name,
+                    file_reference=file_reference,
+                    submitted_at=submitted_at,
+                    submitted_by=caller.id,
+                )
+            )
+    except Exception:
+        for file_reference in saved_references:
+            await file_storage.delete(file_reference)
+        raise
+
     use_case = SubmitProposal(proposal_repo, conversation_repo)
     submit_input = SubmitProposalInput(
-        title=request.title,
-        intended_use=request.intendedUse,
-        purpose=request.purpose,
-        begin_date=request.beginDate,
-        end_date=request.endDate,
+        title=title,
+        intended_use=intendedUse,
+        purpose=purpose,
+        begin_date=beginDate,
+        end_date=endDate,
         requested_by=caller,
-        initial_message_recipient=(
-            request.initialMessageRecipient or "collections@museum.pt"
-        ),
-        initial_message_subject=request.initialMessageSubject,
-        initial_message_body=request.initialMessageBody,
+        submission_channel=SubmissionChannel.AUTHENTICATED,
+        initial_message_recipient=initialMessageRecipient or "collections@museum.pt",
+        initial_message_subject=initialMessageSubject,
+        initial_message_body=initialMessageBody,
+        documents=submitted_documents,
     )
     # Reference numbers are allocated as MAX+1; retry on the rare unique-conflict
     # race so concurrent submissions don't surface a 500.
-    output = await run_with_unique_retry(
-        session, lambda: use_case.execute(submit_input)
-    )
-    await session.commit()
+    try:
+        output = await run_with_unique_retry(
+            session, lambda: use_case.execute(submit_input)
+        )
+        await session.commit()
+    except Exception:
+        for file_reference in saved_references:
+            await file_storage.delete(file_reference)
+        raise
 
     assert output.proposal.requested_by is not None
     requested_by_detail = await hydrate_permission(
@@ -213,6 +279,7 @@ async def submit_proposal(
             referenceNumber=output.proposal.reference_number.value,
             title=output.proposal.title,
             status=output.proposal.status,
+            submissionChannel=output.proposal.submission_channel,
             intendedUse=output.proposal.intended_use,
             beginDate=output.proposal.begin_date,
             endDate=output.proposal.end_date,
@@ -261,6 +328,7 @@ async def list_proposals(
             referenceNumber=item.proposal.reference_number.value,
             title=item.proposal.title,
             status=item.proposal.status,
+            submissionChannel=item.proposal.submission_channel,
             intendedUse=item.proposal.intended_use,
             beginDate=item.proposal.begin_date,
             endDate=item.proposal.end_date,
@@ -363,6 +431,7 @@ async def get_proposal(
         referenceNumber=proposal.reference_number.value,
         title=proposal.title,
         status=proposal.status,
+        submissionChannel=proposal.submission_channel,
         intendedUse=proposal.intended_use,
         beginDate=proposal.begin_date,
         endDate=proposal.end_date,

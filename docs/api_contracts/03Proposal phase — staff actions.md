@@ -54,7 +54,8 @@ Repeat `status` to match any of several statuses (OR semantics), for example
         },
         "group": "CURATORIAL"
       },
-      "submittedAt": "2025-01-15T10:30:00"
+      "submittedAt": "2025-01-15T10:30:00",
+      "submissionChannel": "AUTHENTICATED"
     }
   ],
   "page": 0,
@@ -64,7 +65,7 @@ Repeat `status` to match any of several statuses (OR semantics), for example
 }
 ```
 
-List items carry the proposal summary only, including the proposal `referenceNumber` (`VRP-YYYYMMDD-XXXX`) and `title` — there is no embedded `collectionUseProject` (use `GET /proposals/{proposal_id}` for the linked project reference). `title`, `intendedUse`, `beginDate`, and `endDate` are nullable: a proposal submitted as a stub carries `null` for any of these until it is filled in. Public submissions that are not yet approved may have `requestedBy: null` and `requesterContact: { "name", "email" }`, because the Identity user/permission is provisioned only during approval.
+List items carry the proposal summary only, including the proposal `referenceNumber` (`VRP-YYYYMMDD-XXXX`), `title`, and persisted `submissionChannel` (`PUBLIC` or `AUTHENTICATED`) — there is no embedded `collectionUseProject` (use `GET /proposals/{proposal_id}` for the linked project reference). `title`, `intendedUse`, `beginDate`, and `endDate` are nullable: a proposal submitted as a stub carries `null` for any of these until it is filled in. Public submissions that are not yet approved may have `requestedBy: null` and `requesterContact: { "name", "email" }`, because the Identity user/permission is provisioned only during approval.
 
 > **Note — nullable proposal fields in command responses.** Every staff command below returns a proposal summary whose `title`, `beginDate`, and `endDate` (and, where shown, `intendedUse`) echo the stored proposal. For a stub proposal that has not yet been completed these are `null`. They are shown below with concrete example values for brevity.
 

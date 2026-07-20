@@ -119,6 +119,7 @@ ignore_imports = [
     # Tracked for extraction behind published ingestion facades; these ignores
     # stop NEW drift meanwhile.
     "app.public_submission.application.use_cases -> app.use_of_collections.application.use_cases",
+    "app.public_submission.application.use_cases -> app.use_of_collections.domain.enums",
     "app.public_submission.application.use_cases -> app.use_of_collections.domain.models",
     "app.public_submission.presentation.dependencies -> app.use_of_collections.application.use_cases",
     "app.public_submission.presentation.dependencies -> app.use_of_collections.infrastructure.file_storage",

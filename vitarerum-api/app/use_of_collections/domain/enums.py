@@ -40,6 +40,11 @@ class ProposalStatus(StrEnum):
     CANCELLED = "CANCELLED"
 
 
+class SubmissionChannel(StrEnum):
+    PUBLIC = "PUBLIC"
+    AUTHENTICATED = "AUTHENTICATED"
+
+
 class ProposalEventType(StrEnum):
     SUBMITTED = "SUBMITTED"
     ASSIGNED = "ASSIGNED"

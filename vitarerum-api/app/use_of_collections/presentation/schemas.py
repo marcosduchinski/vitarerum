@@ -7,6 +7,7 @@ from app.use_of_collections.domain.enums import (
     MediaType,
     ProposalEventType,
     ProposalStatus,
+    SubmissionChannel,
     UseEventType,
     UseResult,
     UseStatus,
@@ -29,19 +30,6 @@ class PermissionDetail(BaseModel):
 
 
 # ── Proposal request/response schemas ────────────────────────────────────────
-
-
-class SubmitProposalRequest(BaseModel):
-    # All proposal-defining fields are optional: a proposal can be created as a
-    # stub and completed in a later step. See SubmitProposal use case.
-    title: str | None = None
-    intendedUse: UseType | None = None
-    purpose: str | None = None
-    beginDate: date | None = None
-    endDate: date | None = None
-    initialMessageRecipient: str = ""
-    initialMessageSubject: str = ""
-    initialMessageBody: str = ""
 
 
 class UpdateProposalRequest(BaseModel):
@@ -74,6 +62,7 @@ class ProposalSummary(BaseModel):
     referenceNumber: str
     title: str | None = None
     status: ProposalStatus
+    submissionChannel: SubmissionChannel
     intendedUse: UseType | None = None
     beginDate: date | None = None
     endDate: date | None = None
@@ -161,6 +150,7 @@ class ProposalDetailResponse(BaseModel):
     referenceNumber: str
     title: str | None = None
     status: ProposalStatus
+    submissionChannel: SubmissionChannel
     intendedUse: UseType | None = None
     beginDate: date | None = None
     endDate: date | None = None
@@ -188,6 +178,7 @@ class ProposalListItemResponse(BaseModel):
     referenceNumber: str
     title: str | None = None
     status: ProposalStatus
+    submissionChannel: SubmissionChannel
     intendedUse: UseType | None = None
     beginDate: date | None = None
     endDate: date | None = None

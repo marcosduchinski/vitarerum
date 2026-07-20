@@ -19,6 +19,7 @@ from app.public_submission.domain.models import (
     PendingSubmissionStatus,
 )
 from app.shared.kernel import UseType
+from app.use_of_collections.domain.enums import SubmissionChannel
 
 _NOW = datetime(2026, 6, 26, 12, 0, tzinfo=UTC)
 
@@ -278,6 +279,7 @@ async def test_confirm_materialises_proposal() -> None:
     assert len(submit.calls) == 1
     # The citizen's intended use is carried into the materialised proposal.
     assert submit.calls[0].intended_use == UseType.IN_SITU_VISIT
+    assert submit.calls[0].submission_channel == SubmissionChannel.PUBLIC
     # As are the dates the citizen proposed.
     assert submit.calls[0].begin_date == date(2026, 7, 1)
     assert submit.calls[0].end_date == date(2026, 7, 15)

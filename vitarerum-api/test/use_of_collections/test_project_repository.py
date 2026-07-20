@@ -5,7 +5,12 @@ from sqlalchemy.pool import StaticPool
 
 from app.database import Base
 from app.use_of_collections.application.ports import ProjectFilters, ProposalFilters
-from app.use_of_collections.domain.enums import ProposalStatus, UseStatus, UseType
+from app.use_of_collections.domain.enums import (
+    ProposalStatus,
+    SubmissionChannel,
+    UseStatus,
+    UseType,
+)
 from app.use_of_collections.domain.models import (
     CollectionUseProject,
     CollectionUseProjectId,
@@ -73,6 +78,7 @@ async def test_project_list_filters_requested_by_before_pagination() -> None:
                 status=ProposalStatus.APPROVED,
                 requested_by=PermissionId("permission-foreign"),
                 submitted_at=datetime(2026, 6, 1, tzinfo=UTC),
+                submission_channel=SubmissionChannel.AUTHENTICATED,
             )
         )
         await proposal_repo.add(
@@ -87,6 +93,7 @@ async def test_project_list_filters_requested_by_before_pagination() -> None:
                 status=ProposalStatus.APPROVED,
                 requested_by=PermissionId("permission-own"),
                 submitted_at=datetime(2026, 6, 2, tzinfo=UTC),
+                submission_channel=SubmissionChannel.AUTHENTICATED,
             )
         )
         await session.commit()
@@ -128,6 +135,7 @@ async def test_proposal_list_searches_proposal_title_without_project() -> None:
                 status=ProposalStatus.SUBMITTED,
                 requested_by=PermissionId("permission-1"),
                 submitted_at=datetime(2026, 6, 1, tzinfo=UTC),
+                submission_channel=SubmissionChannel.AUTHENTICATED,
             )
         )
         await session.commit()
@@ -181,6 +189,7 @@ async def test_proposal_list_filters_by_multiple_statuses() -> None:
                     status=status,
                     requested_by=PermissionId("permission-1"),
                     submitted_at=datetime(2026, 6, index, tzinfo=UTC),
+                    submission_channel=SubmissionChannel.AUTHENTICATED,
                 )
             )
         await session.commit()

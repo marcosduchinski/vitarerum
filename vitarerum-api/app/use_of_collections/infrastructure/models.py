@@ -11,6 +11,7 @@ from app.use_of_collections.domain.enums import (
     MediaType,
     ProposalEventType,
     ProposalStatus,
+    SubmissionChannel,
     UseEventType,
     UseResult,
     UseStatus,
@@ -306,7 +307,7 @@ class ProposalRecord(Base):
         index=True,
     )
     # title/type/dates are nullable: a proposal may be created as a stub and
-    # completed in a later step (see SubmitProposalRequest).
+    # completed in a later step.
     title: Mapped[str | None] = mapped_column(String(255), nullable=True, default="")
     collection_use_project_id: Mapped[str | None] = mapped_column(
         String(36),
@@ -320,6 +321,9 @@ class ProposalRecord(Base):
     end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     status: Mapped[ProposalStatus] = mapped_column(
         SAEnum(ProposalStatus, name="proposal_status")
+    )
+    submission_channel: Mapped[SubmissionChannel] = mapped_column(
+        SAEnum(SubmissionChannel, name="proposal_submission_channel")
     )
     requested_by: Mapped[str | None] = mapped_column(
         String(36), index=True, nullable=True

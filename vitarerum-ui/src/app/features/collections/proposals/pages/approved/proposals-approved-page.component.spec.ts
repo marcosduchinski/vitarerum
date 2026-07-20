@@ -15,6 +15,7 @@ const APPROVED_PROPOSAL: ProposalSummary = {
   referenceNumber: 'VR-2026-001',
   title: 'Approved research request',
   status: 'APPROVED',
+  submissionChannel: 'AUTHENTICATED',
   type: 'IN_SITU_VISIT',
   requestedBy: {
     permissionId: 'permission-external',

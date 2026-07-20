@@ -13,7 +13,11 @@ from app.use_of_collections.application.authorization import (
     assert_project_access,
     assert_proposal_access,
 )
-from app.use_of_collections.domain.enums import ProposalStatus, UseType
+from app.use_of_collections.domain.enums import (
+    ProposalStatus,
+    SubmissionChannel,
+    UseType,
+)
 from app.use_of_collections.domain.models import (
     CollectionUseProjectId,
     Proposal,
@@ -38,6 +42,7 @@ def _proposal(requested_by: PermissionId) -> Proposal:
         status=ProposalStatus.SUBMITTED,
         requested_by=requested_by,
         submitted_at=datetime.now(UTC),
+        submission_channel=SubmissionChannel.AUTHENTICATED,
     )
 
 

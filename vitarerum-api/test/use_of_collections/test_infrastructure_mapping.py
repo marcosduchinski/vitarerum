@@ -21,6 +21,7 @@ from app.use_of_collections.domain.enums import (
     MediaType,
     ProposalEventType,
     ProposalStatus,
+    SubmissionChannel,
     UseEventType,
     UseStatus,
     UseType,
@@ -326,6 +327,7 @@ def test_proposal_roundtrip_preserves_key_data() -> None:
         requested_by=PermissionId("permission-1"),
         assigned_to=PermissionId("permission-2"),
         submitted_at=now,
+        submission_channel=SubmissionChannel.AUTHENTICATED,
         events=[
             ProposalEvent(
                 occurred_at=now,
@@ -364,6 +366,7 @@ def test_proposal_roundtrip_preserves_key_data() -> None:
     assert rebuilt.begin_date == date(2026, 6, 1)
     assert rebuilt.end_date == date(2026, 6, 7)
     assert rebuilt.submitted_at == now
+    assert rebuilt.submission_channel == SubmissionChannel.AUTHENTICATED
     assert rebuilt.events[0].type == ProposalEventType.SUBMITTED
     assert rebuilt.requested_objects[0].inventory_number == "INV-010"
     assert rebuilt.requested_objects[0].category == "manuscript"
@@ -389,6 +392,7 @@ def test_public_contact_proposal_roundtrip_without_requester_or_project() -> Non
             email=EmailAddress("pedro@example.test"),
         ),
         submitted_at=now,
+        submission_channel=SubmissionChannel.PUBLIC,
         events=[
             ProposalEvent(
                 occurred_at=now,
@@ -406,6 +410,7 @@ def test_public_contact_proposal_roundtrip_without_requester_or_project() -> Non
     assert rebuilt.requester_contact is not None
     assert rebuilt.requester_contact.name == "Pedro Silva"
     assert rebuilt.requester_contact.email.value == "pedro@example.test"
+    assert rebuilt.submission_channel == SubmissionChannel.PUBLIC
     assert rebuilt.events[0].triggered_by is None
 
 
