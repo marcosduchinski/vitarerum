@@ -18,13 +18,24 @@ Core stack:
 Primary bounded contexts:
 - `identity`: users, groups, permissions, login, JWT identity.
 - `use_of_collections`: proposal and collection-use project workflows.
+- `public_submission`: public proposal intake, confirmation, and amendment tokens.
+- `collection_object_index`: searchable collection-object source data and snapshots.
+- `document_templates`: managed document templates and uploaded template files.
+- `museum_questions`: public museum questions and staff responses.
+- `reports.in_situ_visit`: in-situ visit report aggregation across record and narrative contexts.
 - `ai.museum_narrative`: AI-assisted (KG-RAG) museum narrative generation.
+- `ai.museum_question_triage`: AI-assisted triage for public museum questions.
+- `ai.prompts`: versioned prompt templates used by AI-assisted contexts.
 - `cidoc_crm.in_situ_visit_mapping`: persisted in-situ visit records for CIDOC-CRM mapping.
 - `shared`: exceptions, authorization helpers, and shared kernel value objects.
 
 Context namespaces:
 - `app/ai/*` groups AI-assisted contexts (e.g. `museum_narrative`).
 - `app/cidoc_crm/*` groups CIDOC-CRM mapping contexts (e.g. `in_situ_visit_mapping`).
+- `app/reports/*` groups report aggregation contexts (e.g. `in_situ_visit`).
+- `app/ai/in_situ_visit` currently exists only as an empty scaffold with no
+  implementation and no import-linter contracts. Do not list it as an active
+  bounded context until it has real behavior and architecture contracts.
 
 > This file is the canonical `AGENTS.md`. It complements `CLAUDE.md` and the
 > agent memory; when guidance conflicts, prefer the most specific and most
@@ -102,6 +113,7 @@ Cross-context rules:
 - Do not bypass published-language modules with direct imports into another context.
 - Preserve import-linter contracts in `pyproject.toml`.
 - Every bounded context must register its own import-linter contracts in `pyproject.toml`: a `layers` contract for its `presentation > infrastructure > application > domain` ordering, plus coverage in the domain/application purity (`forbidden`) contracts. A new context is not complete until these are added.
+- When adding, removing, or changing import-linter contracts between bounded contexts, update `../docs/architecture/context-map.puml` in the same change.
 
 API contract rules:
 - Treat `docs/api_contracts/` as the public contract.

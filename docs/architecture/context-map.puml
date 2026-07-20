@@ -1,0 +1,113 @@
+@startuml vitarerum-context-map
+title Vitarerum bounded context map
+
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam componentStyle rectangle
+skinparam defaultTextAlignment center
+
+package "Core workflow" {
+  [Identity] as identity
+  [Use of Collections] as uoc
+  [Public Submission] as public_submission
+}
+
+package "Collection knowledge" {
+  [Collection Object Index] as object_index
+  [Document Templates] as doc_templates
+  [Museum Questions] as questions
+}
+
+package "In-situ reporting" {
+  [Reports: In-Situ Visit] as reports_visit
+  [CIDOC-CRM: In-Situ Visit Mapping] as cidoc_visit
+}
+
+package "AI-assisted contexts" {
+  [AI Prompts] as prompts
+  [Museum Narrative] as narrative
+  [Museum Question Triage] as triage
+}
+
+package "Shared" {
+  [Shared Kernel] as shared_kernel
+  [Shared Auth/Dependencies] as shared_auth
+}
+
+package "Angular SPA\n(single deployed frontend)" as angular_spa {
+  [Public routes\n/submit-proposal\n/public\n/ask-museum] as public_routes
+  [Authenticated routes\n/p/*] as authenticated_routes
+}
+database "Application DB" as db
+folder "File storage" as storage
+cloud "SMTP" as smtp
+cloud "LLM/Ollama" as llm
+cloud "Cloudflare Turnstile" as turnstile
+
+authenticated_routes --> identity : login/session
+authenticated_routes --> uoc : authenticated proposals/projects
+authenticated_routes --> object_index : object search/admin
+authenticated_routes --> doc_templates : template admin
+authenticated_routes --> questions : staff responses
+authenticated_routes --> reports_visit : in-situ reports
+
+public_routes --> public_submission : public proposal intake
+public_routes --> questions : public questions
+
+public_submission --> uoc : materialise proposal\n(adapter coupling; tracked)
+public_submission --> smtp : confirmation/amendment email
+public_submission --> turnstile : captcha verification
+
+uoc --> identity : identity.public
+questions --> identity : identity.public via shared auth
+doc_templates --> identity : identity.public via shared auth
+
+cidoc_visit --> uoc : use_of_collections.public
+narrative --> cidoc_visit : cidoc_crm.public
+narrative --> prompts : ai.prompts.public
+reports_visit --> cidoc_visit : cidoc_crm.public
+reports_visit --> narrative : ai.museum_narrative.public
+
+triage --> questions : museum_questions.public\nor narrow ACL
+triage --> object_index : object-search ACL
+triage --> prompts : future prompt consumer
+
+uoc --> storage : proposal/project documents
+doc_templates --> storage : template files
+object_index --> storage : source files
+
+narrative --> llm : narrative generation
+triage --> llm : question triage
+
+identity ..> db
+uoc ..> db
+public_submission ..> db
+object_index ..> db
+doc_templates ..> db
+questions ..> db
+reports_visit ..> db
+cidoc_visit ..> db
+narrative ..> db
+triage ..> db
+prompts ..> db
+
+shared_kernel .. identity : stdlib-only shared values
+shared_auth ..> identity : identity.public
+
+note right of public_submission
+  Public submission has known composition-root
+  coupling to Use of Collections while materialising
+  proposals. The import-linter contract prevents
+  new drift and documents the ignored imports.
+end note
+
+note as core_ai_rule
+  Core contexts (Identity, Use of Collections,
+  Public Submission) must not depend on AI contexts.
+end note
+
+note bottom of shared_kernel
+  shared.kernel is stdlib-only.
+end note
+
+@enduml
