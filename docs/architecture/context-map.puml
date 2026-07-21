@@ -94,20 +94,6 @@ prompts ..> db
 shared_kernel .. identity : stdlib-only shared values
 shared_auth ..> identity : identity.public
 
-note right of public_submission
-  Public submission has known composition-root
-  coupling to Use of Collections while materialising
-  proposals. The import-linter contract prevents
-  new drift and documents the ignored imports.
-end note
 
-note as core_ai_rule
-  Core contexts (Identity, Use of Collections,
-  Public Submission) must not depend on AI contexts.
-end note
-
-note bottom of shared_kernel
-  shared.kernel is stdlib-only.
-end note
 
 @enduml
