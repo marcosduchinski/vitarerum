@@ -15,6 +15,8 @@ Failure mapping:
 
 from __future__ import annotations
 
+import json
+import logging
 from typing import Any
 
 from pydantic import BaseModel, Field, ValidationError
@@ -33,6 +35,7 @@ from app.ai.museum_question_triage.domain.ports import ModelTimeout, ModelUnavai
 
 _CLASSIFICATION_TEMPERATURE = 0.0
 _REPLY_TEMPERATURE = 0.3
+logger = logging.getLogger(__name__)
 
 
 class _MentionedObjectSchema(BaseModel):
@@ -75,6 +78,30 @@ class _UseCategoryClassificationSchema(BaseModel):
     )
     category_scores: list[_UseCategoryScoreSchema] = Field(default_factory=list)
     assigned_categories: list[_UseCategoryScoreSchema] = Field(default_factory=list)
+
+
+def _json_object_from_text(text: str) -> dict[str, Any]:
+    candidate = text.strip()
+    if candidate.startswith("```"):
+        lines = candidate.splitlines()
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        candidate = "\n".join(lines).strip()
+
+    try:
+        data = json.loads(candidate)
+    except json.JSONDecodeError:
+        start = candidate.find("{")
+        end = candidate.rfind("}")
+        if start == -1 or end == -1 or end <= start:
+            raise
+        data = json.loads(candidate[start : end + 1])
+
+    if not isinstance(data, dict):
+        raise TypeError("Expected a JSON object.")
+    return data
 
 
 def _parse_classification(result: Any) -> TriageClassification:
@@ -168,6 +195,87 @@ class OllamaTriageAdapter:
             client_kwargs["headers"] = {"Authorization": f"Bearer {self._api_key}"}
         return client_kwargs
 
+    async def _classify_with_json_fallback(self, message: str) -> TriageClassification:
+        from langchain_core.messages import HumanMessage, SystemMessage
+        from langchain_ollama import ChatOllama
+
+        from app.ai.museum_question_triage.application.prompts import (
+            build_classification_system_prompt,
+            build_classification_user_prompt,
+        )
+
+        chat = ChatOllama(
+            base_url=self._base_url,
+            model=self._model,
+            temperature=_CLASSIFICATION_TEMPERATURE,
+            client_kwargs=self._client_kwargs(),
+        )
+        response = await chat.ainvoke(
+            [
+                SystemMessage(
+                    content=(
+                        f"{build_classification_system_prompt()}\n\n"
+                        "Return valid JSON only, with no Markdown and no prose. "
+                        "The JSON object must have exactly this shape: "
+                        '{"is_visit_related": boolean, "mentioned_objects": '
+                        '[{"english": string, "portuguese": string}]}.'
+                    )
+                ),
+                HumanMessage(content=build_classification_user_prompt(message)),
+            ]
+        )
+        try:
+            return _parse_classification(_json_object_from_text(str(response.content)))
+        except (json.JSONDecodeError, ModelUnavailable, TypeError) as exc:
+            raise ModelUnavailable(
+                "The triage model returned an invalid structured response"
+            ) from exc
+
+    async def _classify_use_categories_with_json_fallback(
+        self, message: str
+    ) -> UseCategoryClassification:
+        from langchain_core.messages import HumanMessage, SystemMessage
+        from langchain_ollama import ChatOllama
+
+        from app.ai.museum_question_triage.application.prompts import (
+            build_use_category_classification_system_prompt,
+            build_use_category_classification_user_prompt,
+        )
+
+        chat = ChatOllama(
+            base_url=self._base_url,
+            model=self._model,
+            temperature=_CLASSIFICATION_TEMPERATURE,
+            client_kwargs=self._client_kwargs(),
+        )
+        response = await chat.ainvoke(
+            [
+                SystemMessage(
+                    content=(
+                        f"{build_use_category_classification_system_prompt()}\n\n"
+                        "Return valid JSON only, with no Markdown and no prose. "
+                        "Use exactly this shape: "
+                        '{"outcome": "CATEGORIZED"|"UNCLEAR", '
+                        '"category_scores": [{"category": string, '
+                        '"confidence": number, "source": "LLM"}], '
+                        '"assigned_categories": [{"category": string, '
+                        '"confidence": number, "source": "LLM"}]}.'
+                    )
+                ),
+                HumanMessage(
+                    content=build_use_category_classification_user_prompt(message)
+                ),
+            ]
+        )
+        try:
+            return _parse_use_category_classification(
+                _json_object_from_text(str(response.content))
+            )
+        except (json.JSONDecodeError, ModelUnavailable, TypeError) as exc:
+            raise ModelUnavailable(
+                "The triage model returned an invalid use-category response"
+            ) from exc
+
     async def classify(self, message: str) -> TriageClassification:
         import httpx
         from langchain_core.exceptions import OutputParserException
@@ -199,9 +307,25 @@ class OllamaTriageAdapter:
         except OutputParserException as exc:
             # The model failed to produce output matching the requested schema
             # (e.g. it doesn't support tool/function calling well).
-            raise ModelUnavailable(
-                "The triage model returned an invalid structured response"
-            ) from exc
+            logger.warning(
+                "Ollama triage structured output failed; retrying JSON fallback.",
+                exc_info=exc,
+            )
+            try:
+                return await self._classify_with_json_fallback(message)
+            except (httpx.TimeoutException, TimeoutError) as fallback_exc:
+                raise ModelTimeout(
+                    "The triage model did not respond in time"
+                ) from fallback_exc
+            except (
+                httpx.ConnectError,
+                httpx.HTTPError,
+                ConnectionError,
+                OSError,
+            ) as fallback_exc:
+                raise ModelUnavailable(
+                    "The triage model is currently unavailable"
+                ) from fallback_exc
 
         return _parse_classification(result)
 
@@ -238,9 +362,25 @@ class OllamaTriageAdapter:
         except (httpx.ConnectError, httpx.HTTPError, ConnectionError, OSError) as exc:
             raise ModelUnavailable("The triage model is currently unavailable") from exc
         except OutputParserException as exc:
-            raise ModelUnavailable(
-                "The triage model returned an invalid use-category response"
-            ) from exc
+            logger.warning(
+                "Ollama use-category structured output failed; retrying JSON fallback.",
+                exc_info=exc,
+            )
+            try:
+                return await self._classify_use_categories_with_json_fallback(message)
+            except (httpx.TimeoutException, TimeoutError) as fallback_exc:
+                raise ModelTimeout(
+                    "The triage model did not respond in time"
+                ) from fallback_exc
+            except (
+                httpx.ConnectError,
+                httpx.HTTPError,
+                ConnectionError,
+                OSError,
+            ) as fallback_exc:
+                raise ModelUnavailable(
+                    "The triage model is currently unavailable"
+                ) from fallback_exc
 
         return _parse_use_category_classification(result)
 

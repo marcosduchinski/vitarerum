@@ -12,12 +12,31 @@ from app.ai.museum_question_triage.domain.models import (
 from app.ai.museum_question_triage.domain.ports import ModelUnavailable
 from app.ai.museum_question_triage.infrastructure.model_ollama import (
     _MentionedObjectSchema,
+    _json_object_from_text,
     _parse_classification,
     _parse_use_category_classification,
     _TriageClassificationSchema,
     _UseCategoryClassificationSchema,
     _UseCategoryScoreSchema,
 )
+
+
+def test_extracts_json_object_from_plain_json_text() -> None:
+    assert _json_object_from_text('{"is_visit_related": true}') == {
+        "is_visit_related": True
+    }
+
+
+def test_extracts_json_object_from_markdown_fence() -> None:
+    assert _json_object_from_text(
+        '```json\n{"is_visit_related": false, "mentioned_objects": []}\n```'
+    ) == {"is_visit_related": False, "mentioned_objects": []}
+
+
+def test_extracts_json_object_embedded_in_text() -> None:
+    assert _json_object_from_text(
+        'Here is the result: {"is_visit_related": true, "mentioned_objects": []}'
+    ) == {"is_visit_related": True, "mentioned_objects": []}
 
 
 def test_parses_a_valid_schema_instance() -> None:
