@@ -22,6 +22,7 @@ documentation.
 - [Architecture decisions](./docs/architecture/adr/README.md)
 - [API contracts](./docs/api_contracts/)
 - [Diagrams](./docs/diagrams/)
+- [Cloud deployment plan](./docs/cloud/README.md)
 
 ## Notes
 

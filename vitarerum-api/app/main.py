@@ -1,8 +1,10 @@
-from fastapi import FastAPI, Request, status
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.ai.museum_narrative.presentation.routes import museum_narrative_router
@@ -43,6 +45,9 @@ from app.reports.in_situ_visit.presentation.routes import reports_router
 from app.shared.exceptions import AccessDenied, InsufficientGroup
 from app.use_of_collections.presentation.dependencies import get_amendment_invitation
 from app.use_of_collections.presentation.routes import projects_router, proposals_router
+
+STATIC_DIR = (Path(__file__).resolve().parent.parent / "static").resolve()
+API_PREFIX = settings.api_v1_prefix.strip("/")
 
 app = FastAPI(title=settings.app_name)
 
@@ -154,3 +159,18 @@ async def health() -> dict[str, str]:
         "status": "ok",
         "application": settings.app_name,
     }
+
+
+@app.get("/{full_path:path}")
+async def spa_fallback(full_path: str) -> FileResponse:
+    if full_path == API_PREFIX or full_path.startswith(f"{API_PREFIX}/"):
+        raise HTTPException(status_code=404)
+
+    candidate = (STATIC_DIR / full_path).resolve()
+    if candidate.is_relative_to(STATIC_DIR) and candidate.is_file():
+        return FileResponse(candidate)
+
+    index_file = STATIC_DIR / "index.html"
+    if not index_file.is_file():
+        raise HTTPException(status_code=404)
+    return FileResponse(index_file)
