@@ -108,6 +108,17 @@
   font-size: 0.8rem;
 }
 
+.field__notice {
+  margin: 0.25rem 0 0;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--status-pending-text, #8a5a00) 28%, transparent);
+  border-radius: var(--radius-sm);
+  background: var(--status-pending-bg, #fff7df);
+  color: var(--status-pending-text, #6d4c00);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
 .document-list {
   display: grid;
   gap: 0.5rem;

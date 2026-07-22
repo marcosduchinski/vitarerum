@@ -88,6 +88,12 @@
         @if (useTypeError()) {
           <p class="field__error" role="alert">Please choose how you'll use the collection.</p>
         }
+        @if (unsupportedUseTypeSelected()) {
+          <p class="field__notice" role="status">
+            Only in-situ visit requests are operational at the moment. Exhibition and other uses
+            will be implemented later.
+          </p>
+        }
       </div>
 
       @if (useType() && templates().length > 0) {

@@ -90,10 +90,34 @@ describe('PublicSubmitProposalPageComponent', () => {
     expect(section).not.toBeNull();
     const link = section?.querySelector<HTMLAnchorElement>('.templates__download');
     expect(link?.textContent).toContain('Safety form');
-    expect(link?.getAttribute('href')).toBe(
-      '/api/v1/public/document-templates/tpl-1/file',
-    );
+    expect(link?.getAttribute('href')).toBe('/api/v1/public/document-templates/tpl-1/file');
     expect(section?.querySelector('.templates__badge')?.textContent).toContain('Mandatory');
+  });
+
+  it('warns that exhibition and other intended uses are not operational yet', async () => {
+    await setup('');
+    const fixture = TestBed.createComponent(PublicSubmitProposalPageComponent);
+    fixture.detectChanges();
+    const compiled = fixture.nativeElement as HTMLElement;
+    const noticeText = 'Only in-situ visit requests are operational at the moment.';
+
+    expect(compiled.textContent).not.toContain(noticeText);
+
+    setSelectValue(compiled, '#useType', 'EXHIBITION');
+    fixture.detectChanges();
+
+    expect(compiled.textContent).toContain(noticeText);
+    expect(compiled.textContent).toContain('will be implemented later');
+
+    setSelectValue(compiled, '#useType', 'OTHER');
+    fixture.detectChanges();
+
+    expect(compiled.textContent).toContain(noticeText);
+
+    setSelectValue(compiled, '#useType', 'IN_SITU_VISIT');
+    fixture.detectChanges();
+
+    expect(compiled.textContent).not.toContain(noticeText);
   });
 
   it('submits citizen details and routes to the confirmation screen', async () => {

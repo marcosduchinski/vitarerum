@@ -83,6 +83,9 @@ export class PublicSubmitProposalPageComponent {
     },
   });
   protected readonly templates = computed(() => this.templatesResource.value() ?? []);
+  protected readonly unsupportedUseTypeSelected = computed(
+    () => this.useType() === 'EXHIBITION' || this.useType() === 'OTHER',
+  );
 
   protected templateDownloadUrl(id: string): string {
     return this.documentTemplates.downloadUrl(id);
@@ -163,13 +166,7 @@ export class PublicSubmitProposalPageComponent {
 
   protected onInput(
     field:
-      | 'name'
-      | 'email'
-      | 'subject'
-      | 'body'
-      | 'website'
-      | 'proposedBeginDate'
-      | 'proposedEndDate',
+      'name' | 'email' | 'subject' | 'body' | 'website' | 'proposedBeginDate' | 'proposedEndDate',
     event: Event,
   ): void {
     const value = (event.target as HTMLInputElement | HTMLTextAreaElement).value;
