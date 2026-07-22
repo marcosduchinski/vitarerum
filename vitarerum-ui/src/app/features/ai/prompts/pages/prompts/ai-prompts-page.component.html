@@ -9,349 +9,106 @@
     <app-error-message [apiError]="loadError()!" (retry)="loadTemplates()" />
   }
 
-  @if (actionError()) {
-    <app-error-message [apiError]="actionError()!" />
-  }
-
-  @if (isListRoute()) {
-    <section class="prompts-list-panel" aria-label="Prompt templates list">
-      <div class="prompts-toolbar">
-        <label class="field">
-          <span class="field__label">Purpose</span>
-          <select
-            class="field__input"
-            [value]="purposeFilter() ?? ''"
-            (change)="setPurposeFilter($event)"
-          >
-            <option value="">All purposes</option>
-            @for (option of purposeOptions; track option.value) {
-              <option [value]="option.value">{{ option.label }}</option>
-            }
-          </select>
-        </label>
-        <label class="field">
-          <span class="field__label">Status</span>
-          <select
-            class="field__input"
-            [value]="statusFilter() ?? ''"
-            (change)="setStatusFilter($event)"
-          >
-            <option value="">Any status</option>
-            @for (option of statusOptions; track option.value) {
-              <option [value]="option.value">{{ option.label }}</option>
-            }
-          </select>
-        </label>
-      </div>
-
-      @if (loadingTemplates()) {
-        <app-loading-state />
-      } @else if (templates().length === 0) {
-        <app-empty-state
-          title="No prompts found"
-          message="No prompt templates match the current filters."
-        />
-      } @else {
-        <div class="prompts-table-shell">
-          <table class="prompts-table" aria-label="Prompt templates">
-            <colgroup>
-              <col class="prompts-table__col-name" />
-              <col class="prompts-table__col-purpose" />
-              <col class="prompts-table__col-status" />
-              <col class="prompts-table__col-version" />
-              <col class="prompts-table__col-published" />
-              <col class="prompts-table__col-user" />
-              <col class="prompts-table__col-actions" />
-            </colgroup>
-            <thead>
-              <tr>
-                <th scope="col">Prompt</th>
-                <th scope="col">Purpose</th>
-                <th scope="col">Status</th>
-                <th scope="col">Active version</th>
-                <th scope="col">Last published</th>
-                <th scope="col">Published by</th>
-                <th scope="col" class="prompts-table__actions-header">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (template of templates(); track template.id) {
-                <tr>
-                  <td>
-                    <a class="prompts-table__title" [routerLink]="['/p/ai/prompts', template.id]">
-                      {{ template.name }}
-                    </a>
-                    <span class="prompts-table__key">{{ template.key }}</span>
-                  </td>
-                  <td>{{ purposeLabel(template.purpose) }}</td>
-                  <td>
-                    <span
-                      class="status-pill"
-                      [class]="'status-pill--' + (currentStatus(template) ?? 'none')"
-                    >
-                      {{ statusLabel(currentStatus(template)) }}
-                    </span>
-                  </td>
-                  <td>{{ activeVersionFor(template)?.versionLabel ?? 'Unavailable' }}</td>
-                  <td>
-                    {{
-                      lastPublishedFor(template)?.publishedAt
-                        ? (lastPublishedFor(template)?.publishedAt | date: 'mediumDate')
-                        : 'Never'
-                    }}
-                  </td>
-                  <td>{{ lastPublishedFor(template)?.publishedBy ?? 'Unavailable' }}</td>
-                  <td>
-                    <div class="prompts-table__actions">
-                      <app-row-actions
-                        [items]="actionItemsFor(template)"
-                        ariaLabel="More actions for {{ template.name }}"
-                      />
-                    </div>
-                  </td>
-                </tr>
-              }
-            </tbody>
-          </table>
-        </div>
-      }
-    </section>
-  } @else {
-    <main class="prompt-detail">
-      <a class="back-link" routerLink="/p/ai/prompts">
-        <span class="pi pi-arrow-left" aria-hidden="true"></span>
-        Prompts
-      </a>
-
-      @if (loadingTemplates() && !selectedTemplate()) {
-        <app-loading-state />
-      } @else if (!selectedTemplate()) {
-        <app-empty-state
-          title="Prompt not found"
-          message="No prompt template could be resolved for this route."
-        />
-      } @else {
-        @if (selectedTemplate(); as template) {
-          <section class="detail-head">
-            <div>
-              <p class="detail-head__eyebrow">{{ purposeLabel(template.purpose) }}</p>
-              <h2>{{ template.name }}</h2>
-              <p>{{ template.description }}</p>
-            </div>
-            <dl class="template-meta">
-              <div>
-                <dt>Key</dt>
-                <dd>{{ template.key }}</dd>
-              </div>
-              <div>
-                <dt>{{ isReadonlyVersionRoute() ? 'Displayed version' : 'Active version' }}</dt>
-                <dd>{{ displayedVersion()?.versionLabel ?? 'Unavailable' }}</dd>
-              </div>
-              <div>
-                <dt>Created</dt>
-                <dd>{{ template.createdAt | date: 'medium' }}</dd>
-              </div>
-              <div>
-                <dt>Published</dt>
-                <dd>
-                  {{
-                    displayedVersion()?.publishedAt
-                      ? (displayedVersion()?.publishedAt | date: 'medium')
-                      : 'Unavailable'
-                  }}
-                </dd>
-              </div>
-              <div>
-                <dt>Published by</dt>
-                <dd>{{ displayedVersion()?.publishedBy ?? 'Unavailable' }}</dd>
-              </div>
-            </dl>
-          </section>
-
-          <section class="schema-block">
-            <h3>Variables schema</h3>
-            <pre>{{ template.variablesSchemaJson }}</pre>
-          </section>
-
-          <section class="versions">
-            <div class="section-title">
-              <h3>Version history</h3>
-              @if (!isReadonlyVersionRoute()) {
-                @if (activeVersion(); as active) {
-                  <button class="btn btn--primary" type="button" (click)="duplicateVersion(active)">
-                    <span class="pi pi-copy" aria-hidden="true"></span>
-                    Duplicate active
-                  </button>
-                }
-              }
-            </div>
-
-            @if (!isReadonlyVersionRoute() && template.purpose === 'in_situ_narrative') {
-              <div class="preview-panel" aria-label="Narrative preview">
-                <div class="preview-panel__fields">
-                  <label class="field">
-                    <span class="field__label">Preview record id</span>
-                    <input
-                      class="field__input"
-                      type="text"
-                      [value]="previewRecordId()"
-                      (input)="previewRecordId.set($any($event.target).value)"
-                    />
-                  </label>
-                  <label class="field">
-                    <span class="field__label">Language</span>
-                    <input
-                      class="field__input"
-                      type="text"
-                      [value]="previewTargetLanguage()"
-                      (input)="previewTargetLanguage.set($any($event.target).value)"
-                    />
-                  </label>
-                </div>
-
-                @if (previewResult(); as preview) {
-                  <article class="preview-result">
-                    <header class="preview-result__meta">
-                      <span>{{ preview.promptVersion }}</span>
-                      <span>{{ preview.llmModel }}</span>
-                      <span>Temperature {{ preview.creativityTemperature }}</span>
-                      <span>{{ preview.validationConforms ? 'Conforms' : 'Needs review' }}</span>
-                    </header>
-                    <p>{{ preview.narrative }}</p>
-                    <small>{{ preview.modelResponseHash }}</small>
-                  </article>
-                }
-              </div>
-            }
-
-            @if (loadingVersions()) {
-              <app-loading-state />
-            } @else {
-              <div class="version-list">
-                @for (version of versions(); track version.id) {
-                  <article
-                    class="version"
-                    [class.version--published]="version.status === 'published'"
-                  >
-                    <header class="version__head">
-                      <div>
-                        <h4>{{ version.versionLabel }}</h4>
-                        <p>
-                          Version {{ version.version }} - Created
-                          {{ version.createdAt | date: 'medium' }} by {{ version.createdBy }}
-                        </p>
-                        <p>
-                          Published:
-                          {{
-                            version.publishedAt
-                              ? (version.publishedAt | date: 'medium')
-                              : 'Not published'
-                          }}
-                          @if (version.publishedBy) {
-                            by {{ version.publishedBy }}
-                          }
-                        </p>
-                      </div>
-                      <span class="status-pill" [class]="'status-pill--' + version.status">
-                        {{ statusLabel(version.status) }}
-                      </span>
-                    </header>
-                    <pre class="version__content">{{ version.content }}</pre>
-                    @if (!isReadonlyVersionRoute()) {
-                      <footer class="version__actions">
-                        @if (version.status === 'draft') {
-                          <button
-                            class="btn btn--primary"
-                            type="button"
-                            [disabled]="busy()"
-                            (click)="publish(version)"
-                          >
-                            <span class="pi pi-send" aria-hidden="true"></span>
-                            Publish
-                          </button>
-                          <button
-                            class="btn"
-                            type="button"
-                            [disabled]="busy()"
-                            (click)="archive(version)"
-                          >
-                            <span class="pi pi-folder" aria-hidden="true"></span>
-                            Archive
-                          </button>
-                          @if (template.purpose === 'in_situ_narrative') {
-                            <button
-                              class="btn"
-                              type="button"
-                              [disabled]="!canPreview() || previewingVersionId() === version.id"
-                              (click)="preview(version)"
-                            >
-                              <span class="pi pi-play" aria-hidden="true"></span>
-                              {{ previewingVersionId() === version.id ? 'Previewing' : 'Preview' }}
-                            </button>
-                          }
-                        }
-                        <button class="btn" type="button" (click)="duplicateVersion(version)">
-                          <span class="pi pi-copy" aria-hidden="true"></span>
-                          Duplicate
-                        </button>
-                      </footer>
-                    }
-                  </article>
-                }
-              </div>
-            }
-          </section>
-
-          @if (!isReadonlyVersionRoute()) {
-            <form class="draft-editor" (submit)="$event.preventDefault(); createDraft()">
-              <div class="section-title">
-                <h3>Draft editor</h3>
-                @if (draftSourceId()) {
-                  <button class="btn" type="button" (click)="resetDraft()">Clear</button>
-                }
-              </div>
-              <div class="draft-editor__grid">
-                <label class="field">
-                  <span class="field__label">Version label</span>
-                  <input
-                    class="field__input"
-                    type="text"
-                    [value]="draftVersionLabel()"
-                    (input)="draftVersionLabel.set($any($event.target).value)"
-                  />
-                </label>
-                <label class="field">
-                  <span class="field__label">Default temperature</span>
-                  <input
-                    class="field__input"
-                    type="number"
-                    min="0"
-                    max="1"
-                    step="0.1"
-                    [value]="draftTemperature()"
-                    (input)="draftTemperature.set(+$any($event.target).value)"
-                  />
-                </label>
-                <label class="field field--wide">
-                  <span class="field__label">Content</span>
-                  <textarea
-                    class="field__input field__input--code"
-                    rows="12"
-                    [value]="draftContent()"
-                    (input)="draftContent.set($any($event.target).value)"
-                  ></textarea>
-                </label>
-              </div>
-              <div class="draft-editor__footer">
-                <button class="btn btn--primary" type="submit" [disabled]="!canCreateDraft()">
-                  <span class="pi pi-save" aria-hidden="true"></span>
-                  Create draft
-                </button>
-              </div>
-            </form>
+  <section class="prompts-list-panel" aria-label="Prompt templates list">
+    <div class="prompts-toolbar">
+      <label class="field">
+        <span class="field__label">Purpose</span>
+        <select
+          class="field__input"
+          [value]="purposeFilter() ?? ''"
+          (change)="setPurposeFilter($event)"
+        >
+          <option value="">All purposes</option>
+          @for (option of purposeOptions; track option.value) {
+            <option [value]="option.value">{{ option.label }}</option>
           }
-        }
-      }
-    </main>
-  }
+        </select>
+      </label>
+      <label class="field">
+        <span class="field__label">Status</span>
+        <select
+          class="field__input"
+          [value]="statusFilter() ?? ''"
+          (change)="setStatusFilter($event)"
+        >
+          <option value="">Any status</option>
+          @for (option of statusOptions; track option.value) {
+            <option [value]="option.value">{{ option.label }}</option>
+          }
+        </select>
+      </label>
+    </div>
+
+    @if (loadingTemplates()) {
+      <app-loading-state />
+    } @else if (templates().length === 0) {
+      <app-empty-state
+        title="No prompts found"
+        message="No prompt templates match the current filters."
+      />
+    } @else {
+      <div class="prompts-table-shell">
+        <table class="prompts-table" aria-label="Prompt templates">
+          <colgroup>
+            <col class="prompts-table__col-name" />
+            <col class="prompts-table__col-purpose" />
+            <col class="prompts-table__col-status" />
+            <col class="prompts-table__col-version" />
+            <col class="prompts-table__col-published" />
+            <col class="prompts-table__col-user" />
+            <col class="prompts-table__col-actions" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th scope="col">Prompt</th>
+              <th scope="col">Purpose</th>
+              <th scope="col">Status</th>
+              <th scope="col">Active version</th>
+              <th scope="col">Last published</th>
+              <th scope="col">Published by</th>
+              <th scope="col" class="prompts-table__actions-header">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (template of templates(); track template.id) {
+              <tr>
+                <td>
+                  <a class="prompts-table__title" [routerLink]="['/p/ai/prompts', template.id]">
+                    {{ template.name }}
+                  </a>
+                  <span class="prompts-table__key">{{ template.key }}</span>
+                </td>
+                <td>{{ purposeLabel(template.purpose) }}</td>
+                <td>
+                  <span
+                    class="status-pill"
+                    [class]="'status-pill--' + (currentStatus(template) ?? 'none')"
+                  >
+                    {{ statusLabel(currentStatus(template)) }}
+                  </span>
+                </td>
+                <td>{{ activeVersionFor(template)?.versionLabel ?? 'Unavailable' }}</td>
+                <td>
+                  {{
+                    lastPublishedFor(template)?.publishedAt
+                      ? (lastPublishedFor(template)?.publishedAt | date: 'mediumDate')
+                      : 'Never'
+                  }}
+                </td>
+                <td>{{ lastPublishedFor(template)?.publishedBy ?? 'Unavailable' }}</td>
+                <td>
+                  <div class="prompts-table__actions">
+                    <app-row-actions
+                      [items]="actionItemsFor(template)"
+                      ariaLabel="More actions for {{ template.name }}"
+                    />
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </section>
 </section>

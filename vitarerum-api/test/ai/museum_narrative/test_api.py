@@ -309,6 +309,7 @@ async def test_preview_returns_draft_metadata_without_persisting() -> None:
     assert body["meta"]["prompt_version_id"] == "pver-draft-1"
     assert body["meta"]["prompt_version"] == "museum-narrative-institutional-draft"
     assert body["meta"]["prompt_status"] == "draft"
+    assert body["meta"]["prompt_source"] == "version"
     assert body["meta"]["llm_model"] == "llama3.1:8b"
     assert body["meta"]["creativity_temperature"] == 0.3
     assert body["meta"]["model_response_hash"]
@@ -317,6 +318,55 @@ async def test_preview_returns_draft_metadata_without_persisting() -> None:
     assert model.temperature == 0.3
     assert repo.stored == []
     assert repo.snapshots == []
+
+
+async def test_preview_accepts_ad_hoc_content_with_null_prompt_version_id() -> None:
+    repo = _FakeRepo()
+    prompts = _FakePrompts()
+    model = _FakeModel(text=" preview text ")
+    async with _client(repo=repo, prompts=prompts, model=model) as client:
+        resp = await client.post(
+            _PREVIEW_URL,
+            json={
+                "prompt_version_id": None,
+                "content": "  Ad-hoc system prompt.  ",
+                "narrative_type": "institutional",
+                "creativity_temperature": 0.6,
+            },
+        )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "preview"
+    assert body["data"]["narrative"] == "preview text"
+    assert body["meta"]["prompt_source"] == "adhoc"
+    assert body["meta"]["prompt_version_id"] is None
+    assert body["meta"]["prompt_version"] is None
+    assert body["meta"]["prompt_status"] is None
+    assert body["meta"]["creativity_temperature"] == 0.6
+    assert prompts.seen_versions == []
+    assert model.system_prompt == "Ad-hoc system prompt."
+    assert repo.stored == []
+    assert repo.snapshots == []
+
+
+async def test_preview_rejects_invalid_prompt_source_payloads_with_422_shape() -> None:
+    cases = [
+        {},
+        {"prompt_version_id": "pver-draft-1", "content": "Ad-hoc system prompt."},
+        {"content": ""},
+        {"content": "   "},
+        {"content": "Ad-hoc system prompt."},
+        {"prompt_version_id": None, "content": "Ad-hoc system prompt."},
+    ]
+    async with _client() as client:
+        responses = [await client.post(_PREVIEW_URL, json=payload) for payload in cases]
+
+    for resp in responses:
+        assert resp.status_code == 422
+        body = resp.json()
+        assert body["message"] == "Validation failed"
+        assert body["errors"]
 
 
 async def test_preview_rejects_prompt_version_for_another_narrative_type() -> None:

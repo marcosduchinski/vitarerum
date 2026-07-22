@@ -74,15 +74,24 @@ export class AiPromptManagementService implements AiPromptManagementApi {
   }
 
   previewNarrative(input: AiPromptPreviewInput): Observable<AiPromptPreviewResult> {
+    const payload =
+      input.mode === 'adhoc'
+        ? {
+            content: input.content,
+            narrative_type: input.narrativeType,
+            target_language: input.targetLanguage,
+            creativity_temperature: input.creativityTemperature,
+          }
+        : {
+            prompt_version_id: input.promptVersionId,
+            narrative_type: input.narrativeType ?? null,
+            target_language: input.targetLanguage,
+            creativity_temperature: input.creativityTemperature,
+          };
     return this.http
       .post<AiPromptPreviewResponse>(
         this.url(`/cidoc-mapping/in-situ-visit/${input.recordId}/narrative/preview`),
-        {
-          prompt_version_id: input.promptVersionId,
-          narrative_type: input.narrativeType ?? null,
-          target_language: input.targetLanguage,
-          creativity_temperature: input.creativityTemperature,
-        },
+        payload,
       )
       .pipe(mapPreviewResponse);
   }
@@ -98,9 +107,10 @@ interface AiPromptPreviewResponse {
   readonly generated_at: string;
   readonly data: { readonly narrative: string };
   readonly meta: {
-    readonly prompt_version_id: string;
-    readonly prompt_version: string;
+    readonly prompt_version_id: string | null;
+    readonly prompt_version: string | null;
     readonly prompt_status: AiPromptPreviewResult['promptStatus'];
+    readonly prompt_source: AiPromptPreviewResult['promptSource'];
     readonly llm_model: string;
     readonly creativity_temperature: number;
     readonly validation_conforms: boolean;
@@ -120,6 +130,7 @@ function mapPreviewResponse(
       promptVersionId: response.meta.prompt_version_id,
       promptVersion: response.meta.prompt_version,
       promptStatus: response.meta.prompt_status,
+      promptSource: response.meta.prompt_source,
       llmModel: response.meta.llm_model,
       creativityTemperature: response.meta.creativity_temperature,
       validationConforms: response.meta.validation_conforms,

@@ -1,0 +1,262 @@
+<section class="ai-prompts ai-prompts--manage">
+  <app-page-header
+    eyebrow="AI"
+    title="Edit prompt"
+    description="Iterate on prompt content against a real visit record before saving a version."
+  />
+
+  @if (loadError()) {
+    <app-error-message [apiError]="loadError()!" (retry)="loadTemplates()" />
+  }
+
+  @if (actionError()) {
+    <app-error-message [apiError]="actionError()!" />
+  }
+
+  <main class="prompt-workspace">
+    <a class="back-link" routerLink="/p/ai/prompts">
+      <span class="pi pi-arrow-left" aria-hidden="true"></span>
+      Prompts
+    </a>
+
+    @if (loadingTemplates() && !selectedTemplate()) {
+      <app-loading-state />
+    } @else if (!selectedTemplate()) {
+      <app-empty-state
+        title="Prompt not found"
+        message="No prompt template could be resolved for this route."
+      />
+    } @else {
+      @if (selectedTemplate(); as template) {
+        <section class="manage-head">
+          <div class="manage-head__title">
+            <p class="detail-head__eyebrow">{{ purposeLabel(template.purpose) }}</p>
+            <h2>{{ template.name }}</h2>
+            <p>{{ template.description }}</p>
+          </div>
+          <div class="manage-head__actions">
+            <button class="btn" type="button" (click)="viewDetails(template)">
+              <span class="pi pi-eye" aria-hidden="true"></span>
+              Details
+            </button>
+            @if (activeVersion(); as active) {
+              <button class="btn" type="button" (click)="duplicateVersion(active)">
+                <span class="pi pi-copy" aria-hidden="true"></span>
+                Duplicate active
+              </button>
+            }
+          </div>
+        </section>
+
+        <section class="prompt-meta-strip" aria-label="Prompt metadata">
+          <div>
+            <span>Key</span>
+            <strong>{{ template.key }}</strong>
+          </div>
+          <div>
+            <span>Active version</span>
+            <strong>{{ displayedVersion()?.versionLabel ?? 'Unavailable' }}</strong>
+          </div>
+          <div>
+            <span>Status</span>
+            <strong>{{ statusLabel(currentStatus(template)) }}</strong>
+          </div>
+          <div>
+            <span>Published by</span>
+            <strong>{{ displayedVersion()?.publishedBy ?? 'Unavailable' }}</strong>
+          </div>
+        </section>
+
+        <section class="iteration-grid">
+          <form class="draft-editor" (submit)="$event.preventDefault(); createDraft()">
+            <div class="section-title">
+              <h3>Draft editor</h3>
+              @if (draftSourceId()) {
+                <button class="btn" type="button" (click)="resetDraft()">Clear</button>
+              }
+            </div>
+
+            <div class="test-controls">
+              <label class="field">
+                <span class="field__label">Preview record id</span>
+                <input
+                  class="field__input"
+                  type="text"
+                  [value]="previewRecordId()"
+                  (input)="previewRecordId.set($any($event.target).value)"
+                />
+              </label>
+              <label class="field test-controls__language">
+                <span class="field__label">Language</span>
+                <input
+                  class="field__input"
+                  type="text"
+                  [value]="previewTargetLanguage()"
+                  (input)="previewTargetLanguage.set($any($event.target).value)"
+                />
+              </label>
+              <label class="field test-controls__temperature">
+                <span class="field__label">Temperature</span>
+                <input
+                  class="field__input"
+                  type="number"
+                  min="0"
+                  max="1"
+                  step="0.1"
+                  [value]="draftTemperature()"
+                  (input)="draftTemperature.set(+$any($event.target).value)"
+                />
+              </label>
+            </div>
+
+            <label class="field">
+              <span class="field__label">Content</span>
+              <textarea
+                class="field__input field__input--code prompt-textarea"
+                rows="18"
+                [value]="draftContent()"
+                (input)="draftContent.set($any($event.target).value)"
+              ></textarea>
+            </label>
+
+            <div class="save-row">
+              <label class="field save-row__label">
+                <span class="field__label">Version label</span>
+                <input
+                  class="field__input"
+                  type="text"
+                  [value]="draftVersionLabel()"
+                  (input)="draftVersionLabel.set($any($event.target).value)"
+                />
+              </label>
+              <div class="draft-editor__footer">
+                <button
+                  class="btn btn--primary"
+                  type="button"
+                  [disabled]="!canTestDraft()"
+                  (click)="testDraft()"
+                >
+                  <span class="pi pi-play" aria-hidden="true"></span>
+                  {{ previewingTarget() === 'draft' ? 'Testing' : 'Test' }}
+                </button>
+                <button class="btn" type="submit" [disabled]="!canCreateDraft()">
+                  <span class="pi pi-save" aria-hidden="true"></span>
+                  Create draft
+                </button>
+              </div>
+            </div>
+          </form>
+
+          <aside class="preview-panel" aria-label="Narrative preview">
+            <div class="section-title">
+              <h3>Preview result</h3>
+            </div>
+            @if (previewResult(); as preview) {
+              <article class="preview-result">
+                <header class="preview-result__meta">
+                  <span>
+                    {{ preview.promptSource === 'adhoc' ? 'Ad-hoc draft' : preview.promptVersion }}
+                  </span>
+                  <span>{{ preview.llmModel }}</span>
+                  <span>Temperature {{ preview.creativityTemperature }}</span>
+                  <span>{{ preview.validationConforms ? 'Conforms' : 'Needs review' }}</span>
+                </header>
+                <p>{{ preview.narrative }}</p>
+                <small>{{ preview.modelResponseHash }}</small>
+              </article>
+            } @else {
+              <app-empty-state
+                title="No preview yet"
+                message="Choose a record, edit the prompt, and run Test."
+              />
+            }
+          </aside>
+        </section>
+
+        <section class="versions">
+          <div class="section-title">
+            <h3>Version history</h3>
+          </div>
+
+          @if (loadingVersions()) {
+            <app-loading-state />
+          } @else {
+            <div class="version-list version-list--compact">
+              @for (version of versions(); track version.id) {
+                <article
+                  class="version"
+                  [class.version--published]="version.status === 'published'"
+                >
+                  <header class="version__head">
+                    <div>
+                      <h4>{{ version.versionLabel }}</h4>
+                      <p>
+                        Version {{ version.version }} - Created
+                        {{ version.createdAt | date: 'medium' }} by {{ version.createdBy }}
+                      </p>
+                      <p>
+                        Published:
+                        {{
+                          version.publishedAt
+                            ? (version.publishedAt | date: 'medium')
+                            : 'Not published'
+                        }}
+                        @if (version.publishedBy) {
+                          by {{ version.publishedBy }}
+                        }
+                      </p>
+                    </div>
+                    <span class="status-pill" [class]="'status-pill--' + version.status">
+                      {{ statusLabel(version.status) }}
+                    </span>
+                  </header>
+                  <details class="version__details">
+                    <summary>Content</summary>
+                    <pre class="version__content">{{ version.content }}</pre>
+                  </details>
+                  <footer class="version__actions">
+                    @if (version.status === 'draft') {
+                      <button
+                        class="btn btn--primary"
+                        type="button"
+                        [disabled]="busy()"
+                        (click)="publish(version)"
+                      >
+                        <span class="pi pi-send" aria-hidden="true"></span>
+                        Publish
+                      </button>
+                      <button
+                        class="btn"
+                        type="button"
+                        [disabled]="busy()"
+                        (click)="archive(version)"
+                      >
+                        <span class="pi pi-folder" aria-hidden="true"></span>
+                        Archive
+                      </button>
+                      @if (template.purpose === 'in_situ_narrative') {
+                        <button
+                          class="btn"
+                          type="button"
+                          [disabled]="!canPreview() || previewingTarget() === version.id"
+                          (click)="preview(version)"
+                        >
+                          <span class="pi pi-play" aria-hidden="true"></span>
+                          {{ previewingTarget() === version.id ? 'Previewing' : 'Preview' }}
+                        </button>
+                      }
+                    }
+                    <button class="btn" type="button" (click)="duplicateVersion(version)">
+                      <span class="pi pi-copy" aria-hidden="true"></span>
+                      Duplicate
+                    </button>
+                  </footer>
+                </article>
+              }
+            </div>
+          }
+        </section>
+      }
+    }
+  </main>
+</section>

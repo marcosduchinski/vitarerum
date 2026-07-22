@@ -12,6 +12,7 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
+from typing import Literal
 
 from app.ai.museum_narrative.application.prompts import (
     build_user_prompt,
@@ -27,6 +28,7 @@ from app.ai.museum_narrative.domain.models import (
     ResolutionSource,
 )
 from app.ai.museum_narrative.domain.ports import (
+    InvalidPreviewInput,
     ModelUnavailable,
     NarrativeFactsPort,
     NarrativeModelPort,
@@ -86,7 +88,8 @@ class UpdateNarrativeInput:
 @dataclass(frozen=True, slots=True)
 class PreviewNarrativeInput:
     record_id: str
-    prompt_version_id: str
+    prompt_version_id: str | None = None
+    content: str | None = None
     narrative_type: str | None = None
     target_language: str = _DEFAULT_LANGUAGE
     creativity_temperature: float | None = None
@@ -102,9 +105,10 @@ class PreviewNarrativeResult:
     target_language: str
     creativity_temperature: float
     llm_model: str
-    prompt_version_id: str
-    prompt_version: str
-    prompt_status: str
+    prompt_version_id: str | None
+    prompt_version: str | None
+    prompt_status: str | None
+    prompt_source: Literal["version", "adhoc"]
     model_response_hash: str
     validation_conforms: bool
     validation_findings: list[NarrativeFinding]
@@ -207,14 +211,42 @@ class PreviewNarrative:
         self._model_name = model_name
 
     async def execute(self, data: PreviewNarrativeInput) -> PreviewNarrativeResult:
+        prompt_version_id = (
+            data.prompt_version_id.strip()
+            if data.prompt_version_id is not None
+            else None
+        )
+        content = data.content.strip() if data.content is not None else None
+        has_version = prompt_version_id is not None and bool(prompt_version_id)
+        has_content = content is not None and bool(content)
+        if has_version == has_content:
+            raise InvalidPreviewInput(
+                "Provide exactly one of prompt_version_id or content"
+            )
+        if data.prompt_version_id is not None and not prompt_version_id:
+            raise InvalidPreviewInput("prompt_version_id must not be blank")
+        if data.content is not None and not content:
+            raise InvalidPreviewInput("content must not be blank")
+        if has_content and data.narrative_type is None:
+            raise InvalidPreviewInput(
+                "narrative_type is required when content is provided"
+            )
+
         narrative_type, source = _resolve_type(data.narrative_type)
-        prompt = await self._prompts.get_version(data.prompt_version_id, narrative_type)
+        prompt = None
+        system_prompt = content
+        prompt_source: Literal["version", "adhoc"] = "adhoc"
+        if prompt_version_id is not None:
+            prompt = await self._prompts.get_version(prompt_version_id, narrative_type)
+            system_prompt = prompt.content
+            prompt_source = "version"
+
         prepared = await self._facts.prepare(data.record_id)
         temperature = data.creativity_temperature
         if temperature is None:
             temperature = _DEFAULT_TEMPERATURE
         narrative = await self._model.generate(
-            system_prompt=prompt.content,
+            system_prompt=system_prompt or "",
             user_prompt=build_user_prompt(prepared.facts, data.target_language),
             temperature=temperature,
         )
@@ -231,9 +263,10 @@ class PreviewNarrative:
             target_language=data.target_language,
             creativity_temperature=temperature,
             llm_model=self._model_name,
-            prompt_version_id=prompt.version_id,
-            prompt_version=prompt.version_label,
-            prompt_status=prompt.status,
+            prompt_version_id=prompt.version_id if prompt is not None else None,
+            prompt_version=prompt.version_label if prompt is not None else None,
+            prompt_status=prompt.status if prompt is not None else None,
+            prompt_source=prompt_source,
             model_response_hash=_sha256(text),
             validation_conforms=validation.conforms,
             validation_findings=list(validation.findings),

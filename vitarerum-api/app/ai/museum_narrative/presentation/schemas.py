@@ -5,8 +5,9 @@ snake_case keys)."""
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class NarrativeRequest(BaseModel):
@@ -16,18 +17,41 @@ class NarrativeRequest(BaseModel):
 
 
 class NarrativePreviewRequest(BaseModel):
-    prompt_version_id: str = Field(min_length=1)
+    prompt_version_id: str | None = Field(default=None, min_length=1)
+    content: str | None = Field(default=None, min_length=1)
     target_language: str = "pt"
     narrative_type: str | None = None
     creativity_temperature: float | None = Field(default=None, ge=0.0, le=1.0)
 
     @field_validator("prompt_version_id")
     @classmethod
-    def _prompt_version_id_not_blank(cls, value: str) -> str:
+    def _prompt_version_id_not_blank(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
         trimmed = value.strip()
         if not trimmed:
             raise ValueError("prompt_version_id must not be blank")
         return trimmed
+
+    @field_validator("content")
+    @classmethod
+    def _content_not_blank(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        trimmed = value.strip()
+        if not trimmed:
+            raise ValueError("content must not be blank")
+        return trimmed
+
+    @model_validator(mode="after")
+    def _exactly_one_prompt_source(self) -> NarrativePreviewRequest:
+        has_version = self.prompt_version_id is not None
+        has_content = self.content is not None
+        if has_version == has_content:
+            raise ValueError("Provide exactly one of prompt_version_id or content")
+        if has_content and self.narrative_type is None:
+            raise ValueError("narrative_type is required when content is provided")
+        return self
 
 
 class UpdateNarrativeRequest(BaseModel):
@@ -59,7 +83,8 @@ class NarrativeMeta(BaseModel):
 
 
 class NarrativePreviewMeta(NarrativeMeta):
-    prompt_status: str
+    prompt_status: str | None = None
+    prompt_source: Literal["version", "adhoc"]
 
 
 class NarrativeData(BaseModel):

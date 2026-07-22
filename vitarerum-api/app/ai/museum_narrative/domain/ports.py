@@ -37,6 +37,10 @@ class UnsupportedNarrativeType(Exception):
     """The requested narrative_type is not one of the supported styles."""
 
 
+class InvalidPreviewInput(Exception):
+    """The preview request did not provide a valid prompt source."""
+
+
 class ModelUnavailable(Exception):
     """The narrative model could not be reached."""
 

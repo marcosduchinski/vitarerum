@@ -87,6 +87,7 @@ describe('AiPromptManagementService', () => {
     let result: unknown;
     service
       .previewNarrative({
+        mode: 'version',
         recordId: 'record-1',
         promptVersionId: 'ver-draft',
         narrativeType: 'institutional',
@@ -116,6 +117,7 @@ describe('AiPromptManagementService', () => {
         prompt_version_id: 'ver-draft',
         prompt_version: 'draft-v1',
         prompt_status: 'draft',
+        prompt_source: 'version',
         llm_model: 'llama3.1:8b',
         creativity_temperature: 0.4,
         validation_conforms: true,
@@ -131,8 +133,67 @@ describe('AiPromptManagementService', () => {
       promptVersionId: 'ver-draft',
       promptVersion: 'draft-v1',
       promptStatus: 'draft',
+      promptSource: 'version',
       llmModel: 'llama3.1:8b',
       creativityTemperature: 0.4,
+      validationConforms: true,
+      modelResponseHash: 'sha256:preview',
+    });
+  });
+
+  it('previews a narrative with ad-hoc content', () => {
+    let result: unknown;
+    service
+      .previewNarrative({
+        mode: 'adhoc',
+        recordId: 'record-1',
+        content: 'Ad-hoc prompt',
+        narrativeType: 'institutional',
+        targetLanguage: 'pt',
+        creativityTemperature: 0.5,
+      })
+      .subscribe((response) => {
+        result = response;
+      });
+
+    const request = http.expectOne(
+      'https://api.example.test/cidoc-mapping/in-situ-visit/record-1/narrative/preview',
+    );
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual({
+      content: 'Ad-hoc prompt',
+      narrative_type: 'institutional',
+      target_language: 'pt',
+      creativity_temperature: 0.5,
+    });
+    request.flush({
+      record_id: 'record-1',
+      status: 'preview',
+      generated_at: '2026-07-18T10:00:00Z',
+      data: { narrative: 'Preview text.' },
+      meta: {
+        prompt_version_id: null,
+        prompt_version: null,
+        prompt_status: null,
+        prompt_source: 'adhoc',
+        llm_model: 'llama3.1:8b',
+        creativity_temperature: 0.5,
+        validation_conforms: true,
+        model_response_hash: 'sha256:preview',
+      },
+    });
+
+    expect(result).toEqual({
+      recordId: 'record-1',
+      status: 'preview',
+      generatedAt: '2026-07-18T10:00:00Z',
+      narrative: 'Preview text.',
+      promptVersionId: null,
+      promptVersion: null,
+      promptStatus: null,
+      promptSource: 'adhoc',
+      llmModel: 'llama3.1:8b',
+      creativityTemperature: 0.5,
       validationConforms: true,
       modelResponseHash: 'sha256:preview',
     });

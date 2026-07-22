@@ -153,6 +153,7 @@ async def preview_narrative(
             PreviewNarrativeInput(
                 record_id=record_id,
                 prompt_version_id=body.prompt_version_id,
+                content=body.content,
                 narrative_type=body.narrative_type,
                 target_language=body.target_language,
                 creativity_temperature=body.creativity_temperature,

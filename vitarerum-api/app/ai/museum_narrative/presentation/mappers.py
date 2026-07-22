@@ -55,6 +55,7 @@ def preview_narrative_meta(result: PreviewNarrativeResult) -> NarrativePreviewMe
         prompt_version_id=result.prompt_version_id,
         prompt_version=result.prompt_version,
         prompt_status=result.prompt_status,
+        prompt_source=result.prompt_source,
         model_response_hash=result.model_response_hash,
         validation_conforms=result.validation_conforms,
         validation_findings=[

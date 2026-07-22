@@ -125,24 +125,9 @@ const USE_OF_COLLECTIONS_STAFF: MenuNode = {
     MUSEUM_QUESTIONS_ITEM,
     COLLECTION_PROPOSALS_STAFF,
     COLLECTION_PROJECTS_STAFF,
-    COLLECTION_REPORTS_STAFF,
     USE_OF_COLLECTIONS_OBJECTS,
+    COLLECTION_REPORTS_STAFF,
   ],
-};
-
-// SYS_ADMIN has no "Use of Collections" section (it doesn't use collections),
-// so Object Search and Public Inquiries keep their own top-level sections
-// only for that group.
-const OBJECTS_STAFF: MenuNode = {
-  label: 'Objects',
-  icon: 'pi pi-box',
-  items: [OBJECT_SEARCH_ITEM],
-};
-
-const MESSAGES_STAFF: MenuNode = {
-  label: 'Messages',
-  icon: 'pi pi-comments',
-  items: [MUSEUM_QUESTIONS_ITEM],
 };
 
 const AI_PROMPTS_STAFF: MenuNode = {
@@ -185,7 +170,7 @@ const MENUS: Record<GroupName, readonly MenuNode[]> = {
   COLLECTIONS_MANAGEMENT: [HOME, USE_OF_COLLECTIONS_STAFF, AI_PROMPTS_STAFF, STAFF_ADMIN_MENU],
   CURATORIAL: [HOME, USE_OF_COLLECTIONS_STAFF, AI_PROMPTS_STAFF, STAFF_ADMIN_MENU],
   DIRECTION: [HOME, USE_OF_COLLECTIONS_STAFF, AI_PROMPTS_STAFF],
-  SYS_ADMIN: [HOME, MESSAGES_STAFF, AI_PROMPTS_STAFF, OBJECTS_STAFF, SYS_ADMIN_MENU],
+  SYS_ADMIN: [HOME, SYS_ADMIN_MENU],
 };
 
 @Component({

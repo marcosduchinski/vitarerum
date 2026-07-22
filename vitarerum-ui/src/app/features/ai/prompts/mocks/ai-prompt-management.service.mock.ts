@@ -107,6 +107,23 @@ export class AiPromptManagementServiceMock implements AiPromptManagementApi {
   }
 
   previewNarrative(input: AiPromptPreviewInput): Observable<AiPromptPreviewResult> {
+    if (input.mode === 'adhoc') {
+      return of({
+        recordId: input.recordId,
+        status: 'preview',
+        generatedAt: NOW,
+        narrative: `Preview narrative for ${input.recordId} using ad-hoc draft content.`,
+        promptVersionId: null,
+        promptVersion: null,
+        promptStatus: null,
+        promptSource: 'adhoc',
+        llmModel: 'mock-narrative-model',
+        creativityTemperature: input.creativityTemperature,
+        validationConforms: true,
+        modelResponseHash: 'mock-preview-hash',
+      });
+    }
+
     const version = this.versions.find((item) => item.id === input.promptVersionId);
     if (!version) return throwError(() => new Error('Prompt version not found'));
     return of({
@@ -117,6 +134,7 @@ export class AiPromptManagementServiceMock implements AiPromptManagementApi {
       promptVersionId: version.id,
       promptVersion: version.versionLabel,
       promptStatus: version.status,
+      promptSource: 'version',
       llmModel: 'mock-narrative-model',
       creativityTemperature: input.creativityTemperature,
       validationConforms: true,

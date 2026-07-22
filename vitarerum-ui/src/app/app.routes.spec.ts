@@ -64,6 +64,10 @@ class PromptServiceStub {
   archiveVersion() {
     return of(VERSION);
   }
+
+  previewNarrative() {
+    return of({});
+  }
 }
 
 const SESSION: IdentitySession = {
@@ -117,5 +121,17 @@ describe('app routes', () => {
     expect(promptService.getVersionCalls).toEqual(['ver-1']);
     expect(harness.routeNativeElement?.textContent).toContain('Displayed version');
     expect(harness.routeNativeElement?.textContent).toContain('Published prompt.');
+    expect(harness.routeNativeElement?.textContent).not.toContain('Draft editor');
+  });
+
+  it('routes AI prompt edit links to the manage prompt page', async () => {
+    const harness = await RouterTestingHarness.create('/p/ai/prompts/tpl-1/edit');
+    const router = TestBed.inject(Router);
+    await harness.fixture.whenStable();
+    harness.detectChanges();
+
+    expect(router.url).toBe('/p/ai/prompts/tpl-1/edit');
+    expect(harness.routeNativeElement?.textContent).toContain('Draft editor');
+    expect(harness.routeNativeElement?.textContent).toContain('Create draft');
   });
 });

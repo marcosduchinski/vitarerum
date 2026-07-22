@@ -1,0 +1,118 @@
+<section class="ai-prompts">
+  <app-page-header
+    eyebrow="AI"
+    title="Prompts"
+    description="Inspect prompt metadata, schema, and immutable version history."
+  />
+
+  @if (loadError()) {
+    <app-error-message [apiError]="loadError()!" (retry)="loadTemplates()" />
+  }
+
+  @if (actionError()) {
+    <app-error-message [apiError]="actionError()!" />
+  }
+
+  <main class="prompt-detail">
+    <a class="back-link" routerLink="/p/ai/prompts">
+      <span class="pi pi-arrow-left" aria-hidden="true"></span>
+      Prompts
+    </a>
+
+    @if (loadingTemplates() && !selectedTemplate()) {
+      <app-loading-state />
+    } @else if (!selectedTemplate()) {
+      <app-empty-state
+        title="Prompt not found"
+        message="No prompt template could be resolved for this route."
+      />
+    } @else {
+      @if (selectedTemplate(); as template) {
+        <section class="detail-head">
+          <div>
+            <p class="detail-head__eyebrow">{{ purposeLabel(template.purpose) }}</p>
+            <h2>{{ template.name }}</h2>
+            <p>{{ template.description }}</p>
+          </div>
+          <dl class="template-meta">
+            <div>
+              <dt>Key</dt>
+              <dd>{{ template.key }}</dd>
+            </div>
+            <div>
+              <dt>{{ isReadonlyVersionRoute() ? 'Displayed version' : 'Active version' }}</dt>
+              <dd>{{ displayedVersion()?.versionLabel ?? 'Unavailable' }}</dd>
+            </div>
+            <div>
+              <dt>Created</dt>
+              <dd>{{ template.createdAt | date: 'medium' }}</dd>
+            </div>
+            <div>
+              <dt>Published</dt>
+              <dd>
+                {{
+                  displayedVersion()?.publishedAt
+                    ? (displayedVersion()?.publishedAt | date: 'medium')
+                    : 'Unavailable'
+                }}
+              </dd>
+            </div>
+            <div>
+              <dt>Published by</dt>
+              <dd>{{ displayedVersion()?.publishedBy ?? 'Unavailable' }}</dd>
+            </div>
+          </dl>
+        </section>
+
+        <section class="schema-block">
+          <h3>Variables schema</h3>
+          <pre>{{ template.variablesSchemaJson }}</pre>
+        </section>
+
+        <section class="versions">
+          <div class="section-title">
+            <h3>Version history</h3>
+          </div>
+
+          @if (loadingVersions()) {
+            <app-loading-state />
+          } @else {
+            <div class="version-list">
+              @for (version of versions(); track version.id) {
+                <article
+                  class="version"
+                  [class.version--published]="version.status === 'published'"
+                >
+                  <header class="version__head">
+                    <div>
+                      <h4>{{ version.versionLabel }}</h4>
+                      <p>
+                        Version {{ version.version }} - Created
+                        {{ version.createdAt | date: 'medium' }} by {{ version.createdBy }}
+                      </p>
+                      <p>
+                        Published:
+                        {{
+                          version.publishedAt
+                            ? (version.publishedAt | date: 'medium')
+                            : 'Not published'
+                        }}
+                        @if (version.publishedBy) {
+                          by {{ version.publishedBy }}
+                        }
+                      </p>
+                    </div>
+                    <span class="status-pill" [class]="'status-pill--' + version.status">
+                      {{ statusLabel(version.status) }}
+                    </span>
+                  </header>
+                  <pre class="version__content">{{ version.content }}</pre>
+                </article>
+              }
+            </div>
+          }
+        </section>
+      }
+    }
+  </main>
+</section>

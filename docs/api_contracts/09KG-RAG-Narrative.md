@@ -138,9 +138,9 @@ local LLM could not be reached or returned an empty narrative. **504
 
 ## POST /api/v1/cidoc-mapping/in-situ-visit/{record_id}/narrative/preview
 
-Runs a controlled test generation for staff reviewing an AI prompt version. This
-endpoint uses the selected prompt version, canonical facts from the existing
-visit record, and the narrative model, but **does not persist** a
+Runs a controlled test generation for staff reviewing either an AI prompt
+version or ad-hoc prompt content. This endpoint uses canonical facts from the
+existing visit record and the narrative model, but **does not persist** a
 `generated_narratives` row or a `facts_snapshot`.
 
 **Request body**
@@ -155,11 +155,17 @@ visit record, and the narrative model, but **does not persist** a
 ```
 
 ```
-prompt_version_id       : UUID/string (required) — draft or published prompt version to test
+prompt_version_id       : UUID/string|null (optional) — draft or published prompt version to test
+content                 : string|null      (optional) — ad-hoc system prompt content to test
 target_language         : string      (default "pt")
-narrative_type          : enum        (optional; omitted → "institutional")
+narrative_type          : enum        (optional for prompt_version_id; required with content)
 creativity_temperature  : number|null (optional, 0.0–1.0; omitted/null → 0.3)
 ```
+
+Exactly one of `prompt_version_id` or `content` must be supplied. When `content`
+is supplied, `narrative_type` is required so the ad-hoc prompt is still scoped
+to the supported in-situ narrative personas. Blank or whitespace-only values are
+rejected.
 
 **Response 200 OK** — returns preview text and the exact execution metadata.
 
@@ -178,6 +184,7 @@ creativity_temperature  : number|null (optional, 0.0–1.0; omitted/null → 0.3
     "prompt_version_id": "pver-draft-uuid",
     "prompt_version": "museum-narrative-institutional-v2",
     "prompt_status": "draft",
+    "prompt_source": "version",
     "model_response_hash": "sha256...",
     "validation_conforms": true,
     "validation_findings": []
@@ -186,12 +193,31 @@ creativity_temperature  : number|null (optional, 0.0–1.0; omitted/null → 0.3
 }
 ```
 
+For ad-hoc content, `meta.prompt_source` is `"adhoc"` and
+`prompt_version_id`, `prompt_version`, and `prompt_status` are `null`.
+
 **404 `PROMPT_VERSION_NOT_FOUND`** — no prompt version with
 `prompt_version_id`.
 
 **422 `PROMPT_VERSION_NARRATIVE_TYPE_MISMATCH`** — the prompt version exists but
 belongs to another narrative persona/template than the requested
 `narrative_type`.
+
+**422 validation error** — neither or both of `prompt_version_id`/`content`
+were provided, `content` is blank, or `content` was provided without
+`narrative_type`. These use the global validation response shape:
+
+```json
+{
+  "message": "Validation failed",
+  "errors": [
+    {
+      "field": "",
+      "message": "Value error, Provide exactly one of prompt_version_id or content"
+    }
+  ]
+}
+```
 
 Other errors mirror the persisted generation endpoint:
 `INVALID_NARRATIVE_TYPE`, `IN_SITU_VISIT_NOT_FOUND`,

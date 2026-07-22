@@ -12,6 +12,8 @@ import {
   CreateAiPromptDraftInput,
 } from '../../models/ai-prompt.model';
 import { AI_PROMPT_MANAGEMENT_SERVICE } from '../../services/ai-prompt-management.service';
+import { AiPromptManagePageComponent } from '../prompt-manage/ai-prompt-manage-page.component';
+import { AiPromptViewPageComponent } from '../prompt-view/ai-prompt-view-page.component';
 import { AiPromptsPageComponent } from './ai-prompts-page.component';
 
 const TEMPLATE: AiPromptTemplate = {
@@ -142,9 +144,10 @@ class ServiceStub {
       status: 'preview',
       generatedAt: '2026-07-18T10:20:00Z',
       narrative: 'Preview narrative text.',
-      promptVersionId: input.promptVersionId,
-      promptVersion: 'museum-narrative-institutional-v2',
-      promptStatus: 'draft',
+      promptVersionId: input.mode === 'version' ? input.promptVersionId : null,
+      promptVersion: input.mode === 'version' ? 'museum-narrative-institutional-v2' : null,
+      promptStatus: input.mode === 'version' ? 'draft' : null,
+      promptSource: input.mode === 'version' ? 'version' : 'adhoc',
       llmModel: 'llama3.1:8b',
       creativityTemperature: input.creativityTemperature,
       validationConforms: true,
@@ -155,7 +158,7 @@ class ServiceStub {
 }
 
 describe('AiPromptsPageComponent', () => {
-  let fixture: ComponentFixture<AiPromptsPageComponent>;
+  let fixture: ComponentFixture<unknown>;
   let service: ServiceStub;
   let paramMap: BehaviorSubject<ReturnType<typeof convertToParamMap>>;
 
@@ -163,7 +166,7 @@ describe('AiPromptsPageComponent', () => {
     service = new ServiceStub();
     paramMap = new BehaviorSubject(convertToParamMap({ templateId: 'tpl-1' }));
     await TestBed.configureTestingModule({
-      imports: [AiPromptsPageComponent],
+      imports: [AiPromptsPageComponent, AiPromptViewPageComponent, AiPromptManagePageComponent],
       providers: [
         provideRouter([]),
         { provide: ActivatedRoute, useValue: { paramMap: paramMap.asObservable() } },
@@ -213,7 +216,7 @@ describe('AiPromptsPageComponent', () => {
   });
 
   it('renders the selected template detail on a template route', async () => {
-    fixture = TestBed.createComponent(AiPromptsPageComponent);
+    fixture = TestBed.createComponent(AiPromptViewPageComponent);
     await fixture.whenStable();
     fixture.detectChanges();
 
@@ -224,6 +227,9 @@ describe('AiPromptsPageComponent', () => {
     expect(text).toContain('Published by');
     expect(text).toContain('system');
     expect(text).toContain('Variables schema');
+    expect(text).toContain('Active version');
+    expect(text).not.toContain('Displayed version');
+    expect(text).not.toContain('Draft editor');
   });
 
   it('labels a template with only draft versions as draft', async () => {
@@ -248,7 +254,7 @@ describe('AiPromptsPageComponent', () => {
   });
 
   it('duplicates the active version, edits the draft content, creates and publishes it', async () => {
-    fixture = TestBed.createComponent(AiPromptsPageComponent);
+    fixture = TestBed.createComponent(AiPromptManagePageComponent);
     await fixture.whenStable();
     fixture.detectChanges();
 
@@ -275,13 +281,14 @@ describe('AiPromptsPageComponent', () => {
       defaultTemperature: 0.3,
       sourceVersionId: null,
     });
+    expect(service.previewCalls).toEqual([]);
     expect(service.publishCalls).toEqual(['ver-2']);
   });
 
   it('renders a prompt version route as read-only exact version content', async () => {
     paramMap.next(convertToParamMap({ versionId: 'ver-1' }));
 
-    fixture = TestBed.createComponent(AiPromptsPageComponent);
+    fixture = TestBed.createComponent(AiPromptViewPageComponent);
     await fixture.whenStable();
     fixture.detectChanges();
 
@@ -315,7 +322,7 @@ describe('AiPromptsPageComponent', () => {
       },
     ];
 
-    fixture = TestBed.createComponent(AiPromptsPageComponent);
+    fixture = TestBed.createComponent(AiPromptManagePageComponent);
     await fixture.whenStable();
     fixture.detectChanges();
 
@@ -331,6 +338,7 @@ describe('AiPromptsPageComponent', () => {
 
     expect(service.previewCalls).toEqual([
       {
+        mode: 'version',
         recordId: 'record-1',
         promptVersionId: 'ver-draft',
         narrativeType: 'institutional',
@@ -343,6 +351,41 @@ describe('AiPromptsPageComponent', () => {
     expect(text).toContain('museum-narrative-institutional-v2');
     expect(text).toContain('llama3.1:8b');
     expect(text).toContain('Temperature 0.4');
+  });
+
+  it('tests draft editor content without creating a draft', async () => {
+    fixture = TestBed.createComponent(AiPromptManagePageComponent);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const root = fixture.nativeElement as HTMLElement;
+    const recordInput = inputByLabel(root, 'Preview record id');
+    recordInput.value = 'record-1';
+    recordInput.dispatchEvent(new Event('input'));
+    const textarea = root.querySelector('textarea');
+    if (!(textarea instanceof HTMLTextAreaElement)) throw new Error('Draft textarea not found');
+    textarea.value = 'Ad-hoc prompt content.';
+    textarea.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    clickButton(root, 'Test');
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(service.createDraftCalls).toEqual([]);
+    expect(service.previewCalls).toEqual([
+      {
+        mode: 'adhoc',
+        recordId: 'record-1',
+        content: 'Ad-hoc prompt content.',
+        narrativeType: 'institutional',
+        targetLanguage: 'pt',
+        creativityTemperature: 0.3,
+      },
+    ]);
+    const text = root.textContent ?? '';
+    expect(text).toContain('Preview narrative text.');
+    expect(text).toContain('Ad-hoc draft');
   });
 });
 

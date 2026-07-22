@@ -41,6 +41,7 @@ from app.ai.museum_narrative.domain.models import (
     ResolutionSource,
 )
 from app.ai.museum_narrative.domain.ports import (
+    InvalidPreviewInput,
     ModelUnavailable,
     NarrativeNotFound,
     NarrativePromptUnavailable,
@@ -298,10 +299,86 @@ async def test_preview_uses_prompt_version_without_persisting_narrative() -> Non
     assert result.prompt_version_id == "draft-version-1"
     assert result.prompt_version == "museum-narrative-institutional-draft"
     assert result.prompt_status == "draft"
+    assert result.prompt_source == "version"
     assert result.llm_model == "llama3.1:8b"
     assert result.model_response_hash
     assert repo.stored == []
     assert repo.snapshots == []
+
+
+async def test_preview_uses_ad_hoc_content_without_persisting() -> None:
+    facts = _FakeFacts()
+    prompts = _FakePrompts()
+    model = _FakeModel(" preview narrative ")
+    repo = _FakeRepo()
+    use_case = PreviewNarrative(facts, prompts, model, "llama3.1:8b")
+
+    result = await use_case.execute(
+        PreviewNarrativeInput(
+            record_id="r1",
+            prompt_version_id=None,
+            content="  Ad-hoc system prompt.  ",
+            narrative_type="institutional",
+            creativity_temperature=0.7,
+        )
+    )
+
+    assert facts.seen == "r1"
+    assert prompts.seen_versions == []
+    assert model.system_prompt == "Ad-hoc system prompt."
+    assert model.temperature == 0.7
+    assert result.narrative == "preview narrative"
+    assert result.prompt_version_id is None
+    assert result.prompt_version is None
+    assert result.prompt_status is None
+    assert result.prompt_source == "adhoc"
+    assert result.llm_model == "llama3.1:8b"
+    assert repo.stored == []
+    assert repo.snapshots == []
+
+
+@pytest.mark.parametrize(
+    "input_data",
+    [
+        PreviewNarrativeInput(record_id="r1", prompt_version_id=None, content=None),
+        PreviewNarrativeInput(
+            record_id="r1",
+            prompt_version_id="draft-version-1",
+            content="Ad-hoc system prompt.",
+            narrative_type="institutional",
+        ),
+        PreviewNarrativeInput(
+            record_id="r1",
+            prompt_version_id=None,
+            content="Ad-hoc system prompt.",
+            narrative_type=None,
+        ),
+        PreviewNarrativeInput(
+            record_id="r1",
+            prompt_version_id=None,
+            content="",
+            narrative_type="institutional",
+        ),
+        PreviewNarrativeInput(
+            record_id="r1",
+            prompt_version_id=None,
+            content="   ",
+            narrative_type="institutional",
+        ),
+    ],
+)
+async def test_preview_rejects_invalid_prompt_source_combinations(
+    input_data: PreviewNarrativeInput,
+) -> None:
+    facts = _FakeFacts()
+    model = _FakeModel()
+    use_case = PreviewNarrative(facts, _FakePrompts(), model, "llama3.1:8b")
+
+    with pytest.raises(InvalidPreviewInput):
+        await use_case.execute(input_data)
+
+    assert facts.seen is None
+    assert model.system_prompt == ""
 
 
 async def test_preview_rejects_prompt_version_for_another_narrative_type() -> None:

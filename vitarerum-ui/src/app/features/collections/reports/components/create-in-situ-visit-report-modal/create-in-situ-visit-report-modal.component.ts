@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, input, output, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  Injector,
+  inject,
+  input,
+  output,
+  signal,
+} from '@angular/core';
 import { FormField, form, max, min } from '@angular/forms/signals';
 
 import { ApiError } from '@core/http/api-error.model';
@@ -22,6 +30,8 @@ const DEFAULT_REPORT_REQUEST: CreateInSituVisitReportRequest = {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class CreateInSituVisitReportModalComponent {
+  private readonly injector = inject(Injector);
+
   readonly open = input(false);
   readonly pending = input(false);
   readonly apiError = input<ApiError | null>(null);
@@ -35,10 +45,14 @@ export class CreateInSituVisitReportModalComponent {
 
   // Signal Forms is experimental in Angular 21. Keeping it local to this modal
   // limits the migration surface if its API changes.
-  protected readonly reportForm = form(this.formModel, (path) => {
-    min(path.creativityTemperature, 0, { message: 'Creativity must be at least 0.0.' });
-    max(path.creativityTemperature, 1, { message: 'Creativity must be at most 1.0.' });
-  });
+  protected readonly reportForm = form(
+    this.formModel,
+    (path) => {
+      min(path.creativityTemperature, 0, { message: 'Creativity must be at least 0.0.' });
+      max(path.creativityTemperature, 1, { message: 'Creativity must be at most 1.0.' });
+    },
+    { injector: this.injector },
+  );
 
   protected submit(): void {
     this.reportForm().markAsTouched();
