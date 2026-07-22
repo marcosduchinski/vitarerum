@@ -198,4 +198,72 @@ describe('AiPromptManagementService', () => {
       modelResponseHash: 'sha256:preview',
     });
   });
+
+  it('retries preview with the latest report record when a project id is provided', () => {
+    let result: unknown;
+    service
+      .previewNarrative({
+        mode: 'adhoc',
+        recordId: 'project-1',
+        content: 'Ad-hoc prompt',
+        narrativeType: 'institutional',
+        targetLanguage: 'pt',
+        creativityTemperature: 0.5,
+      })
+      .subscribe((response) => {
+        result = response;
+      });
+
+    const firstPreview = http.expectOne(
+      'https://api.example.test/cidoc-mapping/in-situ-visit/project-1/narrative/preview',
+    );
+    expect(firstPreview.request.method).toBe('POST');
+    firstPreview.flush(
+      { message: 'No in-situ visit record found with id project-1' },
+      { status: 404, statusText: 'Not Found' },
+    );
+
+    const reportLookup = http.expectOne(
+      'https://api.example.test/reports/collection-use/project-1/in_situ_visit?page=0&size=1',
+    );
+    expect(reportLookup.request.method).toBe('GET');
+    reportLookup.flush({
+      content: [{ inSituVisitRecordId: 'record-from-project' }],
+    });
+
+    const retryPreview = http.expectOne(
+      'https://api.example.test/cidoc-mapping/in-situ-visit/record-from-project/narrative/preview',
+    );
+    expect(retryPreview.request.method).toBe('POST');
+    expect(retryPreview.request.body).toEqual({
+      content: 'Ad-hoc prompt',
+      narrative_type: 'institutional',
+      target_language: 'pt',
+      creativity_temperature: 0.5,
+    });
+    retryPreview.flush({
+      record_id: 'record-from-project',
+      status: 'preview',
+      generated_at: '2026-07-18T10:00:00Z',
+      data: { narrative: 'Preview text.' },
+      meta: {
+        prompt_version_id: null,
+        prompt_version: null,
+        prompt_status: null,
+        prompt_source: 'adhoc',
+        llm_model: 'llama3.1:8b',
+        creativity_temperature: 0.5,
+        validation_conforms: true,
+        model_response_hash: 'sha256:preview',
+      },
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        recordId: 'record-from-project',
+        narrative: 'Preview text.',
+        promptSource: 'adhoc',
+      }),
+    );
+  });
 });

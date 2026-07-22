@@ -1,4 +1,4 @@
-<section class="ai-prompts">
+<section class="ai-prompts ai-prompts--index">
   <app-page-header
     eyebrow="AI"
     title="Prompts"
@@ -11,32 +11,38 @@
 
   <section class="prompts-list-panel" aria-label="Prompt templates list">
     <div class="prompts-toolbar">
-      <label class="field">
-        <span class="field__label">Purpose</span>
-        <select
-          class="field__input"
-          [value]="purposeFilter() ?? ''"
-          (change)="setPurposeFilter($event)"
-        >
-          <option value="">All purposes</option>
-          @for (option of purposeOptions; track option.value) {
-            <option [value]="option.value">{{ option.label }}</option>
-          }
-        </select>
-      </label>
-      <label class="field">
-        <span class="field__label">Status</span>
-        <select
-          class="field__input"
-          [value]="statusFilter() ?? ''"
-          (change)="setStatusFilter($event)"
-        >
-          <option value="">Any status</option>
-          @for (option of statusOptions; track option.value) {
-            <option [value]="option.value">{{ option.label }}</option>
-          }
-        </select>
-      </label>
+      <div class="prompts-toolbar__summary">
+        <span class="prompts-toolbar__count">{{ templates().length }}</span>
+        <span>{{ templates().length === 1 ? 'prompt' : 'prompts' }}</span>
+      </div>
+      <div class="prompts-toolbar__filters">
+        <label class="field">
+          <span class="field__label">Purpose</span>
+          <select
+            class="field__input"
+            [value]="purposeFilter() ?? ''"
+            (change)="setPurposeFilter($event)"
+          >
+            <option value="">All purposes</option>
+            @for (option of purposeOptions; track option.value) {
+              <option [value]="option.value">{{ option.label }}</option>
+            }
+          </select>
+        </label>
+        <label class="field">
+          <span class="field__label">Status</span>
+          <select
+            class="field__input"
+            [value]="statusFilter() ?? ''"
+            (change)="setStatusFilter($event)"
+          >
+            <option value="">Any status</option>
+            @for (option of statusOptions; track option.value) {
+              <option [value]="option.value">{{ option.label }}</option>
+            }
+          </select>
+        </label>
+      </div>
     </div>
 
     @if (loadingTemplates()) {

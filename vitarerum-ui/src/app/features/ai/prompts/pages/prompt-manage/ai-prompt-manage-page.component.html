@@ -2,7 +2,7 @@
   <app-page-header
     eyebrow="AI"
     title="Edit prompt"
-    description="Iterate on prompt content against a real visit record before saving a version."
+    description="Edit, test and publish prompt versions against completed in-situ projects."
   />
 
   @if (loadError()) {
@@ -33,6 +33,20 @@
             <p class="detail-head__eyebrow">{{ purposeLabel(template.purpose) }}</p>
             <h2>{{ template.name }}</h2>
             <p>{{ template.description }}</p>
+            <dl class="prompt-facts" aria-label="Prompt metadata">
+              <div>
+                <dt>Key</dt>
+                <dd>{{ template.key }}</dd>
+              </div>
+              <div>
+                <dt>Active</dt>
+                <dd>{{ displayedVersion()?.versionLabel ?? 'Unavailable' }}</dd>
+              </div>
+              <div>
+                <dt>Status</dt>
+                <dd>{{ statusLabel(currentStatus(template)) }}</dd>
+              </div>
+            </dl>
           </div>
           <div class="manage-head__actions">
             <button class="btn" type="button" (click)="viewDetails(template)">
@@ -48,65 +62,22 @@
           </div>
         </section>
 
-        <section class="prompt-meta-strip" aria-label="Prompt metadata">
-          <div>
-            <span>Key</span>
-            <strong>{{ template.key }}</strong>
-          </div>
-          <div>
-            <span>Active version</span>
-            <strong>{{ displayedVersion()?.versionLabel ?? 'Unavailable' }}</strong>
-          </div>
-          <div>
-            <span>Status</span>
-            <strong>{{ statusLabel(currentStatus(template)) }}</strong>
-          </div>
-          <div>
-            <span>Published by</span>
-            <strong>{{ displayedVersion()?.publishedBy ?? 'Unavailable' }}</strong>
-          </div>
-        </section>
-
         <section class="iteration-grid">
           <form class="draft-editor" (submit)="$event.preventDefault(); createDraft()">
             <div class="section-title">
-              <h3>Draft editor</h3>
-              @if (draftSourceId()) {
-                <button class="btn" type="button" (click)="resetDraft()">Clear</button>
-              }
-            </div>
-
-            <div class="test-controls">
-              <label class="field">
-                <span class="field__label">Preview record id</span>
-                <input
-                  class="field__input"
-                  type="text"
-                  [value]="previewRecordId()"
-                  (input)="previewRecordId.set($any($event.target).value)"
-                />
-              </label>
-              <label class="field test-controls__language">
-                <span class="field__label">Language</span>
-                <input
-                  class="field__input"
-                  type="text"
-                  [value]="previewTargetLanguage()"
-                  (input)="previewTargetLanguage.set($any($event.target).value)"
-                />
-              </label>
-              <label class="field test-controls__temperature">
-                <span class="field__label">Temperature</span>
-                <input
-                  class="field__input"
-                  type="number"
-                  min="0"
-                  max="1"
-                  step="0.1"
-                  [value]="draftTemperature()"
-                  (input)="draftTemperature.set(+$any($event.target).value)"
-                />
-              </label>
+              <div>
+                <span class="section-kicker">Prompt draft</span>
+                <h3>{{ draftVersionLabel() || 'New version' }}</h3>
+              </div>
+              <div class="section-title__actions">
+                @if (draftSourceId()) {
+                  <span class="source-pill">
+                    <span class="pi pi-copy" aria-hidden="true"></span>
+                    Active duplicated
+                  </span>
+                  <button class="btn" type="button" (click)="resetDraft()">Clear</button>
+                }
+              </div>
             </div>
 
             <label class="field">
@@ -129,16 +100,19 @@
                   (input)="draftVersionLabel.set($any($event.target).value)"
                 />
               </label>
+              <label class="field save-row__temperature">
+                <span class="field__label">Temperature</span>
+                <input
+                  class="field__input"
+                  type="number"
+                  min="0"
+                  max="1"
+                  step="0.1"
+                  [value]="draftTemperature()"
+                  (input)="draftTemperature.set(+$any($event.target).value)"
+                />
+              </label>
               <div class="draft-editor__footer">
-                <button
-                  class="btn btn--primary"
-                  type="button"
-                  [disabled]="!canTestDraft()"
-                  (click)="testDraft()"
-                >
-                  <span class="pi pi-play" aria-hidden="true"></span>
-                  {{ previewingTarget() === 'draft' ? 'Testing' : 'Test' }}
-                </button>
                 <button class="btn" type="submit" [disabled]="!canCreateDraft()">
                   <span class="pi pi-save" aria-hidden="true"></span>
                   Create draft
@@ -148,28 +122,96 @@
           </form>
 
           <aside class="preview-panel" aria-label="Narrative preview">
-            <div class="section-title">
-              <h3>Preview result</h3>
-            </div>
-            @if (previewResult(); as preview) {
-              <article class="preview-result">
-                <header class="preview-result__meta">
-                  <span>
-                    {{ preview.promptSource === 'adhoc' ? 'Ad-hoc draft' : preview.promptVersion }}
-                  </span>
-                  <span>{{ preview.llmModel }}</span>
-                  <span>Temperature {{ preview.creativityTemperature }}</span>
-                  <span>{{ preview.validationConforms ? 'Conforms' : 'Needs review' }}</span>
-                </header>
-                <p>{{ preview.narrative }}</p>
-                <small>{{ preview.modelResponseHash }}</small>
-              </article>
-            } @else {
-              <app-empty-state
-                title="No preview yet"
-                message="Choose a record, edit the prompt, and run Test."
-              />
-            }
+            <section class="preview-console">
+              <div class="section-title">
+                <div>
+                  <span class="section-kicker">Test bench</span>
+                  <h3>Preview</h3>
+                </div>
+                <button
+                  class="btn btn--primary"
+                  type="button"
+                  [disabled]="!canTestDraft()"
+                  (click)="testDraft()"
+                >
+                  <span class="pi pi-play" aria-hidden="true"></span>
+                  {{ previewingTarget() === 'draft' ? 'Testing' : 'Test' }}
+                </button>
+              </div>
+
+              <label class="field">
+                <span class="field__label">Completed in-situ project</span>
+                <select
+                  class="field__input"
+                  [value]="previewRecordId()"
+                  (change)="selectPreviewProject($any($event.target).value)"
+                >
+                  <option value="">
+                    {{
+                      loadingCompletedProjects()
+                        ? 'Loading completed projects...'
+                        : 'Select a project'
+                    }}
+                  </option>
+                  @for (project of completedProjects(); track project.id) {
+                    <option [value]="project.id">{{ projectOptionLabel(project) }}</option>
+                  }
+                </select>
+                @if (completedProjectsError()) {
+                  <span class="field__hint">Completed projects could not be loaded.</span>
+                } @else {
+                  <span class="field__hint">Reference shown; project id submitted.</span>
+                }
+              </label>
+
+              <div class="preview-console__inline">
+                <label class="field">
+                  <span class="field__label">Preview record or project id</span>
+                  <input
+                    class="field__input"
+                    type="text"
+                    [value]="previewRecordId()"
+                    (input)="previewRecordId.set($any($event.target).value)"
+                  />
+                </label>
+                <label class="field preview-console__language">
+                  <span class="field__label">Language</span>
+                  <input
+                    class="field__input"
+                    type="text"
+                    [value]="previewTargetLanguage()"
+                    (input)="previewTargetLanguage.set($any($event.target).value)"
+                  />
+                </label>
+              </div>
+            </section>
+
+            <section class="preview-output">
+              <div class="section-title">
+                <h3>Result</h3>
+              </div>
+              @if (previewResult(); as preview) {
+                <article class="preview-result">
+                  <header class="preview-result__meta">
+                    <span>
+                      {{
+                        preview.promptSource === 'adhoc' ? 'Ad-hoc draft' : preview.promptVersion
+                      }}
+                    </span>
+                    <span>{{ preview.llmModel }}</span>
+                    <span>Temperature {{ preview.creativityTemperature }}</span>
+                    <span>{{ preview.validationConforms ? 'Conforms' : 'Needs review' }}</span>
+                  </header>
+                  <p>{{ preview.narrative }}</p>
+                  <small>{{ preview.modelResponseHash }}</small>
+                </article>
+              } @else {
+                <app-empty-state
+                  title="No preview yet"
+                  message="Choose a record, edit the prompt, and run Test."
+                />
+              }
+            </section>
           </aside>
         </section>
 

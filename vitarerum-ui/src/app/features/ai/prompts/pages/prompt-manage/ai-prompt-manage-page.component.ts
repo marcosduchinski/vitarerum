@@ -16,6 +16,8 @@ import { EmptyStateComponent } from '@shared/components/empty-state/empty-state.
 import { ErrorMessageComponent } from '@shared/components/error-message/error-message.component';
 import { LoadingStateComponent } from '@shared/components/loading-state/loading-state.component';
 import { PageHeaderComponent } from '@shared/components/page-header/page-header.component';
+import { CollectionUseProjectSummary } from '@features/collections/projects/models/project.model';
+import { PROJECT_API_SERVICE } from '@features/collections/projects/services/project-api.service';
 
 import {
   AiPromptPreviewResult,
@@ -64,6 +66,7 @@ const NARRATIVE_TYPE_BY_TEMPLATE_KEY: Readonly<Record<string, string>> = {
 })
 export class AiPromptManagePageComponent {
   private readonly service = inject(AI_PROMPT_MANAGEMENT_SERVICE);
+  private readonly projectService = inject(PROJECT_API_SERVICE);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
 
@@ -83,6 +86,9 @@ export class AiPromptManagePageComponent {
   protected readonly previewRecordId = signal('');
   protected readonly previewTargetLanguage = signal('pt');
   protected readonly previewResult = signal<AiPromptPreviewResult | null>(null);
+  protected readonly completedProjects = signal<readonly CollectionUseProjectSummary[]>([]);
+  protected readonly loadingCompletedProjects = signal(false);
+  protected readonly completedProjectsError = signal<ApiError | null>(null);
 
   protected readonly selectedTemplate = computed(() => {
     const id = this.selectedTemplateId();
@@ -132,6 +138,7 @@ export class AiPromptManagePageComponent {
 
   constructor() {
     void this.loadTemplates();
+    void this.loadCompletedProjects();
     effect(() => {
       const templateId = this.selectedTemplateId();
       if (templateId) {
@@ -172,6 +179,16 @@ export class AiPromptManagePageComponent {
 
   protected viewDetails(template: AiPromptTemplate): void {
     void this.router.navigate(['/p/ai/prompts', template.id]);
+  }
+
+  protected selectPreviewProject(projectId: string): void {
+    if (projectId) {
+      this.previewRecordId.set(projectId);
+    }
+  }
+
+  protected projectOptionLabel(project: CollectionUseProjectSummary): string {
+    return `${project.referenceNumber} - ${project.title}`;
   }
 
   protected duplicateVersion(version: AiPromptVersion): void {
@@ -282,6 +299,14 @@ export class AiPromptManagePageComponent {
       const templates = await firstValueFrom(this.service.listTemplates());
       this.templates.set(templates);
       const selected = this.selectedTemplateId();
+      if (
+        selected &&
+        this.versions().length > 0 &&
+        !this.draftContent().trim() &&
+        !this.draftVersionLabel().trim()
+      ) {
+        this.primeDraftFromActiveVersion(selected);
+      }
       if (selected && !templates.some((template) => template.id === selected)) {
         await this.router.navigate(['/p/ai/prompts']);
       }
@@ -292,13 +317,36 @@ export class AiPromptManagePageComponent {
     }
   }
 
+  protected async loadCompletedProjects(): Promise<void> {
+    this.loadingCompletedProjects.set(true);
+    this.completedProjectsError.set(null);
+    try {
+      const page = await firstValueFrom(
+        this.projectService.listProjects({
+          status: 'COMPLETED',
+          type: 'IN_SITU_VISIT',
+          page: 0,
+          size: 100,
+        }),
+      );
+      this.completedProjects.set(page.content);
+    } catch (err) {
+      this.completedProjectsError.set(toApiError(err));
+      this.completedProjects.set([]);
+    } finally {
+      this.loadingCompletedProjects.set(false);
+    }
+  }
+
   private async loadVersions(templateId: string): Promise<void> {
     this.loadingVersions.set(true);
     this.actionError.set(null);
     try {
       this.versions.set(await firstValueFrom(this.service.listVersions(templateId)));
       this.previewResult.set(null);
-      this.resetDraft();
+      if (!this.primeDraftFromActiveVersion(templateId)) {
+        this.resetDraft();
+      }
     } catch (err) {
       this.actionError.set(toApiError(err));
       this.versions.set([]);
@@ -323,5 +371,16 @@ export class AiPromptManagePageComponent {
     const base = version.versionLabel.replace(/-v\d+$/, '');
     const next = Math.max(...this.versions().map((item) => item.version), version.version) + 1;
     return `${base}-v${next}`;
+  }
+
+  private primeDraftFromActiveVersion(templateId: string): boolean {
+    const template = this.templates().find((item) => item.id === templateId);
+    if (!template?.id.startsWith('ptpl-') || !template.activeVersionId) return false;
+
+    const active = this.versions().find((version) => version.id === template.activeVersionId);
+    if (!active) return false;
+
+    this.duplicateVersion(active);
+    return true;
   }
 }

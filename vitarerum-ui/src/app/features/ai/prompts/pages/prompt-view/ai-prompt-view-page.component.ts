@@ -75,6 +75,10 @@ export class AiPromptViewPageComponent {
   protected readonly loadError = signal<ApiError | null>(null);
   protected readonly actionError = signal<ApiError | null>(null);
   protected readonly isReadonlyVersionRoute = computed(() => !!this.selectedVersionId());
+  protected readonly canManageTemplate = computed(() => {
+    const templateId = this.selectedTemplateId();
+    return !this.isReadonlyVersionRoute() && !!templateId?.startsWith('ptpl-');
+  });
 
   protected readonly selectedTemplate = computed(() => {
     const id = this.selectedTemplateId() ?? this.readonlyVersion()?.templateId;
@@ -108,6 +112,10 @@ export class AiPromptViewPageComponent {
 
   protected purposeLabel(purpose: AiPromptPurpose): string {
     return PURPOSE_OPTIONS.find((option) => option.value === purpose)?.label ?? purpose;
+  }
+
+  protected editLink(template: AiPromptTemplate): readonly string[] {
+    return ['/p/ai/prompts', template.id, 'edit'];
   }
 
   protected async loadTemplates(): Promise<void> {

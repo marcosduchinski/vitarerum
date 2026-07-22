@@ -1,4 +1,4 @@
-<section class="ai-prompts">
+<section class="ai-prompts ai-prompts--view">
   <app-page-header
     eyebrow="AI"
     title="Prompts"
@@ -29,44 +29,47 @@
     } @else {
       @if (selectedTemplate(); as template) {
         <section class="detail-head">
-          <div>
+          <div class="detail-head__title">
             <p class="detail-head__eyebrow">{{ purposeLabel(template.purpose) }}</p>
             <h2>{{ template.name }}</h2>
             <p>{{ template.description }}</p>
+            <dl class="template-meta" aria-label="Prompt metadata">
+              <div>
+                <dt>Key</dt>
+                <dd>{{ template.key }}</dd>
+              </div>
+              <div>
+                <dt>{{ isReadonlyVersionRoute() ? 'Displayed version' : 'Active version' }}</dt>
+                <dd>{{ displayedVersion()?.versionLabel ?? 'Unavailable' }}</dd>
+              </div>
+              <div>
+                <dt>Created</dt>
+                <dd>{{ template.createdAt | date: 'mediumDate' }}</dd>
+              </div>
+              <div>
+                <dt>Published</dt>
+                <dd>
+                  {{
+                    displayedVersion()?.publishedAt
+                      ? (displayedVersion()?.publishedAt | date: 'mediumDate')
+                      : 'Unavailable'
+                  }}
+                </dd>
+              </div>
+              <div>
+                <dt>Published by</dt>
+                <dd>{{ displayedVersion()?.publishedBy ?? 'Unavailable' }}</dd>
+              </div>
+            </dl>
           </div>
-          <dl class="template-meta">
-            <div>
-              <dt>Key</dt>
-              <dd>{{ template.key }}</dd>
-            </div>
-            <div>
-              <dt>{{ isReadonlyVersionRoute() ? 'Displayed version' : 'Active version' }}</dt>
-              <dd>{{ displayedVersion()?.versionLabel ?? 'Unavailable' }}</dd>
-            </div>
-            <div>
-              <dt>Created</dt>
-              <dd>{{ template.createdAt | date: 'medium' }}</dd>
-            </div>
-            <div>
-              <dt>Published</dt>
-              <dd>
-                {{
-                  displayedVersion()?.publishedAt
-                    ? (displayedVersion()?.publishedAt | date: 'medium')
-                    : 'Unavailable'
-                }}
-              </dd>
-            </div>
-            <div>
-              <dt>Published by</dt>
-              <dd>{{ displayedVersion()?.publishedBy ?? 'Unavailable' }}</dd>
-            </div>
-          </dl>
-        </section>
-
-        <section class="schema-block">
-          <h3>Variables schema</h3>
-          <pre>{{ template.variablesSchemaJson }}</pre>
+          <div class="detail-head__actions">
+            @if (canManageTemplate()) {
+              <a class="btn btn--primary" [routerLink]="editLink(template)">
+                <span class="pi pi-pencil" aria-hidden="true"></span>
+                Edit
+              </a>
+            }
+          </div>
         </section>
 
         <section class="versions">

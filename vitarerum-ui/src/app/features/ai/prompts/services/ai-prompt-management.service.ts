@@ -1,9 +1,9 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { inject, Injectable, InjectionToken } from '@angular/core';
 import { API_BASE_URL } from '@core/config/app-config.model';
 import { buildApiUrl } from '@core/http/api-url.util';
 import { buildHttpParams } from '@core/http/http-params.util';
-import { map, Observable } from 'rxjs';
+import { catchError, map, Observable, switchMap, throwError } from 'rxjs';
 
 import {
   AiPromptPreviewInput,
@@ -88,17 +88,69 @@ export class AiPromptManagementService implements AiPromptManagementApi {
             target_language: input.targetLanguage,
             creativity_temperature: input.creativityTemperature,
           };
-    return this.http
-      .post<AiPromptPreviewResponse>(
-        this.url(`/cidoc-mapping/in-situ-visit/${input.recordId}/narrative/preview`),
-        payload,
-      )
-      .pipe(mapPreviewResponse);
+    return this.postPreviewNarrative(input.recordId, payload).pipe(
+      catchError((error: unknown) => {
+        if (!(error instanceof HttpErrorResponse) || error.status !== 404) {
+          return throwError(() => error);
+        }
+        return this.resolveLatestReportRecordId(input.recordId).pipe(
+          switchMap((recordId) =>
+            recordId === input.recordId
+              ? throwError(() => error)
+              : this.postPreviewNarrative(recordId, payload),
+          ),
+          catchError(() => throwError(() => error)),
+        );
+      }),
+    );
   }
 
   private url(path: string): string {
     return buildApiUrl(this.apiBaseUrl, path);
   }
+
+  private postPreviewNarrative(
+    recordId: string,
+    payload: AiPromptPreviewPayload,
+  ): Observable<AiPromptPreviewResult> {
+    return this.http
+      .post<AiPromptPreviewResponse>(
+        this.url(`/cidoc-mapping/in-situ-visit/${recordId}/narrative/preview`),
+        payload,
+      )
+      .pipe(mapPreviewResponse);
+  }
+
+  private resolveLatestReportRecordId(projectId: string): Observable<string> {
+    return this.http
+      .get<InSituVisitReportsResponse>(
+        this.url(`/reports/collection-use/${projectId}/in_situ_visit`),
+        {
+          params: buildHttpParams({ page: 0, size: 1 }),
+        },
+      )
+      .pipe(map((page) => page.content[0]?.inSituVisitRecordId ?? projectId));
+  }
+}
+
+type AiPromptPreviewPayload =
+  | {
+      readonly content: string;
+      readonly narrative_type: string;
+      readonly target_language: string;
+      readonly creativity_temperature: number;
+    }
+  | {
+      readonly prompt_version_id: string;
+      readonly narrative_type: string | null;
+      readonly target_language: string;
+      readonly creativity_temperature: number;
+    };
+
+interface InSituVisitReportsResponse {
+  readonly content: readonly {
+    readonly inSituVisitRecordId: string;
+  }[];
 }
 
 interface AiPromptPreviewResponse {

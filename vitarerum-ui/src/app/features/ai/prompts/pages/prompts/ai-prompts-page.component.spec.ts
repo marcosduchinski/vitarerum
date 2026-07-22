@@ -4,6 +4,13 @@ import { MenuItem } from 'primeng/api';
 import { BehaviorSubject, of } from 'rxjs';
 
 import {
+  CollectionUseProjectSummary,
+  ProjectListQuery,
+} from '@features/collections/projects/models/project.model';
+import { PROJECT_API_SERVICE } from '@features/collections/projects/services/project-api.service';
+import { Page } from '@shared/models/page.model';
+
+import {
   AiPromptPreviewInput,
   AiPromptPreviewResult,
   AiPromptTemplate,
@@ -38,6 +45,12 @@ const DRAFT_TEMPLATE: AiPromptTemplate = {
   createdAt: '2026-07-18T10:00:00Z',
 };
 
+const PTPL_TEMPLATE: AiPromptTemplate = {
+  ...TEMPLATE,
+  id: 'ptpl-insitu-institutional',
+  activeVersionId: 'pver-insitu-institutional-v1',
+};
+
 const VERSION: AiPromptVersion = {
   id: 'ver-1',
   templateId: 'tpl-1',
@@ -53,6 +66,12 @@ const VERSION: AiPromptVersion = {
   archivedAt: null,
 };
 
+const PTPL_VERSION: AiPromptVersion = {
+  ...VERSION,
+  id: 'pver-insitu-institutional-v1',
+  templateId: PTPL_TEMPLATE.id,
+};
+
 const DRAFT_VERSION: AiPromptVersion = {
   id: 'ver-draft',
   templateId: 'tpl-draft',
@@ -66,6 +85,25 @@ const DRAFT_VERSION: AiPromptVersion = {
   publishedBy: null,
   publishedAt: null,
   archivedAt: null,
+};
+
+const COMPLETED_IN_SITU_PROJECT: CollectionUseProjectSummary = {
+  id: 'project-closed-1',
+  referenceNumber: 'CU-2026-0042',
+  title: 'Completed institutional visit',
+  purpose: 'Document an in-situ visit.',
+  note: null,
+  type: 'IN_SITU_VISIT',
+  status: 'COMPLETED',
+  result: 'COMPLETED',
+  beginDate: '2026-07-01',
+  endDate: '2026-07-05',
+  requestedBy: null,
+  proposal: {
+    id: 'proposal-closed-1',
+    status: 'APPROVED',
+    assignedTo: null,
+  },
 };
 
 class ServiceStub {
@@ -157,13 +195,32 @@ class ServiceStub {
   }
 }
 
+class ProjectServiceStub {
+  readonly listProjectsCalls: ProjectListQuery[] = [];
+  projects: CollectionUseProjectSummary[] = [COMPLETED_IN_SITU_PROJECT];
+
+  listProjects(query: ProjectListQuery = {}) {
+    this.listProjectsCalls.push(query);
+    const page: Page<CollectionUseProjectSummary> = {
+      content: this.projects,
+      page: query.page ?? 0,
+      size: query.size ?? this.projects.length,
+      totalElements: this.projects.length,
+      totalPages: 1,
+    };
+    return of(page);
+  }
+}
+
 describe('AiPromptsPageComponent', () => {
   let fixture: ComponentFixture<unknown>;
   let service: ServiceStub;
+  let projectService: ProjectServiceStub;
   let paramMap: BehaviorSubject<ReturnType<typeof convertToParamMap>>;
 
   beforeEach(async () => {
     service = new ServiceStub();
+    projectService = new ProjectServiceStub();
     paramMap = new BehaviorSubject(convertToParamMap({ templateId: 'tpl-1' }));
     await TestBed.configureTestingModule({
       imports: [AiPromptsPageComponent, AiPromptViewPageComponent, AiPromptManagePageComponent],
@@ -171,6 +228,7 @@ describe('AiPromptsPageComponent', () => {
         provideRouter([]),
         { provide: ActivatedRoute, useValue: { paramMap: paramMap.asObservable() } },
         { provide: AI_PROMPT_MANAGEMENT_SERVICE, useValue: service },
+        { provide: PROJECT_API_SERVICE, useValue: projectService },
       ],
     }).compileComponents();
   });
@@ -226,10 +284,28 @@ describe('AiPromptsPageComponent', () => {
     expect(text).toContain('Published prompt.');
     expect(text).toContain('Published by');
     expect(text).toContain('system');
-    expect(text).toContain('Variables schema');
+    expect(text).not.toContain('Variables schema');
     expect(text).toContain('Active version');
     expect(text).not.toContain('Displayed version');
     expect(text).not.toContain('Draft editor');
+  });
+
+  it('links ptpl template detail routes to the manage screen', async () => {
+    paramMap.next(convertToParamMap({ templateId: 'ptpl-insitu-institutional' }));
+    service.templates = [...service.templates, PTPL_TEMPLATE];
+    service.versionsByTemplate[PTPL_TEMPLATE.id] = [PTPL_VERSION];
+
+    fixture = TestBed.createComponent(AiPromptViewPageComponent);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const root = fixture.nativeElement as HTMLElement;
+    const editLink = Array.from(root.querySelectorAll<HTMLAnchorElement>('a')).find((link) =>
+      link.textContent?.includes('Edit'),
+    );
+
+    expect(editLink).not.toBeUndefined();
+    expect(editLink?.getAttribute('href')).toBe('/p/ai/prompts/ptpl-insitu-institutional/edit');
   });
 
   it('labels a template with only draft versions as draft', async () => {
@@ -285,6 +361,25 @@ describe('AiPromptsPageComponent', () => {
     expect(service.publishCalls).toEqual(['ver-2']);
   });
 
+  it('prefills ptpl manage drafts from the active prompt version', async () => {
+    paramMap.next(convertToParamMap({ templateId: 'ptpl-insitu-institutional' }));
+    service.templates = [...service.templates, PTPL_TEMPLATE];
+    service.versionsByTemplate[PTPL_TEMPLATE.id] = [PTPL_VERSION];
+
+    fixture = TestBed.createComponent(AiPromptManagePageComponent);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const root = fixture.nativeElement as HTMLElement;
+    const textarea = root.querySelector('textarea');
+    if (!(textarea instanceof HTMLTextAreaElement)) throw new Error('Draft textarea not found');
+    const labelInput = inputByLabel(root, 'Version label');
+
+    expect(textarea.value).toBe('Published prompt.');
+    expect(labelInput.value).toBe('museum-narrative-institutional-v2');
+    expect(service.createDraftCalls).toEqual([]);
+  });
+
   it('renders a prompt version route as read-only exact version content', async () => {
     paramMap.next(convertToParamMap({ versionId: 'ver-1' }));
 
@@ -327,7 +422,7 @@ describe('AiPromptsPageComponent', () => {
     fixture.detectChanges();
 
     const root = fixture.nativeElement as HTMLElement;
-    const recordInput = inputByLabel(root, 'Preview record id');
+    const recordInput = inputByLabel(root, 'Preview record or project id');
     recordInput.value = 'record-1';
     recordInput.dispatchEvent(new Event('input'));
     fixture.detectChanges();
@@ -359,7 +454,7 @@ describe('AiPromptsPageComponent', () => {
     fixture.detectChanges();
 
     const root = fixture.nativeElement as HTMLElement;
-    const recordInput = inputByLabel(root, 'Preview record id');
+    const recordInput = inputByLabel(root, 'Preview record or project id');
     recordInput.value = 'record-1';
     recordInput.dispatchEvent(new Event('input'));
     const textarea = root.querySelector('textarea');
@@ -387,6 +482,38 @@ describe('AiPromptsPageComponent', () => {
     expect(text).toContain('Preview narrative text.');
     expect(text).toContain('Ad-hoc draft');
   });
+
+  it('shows completed in-situ project references and previews with the project id', async () => {
+    fixture = TestBed.createComponent(AiPromptManagePageComponent);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const root = fixture.nativeElement as HTMLElement;
+    const projectSelect = selectByLabel(root, 'Completed in-situ project');
+    expect(projectSelect.textContent).toContain('CU-2026-0042 - Completed institutional visit');
+
+    projectSelect.value = 'project-closed-1';
+    projectSelect.dispatchEvent(new Event('change'));
+    const textarea = root.querySelector('textarea');
+    if (!(textarea instanceof HTMLTextAreaElement)) throw new Error('Draft textarea not found');
+    textarea.value = 'Ad-hoc prompt content.';
+    textarea.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    clickButton(root, 'Test');
+    await fixture.whenStable();
+
+    expect(projectService.listProjectsCalls[0]).toMatchObject({
+      status: 'COMPLETED',
+      type: 'IN_SITU_VISIT',
+      page: 0,
+      size: 100,
+    });
+    expect(service.previewCalls.at(-1)).toMatchObject({
+      mode: 'adhoc',
+      recordId: 'project-closed-1',
+    });
+  });
 });
 
 function clickButton(root: HTMLElement, text: string): void {
@@ -412,4 +539,13 @@ function inputByLabel(root: HTMLElement, label: string): HTMLInputElement {
   const input = field?.querySelector('input');
   if (!(input instanceof HTMLInputElement)) throw new Error(`Input not found: ${label}`);
   return input;
+}
+
+function selectByLabel(root: HTMLElement, label: string): HTMLSelectElement {
+  const field = Array.from(root.querySelectorAll('label')).find((candidate) =>
+    candidate.textContent?.includes(label),
+  );
+  const select = field?.querySelector('select');
+  if (!(select instanceof HTMLSelectElement)) throw new Error(`Select not found: ${label}`);
+  return select;
 }
