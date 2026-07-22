@@ -12,7 +12,11 @@ import {
   UseCategoryHumanOutcome,
   UseCategoryValue,
 } from '../../models/museum-question-triage.model';
-import { MuseumQuestion } from '../../models/museum-question.model';
+import {
+  MuseumQuestion,
+  MuseumQuestionListQuery,
+  MuseumQuestionPage,
+} from '../../models/museum-question.model';
 import { MUSEUM_QUESTION_MANAGEMENT_SERVICE } from '../../services/museum-question-management.service';
 import { MuseumQuestionDetailPageComponent } from './museum-question-detail-page.component';
 
@@ -34,6 +38,28 @@ const QUESTION: MuseumQuestion = {
   outOfScopeEmailSentAt: null,
   closedAt: null,
   closedBy: null,
+};
+
+const PREVIOUS_QUESTION: MuseumQuestion = {
+  ...QUESTION,
+  id: 'q-previous',
+  subject: 'Previous collections visit',
+  message: 'Did the museum previously allow visits to the archives?',
+  status: 'ANSWERED',
+  createdAt: '2026-06-22T09:30:00Z',
+  answeredAt: '2026-06-22T15:00:00Z',
+  answeredBy: 'perm-staff',
+  answerBody: 'Yes. Please coordinate the visit with the collections team.',
+  answerSentAt: '2026-06-22T15:00:00Z',
+};
+
+const OTHER_REQUESTER_QUESTION: MuseumQuestion = {
+  ...QUESTION,
+  id: 'q-other',
+  requesterEmail: 'other@example.org',
+  subject: 'Different requester',
+  message: 'This should not appear in Ana history.',
+  createdAt: '2026-06-20T09:30:00Z',
 };
 
 const NOT_REQUESTED_USE_CATEGORY_CLASSIFICATION: UseCategoryClassification = {
@@ -183,8 +209,10 @@ const FAILED_USE_CATEGORY_CLASSIFICATION: UseCategoryClassification = {
 
 class ServiceStub {
   question = QUESTION;
+  historyQuestions: MuseumQuestion[] = [PREVIOUS_QUESTION, OTHER_REQUESTER_QUESTION];
   triage: MuseumQuestionTriage | null = null;
   nextTriage: MuseumQuestionTriage | null = null;
+  readonly listCalls: MuseumQuestionListQuery[] = [];
   readonly answerCalls: [string, string][] = [];
   readonly outOfScopeCalls: [string, string | null][] = [];
   readonly closeCalls: string[] = [];
@@ -275,6 +303,26 @@ class ServiceStub {
 
   get() {
     return of(this.question);
+  }
+
+  list(query: MuseumQuestionListQuery) {
+    this.listCalls.push(query);
+    const filtered = [this.question, ...this.historyQuestions]
+      .filter((item) => !query.status || item.status === query.status)
+      .filter(
+        (item) =>
+          !query.requesterEmail ||
+          item.requesterEmail.toLowerCase() === query.requesterEmail.trim().toLowerCase(),
+      )
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    const page: MuseumQuestionPage = {
+      content: filtered.slice(query.page * query.size, query.page * query.size + query.size),
+      page: query.page,
+      size: query.size,
+      totalElements: filtered.length,
+      totalPages: filtered.length === 0 ? 0 : Math.ceil(filtered.length / query.size),
+    };
+    return of(page);
   }
 
   answer(questionId: string, body: { answerBody: string }) {
@@ -398,14 +446,31 @@ describe('MuseumQuestionDetailPageComponent', () => {
     expect(service.closeCalls).toEqual(['q1']);
   });
 
-  it('does not render the answered history tab', async () => {
+  it('lists previous messages from the same requester email in the history tab', async () => {
     const el = await setup();
     const tabLabels = Array.from(el.querySelectorAll<HTMLButtonElement>('[role="tab"]')).map(
       (button) => button.textContent?.trim(),
     );
 
-    expect(tabLabels).toEqual(['Message', 'AI assistance']);
-    expect(el.textContent).not.toContain('Answered for this email');
+    expect(tabLabels).toEqual(['Message', 'History', 'AI assistance']);
+
+    el.querySelector<HTMLButtonElement>('#history-tab')!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(service.listCalls.at(-1)).toMatchObject({
+      requesterEmail: 'ana@example.org',
+      page: 0,
+      size: 100,
+    });
+    expect(el.textContent).toContain('Previous messages');
+    expect(el.textContent).toContain('Previous collections visit');
+    expect(el.textContent).toContain('Did the museum previously allow visits to the archives?');
+    expect(el.textContent).not.toContain('Different requester');
+    expect(
+      el.querySelector<HTMLAnchorElement>('a[href="/p/museum-questions/q-previous"]'),
+    ).not.toBeNull();
   });
 
   it('runs AI triage from the message icon and switches to the AI assistance tab', async () => {
@@ -693,11 +758,7 @@ describe('MuseumQuestionDetailPageComponent', () => {
     fixture.detectChanges();
 
     expect(service.syncUseCategoriesCalls).toEqual([
-      [
-        'q1',
-        ['ANSWERING_ENQUIRIES', 'PUBLISHING_IMAGES', 'RESEARCH_PROJECTS'],
-        'CATEGORIZED',
-      ],
+      ['q1', ['ANSWERING_ENQUIRIES', 'PUBLISHING_IMAGES', 'RESEARCH_PROJECTS'], 'CATEGORIZED'],
     ]);
   });
 

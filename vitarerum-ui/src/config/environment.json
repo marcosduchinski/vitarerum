@@ -4,5 +4,5 @@
   "api-base-url": "http://localhost:8000/api/v1",
   "use-mock-api": false,
   "use-mock-auth": false,
-  "turnstile-site-key": "0x4AAAAAAD6fXP5mreFiGSJz"
+  "turnstile-site-key": "1x00000000000000000000AA"
 }

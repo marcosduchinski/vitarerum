@@ -39,6 +39,18 @@
       </button>
       <button
         type="button"
+        id="history-tab"
+        class="question-detail__tab"
+        [class.question-detail__tab--active]="activePanel() === 'history'"
+        role="tab"
+        aria-controls="history-panel"
+        [attr.aria-selected]="activePanel() === 'history'"
+        (click)="selectPanel('history')"
+      >
+        History
+      </button>
+      <button
+        type="button"
         id="ai-assistance-tab"
         class="question-detail__tab"
         [class.question-detail__tab--active]="activePanel() === 'ai-assistance'"
@@ -296,6 +308,64 @@
           </section>
         </section>
       }
+      @case ('history') {
+        <section
+          id="history-panel"
+          class="question-detail__panel"
+          role="tabpanel"
+          aria-labelledby="history-tab"
+        >
+          <section class="detail-card" aria-labelledby="history-card-title">
+            <div class="history-card__header">
+              <div>
+                <h2 id="history-card-title" class="detail-card__title">Previous messages</h2>
+                <p class="history-card__subtitle">{{ question.requesterEmail }}</p>
+              </div>
+              @if (historyResource.value()) {
+                <span class="history-card__count">
+                  {{ previousQuestions().length }} of {{ previousQuestionsTotal() }}
+                </span>
+              }
+            </div>
+
+            @if (historyResource.isLoading()) {
+              <app-loading-state label="Loading message history..." />
+            } @else if (historyError()) {
+              <app-error-message [apiError]="historyError()!" (retry)="historyResource.reload()" />
+            } @else if (!previousQuestions().length) {
+              <app-empty-state
+                title="No previous messages"
+                message="No earlier museum questions were found for this requester email."
+              />
+            } @else {
+              <ol class="message-list" aria-label="Previous museum questions from this requester">
+                @for (item of previousQuestions(); track item.id) {
+                  <li>
+                    <a
+                      class="message history-message"
+                      [routerLink]="['/p/museum-questions', item.id]"
+                    >
+                      <div class="message__avatar" aria-hidden="true">
+                        <span class="pi pi-history"></span>
+                      </div>
+                      <div class="message__content">
+                        <div class="message__header">
+                          <div>
+                            <span class="message__sender">{{ item.subject }}</span>
+                            <span class="message__role">{{ statusLabel(item.status) }}</span>
+                          </div>
+                          <span class="message__date">{{ formatDate(item.createdAt) }}</span>
+                        </div>
+                        <p class="message__body">{{ item.message }}</p>
+                      </div>
+                    </a>
+                  </li>
+                }
+              </ol>
+            }
+          </section>
+        </section>
+      }
       @case ('ai-assistance') {
         <section
           id="ai-assistance-panel"
@@ -362,10 +432,7 @@
                 }
               </div>
 
-              @if (
-                displayedUseCategoryClassification();
-                as useCategoryClassification
-              ) {
+              @if (displayedUseCategoryClassification(); as useCategoryClassification) {
                 @if (useCategoryClassification.status !== 'NOT_REQUESTED') {
                   <section
                     class="triage-terms-editor"
@@ -373,9 +440,7 @@
                   >
                     <div class="triage-section-heading">
                       <div>
-                        <h3 id="use-category-classification-title">
-                          Categorias de uso detectadas
-                        </h3>
+                        <h3 id="use-category-classification-title">Categorias de uso detectadas</h3>
                         <p class="triage-section-heading__note">
                           {{ operationalClassifierLabel(useCategoryOperationalClassifier()) }}
                           ·

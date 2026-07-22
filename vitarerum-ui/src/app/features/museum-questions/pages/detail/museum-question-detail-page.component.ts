@@ -38,10 +38,14 @@ import {
   UseCategoryScoreSource,
   UseCategoryValue,
 } from '../../models/museum-question-triage.model';
-import { MuseumQuestion, MuseumQuestionStatus } from '../../models/museum-question.model';
+import {
+  MuseumQuestion,
+  MuseumQuestionPage,
+  MuseumQuestionStatus,
+} from '../../models/museum-question.model';
 import { MUSEUM_QUESTION_MANAGEMENT_SERVICE } from '../../services/museum-question-management.service';
 
-type QuestionDetailPanel = 'message' | 'ai-assistance';
+type QuestionDetailPanel = 'message' | 'history' | 'ai-assistance';
 type ReplyEditorCommand = 'bold' | 'italic' | 'insertUnorderedList' | 'removeFormat';
 type SearchTermField = 'english' | 'portuguese';
 
@@ -209,6 +213,55 @@ export class MuseumQuestionDetailPageComponent {
     return err ? toApiError(err) : null;
   });
 
+  protected readonly historyResource = resource<
+    MuseumQuestionPage | null,
+    {
+      readonly currentQuestionId: string | null;
+      readonly requesterEmail: string | null;
+      readonly createdAt: string | null;
+      readonly refresh: number;
+    }
+  >({
+    params: () => {
+      const question = this.question();
+      return {
+        currentQuestionId: question?.id ?? null,
+        requesterEmail: question?.requesterEmail ?? null,
+        createdAt: question?.createdAt ?? null,
+        refresh: this.detailRefreshToken(),
+      };
+    },
+    loader: ({ params }) => {
+      if (!params.requesterEmail) return Promise.resolve(null);
+      return firstValueFrom(
+        this.service.list({
+          requesterEmail: params.requesterEmail,
+          page: 0,
+          size: 100,
+        }),
+      );
+    },
+  });
+
+  protected readonly historyError = computed<ApiError | null>(() => {
+    const err = this.historyResource.error();
+    return err ? toApiError(err) : null;
+  });
+  protected readonly previousQuestions = computed<readonly MuseumQuestion[]>(() => {
+    const question = this.question();
+    const page = this.historyResource.value();
+    if (!question || !page) return [];
+    return page.content
+      .filter((item) => item.id !== question.id && item.createdAt < question.createdAt)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  });
+  protected readonly previousQuestionsTotal = computed(() => {
+    const question = this.question();
+    const page = this.historyResource.value();
+    if (!question || !page) return 0;
+    return Math.max(0, page.totalElements - 1);
+  });
+
   protected readonly triageResource = resource({
     params: () => ({ id: this.id(), refresh: this.triageRefreshToken() }),
     loader: ({ params }) => firstValueFrom(this.service.getTriage(params.id)),
@@ -257,8 +310,7 @@ export class MuseumQuestionDetailPageComponent {
   protected readonly categoryDraftChanged = computed(() => {
     const current = new Set(this.assignedUseCategories().map((score) => score.category));
     const draft = this.categoryDraft();
-    const currentOutcome =
-      this.displayedUseCategoryClassification()?.outcome ?? 'CATEGORIZED';
+    const currentOutcome = this.displayedUseCategoryClassification()?.outcome ?? 'CATEGORIZED';
     if (currentOutcome !== this.categoryDraftOutcome()) return true;
     if (current.size !== draft.size) return true;
     return [...draft].some((category) => !current.has(category));
@@ -630,6 +682,7 @@ export class MuseumQuestionDetailPageComponent {
   }
 
   private normalizeTab(tab: string | undefined): QuestionDetailPanel {
+    if (tab === 'history') return tab;
     if (tab === 'ai-assistance') return tab;
     return 'message';
   }
