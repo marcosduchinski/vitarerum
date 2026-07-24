@@ -13,20 +13,9 @@ from email.message import EmailMessage
 
 import aiosmtplib
 
+from app.shared.email_templates import requester_access_created_email
+
 logger = logging.getLogger(__name__)
-
-
-def _access_created_body(
-    requester_name: str, login_url: str, temporary_password: str
-) -> str:
-    return (
-        f"Olá {requester_name},\n\n"
-        "A sua proposta foi aprovada e criámos um acesso à sua área pessoal "
-        "no Vitarerum.\n\n"
-        f"Link de acesso: {login_url}\n"
-        f"Senha provisória: {temporary_password}\n\n"
-        "Recomendamos que altere esta senha assim que possível."
-    )
 
 
 class LoggingRequesterAccessEmailSender:
@@ -71,13 +60,14 @@ class SmtpRequesterAccessEmailSender:
         login_url: str,
         temporary_password: str,
     ) -> None:
+        template = requester_access_created_email(
+            requester_name, login_url, temporary_password
+        )
         message = EmailMessage()
         message["From"] = self._from
         message["To"] = to_email
-        message["Subject"] = "O seu acesso à área pessoal do Vitarerum"
-        message.set_content(
-            _access_created_body(requester_name, login_url, temporary_password)
-        )
+        message["Subject"] = template.subject
+        message.set_content(template.body)
         await aiosmtplib.send(
             message,
             hostname=self._host,

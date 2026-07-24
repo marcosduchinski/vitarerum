@@ -20,6 +20,11 @@ from email.message import EmailMessage
 
 import aiosmtplib
 
+from app.shared.email_templates import (
+    password_changed_email,
+    password_reset_email,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -90,25 +95,19 @@ class SmtpPasswordEmailSender:
         self, to_email: str, display_name: str, token: str
     ) -> None:
         link = _reset_link(self._origin, self._path, token)
+        template = password_reset_email(display_name, link)
         await self._send(
             to_email,
-            "Redefinição de password",
-            f"Olá {display_name},\n\n"
-            "Recebemos um pedido para redefinir a sua password. Para "
-            "continuar, aceda ao link abaixo (válido por tempo limitado):\n\n"
-            f"{link}\n\n"
-            "Se não foi você quem pediu, ignore esta mensagem — a sua "
-            "password atual continua válida.",
+            template.subject,
+            template.body,
         )
 
     async def send_password_changed_notice(
         self, to_email: str, display_name: str
     ) -> None:
+        template = password_changed_email(display_name)
         await self._send(
             to_email,
-            "A sua password foi alterada",
-            f"Olá {display_name},\n\n"
-            "A password da sua conta Vitarerum acabou de ser alterada.\n\n"
-            "Se foi você, pode ignorar esta mensagem. Se não foi, contacte o "
-            "suporte o mais rápido possível.",
+            template.subject,
+            template.body,
         )

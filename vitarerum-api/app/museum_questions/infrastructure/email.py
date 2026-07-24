@@ -9,18 +9,14 @@ from html.parser import HTMLParser
 
 import aiosmtplib
 
-logger = logging.getLogger(__name__)
-
-_OUT_OF_SCOPE_BODY = (
-    "Obrigado por entrar em contato com o Vitarerum.\n\n"
-    "Neste momento, o Pergunte ao Museu esta disponivel apenas para perguntas "
-    "relacionadas ao uso de colecoes, especialmente visitas in situ para "
-    "investigacao.\n\n"
-    "Perguntas sobre exposicoes, emprestimos, eventos, atividades educativas "
-    "ou outros servicos do museu ainda nao sao tratadas por este canal e "
-    "serao disponibilizadas em uma versao futura.\n\n"
-    "Agradecemos a compreensao."
+from app.shared.email_templates import (
+    museum_question_answer_html_body,
+    museum_question_answer_subject,
+    museum_question_answer_text_body,
+    museum_question_out_of_scope_email,
 )
+
+logger = logging.getLogger(__name__)
 
 _ALLOWED_INLINE_TAGS = {"b", "em", "i", "strong"}
 _ALLOWED_BLOCK_TAGS = {"br", "li", "ol", "p", "ul"}
@@ -29,7 +25,7 @@ _BLOCKED_CONTENT_TAGS = {"embed", "iframe", "link", "meta", "object", "script", 
 
 
 def _answer_body(requester_name: str, answer_body: str) -> str:
-    return f"Olá {requester_name},\n\n{answer_body}\n\nVitarerum"
+    return museum_question_answer_text_body(requester_name, answer_body)
 
 
 class _AnswerHtmlParser(HTMLParser):
@@ -126,13 +122,7 @@ def _sanitize_answer_markup(answer_body: str) -> tuple[str, str]:
 
 def _answer_html_body(requester_name: str, answer_body: str) -> str:
     _text, sanitized_html = _sanitize_answer_markup(answer_body)
-    return (
-        "<!doctype html><html><body>"
-        f"<p>Olá {escape(requester_name)},</p>"
-        f"{sanitized_html}"
-        "<p>Vitarerum</p>"
-        "</body></html>"
-    )
+    return museum_question_answer_html_body(requester_name, sanitized_html)
 
 
 def _answer_text_body(requester_name: str, answer_body: str) -> str:
@@ -201,7 +191,7 @@ class SmtpMuseumQuestionEmailSender:
         message = EmailMessage()
         message["From"] = self._from
         message["To"] = to_email
-        message["Subject"] = f"Resposta do Vitarerum: {subject}"
+        message["Subject"] = museum_question_answer_subject(subject)
         message.set_content(_answer_text_body(requester_name, answer_body))
         message.add_alternative(
             _answer_html_body(requester_name, answer_body),
@@ -219,8 +209,9 @@ class SmtpMuseumQuestionEmailSender:
         message = EmailMessage()
         message["From"] = self._from
         message["To"] = to_email
-        message["Subject"] = f"Pergunte ao Museu: {subject}"
-        message.set_content(_OUT_OF_SCOPE_BODY)
+        template = museum_question_out_of_scope_email(subject)
+        message["Subject"] = template.subject
+        message.set_content(template.body)
         await self._send(message)
 
     async def _send(self, message: EmailMessage) -> None:
