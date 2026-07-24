@@ -481,44 +481,6 @@ describe('ProposalMyDetailPageComponent', () => {
     ]);
   });
 
-  it('simulates creating a temporary external user without calling the backend', async () => {
-    const fixture = TestBed.createComponent(ProposalMyDetailPageComponent);
-    fixture.componentRef.setInput('id', 'proposal-1');
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
-    await selectPanel(fixture, 'Actions');
-
-    const compiled = fixture.nativeElement as HTMLElement;
-    const text = compiled.textContent?.replace(/\s+/g, ' ') ?? '';
-    const createButton = Array.from(compiled.querySelectorAll<HTMLButtonElement>('button')).find(
-      (button) => button.textContent?.trim() === 'Create user',
-    );
-
-    expect(text).toContain('Create temporary external user');
-    expect(text).toContain(
-      'Create a temporary external account for the requester if no external user exists for their email address.',
-    );
-    expect(createButton).toBeDefined();
-    expect(createButton!.disabled).toBe(false);
-
-    createButton!.click();
-    fixture.detectChanges();
-
-    const feedback = compiled.querySelector<HTMLElement>('app-feedback-message [role="status"]');
-    expect(feedback?.textContent).toContain('Temporary external user created');
-    expect(feedback?.textContent).toContain(
-      'A new temporary external user for alice@example.test was created.',
-    );
-    expect(createButton!.disabled).toBe(true);
-    expect(createButton!.textContent?.trim()).toBe('Created');
-    expect(proposalService.updateProposalCalls).toEqual([]);
-    expect(proposalService.approveCalls).toEqual([]);
-    expect(proposalService.rejectCalls).toEqual([]);
-    expect(proposalService.uploadCalls).toEqual([]);
-    expect(proposalService.sendMessageCalls).toEqual([]);
-  });
-
   it('hides the Edit action when the proposal has a terminal status', async () => {
     proposalService.setProposal({ ...PROPOSAL, status: 'APPROVED' });
     const fixture = TestBed.createComponent(ProposalMyDetailPageComponent);

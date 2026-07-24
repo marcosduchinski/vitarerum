@@ -296,43 +296,6 @@
             </div>
           </div>
 
-          @if (canEdit()) {
-            <div class="action-group" aria-labelledby="requester-access-group-title">
-              <p id="requester-access-group-title" class="action-group__title">Requester access</p>
-
-              @if (temporaryExternalUserEmail(); as createdEmail) {
-                <app-feedback-message
-                  title="Temporary external user created"
-                  [message]="'A new temporary external user for ' + createdEmail + ' was created.'"
-                  tone="success"
-                />
-              }
-
-              <div class="task-row" aria-labelledby="temporary-user-task-heading">
-                <span class="task-row__icon task-row__icon--accent" aria-hidden="true">
-                  <span class="pi pi-user-plus"></span>
-                </span>
-                <div class="task-row__body">
-                  <h3 id="temporary-user-task-heading" class="task-row__title">
-                    Create temporary external user
-                  </h3>
-                  <p class="task-row__desc">
-                    Create a temporary external account for the requester if no external user exists
-                    for their email address.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  class="action-btn task-row__control"
-                  [disabled]="temporaryExternalUserEmail() !== null"
-                  (click)="createTemporaryExternalUser()"
-                >
-                  {{ temporaryExternalUserEmail() ? 'Created' : 'Create user' }}
-                </button>
-              </div>
-            </div>
-          }
-
           @if (canDecide()) {
             <div class="action-group" aria-labelledby="decision-group-title">
               <p id="decision-group-title" class="action-group__title">Decision</p>

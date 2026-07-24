@@ -16,7 +16,6 @@ import { ApiError, toApiError } from '@core/http/api-error.model';
 import { USER_MANAGEMENT_SERVICE } from '@features/admin/services/user-management.service';
 import { ConfirmModalComponent } from '@shared/components/confirm-modal/confirm-modal.component';
 import { ErrorMessageComponent } from '@shared/components/error-message/error-message.component';
-import { FeedbackMessageComponent } from '@shared/components/feedback-message/feedback-message.component';
 import { LoadingStateComponent } from '@shared/components/loading-state/loading-state.component';
 import {
   StatusChipComponent,
@@ -49,7 +48,6 @@ type MyDetailPanel = 'overview' | 'objects' | 'documents' | 'conversation' | 'ac
     RouterLink,
     LoadingStateComponent,
     ErrorMessageComponent,
-    FeedbackMessageComponent,
     StatusChipComponent,
     TypeChipComponent,
     ConfirmModalComponent,
@@ -140,10 +138,6 @@ export class ProposalMyDetailPageComponent {
   protected readonly removeObjectError = signal<ApiError | null>(null);
   protected readonly addingObjects = signal(false);
   protected readonly addObjectError = signal<ApiError | null>(null);
-  protected readonly temporaryExternalUserEmail = linkedSignal<string | null>(() => {
-    this.id();
-    return null;
-  });
 
   protected readonly canDecide = computed(() => this.proposal()?.status === 'PENDING');
   protected readonly canEdit = computed(() => {
@@ -193,13 +187,6 @@ export class ProposalMyDetailPageComponent {
 
   protected edit(): void {
     void this.router.navigate(['/p/collections/proposals/my-assignments', this.id(), 'edit']);
-  }
-
-  protected createTemporaryExternalUser(): void {
-    const email = this.proposal()?.requestedBy.user.email;
-    if (email && !this.temporaryExternalUserEmail()) {
-      this.temporaryExternalUserEmail.set(email);
-    }
   }
 
   protected selectPanel(panel: MyDetailPanel): void {
