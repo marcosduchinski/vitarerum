@@ -304,6 +304,54 @@ async def test_amendment_upload_blank_type_rejected() -> None:
     assert storage.saved == {}  # invalid type rejected before any file write
 
 
+async def test_amendment_upload_replaces_flagged_document() -> None:
+    """Uploading a corrected file for a replacement-type item atomically detaches
+    the flagged document — the citizen doesn't have to remove it by hand first."""
+    factory = await _session_factory()
+    storage = _FakeStorage()
+
+    async with factory() as session:
+        repo = SqlAlchemyProposalRepository(session)
+        await repo.add(_pending_proposal())  # seeds doc-1 (ID_CARD)
+        await RequestDocumentCorrections(repo).execute(
+            RequestDocumentCorrectionsInput(
+                proposal_id=ProposalId("prop-1"),
+                caller=_STAFF,
+                items=[
+                    DocumentCorrectionInput(
+                        document_type="ID_CARD",
+                        reason="Illegible",
+                        document_id="doc-1",
+                    )
+                ],
+                requester_email="pedro@example.test",
+                requester_name="Pedro Silva",
+            )
+        )
+        await session.commit()
+
+    async with factory() as session:
+        repo = SqlAlchemyProposalRepository(session)
+        new_document = await SubmitAmendmentDocument(repo, storage).execute(
+            SubmitAmendmentDocumentInput(
+                proposal_id=ProposalId("prop-1"),
+                file_content=b"%PDF-1.4 id",
+                file_name="id-clear.pdf",
+                document_type="ID_CARD",
+                allowed_document_types={"ID_CARD"},
+            )
+        )
+        await session.commit()
+
+    assert storage.deleted == ["proposals/prop-1/id.pdf"]
+
+    async with factory() as session:
+        repo = SqlAlchemyProposalRepository(session)
+        after = await repo.get_by_id(ProposalId("prop-1"))
+    assert after is not None
+    assert [d.id for d in after.documents] == [new_document.id]
+
+
 async def test_amendment_remove_reclaims_file() -> None:
     factory = await _session_factory()
     storage = _FakeStorage()

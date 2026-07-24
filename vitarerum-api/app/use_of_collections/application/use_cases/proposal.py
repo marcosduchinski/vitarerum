@@ -596,7 +596,10 @@ class SubmitAmendmentDocument:
 
     Mirrors :class:`SubmitDocuments` but carries no ``Actor`` — the citizen has no
     account, so ``submitted_by`` is ``None``. Enforces the token-derived
-    ``allowed_document_types`` scope before persisting."""
+    ``allowed_document_types`` scope before persisting. When the upload
+    satisfies a replacement-type correction item, the flagged document it
+    replaces is atomically detached and its file reclaimed — the citizen is
+    not required to remove it by hand first."""
 
     def __init__(
         self,
@@ -630,15 +633,16 @@ class SubmitAmendmentDocument:
                 submitted_at=now,
                 submitted_by=None,
             )
-            proposal.submit_documents(
+            replaced = proposal.submit_amendment_document(
                 occurred_at=now,
-                triggered_by=None,
                 document=document,
             )
             await self._repo.save(proposal)
         except BaseException:
             await self._storage.delete(file_reference)
             raise
+        for old in replaced:
+            await self._storage.delete(old.file_reference)
         return document
 
 

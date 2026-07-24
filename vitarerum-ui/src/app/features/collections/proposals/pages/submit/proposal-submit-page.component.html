@@ -9,7 +9,7 @@
     <fieldset class="submit-form__section">
       <legend class="submit-form__section-title">Request details</legend>
 
-      <div class="field" [class.field--error]="useTypeError()">
+      <div class="field" [class.field--error]="useTypeError() || unsupportedUseTypeError()">
         <label class="field__label" for="useType"
           >Intended use <span aria-hidden="true">*</span></label
         >
@@ -18,7 +18,7 @@
           class="field__input"
           [value]="useType()"
           (change)="onUseTypeChange($event)"
-          [attr.aria-invalid]="useTypeError() || null"
+          [attr.aria-invalid]="useTypeError() || unsupportedUseTypeError() || null"
         >
           <option value="" disabled>Select how you'll use the collection…</option>
           @for (option of useTypeOptions; track option.value) {
@@ -28,7 +28,48 @@
         @if (useTypeError()) {
           <p class="field__error" role="alert">Please choose how you'll use the collection.</p>
         }
+        @if (unsupportedUseTypeSelected()) {
+          <p class="field__notice" role="status">
+            Only in-situ visit requests are operational at the moment. Exhibition and other uses
+            will be implemented later.
+          </p>
+        }
       </div>
+
+      @if (useType() && templates().length > 0) {
+        <section class="templates" aria-labelledby="templates-heading">
+          <h2 id="templates-heading" class="templates__title">Required documents</h2>
+          <p class="templates__intro">
+            Download the template(s) below, fill them in and attach the completed files to your
+            request.
+          </p>
+          <ul class="templates__list">
+            @for (template of templates(); track template.id) {
+              <li class="templates__item">
+                <div class="templates__item-head">
+                  <button
+                    type="button"
+                    class="templates__download"
+                    (click)="downloadTemplate(template)"
+                  >
+                    {{ template.title }}
+                  </button>
+                  @if (template.mandatory) {
+                    <span class="templates__badge">Mandatory</span>
+                  }
+                </div>
+                @if (template.description) {
+                  <p class="templates__desc">{{ template.description }}</p>
+                }
+              </li>
+            }
+          </ul>
+        </section>
+      }
+
+      @if (templateDownloadError()) {
+        <app-error-message [apiError]="templateDownloadError()!" />
+      }
 
       <div
         class="field"
@@ -66,7 +107,8 @@
     <fieldset class="submit-form__section">
       <legend class="submit-form__section-title">Opening message</legend>
       <p class="submit-form__section-hint">
-        Your proposal starts a conversation with the collections team. Write your first message below.
+        Your proposal starts a conversation with the collections team. Write your first message
+        below.
       </p>
 
       <div class="field" [class.field--error]="subjectError()">
@@ -109,7 +151,9 @@
       </p>
 
       <div class="field" [class.field--error]="documentsError()">
-        <label class="field__label" for="documents">Documents</label>
+        <label class="field__label" for="documents"
+          >Documents <span aria-hidden="true">*</span></label
+        >
         <input
           id="documents"
           type="file"
@@ -136,7 +180,7 @@
           <p class="field__error" role="alert">{{ documentValidationMessage() }}</p>
         } @else {
           <p class="field__hint">
-            Attach up to 5 files. PDF, JPG, PNG, and DOCX are accepted, up to 10 MB each.
+            Attach 1-5 files. PDF, JPG, PNG, and DOCX are accepted, up to 10 MB each.
           </p>
         }
       </div>
@@ -147,14 +191,9 @@
     }
 
     <div class="submit-form__footer">
-      <button
-        type="submit"
-        class="submit-btn"
-        [disabled]="submitting()"
-      >
+      <button type="submit" class="submit-btn" [disabled]="submitting()">
         {{ submitting() ? 'Submitting…' : 'Submit proposal' }}
       </button>
     </div>
-
   </form>
 </div>

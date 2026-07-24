@@ -761,6 +761,42 @@ class Proposal:
             )
         )
 
+    def submit_amendment_document(
+        self,
+        occurred_at: datetime,
+        document: Document,
+    ) -> list[Document]:
+        """Public correction upload: appends ``document`` and atomically detaches
+        any document(s) it replaces.
+
+        A document is replaced when it is flagged (``document_id``) by a still
+        open (``REQUESTED``) correction item of the same type as the upload —
+        the citizen is not required to remove the flagged document by hand
+        first. Missing-document items (``document_id is None``) have nothing to
+        detach. Returns the detached documents so the caller can reclaim their
+        stored files."""
+        if self.status != ProposalStatus.PENDING:
+            raise InvalidTransition("Proposal is not in PENDING status")
+        flagged_ids = {
+            item.document_id
+            for item in self.correction_items
+            if item.status == DocumentCorrectionStatus.REQUESTED
+            and item.document_type == document.type
+            and item.document_id is not None
+        }
+        replaced = [d for d in self.documents if d.id in flagged_ids]
+        self.documents.append(document)
+        for old in replaced:
+            self.documents.remove(old)
+        self.events.append(
+            ProposalEvent(
+                occurred_at=occurred_at,
+                type=ProposalEventType.DOCUMENTS_SUBMITTED,
+                triggered_by=None,
+            )
+        )
+        return replaced
+
     def request_document_corrections(
         self,
         occurred_at: datetime,
