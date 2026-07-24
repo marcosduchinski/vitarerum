@@ -163,6 +163,19 @@
                           <span class="search-hit__inventory">{{ snapshot.inventoryNumber }}</span>
                           <strong>{{ snapshot.displayTitle || snapshot.objectName }}</strong>
                         </span>
+                        <span class="search-hit__meta">
+                          @if (snapshot.objectName) {
+                            <span>{{ snapshot.objectName }}</span>
+                          }
+                          @if (snapshot.category) {
+                            <span>{{ snapshot.category }}</span>
+                          }
+                        </span>
+                        @if (snapshot.briefDescriptionSnapshot) {
+                          <span class="search-hit__description">
+                            {{ snapshot.briefDescriptionSnapshot }}
+                          </span>
+                        }
                       }
                       <span class="search-hit__highlight" [innerHTML]="highlightHtml(hit)"></span>
                       <span class="search-hit__provenance">

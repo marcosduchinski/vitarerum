@@ -22,19 +22,12 @@ import { ProposalConversationSectionComponent } from '../../components/proposal-
 import { ProposalEventsSectionComponent } from '../../components/proposal-events-section/proposal-events-section.component';
 import { ProposalOverviewSectionComponent } from '../../components/proposal-overview-section/proposal-overview-section.component';
 import { ProposalEvent } from '../../models/proposal.model';
+import { formatProposalDetailDateTime } from '../../proposal-detail.presentation';
 import { PROPOSAL_API_SERVICE } from '../../services/proposal-api.service';
 
 function formatDate(iso: string | undefined): string {
   if (!iso) return '—';
-  try {
-    return new Date(iso).toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    });
-  } catch {
-    return iso;
-  }
+  return formatProposalDetailDateTime(iso);
 }
 
 @Component({

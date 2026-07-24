@@ -20,6 +20,10 @@
   color: var(--color-subtle);
 }
 
+app-confirm-modal {
+  display: contents;
+}
+
 /* Underline tab strip — navigation, distinct from the solid-indigo Accept CTA. */
 .proposal-detail__tabs {
   display: flex;
@@ -64,6 +68,14 @@
 .proposal-detail__panel {
   display: grid;
   gap: 1.5rem;
+}
+
+.proposal-detail__panel--overview {
+  align-items: start;
+
+  @media (min-width: 1120px) {
+    grid-template-columns: minmax(0, 1.45fr) minmax(20rem, 0.75fr);
+  }
 }
 
 .proposal-actions__status-note {

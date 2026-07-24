@@ -362,6 +362,21 @@
   }
 }
 
+.search-hit__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  color: var(--color-subtle);
+  font-size: 0.8rem;
+}
+
+.search-hit__description {
+  color: var(--color-muted);
+  font-size: 0.84rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
 .search-hit__highlight {
   overflow-wrap: anywhere;
 }

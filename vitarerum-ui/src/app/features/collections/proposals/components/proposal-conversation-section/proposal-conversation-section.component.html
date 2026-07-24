@@ -126,6 +126,25 @@
                             {{ requestedObject.objectReference.objectName }}
                           </span>
                         }
+                        <span class="requested-object-picker__meta">
+                          @if (requestedObject.category) {
+                            <span>{{ requestedObject.category }}</span>
+                          }
+                          @if (requestedObject.requestedAt) {
+                            <span>{{ requestedObject.requestedAt.slice(0, 10) }}</span>
+                          }
+                        </span>
+                        @if (
+                          requestedObject.objectReference.briefDescriptionSnapshot ||
+                          requestedObject.description
+                        ) {
+                          <span class="requested-object-picker__description">
+                            {{
+                              requestedObject.objectReference.briefDescriptionSnapshot ||
+                                requestedObject.description
+                            }}
+                          </span>
+                        }
                       </span>
                     </label>
                     @if (isRequestedObjectInserted(requestedObject.id)) {

@@ -21,6 +21,7 @@ import { RowActionsComponent } from '@shared/components/row-actions/row-actions.
 import { TypeChipComponent } from '@shared/components/type-chip/type-chip.component';
 
 import { ProposalSummary } from '../../models/proposal.model';
+import { formatProposalDetailDateTime } from '../../proposal-detail.presentation';
 import { PROPOSAL_API_SERVICE } from '../../services/proposal-api.service';
 
 const DEFAULT_PAGE_SIZE = 20;
@@ -56,6 +57,8 @@ export class ProposalsOthersPageComponent {
   protected readonly pageSize = signal(DEFAULT_PAGE_SIZE);
   protected readonly searchDraft = signal('');
   protected readonly appliedSearch = signal('');
+
+  protected readonly formatDateTime = formatProposalDetailDateTime;
 
   // The active permission id comes straight from the session — no need to fetch
   // the (admin-only) user directory to look it up.

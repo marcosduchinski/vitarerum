@@ -24,6 +24,7 @@ import { RowActionsComponent } from '@shared/components/row-actions/row-actions.
 import { TypeChipComponent } from '@shared/components/type-chip/type-chip.component';
 
 import { ProposalSummary } from '../../models/proposal.model';
+import { formatProposalDetailDateTime } from '../../proposal-detail.presentation';
 import { PROPOSAL_API_SERVICE } from '../../services/proposal-api.service';
 
 interface ForwardStaffOption {
@@ -69,6 +70,8 @@ export class ProposalsNewPageComponent {
   protected readonly pageSize = signal(DEFAULT_PAGE_SIZE);
   protected readonly searchDraft = signal('');
   protected readonly appliedSearch = signal('');
+
+  protected readonly formatDateTime = formatProposalDetailDateTime;
 
   protected readonly proposalsResource = resource({
     params: () => ({

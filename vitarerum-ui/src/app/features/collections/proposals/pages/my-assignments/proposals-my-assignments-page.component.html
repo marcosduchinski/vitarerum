@@ -104,7 +104,7 @@
                       </span>
                     </div>
                   </td>
-                  <td class="proposals-table__date">{{ proposal.submittedAt.slice(0, 10) }}</td>
+                  <td class="proposals-table__date">{{ formatDateTime(proposal.submittedAt) }}</td>
                   <td>
                     <div class="proposals-table__actions">
                       <app-row-actions

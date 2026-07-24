@@ -154,9 +154,19 @@
 }
 
 .requested-object-picker__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
   font-size: 0.75rem;
   font-style: italic;
   color: var(--color-subtle);
+}
+
+.requested-object-picker__description {
+  color: var(--color-muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .requested-object-picker__status {

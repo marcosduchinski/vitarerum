@@ -157,6 +157,8 @@ describe('ProposalObjectsSectionComponent', () => {
     );
     expect(el.textContent).toContain('Matched by Exact - Name');
     expect(el.textContent).toContain('Matched by Approximate');
+    expect(el.textContent).toContain('Zoology');
+    expect(el.textContent).toContain('Large cat.');
     expect(el.textContent).toContain('Cannot add this row');
 
     const checkbox = el.querySelector<HTMLInputElement>('.search-hit input[type="checkbox"]')!;

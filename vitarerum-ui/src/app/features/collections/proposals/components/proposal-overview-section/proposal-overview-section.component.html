@@ -1,39 +1,92 @@
-<section class="detail-card" aria-labelledby="overview-heading">
-  <h2 id="overview-heading" class="detail-card__title">Overview</h2>
-  <dl class="detail-dl">
-    <div class="detail-dl__row">
-      <dt>Requested by</dt>
-      <dd>
-        {{ proposal().requestedBy.user.name }}
-        <span class="detail-dl__email">{{ proposal().requestedBy.user.email }}</span>
-      </dd>
+<section class="overview-panel" aria-labelledby="overview-heading">
+  <header class="overview-panel__header">
+    <div>
+      <p class="overview-panel__eyebrow">{{ proposal().referenceNumber }}</p>
+      <h2 id="overview-heading" class="overview-panel__title">Overview</h2>
     </div>
-    @if (proposal().assignedTo) {
-      <div class="detail-dl__row">
-        <dt>Assigned to</dt>
+    <div class="overview-panel__chips" aria-label="Proposal status and type">
+      <app-status-chip kind="proposal" [status]="asWorkflowStatus(proposal().status)" />
+      <app-type-chip [type]="proposal().type" />
+    </div>
+  </header>
+
+  <div class="overview-panel__summary">
+    <span class="overview-panel__summary-label">{{ typeLabel() }}</span>
+    <p>{{ proposal().title || 'Untitled proposal' }}</p>
+  </div>
+
+  <div class="overview-panel__content">
+    <dl class="overview-people">
+      <div class="overview-person">
+        <dt>Requested by</dt>
         <dd>
-          {{ proposal().assignedTo!.user.name }}
-          <span class="detail-dl__email">{{ proposal().assignedTo!.user.email }}</span>
+          <span class="overview-person__name">{{ proposal().requestedBy.user.name }}</span>
+          <span class="overview-person__meta">
+            {{ requesterGroupLabel() }} · {{ proposal().requestedBy.user.email }}
+          </span>
         </dd>
       </div>
-    } @else {
-      <div class="detail-dl__row">
+
+      <div class="overview-person">
         <dt>Assigned to</dt>
-        <dd class="detail-dl__empty">Unassigned</dd>
+        @if (proposal().assignedTo) {
+          <dd>
+            <span class="overview-person__name">{{ proposal().assignedTo!.user.name }}</span>
+            <span class="overview-person__meta">
+              {{ assigneeGroupLabel() }} · {{ proposal().assignedTo!.user.email }}
+            </span>
+          </dd>
+        } @else {
+          <dd>
+            <span class="overview-person__name overview-person__name--empty">Unassigned</span>
+            <span class="overview-person__meta">{{ assigneeGroupLabel() }}</span>
+          </dd>
+        }
       </div>
-    }
-    <div class="detail-dl__row">
-      <dt>Submitted</dt>
-      <dd>{{ formatDateTime(proposal().submittedAt) }}</dd>
+    </dl>
+
+    <dl class="overview-facts">
+      <div class="overview-fact">
+        <dt>Submitted</dt>
+        <dd>{{ formatDateTime(proposal().submittedAt) }}</dd>
+      </div>
+      <div class="overview-fact">
+        <dt>Requested period</dt>
+        <dd>{{ requestedPeriod() }}</dd>
+      </div>
+      <div class="overview-fact">
+        <dt>Submission channel</dt>
+        <dd>{{ submissionChannelLabel() }}</dd>
+      </div>
+      <div class="overview-fact">
+        <dt>Project</dt>
+        <dd>
+          @if (proposal().collectionUseProject?.referenceNumber) {
+            {{ proposal().collectionUseProject!.referenceNumber }}
+          } @else {
+            Not created yet
+          }
+        </dd>
+      </div>
+    </dl>
+  </div>
+
+  <dl class="overview-metrics" aria-label="Proposal material summary">
+    <div class="overview-metric">
+      <dt>Documents</dt>
+      <dd>{{ proposal().documents.length }}</dd>
     </div>
-    <div class="detail-dl__row">
-      <dt>Status</dt>
-      <dd>
-        <app-status-chip
-          kind="proposal"
-          [status]="asWorkflowStatus(proposal().status)"
-        />
-      </dd>
+    <div class="overview-metric">
+      <dt>Requested documents</dt>
+      <dd>{{ proposal().requestedDocuments?.length ?? 0 }}</dd>
+    </div>
+    <div class="overview-metric">
+      <dt>Objects</dt>
+      <dd>{{ proposal().requestedObjects.length }}</dd>
+    </div>
+    <div class="overview-metric">
+      <dt>Corrections</dt>
+      <dd>{{ pendingCorrectionsCount() }}</dd>
     </div>
   </dl>
 </section>

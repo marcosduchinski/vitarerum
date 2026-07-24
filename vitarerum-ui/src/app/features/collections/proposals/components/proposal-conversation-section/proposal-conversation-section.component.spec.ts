@@ -234,6 +234,9 @@ describe('ProposalConversationSectionComponent', () => {
     expect(editor?.textContent).toContain('Requested objects');
     expect(editor?.textContent).toContain('MNHN-2026-001 — Iberian lynx specimen');
     expect(editor?.textContent).toContain('Lynx pardinus');
+    expect(editor?.textContent).toContain('Zoology');
+    expect(editor?.textContent).toContain('2026-05-01');
+    expect(editor?.textContent).toContain('Adult study skin');
     expect(checkboxes[0].disabled).toBe(true);
     expect(insertButton?.disabled).toBe(true);
     expect(
@@ -244,7 +247,7 @@ describe('ProposalConversationSectionComponent', () => {
 
     expect(submitted).toEqual([
       {
-        body: '<p><strong>Requested objects</strong></p><ul><li>MNHN-2026-001 — Iberian lynx specimen (Lynx pardinus; Adult study skin; Requested for comparative research)</li></ul>',
+        body: '<p><strong>Requested objects</strong></p><ul><li>MNHN-2026-001 — Iberian lynx specimen (Lynx pardinus; Zoology; 2026-05-01; Adult study skin)</li></ul>',
         files: [],
       },
     ]);

@@ -20,6 +20,7 @@ import { RowActionsComponent } from '@shared/components/row-actions/row-actions.
 import { StatusChipComponent } from '@shared/components/status-chip/status-chip.component';
 import { TypeChipComponent } from '@shared/components/type-chip/type-chip.component';
 
+import { formatProposalDetailDateTime } from '../../proposal-detail.presentation';
 import { PROPOSAL_API_SERVICE } from '../../services/proposal-api.service';
 
 const DEFAULT_PAGE_SIZE = 20;
@@ -51,6 +52,8 @@ export class ProposalsApprovedPageComponent {
   protected readonly pageSize = signal(DEFAULT_PAGE_SIZE);
   protected readonly searchDraft = signal('');
   protected readonly appliedSearch = signal('');
+
+  protected readonly formatDateTime = formatProposalDetailDateTime;
 
   // Refetch when the active role changes: requests carry X-Permission-Id.
   protected readonly currentPermissionId = computed(() => this.identity.getPermissionId());

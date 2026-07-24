@@ -269,10 +269,12 @@ export class ProposalConversationSectionComponent {
   private requestedObjectMessageText(requestedObject: RequestedObject): string {
     const reference = requestedObject.objectReference;
     const title = reference.displayTitle ?? reference.objectName ?? 'Untitled object';
+    const description = reference.briefDescriptionSnapshot || requestedObject.description;
     const details = [
       reference.objectName && reference.objectName !== title ? reference.objectName : null,
-      reference.briefDescriptionSnapshot,
-      requestedObject.description,
+      requestedObject.category,
+      requestedObject.requestedAt ? requestedObject.requestedAt.slice(0, 10) : null,
+      description,
     ].filter((value): value is string => Boolean(value?.trim()));
 
     return `${reference.inventoryNumber} — ${title}${details.length ? ` (${details.join('; ')})` : ''}`;

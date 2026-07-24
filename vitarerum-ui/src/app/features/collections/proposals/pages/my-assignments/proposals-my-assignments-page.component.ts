@@ -26,6 +26,7 @@ import { TypeChipComponent } from '@shared/components/type-chip/type-chip.compon
 import { Page } from '@shared/models/page.model';
 
 import { ProposalSummary } from '../../models/proposal.model';
+import { formatProposalDetailDateTime } from '../../proposal-detail.presentation';
 import { PROPOSAL_API_SERVICE } from '../../services/proposal-api.service';
 
 interface ForwardStaffOption {
@@ -76,6 +77,8 @@ export class ProposalsMyAssignmentsPageComponent {
   protected readonly pageSize = signal(DEFAULT_PAGE_SIZE);
   protected readonly searchDraft = signal('');
   protected readonly appliedSearch = signal('');
+
+  protected readonly formatDateTime = formatProposalDetailDateTime;
 
   // Staff directory for the forward picker only. The assignments list no longer
   // depends on this (see currentPermissionId), so a failure here degrades the

@@ -22,6 +22,7 @@ import { ProposalConversationSectionComponent } from '../../components/proposal-
 import { ProposalEventsSectionComponent } from '../../components/proposal-events-section/proposal-events-section.component';
 import { ProposalOverviewSectionComponent } from '../../components/proposal-overview-section/proposal-overview-section.component';
 import { ProposalEvent } from '../../models/proposal.model';
+import { formatProposalDetailDateTime } from '../../proposal-detail.presentation';
 import { PROPOSAL_API_SERVICE } from '../../services/proposal-api.service';
 
 function formatDate(iso: string | undefined): string {
@@ -35,6 +36,11 @@ function formatDate(iso: string | undefined): string {
   } catch {
     return iso;
   }
+}
+
+function formatDateTime(iso: string | undefined): string {
+  if (!iso) return '—';
+  return formatProposalDetailDateTime(iso);
 }
 
 @Component({
@@ -90,6 +96,7 @@ export class ProposalApprovedDetailPageComponent {
   });
 
   protected readonly formatDate = formatDate;
+  protected readonly formatDateTime = formatDateTime;
 
   protected asWorkflowStatus(value: string): WorkflowStatus {
     return value as WorkflowStatus;
