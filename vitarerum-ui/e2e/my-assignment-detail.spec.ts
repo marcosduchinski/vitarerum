@@ -73,7 +73,7 @@ test('collections staff can work through a my-assignment detail page', async ({ 
   ).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Discarded title change' })).not.toBeVisible();
 
-  await page.getByRole('tab', { name: 'Conversation' }).click();
+  await page.getByRole('tab', { name: 'Messages' }).click();
   await expect(page.getByRole('heading', { name: 'Conversation' })).toBeVisible();
   await expect(page.getByText('Collection use request: VR-2026-001')).toBeVisible();
   const editor = page.getByRole('textbox', { name: 'Response message' });
