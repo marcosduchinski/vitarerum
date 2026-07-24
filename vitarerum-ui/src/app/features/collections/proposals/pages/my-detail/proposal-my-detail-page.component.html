@@ -246,56 +246,6 @@
           role="tabpanel"
           aria-labelledby="actions-tab"
         >
-          <ol
-            class="lifecycle"
-            [class.lifecycle--cancelled]="closedOutcome()"
-            aria-label="Proposal lifecycle"
-          >
-            @for (step of lifecycle(); track step.label) {
-              <li
-                class="lifecycle__step"
-                [class.lifecycle__step--done]="step.done"
-                [class.lifecycle__step--current]="step.current"
-                [attr.aria-current]="step.current ? 'step' : null"
-              >
-                <span class="lifecycle__marker" aria-hidden="true">
-                  @if (step.done) {
-                    <span class="pi pi-check"></span>
-                  }
-                </span>
-                <span class="lifecycle__label">{{ step.label }}</span>
-              </li>
-            }
-            @if (closedOutcome(); as outcome) {
-              <li class="lifecycle__step lifecycle__step--cancelled" aria-current="step">
-                <span class="lifecycle__marker" aria-hidden="true">
-                  <span class="pi pi-times"></span>
-                </span>
-                <span class="lifecycle__label">{{ outcome }}</span>
-              </li>
-            }
-          </ol>
-
-          <div class="action-group" aria-labelledby="assignment-group-title">
-            <p id="assignment-group-title" class="action-group__title">Assignment</p>
-            <div class="task-row" aria-labelledby="assignment-task-heading">
-              <span class="task-row__icon task-row__icon--accent" aria-hidden="true">
-                <span class="pi pi-user"></span>
-              </span>
-              <div class="task-row__body">
-                @if (proposal()!.assignedTo; as assignedTo) {
-                  <h3 id="assignment-task-heading" class="task-row__title">
-                    {{ assignedTo.user.name }}
-                  </h3>
-                  <p class="task-row__desc">{{ assignedTo.user.email }}</p>
-                } @else {
-                  <h3 id="assignment-task-heading" class="task-row__title">Unassigned</h3>
-                  <p class="task-row__desc">No reviewer is currently assigned.</p>
-                }
-              </div>
-            </div>
-          </div>
-
           @if (canDecide()) {
             <div class="action-group" aria-labelledby="decision-group-title">
               <p id="decision-group-title" class="action-group__title">Decision</p>

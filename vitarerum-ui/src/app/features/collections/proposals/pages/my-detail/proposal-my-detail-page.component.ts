@@ -145,36 +145,6 @@ export class ProposalMyDetailPageComponent {
     return status === 'SUBMITTED' || status === 'PENDING';
   });
 
-  // Negative terminal outcome: drawn as a red off-shoot on the lifecycle rail,
-  // mirroring the cancelled step on the project detail page.
-  protected readonly closedOutcome = computed<string | null>(() => {
-    switch (this.proposal()?.status) {
-      case 'REJECTED':
-        return 'Rejected';
-      case 'CANCELLED':
-        return 'Cancelled';
-      default:
-        return null;
-    }
-  });
-
-  // Lifecycle rail for the Actions panel: Submitted -> Under review -> Decided.
-  // A negative outcome leaves every forward step un-reached (see closedOutcome).
-  protected readonly lifecycle = computed(() => {
-    const status = this.proposal()?.status ?? 'SUBMITTED';
-    const steps = [
-      { key: 'SUBMITTED', label: 'Submitted' },
-      { key: 'PENDING', label: 'Under review' },
-      { key: 'APPROVED', label: 'Decided' },
-    ] as const;
-    const reachedIndex: Record<string, number> = { SUBMITTED: 0, PENDING: 1, APPROVED: 2 };
-    const currentIndex = this.closedOutcome() ? -1 : (reachedIndex[status] ?? 0);
-    return steps.map((step, index) => ({
-      label: step.label,
-      done: currentIndex > index,
-      current: currentIndex === index,
-    }));
-  });
   protected readonly forwardTargetLabel = computed(
     () =>
       this.staffOptions().find((o) => o.permissionId === this.forwardTargetPermissionId())?.label ??
