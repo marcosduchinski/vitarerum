@@ -123,6 +123,21 @@ describe('AppMenuComponent', () => {
     expect(promptsLink.getAttribute('href')).toBe('/p/ai/prompts');
   });
 
+  it('shows reference masks only to system administrators', () => {
+    activeSession.set(sessionForGroup('SYS_ADMIN'));
+    const fixture = TestBed.createComponent(AppMenuComponent);
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    const referenceMasksLink = linkByText(compiled, 'Reference masks');
+    expect(referenceMasksLink.getAttribute('href')).toBe('/p/admin/reference-number-policies');
+
+    activeSession.set(sessionForGroup('COLLECTIONS_MANAGEMENT'));
+    fixture.detectChanges();
+
+    expect(compiled.textContent).not.toContain('Reference masks');
+  });
+
   it('does not show reports for external users', () => {
     activeSession.set(sessionForGroup('EXTERNAL'));
     const fixture = TestBed.createComponent(AppMenuComponent);

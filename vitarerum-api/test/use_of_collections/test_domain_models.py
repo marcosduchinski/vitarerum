@@ -354,18 +354,20 @@ def test_proposal_driven_project_cancellation_allows_completed_project() -> None
     assert project.events[-1].note == "Proposal cancelled"
 
 
-def test_reference_number_validation_rejects_invalid_values() -> None:
+def test_reference_number_validation_rejects_blank_values() -> None:
     with pytest.raises(ValueError, match="Reference number"):
-        ReferenceNumber("CUP-1")
+        ReferenceNumber("   ")
 
 
-def test_reference_number_validation_rejects_old_uc_prefix() -> None:
+def test_reference_number_validation_rejects_overlong_values() -> None:
     with pytest.raises(ValueError, match="Reference number"):
-        ReferenceNumber("UC-1234ABCD")
+        ReferenceNumber("X" * 129)
 
 
-def test_reference_number_validation_accepts_proposal_format() -> None:
-    assert ReferenceNumber("VRP-20260610-0001").value == "VRP-20260610-0001"
+def test_reference_number_normalizes_storage_value() -> None:
+    assert ReferenceNumber(" MUHNAC/COL/2026/0001 ").value == (
+        "MUHNAC/COL/2026/0001"
+    )
 
 
 def test_email_address_validation_rejects_invalid_values() -> None:

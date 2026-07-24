@@ -84,6 +84,7 @@ from app.use_of_collections.presentation.dependencies import (
     ProjectRepo,
     ProposalRepo,
     PublicationLogRepo,
+    ReferenceGenerator,
 )
 from app.use_of_collections.presentation.schemas import (
     AddLogEntryRequest,
@@ -151,13 +152,16 @@ async def add_log_entry(
     project_repo: ProjectRepo,
     proposal_repo: ProposalRepo,
     access_log_repo: AccessLogRepo,
+    reference_generator: ReferenceGenerator,
     session: DBSession,
 ) -> ObjectLogEntryResponse:
     project = await _assert_existing_project_access(
         project_id, caller, project_repo, proposal_repo
     )
     try:
-        entry = await AddObjectLogEntry(project_repo, access_log_repo).execute(
+        entry = await AddObjectLogEntry(
+            project_repo, access_log_repo, reference_generator
+        ).execute(
             AddObjectLogEntryInput(
                 project_id=CollectionUseProjectId(project_id),
                 caller=caller,
@@ -420,6 +424,7 @@ async def add_occurrence_entry(
     project_repo: ProjectRepo,
     proposal_repo: ProposalRepo,
     occurrence_log_repo: OccurrenceLogRepo,
+    reference_generator: ReferenceGenerator,
     session: DBSession,
 ) -> ObjectOccurrenceEntryResponse:
     project = await _assert_existing_project_access(
@@ -427,7 +432,7 @@ async def add_occurrence_entry(
     )
     try:
         entry = await AddObjectOccurrenceEntry(
-            project_repo, occurrence_log_repo
+            project_repo, occurrence_log_repo, reference_generator
         ).execute(
             AddObjectOccurrenceEntryInput(
                 project_id=CollectionUseProjectId(project_id),
@@ -700,6 +705,7 @@ async def add_publication_entry(
     project_repo: ProjectRepo,
     proposal_repo: ProposalRepo,
     publication_log_repo: PublicationLogRepo,
+    reference_generator: ReferenceGenerator,
     session: DBSession,
 ) -> PublicationLogEntryResponse:
     project = await _assert_existing_project_access(
@@ -707,7 +713,7 @@ async def add_publication_entry(
     )
     try:
         entry = await AddPublicationLogEntry(
-            project_repo, publication_log_repo, proposal_repo
+            project_repo, publication_log_repo, proposal_repo, reference_generator
         ).execute(
             AddPublicationLogEntryInput(
                 project_id=CollectionUseProjectId(project_id),

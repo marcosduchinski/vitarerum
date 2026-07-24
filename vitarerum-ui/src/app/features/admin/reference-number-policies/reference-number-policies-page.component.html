@@ -1,0 +1,132 @@
+<section class="page">
+  <app-page-header
+    eyebrow="Administration"
+    title="Reference number masks"
+    description="Manage the numbering formats used when proposals, projects and operational logs are created."
+  />
+
+  <form class="composer" (submit)="$event.preventDefault(); createDraft()">
+    <div class="composer__fields">
+      <label class="field">
+        <span class="field__label">Reference type</span>
+        <select class="field__input" [value]="selectedKind()" (change)="setKind($event)">
+          @for (option of kindOptions; track option.value) {
+            <option [value]="option.value">{{ option.label }}</option>
+          }
+        </select>
+      </label>
+
+      <label class="field field--wide">
+        <span class="field__label">Mask</span>
+        <input
+          class="field__input field__input--code"
+          type="text"
+          autocomplete="off"
+          [value]="newMask()"
+          (input)="newMask.set($any($event.target).value); preview.set(null)"
+        />
+      </label>
+
+      <label class="field">
+        <span class="field__label">Preview date</span>
+        <input
+          class="field__input"
+          type="date"
+          [value]="sampleDate()"
+          (input)="sampleDate.set($any($event.target).value); preview.set(null)"
+        />
+      </label>
+    </div>
+
+    <div class="composer__actions">
+      <button class="btn" type="button" [disabled]="!canSubmit()" (click)="previewMask()">
+        Preview
+      </button>
+      <button class="btn btn--primary" type="submit" [disabled]="!canSubmit()">Create draft</button>
+    </div>
+
+    @if (preview(); as value) {
+      <div class="preview">
+        <span class="preview__label">{{ kindLabel(value.kind) }}</span>
+        <strong class="preview__example">{{ value.example }}</strong>
+        <span class="preview__tokens">{{ value.tokens.join(' ') || 'No tokens' }}</span>
+      </div>
+    }
+  </form>
+
+  @if (actionError()) {
+    <app-error-message [apiError]="actionError()!" />
+  }
+
+  @if (loading()) {
+    <app-loading-state />
+  } @else if (loadError()) {
+    <app-error-message [apiError]="loadError()!" (retry)="policiesResource.reload()" />
+  } @else {
+    <div class="groups">
+      @for (group of groups(); track group.kind) {
+        <section class="group">
+          <div class="group__header">
+            <h2>{{ group.label }}</h2>
+            <span>{{ group.policies.length }} policies</span>
+          </div>
+
+          @if (group.policies.length === 0) {
+            <p class="empty">No policy registered for this type.</p>
+          } @else {
+            <ul class="policy-list">
+              @for (policy of group.policies; track policy.id) {
+                <li class="policy">
+                  <div class="policy__main">
+                    <div class="policy__title-row">
+                      <span class="policy__mask">{{ policy.mask }}</span>
+                      <span class="tag" [class.tag--active]="policy.status === 'ACTIVE'">
+                        {{ statusLabel(policy.status) }}
+                      </span>
+                    </div>
+                    <dl class="policy__meta">
+                      <div>
+                        <dt>Scope</dt>
+                        <dd>{{ policy.sequenceScope }}</dd>
+                      </div>
+                      <div>
+                        <dt>Created</dt>
+                        <dd>{{ formatDate(policy.createdAt) }}</dd>
+                      </div>
+                      <div>
+                        <dt>Activated</dt>
+                        <dd>{{ formatDate(policy.activatedAt) }}</dd>
+                      </div>
+                    </dl>
+                  </div>
+
+                  <div class="policy__actions">
+                    @if (policy.status !== 'ACTIVE') {
+                      <button
+                        class="btn btn--primary"
+                        type="button"
+                        [disabled]="busy()"
+                        (click)="activate(policy)"
+                      >
+                        Activate
+                      </button>
+                    } @else {
+                      <button
+                        class="btn"
+                        type="button"
+                        [disabled]="busy()"
+                        (click)="deactivate(policy)"
+                      >
+                        Deactivate
+                      </button>
+                    }
+                  </div>
+                </li>
+              }
+            </ul>
+          }
+        </section>
+      }
+    </div>
+  }
+</section>

@@ -34,6 +34,9 @@ from app.museum_questions.infrastructure import (
 from app.public_submission.infrastructure import (
     models as public_submission_models,  # noqa: F401
 )
+from app.reference_numbers.infrastructure import (
+    models as reference_numbers_models,  # noqa: F401
+)
 from app.reports.in_situ_visit.infrastructure import (
     models as in_situ_visit_report_models,  # noqa: F401
 )

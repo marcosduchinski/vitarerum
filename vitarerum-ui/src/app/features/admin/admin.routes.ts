@@ -1,4 +1,5 @@
 import { Routes } from '@angular/router';
+import { sysAdminGuard } from '@core/guards/sys-admin.guard';
 
 export const ADMIN_ROUTES: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'users' },
@@ -49,6 +50,15 @@ export const ADMIN_ROUTES: Routes = [
     loadComponent: () =>
       import('./collection-data-sources/collection-data-sources-page.component').then(
         (m) => m.CollectionDataSourcesPageComponent,
+      ),
+  },
+  {
+    path: 'reference-number-policies',
+    title: 'Reference number masks',
+    canMatch: [sysAdminGuard],
+    loadComponent: () =>
+      import('./reference-number-policies/reference-number-policies-page.component').then(
+        (m) => m.ReferenceNumberPoliciesPageComponent,
       ),
   },
   {

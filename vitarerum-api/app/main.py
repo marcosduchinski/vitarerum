@@ -41,6 +41,7 @@ from app.public_submission.presentation.dependencies import (
     get_amendment_invitation_adapter,
 )
 from app.public_submission.presentation.routes import router as public_proposals_router
+from app.reference_numbers.presentation.routes import reference_policies_router
 from app.reports.in_situ_visit.presentation.routes import reports_router
 from app.shared.exceptions import AccessDenied, InsufficientGroup
 from app.use_of_collections.presentation.dependencies import get_amendment_invitation
@@ -144,6 +145,7 @@ app.include_router(museum_questions_router, prefix=prefix)
 app.include_router(internal_museum_questions_router, prefix=prefix)
 app.include_router(museum_question_triage_router, prefix=prefix)
 app.include_router(ai_prompts_router, prefix=prefix)
+app.include_router(reference_policies_router, prefix=prefix)
 
 
 # Composition root: bind the staff endpoint's AmendmentInvitationPort (defaulted

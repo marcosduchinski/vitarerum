@@ -12,11 +12,13 @@ from dataclasses import dataclass, field
 from datetime import date
 
 from app.identity.public import Actor, GroupName
+from app.reference_numbers.public import ReferenceKind
 from app.shared.authorization import require_group, require_staff
 from app.use_of_collections.application.ports import (
     ConversationRepository,
     FileStoragePort,
     ProposalRepository,
+    ReferenceNumberGeneratorPort,
 )
 from app.use_of_collections.application.use_cases._shared import (
     _actor_email,
@@ -89,9 +91,11 @@ class SubmitProposal:
         self,
         proposal_repository: ProposalRepository,
         conversation_repository: ConversationRepository,
+        reference_generator: ReferenceNumberGeneratorPort | None = None,
     ) -> None:
         self._proposal_repo = proposal_repository
         self._conversation_repo = conversation_repository
+        self._reference_generator = reference_generator
 
     async def execute(self, data: SubmitProposalInput) -> SubmitProposalOutput:
         if data.requested_by is None and data.requester_contact is None:
@@ -104,8 +108,12 @@ class SubmitProposal:
         now = _now()
         proposal_id = ProposalId(_new_id())
         conversation_id = ConversationId(_new_id())
-        reference_number = await self._proposal_repo.next_reference_number_for(
-            now.date()
+        reference_number = (
+            await self._reference_generator.generate(
+                kind=ReferenceKind.PROPOSAL, on_date=now.date()
+            )
+            if self._reference_generator is not None
+            else await self._proposal_repo.next_reference_number_for(now.date())
         )
 
         proposal = Proposal(

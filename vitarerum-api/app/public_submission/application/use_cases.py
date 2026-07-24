@@ -296,8 +296,9 @@ class ConfirmPublicProposal:
             await self._repo.delete(submission)
             return ConfirmPublicProposalOutput(status="EXPIRED")
 
-        # Retry the proposal materialisation on a reference-number unique
-        # conflict (sequential MAX+1 allocation), matching authenticated submit.
+        # Keep the existing retry boundary around proposal materialisation; the
+        # reference allocator is now transactional, but insert uniqueness remains
+        # the final persistence backstop.
         reference = await self._retry_runner(lambda: self._materialise(submission))
         submission.confirm(proposal_reference=reference, occurred_at=now)
         await self._repo.save(submission)

@@ -47,6 +47,7 @@ from app.public_submission.infrastructure.repositories import (
     SqlAlchemyAmendmentTokenRepository,
     SqlAlchemyPendingSubmissionRepository,
 )
+from app.reference_numbers.public import get_reference_generator
 from app.shared.persistence import run_with_unique_retry
 from app.use_of_collections.application.ports import ProposalRepository
 from app.use_of_collections.application.use_cases import (
@@ -111,6 +112,7 @@ def get_confirm_use_case(session: DBSession) -> ConfirmPublicProposal:
     submit = SubmitProposal(
         SqlAlchemyProposalRepository(session),
         SqlAlchemyConversationRepository(session),
+        get_reference_generator(session),
     )
 
     async def retry_runner[T](operation: Callable[[], Awaitable[T]]) -> T:

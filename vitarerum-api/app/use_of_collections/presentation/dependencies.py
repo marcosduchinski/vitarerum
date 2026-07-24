@@ -16,6 +16,10 @@ from app.identity.public import (
     get_permission_reader,
     get_requester_provisioner,
 )
+from app.reference_numbers.public import (
+    ReferenceNumberGenerator,
+    get_reference_generator,
+)
 from app.use_of_collections.application.ports import (
     AmendmentInvitationPort,
     CollectionUseProjectRepository,
@@ -118,6 +122,10 @@ def get_requester_access_email_sender() -> RequesterAccessEmailSender:
     )
 
 
+def get_reference_number_generator(session: DBSession) -> ReferenceNumberGenerator:
+    return get_reference_generator(session)
+
+
 ProjectRepo = Annotated[CollectionUseProjectRepository, Depends(get_project_repo)]
 ProposalRepo = Annotated[ProposalRepository, Depends(get_proposal_repo)]
 ConvRepo = Annotated[ConversationRepository, Depends(get_conversation_repo)]
@@ -138,6 +146,9 @@ RequesterProvisioner = Annotated[
 ]
 AccessEmailSender = Annotated[
     RequesterAccessEmailSender, Depends(get_requester_access_email_sender)
+]
+ReferenceGenerator = Annotated[
+    ReferenceNumberGenerator, Depends(get_reference_number_generator)
 ]
 
 

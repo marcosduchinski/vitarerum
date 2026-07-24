@@ -110,6 +110,7 @@ source_modules = ["app.public_submission"]
 forbidden_modules = [
     "app.identity",
     "app.use_of_collections",
+    "app.reference_numbers",
     "app.cidoc_crm",
     "app.museum_questions",
 ]
@@ -124,6 +125,7 @@ ignore_imports = [
     "app.public_submission.presentation.dependencies -> app.use_of_collections.application.use_cases",
     "app.public_submission.presentation.dependencies -> app.use_of_collections.infrastructure.file_storage",
     "app.public_submission.presentation.dependencies -> app.use_of_collections.infrastructure.repositories",
+    "app.public_submission.presentation.dependencies -> app.reference_numbers.public",
     # Amendment (document-correction) channel: the public context owns the token
     # + e-mail and drives the Use of Collections amendment use cases; its adapter
     # structurally implements AmendmentInvitationPort (defined in Use of
@@ -135,6 +137,25 @@ ignore_imports = [
     "app.public_submission.presentation.routes -> app.use_of_collections.application.use_cases",
     "app.public_submission.presentation.routes -> app.use_of_collections.domain.enums",
     "app.public_submission.presentation.routes -> app.use_of_collections.domain.models",
+]
+
+[[tool.importlinter.contracts]]
+name = "Reference Numbers layers (presentation > infrastructure > application > domain)"
+type = "layers"
+layers = [
+    "app.reference_numbers.presentation",
+    "app.reference_numbers.infrastructure",
+    "app.reference_numbers.application",
+    "app.reference_numbers.domain",
+]
+
+[[tool.importlinter.contracts]]
+name = "Use of Collections may import Reference Numbers only via reference_numbers.public"
+type = "forbidden"
+source_modules = ["app.use_of_collections"]
+forbidden_modules = ["app.reference_numbers"]
+ignore_imports = [
+    "app.use_of_collections.** -> app.reference_numbers.public",
 ]
 
 [[tool.importlinter.contracts]]
@@ -385,6 +406,7 @@ ignore_imports = [
     # imports); applications never execute them — only inbound adapters do.
     "app.identity.public -> app.identity.infrastructure.repositories",
     "app.use_of_collections.public -> app.use_of_collections.infrastructure.repositories",
+    "app.reference_numbers.public -> app.reference_numbers.infrastructure.repositories",
 ]
 
 [[tool.importlinter.contracts]]
@@ -403,6 +425,10 @@ ignore_imports = [
     "app.use_of_collections.** -> app.identity.public",
     "app.shared.authorization -> app.identity.public",
     "app.shared.dependencies -> app.identity.public",
+    # Lazy composition hook inside reference_numbers.public (function-level
+    # import) transitively reaches identity.public through
+    # reference_numbers.application.use_cases; same shape as the hooks above.
+    "app.reference_numbers.public -> app.reference_numbers.application.use_cases",
 ]
 
 [[tool.importlinter.contracts]]

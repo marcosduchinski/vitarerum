@@ -11,9 +11,6 @@ from app.shared.kernel import (
     EMAIL_ADDRESS_PATTERN as EMAIL_ADDRESS_PATTERN,
 )
 from app.shared.kernel import (
-    REFERENCE_NUMBER_PATTERN as REFERENCE_NUMBER_PATTERN,
-)
-from app.shared.kernel import (
     DocumentId as DocumentId,
 )
 from app.shared.kernel import (

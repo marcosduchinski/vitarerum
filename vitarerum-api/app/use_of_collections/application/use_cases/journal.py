@@ -18,19 +18,20 @@ from datetime import datetime
 from typing import Protocol
 
 from app.identity.public import Actor
+from app.reference_numbers.public import ReferenceKind
 from app.use_of_collections.application.ports import (
     CollectionUseProjectRepository,
     FileStoragePort,
     ObjectAccessLogRepository,
     ObjectOccurrenceLogRepository,
+    ReferenceNumberGeneratorPort,
 )
 from app.use_of_collections.application.use_cases._shared import (
-    _new_access_log_reference_number,
     _new_id,
-    _new_occurrence_log_reference_number,
     _now,
     _store_attachment,
     _validate_collection_use_object,
+    default_reference_generator,
 )
 from app.use_of_collections.domain.enums import UseStatus
 from app.use_of_collections.domain.models import (
@@ -47,7 +48,6 @@ from app.use_of_collections.domain.models import (
     ObjectOccurrenceEntryId,
     ObjectOccurrenceLog,
     ObjectOccurrenceLogId,
-    ReferenceNumber,
 )
 
 # ── Shared helpers ─────────────────────────────────────────────────────────────
@@ -108,12 +108,16 @@ def _assert_entry_log_writable(
 async def _get_or_create_access_log(
     project_id: CollectionUseProjectId,
     repository: ObjectAccessLogRepository,
+    reference_generator: ReferenceNumberGeneratorPort,
 ) -> ObjectAccessLog:
     access_log = await repository.get_by_project_id(project_id)
     if access_log is None:
+        now = _now()
         access_log = ObjectAccessLog(
             id=ObjectAccessLogId(_new_id()),
-            reference_number=ReferenceNumber(_new_access_log_reference_number()),
+            reference_number=await reference_generator.generate(
+                kind=ReferenceKind.OBJECT_ACCESS_LOG, on_date=now.date()
+            ),
             collection_use_project_id=project_id,
         )
         await repository.add(access_log)
@@ -135,16 +139,20 @@ class AddObjectLogEntry:
         self,
         project_repository: CollectionUseProjectRepository,
         access_log_repository: ObjectAccessLogRepository,
+        reference_generator: ReferenceNumberGeneratorPort | None = None,
     ) -> None:
         self._project_repo = project_repository
         self._repo = access_log_repository
+        self._reference_generator = reference_generator or default_reference_generator()
 
     async def execute(self, data: AddObjectLogEntryInput) -> ObjectLogEntry:
         project = await _load_writable_project(
             self._project_repo, data.project_id, data.restrict_to_in_progress
         )
         _validate_collection_use_object(project, data.collection_use_object_id)
-        access_log = await _get_or_create_access_log(data.project_id, self._repo)
+        access_log = await _get_or_create_access_log(
+            data.project_id, self._repo, self._reference_generator
+        )
         entry = ObjectLogEntry(
             id=ObjectLogEntryId(_new_id()),
             object_access_log_id=access_log.id,
@@ -332,12 +340,16 @@ class RemoveLogEntryAttachment:
 async def _get_or_create_occurrence_log(
     project_id: CollectionUseProjectId,
     repository: ObjectOccurrenceLogRepository,
+    reference_generator: ReferenceNumberGeneratorPort,
 ) -> ObjectOccurrenceLog:
     occurrence_log = await repository.get_by_project_id(project_id)
     if occurrence_log is None:
+        now = _now()
         occurrence_log = ObjectOccurrenceLog(
             id=ObjectOccurrenceLogId(_new_id()),
-            reference_number=ReferenceNumber(_new_occurrence_log_reference_number()),
+            reference_number=await reference_generator.generate(
+                kind=ReferenceKind.OBJECT_OCCURRENCE_LOG, on_date=now.date()
+            ),
             collection_use_project_id=project_id,
         )
         await repository.add(occurrence_log)
@@ -362,9 +374,11 @@ class AddObjectOccurrenceEntry:
         self,
         project_repository: CollectionUseProjectRepository,
         occurrence_log_repository: ObjectOccurrenceLogRepository,
+        reference_generator: ReferenceNumberGeneratorPort | None = None,
     ) -> None:
         self._project_repo = project_repository
         self._repo = occurrence_log_repository
+        self._reference_generator = reference_generator or default_reference_generator()
 
     async def execute(
         self, data: AddObjectOccurrenceEntryInput
@@ -374,7 +388,7 @@ class AddObjectOccurrenceEntry:
         )
         _validate_collection_use_object(project, data.collection_use_object_id)
         occurrence_log = await _get_or_create_occurrence_log(
-            data.project_id, self._repo
+            data.project_id, self._repo, self._reference_generator
         )
         entry = ObjectOccurrenceEntry(
             id=ObjectOccurrenceEntryId(_new_id()),

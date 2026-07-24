@@ -118,6 +118,7 @@ from app.use_of_collections.presentation.dependencies import (
     ProjectRepo,
     ProposalDetailQuery,
     ProposalRepo,
+    ReferenceGenerator,
     RequesterProvisioner,
 )
 from app.use_of_collections.presentation.permissions import (
@@ -170,6 +171,7 @@ async def submit_proposal(
     proposal_repo: ProposalRepo,
     conversation_repo: ConvRepo,
     file_storage: FileStorage,
+    reference_generator: ReferenceGenerator,
     session: DBSession,
     documents: Annotated[list[UploadFile], File(default_factory=list)],
     title: Annotated[str | None, Form()] = None,
@@ -236,7 +238,7 @@ async def submit_proposal(
             await file_storage.delete(file_reference)
         raise
 
-    use_case = SubmitProposal(proposal_repo, conversation_repo)
+    use_case = SubmitProposal(proposal_repo, conversation_repo, reference_generator)
     submit_input = SubmitProposalInput(
         title=title,
         intended_use=intendedUse,
@@ -250,8 +252,6 @@ async def submit_proposal(
         initial_message_body=initialMessageBody,
         documents=submitted_documents,
     )
-    # Reference numbers are allocated as MAX+1; retry on the rare unique-conflict
-    # race so concurrent submissions don't surface a 500.
     try:
         output = await run_with_unique_retry(
             session, lambda: use_case.execute(submit_input)
@@ -860,6 +860,7 @@ async def approve_proposal(
     project_repo: ProjectRepo,
     requester_provisioner: RequesterProvisioner,
     access_email_sender: AccessEmailSender,
+    reference_generator: ReferenceGenerator,
     session: DBSession,
 ) -> DualAggregateResponse:
     proposal_before = await proposal_repo.get_by_id(ProposalId(proposal_id))
@@ -876,7 +877,7 @@ async def approve_proposal(
         )
     try:
         output = await ApproveProposal(
-            proposal_repo, project_repo, requester_provisioner
+            proposal_repo, project_repo, requester_provisioner, reference_generator
         ).execute(
             ApproveProposalInput(
                 proposal_id=ProposalId(proposal_id),

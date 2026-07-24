@@ -153,6 +153,11 @@ const SYS_ADMIN_MENU: MenuNode = {
       icon: 'pi pi-file-word',
       routerLink: '/p/admin/document-templates',
     },
+    {
+      label: 'Reference masks',
+      icon: 'pi pi-hashtag',
+      routerLink: '/p/admin/reference-number-policies',
+    },
     COLLECTION_DATA_SOURCES_ITEM,
   ],
 };

@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.identity.public import Actor, GroupName
+from app.reference_numbers.public import ReferenceKind
 from app.shared.authorization import is_in_group, is_staff
 from app.shared.exceptions import AccessDenied
 from app.use_of_collections.application.ports import (
@@ -18,13 +19,14 @@ from app.use_of_collections.application.ports import (
     FileStoragePort,
     ProposalRepository,
     PublicationLogRepository,
+    ReferenceNumberGeneratorPort,
 )
 from app.use_of_collections.application.use_cases._shared import (
     _new_id,
-    _new_publication_log_reference_number,
     _now,
     _store_attachment,
     _validate_collection_use_object,
+    default_reference_generator,
 )
 from app.use_of_collections.domain.enums import UseStatus
 from app.use_of_collections.domain.models import (
@@ -38,7 +40,6 @@ from app.use_of_collections.domain.models import (
     PublicationLogEntry,
     PublicationLogEntryId,
     PublicationLogId,
-    ReferenceNumber,
 )
 
 _PUBLICATION_STAFF_GROUPS = (
@@ -79,12 +80,16 @@ async def _get_or_create_publication_log(
     project_id: CollectionUseProjectId,
     repository: PublicationLogRepository,
     curator: PermissionId | None,
+    reference_generator: ReferenceNumberGeneratorPort,
 ) -> PublicationLog:
     publication_log = await repository.get_by_project_id(project_id)
     if publication_log is None:
+        now = _now()
         publication_log = PublicationLog(
             id=PublicationLogId(_new_id()),
-            reference_number=ReferenceNumber(_new_publication_log_reference_number()),
+            reference_number=await reference_generator.generate(
+                kind=ReferenceKind.PUBLICATION_LOG, on_date=now.date()
+            ),
             collection_use_project_id=project_id,
             curator=curator,
         )
@@ -106,10 +111,12 @@ class AddPublicationLogEntry:
         project_repository: CollectionUseProjectRepository,
         publication_log_repository: PublicationLogRepository,
         proposal_repository: ProposalRepository,
+        reference_generator: ReferenceNumberGeneratorPort | None = None,
     ) -> None:
         self._project_repo = project_repository
         self._repo = publication_log_repository
         self._proposal_repo = proposal_repository
+        self._reference_generator = reference_generator or default_reference_generator()
 
     async def execute(self, data: AddPublicationLogEntryInput) -> PublicationLogEntry:
         project = await self._project_repo.get_by_id(data.project_id)
@@ -123,7 +130,7 @@ class AddPublicationLogEntry:
         proposal = await self._proposal_repo.get_by_project_id(data.project_id)
         curator = proposal.assigned_to if proposal is not None else None
         publication_log = await _get_or_create_publication_log(
-            data.project_id, self._repo, curator
+            data.project_id, self._repo, curator, self._reference_generator
         )
         entry = PublicationLogEntry(
             id=PublicationLogEntryId(_new_id()),

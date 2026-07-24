@@ -8,6 +8,7 @@ import { IDENTITY_SERVICE, IdentityService } from '@core/auth/identity.service';
 import { IdentitySession } from '@core/auth/models/identity-session.model';
 import { AiPromptTemplate, AiPromptVersion } from '@features/ai/prompts/models/ai-prompt.model';
 import { AI_PROMPT_MANAGEMENT_SERVICE } from '@features/ai/prompts/services/ai-prompt-management.service';
+import { PROJECT_API_SERVICE } from '@features/collections/projects/services/project-api.service';
 
 import { routes } from './app.routes';
 
@@ -70,6 +71,12 @@ class PromptServiceStub {
   }
 }
 
+class ProjectServiceStub {
+  listProjects() {
+    return of({ content: [], page: 0, size: 100, totalElements: 0, totalPages: 0 });
+  }
+}
+
 const SESSION: IdentitySession = {
   accessToken: 'token',
   user: {
@@ -104,6 +111,7 @@ describe('app routes', () => {
         provideRouter(routes),
         { provide: IDENTITY_SERVICE, useValue: identityStub },
         { provide: AI_PROMPT_MANAGEMENT_SERVICE, useClass: PromptServiceStub },
+        { provide: PROJECT_API_SERVICE, useClass: ProjectServiceStub },
       ],
     }).compileComponents();
   });
@@ -131,7 +139,7 @@ describe('app routes', () => {
     harness.detectChanges();
 
     expect(router.url).toBe('/p/ai/prompts/tpl-1/edit');
-    expect(harness.routeNativeElement?.textContent).toContain('Draft editor');
+    expect(harness.routeNativeElement?.textContent).toContain('Prompt draft');
     expect(harness.routeNativeElement?.textContent).toContain('Create draft');
   });
 });

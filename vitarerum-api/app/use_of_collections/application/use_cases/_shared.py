@@ -6,15 +6,20 @@ used across the proposal, project, journal and publication modules.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from uuid import uuid4
 
 from app.identity.public import Actor
-from app.use_of_collections.application.ports import FileStoragePort
+from app.reference_numbers.public import ReferenceKind
+from app.use_of_collections.application.ports import (
+    FileStoragePort,
+    ReferenceNumberGeneratorPort,
+)
 from app.use_of_collections.domain.models import (
     Attachment,
     CollectionUseObjectId,
     CollectionUseProject,
+    ReferenceNumber,
 )
 
 
@@ -55,6 +60,43 @@ def _new_occurrence_log_reference_number() -> str:
 
 def _new_publication_log_reference_number() -> str:
     return f"PUB-{uuid4().hex[:8].upper()}"
+
+
+class _TestOnlyLegacyReferenceNumberGenerator:
+    """Pre-``reference_numbers``-context random generator.
+
+    Exists only so unit tests that construct a use case with the
+    ``reference_generator`` argument omitted still get *a* reference number.
+    Every real request path (proposal/journal/project routes,
+    ``public_submission``'s confirm flow) explicitly wires the real
+    ``reference_numbers.public.get_reference_generator`` and never reaches
+    this fallback. Do not wire this into any production dependency —
+    it bypasses reference-number policies, legacy formats, and the
+    transactional sequence entirely.
+    """
+
+    async def generate(
+        self, *, kind: ReferenceKind, on_date: date
+    ) -> ReferenceNumber:
+        if kind is ReferenceKind.COLLECTION_USE_PROJECT:
+            return ReferenceNumber(_new_reference_number())
+        if kind is ReferenceKind.OBJECT_ACCESS_LOG:
+            return ReferenceNumber(_new_access_log_reference_number())
+        if kind is ReferenceKind.OBJECT_OCCURRENCE_LOG:
+            return ReferenceNumber(_new_occurrence_log_reference_number())
+        if kind is ReferenceKind.PUBLICATION_LOG:
+            return ReferenceNumber(_new_publication_log_reference_number())
+        raise ValueError(f"Unsupported reference kind {kind.value}")
+
+
+def default_reference_generator() -> ReferenceNumberGeneratorPort:
+    """Test-only fallback — see ``_TestOnlyLegacyReferenceNumberGenerator``.
+
+    Every production call site must pass ``reference_generator`` explicitly;
+    this default exists solely to keep unit tests that predate the
+    ``reference_numbers`` context working without wiring a full policy setup.
+    """
+    return _TestOnlyLegacyReferenceNumberGenerator()
 
 
 def _actor_email(actor: Actor) -> str:

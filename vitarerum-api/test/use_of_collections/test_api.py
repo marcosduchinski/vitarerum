@@ -16,6 +16,7 @@ from app.identity.infrastructure.models import (
 )
 from app.identity.public import Actor, GroupName, PermissionId
 from app.main import app
+from app.reference_numbers.public import ReferenceKind
 from app.shared.dependencies import get_caller_permission
 from app.use_of_collections.application.ports import (
     ProjectFilters,
@@ -69,6 +70,7 @@ from app.use_of_collections.presentation.dependencies import (
     get_project_repo,
     get_proposal_repo,
     get_publication_log_repo,
+    get_reference_number_generator,
     get_requester_access_email_sender,
 )
 
@@ -268,6 +270,24 @@ class InMemoryProposalRepository:
         if filters.statuses:
             items = [item for item in items if item.status in filters.statuses]
         return items[page * size : page * size + size], len(items)
+
+
+class InMemoryReferenceNumberGenerator:
+    def __init__(self, proposal_repo: InMemoryProposalRepository) -> None:
+        self._proposal_repo = proposal_repo
+        self._counters: dict[ReferenceKind, int] = {}
+
+    async def generate(self, *, kind: ReferenceKind, on_date: date) -> ReferenceNumber:
+        if kind is ReferenceKind.PROPOSAL:
+            return await self._proposal_repo.next_reference_number_for(on_date)
+        self._counters[kind] = self._counters.get(kind, 0) + 1
+        prefixes = {
+            ReferenceKind.COLLECTION_USE_PROJECT: "CUP",
+            ReferenceKind.OBJECT_ACCESS_LOG: "OAL",
+            ReferenceKind.OBJECT_OCCURRENCE_LOG: "OOL",
+            ReferenceKind.PUBLICATION_LOG: "PUB",
+        }
+        return ReferenceNumber(f"{prefixes[kind]}-{self._counters[kind]:08d}")
 
 
 class InMemoryConversationRepository:
@@ -625,6 +645,9 @@ async def client_with_repos(
     )
     app.dependency_overrides[get_requester_access_email_sender] = lambda: (
         access_email_sender
+    )
+    app.dependency_overrides[get_reference_number_generator] = lambda: (
+        InMemoryReferenceNumberGenerator(proposal_repo)
     )
 
     transport = ASGITransport(app=app)

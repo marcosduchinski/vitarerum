@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 
 from app.identity.public import Actor, GroupName
+from app.reference_numbers.public import ReferenceKind
 from app.shared.authorization import require_group
 from app.use_of_collections.application.ports import (
     CollectionUseProjectRepository,
@@ -21,12 +22,12 @@ from app.use_of_collections.application.ports import (
     ObjectOccurrenceLogRepository,
     ProposalRepository,
     PublicationLogRepository,
+    ReferenceNumberGeneratorPort,
 )
 from app.use_of_collections.application.use_cases._shared import (
-    _new_access_log_reference_number,
     _new_id,
-    _new_reference_number,
     _now,
+    default_reference_generator,
 )
 from app.use_of_collections.domain.enums import UseStatus, UseType
 from app.use_of_collections.domain.models import (
@@ -44,7 +45,6 @@ from app.use_of_collections.domain.models import (
     Proposal,
     ProposalId,
     PublicationLogEntry,
-    ReferenceNumber,
 )
 
 # ── Approve Proposal ──────────────────────────────────────────────────────────
@@ -109,10 +109,12 @@ class ApproveProposal:
         proposal_repository: ProposalRepository,
         project_repository: CollectionUseProjectRepository,
         requester_provisioner: ExternalRequesterProvisioner,
+        reference_generator: ReferenceNumberGeneratorPort | None = None,
     ) -> None:
         self._proposal_repo = proposal_repository
         self._project_repo = project_repository
         self._requester_provisioner = requester_provisioner
+        self._reference_generator = reference_generator or default_reference_generator()
 
     async def execute(self, data: ApproveProposalInput) -> ApproveProposalOutput:
         require_group(data.caller, GroupName.CURATORIAL)
@@ -158,7 +160,9 @@ class ApproveProposal:
         )
         project = CollectionUseProject(
             id=project_id,
-            reference_number=ReferenceNumber(_new_reference_number()),
+            reference_number=await self._reference_generator.generate(
+                kind=ReferenceKind.COLLECTION_USE_PROJECT, on_date=now.date()
+            ),
             title=data.title,
             purpose=data.purpose,
             # A project always has an intended use; a stub proposal may not yet,
@@ -317,9 +321,11 @@ class AddProjectObjects:
         self,
         project_repository: CollectionUseProjectRepository,
         access_log_repository: ObjectAccessLogRepository,
+        reference_generator: ReferenceNumberGeneratorPort | None = None,
     ) -> None:
         self._repo = project_repository
         self._access_log_repo = access_log_repository
+        self._reference_generator = reference_generator or default_reference_generator()
 
     async def execute(self, data: AddProjectObjectsInput) -> CollectionUseProject:
         project = await self._repo.get_by_id(data.project_id)
@@ -351,7 +357,9 @@ class AddProjectObjects:
             if access_log is None:
                 access_log = ObjectAccessLog(
                     id=ObjectAccessLogId(_new_id()),
-                    reference_number=ReferenceNumber(_new_access_log_reference_number()),
+                    reference_number=await self._reference_generator.generate(
+                        kind=ReferenceKind.OBJECT_ACCESS_LOG, on_date=now.date()
+                    ),
                     collection_use_project_id=data.project_id,
                 )
                 await self._access_log_repo.add(access_log)
@@ -565,9 +573,11 @@ class StartProject:
         self,
         project_repository: CollectionUseProjectRepository,
         access_log_repository: ObjectAccessLogRepository,
+        reference_generator: ReferenceNumberGeneratorPort | None = None,
     ) -> None:
         self._repo = project_repository
         self._access_log_repo = access_log_repository
+        self._reference_generator = reference_generator or default_reference_generator()
 
     async def execute(self, data: StartProjectInput) -> CollectionUseProject:
         project = await self._repo.get_by_id(data.project_id)
@@ -599,7 +609,9 @@ class StartProject:
             return
         access_log = ObjectAccessLog(
             id=ObjectAccessLogId(_new_id()),
-            reference_number=ReferenceNumber(_new_access_log_reference_number()),
+            reference_number=await self._reference_generator.generate(
+                kind=ReferenceKind.OBJECT_ACCESS_LOG, on_date=now.date()
+            ),
             collection_use_project_id=project.id,
         )
         await self._access_log_repo.add(access_log)

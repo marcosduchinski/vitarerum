@@ -14,11 +14,8 @@ from typing import NewType
 PermissionId = NewType("PermissionId", str)
 DocumentId = NewType("DocumentId", str)
 
-REFERENCE_NUMBER_PATTERN = re.compile(
-    r"^(?:CUP-[A-Z0-9]{8}|VRP-\d{8}-\d{4}|OAL-[A-Z0-9]{8}"
-    r"|OOL-[A-Z0-9]{8}|PUB-[A-Z0-9]{8})$"
-)
 EMAIL_ADDRESS_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+MAX_REFERENCE_NUMBER_LENGTH = 128
 
 # The document type is free-form text (no fixed catalogue). The bound mirrors the
 # String(128) column it is persisted into, so an over-long value is rejected at
@@ -31,11 +28,15 @@ class ReferenceNumber:
     value: str
 
     def __post_init__(self) -> None:
-        if REFERENCE_NUMBER_PATTERN.fullmatch(self.value) is None:
+        normalized = self.value.strip()
+        if not normalized:
+            raise ValueError("Reference number is required.")
+        if len(normalized) > MAX_REFERENCE_NUMBER_LENGTH:
             raise ValueError(
-                "Reference number must match CUP-XXXXXXXX, VRP-YYYYMMDD-XXXX, "
-                "OAL-XXXXXXXX, OOL-XXXXXXXX or PUB-XXXXXXXX."
+                "Reference number must be at most "
+                f"{MAX_REFERENCE_NUMBER_LENGTH} characters."
             )
+        object.__setattr__(self, "value", normalized)
 
 
 @dataclass(frozen=True, slots=True)

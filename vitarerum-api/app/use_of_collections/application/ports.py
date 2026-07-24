@@ -3,6 +3,7 @@ from datetime import date
 from typing import Protocol
 
 from app.identity.public import Actor
+from app.reference_numbers.public import ReferenceKind
 from app.use_of_collections.domain.enums import ProposalStatus, UseStatus, UseType
 from app.use_of_collections.domain.models import (
     CollectionUseObjectId,
@@ -292,6 +293,12 @@ class RequesterAccessEmailSender(Protocol):
         login_url: str,
         temporary_password: str,
     ) -> None: ...
+
+
+class ReferenceNumberGeneratorPort(Protocol):
+    async def generate(
+        self, *, kind: ReferenceKind, on_date: date
+    ) -> ReferenceNumber: ...
 
 
 class FileStoragePort(Protocol):

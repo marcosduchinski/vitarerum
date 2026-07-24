@@ -71,6 +71,7 @@ from app.use_of_collections.presentation.dependencies import (
     ProjectRepo,
     ProposalRepo,
     PublicationLogRepo,
+    ReferenceGenerator,
 )
 from app.use_of_collections.presentation.schemas import (
     AddProjectObjectsRequest,
@@ -287,6 +288,7 @@ async def add_project_objects(
     proposal_repo: ProposalRepo,
     access_log_repo: AccessLogRepo,
     detail_query: ProjectDetailQuery,
+    reference_generator: ReferenceGenerator,
     session: DBSession,
 ) -> ProjectDetailResponse:
     await _assert_existing_project_access(
@@ -294,7 +296,9 @@ async def add_project_objects(
     )
     require_staff(caller)
     try:
-        await AddProjectObjects(project_repo, access_log_repo).execute(
+        await AddProjectObjects(
+            project_repo, access_log_repo, reference_generator
+        ).execute(
             AddProjectObjectsInput(
                 project_id=CollectionUseProjectId(project_id),
                 caller=caller,
@@ -442,6 +446,7 @@ async def start_project(
     project_repo: ProjectRepo,
     proposal_repo: ProposalRepo,
     access_log_repo: AccessLogRepo,
+    reference_generator: ReferenceGenerator,
     session: DBSession,
 ) -> ProjectCommandResponse:
     await _assert_existing_project_access(
@@ -449,7 +454,7 @@ async def start_project(
     )
     try:
         project = await StartProject(
-            project_repo, access_log_repo
+            project_repo, access_log_repo, reference_generator
         ).execute(
             StartProjectInput(
                 project_id=CollectionUseProjectId(project_id),

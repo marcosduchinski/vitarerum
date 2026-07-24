@@ -27,6 +27,7 @@ import { provideIdentity } from '@core/providers/provide-identity';
 import { provideInstitutionManagement } from '@core/providers/provide-institution-management';
 import { provideMuseumQuestionManagement } from '@core/providers/provide-museum-question-management';
 import { provideObjectSearch } from '@core/providers/provide-object-search';
+import { provideReferenceNumberPolicies } from '@core/providers/provide-reference-number-policies';
 import { provideUserManagement } from '@core/providers/provide-user-management';
 import { providePrimeNG } from 'primeng/config';
 
@@ -108,5 +109,6 @@ export const appConfig: ApplicationConfig = {
     provideObjectSearch(),
     provideMuseumQuestionManagement(),
     provideAiPrompts(),
+    provideReferenceNumberPolicies(),
   ],
 };

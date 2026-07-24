@@ -24,7 +24,7 @@ class CollectionUseProjectRecord(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     reference_number: Mapped[str] = mapped_column(
-        String(12),
+        String(64),
         unique=True,
         index=True,
     )
@@ -302,7 +302,7 @@ class ProposalRecord(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     reference_number: Mapped[str] = mapped_column(
-        String(17),
+        String(64),
         unique=True,
         index=True,
     )
