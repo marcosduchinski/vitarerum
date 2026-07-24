@@ -110,7 +110,7 @@
 }
 
 .proposals-table__col-ref {
-  width: 7.5rem;
+  width: 12rem;
 }
 
 .proposals-table__col-title {
@@ -173,7 +173,9 @@
   color: var(--color-subtle);
   font-size: 0.8rem;
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .proposals-table__title {
