@@ -47,13 +47,14 @@
             @for (template of templates(); track template.id) {
               <li class="templates__item">
                 <div class="templates__item-head">
-                  <button
-                    type="button"
+                  <a
                     class="templates__download"
-                    (click)="downloadTemplate(template)"
+                    [href]="templateDownloadUrl(template.id)"
+                    target="_blank"
+                    rel="noopener"
                   >
                     {{ template.title }}
-                  </button>
+                  </a>
                   @if (template.mandatory) {
                     <span class="templates__badge">Mandatory</span>
                   }
@@ -65,10 +66,6 @@
             }
           </ul>
         </section>
-      }
-
-      @if (templateDownloadError()) {
-        <app-error-message [apiError]="templateDownloadError()!" />
       }
 
       <div
@@ -155,6 +152,7 @@
           >Documents <span aria-hidden="true">*</span></label
         >
         <input
+          #documentsInput
           id="documents"
           type="file"
           class="field__input"
@@ -169,7 +167,11 @@
               <li class="document-list__item">
                 <span class="document-list__name">{{ document.name }}</span>
                 <span class="document-list__size">{{ formatFileSize(document.size) }}</span>
-                <button type="button" class="document-list__remove" (click)="removeDocument(i)">
+                <button
+                  type="button"
+                  class="document-list__remove"
+                  (click)="removeDocument(i, documentsInput)"
+                >
                   Remove
                 </button>
               </li>

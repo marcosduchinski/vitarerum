@@ -2,8 +2,9 @@ import { provideRouter, Router } from '@angular/router';
 import { TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 
-import { DocumentTemplate } from '@features/admin/models/document-template.model';
-import { DOCUMENT_TEMPLATE_MANAGEMENT_SERVICE } from '@features/admin/services/document-template-management.service';
+import { PublicDocumentTemplate } from '@features/public/models/document-template.model';
+import { PUBLIC_DOCUMENT_TEMPLATE_API_SERVICE } from '@features/public/services/public-document-template-api.service';
+import { UseType } from '@shared/models/collection-use-status.model';
 import { CreateProposalRequest, CreateProposalResponse } from '../../models/proposal.model';
 import { PROPOSAL_API_SERVICE } from '../../services/proposal-api.service';
 import { ProposalSubmitPageComponent } from './proposal-submit-page.component';
@@ -34,65 +35,45 @@ class ProposalApiServiceStub {
   }
 }
 
-class DocumentTemplateManagementServiceStub {
-  readonly listCalls: string[] = [];
+class PublicDocumentTemplateApiStub {
+  readonly listCalls: UseType[] = [];
 
-  list(useType?: string) {
-    this.listCalls.push(useType ?? '');
-    return of<DocumentTemplate[]>(
+  listTemplates(useType: UseType) {
+    this.listCalls.push(useType);
+    return of<PublicDocumentTemplate[]>(
       useType === 'IN_SITU_VISIT'
         ? [
             {
               id: 'tpl-safety',
-              useType: 'IN_SITU_VISIT',
               title: 'In-situ visit safety form',
               description: 'Download, complete and sign before your visit.',
               mandatory: true,
-              active: true,
-              displayOrder: 0,
-              fileName: 'safety-form.docx',
-              uploadedAt: '2026-06-01T09:00:00Z',
-            },
-            {
-              id: 'tpl-inactive',
-              useType: 'IN_SITU_VISIT',
-              title: 'Inactive form',
-              description: '',
-              mandatory: false,
-              active: false,
-              displayOrder: 1,
-              fileName: 'inactive.docx',
-              uploadedAt: '2026-06-01T09:00:00Z',
             },
           ]
         : [],
     );
   }
 
-  downloadFile() {
-    return of(
-      new Blob(['template'], {
-        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      }),
-    );
+  downloadUrl(id: string) {
+    return `/api/v1/public/document-templates/${id}/file`;
   }
 }
 
 describe('ProposalSubmitPageComponent', () => {
   let proposalService: ProposalApiServiceStub;
-  let templateService: DocumentTemplateManagementServiceStub;
+  let templateService: PublicDocumentTemplateApiStub;
   let router: Router;
 
   beforeEach(async () => {
     proposalService = new ProposalApiServiceStub();
-    templateService = new DocumentTemplateManagementServiceStub();
+    templateService = new PublicDocumentTemplateApiStub();
 
     await TestBed.configureTestingModule({
       imports: [ProposalSubmitPageComponent],
       providers: [
         provideRouter([]),
         { provide: PROPOSAL_API_SERVICE, useValue: proposalService },
-        { provide: DOCUMENT_TEMPLATE_MANAGEMENT_SERVICE, useValue: templateService },
+        { provide: PUBLIC_DOCUMENT_TEMPLATE_API_SERVICE, useValue: templateService },
       ],
     }).compileComponents();
 
@@ -136,7 +117,8 @@ describe('ProposalSubmitPageComponent', () => {
     expect(compiled.textContent).toContain('Required documents');
     expect(compiled.textContent).toContain('In-situ visit safety form');
     expect(compiled.textContent).toContain('Mandatory');
-    expect(compiled.textContent).not.toContain('Inactive form');
+    const link = compiled.querySelector<HTMLAnchorElement>('.templates__download');
+    expect(link?.getAttribute('href')).toBe('/api/v1/public/document-templates/tpl-safety/file');
   });
 
   it('warns and blocks exhibition and other intended uses', async () => {
@@ -225,6 +207,29 @@ describe('ProposalSubmitPageComponent', () => {
 
     expect(proposalService.createCalls).toHaveLength(0);
     expect(compiled.textContent).toContain('Attach at least one supporting document.');
+  });
+
+  it('clears the native file input when a selected document is removed', () => {
+    const fixture = TestBed.createComponent(ProposalSubmitPageComponent);
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    const document = new File(['support'], 'support.pdf', { type: 'application/pdf' });
+    setFileInput(compiled, '#documents', [document]);
+    fixture.detectChanges();
+
+    const fileInput = compiled.querySelector<HTMLInputElement>('#documents');
+    Object.defineProperty(fileInput, 'value', {
+      configurable: true,
+      writable: true,
+      value: 'C:\\fakepath\\support.pdf',
+    });
+
+    compiled.querySelector<HTMLButtonElement>('.document-list__remove')?.click();
+    fixture.detectChanges();
+
+    expect(fileInput?.value).toBe('');
+    expect(compiled.textContent).not.toContain('support.pdf');
   });
 
   it('blocks submission when the opening message is incomplete', () => {

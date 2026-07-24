@@ -158,14 +158,13 @@
 }
 
 .templates__download {
-  border: 0;
-  padding: 0;
-  background: transparent;
   color: var(--color-accent);
-  font: inherit;
   font-weight: 700;
-  text-align: left;
-  cursor: pointer;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
 }
 
 .templates__badge {

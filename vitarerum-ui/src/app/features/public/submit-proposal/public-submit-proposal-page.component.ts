@@ -208,8 +208,9 @@ export class PublicSubmitProposalPageComponent {
     this.documents.set(Array.from(input.files ?? []));
   }
 
-  protected removeDocument(index: number): void {
+  protected removeDocument(index: number, input?: HTMLInputElement): void {
     this.documents.update((files) => files.filter((_, current) => current !== index));
+    if (input) input.value = '';
   }
 
   protected formatFileSize(size: number): string {

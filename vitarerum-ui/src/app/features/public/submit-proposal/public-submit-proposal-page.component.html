@@ -200,6 +200,7 @@
           >Supporting documents <span aria-hidden="true">*</span></label
         >
         <input
+          #documentsInput
           id="documents"
           type="file"
           class="field__input"
@@ -214,7 +215,11 @@
               <li class="document-list__item">
                 <span class="document-list__name">{{ document.name }}</span>
                 <span class="document-list__size">{{ formatFileSize(document.size) }}</span>
-                <button type="button" class="document-list__remove" (click)="removeDocument(i)">
+                <button
+                  type="button"
+                  class="document-list__remove"
+                  (click)="removeDocument(i, documentsInput)"
+                >
                   Remove
                 </button>
               </li>

@@ -1,8 +1,8 @@
 import { Routes } from '@angular/router';
 
-import { provideDocumentTemplateManagement } from '@core/providers/provide-document-template-management';
 import { externalGuard } from '@core/guards/external.guard';
 import { staffGuard } from '@core/guards/staff.guard';
+import { providePublicSubmission } from '@core/providers/provide-public-submission';
 
 export const PROPOSALS_ROUTES: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'new' },
@@ -17,7 +17,7 @@ export const PROPOSALS_ROUTES: Routes = [
     path: 'submit',
     title: 'Submit Proposal',
     canMatch: [externalGuard],
-    providers: [provideDocumentTemplateManagement()],
+    providers: [providePublicSubmission()],
     loadComponent: () =>
       import('./pages/submit/proposal-submit-page.component').then(
         (m) => m.ProposalSubmitPageComponent,

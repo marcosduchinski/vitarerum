@@ -1,4 +1,3 @@
-import { DOCUMENT } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -11,8 +10,7 @@ import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 
 import { ApiError, toApiError } from '@core/http/api-error.model';
-import { DocumentTemplate } from '@features/admin/models/document-template.model';
-import { DOCUMENT_TEMPLATE_MANAGEMENT_SERVICE } from '@features/admin/services/document-template-management.service';
+import { PUBLIC_DOCUMENT_TEMPLATE_API_SERVICE } from '@features/public/services/public-document-template-api.service';
 import { ErrorMessageComponent } from '@shared/components/error-message/error-message.component';
 import { PageHeaderComponent } from '@shared/components/page-header/page-header.component';
 import { UseType } from '@shared/models/collection-use-status.model';
@@ -45,8 +43,7 @@ const USE_TYPE_OPTIONS: readonly { readonly value: UseType; readonly label: stri
 })
 export class ProposalSubmitPageComponent {
   private readonly proposalService = inject(PROPOSAL_API_SERVICE);
-  private readonly documentTemplates = inject(DOCUMENT_TEMPLATE_MANAGEMENT_SERVICE);
-  private readonly document = inject(DOCUMENT);
+  private readonly documentTemplates = inject(PUBLIC_DOCUMENT_TEMPLATE_API_SERVICE);
   private readonly router = inject(Router);
 
   protected readonly useTypeOptions = USE_TYPE_OPTIONS;
@@ -65,16 +62,12 @@ export class ProposalSubmitPageComponent {
   protected readonly submitted = signal(false);
   protected readonly submitting = signal(false);
   protected readonly submitError = signal<ApiError | null>(null);
-  protected readonly templateDownloadError = signal<ApiError | null>(null);
 
   private readonly templatesResource = resource({
     params: () => this.useType(),
     loader: async ({ params }) => {
       if (!params) return [];
-      const templates = await firstValueFrom(this.documentTemplates.list(params));
-      return templates
-        .filter((template) => template.active)
-        .sort((a, b) => a.displayOrder - b.displayOrder || a.title.localeCompare(b.title));
+      return firstValueFrom(this.documentTemplates.listTemplates(params));
     },
   });
   protected readonly templates = computed(() => this.templatesResource.value() ?? []);
@@ -157,7 +150,6 @@ export class ProposalSubmitPageComponent {
 
   protected onUseTypeChange(event: Event): void {
     this.useType.set((event.target as HTMLSelectElement).value as UseType | '');
-    this.templateDownloadError.set(null);
   }
 
   protected onDocumentsSelected(event: Event): void {
@@ -165,8 +157,9 @@ export class ProposalSubmitPageComponent {
     this.documents.set(Array.from(input.files ?? []));
   }
 
-  protected removeDocument(index: number): void {
+  protected removeDocument(index: number, input?: HTMLInputElement): void {
     this.documents.update((files) => files.filter((_, current) => current !== index));
+    if (input) input.value = '';
   }
 
   protected formatFileSize(size: number): string {
@@ -176,19 +169,8 @@ export class ProposalSubmitPageComponent {
     return `${(size / (1024 * 1024)).toFixed(1)} MB`;
   }
 
-  protected async downloadTemplate(template: DocumentTemplate): Promise<void> {
-    this.templateDownloadError.set(null);
-    try {
-      const blob = await firstValueFrom(this.documentTemplates.downloadFile(template.id));
-      const url = URL.createObjectURL(blob);
-      const anchor = this.document.createElement('a');
-      anchor.href = url;
-      anchor.download = template.fileName;
-      anchor.click();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      this.templateDownloadError.set(toApiError(err));
-    }
+  protected templateDownloadUrl(id: string): string {
+    return this.documentTemplates.downloadUrl(id);
   }
 
   protected async submit(event: Event): Promise<void> {
