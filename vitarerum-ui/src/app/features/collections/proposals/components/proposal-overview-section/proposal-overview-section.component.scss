@@ -15,57 +15,15 @@
 }
 
 .overview-panel__header {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  align-items: start;
-  flex-wrap: wrap;
-}
-
-.overview-panel__eyebrow {
-  margin: 0;
-  color: var(--color-subtle);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  padding-bottom: 0.8rem;
+  border-bottom: 1px solid var(--color-line);
 }
 
 .overview-panel__title {
-  margin: 0.15rem 0 0;
+  margin: 0;
   color: var(--color-text);
-  font-size: 1.15rem;
+  font-size: 1rem;
   line-height: 1.25;
-}
-
-.overview-panel__chips {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.overview-panel__summary {
-  display: grid;
-  gap: 0.25rem;
-  padding: 0.85rem 0;
-  border-block: 1px solid var(--color-line);
-
-  p {
-    margin: 0;
-    color: var(--color-text);
-    font-size: 1rem;
-    font-weight: 700;
-    line-height: 1.35;
-  }
-}
-
-.overview-panel__summary-label {
-  color: var(--color-subtle);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .overview-panel__content {

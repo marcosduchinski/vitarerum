@@ -1,19 +1,7 @@
 <section class="overview-panel" aria-labelledby="overview-heading">
   <header class="overview-panel__header">
-    <div>
-      <p class="overview-panel__eyebrow">{{ proposal().referenceNumber }}</p>
-      <h2 id="overview-heading" class="overview-panel__title">Overview</h2>
-    </div>
-    <div class="overview-panel__chips" aria-label="Proposal status and type">
-      <app-status-chip kind="proposal" [status]="asWorkflowStatus(proposal().status)" />
-      <app-type-chip [type]="proposal().type" />
-    </div>
+    <h2 id="overview-heading" class="overview-panel__title">Overview</h2>
   </header>
-
-  <div class="overview-panel__summary">
-    <span class="overview-panel__summary-label">{{ typeLabel() }}</span>
-    <p>{{ proposal().title || 'Untitled proposal' }}</p>
-  </div>
 
   <div class="overview-panel__content">
     <dl class="overview-people">
