@@ -329,7 +329,7 @@ class ObjectSearchServiceStub {
 
 async function selectPanel(
   fixture: ComponentFixture<ProposalMyDetailPageComponent>,
-  name: 'Overview' | 'Objects' | 'Documents' | 'Conversation' | 'Actions',
+  name: 'Overview' | 'Objects' | 'Documents' | 'Messages' | 'Actions',
 ): Promise<void> {
   const compiled = fixture.nativeElement as HTMLElement;
   const tab = Array.from(compiled.querySelectorAll<HTMLButtonElement>('[role="tab"]')).find(
@@ -384,7 +384,7 @@ describe('ProposalMyDetailPageComponent', () => {
     expect(compiled.textContent).toContain('Assigned to');
     expect(compiled.textContent).toContain('Bob Santos');
     expect(compiled.textContent).toContain('Objects');
-    expect(compiled.textContent).toContain('Conversation');
+    expect(compiled.textContent).toContain('Messages');
     expect(compiled.textContent).toContain('Event log');
     expect(compiled.textContent).toContain('SUBMITTED');
     // The decision actions now live behind the Actions tab, not the header.
@@ -524,15 +524,45 @@ describe('ProposalMyDetailPageComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    await selectPanel(fixture, 'Conversation');
+    await selectPanel(fixture, 'Messages');
 
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toContain(
-      'Conversation',
+      'Messages',
     );
     expect(compiled.querySelector('#conversation-panel')).not.toBeNull();
     expect(compiled.textContent).toContain('Initial request');
     expect(compiled.textContent).toContain('signed-response.docx');
+  });
+
+  it('hides the staff reply composer for public proposals without an active requester user', async () => {
+    proposalService.setProposal({
+      ...PROPOSAL,
+      submissionChannel: 'PUBLIC',
+      requestedBy: {
+        permissionId: '',
+        user: { id: '', name: 'Alice Ferreira', email: 'alice@example.test' },
+        group: 'EXTERNAL',
+      },
+      requesterContact: { name: 'Alice Ferreira', email: 'alice@example.test' },
+    });
+    const fixture = TestBed.createComponent(ProposalMyDetailPageComponent);
+    fixture.componentRef.setInput('id', 'proposal-1');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    await selectPanel(fixture, 'Messages');
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.textContent).toContain('Initial request');
+    expect(compiled.querySelector('.reply-composer')).toBeNull();
+    expect(compiled.querySelector('.reply-editor')).toBeNull();
+    expect(
+      Array.from(compiled.querySelectorAll<HTMLButtonElement>('button')).some((button) =>
+        button.textContent?.includes('Send response'),
+      ),
+    ).toBe(false);
   });
 
   it('enables the staff-only requested-object disclosure in the conversation panel', async () => {
@@ -560,7 +590,7 @@ describe('ProposalMyDetailPageComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    await selectPanel(fixture, 'Conversation');
+    await selectPanel(fixture, 'Messages');
 
     const toggle = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
       '[aria-controls="requested-object-picker-panel"]',
@@ -577,7 +607,7 @@ describe('ProposalMyDetailPageComponent', () => {
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
-    await selectPanel(fixture, 'Conversation');
+    await selectPanel(fixture, 'Messages');
 
     const compiled = fixture.nativeElement as HTMLElement;
     const messages = Array.from(compiled.querySelectorAll<HTMLElement>('.message'));
@@ -598,7 +628,7 @@ describe('ProposalMyDetailPageComponent', () => {
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
-    await selectPanel(fixture, 'Conversation');
+    await selectPanel(fixture, 'Messages');
 
     const compiled = fixture.nativeElement as HTMLElement;
     const editor = compiled.querySelector<HTMLElement>('.reply-editor');

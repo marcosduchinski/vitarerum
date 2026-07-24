@@ -144,6 +144,12 @@ export class ProposalMyDetailPageComponent {
     const status = this.proposal()?.status;
     return status === 'SUBMITTED' || status === 'PENDING';
   });
+  protected readonly canReplyToRequester = computed(() => {
+    const proposal = this.proposal();
+    return (
+      proposal?.submissionChannel === 'AUTHENTICATED' && Boolean(proposal.requestedBy.permissionId)
+    );
+  });
 
   protected readonly forwardTargetLabel = computed(
     () =>

@@ -155,7 +155,7 @@
         [attr.aria-selected]="activePanel() === 'conversation'"
         (click)="selectPanel('conversation')"
       >
-        Conversation
+        Messages
       </button>
       <button
         type="button"
@@ -234,6 +234,7 @@
             [messageError]="messageError()"
             [sendingMessage]="sendingMessage()"
             [replyResetVersion]="replyResetVersion()"
+            [canReply]="canReplyToRequester()"
             [showRequestedObjectPicker]="true"
             (replySubmitted)="sendReply($event)"
           />
