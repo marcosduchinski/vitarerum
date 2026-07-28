@@ -64,7 +64,6 @@ const COLLECTION_PROJECTS_STAFF: MenuNode = {
   label: 'Projects',
   icon: 'pi pi-briefcase',
   items: [
-    { label: 'My projects', icon: 'pi pi-th-large', routerLink: '/p/collections/projects/my' },
     { label: 'Pending', icon: 'pi pi-clock', routerLink: '/p/collections/projects/pending' },
     {
       label: 'In progress',
