@@ -11,6 +11,7 @@ import {
   AddProjectObjectsRequest,
   CollectionUseProjectDetail,
   CollectionUseProjectSummary,
+  CreateFollowUpProjectRequest,
   CreateObjectLogEntryRequest,
   CreateObjectOccurrenceEntryRequest,
   NoteRequest,
@@ -121,6 +122,18 @@ export class ProjectApiService {
       this.url(`/collection-use-projects/${projectId}/objects`),
       request,
     );
+  }
+
+  createFollowUpProject(
+    projectId: string,
+    request: CreateFollowUpProjectRequest,
+  ): Observable<CollectionUseProjectDetail> {
+    return this.http
+      .post<CollectionUseProjectDetail>(
+        this.url(`/collection-use-projects/${projectId}/follow-ups`),
+        request,
+      )
+      .pipe(map((p) => normalizeProjectType(p)));
   }
 
   removeProjectObject(projectId: string, objectId: string): Observable<void> {

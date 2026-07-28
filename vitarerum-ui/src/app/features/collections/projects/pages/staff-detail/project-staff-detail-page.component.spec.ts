@@ -191,7 +191,7 @@ describe('ProjectStaffDetailPageComponent', () => {
     currentProject = {
       ...PROJECT,
       status: 'IN_PROGRESS',
-      actions: { ...PROJECT.actions, canStart: false, canComplete: true },
+      actions: { ...PROJECT.actions!, canStart: false, canComplete: true },
     };
     const fixture = TestBed.createComponent(ProjectStaffDetailPageComponent);
     fixture.componentRef.setInput('id', PROJECT.id);
@@ -211,12 +211,12 @@ describe('ProjectStaffDetailPageComponent', () => {
     ]);
   });
 
-  it('navigates completed staff projects to the blank follow-up screen', async () => {
+  it('navigates completed staff projects to the follow-up creation page', async () => {
     currentProject = {
       ...PROJECT,
       status: 'COMPLETED',
       result: 'COMPLETED',
-      actions: { ...PROJECT.actions, canStart: false, canComplete: false, canCancel: false },
+      actions: { ...PROJECT.actions!, canStart: false, canComplete: false, canCancel: false },
     };
     const navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true);
     const fixture = TestBed.createComponent(ProjectStaffDetailPageComponent);
@@ -227,12 +227,21 @@ describe('ProjectStaffDetailPageComponent', () => {
 
     buttonByText(fixture.nativeElement, 'Create follow-up project').click();
 
-    expect(navigate).toHaveBeenCalledWith([
-      '/p/collections/projects',
-      PROJECT.id,
-      'follow-up',
-      'new',
-    ]);
+    expect(navigate).toHaveBeenCalledWith(
+      ['/p/collections/projects', PROJECT.id, 'follow-up', 'new'],
+      { queryParams: { section: 'collections' } },
+    );
+  });
+
+  it('hides follow-up creation for projects that are not completed', async () => {
+    currentProject = { ...PROJECT, status: 'IN_PROGRESS' };
+    const fixture = TestBed.createComponent(ProjectStaffDetailPageComponent);
+    fixture.componentRef.setInput('id', PROJECT.id);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).not.toContain('Create follow-up project');
   });
 
   it('shows the Edit link in the Actions tab for editable projects', async () => {
@@ -250,12 +259,38 @@ describe('ProjectStaffDetailPageComponent', () => {
     expect(link!.getAttribute('href')).toBe('/p/collections/projects/collections/proj-12/edit');
   });
 
+  it('shows a link to the origin project for follow-up projects', async () => {
+    currentProject = { ...PROJECT, originProjectId: 'proj-origin' };
+    const fixture = TestBed.createComponent(ProjectStaffDetailPageComponent);
+    fixture.componentRef.setInput('id', PROJECT.id);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('Follow-up of');
+    const anchors: HTMLAnchorElement[] = Array.from(
+      fixture.nativeElement.querySelectorAll('a'),
+    );
+    const link = anchors.find((item) => item.textContent?.trim() === 'proj-origin');
+    expect(link?.getAttribute('href')).toBe('/p/collections/projects/collections/proj-origin');
+  });
+
+  it('hides the origin project link for non-follow-up projects', async () => {
+    const fixture = TestBed.createComponent(ProjectStaffDetailPageComponent);
+    fixture.componentRef.setInput('id', PROJECT.id);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).not.toContain('Follow-up of');
+  });
+
   it('hides the Edit link for a completed project', async () => {
     currentProject = {
       ...PROJECT,
       status: 'COMPLETED',
       result: 'COMPLETED',
-      actions: { ...PROJECT.actions, canStart: false, canComplete: false, canCancel: false },
+      actions: { ...PROJECT.actions!, canStart: false, canComplete: false, canCancel: false },
     };
     const fixture = TestBed.createComponent(ProjectStaffDetailPageComponent);
     fixture.componentRef.setInput('id', PROJECT.id);

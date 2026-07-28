@@ -16,9 +16,11 @@ from app.use_of_collections.application.authorization import (
 from app.use_of_collections.domain.enums import (
     ProposalStatus,
     SubmissionChannel,
+    UseStatus,
     UseType,
 )
 from app.use_of_collections.domain.models import (
+    CollectionUseProject,
     CollectionUseProjectId,
     Proposal,
     ProposalId,
@@ -43,6 +45,20 @@ def _proposal(requested_by: PermissionId) -> Proposal:
         requested_by=requested_by,
         submitted_at=datetime.now(UTC),
         submission_channel=SubmissionChannel.AUTHENTICATED,
+    )
+
+
+def _project(requested_by: PermissionId) -> CollectionUseProject:
+    return CollectionUseProject(
+        id=CollectionUseProjectId("project-1"),
+        reference_number=ReferenceNumber("CUP-ABCDEFG1"),
+        title="Project title",
+        purpose="Use collection",
+        intended_use=UseType.IN_SITU_VISIT,
+        status=UseStatus.CREATED,
+        begin_date=date(2026, 6, 1),
+        end_date=date(2026, 6, 7),
+        requested_by=requested_by,
     )
 
 
@@ -81,16 +97,29 @@ def test_proposal_access_rejects_non_owner_external() -> None:
 
 def test_project_access_allows_owner_and_staff() -> None:
     owner = _permission("owner", GroupName.EXTERNAL)
+    project = _project(owner.id)
     proposal = _proposal(owner.id)
 
-    assert_project_access(owner, proposal)
-    assert_project_access(_permission("staff", GroupName.CURATORIAL), proposal)
+    assert_project_access(owner, project, proposal)
+    assert_project_access(_permission("staff", GroupName.CURATORIAL), project, proposal)
 
 
 def test_project_access_rejects_missing_or_foreign_proposal_for_external() -> None:
     caller = _permission("other", GroupName.EXTERNAL)
+    project = _project(PermissionId("owner"))
 
     with pytest.raises(AccessDenied):
-        assert_project_access(caller, None)
+        assert_project_access(caller, project, None)
     with pytest.raises(AccessDenied):
-        assert_project_access(caller, _proposal(PermissionId("owner")))
+        assert_project_access(caller, project, _proposal(PermissionId("owner")))
+
+
+def test_project_access_allows_owner_without_a_proposal() -> None:
+    """A follow-up project (see ``CreateFollowUpProject``) has no proposal of
+    its own — ``requested_by`` is copied from the origin project directly, so
+    access must be granted from ``project.requested_by`` even when no
+    ``Proposal`` links back to it."""
+    owner = _permission("owner", GroupName.EXTERNAL)
+    project = _project(owner.id)
+
+    assert_project_access(owner, project, None)

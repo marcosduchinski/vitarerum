@@ -47,9 +47,10 @@ export interface CollectionUseProjectSummary {
   // Populated only for staff callers; nullable and not yet set by any flow.
   readonly authorisedBy?: PermissionPrincipal | null;
   readonly authorisedAt?: string | null;
-  readonly proposalId?: string;
+  readonly originProjectId?: string | null;
+  readonly proposalId?: string | null;
   readonly requestedBy?: PermissionPrincipal | null;
-  readonly proposal: ProjectProposalSummary;
+  readonly proposal?: ProjectProposalSummary | null;
 }
 
 export interface Attachment {
@@ -200,8 +201,8 @@ export interface ProjectStaffContext {
 
 export interface CollectionUseProjectDetail extends CollectionUseProjectSummary {
   readonly objects?: readonly CollectionUseProjectObject[];
-  readonly actions: ProjectActionPermissions;
-  readonly staffContext: ProjectStaffContext | null;
+  readonly actions?: ProjectActionPermissions;
+  readonly staffContext?: ProjectStaffContext | null;
 }
 
 export interface UseEvent {
@@ -221,6 +222,7 @@ export interface ProjectListQuery extends PageQuery {
   // requester's permissionId (e.g. their own for a "my projects" view), while
   // non-staff callers are always auto-scoped to their own permissionId.
   readonly requestedBy?: string;
+  readonly originProjectId?: string;
   // `assignedTo` is not implemented server-side; stripped before the request and
   // honoured only by the mock.
   readonly assignedTo?: string;
@@ -287,6 +289,15 @@ export interface ProjectObjectSnapshotInput {
 
 export interface AddProjectObjectsRequest {
   readonly objects: readonly ProjectObjectSnapshotInput[];
+}
+
+export interface CreateFollowUpProjectRequest {
+  readonly beginDate: string;
+  readonly endDate: string;
+  readonly objectIds: readonly string[];
+  readonly title?: string | null;
+  readonly purpose?: string | null;
+  readonly note?: string | null;
 }
 
 export interface RemoveProjectObjectRequest {

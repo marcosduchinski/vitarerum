@@ -123,16 +123,20 @@
         <div class="detail-dl__row">
           <dt>Assigned staff</dt>
           <dd>
-            @if (project()!.proposal.assignedTo) {
-              {{ project()!.proposal.assignedTo!.user.name }}
-              <span class="detail-dl__email">
-                {{ project()!.proposal.assignedTo!.user.email }}
-              </span>
+            @if (project()!.proposal?.assignedTo; as assignee) {
+              {{ assignee.user.name }}
+              <span class="detail-dl__email">{{ assignee.user.email }}</span>
             } @else {
               <span class="detail-dl__empty">Unassigned</span>
             }
           </dd>
         </div>
+        @if (originProjectLink(); as link) {
+          <div class="detail-dl__row">
+            <dt>Follow-up of</dt>
+            <dd><a [routerLink]="link">{{ project()!.originProjectId }}</a></dd>
+          </div>
+        }
       </dl>
     </section>
 

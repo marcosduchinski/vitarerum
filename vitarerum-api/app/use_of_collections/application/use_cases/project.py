@@ -27,6 +27,7 @@ from app.use_of_collections.application.ports import (
 from app.use_of_collections.application.use_cases._shared import (
     _new_id,
     _now,
+    _validate_collection_use_object,
     default_reference_generator,
 )
 from app.use_of_collections.domain.enums import UseStatus, UseType
@@ -204,6 +205,110 @@ class ApproveProposal:
             project=project,
             requester_access_notification=requester_access_notification,
         )
+
+
+# ── Create Follow-up Project ─────────────────────────────────────────────────
+
+
+@dataclass(slots=True)
+class CreateFollowUpProjectInput:
+    origin_project_id: CollectionUseProjectId
+    caller: Actor
+    begin_date: date
+    end_date: date
+    object_ids: list[CollectionUseObjectId]
+    title: str | None = None
+    purpose: str | None = None
+    note: str | None = None
+
+
+class CreateFollowUpProject:
+    def __init__(
+        self,
+        project_repository: CollectionUseProjectRepository,
+        reference_generator: ReferenceNumberGeneratorPort | None = None,
+    ) -> None:
+        self._project_repo = project_repository
+        self._reference_generator = reference_generator or default_reference_generator()
+
+    async def execute(
+        self, data: CreateFollowUpProjectInput
+    ) -> CollectionUseProject:
+        origin_project = await self._project_repo.get_by_id(data.origin_project_id)
+        if origin_project is None:
+            raise LookupError(f"No project found with id {data.origin_project_id}")
+        if origin_project.status != UseStatus.COMPLETED:
+            raise InvalidTransition("Only COMPLETED projects can create follow-ups")
+        if data.end_date < data.begin_date:
+            raise ValueError("endDate must be after beginDate")
+        if not data.object_ids:
+            raise ValueError("At least one object must be selected")
+        if len(set(data.object_ids)) != len(data.object_ids):
+            raise ValueError("Object ids must be unique")
+
+        for object_id in data.object_ids:
+            _validate_collection_use_object(origin_project, object_id)
+
+        selected_by_id = {obj.id: obj for obj in origin_project.objects}
+        now = _now()
+        title = _resolve_optional_text(data.title, origin_project.title, "title")
+        purpose = _resolve_optional_text(
+            data.purpose, origin_project.purpose, "purpose"
+        )
+        base_note = f"Follow-up of project {origin_project.reference_number.value}"
+        note = (
+            f"{base_note}: {data.note.strip()}"
+            if data.note and data.note.strip()
+            else base_note
+        )
+
+        new_project = CollectionUseProject(
+            id=CollectionUseProjectId(_new_id()),
+            reference_number=await self._reference_generator.generate(
+                kind=ReferenceKind.COLLECTION_USE_PROJECT,
+                on_date=now.date(),
+            ),
+            title=title,
+            purpose=purpose,
+            intended_use=origin_project.intended_use,
+            status=UseStatus.CREATED,
+            begin_date=data.begin_date,
+            end_date=data.end_date,
+            requested_by=origin_project.requested_by,
+            proposal_id=None,
+            origin_project_id=origin_project.id,
+            objects=[
+                CollectionUseObject(
+                    id=CollectionUseObjectId(_new_id()),
+                    inventory_number=selected_by_id[object_id].inventory_number,
+                    display_title=selected_by_id[object_id].display_title,
+                    object_name=selected_by_id[object_id].object_name,
+                    brief_description_snapshot=selected_by_id[
+                        object_id
+                    ].brief_description_snapshot,
+                    category=selected_by_id[object_id].category,
+                    description=selected_by_id[object_id].description,
+                    requested_at=selected_by_id[object_id].requested_at,
+                    requested_by=selected_by_id[object_id].requested_by,
+                )
+                for object_id in data.object_ids
+            ],
+        )
+        new_project.record_requested(
+            occurred_at=now,
+            triggered_by=data.caller.id,
+            note=note,
+        )
+        await self._project_repo.add(new_project)
+        return new_project
+
+
+def _resolve_optional_text(value: str | None, fallback: str, field_name: str) -> str:
+    if value is None:
+        return fallback
+    if not value.strip():
+        raise ValueError(f"{field_name} is required")
+    return value
 
 
 # ── Cancel Proposal ───────────────────────────────────────────────────────────

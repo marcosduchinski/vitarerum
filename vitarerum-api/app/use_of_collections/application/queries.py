@@ -269,7 +269,7 @@ class GetProjectDetail:
         if project is None:
             return None
         proposal = await self._proposal_repo.get_by_project_id(project.id)
-        assert_project_access(caller, proposal)
+        assert_project_access(caller, project, proposal)
 
         caller_is_staff = is_staff(caller)
         permission_ids: list[PermissionId | None] = [

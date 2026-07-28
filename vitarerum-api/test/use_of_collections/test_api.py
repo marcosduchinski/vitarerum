@@ -197,6 +197,12 @@ class InMemoryProjectRepository:
             items = [
                 item for item in items if item.requested_by == filters.requested_by
             ]
+        if filters.origin_project_id:
+            items = [
+                item
+                for item in items
+                if item.origin_project_id == filters.origin_project_id
+            ]
         if filters.date_from:
             items = [item for item in items if item.begin_date >= filters.date_from]
         if filters.date_to:
@@ -1979,6 +1985,265 @@ async def test_staff_can_add_project_objects() -> None:
     assert project.objects[-1].inventory_number == "INV-002"
     assert project.objects[-1].display_title == "Specimen drawer"
     assert project.objects[-1].requested_by == _STAFF_CALLER.id
+
+
+async def test_staff_can_create_follow_up_project() -> None:
+    async with client_with_repos(caller=_STAFF_CALLER) as (
+        client,
+        project_repo,
+        proposal_repo,
+        _,
+    ):
+        await project_repo.add(
+            _project(
+                status=UseStatus.COMPLETED,
+                objects=[
+                    _collection_use_object("cuo-1", "INV-001"),
+                    _collection_use_object("cuo-2", "INV-002"),
+                ],
+            )
+        )
+        await proposal_repo.add(_proposal())
+
+        response = await client.post(
+            "/api/v1/collection-use-projects/proj-1/follow-ups",
+            json={
+                "beginDate": "2026-08-10",
+                "endDate": "2026-08-20",
+                "objectIds": ["cuo-2"],
+                "title": "Follow-up title",
+                "purpose": "Continue the study",
+                "note": "Second campaign.",
+            },
+        )
+
+    body = response.json()
+    assert response.status_code == 201
+    assert body["id"] != "proj-1"
+    assert body["referenceNumber"] == "CUP-00000001"
+    assert body["status"] == "CREATED"
+    assert body["originProjectId"] == "proj-1"
+    assert body["proposal"] is None
+    assert [obj["inventoryNumber"] for obj in body["objects"]] == ["INV-002"]
+
+
+async def test_follow_up_project_requires_staff() -> None:
+    async with client_with_repos(caller=_CALLER) as (
+        client,
+        project_repo,
+        proposal_repo,
+        _,
+    ):
+        await project_repo.add(
+            _project(status=UseStatus.COMPLETED, objects=[_collection_use_object()])
+        )
+        await proposal_repo.add(_proposal())
+
+        response = await client.post(
+            "/api/v1/collection-use-projects/proj-1/follow-ups",
+            json={
+                "beginDate": "2026-08-10",
+                "endDate": "2026-08-20",
+                "objectIds": ["cuo-1"],
+            },
+        )
+
+    assert response.status_code == 403
+    assert response.json()["error"] == "INSUFFICIENT_GROUP"
+
+
+async def test_follow_up_project_rejects_non_completed_origin() -> None:
+    async with client_with_repos(caller=_STAFF_CALLER) as (
+        client,
+        project_repo,
+        proposal_repo,
+        _,
+    ):
+        await project_repo.add(
+            _project(status=UseStatus.IN_PROGRESS, objects=[_collection_use_object()])
+        )
+        await proposal_repo.add(_proposal())
+
+        response = await client.post(
+            "/api/v1/collection-use-projects/proj-1/follow-ups",
+            json={
+                "beginDate": "2026-08-10",
+                "endDate": "2026-08-20",
+                "objectIds": ["cuo-1"],
+            },
+        )
+
+    assert response.status_code == 409
+    assert response.json()["error"] == "INVALID_TRANSITION"
+
+
+async def test_follow_up_project_rejects_missing_origin() -> None:
+    async with client_with_repos(caller=_STAFF_CALLER) as (client, _, _, _):
+        response = await client.post(
+            "/api/v1/collection-use-projects/missing-project/follow-ups",
+            json={
+                "beginDate": "2026-08-10",
+                "endDate": "2026-08-20",
+                "objectIds": ["cuo-1"],
+            },
+        )
+
+    assert response.status_code == 404
+    assert response.json()["error"] == "PROJECT_NOT_FOUND"
+
+
+async def test_follow_up_project_rejects_empty_object_ids() -> None:
+    async with client_with_repos(caller=_STAFF_CALLER) as (
+        client,
+        project_repo,
+        proposal_repo,
+        _,
+    ):
+        await project_repo.add(
+            _project(status=UseStatus.COMPLETED, objects=[_collection_use_object()])
+        )
+        await proposal_repo.add(_proposal())
+
+        response = await client.post(
+            "/api/v1/collection-use-projects/proj-1/follow-ups",
+            json={"beginDate": "2026-08-10", "endDate": "2026-08-20", "objectIds": []},
+        )
+
+    assert response.status_code == 422
+    assert response.json()["error"] == "VALIDATION_ERROR"
+
+
+async def test_follow_up_project_rejects_invalid_date_range() -> None:
+    async with client_with_repos(caller=_STAFF_CALLER) as (
+        client,
+        project_repo,
+        proposal_repo,
+        _,
+    ):
+        await project_repo.add(
+            _project(status=UseStatus.COMPLETED, objects=[_collection_use_object()])
+        )
+        await proposal_repo.add(_proposal())
+
+        response = await client.post(
+            "/api/v1/collection-use-projects/proj-1/follow-ups",
+            json={
+                "beginDate": "2026-08-20",
+                "endDate": "2026-08-10",
+                "objectIds": ["cuo-1"],
+            },
+        )
+
+    assert response.status_code == 422
+    assert response.json()["error"] == "VALIDATION_ERROR"
+
+
+async def test_follow_up_project_does_not_copy_journal_logs() -> None:
+    async with client_with_repos(caller=_STAFF_CALLER) as (
+        client,
+        project_repo,
+        proposal_repo,
+        _,
+    ):
+        await project_repo.add(
+            _project(status=UseStatus.COMPLETED, objects=[_collection_use_object()])
+        )
+        await proposal_repo.add(_proposal())
+
+        response = await client.post(
+            "/api/v1/collection-use-projects/proj-1/follow-ups",
+            json={
+                "beginDate": "2026-08-10",
+                "endDate": "2026-08-20",
+                "objectIds": ["cuo-1"],
+            },
+        )
+        new_project_id = response.json()["id"]
+
+        access_log = await client.get(
+            f"/api/v1/collection-use-projects/{new_project_id}/object-access-log"
+        )
+        occurrence_log = await client.get(
+            f"/api/v1/collection-use-projects/{new_project_id}/object-occurrence-log"
+        )
+        publication_log = await client.get(
+            f"/api/v1/collection-use-projects/{new_project_id}/publication-log"
+        )
+
+    assert response.status_code == 201
+    assert access_log.status_code == 404
+    assert occurrence_log.status_code == 404
+    assert publication_log.status_code == 404
+
+
+async def test_follow_up_project_owner_can_access_created_follow_up_project() -> None:
+    """Regression test: `requestedBy` is copied from the origin project onto
+    the follow-up, so that same (non-staff) requester must be able to load
+    the follow-up's own detail afterwards — not just see it listed under
+    "my projects". This used to 403 because project-level access checks
+    resolved ownership solely through a linked `Proposal`, and a follow-up
+    project has none (see `assert_project_access`)."""
+    project_repo = InMemoryProjectRepository()
+    proposal_repo = InMemoryProposalRepository()
+    session = CommitOnlySession(None)
+    caller_holder: dict[str, Actor] = {"actor": _STAFF_CALLER}
+
+    app.dependency_overrides[get_project_repo] = lambda: project_repo
+    app.dependency_overrides[get_proposal_repo] = lambda: proposal_repo
+    app.dependency_overrides[get_conversation_repo] = lambda: InMemoryConversationRepository()
+    app.dependency_overrides[get_access_log_repo] = lambda: InMemoryAccessLogRepository()
+    app.dependency_overrides[get_occurrence_log_repo] = lambda: InMemoryOccurrenceLogRepository()
+    app.dependency_overrides[get_publication_log_repo] = lambda: InMemoryPublicationLogRepository()
+    app.dependency_overrides[get_file_storage] = lambda: InMemoryFileStorage()
+    app.dependency_overrides[get_async_session] = lambda: session
+    app.dependency_overrides[get_caller_permission] = lambda: caller_holder["actor"]
+    app.dependency_overrides[get_external_requester_provisioner] = (
+        lambda: RecordingRequesterProvisioner()
+    )
+    app.dependency_overrides[get_requester_access_email_sender] = (
+        lambda: RecordingAccessEmailSender()
+    )
+    app.dependency_overrides[get_reference_number_generator] = lambda: (
+        InMemoryReferenceNumberGenerator(proposal_repo)
+    )
+
+    try:
+        await project_repo.add(
+            _project(status=UseStatus.COMPLETED, objects=[_collection_use_object()])
+        )
+        await proposal_repo.add(_proposal())
+
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            create_response = await client.post(
+                "/api/v1/collection-use-projects/proj-1/follow-ups",
+                json={
+                    "beginDate": "2026-08-10",
+                    "endDate": "2026-08-20",
+                    "objectIds": ["cuo-1"],
+                },
+            )
+            assert create_response.status_code == 201
+            new_project_id = create_response.json()["id"]
+
+            # The origin project's own (non-staff) requester is `_CALLER`
+            # (see `_project`'s default `requested_by`), and it is copied
+            # onto the follow-up unchanged.
+            caller_holder["actor"] = _CALLER
+
+            detail_response = await client.get(
+                f"/api/v1/collection-use-projects/{new_project_id}"
+            )
+            list_response = await client.get(
+                "/api/v1/collection-use-projects",
+                params={"requestedBy": _CALLER.id},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert detail_response.status_code == 200
+    assert detail_response.json()["id"] == new_project_id
+    assert new_project_id in [item["id"] for item in list_response.json()["content"]]
 
 
 async def test_add_project_objects_requires_staff() -> None:

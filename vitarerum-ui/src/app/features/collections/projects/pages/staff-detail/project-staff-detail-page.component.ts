@@ -195,16 +195,32 @@ export class ProjectStaffDetailPageComponent {
     const status = this.project()?.status;
     return status === 'CREATED' || status === 'IN_PROGRESS';
   });
-  protected readonly editLink = computed(() => {
+  // Which of the three staff detail routes (collections/curatorial/direction)
+  // this instance is wrapped by — the follow-up route sits outside all three
+  // (`:id/follow-up/new` isn't section-prefixed), so this also travels along
+  // as a query param when navigating there, to come back to the right section.
+  protected readonly sectionSegment = computed(() => {
     const label = this.sectionLabel().toLowerCase();
-    const section = label.includes('curatorial')
+    return label.includes('curatorial')
       ? 'curatorial'
       : label.includes('direction')
         ? 'direction'
         : 'collections';
-    return ['/p/collections/projects', section, this.id(), 'edit'];
   });
+  protected readonly editLink = computed(() => [
+    '/p/collections/projects',
+    this.sectionSegment(),
+    this.id(),
+    'edit',
+  ]);
   protected readonly canCreateFollowUp = computed(() => this.project()?.status === 'COMPLETED');
+  // Origin project of a follow-up (see `CreateFollowUpProject`); links back
+  // into the same staff section this detail page is already in.
+  protected readonly originProjectLink = computed(() => {
+    const originId = this.project()?.originProjectId;
+    if (!originId) return null;
+    return ['/p/collections/projects', this.sectionSegment(), originId];
+  });
   protected readonly canOpenLogTasks = computed(() => this.project()?.status === 'IN_PROGRESS');
   // Staff write publication entries once COMPLETED; the log stays readable in
   // both phases, so surface the task for IN_PROGRESS and COMPLETED projects.
@@ -345,7 +361,9 @@ export class ProjectStaffDetailPageComponent {
 
   protected createFollowUpProject(): void {
     if (!this.canCreateFollowUp()) return;
-    void this.router.navigate(['/p/collections/projects', this.id(), 'follow-up', 'new']);
+    void this.router.navigate(['/p/collections/projects', this.id(), 'follow-up', 'new'], {
+      queryParams: { section: this.sectionSegment() },
+    });
   }
 
   protected openReportModal(): void {

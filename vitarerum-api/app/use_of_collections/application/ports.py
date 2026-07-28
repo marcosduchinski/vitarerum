@@ -34,6 +34,7 @@ class ProjectFilters:
     status: UseStatus | None = None
     use_type: UseType | None = None
     requested_by: str | None = None
+    origin_project_id: CollectionUseProjectId | None = None
     date_from: date | None = None
     date_to: date | None = None
     search: str | None = None

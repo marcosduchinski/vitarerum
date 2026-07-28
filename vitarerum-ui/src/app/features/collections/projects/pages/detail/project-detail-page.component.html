@@ -110,11 +110,9 @@
                 <div class="detail-dl__row">
                   <dt>Assigned staff</dt>
                   <dd>
-                    @if (project()!.proposal.assignedTo) {
-                      {{ project()!.proposal.assignedTo!.user.name }}
-                      <span class="detail-dl__email">
-                        {{ project()!.proposal.assignedTo!.user.email }}
-                      </span>
+                    @if (project()!.proposal?.assignedTo; as assignee) {
+                      {{ assignee.user.name }}
+                      <span class="detail-dl__email">{{ assignee.user.email }}</span>
                     } @else {
                       <span class="detail-dl__empty">Unassigned</span>
                     }
@@ -123,10 +121,11 @@
                 <div class="detail-dl__row">
                   <dt>Proposal status</dt>
                   <dd>
-                    <app-status-chip
-                      kind="proposal"
-                      [status]="asWorkflowStatus(project()!.proposal.status)"
-                    />
+                    @if (project()!.proposal; as proposal) {
+                      <app-status-chip kind="proposal" [status]="asWorkflowStatus(proposal.status)" />
+                    } @else {
+                      <span class="detail-dl__empty">No linked proposal</span>
+                    }
                   </dd>
                 </div>
               </dl>

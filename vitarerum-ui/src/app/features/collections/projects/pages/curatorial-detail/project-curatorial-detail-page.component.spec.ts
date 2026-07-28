@@ -252,7 +252,7 @@ describe('ProjectCuratorialDetailPageComponent', () => {
     projectService.project = {
       ...PROJECT,
       status: 'COMPLETED',
-      actions: { ...PROJECT.actions, canCancel: false },
+      actions: { ...PROJECT.actions!, canCancel: false },
     };
 
     const compiled = await render();
@@ -378,6 +378,24 @@ describe('ProjectCuratorialDetailPageComponent', () => {
       { projectId: PROJECT.id, reason: 'Cancelled from curatorial project detail.' },
     ]);
     expect(navigateSpy).toHaveBeenCalledWith(['/p/collections/projects/cancelled']);
+  });
+
+  it('navigates to follow-up creation carrying the curatorial section', async () => {
+    projectService.project = {
+      ...PROJECT,
+      status: 'COMPLETED',
+      result: 'COMPLETED',
+      actions: { ...PROJECT.actions!, canCancel: false },
+    };
+    const navigateSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+    const compiled = await render();
+
+    buttonByText(compiled, 'Create follow-up project').click();
+
+    expect(navigateSpy).toHaveBeenCalledWith(
+      ['/p/collections/projects', PROJECT.id, 'follow-up', 'new'],
+      { queryParams: { section: 'curatorial' } },
+    );
   });
 });
 

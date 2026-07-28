@@ -581,8 +581,9 @@ export interface MutableProjectState {
   beginDate: string;
   endDate: string;
   requestedBy: PermissionPrincipal;
-  proposalId: string;
-  proposalStatus: import('@shared/models/collection-use-status.model').ProposalStatus;
+  proposalId: string | null;
+  originProjectId?: string | null;
+  proposalStatus: import('@shared/models/collection-use-status.model').ProposalStatus | null;
   proposalAssignedTo: PermissionPrincipal | null;
   objects?: CollectionUseProjectObject[];
 }
@@ -1022,6 +1023,14 @@ export class MockProjectState {
 
   nextPublicationLogReference(): string {
     return `PUB-${String(this.nextId++).padStart(8, '0')}`;
+  }
+
+  nextProjectId(): string {
+    return `proj-${this.nextId++}`;
+  }
+
+  nextProjectReference(): string {
+    return `CUP-${String(this.nextId++).padStart(8, '0')}`;
   }
 
   nextProjectObjectId(): string {

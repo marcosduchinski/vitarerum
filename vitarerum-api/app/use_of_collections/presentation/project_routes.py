@@ -32,6 +32,8 @@ from app.use_of_collections.application.use_cases import (
     CancelProjectInput,
     CompleteProject,
     CompleteProjectInput,
+    CreateFollowUpProject,
+    CreateFollowUpProjectInput,
     EditProjectDetails,
     EditProjectDetailsInput,
     ProjectObjectHasDependencies,
@@ -76,6 +78,7 @@ from app.use_of_collections.presentation.dependencies import (
 from app.use_of_collections.presentation.schemas import (
     AddProjectObjectsRequest,
     CollectionUseObjectResponse,
+    CreateFollowUpProjectRequest,
     NoteRequest,
     PaginatedEventsResponse,
     PaginatedProjectsResponse,
@@ -101,6 +104,7 @@ async def list_projects(
     status_filter: Annotated[UseStatus | None, Query(alias="status")] = None,
     type_filter: Annotated[UseType | None, Query(alias="type")] = None,
     requested_by: Annotated[str | None, Query(alias="requestedBy")] = None,
+    origin_project_id: Annotated[str | None, Query(alias="originProjectId")] = None,
     date_from: Annotated[date | None, Query(alias="dateFrom")] = None,
     date_to: Annotated[date | None, Query(alias="dateTo")] = None,
     search: Annotated[str | None, Query()] = None,
@@ -115,6 +119,11 @@ async def list_projects(
             status=status_filter,
             use_type=type_filter,
             requested_by=requested_by,
+            origin_project_id=(
+                CollectionUseProjectId(origin_project_id)
+                if origin_project_id
+                else None
+            ),
             date_from=date_from,
             date_to=date_to,
             search=search,
@@ -149,6 +158,7 @@ async def list_projects(
                 result=item.project.result,
                 beginDate=item.project.begin_date,
                 endDate=item.project.end_date,
+                originProjectId=item.project.origin_project_id,
                 proposal=proposal_ref,
                 requestedBy=_detail_or_none(item.requested_by),
             )
@@ -202,6 +212,7 @@ async def get_project(
         result=project.result,
         beginDate=project.begin_date,
         endDate=project.end_date,
+        originProjectId=project.origin_project_id,
         authorisedBy=authorised_by_detail,
         authorisedAt=authorised_at,
         proposal=proposal_ref,
@@ -319,6 +330,49 @@ async def add_project_objects(
         _handle_domain_errors(exc)
     await session.commit()
     return await get_project(project_id, caller, detail_query)
+
+
+@projects_router.post(
+    "/{project_id}/follow-ups",
+    status_code=status.HTTP_201_CREATED,
+    response_model=ProjectDetailResponse,
+)
+async def create_follow_up_project(
+    project_id: str,
+    body: CreateFollowUpProjectRequest,
+    caller: CallerPermission,
+    project_repo: ProjectRepo,
+    proposal_repo: ProposalRepo,
+    detail_query: ProjectDetailQuery,
+    reference_generator: ReferenceGenerator,
+    session: DBSession,
+) -> ProjectDetailResponse:
+    await _assert_existing_project_access(
+        project_id, caller, project_repo, proposal_repo
+    )
+    require_staff(caller)
+    try:
+        new_project = await CreateFollowUpProject(
+            project_repo,
+            reference_generator,
+        ).execute(
+            CreateFollowUpProjectInput(
+                origin_project_id=CollectionUseProjectId(project_id),
+                caller=caller,
+                begin_date=body.beginDate,
+                end_date=body.endDate,
+                object_ids=[
+                    CollectionUseObjectId(object_id) for object_id in body.objectIds
+                ],
+                title=body.title,
+                purpose=body.purpose,
+                note=body.note,
+            )
+        )
+    except Exception as exc:
+        _handle_domain_errors(exc)
+    await session.commit()
+    return await get_project(new_project.id, caller, detail_query)
 
 
 @projects_router.delete(
@@ -551,7 +605,7 @@ async def list_project_events(
     project_proposal = await _find_project_proposal(
         CollectionUseProjectId(project_id), proposal_repo
     )
-    assert_project_access(caller, project_proposal)
+    assert_project_access(caller, project, project_proposal)
     events = project.events
     if type_filter:
         events = [e for e in events if e.type == type_filter]

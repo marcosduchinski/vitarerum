@@ -126,7 +126,7 @@ async def _assert_existing_project_access(
     if project is None:
         raise _not_found("project", project_id)
     project_proposal = await _find_project_proposal(typed_project_id, proposal_repo)
-    assert_project_access(caller, project_proposal)
+    assert_project_access(caller, project, project_proposal)
     return project
 
 

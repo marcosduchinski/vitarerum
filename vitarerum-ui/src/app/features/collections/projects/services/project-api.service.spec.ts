@@ -33,6 +33,7 @@ describe('ProjectApiService', () => {
         status: 'IN_PROGRESS',
         type: 'IN_SITU_VISIT',
         requestedBy: 'user-1',
+        originProjectId: 'project-origin',
         assignedTo: 'permission-1',
         dateFrom: '2026-06-01',
         dateTo: '2026-06-30',
@@ -43,13 +44,14 @@ describe('ProjectApiService', () => {
       .subscribe();
 
     const request = http.expectOne(
-      'https://api.example.test/collection-use-projects?status=IN_PROGRESS&type=IN_SITU_VISIT&requestedBy=user-1&dateFrom=2026-06-01&dateTo=2026-06-30&search=specimen&page=3&size=15',
+      'https://api.example.test/collection-use-projects?status=IN_PROGRESS&type=IN_SITU_VISIT&requestedBy=user-1&originProjectId=project-origin&dateFrom=2026-06-01&dateTo=2026-06-30&search=specimen&page=3&size=15',
     );
 
     expect(request.request.method).toBe('GET');
     // `requestedBy` is an honored server-side filter; `assignedTo` is not
     // implemented and is stripped before the request.
     expect(request.request.params.get('requestedBy')).toBe('user-1');
+    expect(request.request.params.get('originProjectId')).toBe('project-origin');
     expect(request.request.params.has('assignedTo')).toBe(false);
     request.flush({ content: [], page: 3, size: 15, totalElements: 0, totalPages: 0 });
   });
@@ -178,6 +180,45 @@ describe('ProjectApiService', () => {
       reason: 'Wrong object.',
     });
     request.flush(null);
+  });
+
+  it('creates follow-up projects', () => {
+    service
+      .createFollowUpProject('project-1', {
+        beginDate: '2026-08-10',
+        endDate: '2026-08-20',
+        objectIds: ['object-1'],
+        title: 'Follow-up title',
+        purpose: 'Continue research',
+        note: 'Continuation after publication.',
+      })
+      .subscribe();
+
+    const request = http.expectOne(
+      'https://api.example.test/collection-use-projects/project-1/follow-ups',
+    );
+
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual({
+      beginDate: '2026-08-10',
+      endDate: '2026-08-20',
+      objectIds: ['object-1'],
+      title: 'Follow-up title',
+      purpose: 'Continue research',
+      note: 'Continuation after publication.',
+    });
+    request.flush({
+      id: 'project-follow-up',
+      referenceNumber: 'CUP-2026-0002',
+      title: 'Follow-up title',
+      purpose: 'Continue research',
+      status: 'CREATED',
+      beginDate: '2026-08-10',
+      endDate: '2026-08-20',
+      intendedUse: 'IN_SITU_VISIT',
+      originProjectId: 'project-1',
+      proposal: null,
+    });
   });
 
   it('lists object log entries with filters and access log metadata', () => {

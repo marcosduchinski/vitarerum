@@ -342,6 +342,7 @@ class CollectionUseProject:
     end_date: date
     requested_by: PermissionId
     proposal_id: ProposalId | None = None
+    origin_project_id: CollectionUseProjectId | None = None
     request_note: str | None = None
     note: str | None = None
     result: UseResult | None = None

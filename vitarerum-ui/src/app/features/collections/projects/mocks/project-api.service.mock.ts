@@ -10,6 +10,7 @@ import {
   AddProjectObjectsRequest,
   CollectionUseProjectDetail,
   CollectionUseProjectSummary,
+  CreateFollowUpProjectRequest,
   CreateObjectLogEntryRequest,
   CreateObjectOccurrenceEntryRequest,
   NoteRequest,
@@ -64,6 +65,8 @@ export class ProjectApiServiceMock {
       : (this.identity.getPermissionId() ?? '\0');
     if (requestedByScope)
       items = items.filter((p) => p.requestedBy.permissionId === requestedByScope);
+    if (query.originProjectId)
+      items = items.filter((p) => p.originProjectId === query.originProjectId);
     if (query.assignedTo)
       items = items.filter((p) => p.proposalAssignedTo?.permissionId === query.assignedTo);
     if (query.search) {
@@ -173,6 +176,74 @@ export class ProjectApiServiceMock {
     }));
     this.state.logEntries.set(projectId, [...currentEntries, ...syncedEntries]);
     return of(this.toDetail(p));
+  }
+
+  createFollowUpProject(
+    projectId: string,
+    request: CreateFollowUpProjectRequest,
+  ): Observable<CollectionUseProjectDetail> {
+    const origin = this.state.projects.get(projectId);
+    if (!origin) return throwError(() => ({ status: 404, error: 'NOT_FOUND' }));
+    if (!this.identity.isStaff()) {
+      return throwError(() => ({ status: 403, error: 'INSUFFICIENT_GROUP' }));
+    }
+    if (origin.status !== 'COMPLETED') {
+      return throwError(() => ({ status: 409, error: 'INVALID_TRANSITION' }));
+    }
+    if (request.endDate < request.beginDate) {
+      return throwError(() => ({ status: 422, error: 'VALIDATION_ERROR' }));
+    }
+    if (!request.objectIds.length) {
+      return throwError(() => ({ status: 422, error: 'VALIDATION_ERROR' }));
+    }
+
+    const selectedObjects = request.objectIds.map((objectId) => {
+      const object = (origin.objects ?? []).find((candidate) => candidate.id === objectId);
+      return object;
+    });
+    if (selectedObjects.some((object) => !object)) {
+      return throwError(() => ({ status: 422, error: 'VALIDATION_ERROR' }));
+    }
+    const title =
+      request.title === undefined || request.title === null ? origin.title : request.title;
+    const purpose =
+      request.purpose === undefined || request.purpose === null ? origin.purpose : request.purpose;
+    if (!title.trim() || !purpose.trim()) {
+      return throwError(() => ({ status: 422, error: 'VALIDATION_ERROR' }));
+    }
+
+    const followUp: MutableProjectState = {
+      id: this.state.nextProjectId(),
+      referenceNumber: this.state.nextProjectReference(),
+      title: title.trim(),
+      purpose: purpose.trim(),
+      type: origin.type,
+      status: 'CREATED',
+      result: null,
+      beginDate: request.beginDate,
+      endDate: request.endDate,
+      requestedBy: origin.requestedBy,
+      proposalId: null,
+      originProjectId: origin.id,
+      proposalStatus: null,
+      proposalAssignedTo: null,
+      objects: selectedObjects.map((object) => ({
+        ...object!,
+        id: this.state.nextProjectObjectId(),
+      })),
+    };
+    const baseNote = `Follow-up of project ${origin.referenceNumber}`;
+    const note = request.note?.trim() ? `${baseNote}: ${request.note.trim()}` : baseNote;
+    this.state.projects.set(followUp.id, followUp);
+    this.state.events.set(followUp.id, [
+      {
+        occurredAt: new Date().toISOString(),
+        type: 'REQUESTED',
+        triggeredBy: this.currentPrincipal(),
+        note,
+      },
+    ]);
+    return of(this.toDetail(followUp));
   }
 
   removeProjectObject(projectId: string, objectId: string): Observable<void> {
@@ -864,12 +935,16 @@ export class ProjectApiServiceMock {
       result: p.result ?? null,
       beginDate: p.beginDate,
       endDate: p.endDate,
+      originProjectId: p.originProjectId ?? null,
       requestedBy: p.requestedBy,
-      proposal: {
-        id: p.proposalId,
-        status: p.proposalStatus,
-        assignedTo: p.proposalAssignedTo,
-      },
+      proposal:
+        p.proposalId && p.proposalStatus
+          ? {
+              id: p.proposalId,
+              status: p.proposalStatus,
+              assignedTo: p.proposalAssignedTo,
+            }
+          : null,
     };
   }
 
@@ -879,6 +954,7 @@ export class ProjectApiServiceMock {
   ): string {
     const projectObject = p.objects?.find((object) => object.id === collectionUseObjectId);
     if (projectObject) return projectObject.inventoryNumber;
+    if (!p.proposalId) return collectionUseObjectId;
 
     const proposalObject = this.state.proposals
       .get(p.proposalId)
@@ -889,7 +965,7 @@ export class ProjectApiServiceMock {
   private toDetail(p: MutableProjectState): CollectionUseProjectDetail {
     const group = this.identity.session()?.group ?? null;
     const isStaffGroup = group !== null && group !== 'EXTERNAL';
-    const proposal = this.state.proposals.get(p.proposalId);
+    const proposal = p.proposalId ? this.state.proposals.get(p.proposalId) : undefined;
 
     return {
       ...this.toSummary(p),
@@ -906,7 +982,7 @@ export class ProjectApiServiceMock {
         })) ??
         [],
       actions: this.projectActions(p, group),
-      staffContext: isStaffGroup
+      staffContext: isStaffGroup && proposal && p.proposalStatus
         ? this.staffContext(p, group as Exclude<GroupName, 'EXTERNAL'>)
         : null,
     };
@@ -929,6 +1005,7 @@ export class ProjectApiServiceMock {
   }
 
   private staffContext(p: MutableProjectState, viewerGroup: Exclude<GroupName, 'EXTERNAL'>) {
+    if (!p.proposalId || !p.proposalStatus) return null;
     const proposal = this.state.proposals.get(p.proposalId);
     const messages = proposal ? (this.state.messages.get(proposal.conversationId) ?? []) : [];
     const lastMessage = messages.at(-1);

@@ -98,6 +98,7 @@ def test_collection_use_project_roundtrip_preserves_key_data() -> None:
         end_date=date(2026, 6, 7),
         requested_by=PermissionId("permission-1"),
         proposal_id=ProposalId("proposal-1"),
+        origin_project_id=CollectionUseProjectId("origin-project-1"),
         authorised_by=PermissionId("permission-9"),
         authorised_at=now,
         events=[
@@ -129,6 +130,7 @@ def test_collection_use_project_roundtrip_preserves_key_data() -> None:
     assert rebuilt.purpose == "To study the collection"
     assert rebuilt.requested_by == "permission-1"
     assert rebuilt.proposal_id == "proposal-1"
+    assert rebuilt.origin_project_id == "origin-project-1"
     assert rebuilt.authorised_by == "permission-9"
     assert rebuilt.authorised_at == now
     assert rebuilt.events[0].type == UseEventType.REQUESTED

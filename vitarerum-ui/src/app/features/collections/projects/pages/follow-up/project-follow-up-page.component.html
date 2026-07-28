@@ -1,0 +1,178 @@
+<div class="project-follow-up">
+  <a class="project-follow-up__back" [routerLink]="detailLink()">← Back to project</a>
+
+  @if (projectResource.isLoading()) {
+    <app-loading-state />
+  } @else if (loadError()) {
+    <app-error-message [apiError]="loadError()!" (retry)="projectResource.reload()" />
+  } @else if (project()) {
+    <header class="project-follow-up__header">
+      <div>
+        <p class="project-follow-up__ref">{{ project()!.referenceNumber }}</p>
+        <h1>Create follow-up project</h1>
+      </div>
+      <app-status-chip kind="project" [status]="asWorkflowStatus(project()!.status)" />
+    </header>
+
+    @if (!canCreate()) {
+      <app-error-message
+        [apiError]="{
+          kind: 'conflict',
+          status: 409,
+          serverMessage: 'Only completed projects can create follow-ups.',
+          fieldErrors: [],
+        }"
+      />
+    }
+
+    @if (createError()) {
+      <app-error-message [apiError]="createError()!" />
+    }
+
+    <form class="project-follow-up__form" (submit)="create($event)">
+      <section class="form-section" aria-labelledby="follow-up-details-heading">
+        <h2 id="follow-up-details-heading">Project details</h2>
+
+        <label class="form-row" for="follow-up-title">
+          <span>Title</span>
+          <input
+            id="follow-up-title"
+            type="text"
+            [formField]="followUpForm.title"
+            autocomplete="off"
+            [readOnly]="pending() || !canCreate()"
+            aria-describedby="follow-up-title-error"
+          />
+          <p id="follow-up-title-error" class="form-row__error" aria-live="polite">
+            @if (
+              (followUpForm.title().touched() || followUpForm.title().dirty()) &&
+              followUpForm.title().invalid()
+            ) {
+              {{ followUpForm.title().errors()[0].message }}
+            }
+          </p>
+        </label>
+
+        <label class="form-row" for="follow-up-purpose">
+          <span>Purpose</span>
+          <textarea
+            id="follow-up-purpose"
+            rows="5"
+            [formField]="followUpForm.purpose"
+            [readOnly]="pending() || !canCreate()"
+            aria-describedby="follow-up-purpose-error"
+          ></textarea>
+          <p id="follow-up-purpose-error" class="form-row__error" aria-live="polite">
+            @if (
+              (followUpForm.purpose().touched() || followUpForm.purpose().dirty()) &&
+              followUpForm.purpose().invalid()
+            ) {
+              {{ followUpForm.purpose().errors()[0].message }}
+            }
+          </p>
+        </label>
+
+        <div class="date-grid">
+          <label class="form-row" for="follow-up-begin-date">
+            <span>Begin date</span>
+            <input
+              id="follow-up-begin-date"
+              type="date"
+              [formField]="followUpForm.beginDate"
+              [readOnly]="pending() || !canCreate()"
+              aria-describedby="follow-up-begin-date-error"
+            />
+            <p id="follow-up-begin-date-error" class="form-row__error" aria-live="polite">
+              @if (
+                (followUpForm.beginDate().touched() || followUpForm.beginDate().dirty()) &&
+                followUpForm.beginDate().invalid()
+              ) {
+                {{ followUpForm.beginDate().errors()[0].message }}
+              }
+            </p>
+          </label>
+
+          <label class="form-row" for="follow-up-end-date">
+            <span>End date</span>
+            <input
+              id="follow-up-end-date"
+              type="date"
+              [formField]="followUpForm.endDate"
+              [readOnly]="pending() || !canCreate()"
+              aria-describedby="follow-up-end-date-error"
+            />
+            <p id="follow-up-end-date-error" class="form-row__error" aria-live="polite">
+              @if (
+                (followUpForm.endDate().touched() || followUpForm.endDate().dirty()) &&
+                followUpForm.endDate().invalid()
+              ) {
+                {{ followUpForm.endDate().errors()[0].message }}
+              }
+            </p>
+          </label>
+        </div>
+
+        <label class="form-row" for="follow-up-note">
+          <span>Creation note</span>
+          <textarea
+            id="follow-up-note"
+            rows="3"
+            [formField]="followUpForm.note"
+            [readOnly]="pending() || !canCreate()"
+          ></textarea>
+        </label>
+      </section>
+
+      <section class="form-section" aria-labelledby="follow-up-objects-heading">
+        <div class="objects-heading">
+          <h2 id="follow-up-objects-heading">Objects</h2>
+          <label class="select-all">
+            <input
+              type="checkbox"
+              [checked]="allSelected()"
+              [disabled]="pending() || !canCreate() || objects().length === 0"
+              (change)="toggleAll($any($event.target).checked)"
+            />
+            <span>Select all</span>
+          </label>
+        </div>
+
+        @if (objects().length > 0) {
+          <div class="object-list">
+            @for (object of objects(); track object.id) {
+              <label class="object-row">
+                <input
+                  type="checkbox"
+                  [checked]="isSelected(object.id)"
+                  [disabled]="pending() || !canCreate()"
+                  (change)="toggleObject(object.id, $any($event.target).checked)"
+                />
+                <span>
+                  <strong>{{ objectLabel(object) }}</strong>
+                  <small>{{ object.inventoryNumber }} · {{ object.category }}</small>
+                </span>
+              </label>
+            }
+          </div>
+        } @else {
+          <p class="empty-state">No objects are available in the origin project.</p>
+        }
+
+        <p class="form-row__error" aria-live="polite">
+          @if (objectSelectionInvalid()) {
+            Select at least one object.
+          }
+        </p>
+      </section>
+
+      <footer class="project-follow-up__actions">
+        <button type="button" class="secondary-btn" [disabled]="pending()" (click)="cancel()">
+          Cancel
+        </button>
+        <button type="submit" class="primary-btn" [disabled]="createDisabled()">
+          {{ pending() ? 'Creating...' : 'Create follow-up' }}
+        </button>
+      </footer>
+    </form>
+  }
+</div>

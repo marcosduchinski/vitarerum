@@ -148,11 +148,11 @@ export class ProjectsPendingPageComponent {
   }
 
   protected assigneeLabel(project: CollectionUseProjectSummary): string {
-    return project.proposal.assignedTo?.user.name ?? 'Unassigned';
+    return project.proposal?.assignedTo?.user.name ?? 'Unassigned';
   }
 
   protected assigneeEmail(project: CollectionUseProjectSummary): string {
-    return project.proposal.assignedTo?.user.email ?? '';
+    return project.proposal?.assignedTo?.user.email ?? '';
   }
 
   protected dateLabel(date: string): string {

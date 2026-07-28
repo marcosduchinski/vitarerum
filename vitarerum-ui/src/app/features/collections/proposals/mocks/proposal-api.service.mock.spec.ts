@@ -616,7 +616,7 @@ describe('ProposalApiServiceMock', () => {
     await firstValueFrom(service.assignProposal('prop-1', { note: '' }));
 
     const project = await firstValueFrom(projectService.getProject('proj-1'));
-    expect(project.proposal.status).toBe('PENDING');
+    expect(project.proposal?.status).toBe('PENDING');
   });
 
   it('propagates proposal REJECTED status to the associated project and cancels it', async () => {
@@ -625,7 +625,7 @@ describe('ProposalApiServiceMock', () => {
     await firstValueFrom(service.rejectProposal('prop-2', { reason: 'Not viable' }));
 
     const project = await firstValueFrom(projectService.getProject('proj-2'));
-    expect(project.proposal.status).toBe('REJECTED');
+    expect(project.proposal?.status).toBe('REJECTED');
     expect(project.status).toBe('CANCELLED');
 
     const events = await firstValueFrom(projectService.listEvents('proj-2'));

@@ -291,6 +291,15 @@ class AddProjectObjectsRequest(BaseModel):
     objects: list[RequestedObjectSnapshotInput]
 
 
+class CreateFollowUpProjectRequest(BaseModel):
+    beginDate: date
+    endDate: date
+    objectIds: list[str]
+    title: str | None = None
+    purpose: str | None = None
+    note: str | None = None
+
+
 class RemoveProjectObjectRequest(BaseModel):
     confirmCascade: bool = False
     reason: str = ""
@@ -519,6 +528,7 @@ class ProjectListItemResponse(BaseModel):
     result: UseResult | None
     beginDate: date
     endDate: date
+    originProjectId: str | None = None
     proposal: ProposalRefSummary | None = None
     requestedBy: PermissionDetail | None = None
 
@@ -547,6 +557,7 @@ class ProjectDetailResponse(BaseModel):
     result: UseResult | None
     beginDate: date
     endDate: date
+    originProjectId: str | None = None
     authorisedBy: PermissionDetail | None = None
     authorisedAt: datetime | None = None
     proposal: ProposalRefSummary | None = None

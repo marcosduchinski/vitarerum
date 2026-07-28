@@ -208,6 +208,7 @@ async def test_golden_project_detail_and_list_shapes() -> None:
             "result",
             "beginDate",
             "endDate",
+            "originProjectId",
             "authorisedBy",
             "authorisedAt",
             "objects[].id",
@@ -239,6 +240,7 @@ async def test_golden_project_detail_and_list_shapes() -> None:
             "content[].result",
             "content[].beginDate",
             "content[].endDate",
+            "content[].originProjectId",
         }
         | {f"content[].proposal.{f}" for f in proposal_summary}
         | _nested("content[].requestedBy", _PERMISSION_DETAIL)

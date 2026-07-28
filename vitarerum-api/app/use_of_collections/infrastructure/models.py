@@ -35,6 +35,14 @@ class CollectionUseProjectRecord(Base):
     proposal_id: Mapped[str | None] = mapped_column(
         String(36), index=True, nullable=True
     )
+    origin_project_id: Mapped[str | None] = mapped_column(
+        ForeignKey(
+            "collection_use_projects.id",
+            name="fk_collection_use_projects_origin_project_id",
+        ),
+        index=True,
+        nullable=True,
+    )
     type: Mapped[UseType] = mapped_column(SAEnum(UseType, name="use_type"))
     status: Mapped[UseStatus] = mapped_column(SAEnum(UseStatus, name="use_status"))
     result: Mapped[UseResult | None] = mapped_column(
@@ -56,6 +64,9 @@ class CollectionUseProjectRecord(Base):
     objects: Mapped[list[CollectionUseObjectRecord]] = relationship(
         back_populates="project",
         cascade="all, delete-orphan",
+    )
+    origin_project: Mapped[CollectionUseProjectRecord | None] = relationship(
+        remote_side=[id],
     )
 
 

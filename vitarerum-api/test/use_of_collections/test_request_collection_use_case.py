@@ -17,6 +17,8 @@ from app.use_of_collections.application.use_cases import (
     AddPublicationEntryAttachmentInput,
     ApproveProposal,
     ApproveProposalInput,
+    CreateFollowUpProject,
+    CreateFollowUpProjectInput,
     RejectProposal,
     RejectProposalInput,
     SendMessage,
@@ -31,6 +33,7 @@ from app.use_of_collections.domain.enums import (
     ProposalStatus,
     SubmissionChannel,
     UseEventType,
+    UseResult,
     UseStatus,
     UseType,
 )
@@ -89,6 +92,12 @@ class InMemoryCollectionUseProjectRepository:
 
     async def list(self, filters, page, size):
         items = list(self.items.values())
+        if getattr(filters, "origin_project_id", None):
+            items = [
+                item
+                for item in items
+                if item.origin_project_id == filters.origin_project_id
+            ]
         return items[page * size : page * size + size], len(items)
 
 
@@ -579,6 +588,174 @@ async def test_approve_proposal_creates_requested_project() -> None:
     assert saved_project.objects[0].requested_by == "permission-1"
     assert saved_project.events[0].type == UseEventType.REQUESTED
     assert saved_project.events[0].triggered_by == "curator-1"
+
+
+async def test_create_follow_up_project_copies_selected_objects() -> None:
+    project_repository = InMemoryCollectionUseProjectRepository()
+    origin = _make_project(
+        status=UseStatus.COMPLETED,
+        objects=[
+            _collection_use_object("cuo-1", "INV-001"),
+            _collection_use_object("cuo-2", "INV-002"),
+        ],
+    )
+    origin.result = UseResult.COMPLETED
+    origin.authorised_by = PermissionId("permission-staff")
+    origin.authorised_at = datetime(2026, 6, 10, tzinfo=UTC)
+    origin.proposal_id = ProposalId("proposal-1")
+    await project_repository.add(origin)
+
+    created = await CreateFollowUpProject(project_repository).execute(
+        CreateFollowUpProjectInput(
+            origin_project_id=origin.id,
+            caller=_make_curator(),
+            begin_date=date(2026, 8, 10),
+            end_date=date(2026, 8, 20),
+            object_ids=[CollectionUseObjectId("cuo-2")],
+            title=None,
+            purpose=None,
+            note="Continue after publication.",
+        )
+    )
+
+    assert created.id != origin.id
+    assert created.status == UseStatus.CREATED
+    assert created.result is None
+    assert created.proposal_id is None
+    assert created.origin_project_id == origin.id
+    assert created.requested_by == origin.requested_by
+    assert created.title == origin.title
+    assert created.purpose == origin.purpose
+    assert created.authorised_by is None
+    assert created.authorised_at is None
+    assert len(created.objects) == 1
+    assert created.objects[0].id != "cuo-2"
+    assert created.objects[0].inventory_number == "INV-002"
+    assert created.events[0].type == UseEventType.REQUESTED
+    assert created.events[0].note is not None
+    assert "Follow-up of project CUP-LOG00001" in created.events[0].note
+    assert "Continue after publication." in created.events[0].note
+
+
+@pytest.mark.parametrize(
+    "status",
+    [UseStatus.CREATED, UseStatus.IN_PROGRESS, UseStatus.CANCELLED],
+)
+async def test_create_follow_up_project_rejects_non_completed_origin(
+    status: UseStatus,
+) -> None:
+    project_repository = InMemoryCollectionUseProjectRepository()
+    origin = _make_project(status=status, objects=[_collection_use_object()])
+    await project_repository.add(origin)
+
+    with pytest.raises(InvalidTransition):
+        await CreateFollowUpProject(project_repository).execute(
+            CreateFollowUpProjectInput(
+                origin_project_id=origin.id,
+                caller=_make_curator(),
+                begin_date=date(2026, 8, 10),
+                end_date=date(2026, 8, 20),
+                object_ids=[CollectionUseObjectId("cuo-1")],
+            )
+        )
+
+
+async def test_create_follow_up_project_rejects_invalid_objects() -> None:
+    project_repository = InMemoryCollectionUseProjectRepository()
+    origin = _make_project(
+        status=UseStatus.COMPLETED,
+        objects=[_collection_use_object()],
+    )
+    await project_repository.add(origin)
+
+    with pytest.raises(ValueError, match="not part of this project"):
+        await CreateFollowUpProject(project_repository).execute(
+            CreateFollowUpProjectInput(
+                origin_project_id=origin.id,
+                caller=_make_curator(),
+                begin_date=date(2026, 8, 10),
+                end_date=date(2026, 8, 20),
+                object_ids=[CollectionUseObjectId("missing-object")],
+            )
+        )
+
+
+async def test_create_follow_up_project_rejects_empty_object_ids() -> None:
+    project_repository = InMemoryCollectionUseProjectRepository()
+    origin = _make_project(
+        status=UseStatus.COMPLETED,
+        objects=[_collection_use_object()],
+    )
+    await project_repository.add(origin)
+
+    with pytest.raises(ValueError, match="At least one object"):
+        await CreateFollowUpProject(project_repository).execute(
+            CreateFollowUpProjectInput(
+                origin_project_id=origin.id,
+                caller=_make_curator(),
+                begin_date=date(2026, 8, 10),
+                end_date=date(2026, 8, 20),
+                object_ids=[],
+            )
+        )
+
+
+async def test_create_follow_up_project_rejects_invalid_date_range() -> None:
+    project_repository = InMemoryCollectionUseProjectRepository()
+    origin = _make_project(
+        status=UseStatus.COMPLETED,
+        objects=[_collection_use_object()],
+    )
+    await project_repository.add(origin)
+
+    with pytest.raises(ValueError, match="endDate must be after beginDate"):
+        await CreateFollowUpProject(project_repository).execute(
+            CreateFollowUpProjectInput(
+                origin_project_id=origin.id,
+                caller=_make_curator(),
+                begin_date=date(2026, 8, 20),
+                end_date=date(2026, 8, 10),
+                object_ids=[CollectionUseObjectId("cuo-1")],
+            )
+        )
+
+
+async def test_create_follow_up_project_rejects_duplicate_object_ids() -> None:
+    project_repository = InMemoryCollectionUseProjectRepository()
+    origin = _make_project(
+        status=UseStatus.COMPLETED,
+        objects=[_collection_use_object()],
+    )
+    await project_repository.add(origin)
+
+    with pytest.raises(ValueError, match="unique"):
+        await CreateFollowUpProject(project_repository).execute(
+            CreateFollowUpProjectInput(
+                origin_project_id=origin.id,
+                caller=_make_curator(),
+                begin_date=date(2026, 8, 10),
+                end_date=date(2026, 8, 20),
+                object_ids=[
+                    CollectionUseObjectId("cuo-1"),
+                    CollectionUseObjectId("cuo-1"),
+                ],
+            )
+        )
+
+
+async def test_create_follow_up_project_rejects_missing_origin() -> None:
+    project_repository = InMemoryCollectionUseProjectRepository()
+
+    with pytest.raises(LookupError):
+        await CreateFollowUpProject(project_repository).execute(
+            CreateFollowUpProjectInput(
+                origin_project_id=CollectionUseProjectId("missing-project"),
+                caller=_make_curator(),
+                begin_date=date(2026, 8, 10),
+                end_date=date(2026, 8, 20),
+                object_ids=[CollectionUseObjectId("cuo-1")],
+            )
+        )
 
 
 async def test_approve_public_proposal_provisions_external_requester() -> None:

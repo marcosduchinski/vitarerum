@@ -545,7 +545,7 @@ describe('ProjectApiServiceMock', () => {
     const page = await firstValueFrom(service.listProjects({ assignedTo: 'perm-bob', size: 20 }));
 
     expect(page.totalElements).toBeGreaterThan(0);
-    expect(page.content.every((p) => p.proposal.assignedTo?.permissionId === 'perm-bob')).toBe(
+    expect(page.content.every((p) => p.proposal?.assignedTo?.permissionId === 'perm-bob')).toBe(
       true,
     );
   });

@@ -46,7 +46,7 @@ describe('PROJECTS_ROUTES', () => {
     expect(paths.indexOf('direction/:id')).toBeLessThan(detailIndex);
   });
 
-  it('routes follow-up creation to the placeholder page', async () => {
+  it('routes follow-up creation to the functional page', async () => {
     const route = PROJECTS_ROUTES.find((candidate) => candidate.path === ':id/follow-up/new');
     const component = await route?.loadComponent?.();
 

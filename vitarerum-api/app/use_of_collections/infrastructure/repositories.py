@@ -93,6 +93,7 @@ def project_to_record(project: CollectionUseProject) -> CollectionUseProjectReco
         note=project.note,
         request_note=project.request_note,
         proposal_id=project.proposal_id,
+        origin_project_id=project.origin_project_id,
         type=project.intended_use,
         status=project.status,
         result=project.result,
@@ -136,6 +137,11 @@ def project_to_domain(record: CollectionUseProjectRecord) -> CollectionUseProjec
         note=record.note,
         request_note=record.request_note,
         proposal_id=ProposalId(record.proposal_id) if record.proposal_id else None,
+        origin_project_id=(
+            CollectionUseProjectId(record.origin_project_id)
+            if record.origin_project_id
+            else None
+        ),
         intended_use=record.type,
         status=record.status,
         result=record.result,
@@ -715,6 +721,11 @@ class SqlAlchemyCollectionUseProjectRepository:
         if filters.requested_by:
             base_stmt = base_stmt.where(
                 CollectionUseProjectRecord.requested_by == filters.requested_by
+            )
+        if filters.origin_project_id:
+            base_stmt = base_stmt.where(
+                CollectionUseProjectRecord.origin_project_id
+                == filters.origin_project_id
             )
         if filters.date_from:
             base_stmt = base_stmt.where(
