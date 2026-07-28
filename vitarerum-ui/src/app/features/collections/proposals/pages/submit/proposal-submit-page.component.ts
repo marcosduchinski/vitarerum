@@ -51,12 +51,8 @@ export class ProposalSubmitPageComponent {
   protected readonly useType = signal<UseType | ''>('');
   protected readonly proposedBeginDate = signal('');
   protected readonly proposedEndDate = signal('');
-  protected readonly subject = signal(
-    'Solicitação de acesso à Coleção de Zoologia para fins de investigação',
-  );
-  protected readonly body = signal(
-    'Meu nome é Pedro Silva, sou  estudante de  na Universidade de Coimbra e venho, por este meio, solicitar  a autorização para consultar um objeto pertencente à Coleção de Zoologia desta prestigiada instituição, o lince ibérico. O objetivo desta visita é integrar a análise do referido espécime na investigação de minha tese, orientada pela Dra Maria Catarina. Proponho que a visita ocorra entre os dias 09/06/2026 e 20/06/2026. Cumprimentos. Pedro Silva',
-  );
+  protected readonly subject = signal('');
+  protected readonly body = signal('');
   protected readonly documents = signal<readonly File[]>([]);
 
   protected readonly submitted = signal(false);
