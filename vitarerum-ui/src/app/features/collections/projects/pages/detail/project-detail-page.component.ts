@@ -24,7 +24,8 @@ import { UseType } from '@shared/models/collection-use-status.model';
 
 import { PROJECT_API_SERVICE } from '../../services/project-api.service';
 
-type ExternalProjectPanel = 'overview' | 'tasks';
+type ExternalProjectPanel = 'overview' | 'actions';
+const EXTERNAL_PROJECT_PANELS: readonly ExternalProjectPanel[] = ['overview', 'actions'];
 
 const LOG_ROUTE: Record<UseType, string> = {
   IN_SITU_VISIT: 'research',
@@ -121,25 +122,6 @@ export class ProjectDetailPageComponent {
     return type ? LOG_ROUTE[type] : 'research';
   });
 
-  protected readonly isCancelled = computed(() => this.project()?.status === 'CANCELLED');
-
-  // Drives the lifecycle rail at the top of the Actions panel. Cancelled is a
-  // terminal off-shoot, so it leaves every forward step un-reached.
-  protected readonly lifecycle = computed(() => {
-    const status = this.project()?.status ?? 'CREATED';
-    const steps = [
-      { key: 'CREATED', label: 'Created' },
-      { key: 'IN_PROGRESS', label: 'In progress' },
-      { key: 'COMPLETED', label: 'Completed' },
-    ] as const;
-    const currentIndex = this.isCancelled() ? -1 : steps.findIndex((s) => s.key === status);
-    return steps.map((step, index) => ({
-      label: step.label,
-      done: currentIndex > index,
-      current: currentIndex === index,
-    }));
-  });
-
   protected readonly canStart = computed(
     () => this.identity.session()?.group === 'EXTERNAL' && this.project()?.status === 'CREATED',
   );
@@ -171,6 +153,25 @@ export class ProjectDetailPageComponent {
 
   protected selectPanel(panel: ExternalProjectPanel): void {
     this.activePanel.set(panel);
+  }
+
+  protected onTabKeydown(event: KeyboardEvent, index: number): void {
+    const lastIndex = EXTERNAL_PROJECT_PANELS.length - 1;
+    let nextIndex: number | null = null;
+
+    if (event.key === 'ArrowRight') {
+      nextIndex = index === lastIndex ? 0 : index + 1;
+    } else if (event.key === 'ArrowLeft') {
+      nextIndex = index === 0 ? lastIndex : index - 1;
+    } else if (event.key === 'Home') {
+      nextIndex = 0;
+    } else if (event.key === 'End') {
+      nextIndex = lastIndex;
+    }
+
+    if (nextIndex === null) return;
+    event.preventDefault();
+    this.activePanel.set(EXTERNAL_PROJECT_PANELS[nextIndex]);
   }
 
   protected openStartConfirm(): void {

@@ -130,12 +130,11 @@ describe('ProjectDetailPageComponent', () => {
     const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
     expect(text).toContain('VR-2026-012');
     expect(text).toContain('Atlantic forest zoology specimens');
-    expect(text).toContain('Alice Ferreira');
     expect(text).toContain('Bob Santos');
     expect(text).toContain('REQUESTED');
   });
 
-  it('renders nullable researcher-only requester details without failing', async () => {
+  it('omits researcher-only requester details when the API redacts them', async () => {
     currentProject = { ...PROJECT, requestedBy: null };
     const fixture = TestBed.createComponent(ProjectDetailPageComponent);
     componentRef = fixture.componentRef;
@@ -146,8 +145,7 @@ describe('ProjectDetailPageComponent', () => {
 
     const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
 
-    expect(text).toContain('Requested by');
-    expect(text).toContain('-');
+    expect(text).not.toContain('Requested by');
   });
 
   it('shows Start project button for external researchers when CREATED', async () => {

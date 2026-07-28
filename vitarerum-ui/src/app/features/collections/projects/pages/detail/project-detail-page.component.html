@@ -66,18 +66,20 @@
         aria-controls="overview-panel"
         [attr.aria-selected]="activePanel() === 'overview'"
         (click)="selectPanel('overview')"
+        (keydown)="onTabKeydown($event, 0)"
       >
         Overview
       </button>
       <button
         type="button"
-        id="tasks-tab"
+        id="actions-tab"
         class="project-detail__tab"
-        [class.project-detail__tab--active]="activePanel() === 'tasks'"
+        [class.project-detail__tab--active]="activePanel() === 'actions'"
         role="tab"
-        aria-controls="tasks-panel"
-        [attr.aria-selected]="activePanel() === 'tasks'"
-        (click)="selectPanel('tasks')"
+        aria-controls="actions-panel"
+        [attr.aria-selected]="activePanel() === 'actions'"
+        (click)="selectPanel('actions')"
+        (keydown)="onTabKeydown($event, 1)"
       >
         Actions
       </button>
@@ -93,7 +95,7 @@
         >
           <div class="project-detail__grid">
             <section class="detail-card" aria-labelledby="project-overview-heading">
-              <h2 id="project-overview-heading" class="detail-card__title">Overview</h2>
+              <h2 id="project-overview-heading" class="detail-card__title">Project details</h2>
               <dl class="detail-dl">
                 <div class="detail-dl__row">
                   <dt>Purpose</dt>
@@ -103,17 +105,6 @@
                   <dt>Dates</dt>
                   <dd>
                     {{ formatDate(project()!.beginDate) }} - {{ formatDate(project()!.endDate) }}
-                  </dd>
-                </div>
-                <div class="detail-dl__row">
-                  <dt>Requested by</dt>
-                  <dd>
-                    @if (project()!.requestedBy; as requester) {
-                      {{ requester.user.name }}
-                      <span class="detail-dl__email">{{ requester.user.email }}</span>
-                    } @else {
-                      <span class="detail-dl__empty">-</span>
-                    }
                   </dd>
                 </div>
                 <div class="detail-dl__row">
@@ -171,43 +162,13 @@
           </div>
         </section>
       }
-      @case ('tasks') {
+      @case ('actions') {
         <section
-          id="tasks-panel"
+          id="actions-panel"
           class="project-detail__panel actions-panel"
           role="tabpanel"
-          aria-labelledby="tasks-tab"
+          aria-labelledby="actions-tab"
         >
-          <ol
-            class="lifecycle"
-            [class.lifecycle--cancelled]="isCancelled()"
-            aria-label="Project lifecycle"
-          >
-            @for (step of lifecycle(); track step.label) {
-              <li
-                class="lifecycle__step"
-                [class.lifecycle__step--done]="step.done"
-                [class.lifecycle__step--current]="step.current"
-                [attr.aria-current]="step.current ? 'step' : null"
-              >
-                <span class="lifecycle__marker" aria-hidden="true">
-                  @if (step.done) {
-                    <span class="pi pi-check"></span>
-                  }
-                </span>
-                <span class="lifecycle__label">{{ step.label }}</span>
-              </li>
-            }
-            @if (isCancelled()) {
-              <li class="lifecycle__step lifecycle__step--cancelled" aria-current="step">
-                <span class="lifecycle__marker" aria-hidden="true">
-                  <span class="pi pi-times"></span>
-                </span>
-                <span class="lifecycle__label">Cancelled</span>
-              </li>
-            }
-          </ol>
-
           <div class="action-group" aria-labelledby="lifecycle-group-title">
             <p id="lifecycle-group-title" class="action-group__title">Lifecycle</p>
 
