@@ -1,6 +1,7 @@
 import { staffGuard } from '@core/guards/staff.guard';
 
 import { PROJECTS_ROUTES } from './projects.routes';
+import { projectExternalDetailGuard } from './guards/project-external-detail.guard';
 import { projectLogAccessGuard } from './guards/project-log-access.guard';
 import { ProjectCollectionsDetailPageComponent } from './pages/collections-detail/project-collections-detail-page.component';
 import { ProjectCuratorialDetailPageComponent } from './pages/curatorial-detail/project-curatorial-detail-page.component';
@@ -88,12 +89,12 @@ describe('PROJECTS_ROUTES', () => {
     }
   });
 
-  it('keeps my projects and the generic detail route open to external users', () => {
+  it('keeps my projects open and restricts the generic detail route to external users', () => {
     const myRoute = PROJECTS_ROUTES.find((candidate) => candidate.path === 'my');
     const detailRoute = PROJECTS_ROUTES.find((candidate) => candidate.path === ':id');
 
     expect(myRoute?.canMatch).toBeUndefined();
-    expect(detailRoute?.canMatch).toBeUndefined();
+    expect(detailRoute?.canMatch).toContain(projectExternalDetailGuard);
   });
 
   it('guards and lazy-loads occurrence log routes separately from access log routes', () => {

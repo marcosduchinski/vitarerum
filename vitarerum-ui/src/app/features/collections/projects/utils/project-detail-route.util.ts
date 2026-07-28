@@ -4,6 +4,7 @@ const STAFF_DETAIL_ROUTE_PREFIX: Partial<Record<GroupName, readonly string[]>> =
   COLLECTIONS_MANAGEMENT: ['/p/collections/projects/collections'],
   CURATORIAL: ['/p/collections/projects/curatorial'],
   DIRECTION: ['/p/collections/projects/direction'],
+  SYS_ADMIN: ['/p/collections/projects/collections'],
 };
 
 export function projectDetailRouteForGroup(

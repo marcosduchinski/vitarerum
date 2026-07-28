@@ -2,6 +2,7 @@ import { Routes } from '@angular/router';
 
 import { staffGuard } from '@core/guards/staff.guard';
 
+import { projectExternalDetailGuard } from './guards/project-external-detail.guard';
 import { projectLogAccessGuard } from './guards/project-log-access.guard';
 import { projectPublicationAccessGuard } from './guards/project-publication-access.guard';
 
@@ -172,6 +173,7 @@ export const PROJECTS_ROUTES: Routes = [
   {
     path: ':id',
     title: 'Project Detail',
+    canMatch: [projectExternalDetailGuard],
     loadComponent: () =>
       import('./pages/detail/project-detail-page.component').then(
         (m) => m.ProjectDetailPageComponent,

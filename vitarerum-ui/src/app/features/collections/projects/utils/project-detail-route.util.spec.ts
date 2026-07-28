@@ -22,7 +22,14 @@ describe('projectDetailRouteForGroup', () => {
     ]);
   });
 
-  it.each(['EXTERNAL', 'SYS_ADMIN', null, undefined] as const)(
+  it('returns the collections management detail route for system administrators', () => {
+    expect(projectDetailRouteForGroup('project-1', 'SYS_ADMIN')).toEqual([
+      '/p/collections/projects/collections',
+      'project-1',
+    ]);
+  });
+
+  it.each(['EXTERNAL', null, undefined] as const)(
     'returns the generic detail route for %s',
     (group) => {
       expect(projectDetailRouteForGroup('project-1', group)).toEqual([
