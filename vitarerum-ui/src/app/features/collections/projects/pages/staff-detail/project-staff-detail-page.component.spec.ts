@@ -191,6 +191,17 @@ describe('ProjectStaffDetailPageComponent', () => {
     currentProject = {
       ...PROJECT,
       status: 'IN_PROGRESS',
+      objects: [
+        {
+          id: 'cuo-1',
+          inventoryNumber: 'INV-001',
+          displayTitle: 'Book of Hours',
+          objectName: 'Illuminated manuscript',
+          briefDescriptionSnapshot: 'Decorated manuscript snapshot.',
+          category: 'manuscript',
+          description: 'Requested for comparative study.',
+        },
+      ],
       actions: { ...PROJECT.actions!, canStart: false, canComplete: true },
     };
     const fixture = TestBed.createComponent(ProjectStaffDetailPageComponent);
@@ -209,6 +220,26 @@ describe('ProjectStaffDetailPageComponent', () => {
     expect(projectService.completed).toEqual([
       { id: PROJECT.id, note: 'Completed from staff project detail.' },
     ]);
+  });
+
+  it('explains why in-progress staff projects without objects cannot be completed', async () => {
+    currentProject = {
+      ...PROJECT,
+      status: 'IN_PROGRESS',
+      objects: [],
+      actions: { ...PROJECT.actions!, canStart: false, canComplete: true },
+    };
+    const fixture = TestBed.createComponent(ProjectStaffDetailPageComponent);
+    fixture.componentRef.setInput('id', PROJECT.id);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain(
+      'Add at least one object before completing this project.',
+    );
+    expect(buttonByText(fixture.nativeElement, 'Complete project').disabled).toBe(true);
+    expect(projectService.completed).toEqual([]);
   });
 
   it('navigates completed staff projects to the follow-up creation page', async () => {

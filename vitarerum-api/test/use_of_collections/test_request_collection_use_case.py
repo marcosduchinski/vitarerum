@@ -17,6 +17,8 @@ from app.use_of_collections.application.use_cases import (
     AddPublicationEntryAttachmentInput,
     ApproveProposal,
     ApproveProposalInput,
+    CompleteProject,
+    CompleteProjectInput,
     CreateFollowUpProject,
     CreateFollowUpProjectInput,
     RejectProposal,
@@ -888,7 +890,7 @@ async def test_approve_public_proposal_reused_user_sends_no_notification() -> No
     assert result.requester_access_notification is None
 
 
-async def test_approve_proposal_without_objects_fails() -> None:
+async def test_approve_proposal_without_objects_creates_empty_project() -> None:
     proposal_repository = InMemoryProposalRepository()
     project_repository = InMemoryCollectionUseProjectRepository()
     proposal = Proposal(
@@ -910,21 +912,23 @@ async def test_approve_proposal_without_objects_fails() -> None:
         proposal_repository, project_repository, RecordingRequesterProvisioner()
     )
 
-    try:
-        await use_case.execute(
-            ApproveProposalInput(
-                proposal_id=ProposalId("proposal-1"),
-                caller=_make_curator(),
-                title="Collection study",
-                purpose="To study the collection",
-                begin_date=date(2026, 7, 1),
-                end_date=date(2026, 7, 7),
-            )
+    result = await use_case.execute(
+        ApproveProposalInput(
+            proposal_id=ProposalId("proposal-1"),
+            caller=_make_curator(),
+            title="Collection study",
+            purpose="To study the collection",
+            begin_date=date(2026, 7, 1),
+            end_date=date(2026, 7, 7),
         )
-    except ValueError as exc:
-        assert "at least one requested object" in str(exc)
-    else:
-        raise AssertionError("expected approval without objects to fail")
+    )
+
+    assert result.project.status == UseStatus.CREATED
+    assert result.project.objects == []
+    assert result.project.proposal_id == ProposalId("proposal-1")
+    assert result.project.requested_by == PermissionId("permission-1")
+    assert result.proposal.status == ProposalStatus.APPROVED
+    assert result.proposal.collection_use_project_id == result.project.id
 
 
 async def test_approve_non_pending_public_proposal_never_provisions_requester() -> None:
@@ -1267,6 +1271,41 @@ async def test_start_project_without_objects_creates_no_access_log() -> None:
         CollectionUseProjectId("project-1")
     )
     assert access_log is None
+
+
+async def test_complete_project_without_objects_is_rejected() -> None:
+    project_repository = InMemoryCollectionUseProjectRepository()
+    await project_repository.add(
+        _make_project(status=UseStatus.IN_PROGRESS, objects=[])
+    )
+
+    with pytest.raises(InvalidTransition, match="at least one object"):
+        await CompleteProject(project_repository).execute(
+            CompleteProjectInput(
+                project_id=CollectionUseProjectId("project-1"),
+                caller=_make_curator(),
+            )
+        )
+
+
+async def test_complete_project_with_objects_still_succeeds() -> None:
+    project_repository = InMemoryCollectionUseProjectRepository()
+    await project_repository.add(
+        _make_project(
+            status=UseStatus.IN_PROGRESS,
+            objects=[_collection_use_object("cuo-1")],
+        )
+    )
+
+    project = await CompleteProject(project_repository).execute(
+        CompleteProjectInput(
+            project_id=CollectionUseProjectId("project-1"),
+            caller=_make_curator(),
+        )
+    )
+
+    assert project.status == UseStatus.COMPLETED
+    assert project.result == UseResult.COMPLETED
 
 
 async def test_log_entry_links_to_collection_use_object() -> None:

@@ -150,6 +150,9 @@ export class ProposalMyDetailPageComponent {
       proposal?.submissionChannel === 'AUTHENTICATED' && Boolean(proposal.requestedBy.permissionId)
     );
   });
+  protected readonly hasNoRequestedObjects = computed(
+    () => (this.proposal()?.requestedObjects.length ?? 0) === 0,
+  );
 
   protected readonly forwardTargetLabel = computed(
     () =>

@@ -14,18 +14,9 @@ Approving a proposal creates the corresponding collection-use project. The
 project receives its initial `objects` collection by copying the proposal's
 requested objects into project-owned object snapshots.
 
-Business rule: approval is rejected when the proposal has no requested objects.
-This prevents a project from being created without the proposal-defined object
-set.
-
-Validation errors use the standard error envelope:
-
-```json
-{
-  "error": "VALIDATION_ERROR",
-  "message": "Proposal must have at least one requested object before approval"
-}
-```
+When the proposal has no requested objects yet, approval is still allowed and
+the project is created with `objects: []` on its detail response. Staff can add
+project-owned object snapshots later while the project is editable.
 
 The successful response remains a dual aggregate response:
 

@@ -713,6 +713,9 @@ describe('ProposalMyDetailPageComponent', () => {
 
     expect(proposalService.approveCalls).toEqual([]);
     expect(compiled.textContent).toContain('Accept proposal?');
+    expect(compiled.textContent).toContain(
+      'This proposal has no requested objects yet. The project will be created empty and objects can be added later.',
+    );
 
     const confirm = Array.from(
       compiled.querySelectorAll<HTMLButtonElement>('[role="dialog"] button'),

@@ -449,6 +449,10 @@ class CollectionUseProject:
     ) -> None:
         if self.status != UseStatus.IN_PROGRESS:
             raise InvalidTransition("Only IN_PROGRESS projects can be concluded")
+        if not self.objects:
+            raise InvalidTransition(
+                "Project must have at least one object before completion"
+            )
         self.status = UseStatus.COMPLETED
         self.result = UseResult.COMPLETED
         self.events.append(

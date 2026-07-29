@@ -238,6 +238,27 @@
                 </div>
               }
 
+              @if (shouldPromptForObjects()) {
+                <div class="task-row" aria-labelledby="add-objects-task-heading">
+                  <span class="task-row__icon task-row__icon--accent" aria-hidden="true">
+                    <span class="pi pi-box"></span>
+                  </span>
+                  <div class="task-row__body">
+                    <h3 id="add-objects-task-heading" class="task-row__title">Add objects</h3>
+                    <p class="task-row__desc">
+                      Link at least one object before completing this project.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    class="action-btn task-row__control"
+                    (click)="selectTab('objects')"
+                  >
+                    Add objects
+                  </button>
+                </div>
+              }
+
               @if (canComplete()) {
                 <div class="task-row" aria-labelledby="complete-project-task-heading">
                   <span class="task-row__icon task-row__icon--accent" aria-hidden="true">
@@ -258,6 +279,30 @@
                     (click)="openCompleteConfirm()"
                   >
                     {{ acting() ? 'Completing...' : 'Complete project' }}
+                  </button>
+                </div>
+              } @else if (completionBlockedByMissingObjects()) {
+                <div
+                  class="task-row task-row--locked"
+                  aria-labelledby="complete-project-task-heading"
+                >
+                  <span class="task-row__icon task-row__icon--accent" aria-hidden="true">
+                    <span class="pi pi-check-circle"></span>
+                  </span>
+                  <div class="task-row__body">
+                    <h3 id="complete-project-task-heading" class="task-row__title">
+                      Complete project
+                    </h3>
+                    <p class="task-row__desc">
+                      Add at least one object before completing this project.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    class="action-btn action-btn--primary task-row__control"
+                    disabled
+                  >
+                    Complete project
                   </button>
                 </div>
               }

@@ -91,6 +91,18 @@ export class ProjectApiServiceMock {
   }
 
   completeProject(projectId: string, request: NoteRequest): Observable<ProjectTransitionResult> {
+    const p = this.state.projects.get(projectId);
+    if (!p) return throwError(() => ({ status: 404, error: 'NOT_FOUND' }));
+    if (p.status !== 'IN_PROGRESS') {
+      return throwError(() => ({ status: 409, error: 'INVALID_TRANSITION' }));
+    }
+    if ((p.objects ?? []).length === 0) {
+      return throwError(() => ({
+        status: 409,
+        error: 'INVALID_TRANSITION',
+        message: 'Project must have at least one object before completion',
+      }));
+    }
     return this.transition(projectId, ['IN_PROGRESS'], 'COMPLETED', 'COMPLETED', request.note);
   }
 
@@ -996,7 +1008,7 @@ export class ProjectApiServiceMock {
 
     return {
       canStart: p.status === 'CREATED',
-      canComplete: p.status === 'IN_PROGRESS',
+      canComplete: p.status === 'IN_PROGRESS' && (p.objects ?? []).length > 0,
       canCancel: p.status === 'CREATED' || p.status === 'IN_PROGRESS',
       canOpenLog: !isExternal || p.status === 'IN_PROGRESS',
       canCreateObjectLogEntry: isExternal ? p.status === 'IN_PROGRESS' : true,

@@ -209,7 +209,11 @@
                 @if (!canComplete()) {
                   <p class="task-row__status">
                     <span class="pi pi-lock" aria-hidden="true"></span>
-                    This task is available once the project is in progress.
+                    {{
+                      completionBlockedByMissingObjects()
+                        ? 'Add at least one object before completing this project.'
+                        : 'This task is available once the project is in progress.'
+                    }}
                   </p>
                 }
               </div>

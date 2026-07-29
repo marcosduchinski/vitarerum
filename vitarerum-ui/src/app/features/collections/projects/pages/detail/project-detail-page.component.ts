@@ -125,7 +125,14 @@ export class ProjectDetailPageComponent {
   protected readonly canStart = computed(
     () => this.identity.session()?.group === 'EXTERNAL' && this.project()?.status === 'CREATED',
   );
-  protected readonly canComplete = computed(() => this.project()?.status === 'IN_PROGRESS');
+  protected readonly canComplete = computed(() => {
+    const project = this.project();
+    return project?.status === 'IN_PROGRESS' && (project.objects?.length ?? 0) > 0;
+  });
+  protected readonly completionBlockedByMissingObjects = computed(() => {
+    const project = this.project();
+    return project?.status === 'IN_PROGRESS' && (project.objects?.length ?? 0) === 0;
+  });
   protected readonly canCancel = computed(
     () => this.project()?.status === 'CREATED' || this.project()?.status === 'IN_PROGRESS',
   );

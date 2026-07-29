@@ -189,7 +189,18 @@ export class ProjectStaffDetailPageComponent {
     const project = this.project();
     if (!project) return false;
 
-    return project.actions?.canComplete ?? project.status === 'IN_PROGRESS';
+    return project.status === 'IN_PROGRESS' && (project.objects?.length ?? 0) > 0;
+  });
+  protected readonly completionBlockedByMissingObjects = computed(() => {
+    const project = this.project();
+    return project?.status === 'IN_PROGRESS' && (project.objects?.length ?? 0) === 0;
+  });
+  protected readonly shouldPromptForObjects = computed(() => {
+    const project = this.project();
+    return (
+      (project?.status === 'CREATED' || project?.status === 'IN_PROGRESS') &&
+      (project.objects?.length ?? 0) === 0
+    );
   });
   protected readonly canEditProject = computed(() => {
     const status = this.project()?.status;

@@ -1952,6 +1952,29 @@ async def test_patch_project_terminal_status_returns_409() -> None:
     assert project.title == "Project title"
 
 
+async def test_complete_project_without_objects_returns_409() -> None:
+    async with client_with_repos(caller=_CALLER) as (
+        client,
+        project_repo,
+        proposal_repo,
+        _,
+    ):
+        await project_repo.add(_project(status=UseStatus.IN_PROGRESS, objects=[]))
+        await proposal_repo.add(_proposal())
+
+        response = await client.post(
+            "/api/v1/collection-use-projects/proj-1/complete",
+            json={"note": "Done without objects."},
+        )
+        project = await project_repo.get_by_id(CollectionUseProjectId("proj-1"))
+
+    assert response.status_code == 409
+    assert response.json()["error"] == "INVALID_TRANSITION"
+    assert "at least one object" in response.json()["message"]
+    assert project is not None
+    assert project.status == UseStatus.IN_PROGRESS
+
+
 async def test_staff_can_add_project_objects() -> None:
     async with client_with_repos(caller=_STAFF_CALLER) as (
         client,
@@ -2190,10 +2213,18 @@ async def test_follow_up_project_owner_can_access_created_follow_up_project() ->
 
     app.dependency_overrides[get_project_repo] = lambda: project_repo
     app.dependency_overrides[get_proposal_repo] = lambda: proposal_repo
-    app.dependency_overrides[get_conversation_repo] = lambda: InMemoryConversationRepository()
-    app.dependency_overrides[get_access_log_repo] = lambda: InMemoryAccessLogRepository()
-    app.dependency_overrides[get_occurrence_log_repo] = lambda: InMemoryOccurrenceLogRepository()
-    app.dependency_overrides[get_publication_log_repo] = lambda: InMemoryPublicationLogRepository()
+    app.dependency_overrides[get_conversation_repo] = (
+        lambda: InMemoryConversationRepository()
+    )
+    app.dependency_overrides[get_access_log_repo] = (
+        lambda: InMemoryAccessLogRepository()
+    )
+    app.dependency_overrides[get_occurrence_log_repo] = (
+        lambda: InMemoryOccurrenceLogRepository()
+    )
+    app.dependency_overrides[get_publication_log_repo] = (
+        lambda: InMemoryPublicationLogRepository()
+    )
     app.dependency_overrides[get_file_storage] = lambda: InMemoryFileStorage()
     app.dependency_overrides[get_async_session] = lambda: session
     app.dependency_overrides[get_caller_permission] = lambda: caller_holder["actor"]
@@ -2647,6 +2678,50 @@ async def test_approve_proposal_invalid_date_range_returns_422() -> None:
     assert response.status_code == 422
     assert response.json()["error"] == "INVALID_DATE_RANGE"
     assert response.json()["message"] == "endDate must be after beginDate"
+
+
+async def test_approve_proposal_without_objects_creates_empty_project() -> None:
+    async with client_with_repos(caller=_STAFF_CALLER) as (
+        client,
+        project_repo,
+        proposal_repo,
+        _,
+    ):
+        await proposal_repo.add(
+            Proposal(
+                id=ProposalId("prop-1"),
+                reference_number=ReferenceNumber("VRP-20260601-0001"),
+                title="Proposal title",
+                collection_use_project_id=None,
+                intended_use=UseType.IN_SITU_VISIT,
+                begin_date=date(2026, 6, 1),
+                end_date=date(2026, 6, 7),
+                status=ProposalStatus.PENDING,
+                requested_by=PermissionId("permission-1"),
+                submitted_at=datetime(2026, 6, 7, tzinfo=UTC),
+                submission_channel=SubmissionChannel.AUTHENTICATED,
+            )
+        )
+
+        response = await client.post(
+            "/api/v1/proposals/prop-1/approve",
+            json={
+                "title": "Approved project",
+                "purpose": "Use the collection",
+                "beginDate": "2026-06-07",
+                "endDate": "2026-06-30",
+            },
+        )
+        project_id = response.json()["collectionUseProject"]["id"]
+        detail = await client.get(f"/api/v1/collection-use-projects/{project_id}")
+        project = await project_repo.get_by_id(CollectionUseProjectId(project_id))
+
+    assert response.status_code == 200
+    assert response.json()["collectionUseProject"]["status"] == "CREATED"
+    assert detail.status_code == 200
+    assert detail.json()["objects"] == []
+    assert project is not None
+    assert project.objects == []
 
 
 async def test_approve_public_proposal_sends_access_email_after_commit() -> None:

@@ -79,6 +79,12 @@
           Approving creates the project for
           {{ proposal()!.referenceNumber }} using its requested title and use period.
         </p>
+        @if (hasNoRequestedObjects()) {
+          <p class="accept-modal-body__hint">
+            This proposal has no requested objects yet. The project will be created empty and
+            objects can be added later.
+          </p>
+        }
       </div>
     </app-confirm-modal>
 

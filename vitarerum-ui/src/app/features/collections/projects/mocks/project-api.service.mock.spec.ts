@@ -138,12 +138,37 @@ describe('ProjectApiServiceMock', () => {
   });
 
   it('completes an in-progress project', async () => {
-    state.projects.get('proj-4')!.status = 'IN_PROGRESS';
+    const project = state.projects.get('proj-4')!;
+    project.status = 'IN_PROGRESS';
+    project.objects = [
+      {
+        id: 'object-1',
+        inventoryNumber: 'INV-001',
+        displayTitle: 'Book of Hours',
+        objectName: 'Illuminated manuscript',
+        briefDescriptionSnapshot: 'Decorated manuscript snapshot.',
+        category: 'manuscript',
+        description: 'Requested for comparative study.',
+      },
+    ];
 
     const completed = await firstValueFrom(
       service.completeProject('proj-4', { note: 'Completed.' }),
     );
     expect(completed.status).toBe('COMPLETED');
+  });
+
+  it('rejects completing an in-progress project without objects', async () => {
+    const project = state.projects.get('proj-4')!;
+    project.status = 'IN_PROGRESS';
+    project.objects = [];
+
+    await expect(
+      firstValueFrom(service.completeProject('proj-4', { note: 'Completed.' })),
+    ).rejects.toMatchObject({
+      status: 409,
+      error: 'INVALID_TRANSITION',
+    });
   });
 
   it('creates an object log entry and lists it', async () => {

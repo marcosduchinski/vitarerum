@@ -244,7 +244,21 @@ describe('ProjectDetailPageComponent', () => {
 
   it('lets external researchers open access and occurrence logs while the project is in progress', async () => {
     currentSession.set({ group: 'EXTERNAL' });
-    currentProject = { ...PROJECT, status: 'IN_PROGRESS' };
+    currentProject = {
+      ...PROJECT,
+      status: 'IN_PROGRESS',
+      objects: [
+        {
+          id: 'cuo-1',
+          inventoryNumber: 'INV-001',
+          displayTitle: 'Book of Hours',
+          objectName: 'Illuminated manuscript',
+          briefDescriptionSnapshot: 'Decorated manuscript snapshot.',
+          category: 'manuscript',
+          description: 'Requested for comparative study.',
+        },
+      ],
+    };
     const fixture = TestBed.createComponent(ProjectDetailPageComponent);
     componentRef = fixture.componentRef;
     componentRef.setInput('id', 'proj-12');

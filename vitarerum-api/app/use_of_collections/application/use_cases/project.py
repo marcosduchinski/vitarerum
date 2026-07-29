@@ -129,10 +129,6 @@ class ApproveProposal:
         # public proposal must never provision a requester for a decision
         # that was never going to succeed.
         proposal.ensure_approvable()
-        if not proposal.requested_objects:
-            raise ValueError(
-                "Proposal must have at least one requested object before approval"
-            )
         requester_access_notification: RequesterAccessNotification | None = None
         if proposal.requested_by is None:
             # Public proposal: Identity provisioning is deferred until this

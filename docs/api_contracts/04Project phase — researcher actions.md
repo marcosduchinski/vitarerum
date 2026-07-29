@@ -185,7 +185,7 @@ project_id : UUID (required)
 
 ### `POST /collection-use-projects/{project_id}/complete`
 
-**Description** — Researcher concludes the project. Transitions from `IN_PROGRESS` to `COMPLETED` and sets `result` to `COMPLETED`. Records a `COMPLETED` `UseEvent`.
+**Description** — Researcher concludes the project. Transitions from `IN_PROGRESS` to `COMPLETED` and sets `result` to `COMPLETED`. Records a `COMPLETED` `UseEvent`. A project must have at least one project-owned object before it can be completed.
 
 **Path parameters**
 ```
@@ -228,6 +228,15 @@ project_id : UUID (required)
 {
   "error": "INVALID_TRANSITION",
   "message": "Only IN_PROGRESS projects can be concluded"
+}
+```
+
+Also returned when the project is `IN_PROGRESS` but has no objects:
+
+```json
+{
+  "error": "INVALID_TRANSITION",
+  "message": "Project must have at least one object before completion"
 }
 ```
 

@@ -106,7 +106,19 @@ def test_visit_execution_evidence_rejects_in_progress_project() -> None:
 
 
 def test_visit_execution_evidence_accepts_completed_project_with_event() -> None:
-    project = _make_project(status=UseStatus.IN_PROGRESS)
+    project = _make_project(
+        status=UseStatus.IN_PROGRESS,
+        objects=[
+            CollectionUseObject(
+                id=CollectionUseObjectId("cuo-1"),
+                inventory_number="INV-001",
+                category="specimen",
+                description="Specimen",
+                requested_at=_now(),
+                requested_by=PermissionId("permission-1"),
+            )
+        ],
+    )
     project.record_completed(
         occurred_at=_now(),
         triggered_by=PermissionId("permission-1"),

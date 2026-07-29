@@ -139,7 +139,7 @@ project_id : UUID (required)
 }
 ```
 
-> `requestedBy` is a required `PermissionId` on `CollectionUseProject`; the API hydrates it as a permission detail for staff callers and returns `null` for non-staff. `authorisedBy` / `authorisedAt` are nullable and are populated only when a stored project has an `authorisedBy` permission that can be hydrated. `objects` lists the project's own `CollectionUseObject`s (copied from the proposal's requested objects at approval); their `id`s are what journal entries reference via `collectionUseObjectId`. Other staff review context is not embedded here; use the linked proposal endpoints for proposal documents/conversation and the paginated project journal endpoints below for logs.
+> `requestedBy` is a required `PermissionId` on `CollectionUseProject`; the API hydrates it as a permission detail for staff callers and returns `null` for non-staff. `authorisedBy` / `authorisedAt` are nullable and are populated only when a stored project has an `authorisedBy` permission that can be hydrated. `objects` lists the project's own `CollectionUseObject`s (copied from the proposal's requested objects at approval); it may be an empty list when the project was approved before operational object selection. Object `id`s are what journal entries reference via `collectionUseObjectId`. Other staff review context is not embedded here; use the linked proposal endpoints for proposal documents/conversation and the paginated project journal endpoints below for logs.
 
 **Response `404 Not Found`**
 ```json
