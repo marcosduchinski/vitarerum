@@ -490,6 +490,23 @@ describe('MuseumQuestionDetailPageComponent', () => {
     ).toBe(true);
   });
 
+  it('explains what the AI assistance tab checks', async () => {
+    const el = await setup();
+
+    el.querySelector<HTMLButtonElement>('#ai-assistance-tab')!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const explainer = el.querySelector('.search-explainer')!;
+
+    expect(explainer.querySelector('summary')?.textContent).toContain('How AI assistance works');
+    expect(explainer.textContent).toContain('Scope');
+    expect(explainer.textContent).toContain('Objects');
+    expect(explainer.textContent).toContain('Use categories');
+    expect(explainer.textContent).toContain('AI triage estimates whether the request is in scope');
+  });
+
   it('renders the suggested reply for an out-of-scope triage result', async () => {
     const el = await setup();
     service.nextTriage = OUT_OF_SCOPE_TRIAGE;

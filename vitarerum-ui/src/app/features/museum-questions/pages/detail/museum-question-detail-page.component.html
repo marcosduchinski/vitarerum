@@ -375,6 +375,23 @@
           role="tabpanel"
           aria-labelledby="ai-assistance-tab"
         >
+          <details class="search-explainer">
+            <summary>
+              <span class="pi pi-info-circle" aria-hidden="true"></span>
+              How AI assistance works
+            </summary>
+            <div class="search-explainer__body">
+              <span class="search-method search-method--scope">Scope</span>
+              <span class="search-method search-method--objects">Objects</span>
+              <span class="search-method search-method--categories">Use categories</span>
+              <p>
+                AI triage estimates whether the request is in scope, drafts an out-of-scope reply
+                when needed, extracts possible object search terms, checks catalogue matches and
+                suggests use categories. Staff can correct the verdict, search terms and categories
+                before using anything in the final reply.
+              </p>
+            </div>
+          </details>
           @if (triageError()) {
             <app-error-message [apiError]="triageError()!" />
           }
