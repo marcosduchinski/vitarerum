@@ -389,6 +389,8 @@ describe('MuseumQuestionDetailPageComponent', () => {
   it('renders message detail and keeps citizen content as text', async () => {
     const el = await setup();
     expect(el.textContent).toContain('Visit question');
+    expect(el.textContent).toContain('Ana Souza');
+    expect(el.textContent).toContain('ana@example.org');
     expect(el.textContent).toContain('<b>Please do not render as HTML</b>');
     expect(el.querySelector('b')).toBeNull();
   });
@@ -499,6 +501,28 @@ describe('MuseumQuestionDetailPageComponent', () => {
 
     expect(el.textContent).toContain('Out of scope');
     expect(el.textContent).toContain('This falls outside the collection-use scope.');
+  });
+
+  it('adds the suggested out-of-scope reply to the message reply editor', async () => {
+    const el = await setup();
+    service.nextTriage = OUT_OF_SCOPE_TRIAGE;
+
+    el.querySelector<HTMLButtonElement>('[aria-label="Run AI triage"]')!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    Array.from(el.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.includes('Use in reply'))!
+      .click();
+    await new Promise((resolve) => setTimeout(resolve));
+    fixture.detectChanges();
+
+    expect(
+      el.querySelector('#message-tab')?.classList.contains('question-detail__tab--active'),
+    ).toBe(true);
+    const editor = el.querySelector<HTMLElement>('.reply-editor')!;
+    expect(editor.textContent).toContain('This falls outside the collection-use scope.');
   });
 
   it('renders object matches, including a not-found case, for an in-scope triage result', async () => {

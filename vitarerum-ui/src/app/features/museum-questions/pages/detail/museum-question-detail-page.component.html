@@ -81,8 +81,8 @@
                 <div class="message__content">
                   <div class="message__header">
                     <div>
-                      <span class="message__sender">{{ question.requesterEmail }}</span>
-                      <span class="message__role">Requester</span>
+                          <span class="message__sender">{{ question.requesterName }}</span>
+                          <span class="message__role">{{ question.requesterEmail }}</span>
                     </div>
                     <button
                       type="button"
@@ -155,7 +155,9 @@
                     <p class="reply-composer__eyebrow">Staff response</p>
                     <h3>Reply to requester</h3>
                   </div>
-                  <span class="reply-composer__recipient">To {{ question.requesterEmail }}</span>
+                  <span class="reply-composer__recipient">
+                    To {{ question.requesterName }} · {{ question.requesterEmail }}
+                  </span>
                 </div>
 
                 <div class="reply-toolbar" aria-label="Rich text formatting">
@@ -583,7 +585,18 @@
 
               @if (effectiveVerdict() === 'OUT_OF_SCOPE') {
                 <div>
-                  <h3 class="detail-card__title">Suggested reply</h3>
+                  <div class="triage-section-heading">
+                    <h3 class="detail-card__title">Suggested reply</h3>
+                    <button
+                      type="button"
+                      class="action-btn"
+                      [disabled]="!triage.suggestedReply"
+                      (click)="insertSuggestedReplyIntoReply(triage.suggestedReply)"
+                    >
+                      <span class="pi pi-reply" aria-hidden="true"></span>
+                      Use in reply
+                    </button>
+                  </div>
                   <p class="message__body">{{ triage.suggestedReply }}</p>
                 </div>
               } @else {

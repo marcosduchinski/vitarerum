@@ -660,13 +660,24 @@ export class MuseumQuestionDetailPageComponent {
     const selectedHtml = this.selectedHitsReplyHtml();
     if (!selectedHtml) return;
 
+    this.insertHtmlIntoReply(selectedHtml);
+  }
+
+  protected insertSuggestedReplyIntoReply(suggestedReply: string | null): void {
+    const reply = suggestedReply?.trim();
+    if (!reply) return;
+
+    this.insertHtmlIntoReply(`<p>${this.escapeHtml(reply)}</p>`);
+  }
+
+  private insertHtmlIntoReply(html: string): void {
     this.selectPanel('message');
     setTimeout(() => {
       const editor = this.replyEditor()?.nativeElement;
       if (!editor) return;
 
       const current = this.currentSanitizedAnswerBody();
-      const next = current ? `${current}<p><br></p>${selectedHtml}` : selectedHtml;
+      const next = current ? `${current}<p><br></p>${html}` : html;
       editor.innerHTML = this.sanitizeRichTextHtml(next);
       this.answerBody.set(this.currentSanitizedAnswerBody());
       editor.focus();
