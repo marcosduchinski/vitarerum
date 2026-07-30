@@ -77,6 +77,10 @@ describe('ReferenceNumberPoliciesPageComponent', () => {
     expect(compiled.textContent).toContain('Proposals');
     expect(compiled.textContent).toContain('VRP-YYYYMMDD-XXXX');
     expect(compiled.textContent).toContain('Active');
+    expect(compiled.querySelector('.mask-explainer summary')?.textContent).toContain(
+      'How masks work',
+    );
+    expect(compiled.textContent).toContain('The X sequence must be the last token');
   });
 
   it('previews and creates a draft from the composer', async () => {

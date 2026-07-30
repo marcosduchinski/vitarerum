@@ -54,6 +54,31 @@
     }
   </form>
 
+  <details class="mask-explainer">
+    <summary>
+      <span class="pi pi-info-circle" aria-hidden="true"></span>
+      How masks work
+    </summary>
+    <div class="mask-explainer__body">
+      <span class="mask-token mask-token--date">YYYY</span>
+      <span class="mask-token mask-token--date">YY</span>
+      <span class="mask-token mask-token--date">MM</span>
+      <span class="mask-token mask-token--date">DD</span>
+      <span class="mask-token mask-token--sequence">XXXX</span>
+      <p>
+        A mask combines fixed text, optional date tokens and one final sequence
+        token made from X characters. Only letters, digits, slashes, underscores
+        and hyphens are allowed.
+      </p>
+      <ul class="mask-explainer__examples">
+        <li><em>VRP-YYYYMMDD-XXXX</em> creates values like <em>VRP-20260730-0001</em>.</li>
+        <li><em>CUP-XXXXXXXX</em> creates a global eight-digit sequence like <em>CUP-00000001</em>.</li>
+        <li>The X sequence must be the last token and can be up to 12 characters wide.</li>
+        <li>Date tokens decide when numbering restarts: by year, month, day or globally.</li>
+      </ul>
+    </div>
+  </details>
+
   @if (actionError()) {
     <app-error-message [apiError]="actionError()!" />
   }
