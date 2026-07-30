@@ -1,7 +1,10 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
+import { Notification } from '@features/notifications/models/notification.model';
+import { NotificationsFacade } from '@features/notifications/state/notifications.facade';
 import { MenuItem } from 'primeng/api';
 import { Menu } from 'primeng/menu';
+import { Popover } from 'primeng/popover';
 
 import { IDENTITY_SERVICE } from '@core/auth/identity.service';
 import { GroupName } from '@core/auth/models/group-name.enum';
@@ -19,7 +22,7 @@ const GROUP_LABELS: Record<GroupName, string> = {
 @Component({
   selector: 'app-topbar',
   standalone: true,
-  imports: [RouterLink, Menu, LogoMarkComponent],
+  imports: [RouterLink, Menu, Popover, LogoMarkComponent],
   templateUrl: './app-topbar.component.html',
   styleUrl: './app-topbar.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -28,8 +31,10 @@ export class AppTopbarComponent {
   protected readonly layoutService = inject(LayoutService);
   private readonly identity = inject(IDENTITY_SERVICE);
   private readonly router = inject(Router);
+  protected readonly notifications = inject(NotificationsFacade);
 
   protected readonly session = this.identity.session;
+  protected readonly isStaff = this.identity.isStaff;
   protected readonly currentGroup = computed(() => this.session()?.group ?? null);
   protected readonly institutionName = computed(() => this.session()?.institution?.name ?? '');
 
@@ -61,6 +66,49 @@ export class AppTopbarComponent {
     const value = (event.target as HTMLSelectElement).value as GroupName;
     this.identity.setGroup(value);
     void this.router.navigateByUrl('/p/dashboard');
+  }
+
+  protected async openNotifications(event: Event, popover: Popover): Promise<void> {
+    popover.toggle(event);
+    await this.notifications.loadRecent();
+  }
+
+  protected async openNotification(notification: Notification, popover: Popover): Promise<void> {
+    await this.notifications.markRead(notification);
+    popover.hide();
+    const link = this.notificationLink(notification);
+    if (link !== null) {
+      await this.router.navigateByUrl(link);
+    }
+  }
+
+  protected async markAllNotificationsRead(): Promise<void> {
+    await this.notifications.markAllRead();
+  }
+
+  protected notificationText(notification: Notification): string {
+    const label = notification.relatedResourceLabel ?? notification.relatedResourceId ?? 'Proposal';
+    const actor = notification.triggeredBy?.user.name ?? 'A staff member';
+    if (notification.kind === 'PROPOSAL_FORWARDED') {
+      return `${actor} forwarded ${label} to you.`;
+    }
+    return `${actor} assigned ${label} to you.`;
+  }
+
+  protected notificationMeta(notification: Notification): string {
+    return new Intl.DateTimeFormat(undefined, {
+      day: '2-digit',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(new Date(notification.createdAt));
+  }
+
+  protected notificationLink(notification: Notification): string | null {
+    if (notification.relatedResourceType === 'PROPOSAL' && notification.relatedResourceId) {
+      return `/p/collections/proposals/${notification.relatedResourceId}`;
+    }
+    return null;
   }
 
   private signOut(): void {

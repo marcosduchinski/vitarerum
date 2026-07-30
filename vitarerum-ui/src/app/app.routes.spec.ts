@@ -9,6 +9,8 @@ import { IdentitySession } from '@core/auth/models/identity-session.model';
 import { AiPromptTemplate, AiPromptVersion } from '@features/ai/prompts/models/ai-prompt.model';
 import { AI_PROMPT_MANAGEMENT_SERVICE } from '@features/ai/prompts/services/ai-prompt-management.service';
 import { PROJECT_API_SERVICE } from '@features/collections/projects/services/project-api.service';
+import { NotificationApiServiceMock } from '@features/notifications/mocks/notification-api.service.mock';
+import { NOTIFICATION_API_SERVICE } from '@features/notifications/services/notification-api.service';
 
 import { routes } from './app.routes';
 
@@ -112,6 +114,7 @@ describe('app routes', () => {
         { provide: IDENTITY_SERVICE, useValue: identityStub },
         { provide: AI_PROMPT_MANAGEMENT_SERVICE, useClass: PromptServiceStub },
         { provide: PROJECT_API_SERVICE, useClass: ProjectServiceStub },
+        { provide: NOTIFICATION_API_SERVICE, useClass: NotificationApiServiceMock },
       ],
     }).compileComponents();
   });

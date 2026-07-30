@@ -5,6 +5,8 @@ import { MenuItem } from 'primeng/api';
 
 import { IDENTITY_SERVICE } from '@core/auth/identity.service';
 import { IdentityServiceMock } from '@core/auth/identity.service.mock';
+import { NotificationApiServiceMock } from '@features/notifications/mocks/notification-api.service.mock';
+import { NOTIFICATION_API_SERVICE } from '@features/notifications/services/notification-api.service';
 import { LayoutService } from '@layout/layout.service';
 
 import { AppTopbarComponent } from './app-topbar.component';
@@ -30,6 +32,7 @@ describe('AppTopbarComponent role switcher', () => {
       providers: [
         provideRouter([]),
         { provide: IDENTITY_SERVICE, useValue: identity },
+        { provide: NOTIFICATION_API_SERVICE, useClass: NotificationApiServiceMock },
         { provide: LayoutService, useClass: LayoutServiceStub },
       ],
     }).compileComponents();

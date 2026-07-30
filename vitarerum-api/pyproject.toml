@@ -396,6 +396,27 @@ ignore_imports = [
 ]
 
 [[tool.importlinter.contracts]]
+name = "Notifications layers (presentation > infrastructure > application > domain)"
+type = "layers"
+layers = [
+    "app.notifications.presentation",
+    "app.notifications.infrastructure",
+    "app.notifications.application",
+    "app.notifications.domain",
+]
+
+[[tool.importlinter.contracts]]
+name = "Notifications may import Identity only via identity.public"
+type = "forbidden"
+source_modules = ["app.notifications"]
+forbidden_modules = ["app.identity"]
+ignore_imports = [
+    "app.notifications.** -> app.identity.public",
+    "app.shared.authorization -> app.identity.public",
+    "app.shared.dependencies -> app.identity.public",
+]
+
+[[tool.importlinter.contracts]]
 name = "Domain purity (no frameworks in domain)"
 type = "forbidden"
 source_modules = [
@@ -410,6 +431,7 @@ source_modules = [
     "app.collection_object_index.domain",
     "app.museum_questions.domain",
     "app.external_publications.domain",
+    "app.notifications.domain",
 ]
 forbidden_modules = ["fastapi", "sqlalchemy", "pydantic"]
 
@@ -429,6 +451,7 @@ source_modules = [
     "app.collection_object_index.application",
     "app.museum_questions.application",
     "app.external_publications.application",
+    "app.notifications.application",
 ]
 forbidden_modules = ["fastapi", "sqlalchemy"]
 ignore_imports = [
@@ -437,6 +460,8 @@ ignore_imports = [
     "app.identity.public -> app.identity.infrastructure.repositories",
     "app.use_of_collections.public -> app.use_of_collections.infrastructure.repositories",
     "app.reference_numbers.public -> app.reference_numbers.infrastructure.repositories",
+    "app.notifications.public -> app.notifications.application.dispatch",
+    "app.notifications.public -> app.notifications.infrastructure.repositories",
 ]
 
 [[tool.importlinter.contracts]]
@@ -459,6 +484,15 @@ ignore_imports = [
     # import) transitively reaches identity.public through
     # reference_numbers.application.use_cases; same shape as the hooks above.
     "app.reference_numbers.public -> app.reference_numbers.application.use_cases",
+]
+
+[[tool.importlinter.contracts]]
+name = "Use of Collections may import Notifications only via notifications.public"
+type = "forbidden"
+source_modules = ["app.use_of_collections"]
+forbidden_modules = ["app.notifications"]
+ignore_imports = [
+    "app.use_of_collections.** -> app.notifications.public",
 ]
 
 [[tool.importlinter.contracts]]

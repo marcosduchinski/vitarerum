@@ -22,6 +22,10 @@ from fastapi import (
 
 from app.config import settings
 from app.identity.public import GroupName
+from app.notifications.public import (
+    NotificationKind,
+    RelatedResourceType,
+)
 from app.shared.authorization import (
     require_staff,
 )
@@ -115,8 +119,10 @@ from app.use_of_collections.presentation.dependencies import (
     DBSession,
     FileStorage,
     ListProposalsQuery,
+    NotificationDispatch,
     ProjectRepo,
     ProposalDetailQuery,
+    ProposalEmailSender,
     ProposalRepo,
     ReferenceGenerator,
     RequesterProvisioner,
@@ -539,6 +545,8 @@ async def assign_proposal(
     body: AssignProposalRequest,
     caller: CallerPermission,
     proposal_repo: ProposalRepo,
+    proposal_notification_email_sender: ProposalEmailSender,
+    notification_dispatcher: NotificationDispatch,
     session: DBSession,
 ) -> ProposalCommandResponse:
     proposal_before = await proposal_repo.get_by_id(ProposalId(proposal_id))
@@ -562,7 +570,37 @@ async def assign_proposal(
         )
     except Exception as exc:
         _handle_domain_errors(exc)
+        raise
+    recipient_permission_id = proposal.assigned_to
+    should_notify_recipient = (
+        recipient_permission_id is not None and recipient_permission_id != caller.id
+    )
+    if should_notify_recipient and recipient_permission_id is not None:
+        await notification_dispatcher.notify(
+            recipient_permission_id=recipient_permission_id,
+            kind=NotificationKind.PROPOSAL_ASSIGNED,
+            triggered_by=caller.id,
+            related_resource_type=RelatedResourceType.PROPOSAL,
+            related_resource_id=str(proposal.id),
+            related_resource_label=proposal.reference_number.value,
+            note=body.note,
+        )
     await session.commit()
+    if should_notify_recipient and recipient_permission_id is not None:
+        recipient = await hydrate_permission(recipient_permission_id, session)
+        if recipient is None:
+            raise RuntimeError(
+                f"Cannot resolve notification recipient {recipient_permission_id}"
+            )
+        assigner = await hydrate_permission(caller.id, session)
+        await proposal_notification_email_sender.send_proposal_assigned(
+            to_email=recipient.user.email,
+            recipient_name=recipient.user.name,
+            proposal_reference=proposal.reference_number.value,
+            assigned_by_name=assigner.user.name if assigner else caller.email,
+            note=body.note,
+            link=f"{settings.public_origin}/p/collections/proposals/{proposal.id}",
+        )
     assigned_to = await hydrate_permission_or_stub(proposal.assigned_to, session)
     last_event = (
         await _build_proposal_event(proposal.events[-1], session)
@@ -681,6 +719,7 @@ async def request_documents(
         )
     except Exception as exc:
         _handle_domain_errors(exc)
+        raise
     await session.commit()
     last_event = (
         await _build_proposal_event(proposal.events[-1], session)
@@ -808,6 +847,8 @@ async def forward_proposal(
     body: ForwardProposalRequest,
     caller: CallerPermission,
     proposal_repo: ProposalRepo,
+    proposal_notification_email_sender: ProposalEmailSender,
+    notification_dispatcher: NotificationDispatch,
     session: DBSession,
 ) -> ProposalCommandResponse:
     proposal_before = await proposal_repo.get_by_id(ProposalId(proposal_id))
@@ -829,7 +870,36 @@ async def forward_proposal(
     except Exception as exc:
         _handle_domain_errors(exc)
         raise
+    recipient_permission_id = proposal.assigned_to
+    should_notify_recipient = (
+        recipient_permission_id is not None and recipient_permission_id != caller.id
+    )
+    if should_notify_recipient and recipient_permission_id is not None:
+        await notification_dispatcher.notify(
+            recipient_permission_id=recipient_permission_id,
+            kind=NotificationKind.PROPOSAL_FORWARDED,
+            triggered_by=caller.id,
+            related_resource_type=RelatedResourceType.PROPOSAL,
+            related_resource_id=str(proposal.id),
+            related_resource_label=proposal.reference_number.value,
+            note=body.note,
+        )
     await session.commit()
+    if should_notify_recipient and recipient_permission_id is not None:
+        recipient = await hydrate_permission(recipient_permission_id, session)
+        if recipient is None:
+            raise RuntimeError(
+                f"Cannot resolve notification recipient {recipient_permission_id}"
+            )
+        forwarded_by = await hydrate_permission(caller.id, session)
+        await proposal_notification_email_sender.send_proposal_forwarded(
+            to_email=recipient.user.email,
+            recipient_name=recipient.user.name,
+            proposal_reference=proposal.reference_number.value,
+            forwarded_by_name=forwarded_by.user.name if forwarded_by else caller.email,
+            note=body.note,
+            link=f"{settings.public_origin}/p/collections/proposals/{proposal.id}",
+        )
     assigned_to = await hydrate_permission_or_stub(proposal.assigned_to, session)
     last_event = (
         await _build_proposal_event(proposal.events[-1], session)

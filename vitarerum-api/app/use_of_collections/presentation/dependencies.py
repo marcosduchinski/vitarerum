@@ -16,6 +16,10 @@ from app.identity.public import (
     get_permission_reader,
     get_requester_provisioner,
 )
+from app.notifications.public import NotificationDispatcher
+from app.notifications.public import (
+    get_notification_dispatcher as build_notification_dispatcher,
+)
 from app.reference_numbers.public import (
     ReferenceNumberGenerator,
     get_reference_generator,
@@ -28,6 +32,7 @@ from app.use_of_collections.application.ports import (
     FileStoragePort,
     ObjectAccessLogRepository,
     ObjectOccurrenceLogRepository,
+    ProposalNotificationEmailSender,
     ProposalRepository,
     PublicationLogRepository,
     RequesterAccessEmailSender,
@@ -45,6 +50,10 @@ from app.use_of_collections.infrastructure.external_requester import (
     IdentityExternalRequesterProvisioner,
 )
 from app.use_of_collections.infrastructure.file_storage import LocalDiskFileStorage
+from app.use_of_collections.infrastructure.proposal_notification_email import (
+    LoggingProposalNotificationEmailSender,
+    SmtpProposalNotificationEmailSender,
+)
 from app.use_of_collections.infrastructure.repositories import (
     SqlAlchemyCollectionUseProjectRepository,
     SqlAlchemyConversationRepository,
@@ -122,8 +131,25 @@ def get_requester_access_email_sender() -> RequesterAccessEmailSender:
     )
 
 
+def get_proposal_notification_email_sender() -> ProposalNotificationEmailSender:
+    if not settings.smtp_host:
+        return LoggingProposalNotificationEmailSender()
+    return SmtpProposalNotificationEmailSender(
+        host=settings.smtp_host,
+        port=settings.smtp_port,
+        username=settings.smtp_username,
+        password=settings.smtp_password,
+        from_address=settings.smtp_from_address,
+        use_tls=settings.smtp_use_tls,
+    )
+
+
 def get_reference_number_generator(session: DBSession) -> ReferenceNumberGenerator:
     return get_reference_generator(session)
+
+
+def get_notifications_dispatcher(session: DBSession) -> NotificationDispatcher:
+    return build_notification_dispatcher(session)
 
 
 ProjectRepo = Annotated[CollectionUseProjectRepository, Depends(get_project_repo)]
@@ -147,8 +173,15 @@ RequesterProvisioner = Annotated[
 AccessEmailSender = Annotated[
     RequesterAccessEmailSender, Depends(get_requester_access_email_sender)
 ]
+ProposalEmailSender = Annotated[
+    ProposalNotificationEmailSender,
+    Depends(get_proposal_notification_email_sender),
+]
 ReferenceGenerator = Annotated[
     ReferenceNumberGenerator, Depends(get_reference_number_generator)
+]
+NotificationDispatch = Annotated[
+    NotificationDispatcher, Depends(get_notifications_dispatcher)
 ]
 
 

@@ -31,6 +31,9 @@ from app.identity.infrastructure import (
 from app.museum_questions.infrastructure import (
     models as museum_questions_models,  # noqa: F401
 )
+from app.notifications.infrastructure import (
+    models as notifications_models,  # noqa: F401
+)
 from app.public_submission.infrastructure import (
     models as public_submission_models,  # noqa: F401
 )

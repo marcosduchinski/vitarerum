@@ -41,6 +41,7 @@ from app.museum_questions.presentation.routes import (
 from app.museum_questions.presentation.routes import (
     router as museum_questions_router,
 )
+from app.notifications.presentation.routes import notifications_router
 from app.public_submission.presentation.dependencies import (
     get_amendment_invitation_adapter,
 )
@@ -146,6 +147,7 @@ app.include_router(public_document_templates_router, prefix=prefix)
 app.include_router(collection_data_sources_router, prefix=prefix)
 app.include_router(object_search_router, prefix=prefix)
 app.include_router(museum_questions_router, prefix=prefix)
+app.include_router(notifications_router, prefix=prefix)
 app.include_router(internal_museum_questions_router, prefix=prefix)
 app.include_router(museum_question_triage_router, prefix=prefix)
 app.include_router(ai_prompts_router, prefix=prefix)

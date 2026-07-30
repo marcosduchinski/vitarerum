@@ -48,6 +48,13 @@ Owns public questions sent to the museum and staff response workflows. It
 exposes selected question data through `museum_questions.public` for AI triage
 and uses Identity through the shared authenticated staff helpers.
 
+### `notifications`
+
+Owns staff-facing in-app notifications and read-state. Workflow contexts publish
+notifications through `notifications.public`; the read API hydrates actor labels
+through `identity.public` and deliberately stores only small resource snapshots,
+not source-context aggregates.
+
 ### `reports.in_situ_visit`
 
 Owns the in-situ visit report aggregation surface. It assembles data from
@@ -91,4 +98,3 @@ context.
 the expected layer directories and has no import-linter contracts. It should not
 be treated as an active bounded context until it has real behavior and the
 corresponding architecture contracts.
-

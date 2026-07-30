@@ -66,8 +66,10 @@ from app.use_of_collections.presentation.dependencies import (
     get_conversation_repo,
     get_external_requester_provisioner,
     get_file_storage,
+    get_notifications_dispatcher,
     get_occurrence_log_repo,
     get_project_repo,
+    get_proposal_notification_email_sender,
     get_proposal_repo,
     get_publication_log_repo,
     get_reference_number_generator,
@@ -611,12 +613,34 @@ class RecordingAccessEmailSender:
         self.calls.append((to_email, requester_name, login_url, temporary_password))
 
 
+class RecordingProposalNotificationEmailSender:
+    def __init__(self) -> None:
+        self.forwarded_calls: list[dict[str, object]] = []
+        self.assigned_calls: list[dict[str, object]] = []
+
+    async def send_proposal_forwarded(self, **kwargs) -> None:
+        self.forwarded_calls.append(kwargs)
+
+    async def send_proposal_assigned(self, **kwargs) -> None:
+        self.assigned_calls.append(kwargs)
+
+
+class RecordingNotificationDispatcher:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, object]] = []
+
+    async def notify(self, **kwargs) -> None:
+        self.calls.append(kwargs)
+
+
 @asynccontextmanager
 async def client_with_repos(
     caller: Actor = _CALLER,
     permission_records: dict[str, PermissionRecord] | None = None,
     requester_provisioner: RecordingRequesterProvisioner | None = None,
     access_email_sender: RecordingAccessEmailSender | None = None,
+    proposal_email_sender: RecordingProposalNotificationEmailSender | None = None,
+    notification_dispatcher: RecordingNotificationDispatcher | None = None,
     file_storage: InMemoryFileStorage | None = None,
 ) -> AsyncIterator[
     tuple[
@@ -636,6 +660,12 @@ async def client_with_repos(
     session = CommitOnlySession(permission_records)
     requester_provisioner = requester_provisioner or RecordingRequesterProvisioner()
     access_email_sender = access_email_sender or RecordingAccessEmailSender()
+    proposal_email_sender = (
+        proposal_email_sender or RecordingProposalNotificationEmailSender()
+    )
+    notification_dispatcher = (
+        notification_dispatcher or RecordingNotificationDispatcher()
+    )
 
     app.dependency_overrides[get_project_repo] = lambda: project_repo
     app.dependency_overrides[get_proposal_repo] = lambda: proposal_repo
@@ -652,8 +682,14 @@ async def client_with_repos(
     app.dependency_overrides[get_requester_access_email_sender] = lambda: (
         access_email_sender
     )
+    app.dependency_overrides[get_proposal_notification_email_sender] = lambda: (
+        proposal_email_sender
+    )
     app.dependency_overrides[get_reference_number_generator] = lambda: (
         InMemoryReferenceNumberGenerator(proposal_repo)
+    )
+    app.dependency_overrides[get_notifications_dispatcher] = lambda: (
+        notification_dispatcher
     )
 
     transport = ASGITransport(app=app)
@@ -1556,6 +1592,8 @@ async def test_reject_proposal_creates_message_to_requester() -> None:
 
 
 async def test_staff_can_assign_proposal_to_staff_target() -> None:
+    notification_dispatcher = RecordingNotificationDispatcher()
+    proposal_email_sender = RecordingProposalNotificationEmailSender()
     async with client_with_repos(
         caller=_STAFF_CALLER,
         permission_records={
@@ -1566,6 +1604,8 @@ async def test_staff_can_assign_proposal_to_staff_target() -> None:
                 "permission-target", GroupName.COLLECTIONS_MANAGEMENT
             ),
         },
+        notification_dispatcher=notification_dispatcher,
+        proposal_email_sender=proposal_email_sender,
     ) as (client, _, proposal_repo, _):
         await proposal_repo.add(
             Proposal(
@@ -1585,7 +1625,7 @@ async def test_staff_can_assign_proposal_to_staff_target() -> None:
 
         response = await client.post(
             "/api/v1/proposals/prop-1/assign",
-            json={"targetPermissionId": "permission-target"},
+            json={"targetPermissionId": "permission-target", "note": "Please triage"},
         )
         proposal = await proposal_repo.get_by_id(ProposalId("prop-1"))
 
@@ -1596,16 +1636,45 @@ async def test_staff_can_assign_proposal_to_staff_target() -> None:
     assert proposal is not None
     assert proposal.assigned_to == "permission-target"
     assert proposal.status == ProposalStatus.PENDING
+    assert notification_dispatcher.calls == [
+        {
+            "recipient_permission_id": "permission-target",
+            "kind": "PROPOSAL_ASSIGNED",
+            "triggered_by": "permission-staff",
+            "related_resource_type": "PROPOSAL",
+            "related_resource_id": "prop-1",
+            "related_resource_label": "VRP-20260601-0001",
+            "note": "Please triage",
+        }
+    ]
+    assert proposal_email_sender.assigned_calls == [
+        {
+            "to_email": "permission-target@example.org",
+            "recipient_name": "User permission-target",
+            "proposal_reference": "VRP-20260601-0001",
+            "assigned_by_name": "User permission-staff",
+            "note": "Please triage",
+            "link": f"{settings.public_origin}/p/collections/proposals/prop-1",
+        }
+    ]
+    assert proposal_email_sender.forwarded_calls == []
 
 
 async def test_staff_can_forward_proposal_to_staff_target() -> None:
+    notification_dispatcher = RecordingNotificationDispatcher()
+    proposal_email_sender = RecordingProposalNotificationEmailSender()
     async with client_with_repos(
         caller=_STAFF_CALLER,
         permission_records={
+            "permission-staff": _permission_record(
+                "permission-staff", GroupName.CURATORIAL
+            ),
             "permission-target": _permission_record(
                 "permission-target", GroupName.DIRECTION
-            )
+            ),
         },
+        notification_dispatcher=notification_dispatcher,
+        proposal_email_sender=proposal_email_sender,
     ) as (client, _, proposal_repo, _):
         await proposal_repo.add(
             Proposal(
@@ -1625,7 +1694,7 @@ async def test_staff_can_forward_proposal_to_staff_target() -> None:
 
         response = await client.post(
             "/api/v1/proposals/prop-1/forward",
-            json={"targetPermissionId": "permission-target"},
+            json={"targetPermissionId": "permission-target", "note": "Direction call"},
         )
         proposal = await proposal_repo.get_by_id(ProposalId("prop-1"))
 
@@ -1633,6 +1702,111 @@ async def test_staff_can_forward_proposal_to_staff_target() -> None:
     assert response.json()["assignedTo"]["permissionId"] == "permission-target"
     assert proposal is not None
     assert proposal.assigned_to == "permission-target"
+    assert notification_dispatcher.calls == [
+        {
+            "recipient_permission_id": "permission-target",
+            "kind": "PROPOSAL_FORWARDED",
+            "triggered_by": "permission-staff",
+            "related_resource_type": "PROPOSAL",
+            "related_resource_id": "prop-1",
+            "related_resource_label": "VRP-20260601-0001",
+            "note": "Direction call",
+        }
+    ]
+    assert proposal_email_sender.forwarded_calls == [
+        {
+            "to_email": "permission-target@example.org",
+            "recipient_name": "User permission-target",
+            "proposal_reference": "VRP-20260601-0001",
+            "forwarded_by_name": "User permission-staff",
+            "note": "Direction call",
+            "link": f"{settings.public_origin}/p/collections/proposals/prop-1",
+        }
+    ]
+    assert proposal_email_sender.assigned_calls == []
+
+
+async def test_assign_proposal_to_self_sends_no_notification_or_email() -> None:
+    notification_dispatcher = RecordingNotificationDispatcher()
+    proposal_email_sender = RecordingProposalNotificationEmailSender()
+    async with client_with_repos(
+        caller=_STAFF_CALLER,
+        permission_records={
+            "permission-staff": _permission_record(
+                "permission-staff", GroupName.CURATORIAL
+            )
+        },
+        notification_dispatcher=notification_dispatcher,
+        proposal_email_sender=proposal_email_sender,
+    ) as (client, _, proposal_repo, _):
+        await proposal_repo.add(
+            Proposal(
+                id=ProposalId("prop-1"),
+                reference_number=ReferenceNumber("VRP-20260601-0001"),
+                title="Proposal title",
+                collection_use_project_id=CollectionUseProjectId("proj-1"),
+                intended_use=UseType.IN_SITU_VISIT,
+                begin_date=date(2026, 6, 1),
+                end_date=date(2026, 6, 7),
+                status=ProposalStatus.SUBMITTED,
+                requested_by=PermissionId("permission-1"),
+                submitted_at=datetime(2026, 6, 7, tzinfo=UTC),
+                submission_channel=SubmissionChannel.AUTHENTICATED,
+            )
+        )
+
+        response = await client.post(
+            "/api/v1/proposals/prop-1/assign",
+            json={},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["assignedTo"]["permissionId"] == "permission-staff"
+    assert notification_dispatcher.calls == []
+    assert proposal_email_sender.assigned_calls == []
+    assert proposal_email_sender.forwarded_calls == []
+
+
+async def test_forward_proposal_to_self_sends_no_notification_or_email() -> None:
+    notification_dispatcher = RecordingNotificationDispatcher()
+    proposal_email_sender = RecordingProposalNotificationEmailSender()
+    async with client_with_repos(
+        caller=_STAFF_CALLER,
+        permission_records={
+            "permission-staff": _permission_record(
+                "permission-staff", GroupName.CURATORIAL
+            )
+        },
+        notification_dispatcher=notification_dispatcher,
+        proposal_email_sender=proposal_email_sender,
+    ) as (client, _, proposal_repo, _):
+        await proposal_repo.add(
+            Proposal(
+                id=ProposalId("prop-1"),
+                reference_number=ReferenceNumber("VRP-20260601-0001"),
+                title="Proposal title",
+                collection_use_project_id=CollectionUseProjectId("proj-1"),
+                intended_use=UseType.IN_SITU_VISIT,
+                begin_date=date(2026, 6, 1),
+                end_date=date(2026, 6, 7),
+                status=ProposalStatus.PENDING,
+                requested_by=PermissionId("permission-1"),
+                assigned_to=PermissionId("permission-target"),
+                submitted_at=datetime(2026, 6, 7, tzinfo=UTC),
+                submission_channel=SubmissionChannel.AUTHENTICATED,
+            )
+        )
+
+        response = await client.post(
+            "/api/v1/proposals/prop-1/forward",
+            json={"targetPermissionId": "permission-staff"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["assignedTo"]["permissionId"] == "permission-staff"
+    assert notification_dispatcher.calls == []
+    assert proposal_email_sender.assigned_calls == []
+    assert proposal_email_sender.forwarded_calls == []
 
 
 async def test_forward_proposal_rejects_non_pending_proposal() -> None:

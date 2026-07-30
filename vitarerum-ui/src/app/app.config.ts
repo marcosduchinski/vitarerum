@@ -27,6 +27,7 @@ import { provideExternalPublications } from '@core/providers/provide-external-pu
 import { provideIdentity } from '@core/providers/provide-identity';
 import { provideInstitutionManagement } from '@core/providers/provide-institution-management';
 import { provideMuseumQuestionManagement } from '@core/providers/provide-museum-question-management';
+import { provideNotifications } from '@core/providers/provide-notifications';
 import { provideObjectSearch } from '@core/providers/provide-object-search';
 import { provideReferenceNumberPolicies } from '@core/providers/provide-reference-number-policies';
 import { provideUserManagement } from '@core/providers/provide-user-management';
@@ -110,6 +111,7 @@ export const appConfig: ApplicationConfig = {
     provideCollectionDataSource(),
     provideObjectSearch(),
     provideMuseumQuestionManagement(),
+    provideNotifications(),
     provideAiPrompts(),
     provideReferenceNumberPolicies(),
   ],

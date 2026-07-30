@@ -181,6 +181,64 @@ def requester_access_created_email(
     )
 
 
+def proposal_forwarded_email(
+    *,
+    recipient_name: str,
+    proposal_reference: str,
+    forwarded_by_name: str,
+    note: str | None,
+    link: str,
+) -> EmailTemplate:
+    note_block_pt = f"\n\nNota: {note}" if note else ""
+    note_block_en = f"\n\nNote: {note}" if note else ""
+    return EmailTemplate(
+        subject=(
+            f"Proposta {proposal_reference} redirecionada / "
+            f"Proposal {proposal_reference} forwarded"
+        ),
+        body=(
+            f"Olá {recipient_name},\n\n"
+            f"{forwarded_by_name} redirecionou a proposta {proposal_reference} "
+            f"para si.{note_block_pt}\n\n"
+            f"Aceda à proposta: {link}\n\n"
+            "---\n\n"
+            f"Hello {recipient_name},\n\n"
+            f"{forwarded_by_name} forwarded proposal {proposal_reference} "
+            f"to you.{note_block_en}\n\n"
+            f"Open the proposal: {link}"
+        ),
+    )
+
+
+def proposal_assigned_email(
+    *,
+    recipient_name: str,
+    proposal_reference: str,
+    assigned_by_name: str,
+    note: str | None,
+    link: str,
+) -> EmailTemplate:
+    note_block_pt = f"\n\nNota: {note}" if note else ""
+    note_block_en = f"\n\nNote: {note}" if note else ""
+    return EmailTemplate(
+        subject=(
+            f"Proposta {proposal_reference} atribuída / "
+            f"Proposal {proposal_reference} assigned"
+        ),
+        body=(
+            f"Olá {recipient_name},\n\n"
+            f"{assigned_by_name} atribuiu a proposta {proposal_reference} "
+            f"a si.{note_block_pt}\n\n"
+            f"Aceda à proposta: {link}\n\n"
+            "---\n\n"
+            f"Hello {recipient_name},\n\n"
+            f"{assigned_by_name} assigned proposal {proposal_reference} "
+            f"to you.{note_block_en}\n\n"
+            f"Open the proposal: {link}"
+        ),
+    )
+
+
 def _bullet_block(title: str, items: list[str]) -> str:
     if not items:
         return ""

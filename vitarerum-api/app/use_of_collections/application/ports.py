@@ -296,6 +296,30 @@ class RequesterAccessEmailSender(Protocol):
     ) -> None: ...
 
 
+class ProposalNotificationEmailSender(Protocol):
+    async def send_proposal_forwarded(
+        self,
+        *,
+        to_email: str,
+        recipient_name: str,
+        proposal_reference: str,
+        forwarded_by_name: str,
+        note: str | None,
+        link: str,
+    ) -> None: ...
+
+    async def send_proposal_assigned(
+        self,
+        *,
+        to_email: str,
+        recipient_name: str,
+        proposal_reference: str,
+        assigned_by_name: str,
+        note: str | None,
+        link: str,
+    ) -> None: ...
+
+
 class ReferenceNumberGeneratorPort(Protocol):
     async def generate(
         self, *, kind: ReferenceKind, on_date: date

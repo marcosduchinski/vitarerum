@@ -49,6 +49,62 @@
       ></i>
     </button>
 
+    @if (isStaff()) {
+      <button
+        type="button"
+        class="layout-topbar-action layout-topbar-action--notification"
+        aria-label="Notifications"
+        aria-haspopup="dialog"
+        (click)="openNotifications($event, notificationsPanel)"
+      >
+        <i class="pi pi-bell"></i>
+        @if (notifications.unreadCount() > 0) {
+          <span class="layout-topbar-notification-badge">
+            {{ notifications.unreadCount() > 9 ? '9+' : notifications.unreadCount() }}
+          </span>
+        }
+      </button>
+      <p-popover
+        #notificationsPanel
+        styleClass="notifications-popover"
+        [appendTo]="'body'"
+      >
+        <div class="notifications-panel">
+          <div class="notifications-panel__header">
+            <span>Notifications</span>
+            @if (notifications.unreadCount() > 0) {
+              <button type="button" (click)="markAllNotificationsRead()">Mark all read</button>
+            }
+          </div>
+          <div class="notifications-panel__list">
+            @if (notifications.loadingRecent()) {
+              <div class="notifications-panel__empty">Loading notifications</div>
+            } @else if (notifications.recent().length === 0) {
+              <div class="notifications-panel__empty">No notifications</div>
+            } @else {
+              @for (item of notifications.recent(); track item.id) {
+                <button
+                  type="button"
+                  class="notifications-panel__item"
+                  [class.notifications-panel__item--unread]="item.readAt === null"
+                  (click)="openNotification(item, notificationsPanel)"
+                >
+                  <span class="notifications-panel__item-marker"></span>
+                  <span class="notifications-panel__item-body">
+                    <span class="notifications-panel__item-text">{{ notificationText(item) }}</span>
+                    @if (item.note) {
+                      <span class="notifications-panel__item-note">{{ item.note }}</span>
+                    }
+                    <span class="notifications-panel__item-meta">{{ notificationMeta(item) }}</span>
+                  </span>
+                </button>
+              }
+            }
+          </div>
+        </div>
+      </p-popover>
+    }
+
     @if (session()) {
       <button
         type="button"
