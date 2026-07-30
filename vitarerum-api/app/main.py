@@ -25,6 +25,10 @@ from app.document_templates.presentation.routes import (
     document_templates_router,
     public_document_templates_router,
 )
+from app.external_publications.presentation.routes import (
+    external_public_router,
+    external_publications_router,
+)
 from app.identity.presentation.auth_routes import auth_router
 from app.identity.presentation.routes import (
     groups_router,
@@ -146,6 +150,8 @@ app.include_router(internal_museum_questions_router, prefix=prefix)
 app.include_router(museum_question_triage_router, prefix=prefix)
 app.include_router(ai_prompts_router, prefix=prefix)
 app.include_router(reference_policies_router, prefix=prefix)
+app.include_router(external_publications_router, prefix=prefix)
+app.include_router(external_public_router, prefix=prefix)
 
 
 # Composition root: bind the staff endpoint's AmendmentInvitationPort (defaulted

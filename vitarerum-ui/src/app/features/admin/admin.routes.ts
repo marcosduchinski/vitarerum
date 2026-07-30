@@ -62,6 +62,15 @@ export const ADMIN_ROUTES: Routes = [
       ),
   },
   {
+    path: 'external-publications',
+    title: 'External Resource Access',
+    canMatch: [sysAdminGuard],
+    loadComponent: () =>
+      import('./external-publications/external-publications-page.component').then(
+        (m) => m.ExternalPublicationsPageComponent,
+      ),
+  },
+  {
     path: 'institutions/new',
     title: 'New institution',
     loadComponent: () =>

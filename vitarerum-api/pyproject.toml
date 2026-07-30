@@ -260,6 +260,34 @@ ignore_imports = [
     # re-declaring them.
     "app.reports.in_situ_visit.presentation.schemas -> app.cidoc_crm.in_situ_visit_mapping.presentation.schemas",
     "app.reports.in_situ_visit.presentation.schemas -> app.ai.museum_narrative.presentation.schemas",
+    "app.reports.public -> app.cidoc_crm.public",
+    "app.reports.public -> app.reports.in_situ_visit.infrastructure.readers",
+    "app.reports.public -> app.reports.in_situ_visit.infrastructure.repositories",
+]
+
+[[tool.importlinter.contracts]]
+name = "External Publications layers (presentation > infrastructure > application > domain)"
+type = "layers"
+layers = [
+    "app.external_publications.presentation",
+    "app.external_publications.infrastructure",
+    "app.external_publications.application",
+    "app.external_publications.domain",
+]
+
+[[tool.importlinter.contracts]]
+name = "External Publications may import resource contexts only via published language"
+type = "forbidden"
+source_modules = ["app.external_publications"]
+forbidden_modules = [
+    "app.use_of_collections",
+    "app.reports",
+    "app.cidoc_crm",
+    "app.ai",
+]
+ignore_imports = [
+    "app.external_publications.infrastructure.acls -> app.use_of_collections.public",
+    "app.external_publications.infrastructure.acls -> app.reports.public",
 ]
 
 [[tool.importlinter.contracts]]
@@ -381,6 +409,7 @@ source_modules = [
     "app.document_templates.domain",
     "app.collection_object_index.domain",
     "app.museum_questions.domain",
+    "app.external_publications.domain",
 ]
 forbidden_modules = ["fastapi", "sqlalchemy", "pydantic"]
 
@@ -399,6 +428,7 @@ source_modules = [
     "app.document_templates.application",
     "app.collection_object_index.application",
     "app.museum_questions.application",
+    "app.external_publications.application",
 ]
 forbidden_modules = ["fastapi", "sqlalchemy"]
 ignore_imports = [

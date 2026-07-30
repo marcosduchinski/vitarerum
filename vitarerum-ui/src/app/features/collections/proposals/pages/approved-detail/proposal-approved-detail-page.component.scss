@@ -70,19 +70,9 @@
   padding: 1rem;
 }
 
-:host ::ng-deep .approved-detail__workspace .message-list,
-:host ::ng-deep .approved-detail__workspace .event-list {
-  gap: 0.75rem;
-}
-
 :host ::ng-deep .approved-detail__workspace .message {
   grid-template-columns: auto minmax(0, 1fr);
   align-items: start;
-  gap: 0.65rem;
-}
-
-:host ::ng-deep .approved-detail__workspace .message__content {
-  padding: 0.85rem;
 }
 
 :host ::ng-deep .approved-detail__workspace .message__body {

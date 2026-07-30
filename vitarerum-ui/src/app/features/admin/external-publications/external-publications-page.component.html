@@ -1,0 +1,454 @@
+<section class="external-publications-page">
+  <app-page-header
+    eyebrow="Administration"
+    title="External Resource Access"
+    description="Publish approved resources for external users and systems through controlled links."
+  >
+    <button class="header-action" type="button" (click)="openCreateDrawer()">
+      <span class="pi pi-plus" aria-hidden="true"></span>
+      Create external link
+    </button>
+  </app-page-header>
+
+  @if (actionError()) {
+    <app-error-message [apiError]="actionError()!" />
+  }
+
+  <section class="registry-panel" aria-labelledby="registry-title">
+    <div class="registry-panel__top">
+      <div class="section-heading">
+        <span class="section-heading__icon pi pi-list-check" aria-hidden="true"></span>
+        <div>
+          <p class="section-heading__eyebrow">Registry</p>
+          <h2 id="registry-title">Published links</h2>
+        </div>
+      </div>
+
+      <div class="metric-strip" aria-label="Current page status summary">
+        <span
+          ><strong>{{ publishedCount() }}</strong> live</span
+        >
+        <span
+          ><strong>{{ expiringCount() }}</strong> expiring</span
+        >
+        <span
+          ><strong>{{ revokedCount() }}</strong> revoked</span
+        >
+      </div>
+    </div>
+
+    <div class="filters">
+      <label class="field field--search">
+        <span class="field__label">Search</span>
+        <span class="search-box">
+          <span class="pi pi-search" aria-hidden="true"></span>
+          <input
+            type="search"
+            [ngModel]="q()"
+            (ngModelChange)="q.set($event); currentPage.set(0)"
+            placeholder="Publication id or resource id"
+          />
+        </span>
+      </label>
+
+      <label class="field">
+        <span class="field__label">Type</span>
+        <select
+          class="field__input"
+          [ngModel]="resourceType()"
+          (ngModelChange)="setFilterType($event)"
+        >
+          <option value="">All types</option>
+          @for (type of resourceTypes; track type.value) {
+            <option [value]="type.value">{{ type.label }}</option>
+          }
+        </select>
+      </label>
+
+      <label class="field">
+        <span class="field__label">Status</span>
+        <select class="field__input" [ngModel]="status()" (ngModelChange)="setFilterStatus($event)">
+          <option value="">All statuses</option>
+          @for (option of statusOptions; track option) {
+            <option [value]="option">{{ option }}</option>
+          }
+        </select>
+      </label>
+
+      <label class="field">
+        <span class="field__label">Profile</span>
+        <select
+          class="field__input"
+          [ngModel]="profile()"
+          (ngModelChange)="setFilterProfile($event)"
+        >
+          <option value="">All profiles</option>
+          @for (option of profiles; track option.value) {
+            <option [value]="option.value">{{ option.label }}</option>
+          }
+        </select>
+      </label>
+    </div>
+
+    @if (loadError()) {
+      <app-error-message [apiError]="loadError()!" (retry)="publicationsResource.reload()" />
+    } @else if (publicationsResource.isLoading()) {
+      <app-loading-state label="Loading publications" />
+    } @else if (!publications().length) {
+      <app-empty-state title="No external resource access links found" />
+    } @else {
+      <div class="publication-list">
+        @for (publication of publications(); track publication.id) {
+          <article
+            class="publication-row"
+            [class.publication-row--revoked]="publication.status === 'REVOKED'"
+          >
+            <div class="publication-row__resource">
+              <span class="resource-badge">{{ resourceTypeLabel(publication.resourceType) }}</span>
+              <div class="publication-row__identity">
+                <strong [title]="publication.resourceId">Resource {{ publication.resourceId }}</strong>
+                <small [title]="publication.id">Publication {{ publication.id }}</small>
+              </div>
+            </div>
+
+            <div class="publication-row__meta" aria-label="Publication metadata">
+              <div class="publication-row__profile">
+                <span class="profile-pill">{{ profileLabel(publication.profile) }}</span>
+                <small>{{ profileTone(publication.profile) }}</small>
+              </div>
+
+              <div class="publication-row__status">
+                <span
+                  class="status-pill"
+                  [class.status-pill--revoked]="publication.status === 'REVOKED'"
+                >
+                  {{ publication.status }}
+                </span>
+                <small>Created {{ publication.createdAt | date: 'mediumDate' }}</small>
+              </div>
+
+              <div class="publication-row__expiry">
+                <span
+                  [title]="
+                    publication.expiresAt
+                      ? (publication.expiresAt | date: 'medium')!
+                      : 'Never expires'
+                  "
+                  >{{
+                  publication.expiresAt ? (publication.expiresAt | date: 'medium') : 'Never expires'
+                }}</span>
+                <small>{{ publication.accessMode }}</small>
+              </div>
+            </div>
+
+            <div class="publication-row__actions">
+              <button
+                type="button"
+                class="icon-action"
+                [disabled]="!publication.url"
+                (click)="copyUrl(publication)"
+                aria-label="Copy external URL"
+                title="Copy external URL"
+              >
+                <span class="pi pi-copy" aria-hidden="true"></span>
+              </button>
+              <button
+                type="button"
+                class="icon-action icon-action--danger"
+                [disabled]="publication.status === 'REVOKED' || busy()"
+                (click)="revoke(publication)"
+                aria-label="Revoke publication"
+                title="Revoke publication"
+              >
+                <span class="pi pi-ban" aria-hidden="true"></span>
+              </button>
+            </div>
+          </article>
+        }
+      </div>
+
+      <div class="pagination-strip">
+        <button type="button" [disabled]="currentPage() === 0" (click)="prevPage()">
+          <span class="pi pi-chevron-left" aria-hidden="true"></span>
+          Previous
+        </button>
+        <span>Page {{ currentPage() + 1 }} of {{ totalPages() || 1 }} / {{ total() }} links</span>
+        <button type="button" [disabled]="currentPage() >= totalPages() - 1" (click)="nextPage()">
+          Next
+          <span class="pi pi-chevron-right" aria-hidden="true"></span>
+        </button>
+      </div>
+    }
+  </section>
+
+  @if (createDrawerOpen()) {
+    <button
+      type="button"
+      class="drawer-backdrop"
+      (click)="closeCreateDrawer()"
+      aria-label="Close publication flow"
+    ></button>
+    <aside class="create-drawer" aria-labelledby="create-publication-title">
+      <header class="create-drawer__header">
+        <div>
+          <p class="section-heading__eyebrow">New external link</p>
+          <h2 id="create-publication-title">Publish resource</h2>
+        </div>
+        <button
+          type="button"
+          class="icon-action"
+          (click)="closeCreateDrawer()"
+          aria-label="Close publication flow"
+          title="Close"
+        >
+          <span class="pi pi-times" aria-hidden="true"></span>
+        </button>
+      </header>
+
+      <nav class="stepper" aria-label="Publication steps">
+        <button
+          type="button"
+          class="stepper__item"
+          [class.stepper__item--active]="createStep() === 1"
+          (click)="goToCreateStep(1)"
+        >
+          <span>1</span>
+          Type
+        </button>
+        <button
+          type="button"
+          class="stepper__item"
+          [class.stepper__item--active]="createStep() === 2"
+          (click)="goToCreateStep(2)"
+        >
+          <span>2</span>
+          Resource
+        </button>
+        <button
+          type="button"
+          class="stepper__item"
+          [class.stepper__item--active]="createStep() === 3"
+          [disabled]="!selectedResource()"
+          (click)="goToCreateStep(3)"
+        >
+          <span>3</span>
+          Access
+        </button>
+        <button
+          type="button"
+          class="stepper__item"
+          [class.stepper__item--active]="createStep() === 4"
+          [disabled]="!canReviewPublication() && !latestUrl()"
+          (click)="goToCreateStep(4)"
+        >
+          <span>4</span>
+          Review
+        </button>
+      </nav>
+
+      <div class="create-drawer__body">
+        @if (createStep() === 1) {
+          <section class="flow-step">
+            <div class="flow-step__copy">
+              <h3>Choose the resource family</h3>
+              <p>Only eligible resources appear in the next step.</p>
+            </div>
+
+            <div class="decision-strip" role="group" aria-label="Resource type">
+              @for (type of resourceTypes; track type.value) {
+                <button
+                  type="button"
+                  class="decision-chip"
+                  [class.decision-chip--selected]="createType() === type.value"
+                  (click)="setCreateType(type.value)"
+                >
+                  <span class="decision-chip__mark pi pi-check" aria-hidden="true"></span>
+                  {{ type.label }}
+                </button>
+              }
+            </div>
+
+            <div class="flow-actions">
+              <button class="primary-action" type="button" (click)="goToCreateStep(2)">
+                Continue
+                <span class="pi pi-arrow-right" aria-hidden="true"></span>
+              </button>
+            </div>
+          </section>
+        }
+
+        @if (createStep() === 2) {
+          <section class="flow-step">
+            <div class="flow-step__copy">
+              <h3>Select a publishable resource</h3>
+              <p>Search by reference, title, visit code, or id.</p>
+            </div>
+
+            <label class="field">
+              <span class="field__label">Resource</span>
+              <span class="search-box">
+                <span class="pi pi-search" aria-hidden="true"></span>
+                <input
+                  type="search"
+                  [ngModel]="resourceQuery()"
+                  (ngModelChange)="resourceQuery.set($event); selectedResource.set(null)"
+                  placeholder="Reference, title, visit code, id"
+                />
+              </span>
+            </label>
+
+            @if (pickerError()) {
+              <app-error-message
+                [apiError]="pickerError()!"
+                (retry)="publishableResource.reload()"
+              />
+            } @else if (publishableResource.isLoading()) {
+              <app-loading-state label="Loading publishable resources" />
+            } @else {
+              <div class="resource-list">
+                @for (resource of publishableResources(); track resource.id) {
+                  <button
+                    type="button"
+                    class="resource-option"
+                    [class.resource-option--selected]="selectedResource()?.id === resource.id"
+                    (click)="selectResource(resource)"
+                  >
+                    <span class="resource-option__type">{{
+                      resourceTypeLabel(resource.resourceType)
+                    }}</span>
+                    <strong>{{ resource.reference || resource.id }}</strong>
+                    <span>{{ resource.title || 'Untitled resource' }}</span>
+                    <small
+                      >{{ resource.status
+                      }}{{ resource.subtitle ? ' / ' + resource.subtitle : '' }}</small
+                    >
+                  </button>
+                } @empty {
+                  <app-empty-state title="No publishable resources found" />
+                }
+              </div>
+            }
+
+            <div class="flow-actions">
+              <button type="button" class="secondary-action" (click)="goToCreateStep(1)">
+                Back
+              </button>
+              <button
+                class="primary-action"
+                type="button"
+                [disabled]="!selectedResource()"
+                (click)="goToCreateStep(3)"
+              >
+                Continue
+                <span class="pi pi-arrow-right" aria-hidden="true"></span>
+              </button>
+            </div>
+          </section>
+        }
+
+        @if (createStep() === 3) {
+          <section class="flow-step">
+            <div class="flow-step__copy">
+              <h3>Set the external contract</h3>
+              <p>Choose how much data leaves the system and whether the link expires.</p>
+            </div>
+
+            <div class="profile-grid" role="group" aria-label="Publication profile">
+              @for (option of profiles; track option.value) {
+                <button
+                  type="button"
+                  class="profile-card"
+                  [class.profile-card--selected]="createProfile() === option.value"
+                  [disabled]="option.value === 'JSON_LD' && createType() !== 'IN_SITU_VISIT_REPORT'"
+                  (click)="createProfile.set(option.value)"
+                >
+                  <span>{{ option.label }}</span>
+                  <small>{{ profileTone(option.value) }}</small>
+                </button>
+              }
+            </div>
+
+            <label class="field">
+              <span class="field__label">Expiration</span>
+              <input
+                class="field__input"
+                type="datetime-local"
+                [ngModel]="createExpiresAt()"
+                (ngModelChange)="createExpiresAt.set($event)"
+              />
+            </label>
+
+            <div class="flow-actions">
+              <button type="button" class="secondary-action" (click)="goToCreateStep(2)">
+                Back
+              </button>
+              <button
+                class="primary-action"
+                type="button"
+                [disabled]="!createProfileAllowed()"
+                (click)="goToCreateStep(4)"
+              >
+                Review
+                <span class="pi pi-arrow-right" aria-hidden="true"></span>
+              </button>
+            </div>
+          </section>
+        }
+
+        @if (createStep() === 4) {
+          <section class="flow-step">
+            <div class="flow-step__copy">
+              <h3>Confirm publication</h3>
+              <p>Review the resource, profile, and expiration before issuing the tokenized URL.</p>
+            </div>
+
+            <div class="review-card" [class.review-card--issued]="latestUrl()">
+              <span class="review-card__label">Resource</span>
+              <strong>{{
+                selectedResource()?.reference || selectedResource()?.id || 'Publication issued'
+              }}</strong>
+              <small>{{ selectedResource()?.title || 'The latest URL is ready to copy.' }}</small>
+
+              <dl>
+                <div>
+                  <dt>Type</dt>
+                  <dd>{{ resourceTypeLabel(createType()) }}</dd>
+                </div>
+                <div>
+                  <dt>Profile</dt>
+                  <dd>{{ profileLabel(createProfile()) }}</dd>
+                </div>
+                <div>
+                  <dt>Expiration</dt>
+                  <dd>{{ createExpiresAt() ? (createExpiresAt() | date: 'medium') : 'Never' }}</dd>
+                </div>
+              </dl>
+            </div>
+
+            @if (latestUrl()) {
+              <div class="url-receipt">
+                <span class="pi pi-link" aria-hidden="true"></span>
+                <code>{{ latestUrl() }}</code>
+              </div>
+            }
+
+            <div class="flow-actions">
+              <button type="button" class="secondary-action" (click)="goToCreateStep(3)">
+                Back
+              </button>
+              <button
+                class="primary-action"
+                type="button"
+                [disabled]="!canCreate()"
+                (click)="createPublication()"
+              >
+                <span class="pi pi-send" aria-hidden="true"></span>
+                Publish externally
+              </button>
+            </div>
+          </section>
+        }
+      </div>
+    </aside>
+  }
+</section>

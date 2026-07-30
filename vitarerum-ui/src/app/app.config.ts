@@ -23,6 +23,7 @@ import { provideAiPrompts } from '@core/providers/provide-ai-prompts';
 import { provideCollectionDataSource } from '@core/providers/provide-collection-data-source';
 import { provideCollectionUse } from '@core/providers/provide-collection-use';
 import { provideDocumentTemplateManagement } from '@core/providers/provide-document-template-management';
+import { provideExternalPublications } from '@core/providers/provide-external-publications';
 import { provideIdentity } from '@core/providers/provide-identity';
 import { provideInstitutionManagement } from '@core/providers/provide-institution-management';
 import { provideMuseumQuestionManagement } from '@core/providers/provide-museum-question-management';
@@ -105,6 +106,7 @@ export const appConfig: ApplicationConfig = {
     provideUserManagement(),
     provideInstitutionManagement(),
     provideDocumentTemplateManagement(),
+    provideExternalPublications(),
     provideCollectionDataSource(),
     provideObjectSearch(),
     provideMuseumQuestionManagement(),

@@ -70,11 +70,11 @@
             <p class="detail-card__empty">The project for this proposal is not available yet.</p>
           }
         </section>
-
-        <app-proposal-overview-section [proposal]="proposal()!" />
       </div>
 
       <div class="approved-detail__main">
+        <app-proposal-overview-section [proposal]="proposal()!" />
+
         <app-proposal-events-section [events]="events()" [loading]="eventsResource.isLoading()" />
 
         <app-proposal-conversation-section

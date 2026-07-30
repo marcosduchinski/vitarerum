@@ -157,6 +157,11 @@ const SYS_ADMIN_MENU: MenuNode = {
       icon: 'pi pi-hashtag',
       routerLink: '/p/admin/reference-number-policies',
     },
+    {
+      label: 'External Resource Access',
+      icon: 'pi pi-share-alt',
+      routerLink: '/p/admin/external-publications',
+    },
     COLLECTION_DATA_SOURCES_ITEM,
   ],
 };
