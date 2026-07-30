@@ -12,11 +12,43 @@ from app.public_submission.application.use_cases import (
     ConfirmPublicProposal,
     SubmitPublicProposal,
 )
-from app.public_submission.domain.models import PendingPublicSubmission
+from app.public_submission.domain.models import (
+    PendingPublicSubmission,
+    ProposalAmendmentToken,
+)
+from app.public_submission.infrastructure.amendment import hash_token
 from app.public_submission.presentation.dependencies import (
+    get_amendment_clock,
+    get_amendment_rate_limiter,
+    get_amendment_token_repo,
     get_confirm_use_case,
     get_email_sender,
+    get_notifications_dispatcher,
+    get_proposal_notification_email_sender,
+    get_reader,
+    get_submit_amendment_corrections,
     get_submit_use_case,
+    get_uoc_proposal_repo,
+)
+from app.shared.kernel import PermissionId, UseType
+from app.use_of_collections.application.use_cases import SubmitAmendmentCorrections
+from app.use_of_collections.domain.enums import (
+    DocumentCorrectionStatus,
+    ProposalStatus,
+    SubmissionChannel,
+)
+from app.use_of_collections.domain.models import (
+    CollectionUseProjectId,
+    Document,
+    DocumentCorrectionItem,
+    DocumentCorrectionItemId,
+    DocumentId,
+    DocumentType,
+    EmailAddress,
+    Proposal,
+    ProposalId,
+    ReferenceNumber,
+    RequesterContact,
 )
 
 _SUBMIT_URL = "/api/v1/public/proposals"
@@ -105,6 +137,87 @@ class _Session:
         if self._fail_commit:
             raise RuntimeError("commit failed")
         self.committed = True
+
+
+class _AmendmentTokenRepo:
+    def __init__(self, token: ProposalAmendmentToken) -> None:
+        self.token = token
+
+    async def get_by_hash(self, token_hash: str) -> ProposalAmendmentToken | None:
+        return self.token if self.token.token_hash == token_hash else None
+
+    async def save(self, token: ProposalAmendmentToken) -> None:
+        self.token = token
+
+
+class _ProposalRepo:
+    def __init__(self, proposal: Proposal) -> None:
+        self.proposal = proposal
+
+    async def get_by_id(self, proposal_id: ProposalId) -> Proposal | None:
+        return self.proposal if self.proposal.id == proposal_id else None
+
+    async def save(self, proposal: Proposal) -> None:
+        self.proposal = proposal
+
+
+class _NotificationDispatcher:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, object]] = []
+
+    async def notify(self, **kwargs) -> None:
+        self.calls.append(kwargs)
+
+    async def notify_many(self, **kwargs) -> None:
+        self.calls.append(kwargs)
+
+
+class _ProposalNotificationEmail:
+    def __init__(self) -> None:
+        self.corrections_submitted: list[dict[str, object]] = []
+
+    async def send_proposal_submitted(self, **kwargs) -> None:
+        raise AssertionError("send_proposal_submitted should not be called")
+
+    async def send_proposal_forwarded(self, **kwargs) -> None:
+        raise AssertionError("send_proposal_forwarded should not be called")
+
+    async def send_proposal_assigned(self, **kwargs) -> None:
+        raise AssertionError("send_proposal_assigned should not be called")
+
+    async def send_proposal_documents_submitted(self, **kwargs) -> None:
+        raise AssertionError("send_proposal_documents_submitted should not be called")
+
+    async def send_proposal_corrections_submitted(self, **kwargs) -> None:
+        self.corrections_submitted.append(kwargs)
+
+
+class _PermissionReader:
+    async def get_detail(self, permission_id: PermissionId):
+        if permission_id == "perm-assignee":
+            return SimpleNamespace(
+                permission_id="perm-assignee",
+                user=SimpleNamespace(
+                    id="user-assignee",
+                    name="Assignee User",
+                    email="assignee@example.test",
+                ),
+                group="CURATORIAL",
+            )
+        if permission_id == "perm-requester":
+            return SimpleNamespace(
+                permission_id="perm-requester",
+                user=SimpleNamespace(
+                    id="user-requester",
+                    name="Requester User",
+                    email="requester@example.test",
+                ),
+                group="EXTERNAL",
+            )
+        return None
+
+    async def list_by_group(self, group):
+        return []
 
 
 async def _passthrough_retry(op):  # type: ignore[no-untyped-def]
@@ -355,6 +468,108 @@ async def test_submit_then_confirm_flow() -> None:
         again = await client.post(_CONFIRM_URL, json={"token": token})
         assert again.status_code == 200
         assert again.json()["status"] == "ALREADY_CONFIRMED"
+
+
+async def test_submit_amendment_notifies_assigned_staff() -> None:
+    raw_token = "raw-amendment-token"
+    token = ProposalAmendmentToken(
+        id="token-1",
+        proposal_id="prop-1",
+        token_hash=hash_token(raw_token),
+        requester_email="requester@example.test",
+        correction_item_ids=["correction-1"],
+        created_at=_NOW,
+        expires_at=_NOW + timedelta(hours=1),
+    )
+    proposal = Proposal(
+        id=ProposalId("prop-1"),
+        reference_number=ReferenceNumber("VRP-20260626-0007"),
+        title="Proposal title",
+        collection_use_project_id=CollectionUseProjectId("proj-1"),
+        intended_use=UseType.IN_SITU_VISIT,
+        begin_date=date(2026, 7, 1),
+        end_date=date(2026, 7, 15),
+        status=ProposalStatus.PENDING,
+        requested_by=PermissionId("perm-requester"),
+        requester_contact=RequesterContact(
+            name="Pedro Silva",
+            email=EmailAddress("requester@example.test"),
+        ),
+        assigned_to=PermissionId("perm-assignee"),
+        submitted_at=_NOW,
+        submission_channel=SubmissionChannel.PUBLIC,
+        documents=[
+            Document(
+                id=DocumentId("doc-1"),
+                type=DocumentType("REQUEST_FORM"),
+                file_name="request.docx",
+                file_reference="request.docx",
+                submitted_at=_NOW,
+                submitted_by=None,
+            )
+        ],
+        correction_items=[
+            DocumentCorrectionItem(
+                id=DocumentCorrectionItemId("correction-1"),
+                document_type=DocumentType("REQUEST_FORM"),
+                reason="Missing form",
+                requested_at=_NOW,
+                requested_by=PermissionId("perm-staff"),
+                status=DocumentCorrectionStatus.REQUESTED,
+            )
+        ],
+    )
+    proposal_repo = _ProposalRepo(proposal)
+    token_repo = _AmendmentTokenRepo(token)
+    notification_dispatcher = _NotificationDispatcher()
+    proposal_email = _ProposalNotificationEmail()
+    app.dependency_overrides[get_amendment_token_repo] = lambda: token_repo
+    app.dependency_overrides[get_uoc_proposal_repo] = lambda: proposal_repo
+    app.dependency_overrides[get_amendment_clock] = lambda: _Clock()
+    app.dependency_overrides[get_amendment_rate_limiter] = lambda: _Limiter()
+    app.dependency_overrides[get_submit_amendment_corrections] = lambda: (
+        SubmitAmendmentCorrections(proposal_repo)  # type: ignore[arg-type]
+    )
+    app.dependency_overrides[get_notifications_dispatcher] = lambda: (
+        notification_dispatcher
+    )
+    app.dependency_overrides[get_proposal_notification_email_sender] = lambda: (
+        proposal_email
+    )
+    app.dependency_overrides[get_reader] = lambda: _PermissionReader()
+    app.dependency_overrides[get_async_session] = lambda: _Session()
+
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.post(
+                f"/api/v1/public/proposals/amendments/{raw_token}/submit"
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert notification_dispatcher.calls == [
+        {
+            "recipient_permission_id": "perm-assignee",
+            "kind": "PROPOSAL_CORRECTIONS_SUBMITTED",
+            "triggered_by": None,
+            "related_resource_type": "PROPOSAL",
+            "related_resource_id": "prop-1",
+            "related_resource_label": "VRP-20260626-0007",
+        }
+    ]
+    assert proposal_email.corrections_submitted == [
+        {
+            "to_email": "assignee@example.test",
+            "recipient_name": "Assignee User",
+            "proposal_reference": "VRP-20260626-0007",
+            "submitted_by_name": "Requester User",
+            "link": "http://localhost:4200/p/collections/proposals/prop-1",
+        }
+    ]
+    assert token.used_at == _NOW
+    assert proposal.correction_items[0].status == DocumentCorrectionStatus.RESOLVED
 
 
 async def test_confirm_unknown_token_returns_200_invalid() -> None:

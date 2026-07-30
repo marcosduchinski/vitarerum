@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import TYPE_CHECKING, Protocol
 
 from app.notifications.domain.enums import NotificationKind, RelatedResourceType
@@ -14,6 +15,18 @@ class NotificationDispatcher(Protocol):
         self,
         *,
         recipient_permission_id: PermissionId,
+        kind: NotificationKind,
+        triggered_by: PermissionId | None,
+        related_resource_type: RelatedResourceType | None = None,
+        related_resource_id: str | None = None,
+        related_resource_label: str | None = None,
+        note: str | None = None,
+    ) -> None: ...
+
+    async def notify_many(
+        self,
+        *,
+        recipient_permission_ids: Iterable[PermissionId],
         kind: NotificationKind,
         triggered_by: PermissionId | None,
         related_resource_type: RelatedResourceType | None = None,

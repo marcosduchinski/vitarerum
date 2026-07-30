@@ -21,7 +21,7 @@ from fastapi import (
 )
 
 from app.config import settings
-from app.identity.public import GroupName
+from app.identity.public import GroupName, PermissionView
 from app.notifications.public import (
     NotificationKind,
     RelatedResourceType,
@@ -88,6 +88,7 @@ from app.use_of_collections.domain.models import (
     DocumentId,
     DocumentType,
     PermissionId,
+    Proposal,
     ProposalId,
     RequestedObjectId,
 )
@@ -126,6 +127,7 @@ from app.use_of_collections.presentation.dependencies import (
     ProposalRepo,
     ReferenceGenerator,
     RequesterProvisioner,
+    StaffNotificationRecipients,
 )
 from app.use_of_collections.presentation.permissions import (
     hydrate_permission,
@@ -167,6 +169,112 @@ from app.use_of_collections.presentation.schemas import (
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+def _proposal_link(proposal_id: ProposalId) -> str:
+    return f"{settings.public_origin}/p/collections/proposals/{proposal_id}"
+
+
+async def _caller_display_name(
+    caller: CallerPermission,
+    session: DBSession,
+) -> str:
+    caller_detail = await hydrate_permission(caller.id, session)
+    return caller_detail.user.name if caller_detail else caller.email
+
+
+def _staff_recipients_except(
+    recipients: list[PermissionView],
+    excluded_permission_id: PermissionId | None,
+) -> list[PermissionView]:
+    return [
+        recipient
+        for recipient in recipients
+        if excluded_permission_id is None
+        or recipient.permission_id != excluded_permission_id
+    ]
+
+
+async def _notify_staff_recipients(
+    *,
+    dispatcher: NotificationDispatch,
+    recipients: list[PermissionView],
+    kind: NotificationKind,
+    triggered_by: PermissionId | None,
+    proposal: Proposal,
+    note: str | None = None,
+) -> None:
+    await dispatcher.notify_many(
+        recipient_permission_ids=[
+            PermissionId(recipient.permission_id) for recipient in recipients
+        ],
+        kind=kind,
+        triggered_by=triggered_by,
+        related_resource_type=RelatedResourceType.PROPOSAL,
+        related_resource_id=str(proposal.id),
+        related_resource_label=proposal.reference_number.value,
+        note=note,
+    )
+
+
+async def _send_proposal_submitted_emails(
+    *,
+    sender: ProposalEmailSender,
+    recipients: list[PermissionView],
+    proposal: Proposal,
+    submitted_by_name: str,
+) -> None:
+    for recipient in recipients:
+        await sender.send_proposal_submitted(
+            to_email=recipient.user.email,
+            recipient_name=recipient.user.name,
+            proposal_reference=proposal.reference_number.value,
+            submitted_by_name=submitted_by_name,
+            link=_proposal_link(proposal.id),
+        )
+
+
+async def _notify_assigned_staff(
+    *,
+    dispatcher: NotificationDispatch,
+    proposal: Proposal,
+    kind: NotificationKind,
+    triggered_by: PermissionId | None,
+) -> PermissionId | None:
+    recipient_permission_id = proposal.assigned_to
+    if recipient_permission_id is None or recipient_permission_id == triggered_by:
+        return None
+    await dispatcher.notify(
+        recipient_permission_id=recipient_permission_id,
+        kind=kind,
+        triggered_by=triggered_by,
+        related_resource_type=RelatedResourceType.PROPOSAL,
+        related_resource_id=str(proposal.id),
+        related_resource_label=proposal.reference_number.value,
+    )
+    return PermissionId(recipient_permission_id)
+
+
+async def _send_documents_submitted_email(
+    *,
+    sender: ProposalEmailSender,
+    recipient_permission_id: PermissionId,
+    proposal: Proposal,
+    submitted_by_name: str,
+    session: DBSession,
+) -> None:
+    recipient = await hydrate_permission(recipient_permission_id, session)
+    if recipient is None:
+        raise RuntimeError(
+            f"Cannot resolve notification recipient {recipient_permission_id}"
+        )
+    await sender.send_proposal_documents_submitted(
+        to_email=recipient.user.email,
+        recipient_name=recipient.user.name,
+        proposal_reference=proposal.reference_number.value,
+        submitted_by_name=submitted_by_name,
+        link=_proposal_link(proposal.id),
+    )
+
+
 @proposals_router.post(
     "",
     status_code=status.HTTP_201_CREATED,
@@ -178,6 +286,9 @@ async def submit_proposal(
     conversation_repo: ConvRepo,
     file_storage: FileStorage,
     reference_generator: ReferenceGenerator,
+    notification_dispatcher: NotificationDispatch,
+    proposal_notification_email_sender: ProposalEmailSender,
+    staff_notification_recipients: StaffNotificationRecipients,
     session: DBSession,
     documents: Annotated[list[UploadFile], File(default_factory=list)],
     title: Annotated[str | None, Form()] = None,
@@ -262,11 +373,28 @@ async def submit_proposal(
         output = await run_with_unique_retry(
             session, lambda: use_case.execute(submit_input)
         )
+        staff_recipients = _staff_recipients_except(
+            staff_notification_recipients, caller.id
+        )
+        await _notify_staff_recipients(
+            dispatcher=notification_dispatcher,
+            recipients=staff_recipients,
+            kind=NotificationKind.PROPOSAL_SUBMITTED,
+            triggered_by=caller.id,
+            proposal=output.proposal,
+        )
         await session.commit()
     except Exception:
         for file_reference in saved_references:
             await file_storage.delete(file_reference)
         raise
+
+    await _send_proposal_submitted_emails(
+        sender=proposal_notification_email_sender,
+        recipients=staff_recipients,
+        proposal=output.proposal,
+        submitted_by_name=await _caller_display_name(caller, session),
+    )
 
     assert output.proposal.requested_by is not None
     requested_by_detail = await hydrate_permission(
@@ -747,6 +875,8 @@ async def submit_documents(
     caller: CallerPermission,
     proposal_repo: ProposalRepo,
     file_storage: FileStorage,
+    proposal_notification_email_sender: ProposalEmailSender,
+    notification_dispatcher: NotificationDispatch,
     session: DBSession,
     file: Annotated[UploadFile, File(...)],
     documentType: Annotated[str, Form(...)],
@@ -778,7 +908,24 @@ async def submit_documents(
     except Exception as exc:
         _handle_domain_errors(exc)
         raise
+    updated_proposal = await proposal_repo.get_by_id(ProposalId(proposal_id))
+    if updated_proposal is None:
+        raise _not_found("proposal", proposal_id)
+    recipient_permission_id = await _notify_assigned_staff(
+        dispatcher=notification_dispatcher,
+        proposal=updated_proposal,
+        kind=NotificationKind.PROPOSAL_DOCUMENTS_SUBMITTED,
+        triggered_by=caller.id,
+    )
     await session.commit()
+    if recipient_permission_id is not None:
+        await _send_documents_submitted_email(
+            sender=proposal_notification_email_sender,
+            recipient_permission_id=recipient_permission_id,
+            proposal=updated_proposal,
+            submitted_by_name=await _caller_display_name(caller, session),
+            session=session,
+        )
     return await _build_document_response(document, session)
 
 

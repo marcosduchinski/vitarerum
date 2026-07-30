@@ -89,10 +89,18 @@ export class AppTopbarComponent {
   protected notificationText(notification: Notification): string {
     const label = notification.relatedResourceLabel ?? notification.relatedResourceId ?? 'Proposal';
     const actor = notification.triggeredBy?.user.name ?? 'A staff member';
-    if (notification.kind === 'PROPOSAL_FORWARDED') {
-      return `${actor} forwarded ${label} to you.`;
+    switch (notification.kind) {
+      case 'PROPOSAL_SUBMITTED':
+        return `${actor} submitted ${label}.`;
+      case 'PROPOSAL_FORWARDED':
+        return `${actor} forwarded ${label} to you.`;
+      case 'PROPOSAL_DOCUMENTS_SUBMITTED':
+        return `${actor} submitted documents for ${label}.`;
+      case 'PROPOSAL_CORRECTIONS_SUBMITTED':
+        return `Corrections were submitted for ${label}.`;
+      case 'PROPOSAL_ASSIGNED':
+        return `${actor} assigned ${label} to you.`;
     }
-    return `${actor} assigned ${label} to you.`;
   }
 
   protected notificationMeta(notification: Notification): string {

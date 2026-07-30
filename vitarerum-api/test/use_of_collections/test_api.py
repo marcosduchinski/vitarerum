@@ -14,7 +14,7 @@ from app.identity.infrastructure.models import (
     PermissionRecord,
     UserRecord,
 )
-from app.identity.public import Actor, GroupName, PermissionId
+from app.identity.public import Actor, GroupName, PermissionId, PermissionView, UserView
 from app.main import app
 from app.reference_numbers.public import ReferenceKind
 from app.shared.dependencies import get_caller_permission
@@ -72,6 +72,7 @@ from app.use_of_collections.presentation.dependencies import (
     get_proposal_notification_email_sender,
     get_proposal_repo,
     get_publication_log_repo,
+    get_reader,
     get_reference_number_generator,
     get_requester_access_email_sender,
 )
@@ -581,6 +582,35 @@ class CommitOnlySession:
         return FakeResult()
 
 
+class InMemoryPermissionReader:
+    def __init__(self, records: dict[str, PermissionRecord]) -> None:
+        self._records = records
+
+    async def get_detail(self, permission_id: PermissionId) -> PermissionView | None:
+        record = self._records.get(str(permission_id))
+        return self._view(record) if record else None
+
+    async def list_by_group(self, group: GroupName) -> list[PermissionView]:
+        return [
+            view
+            for record in self._records.values()
+            if record.group.name == group
+            for view in [self._view(record)]
+        ]
+
+    def _view(self, record: PermissionRecord) -> PermissionView:
+        return PermissionView(
+            permission_id=record.id,
+            user=UserView(
+                id=record.user.id,
+                name=record.user.name,
+                email=record.user.email,
+                password_changed_at=None,
+            ),
+            group=record.group.name,
+        )
+
+
 class RecordingRequesterProvisioner:
     """Fake ``ExternalRequesterProvisioner``. Raises if invoked with no
     ``resolved`` configured, so route tests approving an already-resolved
@@ -615,14 +645,26 @@ class RecordingAccessEmailSender:
 
 class RecordingProposalNotificationEmailSender:
     def __init__(self) -> None:
+        self.submitted_calls: list[dict[str, object]] = []
         self.forwarded_calls: list[dict[str, object]] = []
         self.assigned_calls: list[dict[str, object]] = []
+        self.documents_submitted_calls: list[dict[str, object]] = []
+        self.corrections_submitted_calls: list[dict[str, object]] = []
+
+    async def send_proposal_submitted(self, **kwargs) -> None:
+        self.submitted_calls.append(kwargs)
 
     async def send_proposal_forwarded(self, **kwargs) -> None:
         self.forwarded_calls.append(kwargs)
 
     async def send_proposal_assigned(self, **kwargs) -> None:
         self.assigned_calls.append(kwargs)
+
+    async def send_proposal_documents_submitted(self, **kwargs) -> None:
+        self.documents_submitted_calls.append(kwargs)
+
+    async def send_proposal_corrections_submitted(self, **kwargs) -> None:
+        self.corrections_submitted_calls.append(kwargs)
 
 
 class RecordingNotificationDispatcher:
@@ -631,6 +673,16 @@ class RecordingNotificationDispatcher:
 
     async def notify(self, **kwargs) -> None:
         self.calls.append(kwargs)
+
+    async def notify_many(self, **kwargs) -> None:
+        for recipient_permission_id in kwargs["recipient_permission_ids"]:
+            call = {
+                key: value
+                for key, value in kwargs.items()
+                if key != "recipient_permission_ids"
+            }
+            call["recipient_permission_id"] = recipient_permission_id
+            self.calls.append(call)
 
 
 @asynccontextmanager
@@ -657,6 +709,7 @@ async def client_with_repos(
     occurrence_log_repo = InMemoryOccurrenceLogRepository()
     publication_log_repo = InMemoryPublicationLogRepository()
     file_storage = file_storage or InMemoryFileStorage()
+    permission_records = permission_records or {}
     session = CommitOnlySession(permission_records)
     requester_provisioner = requester_provisioner or RecordingRequesterProvisioner()
     access_email_sender = access_email_sender or RecordingAccessEmailSender()
@@ -676,6 +729,9 @@ async def client_with_repos(
     app.dependency_overrides[get_file_storage] = lambda: file_storage
     app.dependency_overrides[get_async_session] = lambda: session
     app.dependency_overrides[get_caller_permission] = lambda: caller
+    app.dependency_overrides[get_reader] = lambda: InMemoryPermissionReader(
+        permission_records
+    )
     app.dependency_overrides[get_external_requester_provisioner] = lambda: (
         requester_provisioner
     )
@@ -724,6 +780,62 @@ async def test_submit_proposal_returns_201() -> None:
     assert body["proposal"]["endDate"] == "2026-06-07"
     assert body["proposal"]["submissionChannel"] == "AUTHENTICATED"
     assert "conversationId" in body
+
+
+async def test_submit_proposal_notifies_all_staff_except_actor() -> None:
+    notification_dispatcher = RecordingNotificationDispatcher()
+    proposal_email_sender = RecordingProposalNotificationEmailSender()
+    async with client_with_repos(
+        caller=_STAFF_CALLER,
+        permission_records={
+            "permission-staff": _permission_record(
+                "permission-staff", GroupName.CURATORIAL
+            ),
+            "permission-curatorial": _permission_record(
+                "permission-curatorial", GroupName.CURATORIAL
+            ),
+            "permission-collections": _permission_record(
+                "permission-collections", GroupName.COLLECTIONS_MANAGEMENT
+            ),
+            "permission-external": _permission_record(
+                "permission-external", GroupName.EXTERNAL
+            ),
+        },
+        notification_dispatcher=notification_dispatcher,
+        proposal_email_sender=proposal_email_sender,
+    ) as (client, _, _, _):
+        response = await client.post(
+            "/api/v1/proposals",
+            data={
+                "title": "Collection study",
+                "intendedUse": "IN_SITU_VISIT",
+                "purpose": "To study the collection",
+                "beginDate": "2026-06-01",
+                "endDate": "2026-06-07",
+                "initialMessageSubject": "Collection study",
+                "initialMessageBody": "To study the collection",
+            },
+        )
+
+    assert response.status_code == 201
+    proposal_id = response.json()["proposal"]["id"]
+    assert [
+        call["recipient_permission_id"] for call in notification_dispatcher.calls
+    ] == ["permission-curatorial", "permission-collections"]
+    assert {call["kind"] for call in notification_dispatcher.calls} == {
+        "PROPOSAL_SUBMITTED"
+    }
+    assert {call["related_resource_id"] for call in notification_dispatcher.calls} == {
+        proposal_id
+    }
+    assert [call["to_email"] for call in proposal_email_sender.submitted_calls] == [
+        "permission-curatorial@example.org",
+        "permission-collections@example.org",
+    ]
+    submitted_by_names = {
+        call["submitted_by_name"] for call in proposal_email_sender.submitted_calls
+    }
+    assert submitted_by_names == {"User permission-staff"}
 
 
 async def test_submit_proposal_carries_intended_use_through_to_detail() -> None:
@@ -3119,6 +3231,91 @@ async def test_submit_document_accepts_valid_docx() -> None:
             headers={"X-Permission-Id": "permission-1"},
         )
     assert response.status_code == 201
+
+
+async def test_submit_document_notifies_assigned_staff_target() -> None:
+    notification_dispatcher = RecordingNotificationDispatcher()
+    proposal_email_sender = RecordingProposalNotificationEmailSender()
+    async with client_with_repos(
+        permission_records={
+            "permission-1": _permission_record("permission-1", GroupName.EXTERNAL),
+            "permission-target": _permission_record(
+                "permission-target", GroupName.CURATORIAL
+            ),
+        },
+        notification_dispatcher=notification_dispatcher,
+        proposal_email_sender=proposal_email_sender,
+    ) as (client, _, proposal_repo, _):
+        proposal = _pending_proposal()
+        proposal.assigned_to = PermissionId("permission-target")
+        await proposal_repo.add(proposal)
+        response = await client.post(
+            "/api/v1/proposals/prop-1/documents",
+            files={
+                "file": (
+                    "request.docx",
+                    _docx_bytes(),
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                )
+            },
+            data={"documentType": "REQUEST_FORM"},
+            headers={"X-Permission-Id": "permission-1"},
+        )
+
+    assert response.status_code == 201
+    assert notification_dispatcher.calls == [
+        {
+            "recipient_permission_id": "permission-target",
+            "kind": "PROPOSAL_DOCUMENTS_SUBMITTED",
+            "triggered_by": "permission-1",
+            "related_resource_type": "PROPOSAL",
+            "related_resource_id": "prop-1",
+            "related_resource_label": "VRP-20260601-0001",
+        }
+    ]
+    assert proposal_email_sender.documents_submitted_calls == [
+        {
+            "to_email": "permission-target@example.org",
+            "recipient_name": "User permission-target",
+            "proposal_reference": "VRP-20260601-0001",
+            "submitted_by_name": "User permission-1",
+            "link": f"{settings.public_origin}/p/collections/proposals/prop-1",
+        }
+    ]
+
+
+async def test_submit_document_to_self_sends_no_notification_or_email() -> None:
+    notification_dispatcher = RecordingNotificationDispatcher()
+    proposal_email_sender = RecordingProposalNotificationEmailSender()
+    async with client_with_repos(
+        caller=_STAFF_CALLER,
+        permission_records={
+            "permission-staff": _permission_record(
+                "permission-staff", GroupName.CURATORIAL
+            )
+        },
+        notification_dispatcher=notification_dispatcher,
+        proposal_email_sender=proposal_email_sender,
+    ) as (client, _, proposal_repo, _):
+        proposal = _pending_proposal()
+        proposal.requested_by = PermissionId("permission-staff")
+        proposal.assigned_to = PermissionId("permission-staff")
+        await proposal_repo.add(proposal)
+        response = await client.post(
+            "/api/v1/proposals/prop-1/documents",
+            files={
+                "file": (
+                    "request.docx",
+                    _docx_bytes(),
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                )
+            },
+            data={"documentType": "REQUEST_FORM"},
+        )
+
+    assert response.status_code == 201
+    assert notification_dispatcher.calls == []
+    assert proposal_email_sender.documents_submitted_calls == []
 
 
 async def test_download_document_returns_file_bytes() -> None:

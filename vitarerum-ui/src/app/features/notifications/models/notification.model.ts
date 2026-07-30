@@ -1,7 +1,12 @@
 import { PermissionPrincipal } from '@core/auth/models/permission.model';
 import { Page, PageQuery } from '@shared/models/page.model';
 
-export type NotificationKind = 'PROPOSAL_ASSIGNED' | 'PROPOSAL_FORWARDED';
+export type NotificationKind =
+  | 'PROPOSAL_SUBMITTED'
+  | 'PROPOSAL_ASSIGNED'
+  | 'PROPOSAL_FORWARDED'
+  | 'PROPOSAL_DOCUMENTS_SUBMITTED'
+  | 'PROPOSAL_CORRECTIONS_SUBMITTED';
 export type RelatedResourceType = 'PROPOSAL' | 'PROJECT';
 
 export interface Notification {
@@ -29,4 +34,3 @@ export interface UnreadCountResponse {
 export interface MarkAllNotificationsReadResponse {
   readonly count: number;
 }
-

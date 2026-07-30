@@ -6,6 +6,7 @@ import { MenuItem } from 'primeng/api';
 import { IDENTITY_SERVICE } from '@core/auth/identity.service';
 import { IdentityServiceMock } from '@core/auth/identity.service.mock';
 import { NotificationApiServiceMock } from '@features/notifications/mocks/notification-api.service.mock';
+import { Notification } from '@features/notifications/models/notification.model';
 import { NOTIFICATION_API_SERVICE } from '@features/notifications/services/notification-api.service';
 import { LayoutService } from '@layout/layout.service';
 
@@ -95,5 +96,47 @@ describe('AppTopbarComponent role switcher', () => {
     changePasswordItem!.command!({ item: changePasswordItem!, originalEvent: new Event('click') });
 
     expect(navigateSpy).toHaveBeenCalledWith('/p/account/password');
+  });
+
+  it('renders copy for staff notification kinds', async () => {
+    await identity.signIn({ email: 'bob@collections.example.com', password: 'vita2026' });
+    const fixture = TestBed.createComponent(AppTopbarComponent);
+    const component = fixture.componentInstance as unknown as {
+      notificationText: (notification: Notification) => string;
+    };
+    const baseNotification: Omit<Notification, 'kind'> = {
+      id: 'notification-1',
+      relatedResourceType: 'PROPOSAL',
+      relatedResourceId: 'proposal-1',
+      relatedResourceLabel: 'VR-2026-001',
+      triggeredBy: {
+        permissionId: 'perm-curatorial',
+        group: 'CURATORIAL',
+        user: {
+          id: 'user-curatorial',
+          name: 'Alice Curator',
+          email: 'alice@example.com',
+        },
+      },
+      note: null,
+      createdAt: '2026-07-30T12:00:00Z',
+      readAt: null,
+    };
+
+    expect(
+      component.notificationText({ ...baseNotification, kind: 'PROPOSAL_SUBMITTED' }),
+    ).toBe('Alice Curator submitted VR-2026-001.');
+    expect(
+      component.notificationText({
+        ...baseNotification,
+        kind: 'PROPOSAL_DOCUMENTS_SUBMITTED',
+      }),
+    ).toBe('Alice Curator submitted documents for VR-2026-001.');
+    expect(
+      component.notificationText({
+        ...baseNotification,
+        kind: 'PROPOSAL_CORRECTIONS_SUBMITTED',
+      }),
+    ).toBe('Corrections were submitted for VR-2026-001.');
   });
 });

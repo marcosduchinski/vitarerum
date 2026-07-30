@@ -18,6 +18,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import get_async_session
+from app.identity.public import PermissionReader, get_permission_reader
+from app.notifications.public import (
+    NotificationDispatcher,
+)
+from app.notifications.public import (
+    get_notification_dispatcher as build_notification_dispatcher,
+)
 from app.public_submission.application.ports import (
     AmendmentTokenRepository,
     CaptchaVerifier,
@@ -49,7 +56,10 @@ from app.public_submission.infrastructure.repositories import (
 )
 from app.reference_numbers.public import get_reference_generator
 from app.shared.persistence import run_with_unique_retry
-from app.use_of_collections.application.ports import ProposalRepository
+from app.use_of_collections.application.ports import (
+    ProposalNotificationEmailSender,
+    ProposalRepository,
+)
 from app.use_of_collections.application.use_cases import (
     RemoveAmendmentDocument,
     SubmitAmendmentCorrections,
@@ -57,6 +67,10 @@ from app.use_of_collections.application.use_cases import (
     SubmitProposal,
 )
 from app.use_of_collections.infrastructure.file_storage import LocalDiskFileStorage
+from app.use_of_collections.infrastructure.proposal_notification_email import (
+    LoggingProposalNotificationEmailSender,
+    SmtpProposalNotificationEmailSender,
+)
 from app.use_of_collections.infrastructure.repositories import (
     SqlAlchemyConversationRepository,
     SqlAlchemyProposalRepository,
@@ -137,6 +151,27 @@ def get_uoc_proposal_repo(session: DBSession) -> ProposalRepository:
     return SqlAlchemyProposalRepository(session)
 
 
+def get_reader(session: DBSession) -> PermissionReader:
+    return get_permission_reader(session)
+
+
+def get_proposal_notification_email_sender() -> ProposalNotificationEmailSender:
+    if not settings.smtp_host:
+        return LoggingProposalNotificationEmailSender()
+    return SmtpProposalNotificationEmailSender(
+        host=settings.smtp_host,
+        port=settings.smtp_port,
+        username=settings.smtp_username,
+        password=settings.smtp_password,
+        from_address=settings.smtp_from_address,
+        use_tls=settings.smtp_use_tls,
+    )
+
+
+def get_notifications_dispatcher(session: DBSession) -> NotificationDispatcher:
+    return build_notification_dispatcher(session)
+
+
 def get_submit_amendment_document(session: DBSession) -> SubmitAmendmentDocument:
     return SubmitAmendmentDocument(
         SqlAlchemyProposalRepository(session),
@@ -185,6 +220,14 @@ AmendmentTokenRepo = Annotated[
     AmendmentTokenRepository, Depends(get_amendment_token_repo)
 ]
 AmendmentProposalRepo = Annotated[ProposalRepository, Depends(get_uoc_proposal_repo)]
+AmendmentPermReader = Annotated[PermissionReader, Depends(get_reader)]
+AmendmentProposalEmailSender = Annotated[
+    ProposalNotificationEmailSender,
+    Depends(get_proposal_notification_email_sender),
+]
+AmendmentNotificationDispatch = Annotated[
+    NotificationDispatcher, Depends(get_notifications_dispatcher)
+]
 SubmitAmendmentDoc = Annotated[
     SubmitAmendmentDocument, Depends(get_submit_amendment_document)
 ]

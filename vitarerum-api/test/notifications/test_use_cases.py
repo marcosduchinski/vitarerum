@@ -123,6 +123,28 @@ async def test_create_notification_persists_unread_item() -> None:
     assert item.read_at is None
 
 
+async def test_create_notification_many_dedupes_recipients() -> None:
+    repo = _Repo()
+
+    await CreateNotification(repo).notify_many(
+        recipient_permission_ids=[
+            PermissionId("perm-recipient"),
+            PermissionId("perm-recipient"),
+            PermissionId("perm-other"),
+        ],
+        kind=NotificationKind.PROPOSAL_SUBMITTED,
+        triggered_by=PermissionId("perm-trigger"),
+        related_resource_type=RelatedResourceType.PROPOSAL,
+        related_resource_id="proposal-1",
+        related_resource_label="VRP-1",
+    )
+
+    assert [item.recipient_permission_id for item in repo.items.values()] == [
+        "perm-recipient",
+        "perm-other",
+    ]
+
+
 async def test_list_notifications_dedupes_triggered_by_resolution() -> None:
     repo = _Repo()
     repo.items = {

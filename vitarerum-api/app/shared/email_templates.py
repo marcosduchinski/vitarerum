@@ -239,6 +239,82 @@ def proposal_assigned_email(
     )
 
 
+def proposal_submitted_email(
+    *,
+    recipient_name: str,
+    proposal_reference: str,
+    submitted_by_name: str,
+    link: str,
+) -> EmailTemplate:
+    return EmailTemplate(
+        subject=(
+            f"Nova proposta {proposal_reference} submetida / "
+            f"New proposal {proposal_reference} submitted"
+        ),
+        body=(
+            f"Olá {recipient_name},\n\n"
+            f"{submitted_by_name} submeteu a proposta {proposal_reference}.\n\n"
+            f"Aceda à proposta: {link}\n\n"
+            "---\n\n"
+            f"Hello {recipient_name},\n\n"
+            f"{submitted_by_name} submitted proposal {proposal_reference}.\n\n"
+            f"Open the proposal: {link}"
+        ),
+    )
+
+
+def proposal_documents_submitted_email(
+    *,
+    recipient_name: str,
+    proposal_reference: str,
+    submitted_by_name: str,
+    link: str,
+) -> EmailTemplate:
+    return EmailTemplate(
+        subject=(
+            f"Documentos enviados para {proposal_reference} / "
+            f"Documents submitted for {proposal_reference}"
+        ),
+        body=(
+            f"Olá {recipient_name},\n\n"
+            f"{submitted_by_name} enviou documentos para a proposta "
+            f"{proposal_reference}.\n\n"
+            f"Aceda à proposta: {link}\n\n"
+            "---\n\n"
+            f"Hello {recipient_name},\n\n"
+            f"{submitted_by_name} submitted documents for proposal "
+            f"{proposal_reference}.\n\n"
+            f"Open the proposal: {link}"
+        ),
+    )
+
+
+def proposal_corrections_submitted_email(
+    *,
+    recipient_name: str,
+    proposal_reference: str,
+    submitted_by_name: str,
+    link: str,
+) -> EmailTemplate:
+    return EmailTemplate(
+        subject=(
+            f"Correções enviadas para {proposal_reference} / "
+            f"Corrections submitted for {proposal_reference}"
+        ),
+        body=(
+            f"Olá {recipient_name},\n\n"
+            f"{submitted_by_name} enviou correções para a proposta "
+            f"{proposal_reference}.\n\n"
+            f"Aceda à proposta: {link}\n\n"
+            "---\n\n"
+            f"Hello {recipient_name},\n\n"
+            f"{submitted_by_name} submitted corrections for proposal "
+            f"{proposal_reference}.\n\n"
+            f"Open the proposal: {link}"
+        ),
+    )
+
+
 def _bullet_block(title: str, items: list[str]) -> str:
     if not items:
         return ""

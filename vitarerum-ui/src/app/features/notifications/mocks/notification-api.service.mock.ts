@@ -79,6 +79,17 @@ export class NotificationApiServiceMock implements NotificationApi {
   private seed(): Notification[] {
     return [
       {
+        id: 'notif-submitted-1',
+        kind: 'PROPOSAL_SUBMITTED',
+        relatedResourceType: 'PROPOSAL',
+        relatedResourceId: 'proposal-submitted-zoology',
+        relatedResourceLabel: 'PROP-2026-003',
+        triggeredBy: ACTOR,
+        note: null,
+        createdAt: new Date(Date.now() - 1000 * 60 * 8).toISOString(),
+        readAt: null,
+      },
+      {
         id: 'notif-forwarded-1',
         kind: 'PROPOSAL_FORWARDED',
         relatedResourceType: 'PROPOSAL',
@@ -103,4 +114,3 @@ export class NotificationApiServiceMock implements NotificationApi {
     ];
   }
 }
-

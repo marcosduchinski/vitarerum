@@ -113,6 +113,7 @@ forbidden_modules = [
     "app.reference_numbers",
     "app.cidoc_crm",
     "app.museum_questions",
+    "app.notifications",
 ]
 ignore_imports = [
     # Known composition-root coupling: the public intake adapter wires other
@@ -131,9 +132,12 @@ ignore_imports = [
     # structurally implements AmendmentInvitationPort (defined in Use of
     # Collections) and references its ProposalRepository/ProposalId. Same
     # composition-root coupling as the intake path above.
+    "app.public_submission.presentation.dependencies -> app.identity.public",
     "app.public_submission.infrastructure.amendment -> app.use_of_collections.application.ports",
     "app.public_submission.infrastructure.amendment -> app.use_of_collections.domain.models",
     "app.public_submission.presentation.dependencies -> app.use_of_collections.application.ports",
+    "app.public_submission.presentation.dependencies -> app.use_of_collections.infrastructure.proposal_notification_email",
+    "app.public_submission.** -> app.notifications.public",
     "app.public_submission.presentation.routes -> app.use_of_collections.application.use_cases",
     "app.public_submission.presentation.routes -> app.use_of_collections.domain.enums",
     "app.public_submission.presentation.routes -> app.use_of_collections.domain.models",

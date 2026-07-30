@@ -27,7 +27,9 @@ from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_async_session
+from app.notifications.public import NotificationKind, RelatedResourceType
 from app.public_submission.application.use_cases import (
     RATE_LIMIT_PER_IP,
     CaptchaFailed,
@@ -44,6 +46,9 @@ from app.public_submission.domain.models import (
 from app.public_submission.infrastructure.amendment import hash_token
 from app.public_submission.presentation.dependencies import (
     AmendmentClock,
+    AmendmentNotificationDispatch,
+    AmendmentPermReader,
+    AmendmentProposalEmailSender,
     AmendmentProposalRepo,
     AmendmentRateLimiter,
     AmendmentTokenRepo,
@@ -65,6 +70,7 @@ from app.public_submission.presentation.schemas import (
     PublicProposalSubmission,
     PublicSubmissionReceipt,
 )
+from app.shared.kernel import PermissionId
 from app.shared.uploads import (
     ALLOWED_DOCUMENT_MAX_BYTES,
     ensure_allowed_document,
@@ -451,6 +457,9 @@ async def submit_amendment(
     clock: AmendmentClock,
     rate_limiter: AmendmentRateLimiter,
     submit_corrections: SubmitAmendmentCorr,
+    notification_dispatcher: AmendmentNotificationDispatch,
+    proposal_notification_email_sender: AmendmentProposalEmailSender,
+    reader: AmendmentPermReader,
     session: DBSession,
 ) -> AmendmentSubmitResult:
     _amendment_rate_limit(rate_limiter, _client_ip(request))
@@ -458,7 +467,7 @@ async def submit_amendment(
         token, token_repo, proposal_repo, clock
     )
     try:
-        await submit_corrections.execute(
+        proposal = await submit_corrections.execute(
             SubmitAmendmentCorrectionsInput(
                 proposal_id=ProposalId(proposal.id),
                 item_ids=record.correction_item_ids,
@@ -472,5 +481,35 @@ async def submit_amendment(
     # Single-use: burn the token so the link cannot be replayed.
     record.mark_used(clock.now())
     await token_repo.save(record)
+    recipient_permission_id = proposal.assigned_to
+    if recipient_permission_id is not None:
+        await notification_dispatcher.notify(
+            recipient_permission_id=recipient_permission_id,
+            kind=NotificationKind.PROPOSAL_CORRECTIONS_SUBMITTED,
+            triggered_by=None,
+            related_resource_type=RelatedResourceType.PROPOSAL,
+            related_resource_id=str(proposal.id),
+            related_resource_label=proposal.reference_number.value,
+        )
     await session.commit()
+    if recipient_permission_id is not None:
+        recipient = await reader.get_detail(recipient_permission_id)
+        if recipient is None:
+            raise RuntimeError(
+                f"Cannot resolve notification recipient {recipient_permission_id}"
+            )
+        submitted_by_name = "Requester"
+        if proposal.requested_by is not None:
+            requester = await reader.get_detail(PermissionId(proposal.requested_by))
+            if requester is not None:
+                submitted_by_name = requester.user.name
+        elif proposal.requester_contact is not None:
+            submitted_by_name = proposal.requester_contact.name
+        await proposal_notification_email_sender.send_proposal_corrections_submitted(
+            to_email=recipient.user.email,
+            recipient_name=recipient.user.name,
+            proposal_reference=proposal.reference_number.value,
+            submitted_by_name=submitted_by_name,
+            link=f"{settings.public_origin}/p/collections/proposals/{proposal.id}",
+        )
     return AmendmentSubmitResult()

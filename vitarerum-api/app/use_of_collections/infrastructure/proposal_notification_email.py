@@ -7,13 +7,34 @@ import aiosmtplib
 
 from app.shared.email_templates import (
     proposal_assigned_email,
+    proposal_corrections_submitted_email,
+    proposal_documents_submitted_email,
     proposal_forwarded_email,
+    proposal_submitted_email,
 )
 
 logger = logging.getLogger(__name__)
 
 
 class LoggingProposalNotificationEmailSender:
+    async def send_proposal_submitted(
+        self,
+        *,
+        to_email: str,
+        recipient_name: str,
+        proposal_reference: str,
+        submitted_by_name: str,
+        link: str,
+    ) -> None:
+        logger.info(
+            "[use-of-collections] proposal %s submitted; notifying %s by %s "
+            "(link: %s)",
+            proposal_reference,
+            to_email,
+            submitted_by_name,
+            link,
+        )
+
     async def send_proposal_forwarded(
         self,
         *,
@@ -54,6 +75,42 @@ class LoggingProposalNotificationEmailSender:
             note,
         )
 
+    async def send_proposal_documents_submitted(
+        self,
+        *,
+        to_email: str,
+        recipient_name: str,
+        proposal_reference: str,
+        submitted_by_name: str,
+        link: str,
+    ) -> None:
+        logger.info(
+            "[use-of-collections] proposal %s documents submitted; "
+            "notifying %s by %s (link: %s)",
+            proposal_reference,
+            to_email,
+            submitted_by_name,
+            link,
+        )
+
+    async def send_proposal_corrections_submitted(
+        self,
+        *,
+        to_email: str,
+        recipient_name: str,
+        proposal_reference: str,
+        submitted_by_name: str,
+        link: str,
+    ) -> None:
+        logger.info(
+            "[use-of-collections] proposal %s corrections submitted; "
+            "notifying %s by %s (link: %s)",
+            proposal_reference,
+            to_email,
+            submitted_by_name,
+            link,
+        )
+
 
 class SmtpProposalNotificationEmailSender:
     def __init__(
@@ -91,6 +148,23 @@ class SmtpProposalNotificationEmailSender:
         )
         await self._send(to_email, template.subject, template.body)
 
+    async def send_proposal_submitted(
+        self,
+        *,
+        to_email: str,
+        recipient_name: str,
+        proposal_reference: str,
+        submitted_by_name: str,
+        link: str,
+    ) -> None:
+        template = proposal_submitted_email(
+            recipient_name=recipient_name,
+            proposal_reference=proposal_reference,
+            submitted_by_name=submitted_by_name,
+            link=link,
+        )
+        await self._send(to_email, template.subject, template.body)
+
     async def send_proposal_assigned(
         self,
         *,
@@ -106,6 +180,40 @@ class SmtpProposalNotificationEmailSender:
             proposal_reference=proposal_reference,
             assigned_by_name=assigned_by_name,
             note=note,
+            link=link,
+        )
+        await self._send(to_email, template.subject, template.body)
+
+    async def send_proposal_documents_submitted(
+        self,
+        *,
+        to_email: str,
+        recipient_name: str,
+        proposal_reference: str,
+        submitted_by_name: str,
+        link: str,
+    ) -> None:
+        template = proposal_documents_submitted_email(
+            recipient_name=recipient_name,
+            proposal_reference=proposal_reference,
+            submitted_by_name=submitted_by_name,
+            link=link,
+        )
+        await self._send(to_email, template.subject, template.body)
+
+    async def send_proposal_corrections_submitted(
+        self,
+        *,
+        to_email: str,
+        recipient_name: str,
+        proposal_reference: str,
+        submitted_by_name: str,
+        link: str,
+    ) -> None:
+        template = proposal_corrections_submitted_email(
+            recipient_name=recipient_name,
+            proposal_reference=proposal_reference,
+            submitted_by_name=submitted_by_name,
             link=link,
         )
         await self._send(to_email, template.subject, template.body)

@@ -12,7 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_session
 from app.identity.public import (
+    GroupName,
     PermissionReader,
+    PermissionView,
     get_permission_reader,
     get_requester_provisioner,
 )
@@ -152,6 +154,21 @@ def get_notifications_dispatcher(session: DBSession) -> NotificationDispatcher:
     return build_notification_dispatcher(session)
 
 
+async def get_staff_notification_recipients(
+    reader: Annotated[PermissionReader, Depends(get_reader)],
+) -> list[PermissionView]:
+    recipients: dict[str, PermissionView] = {}
+    for group in (
+        GroupName.CURATORIAL,
+        GroupName.COLLECTIONS_MANAGEMENT,
+        GroupName.DIRECTION,
+        GroupName.SYS_ADMIN,
+    ):
+        for permission in await reader.list_by_group(group):
+            recipients.setdefault(permission.permission_id, permission)
+    return list(recipients.values())
+
+
 ProjectRepo = Annotated[CollectionUseProjectRepository, Depends(get_project_repo)]
 ProposalRepo = Annotated[ProposalRepository, Depends(get_proposal_repo)]
 ConvRepo = Annotated[ConversationRepository, Depends(get_conversation_repo)]
@@ -182,6 +199,9 @@ ReferenceGenerator = Annotated[
 ]
 NotificationDispatch = Annotated[
     NotificationDispatcher, Depends(get_notifications_dispatcher)
+]
+StaffNotificationRecipients = Annotated[
+    list[PermissionView], Depends(get_staff_notification_recipients)
 ]
 
 

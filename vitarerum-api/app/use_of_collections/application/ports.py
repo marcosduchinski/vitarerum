@@ -297,6 +297,16 @@ class RequesterAccessEmailSender(Protocol):
 
 
 class ProposalNotificationEmailSender(Protocol):
+    async def send_proposal_submitted(
+        self,
+        *,
+        to_email: str,
+        recipient_name: str,
+        proposal_reference: str,
+        submitted_by_name: str,
+        link: str,
+    ) -> None: ...
+
     async def send_proposal_forwarded(
         self,
         *,
@@ -305,6 +315,26 @@ class ProposalNotificationEmailSender(Protocol):
         proposal_reference: str,
         forwarded_by_name: str,
         note: str | None,
+        link: str,
+    ) -> None: ...
+
+    async def send_proposal_documents_submitted(
+        self,
+        *,
+        to_email: str,
+        recipient_name: str,
+        proposal_reference: str,
+        submitted_by_name: str,
+        link: str,
+    ) -> None: ...
+
+    async def send_proposal_corrections_submitted(
+        self,
+        *,
+        to_email: str,
+        recipient_name: str,
+        proposal_reference: str,
+        submitted_by_name: str,
         link: str,
     ) -> None: ...
 

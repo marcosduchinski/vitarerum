@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -40,3 +41,29 @@ class CreateNotification:
             created_at=_now(),
         )
         await self._repo.add(notification)
+
+    async def notify_many(
+        self,
+        *,
+        recipient_permission_ids: Iterable[PermissionId],
+        kind: NotificationKind,
+        triggered_by: PermissionId | None,
+        related_resource_type: RelatedResourceType | None = None,
+        related_resource_id: str | None = None,
+        related_resource_label: str | None = None,
+        note: str | None = None,
+    ) -> None:
+        seen: set[PermissionId] = set()
+        for recipient_permission_id in recipient_permission_ids:
+            if recipient_permission_id in seen:
+                continue
+            seen.add(recipient_permission_id)
+            await self.notify(
+                recipient_permission_id=recipient_permission_id,
+                kind=kind,
+                triggered_by=triggered_by,
+                related_resource_type=related_resource_type,
+                related_resource_id=related_resource_id,
+                related_resource_label=related_resource_label,
+                note=note,
+            )
