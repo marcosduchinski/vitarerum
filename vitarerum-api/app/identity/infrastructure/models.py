@@ -10,7 +10,7 @@ from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
-from app.identity.domain.enums import GroupName
+from app.identity.domain.enums import GroupName, UserStatus
 
 
 class InstitutionRecord(Base):
@@ -32,6 +32,10 @@ class UserRecord(Base):
     # gives case-insensitive uniqueness portably (no functional index needed).
     email: Mapped[str] = mapped_column(String(255), default="", unique=True)
     password_hash: Mapped[str] = mapped_column(String(255), default="")
+    status: Mapped[UserStatus] = mapped_column(
+        SAEnum(UserStatus, name="identity_user_status"),
+        default=UserStatus.ACTIVE,
+    )
     password_changed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), default=None
     )

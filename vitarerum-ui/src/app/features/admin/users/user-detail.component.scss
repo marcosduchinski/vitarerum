@@ -21,13 +21,69 @@
   gap: 1rem;
 }
 
+.user-detail__section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--color-line);
+}
+
 .user-detail__section h3 {
   margin: 0;
   color: var(--color-text);
   font-size: 1rem;
   font-weight: 700;
+}
+
+.user-detail__section > h3 {
   padding-bottom: 0.5rem;
   border-bottom: 1px solid var(--color-line);
+}
+
+.user-detail__account-actions,
+.user-detail__edit-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.user-detail__text-input {
+  min-width: min(22rem, 100%);
+  height: 2.5rem;
+  padding: 0 0.75rem;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-panel);
+  color: var(--color-text);
+  font: inherit;
+}
+
+.user-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.5rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  background: var(--status-approved-bg, #e8f6ec);
+  color: var(--status-approved-text, #1d7f3f);
+  font-size: 0.72rem;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.user-status--disabled {
+  background: var(--status-rejected-bg, #fce8e6);
+  color: var(--status-rejected-text, #b3261e);
+}
+
+.user-detail__success {
+  margin: 0;
+  color: var(--status-approved-text, #1d7f3f);
+  font-size: 0.875rem;
+  font-weight: 600;
 }
 
 .user-detail__empty {
@@ -81,7 +137,8 @@
   cursor: pointer;
 }
 
-.user-detail__group-select:focus {
+.user-detail__group-select:focus,
+.user-detail__text-input:focus {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }

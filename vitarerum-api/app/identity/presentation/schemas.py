@@ -1,12 +1,13 @@
 from pydantic import BaseModel
 
-from app.identity.domain.enums import GroupName
+from app.identity.domain.enums import GroupName, UserStatus
 
 
 class UserSummary(BaseModel):
     id: str
     name: str
     email: str
+    status: UserStatus = UserStatus.ACTIVE
 
 
 class PermissionDetail(BaseModel):
@@ -19,6 +20,10 @@ class CreateUserRequest(BaseModel):
     name: str
     email: str
     password: str | None = None
+
+
+class UpdateUserRequest(BaseModel):
+    name: str
 
 
 class LoginRequest(BaseModel):
@@ -68,6 +73,7 @@ class UserDetailResponse(BaseModel):
     id: str
     name: str
     email: str
+    status: UserStatus
     permissions: list[PermissionDetail]
 
 
@@ -75,6 +81,7 @@ class UserListItemResponse(BaseModel):
     id: str
     name: str
     email: str
+    status: UserStatus
     permissions: list[PermissionDetail]
 
 

@@ -8,7 +8,7 @@ from sqlalchemy.orm import selectinload
 
 from app.identity.application.ports import UserFilters
 from app.identity.application.read_models import PermissionView, UserView
-from app.identity.domain.enums import GroupName
+from app.identity.domain.enums import GroupName, UserStatus
 from app.identity.domain.models import (
     Group,
     GroupId,
@@ -43,6 +43,7 @@ def user_to_record(user: User) -> UserRecord:
         name=user.name,
         email=user.email,
         password_hash=user.password_hash,
+        status=user.status,
         password_changed_at=user.password_changed_at,
     )
 
@@ -53,6 +54,7 @@ def user_to_domain(record: UserRecord) -> User:
         name=record.name,
         email=record.email,
         password_hash=record.password_hash,
+        status=record.status or UserStatus.ACTIVE,
         password_changed_at=record.password_changed_at,
     )
 
@@ -120,6 +122,7 @@ def permission_to_view(record: PermissionRecord) -> PermissionView:
             id=record.user.id if record.user else "",
             name=record.user.name if record.user else "",
             email=record.user.email if record.user else "",
+            status=record.user.status if record.user and record.user.status else None,
             password_changed_at=(
                 record.user.password_changed_at if record.user else None
             ),
@@ -209,6 +212,7 @@ class SqlAlchemyUserRepository:
         record.name = user.name
         record.email = user.email
         record.password_hash = user.password_hash
+        record.status = user.status
         record.password_changed_at = user.password_changed_at
         await self._session.flush()
 
@@ -344,6 +348,17 @@ class SqlAlchemyPermissionRepository:
         data_result = await self._session.execute(data_stmt)
         records = data_result.scalars().all()
         return [permission_to_domain(r) for r in records], total
+
+    async def count_active_by_group_name(self, group: GroupName) -> int:
+        stmt = (
+            select(func.count(func.distinct(UserRecord.id)))
+            .select_from(PermissionRecord)
+            .join(PermissionRecord.group)
+            .join(PermissionRecord.user)
+            .where(GroupRecord.name == group, UserRecord.status == UserStatus.ACTIVE)
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar_one()
 
     async def delete(self, permission_id: PermissionId) -> None:
         record = await self._session.get(PermissionRecord, permission_id)

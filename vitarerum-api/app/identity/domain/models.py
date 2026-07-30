@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import NewType
 
-from app.identity.domain.enums import GroupName
+from app.identity.domain.enums import GroupName, UserStatus
 from app.shared.kernel import PermissionId as PermissionId
 
 UserId = NewType("UserId", str)
@@ -29,6 +29,7 @@ class User:
     name: str = ""
     email: str = ""
     password_hash: str = ""
+    status: UserStatus = UserStatus.ACTIVE
     # Bumped to "now" on every password change/reset. Access tokens issued
     # before this instant are rejected (see get_caller_permission), so a
     # stolen bearer token stops working once the owner reacts.

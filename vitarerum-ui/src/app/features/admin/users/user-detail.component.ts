@@ -78,6 +78,15 @@ export class UserDetailComponent {
   });
 
   protected readonly selectedGroupId = signal('');
+  protected readonly editingName = signal(false);
+  protected readonly nameDraft = signal('');
+  protected readonly savePending = signal(false);
+  protected readonly saveError = signal<ApiError | null>(null);
+  protected readonly statusPending = signal(false);
+  protected readonly statusError = signal<ApiError | null>(null);
+  protected readonly resetPending = signal(false);
+  protected readonly resetError = signal<ApiError | null>(null);
+  protected readonly resetSent = signal(false);
   protected readonly assignPending = signal(false);
   protected readonly assignError = signal<ApiError | null>(null);
 
@@ -100,6 +109,76 @@ export class UserDetailComponent {
 
   protected onGroupSelect(event: Event): void {
     this.selectedGroupId.set((event.target as HTMLSelectElement).value);
+  }
+
+  protected statusLabel(): string {
+    return (this.user()?.status ?? 'ACTIVE') === 'ACTIVE' ? 'Active' : 'Disabled';
+  }
+
+  protected onNameInput(event: Event): void {
+    this.nameDraft.set((event.target as HTMLInputElement).value);
+  }
+
+  protected editName(): void {
+    this.editingName.set(true);
+    this.nameDraft.set(this.user()?.name ?? '');
+    this.saveError.set(null);
+  }
+
+  protected cancelEditName(): void {
+    this.editingName.set(false);
+    this.nameDraft.set('');
+    this.saveError.set(null);
+  }
+
+  protected async saveName(): Promise<void> {
+    const name = this.nameDraft().trim();
+    if (!name) return;
+    this.savePending.set(true);
+    this.saveError.set(null);
+    try {
+      await firstValueFrom(this.userService.updateUser(this.id(), { name }));
+      this.editingName.set(false);
+      this.nameDraft.set('');
+      this.userResource.reload();
+    } catch (err) {
+      this.saveError.set(toApiError(err));
+    } finally {
+      this.savePending.set(false);
+    }
+  }
+
+  protected async toggleStatus(): Promise<void> {
+    const user = this.user();
+    if (!user) return;
+    this.statusPending.set(true);
+    this.statusError.set(null);
+    try {
+      if ((user.status ?? 'ACTIVE') === 'ACTIVE') {
+        await firstValueFrom(this.userService.disableUser(user.id));
+      } else {
+        await firstValueFrom(this.userService.enableUser(user.id));
+      }
+      this.userResource.reload();
+    } catch (err) {
+      this.statusError.set(toApiError(err));
+    } finally {
+      this.statusPending.set(false);
+    }
+  }
+
+  protected async requestPasswordReset(): Promise<void> {
+    this.resetPending.set(true);
+    this.resetError.set(null);
+    this.resetSent.set(false);
+    try {
+      await firstValueFrom(this.userService.requestPasswordReset(this.id()));
+      this.resetSent.set(true);
+    } catch (err) {
+      this.resetError.set(toApiError(err));
+    } finally {
+      this.resetPending.set(false);
+    }
   }
 
   protected async assignGroup(): Promise<void> {

@@ -3,7 +3,7 @@ import { GroupsResponse } from '@core/auth/models/group.model';
 import { IDENTITY_SERVICE } from '@core/auth/identity.service';
 import { GroupName } from '@core/auth/models/group-name.enum';
 import { GroupMembership, UserPermissionsResponse } from '@core/auth/models/permission.model';
-import { CreateUserPayload, UserDetail } from '@core/auth/models/user.model';
+import { CreateUserPayload, UpdateUserPayload, UserDetail } from '@core/auth/models/user.model';
 import { makePageFrom, MOCK_GROUPS, MOCK_MEMBERSHIPS, MOCK_USERS } from '../../collections/proposals/mocks/mock-data';
 import { Page, PageQuery } from '@shared/models/page.model';
 import { Observable, of, throwError } from 'rxjs';
@@ -46,10 +46,34 @@ export class UserManagementServiceMock {
       id: `u-${Date.now()}`,
       name: payload.name.trim(),
       email,
+      status: 'ACTIVE',
       permissions: [],
     };
     this.users.push(user);
     return of(user);
+  }
+
+  updateUser(userId: string, payload: UpdateUserPayload): Observable<UserDetail> {
+    const idx = this.users.findIndex(u => u.id === userId);
+    if (idx === -1) return throwError(() => ({ status: 404, error: 'NOT_FOUND' }));
+    this.users[idx] = { ...this.users[idx], name: payload.name.trim() };
+    this.syncSessionIfCurrentUser(userId);
+    return of(this.users[idx]);
+  }
+
+  disableUser(userId: string): Observable<UserDetail> {
+    return this.setUserStatus(userId, 'DISABLED');
+  }
+
+  enableUser(userId: string): Observable<UserDetail> {
+    return this.setUserStatus(userId, 'ACTIVE');
+  }
+
+  requestPasswordReset(userId: string): Observable<void> {
+    if (!this.users.some(u => u.id === userId)) {
+      return throwError(() => ({ status: 404, error: 'NOT_FOUND' }));
+    }
+    return of(undefined);
   }
 
   assignGroup(userId: string, groupId: string): Observable<GroupMembership> {
@@ -112,5 +136,13 @@ export class UserManagementServiceMock {
     if (!user) return;
     const groups = user.permissions.map(p => p.group.name as GroupName);
     this.identity.updateAvailableGroups(groups);
+  }
+
+  private setUserStatus(userId: string, status: 'ACTIVE' | 'DISABLED'): Observable<UserDetail> {
+    const idx = this.users.findIndex(u => u.id === userId);
+    if (idx === -1) return throwError(() => ({ status: 404, error: 'NOT_FOUND' }));
+    this.users[idx] = { ...this.users[idx], status };
+    this.syncSessionIfCurrentUser(userId);
+    return of(this.users[idx]);
   }
 }

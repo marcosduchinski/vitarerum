@@ -8,7 +8,7 @@ import {
   GroupMembership,
   UserPermissionsResponse,
 } from '@core/auth/models/permission.model';
-import { CreateUserPayload, UserDetail } from '@core/auth/models/user.model';
+import { CreateUserPayload, UpdateUserPayload, UserDetail } from '@core/auth/models/user.model';
 import { Page, PageQuery } from '@shared/models/page.model';
 import { Observable } from 'rxjs';
 
@@ -42,6 +42,22 @@ export class UserManagementService {
 
   getUser(userId: string): Observable<UserDetail> {
     return this.http.get<UserDetail>(this.url(`/users/${userId}`));
+  }
+
+  updateUser(userId: string, payload: UpdateUserPayload): Observable<UserDetail> {
+    return this.http.put<UserDetail>(this.url(`/users/${userId}`), payload);
+  }
+
+  disableUser(userId: string): Observable<UserDetail> {
+    return this.http.post<UserDetail>(this.url(`/users/${userId}/disable`), null);
+  }
+
+  enableUser(userId: string): Observable<UserDetail> {
+    return this.http.post<UserDetail>(this.url(`/users/${userId}/enable`), null);
+  }
+
+  requestPasswordReset(userId: string): Observable<void> {
+    return this.http.post<void>(this.url(`/users/${userId}/password-reset`), null);
   }
 
   assignGroup(userId: string, groupId: string): Observable<GroupMembership> {

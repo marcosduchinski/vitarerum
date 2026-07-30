@@ -8,6 +8,70 @@
   } @else if (user()) {
     <app-page-header eyebrow="User" [title]="user()!.name" [description]="user()!.email" />
 
+    <section class="user-detail__section" aria-labelledby="account-heading">
+      <div class="user-detail__section-header">
+        <h3 id="account-heading">Account</h3>
+        <span class="user-status" [class.user-status--disabled]="(user()!.status ?? 'ACTIVE') === 'DISABLED'">
+          {{ statusLabel() }}
+        </span>
+      </div>
+
+      @if (editingName()) {
+        <div class="user-detail__edit-row">
+          <label class="sr-only" for="user-name">Name</label>
+          <input
+            id="user-name"
+            class="user-detail__text-input"
+            type="text"
+            [value]="nameDraft()"
+            (input)="onNameInput($event)"
+          />
+          <button pButton type="button" [disabled]="!nameDraft().trim() || savePending()" (click)="saveName()">
+            {{ savePending() ? 'Saving...' : 'Save' }}
+          </button>
+          <button pButton type="button" class="p-button-text" [disabled]="savePending()" (click)="cancelEditName()">
+            Cancel
+          </button>
+        </div>
+      } @else {
+        <div class="user-detail__account-actions">
+          <button pButton type="button" class="p-button-outlined" (click)="editName()">
+            Edit name
+          </button>
+          <button pButton type="button" class="p-button-outlined" [disabled]="resetPending()" (click)="requestPasswordReset()">
+            {{ resetPending() ? 'Sending...' : 'Send password reset' }}
+          </button>
+          <button
+            pButton
+            type="button"
+            class="p-button-outlined"
+            [class.p-button-danger]="(user()!.status ?? 'ACTIVE') === 'ACTIVE'"
+            [disabled]="statusPending()"
+            (click)="toggleStatus()"
+          >
+            @if ((user()!.status ?? 'ACTIVE') === 'ACTIVE') {
+              {{ statusPending() ? 'Disabling...' : 'Disable user' }}
+            } @else {
+              {{ statusPending() ? 'Enabling...' : 'Enable user' }}
+            }
+          </button>
+        </div>
+      }
+
+      @if (resetSent()) {
+        <p class="user-detail__success">Password reset email sent.</p>
+      }
+      @if (saveError()) {
+        <app-error-message [apiError]="saveError()!" />
+      }
+      @if (statusError()) {
+        <app-error-message [apiError]="statusError()!" />
+      }
+      @if (resetError()) {
+        <app-error-message [apiError]="resetError()!" />
+      }
+    </section>
+
     <section class="user-detail__section" aria-labelledby="groups-heading">
       <h3 id="groups-heading">Group memberships</h3>
 

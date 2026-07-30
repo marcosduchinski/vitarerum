@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
+from datetime import timedelta
 from typing import Annotated
 
+import aiosmtplib
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_async_session
 from app.identity.application.password_policy import WeakPassword
 from app.identity.application.ports import UserFilters
@@ -18,20 +22,27 @@ from app.identity.application.use_cases import (
     GetInstitution,
     GetUser,
     InstitutionInUse,
+    LastActiveSysAdmin,
     ListInstitutions,
     ListUsers,
     RemoveUserFromGroup,
+    RequestAdminPasswordReset,
+    SetUserStatus,
     UpdateInstitution,
+    UpdateUserName,
 )
-from app.identity.domain.enums import GroupName
+from app.identity.domain.enums import GroupName, UserStatus
 from app.identity.domain.models import GroupId, InstitutionId, UserId
+from app.identity.infrastructure.clock import SystemClock
 from app.identity.infrastructure.repositories import (
     SqlAlchemyGroupRepository,
     SqlAlchemyInstitutionRepository,
+    SqlAlchemyPasswordResetTokenRepository,
     SqlAlchemyPermissionRepository,
     SqlAlchemyUserRepository,
 )
 from app.identity.infrastructure.security import BcryptPasswordHasher
+from app.identity.presentation.dependencies import PasswordEmailSenderDep
 from app.identity.presentation.schemas import (
     CreateInstitutionRequest,
     CreateUserRequest,
@@ -44,6 +55,7 @@ from app.identity.presentation.schemas import (
     PaginatedUsersResponse,
     PermissionDetail,
     UpdateInstitutionRequest,
+    UpdateUserRequest,
     UserDetailResponse,
     UserListItemResponse,
     UserPermissionsResponse,
@@ -68,8 +80,34 @@ def _permission_detail(p: object) -> PermissionDetail:
             id=perm.user.id if perm.user else "",
             name=perm.user.name if perm.user else "",
             email=perm.user.email if perm.user else "",
+            status=perm.user.status if perm.user else UserStatus.ACTIVE,
         ),
         group=perm.group.name if perm.group else "EXTERNAL",
+    )
+
+
+def _user_detail_response(
+    user: object, permissions: Sequence[object]
+) -> UserDetailResponse:
+    from app.identity.domain.models import User
+
+    u: User = user  # type: ignore[assignment]
+    return UserDetailResponse(
+        id=u.id,
+        name=u.name,
+        email=u.email,
+        status=u.status,
+        permissions=[_permission_detail(p) for p in permissions],
+    )
+
+
+def _email_delivery_failed() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        detail={
+            "error": "EMAIL_DELIVERY_FAILED",
+            "message": "Password reset email could not be delivered",
+        },
     )
 
 
@@ -104,9 +142,7 @@ async def create_user(
                 "message": "A user with this email already exists",
             },
         ) from exc
-    return UserDetailResponse(
-        id=user.id, name=user.name, email=user.email, permissions=[]
-    )
+    return _user_detail_response(user, [])
 
 
 @users_router.get("", response_model=PaginatedUsersResponse)
@@ -134,6 +170,7 @@ async def list_users(
                 id=u.id,
                 name=u.name,
                 email=u.email,
+                status=u.status,
                 permissions=[_permission_detail(p) for p in perms],
             )
         )
@@ -167,12 +204,114 @@ async def get_user(
             },
         )
     perms = await perm_repo.get_by_user_id(UserId(user_id))
-    return UserDetailResponse(
-        id=user.id,
-        name=user.name,
-        email=user.email,
-        permissions=[_permission_detail(p) for p in perms],
-    )
+    return _user_detail_response(user, perms)
+
+
+@users_router.put("/{user_id}", response_model=UserDetailResponse)
+async def update_user(
+    user_id: str,
+    body: UpdateUserRequest,
+    caller: CallerPermission,
+    session: DBSession,
+) -> UserDetailResponse:
+    require_group(caller, GroupName.SYS_ADMIN)
+    user_repo = SqlAlchemyUserRepository(session)
+    perm_repo = SqlAlchemyPermissionRepository(session)
+    try:
+        user = await UpdateUserName(user_repo).execute(UserId(user_id), body.name)
+        await session.commit()
+    except LookupError as exc:
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": "USER_NOT_FOUND", "message": str(exc)},
+        ) from exc
+    perms = await perm_repo.get_by_user_id(UserId(user_id))
+    return _user_detail_response(user, perms)
+
+
+@users_router.post("/{user_id}/disable", response_model=UserDetailResponse)
+async def disable_user(
+    user_id: str,
+    caller: CallerPermission,
+    session: DBSession,
+) -> UserDetailResponse:
+    require_group(caller, GroupName.SYS_ADMIN)
+    user_repo = SqlAlchemyUserRepository(session)
+    perm_repo = SqlAlchemyPermissionRepository(session)
+    try:
+        user = await SetUserStatus(user_repo, perm_repo).execute(
+            UserId(user_id), UserStatus.DISABLED
+        )
+        await session.commit()
+    except LookupError as exc:
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": "USER_NOT_FOUND", "message": str(exc)},
+        ) from exc
+    except LastActiveSysAdmin as exc:
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"error": "LAST_ACTIVE_SYS_ADMIN", "message": str(exc)},
+        ) from exc
+    perms = await perm_repo.get_by_user_id(UserId(user_id))
+    return _user_detail_response(user, perms)
+
+
+@users_router.post("/{user_id}/enable", response_model=UserDetailResponse)
+async def enable_user(
+    user_id: str,
+    caller: CallerPermission,
+    session: DBSession,
+) -> UserDetailResponse:
+    require_group(caller, GroupName.SYS_ADMIN)
+    user_repo = SqlAlchemyUserRepository(session)
+    perm_repo = SqlAlchemyPermissionRepository(session)
+    try:
+        user = await SetUserStatus(user_repo, perm_repo).execute(
+            UserId(user_id), UserStatus.ACTIVE
+        )
+        await session.commit()
+    except LookupError as exc:
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": "USER_NOT_FOUND", "message": str(exc)},
+        ) from exc
+    perms = await perm_repo.get_by_user_id(UserId(user_id))
+    return _user_detail_response(user, perms)
+
+
+@users_router.post("/{user_id}/password-reset", status_code=status.HTTP_204_NO_CONTENT)
+async def request_user_password_reset(
+    user_id: str,
+    caller: CallerPermission,
+    session: DBSession,
+    email_sender: PasswordEmailSenderDep,
+) -> None:
+    require_group(caller, GroupName.SYS_ADMIN)
+    try:
+        outcome = await RequestAdminPasswordReset(
+            user_repo=SqlAlchemyUserRepository(session),
+            token_repo=SqlAlchemyPasswordResetTokenRepository(session),
+            clock=SystemClock(),
+            token_ttl=timedelta(minutes=settings.password_reset_token_ttl_minutes),
+        ).execute(UserId(user_id))
+        await session.commit()
+    except LookupError as exc:
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": "USER_NOT_FOUND", "message": str(exc)},
+        ) from exc
+    try:
+        await email_sender.send_password_reset(
+            outcome.email, outcome.display_name, outcome.raw_token
+        )
+    except aiosmtplib.SMTPException as exc:
+        raise _email_delivery_failed() from exc
 
 
 @users_router.post(
@@ -248,9 +387,16 @@ async def remove_user_from_group(
     try:
         await RemoveUserFromGroup(perm_repo).execute(UserId(user_id), GroupId(group_id))
     except LookupError as exc:
+        await session.rollback()
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"error": "PERMISSION_NOT_FOUND", "message": str(exc)},
+        ) from exc
+    except LastActiveSysAdmin as exc:
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"error": "LAST_ACTIVE_SYS_ADMIN", "message": str(exc)},
         ) from exc
     await session.commit()
 

@@ -19,7 +19,7 @@ from app.identity.application.ports import (
     UserRepository,
 )
 from app.identity.application.read_models import Actor
-from app.identity.domain.enums import GroupName
+from app.identity.domain.enums import GroupName, UserStatus
 from app.identity.domain.models import (
     GroupId,
     Institution,
@@ -75,6 +75,10 @@ class InvalidOrExpiredResetToken(Exception):
 
 class InstitutionInUse(Exception):
     """Raised when deleting an institution that still owns groups."""
+
+
+class LastActiveSysAdmin(Exception):
+    """Raised when an operation would leave the system without an active admin."""
 
 
 def _new_id() -> str:
@@ -216,7 +220,11 @@ class AuthenticateUser:
         self, email: str, password: str
     ) -> tuple[User, list[Permission]]:
         user = await self._user_repo.get_by_email(_normalize_email(email))
-        if user is None or not self._hasher.verify(password, user.password_hash):
+        if (
+            user is None
+            or user.status is not UserStatus.ACTIVE
+            or not self._hasher.verify(password, user.password_hash)
+        ):
             raise InvalidCredentials("Invalid email or password")
         permissions = await self._permission_repo.get_by_user_id(UserId(user.id))
         if not permissions:
@@ -395,6 +403,89 @@ class GetUser:
         return await self._repo.get_by_id(user_id)
 
 
+class UpdateUserName:
+    def __init__(self, repo: UserRepository) -> None:
+        self._repo = repo
+
+    async def execute(self, user_id: UserId, name: str) -> User:
+        user = await self._repo.get_by_id(user_id)
+        if user is None:
+            raise LookupError(f"No user found with id {user_id}")
+        user.name = name.strip()
+        await self._repo.update(user)
+        return user
+
+
+class SetUserStatus:
+    def __init__(
+        self,
+        user_repo: UserRepository,
+        permission_repo: PermissionRepository,
+    ) -> None:
+        self._user_repo = user_repo
+        self._permission_repo = permission_repo
+
+    async def execute(self, user_id: UserId, status: UserStatus) -> User:
+        user = await self._user_repo.get_by_id(user_id)
+        if user is None:
+            raise LookupError(f"No user found with id {user_id}")
+        if status is UserStatus.DISABLED and user.status is UserStatus.ACTIVE:
+            permissions = await self._permission_repo.get_by_user_id(user_id)
+            is_sys_admin = any(
+                p.group is not None and p.group.name is GroupName.SYS_ADMIN
+                for p in permissions
+            )
+            if (
+                is_sys_admin
+                and await self._permission_repo.count_active_by_group_name(
+                    GroupName.SYS_ADMIN
+                )
+                <= 1
+            ):
+                raise LastActiveSysAdmin(
+                    "Cannot disable the last active system administrator"
+                )
+        user.status = status
+        await self._user_repo.update(user)
+        return user
+
+
+class RequestAdminPasswordReset:
+    def __init__(
+        self,
+        user_repo: UserRepository,
+        token_repo: PasswordResetTokenRepository,
+        clock: Clock,
+        token_ttl: timedelta,
+    ) -> None:
+        self._user_repo = user_repo
+        self._token_repo = token_repo
+        self._clock = clock
+        self._token_ttl = token_ttl
+
+    async def execute(self, user_id: UserId) -> PasswordResetOutcome:
+        user = await self._user_repo.get_by_id(user_id)
+        if user is None:
+            raise LookupError(f"No user found with id {user_id}")
+        now = self._clock.now()
+        await self._token_repo.invalidate_active_for_user(user.id, now)
+        raw_token = secrets.token_urlsafe(32)
+        await self._token_repo.add(
+            PasswordResetToken(
+                id=str(uuid4()),
+                user_id=user.id,
+                token_hash=_hash_token(raw_token),
+                created_at=now,
+                expires_at=now + self._token_ttl,
+            )
+        )
+        return PasswordResetOutcome(
+            email=user.email,
+            display_name=user.name,
+            raw_token=raw_token,
+        )
+
+
 class AssignUserToGroup:
     def __init__(
         self,
@@ -444,6 +535,19 @@ class RemoveUserFromGroup:
         if existing is None:
             raise LookupError(
                 f"User {user_id} is not a member of group {group_id}"
+            )
+        if (
+            existing.group is not None
+            and existing.group.name is GroupName.SYS_ADMIN
+            and existing.user is not None
+            and existing.user.status is UserStatus.ACTIVE
+            and await self._permission_repo.count_active_by_group_name(
+                GroupName.SYS_ADMIN
+            )
+            <= 1
+        ):
+            raise LastActiveSysAdmin(
+                "Cannot remove the last active system administrator"
             )
         await self._permission_repo.delete(existing.id)
 

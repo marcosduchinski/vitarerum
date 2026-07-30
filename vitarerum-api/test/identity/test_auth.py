@@ -19,12 +19,17 @@ from app.identity.application.use_cases import (
     ChangeOwnPassword,
     IncorrectCurrentPassword,
     InvalidCredentials,
+    LastActiveSysAdmin,
+    RequestAdminPasswordReset,
+    SetUserStatus,
+    UpdateUserName,
 )
-from app.identity.domain.enums import GroupName
+from app.identity.domain.enums import GroupName, UserStatus
 from app.identity.domain.models import (
     Group,
     GroupId,
     InstitutionId,
+    PasswordResetToken,
     Permission,
     PermissionId,
     User,
@@ -42,6 +47,7 @@ from app.identity.infrastructure.security import (
     create_access_token,
     decode_access_token,
 )
+from app.identity.presentation.dependencies import get_password_email_sender
 from app.main import app
 from app.shared.dependencies import get_caller_permission
 
@@ -89,6 +95,28 @@ class FixedClock:
         return self._when
 
 
+class InMemoryPasswordResetTokenRepository:
+    def __init__(self) -> None:
+        self.tokens: list[PasswordResetToken] = []
+
+    async def add(self, token: PasswordResetToken) -> None:
+        self.tokens.append(token)
+
+    async def get_by_hash(self, token_hash: str) -> PasswordResetToken | None:
+        return next(
+            (t for t in self.tokens if t.token_hash == token_hash),
+            None,
+        )
+
+    async def save(self, token: PasswordResetToken) -> None:
+        return None
+
+    async def invalidate_active_for_user(self, user_id: UserId, now: datetime) -> None:
+        for token in self.tokens:
+            if token.user_id == user_id and token.used_at is None:
+                token.used_at = now
+
+
 class InMemoryPermissionRepository:
     def __init__(self, by_user: dict[str, list[Permission]]) -> None:
         self._by_user = by_user
@@ -116,6 +144,19 @@ class InMemoryPermissionRepository:
             if p.group_id == group_id
         ]
         return perms, len(perms)
+
+    async def count_active_by_group_name(self, group: GroupName) -> int:
+        user_ids: set[UserId] = set()
+        for perms in self._by_user.values():
+            for perm in perms:
+                if (
+                    perm.group is not None
+                    and perm.group.name is group
+                    and perm.user is not None
+                    and perm.user.status is UserStatus.ACTIVE
+                ):
+                    user_ids.add(perm.user.id)
+        return len(user_ids)
 
     async def delete(self, permission_id: PermissionId) -> None:
         for perms in self._by_user.values():
@@ -204,6 +245,62 @@ async def test_authenticate_user_without_permissions_raises() -> None:
         await uc.execute("alice@x.org", "secret")
 
 
+async def test_authenticate_disabled_user_raises() -> None:
+    hasher = PlainHasher()
+    user = _user(hasher.hash("secret"))
+    user.status = UserStatus.DISABLED
+    perms = [_perm(user, GroupName.CURATORIAL)]
+    uc = AuthenticateUser(
+        InMemoryUserRepository([user]),
+        InMemoryPermissionRepository({UserId("u1"): perms}),
+        hasher,
+    )
+
+    with pytest.raises(InvalidCredentials):
+        await uc.execute("alice@x.org", "secret")
+
+
+async def test_update_user_name_changes_only_the_display_name() -> None:
+    user = _user("hashed:secret")
+    repo = InMemoryUserRepository([user])
+
+    updated = await UpdateUserName(repo).execute(UserId("u1"), " Alice Updated ")
+
+    assert updated.name == "Alice Updated"
+    assert updated.email == "alice@x.org"
+
+
+async def test_disable_last_active_sys_admin_is_rejected() -> None:
+    user = _user("hashed:secret")
+    perms = [_perm(user, GroupName.SYS_ADMIN)]
+    uc = SetUserStatus(
+        InMemoryUserRepository([user]),
+        InMemoryPermissionRepository({UserId("u1"): perms}),
+    )
+
+    with pytest.raises(LastActiveSysAdmin):
+        await uc.execute(UserId("u1"), UserStatus.DISABLED)
+
+
+async def test_admin_password_reset_mints_token_for_user() -> None:
+    user = _user("hashed:secret")
+    tokens = InMemoryPasswordResetTokenRepository()
+    now = datetime(2026, 7, 30, 12, 0, tzinfo=UTC)
+    uc = RequestAdminPasswordReset(
+        InMemoryUserRepository([user]),
+        tokens,
+        FixedClock(now),
+        timedelta(minutes=60),
+    )
+
+    outcome = await uc.execute(UserId("u1"))
+
+    assert outcome.email == "alice@x.org"
+    assert outcome.display_name == "Alice Ferreira"
+    assert outcome.raw_token
+    assert len(tokens.tokens) == 1
+
+
 # ── ChangeOwnPassword ──────────────────────────────────────────────────────────
 
 
@@ -264,6 +361,7 @@ def _perm_record(
     user_id: str,
     group: GroupName,
     password_changed_at: datetime | None = None,
+    user_status: UserStatus = UserStatus.ACTIVE,
 ) -> PermissionRecord:
     record = PermissionRecord(id="perm-1", user_id=user_id, group_id="g1")
     record.user = UserRecord(
@@ -271,6 +369,7 @@ def _perm_record(
         name="Alice",
         email="a@x.org",
         password_hash="",
+        status=user_status,
         password_changed_at=password_changed_at,
     )
     record.group = GroupRecord(id="g1", name=group)
@@ -346,6 +445,18 @@ async def test_caller_permission_not_owned_is_403() -> None:
             record, credentials=credentials, x_permission_id="perm-1"
         )
     assert exc.value.status_code == 403
+
+
+async def test_caller_disabled_user_is_401() -> None:
+    credentials = _bearer(create_access_token("u1"))
+    record = _perm_record("u1", GroupName.CURATORIAL, user_status=UserStatus.DISABLED)
+
+    with pytest.raises(HTTPException) as exc:
+        await _caller_permission(
+            record, credentials=credentials, x_permission_id="perm-1"
+        )
+
+    assert exc.value.status_code == 401
 
 
 async def test_caller_valid_and_owned_returns_actor() -> None:
@@ -555,6 +666,19 @@ async def test_login_wrong_password_is_401_with_message() -> None:
     assert resp.json() == {"message": "Invalid email or password"}
 
 
+async def test_login_disabled_user_is_401_with_message() -> None:
+    user_rec, perm_recs = _login_records("secret")
+    user_rec.status = UserStatus.DISABLED
+    async with login_client(user_rec, perm_recs) as client:
+        resp = await client.post(
+            "/api/v1/auth/login",
+            json={"email": "alice@x.org", "password": "secret"},
+        )
+
+    assert resp.status_code == 401
+    assert resp.json() == {"message": "Invalid email or password"}
+
+
 async def test_login_unknown_email_is_401() -> None:
     async with login_client(None, []) as client:
         resp = await client.post(
@@ -608,6 +732,21 @@ class ChangePasswordSession:
         return None
 
 
+class CapturingPasswordEmailSender:
+    def __init__(self) -> None:
+        self.changed_notice_sent_to: list[str] = []
+
+    async def send_password_reset(
+        self, to_email: str, display_name: str, token: str
+    ) -> None:
+        return None
+
+    async def send_password_changed_notice(
+        self, to_email: str, display_name: str
+    ) -> None:
+        self.changed_notice_sent_to.append(to_email)
+
+
 @asynccontextmanager
 async def change_password_client(user_record: UserRecord) -> AsyncIterator[AsyncClient]:
     actor = Actor(
@@ -617,6 +756,7 @@ async def change_password_client(user_record: UserRecord) -> AsyncIterator[Async
     app.dependency_overrides[get_async_session] = lambda: ChangePasswordSession(
         user_record
     )
+    app.dependency_overrides[get_password_email_sender] = CapturingPasswordEmailSender
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client

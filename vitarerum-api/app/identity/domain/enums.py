@@ -7,3 +7,8 @@ class GroupName(StrEnum):
     COLLECTIONS_MANAGEMENT = "COLLECTIONS_MANAGEMENT"
     DIRECTION = "DIRECTION"
     SYS_ADMIN = "SYS_ADMIN"
+
+
+class UserStatus(StrEnum):
+    ACTIVE = "ACTIVE"
+    DISABLED = "DISABLED"

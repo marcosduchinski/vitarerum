@@ -31,6 +31,7 @@
         <tr>
           <th scope="col">Name</th>
           <th scope="col" class="is-secondary">Email</th>
+          <th scope="col">Status</th>
           <th scope="col">Groups</th>
           <th scope="col" class="sr-only">Actions</th>
         </tr>
@@ -45,6 +46,11 @@
               </div>
             </td>
             <td class="data-table__muted is-secondary">{{ user.email }}</td>
+            <td>
+              <span class="user-status" [class.user-status--disabled]="(user.status ?? 'ACTIVE') === 'DISABLED'">
+                {{ (user.status ?? 'ACTIVE') === 'ACTIVE' ? 'Active' : 'Disabled' }}
+              </span>
+            </td>
             <td>
               <div class="users-table__groups">
                 @for (perm of user.permissions; track perm.permissionId) {

@@ -79,6 +79,60 @@ describe('UserManagementService', () => {
     request.flush({ id: 'user-1', name: 'Ana', email: 'ana@example.test', permissions: [] });
   });
 
+  it('updates user name and status', () => {
+    service.updateUser('user-1', { name: 'Ana Maria' }).subscribe();
+
+    const updateRequest = http.expectOne('https://api.example.test/users/user-1');
+
+    expect(updateRequest.request.method).toBe('PUT');
+    expect(updateRequest.request.body).toEqual({ name: 'Ana Maria' });
+    updateRequest.flush({
+      id: 'user-1',
+      name: 'Ana Maria',
+      email: 'ana@example.test',
+      status: 'ACTIVE',
+      permissions: [],
+    });
+
+    service.disableUser('user-1').subscribe();
+
+    const disableRequest = http.expectOne('https://api.example.test/users/user-1/disable');
+
+    expect(disableRequest.request.method).toBe('POST');
+    expect(disableRequest.request.body).toBeNull();
+    disableRequest.flush({
+      id: 'user-1',
+      name: 'Ana Maria',
+      email: 'ana@example.test',
+      status: 'DISABLED',
+      permissions: [],
+    });
+
+    service.enableUser('user-1').subscribe();
+
+    const enableRequest = http.expectOne('https://api.example.test/users/user-1/enable');
+
+    expect(enableRequest.request.method).toBe('POST');
+    expect(enableRequest.request.body).toBeNull();
+    enableRequest.flush({
+      id: 'user-1',
+      name: 'Ana Maria',
+      email: 'ana@example.test',
+      status: 'ACTIVE',
+      permissions: [],
+    });
+  });
+
+  it('requests an administrative password reset', () => {
+    service.requestPasswordReset('user-1').subscribe();
+
+    const request = http.expectOne('https://api.example.test/users/user-1/password-reset');
+
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toBeNull();
+    request.flush(null);
+  });
+
   it('lists permissions for a user', () => {
     service.listUserPermissions('user-1').subscribe();
 
