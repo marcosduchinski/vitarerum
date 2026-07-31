@@ -24,6 +24,7 @@ def notification_to_record(notification: Notification) -> NotificationRecord:
         note=notification.note,
         created_at=notification.created_at,
         read_at=notification.read_at,
+        cleared_at=notification.cleared_at,
     )
 
 
@@ -39,6 +40,7 @@ def notification_to_domain(record: NotificationRecord) -> Notification:
         note=record.note,
         created_at=record.created_at,
         read_at=record.read_at,
+        cleared_at=record.cleared_at,
     )
 
 
@@ -61,7 +63,8 @@ class SqlAlchemyNotificationRepository:
         unread_only: bool = False,
     ) -> tuple[list[Notification], int]:
         filters = [
-            NotificationRecord.recipient_permission_id == recipient_permission_id
+            NotificationRecord.recipient_permission_id == recipient_permission_id,
+            NotificationRecord.cleared_at.is_(None),
         ]
         if unread_only:
             filters.append(NotificationRecord.read_at.is_(None))
@@ -88,6 +91,7 @@ class SqlAlchemyNotificationRepository:
             .where(
                 NotificationRecord.recipient_permission_id == recipient_permission_id,
                 NotificationRecord.read_at.is_(None),
+                NotificationRecord.cleared_at.is_(None),
             )
         )
         return int(result.scalar_one())
@@ -106,6 +110,7 @@ class SqlAlchemyNotificationRepository:
         existing.note = notification.note
         existing.created_at = notification.created_at
         existing.read_at = notification.read_at
+        existing.cleared_at = notification.cleared_at
 
     async def mark_all_read(self, recipient_permission_id: PermissionId) -> int:
         result = await self._session.execute(
@@ -113,7 +118,23 @@ class SqlAlchemyNotificationRepository:
             .where(
                 NotificationRecord.recipient_permission_id == recipient_permission_id,
                 NotificationRecord.read_at.is_(None),
+                NotificationRecord.cleared_at.is_(None),
             )
             .values(read_at=datetime.now(tz=UTC))
+        )
+        return cast(CursorResult[Any], result).rowcount or 0
+
+    async def clear_all(self, recipient_permission_id: PermissionId) -> int:
+        now = datetime.now(tz=UTC)
+        result = await self._session.execute(
+            update(NotificationRecord)
+            .where(
+                NotificationRecord.recipient_permission_id == recipient_permission_id,
+                NotificationRecord.cleared_at.is_(None),
+            )
+            .values(
+                cleared_at=now,
+                read_at=func.coalesce(NotificationRecord.read_at, now),
+            )
         )
         return cast(CursorResult[Any], result).rowcount or 0

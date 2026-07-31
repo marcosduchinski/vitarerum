@@ -22,4 +22,4 @@ class Notification:
     note: str | None
     created_at: datetime
     read_at: datetime | None = None
-
+    cleared_at: datetime | None = None

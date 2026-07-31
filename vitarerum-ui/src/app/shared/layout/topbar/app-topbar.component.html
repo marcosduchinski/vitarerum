@@ -72,8 +72,13 @@
         <div class="notifications-panel">
           <div class="notifications-panel__header">
             <span>Notifications</span>
-            @if (notifications.unreadCount() > 0) {
-              <button type="button" (click)="markAllNotificationsRead()">Mark all read</button>
+            @if (notifications.recent().length > 0) {
+              <span class="notifications-panel__actions">
+                @if (notifications.unreadCount() > 0) {
+                  <button type="button" (click)="markAllNotificationsRead()">Mark all read</button>
+                }
+                <button type="button" (click)="clearNotifications()">Clear all</button>
+              </span>
             }
           </div>
           <div class="notifications-panel__list">

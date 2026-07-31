@@ -111,3 +111,11 @@ class MarkAllNotificationsRead:
 
     async def execute(self, recipient_permission_id: PermissionId) -> int:
         return await self._repo.mark_all_read(recipient_permission_id)
+
+
+class ClearAllNotifications:
+    def __init__(self, repository: NotificationRepository) -> None:
+        self._repo = repository
+
+    async def execute(self, recipient_permission_id: PermissionId) -> int:
+        return await self._repo.clear_all(recipient_permission_id)

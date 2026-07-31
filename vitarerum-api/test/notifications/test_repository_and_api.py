@@ -131,6 +131,7 @@ def _notification(
     *,
     recipient_permission_id: str = "perm-recipient",
     read_at: datetime | None = None,
+    cleared_at: datetime | None = None,
 ) -> Notification:
     return Notification(
         id=NotificationId(notification_id),
@@ -143,6 +144,7 @@ def _notification(
         note="Please review",
         created_at=_NOW,
         read_at=read_at,
+        cleared_at=cleared_at,
     )
 
 
@@ -169,6 +171,38 @@ async def test_sqlalchemy_notification_repository_round_trip_and_mark_all_read()
     assert unread_count == 1
     assert marked_count == 1
     assert unread_after_mark == 0
+
+
+async def test_repo_clear_all_hides_active_permission() -> None:
+    session_factory = await _session_factory()
+    async with session_factory() as session:
+        repo = SqlAlchemyNotificationRepository(session)
+        await repo.add(_notification("notification-1"))
+        await repo.add(_notification("notification-2", read_at=_NOW))
+        await repo.add(
+            _notification(
+                "notification-3",
+                recipient_permission_id="perm-other",
+            )
+        )
+        await session.commit()
+
+        cleared_count = await repo.clear_all(PermissionId("perm-recipient"))
+        await session.commit()
+        listed, total = await repo.list_for_recipient(
+            PermissionId("perm-recipient"), page=0, size=10
+        )
+        unread_count = await repo.count_unread(PermissionId("perm-recipient"))
+        other_listed, other_total = await repo.list_for_recipient(
+            PermissionId("perm-other"), page=0, size=10
+        )
+
+    assert cleared_count == 2
+    assert listed == []
+    assert total == 0
+    assert unread_count == 0
+    assert other_total == 1
+    assert [item.id for item in other_listed] == ["notification-3"]
 
 
 async def test_notifications_routes_list_filter_count_and_mark_read() -> None:
@@ -203,6 +237,27 @@ async def test_notifications_routes_list_filter_count_and_mark_read() -> None:
     assert mark_response.status_code == 200
     assert mark_response.json()["readAt"] is not None
     assert unread_after_mark_response.json() == {"count": 0}
+
+
+async def test_notifications_routes_clear_all_hides_list_and_clears_unread() -> None:
+    session_factory = await _session_factory()
+    async with session_factory() as session:
+        await _seed_identity(session)
+        repo = SqlAlchemyNotificationRepository(session)
+        await repo.add(_notification("notification-1"))
+        await repo.add(_notification("notification-2", read_at=_NOW))
+        await session.commit()
+
+    async with _client(session_factory) as client:
+        clear_response = await client.post("/api/v1/notifications/clear-all")
+        list_response = await client.get("/api/v1/notifications?page=0&size=10")
+        unread_response = await client.get("/api/v1/notifications/unread-count")
+
+    assert clear_response.status_code == 200
+    assert clear_response.json() == {"count": 2}
+    assert list_response.json()["totalElements"] == 0
+    assert list_response.json()["content"] == []
+    assert unread_response.json() == {"count": 0}
 
 
 async def test_notification_routes_reject_other_recipient_and_external_callers() -> (

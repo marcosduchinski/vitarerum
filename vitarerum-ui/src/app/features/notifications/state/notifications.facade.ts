@@ -77,6 +77,12 @@ export class NotificationsFacade {
     this.unreadCountState.set(0);
   }
 
+  async clearAll(): Promise<void> {
+    await firstValueFrom(this.api.clearAll());
+    this.recentState.set([]);
+    this.unreadCountState.set(0);
+  }
+
   private reset(permissionId: string | null): void {
     this.lastPermissionId = permissionId;
     this.unreadCountState.set(0);

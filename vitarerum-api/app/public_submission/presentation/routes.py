@@ -55,9 +55,11 @@ from app.public_submission.presentation.dependencies import (
     ConfirmUseCase,
     EmailSender,
     RemoveAmendmentDoc,
+    StaffNotificationRecipients,
     SubmitAmendmentCorr,
     SubmitAmendmentDoc,
     SubmitUseCase,
+    distinct_email_recipients,
 )
 from app.public_submission.presentation.schemas import (
     AmendmentCorrectionItem,
@@ -249,13 +251,46 @@ async def confirm_public_proposal(
     body: PublicConfirmationRequest,
     request: Request,
     use_case: ConfirmUseCase,
+    notification_dispatcher: AmendmentNotificationDispatch,
+    proposal_notification_email_sender: AmendmentProposalEmailSender,
+    staff_notification_recipients: StaffNotificationRecipients,
     session: DBSession,
 ) -> PublicConfirmationResult:
     try:
         result = await use_case.execute(body.token, _client_ip(request))
     except RateLimitExceeded as exc:
         raise _rate_limited(exc) from exc
+    if (
+        result.status == "CONFIRMED"
+        and result.proposal_id is not None
+        and result.reference_number is not None
+    ):
+        await notification_dispatcher.notify_many(
+            recipient_permission_ids=[
+                PermissionId(recipient.permission_id)
+                for recipient in staff_notification_recipients
+            ],
+            kind=NotificationKind.PROPOSAL_SUBMITTED,
+            triggered_by=None,
+            related_resource_type=RelatedResourceType.PROPOSAL,
+            related_resource_id=result.proposal_id,
+            related_resource_label=result.reference_number,
+        )
     await session.commit()
+    if (
+        result.status == "CONFIRMED"
+        and result.proposal_id is not None
+        and result.reference_number is not None
+    ):
+        link = f"{settings.public_origin}/p/collections/proposals/{result.proposal_id}"
+        for recipient in distinct_email_recipients(staff_notification_recipients):
+            await proposal_notification_email_sender.send_proposal_submitted(
+                to_email=recipient.user.email,
+                recipient_name=recipient.user.name,
+                proposal_reference=result.reference_number,
+                submitted_by_name=result.submitted_by_name or "Requester",
+                link=link,
+            )
     return PublicConfirmationResult(
         status=result.status, referenceNumber=result.reference_number
     )
@@ -510,6 +545,9 @@ async def submit_amendment(
             recipient_name=recipient.user.name,
             proposal_reference=proposal.reference_number.value,
             submitted_by_name=submitted_by_name,
-            link=f"{settings.public_origin}/p/collections/proposals/{proposal.id}",
+            link=(
+                f"{settings.public_origin}/p/collections/proposals/my-assignments/"
+                f"{proposal.id}?tab=documents"
+            ),
         )
     return AmendmentSubmitResult()

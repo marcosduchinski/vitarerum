@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 
 from app.identity.public import PermissionView
 from app.notifications.application.use_cases import (
+    ClearAllNotifications,
     CountUnreadNotifications,
     MarkAllNotificationsRead,
     MarkNotificationRead,
@@ -145,5 +146,19 @@ async def mark_all_notifications_read(
 ) -> MarkAllNotificationsReadResponse:
     require_staff(caller)
     count = await MarkAllNotificationsRead(repo).execute(caller.id)
+    await session.commit()
+    return MarkAllNotificationsReadResponse(count=count)
+
+
+@notifications_router.post(
+    "/clear-all", response_model=MarkAllNotificationsReadResponse
+)
+async def clear_all_notifications(
+    caller: CallerPermission,
+    repo: NotificationRepo,
+    session: DBSession,
+) -> MarkAllNotificationsReadResponse:
+    require_staff(caller)
+    count = await ClearAllNotifications(repo).execute(caller.id)
     await session.commit()
     return MarkAllNotificationsReadResponse(count=count)
