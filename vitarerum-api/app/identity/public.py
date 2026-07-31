@@ -20,7 +20,7 @@ from app.identity.application.use_cases import (
     ProvisionedRequester,
     ProvisionExternalRequester,
 )
-from app.identity.domain.enums import GroupName
+from app.identity.domain.enums import GroupName, UserStatus
 from app.identity.domain.models import (
     Group,
     GroupId,
@@ -78,6 +78,7 @@ __all__ = [
     "TokenError",
     "User",
     "UserId",
+    "UserStatus",
     "UserView",
     "decode_access_token",
     "get_permission_reader",

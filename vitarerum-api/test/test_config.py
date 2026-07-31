@@ -47,6 +47,28 @@ def test_non_local_settings_accept_explicit_security_values() -> None:
     assert settings.app_env == "production"
 
 
+def test_gmail_app_password_spaces_are_removed() -> None:
+    settings = Settings(
+        app_env="local",
+        smtp_host="smtp.gmail.com",
+        smtp_password="abcd efgh ijkl mnop",
+        _env_file=None,
+    )
+
+    assert settings.smtp_password == "abcdefghijklmnop"
+
+
+def test_non_gmail_smtp_password_spaces_are_preserved() -> None:
+    settings = Settings(
+        app_env="local",
+        smtp_host="smtp.example.org",
+        smtp_password="keep this space",
+        _env_file=None,
+    )
+
+    assert settings.smtp_password == "keep this space"
+
+
 def test_settings_reject_invalid_cascade_category_threshold_key() -> None:
     with pytest.raises(ValidationError) as exc:
         Settings(

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
+import aiosmtplib
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -57,6 +58,16 @@ def _rate_limited(exc: RateLimitExceeded) -> HTTPException:
         status_code=status.HTTP_429_TOO_MANY_REQUESTS,
         detail={"message": str(exc)},
         headers={"Retry-After": str(exc.retry_after)},
+    )
+
+
+def _email_delivery_failed() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        detail={
+            "error": "EMAIL_DELIVERY_FAILED",
+            "message": "Password reset email could not be delivered",
+        },
     )
 
 
@@ -155,9 +166,12 @@ async def request_password_reset(
     # for an unknown address — otherwise a prober could learn which accounts
     # exist from response content alone.
     if outcome is not None:
-        await email_sender.send_password_reset(
-            outcome.email, outcome.display_name, outcome.raw_token
-        )
+        try:
+            await email_sender.send_password_reset(
+                outcome.email, outcome.display_name, outcome.raw_token
+            )
+        except aiosmtplib.SMTPException as exc:
+            raise _email_delivery_failed() from exc
 
 
 @auth_router.post(

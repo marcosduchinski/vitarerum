@@ -9,6 +9,7 @@ from app.identity.public import (
     Actor,
     PermissionId,
     TokenError,
+    UserStatus,
     decode_access_token,
     get_permission_reader,
 )
@@ -57,6 +58,8 @@ async def get_caller_permission(
     )
     if view is None or view.user.id != decoded.user_id:
         raise _forbidden("Permission does not belong to the authenticated user")
+    if view.user.status is UserStatus.DISABLED:
+        raise _unauthorized("Invalid or expired token")
     # A password change/reset bumps password_changed_at; tokens minted before
     # that instant are stale sessions, not merely expired ones — same 401 as
     # an invalid token so a stolen bearer token stops working once the owner

@@ -91,6 +91,17 @@ class Settings(BaseSettings):
     )
 
     @model_validator(mode="after")
+    def normalize_gmail_app_password(self) -> "Settings":
+        # Google displays app passwords in 4-character groups separated by
+        # spaces, but SMTP authentication expects the 16 characters only.
+        if (
+            self.smtp_host.lower() in {"smtp.gmail.com", "smtp.googlemail.com"}
+            and self.smtp_password
+        ):
+            self.smtp_password = "".join(self.smtp_password.split())
+        return self
+
+    @model_validator(mode="after")
     def validate_use_category_operational_classifier(self) -> "Settings":
         if (
             self.use_category_operational_classifier != "LLM"

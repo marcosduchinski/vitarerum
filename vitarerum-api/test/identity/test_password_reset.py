@@ -5,6 +5,7 @@ import hashlib
 from collections.abc import AsyncIterator, Iterator
 from datetime import UTC, datetime, timedelta
 
+import aiosmtplib
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -392,7 +393,9 @@ async def _create_user(session: AsyncSession, email: str, password: str) -> None
 async def test_request_then_confirm_password_reset_end_to_end() -> None:
     factory = await _sqlite_session_factory()
     provider = _SqliteSessionProvider(factory)
+    sender = _CapturingEmailSender()
     app.dependency_overrides[get_async_session] = provider
+    app.dependency_overrides[get_password_email_sender] = lambda: sender
     try:
         await _create_user(provider.session, "alice@x.org", "old-password")
 
@@ -410,6 +413,39 @@ async def test_request_then_confirm_password_reset_end_to_end() -> None:
             )
             # Same 204 for an unknown address — no enumeration signal.
             assert unknown_resp.status_code == 204
+    finally:
+        app.dependency_overrides.clear()
+
+
+class _FailingEmailSender:
+    async def send_password_reset(
+        self, to_email: str, display_name: str, token: str
+    ) -> None:
+        raise aiosmtplib.SMTPAuthenticationError(535, "Bad credentials")
+
+    async def send_password_changed_notice(
+        self, to_email: str, display_name: str
+    ) -> None:
+        raise aiosmtplib.SMTPAuthenticationError(535, "Bad credentials")
+
+
+async def test_request_password_reset_smtp_failure_is_502() -> None:
+    factory = await _sqlite_session_factory()
+    provider = _SqliteSessionProvider(factory)
+    app.dependency_overrides[get_async_session] = provider
+    app.dependency_overrides[get_password_email_sender] = _FailingEmailSender
+    try:
+        await _create_user(provider.session, "alice@x.org", "old-password")
+
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.post(
+                "/api/v1/auth/password-reset/request",
+                json={"email": "alice@x.org"},
+            )
+
+        assert resp.status_code == 502
+        assert resp.json()["error"] == "EMAIL_DELIVERY_FAILED"
     finally:
         app.dependency_overrides.clear()
 
