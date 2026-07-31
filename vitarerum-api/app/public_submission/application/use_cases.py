@@ -39,6 +39,7 @@ from app.use_of_collections.domain.models import (
     DocumentId,
     DocumentType,
     EmailAddress,
+    Proposal,
     RequesterContact,
 )
 
@@ -250,6 +251,8 @@ ConfirmStatus = Literal["CONFIRMED", "ALREADY_CONFIRMED", "EXPIRED", "INVALID"]
 class ConfirmPublicProposalOutput:
     status: ConfirmStatus
     reference_number: str | None = None
+    proposal_id: str | None = None
+    submitted_by_name: str | None = None
 
 
 class ConfirmPublicProposal:
@@ -299,14 +302,18 @@ class ConfirmPublicProposal:
         # Keep the existing retry boundary around proposal materialisation; the
         # reference allocator is now transactional, but insert uniqueness remains
         # the final persistence backstop.
-        reference = await self._retry_runner(lambda: self._materialise(submission))
+        proposal = await self._retry_runner(lambda: self._materialise(submission))
+        reference = proposal.reference_number.value
         submission.confirm(proposal_reference=reference, occurred_at=now)
         await self._repo.save(submission)
         return ConfirmPublicProposalOutput(
-            status="CONFIRMED", reference_number=reference
+            status="CONFIRMED",
+            reference_number=reference,
+            proposal_id=str(proposal.id),
+            submitted_by_name=submission.citizen_name,
         )
 
-    async def _materialise(self, submission: PendingPublicSubmission) -> str:
+    async def _materialise(self, submission: PendingPublicSubmission) -> Proposal:
         output = await self._submit.execute(
             SubmitProposalInput(
                 title=None,
@@ -336,4 +343,4 @@ class ConfirmPublicProposal:
                 ],
             )
         )
-        return output.proposal.reference_number.value
+        return output.proposal

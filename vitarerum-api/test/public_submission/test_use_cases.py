@@ -223,6 +223,7 @@ class FakeSubmitProposal:
         self.calls.append(data)
         return SimpleNamespace(
             proposal=SimpleNamespace(
+                id="proposal-1",
                 reference_number=SimpleNamespace(value=self._reference)
             ),
             conversation_id="conv-1",
@@ -378,6 +379,7 @@ class FlakySubmitProposal:
             raise IntegrityError("INSERT proposals", {}, Exception("duplicate ref"))
         return SimpleNamespace(
             proposal=SimpleNamespace(
+                id="proposal-1",
                 reference_number=SimpleNamespace(value=self._reference)
             ),
             conversation_id="conv-1",

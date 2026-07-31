@@ -22,6 +22,7 @@ export interface NotificationApi {
   getUnreadCount(): Observable<UnreadCountResponse>;
   markRead(notificationId: string): Observable<Notification>;
   markAllRead(): Observable<MarkAllNotificationsReadResponse>;
+  clearAll(): Observable<MarkAllNotificationsReadResponse>;
 }
 
 @Injectable()
@@ -50,8 +51,14 @@ export class NotificationApiService implements NotificationApi {
     );
   }
 
+  clearAll(): Observable<MarkAllNotificationsReadResponse> {
+    return this.http.post<MarkAllNotificationsReadResponse>(
+      this.url('/notifications/clear-all'),
+      {},
+    );
+  }
+
   private url(path: string): string {
     return buildApiUrl(this.apiBaseUrl, path);
   }
 }
-

@@ -86,14 +86,20 @@ export class AppTopbarComponent {
     await this.notifications.markAllRead();
   }
 
+  protected async clearNotifications(): Promise<void> {
+    await this.notifications.clearAll();
+  }
+
   protected notificationText(notification: Notification): string {
     const label = notification.relatedResourceLabel ?? notification.relatedResourceId ?? 'Proposal';
     const actor = notification.triggeredBy?.user.name ?? 'A staff member';
     switch (notification.kind) {
       case 'PROPOSAL_SUBMITTED':
-        return `${actor} submitted ${label}.`;
+        return `New proposal ${label} was submitted.`;
       case 'PROPOSAL_FORWARDED':
         return `${actor} forwarded ${label} to you.`;
+      case 'PROPOSAL_TAKEN_OVER':
+        return `${actor} took over ${label}.`;
       case 'PROPOSAL_DOCUMENTS_SUBMITTED':
         return `${actor} submitted documents for ${label}.`;
       case 'PROPOSAL_CORRECTIONS_SUBMITTED':
@@ -114,6 +120,12 @@ export class AppTopbarComponent {
 
   protected notificationLink(notification: Notification): string | null {
     if (notification.relatedResourceType === 'PROPOSAL' && notification.relatedResourceId) {
+      if (
+        notification.kind === 'PROPOSAL_DOCUMENTS_SUBMITTED' ||
+        notification.kind === 'PROPOSAL_CORRECTIONS_SUBMITTED'
+      ) {
+        return `/p/collections/proposals/my-assignments/${notification.relatedResourceId}?tab=documents`;
+      }
       return `/p/collections/proposals/${notification.relatedResourceId}`;
     }
     return null;

@@ -10,7 +10,9 @@ from app.shared.email_templates import (
     proposal_corrections_submitted_email,
     proposal_documents_submitted_email,
     proposal_forwarded_email,
+    proposal_rejected_email,
     proposal_submitted_email,
+    proposal_taken_over_email,
 )
 
 logger = logging.getLogger(__name__)
@@ -75,6 +77,26 @@ class LoggingProposalNotificationEmailSender:
             note,
         )
 
+    async def send_proposal_taken_over(
+        self,
+        *,
+        to_email: str,
+        recipient_name: str,
+        proposal_reference: str,
+        taken_over_by_name: str,
+        note: str | None,
+        link: str,
+    ) -> None:
+        logger.info(
+            "[use-of-collections] proposal %s taken over from %s by %s "
+            "(link: %s, note: %s)",
+            proposal_reference,
+            to_email,
+            taken_over_by_name,
+            link,
+            note,
+        )
+
     async def send_proposal_documents_submitted(
         self,
         *,
@@ -109,6 +131,26 @@ class LoggingProposalNotificationEmailSender:
             to_email,
             submitted_by_name,
             link,
+        )
+
+    async def send_proposal_rejected(
+        self,
+        *,
+        to_email: str,
+        requester_name: str,
+        proposal_reference: str,
+        rejected_by_name: str,
+        reason: str,
+        link: str,
+    ) -> None:
+        logger.info(
+            "[use-of-collections] proposal %s rejected; notifying %s by %s "
+            "(link: %s, reason: %s)",
+            proposal_reference,
+            to_email,
+            rejected_by_name,
+            link,
+            reason,
         )
 
 
@@ -184,6 +226,25 @@ class SmtpProposalNotificationEmailSender:
         )
         await self._send(to_email, template.subject, template.body)
 
+    async def send_proposal_taken_over(
+        self,
+        *,
+        to_email: str,
+        recipient_name: str,
+        proposal_reference: str,
+        taken_over_by_name: str,
+        note: str | None,
+        link: str,
+    ) -> None:
+        template = proposal_taken_over_email(
+            recipient_name=recipient_name,
+            proposal_reference=proposal_reference,
+            taken_over_by_name=taken_over_by_name,
+            note=note,
+            link=link,
+        )
+        await self._send(to_email, template.subject, template.body)
+
     async def send_proposal_documents_submitted(
         self,
         *,
@@ -214,6 +275,25 @@ class SmtpProposalNotificationEmailSender:
             recipient_name=recipient_name,
             proposal_reference=proposal_reference,
             submitted_by_name=submitted_by_name,
+            link=link,
+        )
+        await self._send(to_email, template.subject, template.body)
+
+    async def send_proposal_rejected(
+        self,
+        *,
+        to_email: str,
+        requester_name: str,
+        proposal_reference: str,
+        rejected_by_name: str,
+        reason: str,
+        link: str,
+    ) -> None:
+        template = proposal_rejected_email(
+            requester_name=requester_name,
+            proposal_reference=proposal_reference,
+            rejected_by_name=rejected_by_name,
+            reason=reason,
             link=link,
         )
         await self._send(to_email, template.subject, template.body)

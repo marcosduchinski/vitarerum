@@ -349,6 +349,28 @@ class ProposalNotificationEmailSender(Protocol):
         link: str,
     ) -> None: ...
 
+    async def send_proposal_taken_over(
+        self,
+        *,
+        to_email: str,
+        recipient_name: str,
+        proposal_reference: str,
+        taken_over_by_name: str,
+        note: str | None,
+        link: str,
+    ) -> None: ...
+
+    async def send_proposal_rejected(
+        self,
+        *,
+        to_email: str,
+        requester_name: str,
+        proposal_reference: str,
+        rejected_by_name: str,
+        reason: str,
+        link: str,
+    ) -> None: ...
+
 
 class ReferenceNumberGeneratorPort(Protocol):
     async def generate(

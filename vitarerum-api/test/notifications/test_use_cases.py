@@ -8,6 +8,7 @@ from app.identity.application.read_models import PermissionView, UserView
 from app.identity.public import GroupName
 from app.notifications.application.dispatch import CreateNotification
 from app.notifications.application.use_cases import (
+    ClearAllNotifications,
     ListNotifications,
     MarkAllNotificationsRead,
     MarkNotificationRead,
@@ -38,6 +39,7 @@ class _Repo:
             item
             for item in self.items.values()
             if item.recipient_permission_id == recipient_permission_id
+            and item.cleared_at is None
             and (not unread_only or item.read_at is None)
         ]
         items = sorted(items, key=lambda item: item.created_at, reverse=True)
@@ -49,6 +51,7 @@ class _Repo:
             for item in self.items.values()
             if item.recipient_permission_id == recipient_permission_id
             and item.read_at is None
+            and item.cleared_at is None
         )
 
     async def save(self, notification: Notification) -> None:
@@ -58,9 +61,25 @@ class _Repo:
         count = await self.count_unread(recipient_permission_id)
         now = datetime.now(tz=UTC)
         for item in self.items.values():
-            if item.recipient_permission_id == recipient_permission_id:
+            if (
+                item.recipient_permission_id == recipient_permission_id
+                and item.cleared_at is None
+            ):
                 item.read_at = item.read_at or now
         return count
+
+    async def clear_all(self, recipient_permission_id: PermissionId) -> int:
+        current = [
+            item
+            for item in self.items.values()
+            if item.recipient_permission_id == recipient_permission_id
+            and item.cleared_at is None
+        ]
+        now = datetime.now(tz=UTC)
+        for item in current:
+            item.cleared_at = now
+            item.read_at = item.read_at or now
+        return len(current)
 
 
 class _Reader:
@@ -89,6 +108,7 @@ def _notification(
     recipient: str = "perm-recipient",
     triggered_by: str | None = "perm-trigger",
     read: bool = False,
+    cleared: bool = False,
 ) -> Notification:
     return Notification(
         id=NotificationId(notification_id),
@@ -101,6 +121,7 @@ def _notification(
         note=None,
         created_at=datetime(2026, 7, 30, 12, 0, tzinfo=UTC),
         read_at=datetime(2026, 7, 30, 12, 5, tzinfo=UTC) if read else None,
+        cleared_at=datetime(2026, 7, 30, 12, 10, tzinfo=UTC) if cleared else None,
     )
 
 
@@ -194,3 +215,24 @@ async def test_mark_all_read_scopes_to_active_permission() -> None:
     assert count == 1
     assert repo.items["n1"].read_at is not None
     assert repo.items["n2"].read_at is None
+
+
+async def test_clear_all_hides_notifications_and_scopes_to_active_permission() -> None:
+    repo = _Repo()
+    repo.items = {
+        "n1": _notification("n1"),
+        "n2": _notification("n2", read=True),
+        "n3": _notification("n3", recipient="perm-other"),
+    }
+
+    count = await ClearAllNotifications(repo).execute(PermissionId("perm-recipient"))
+    page = await ListNotifications(repo, _Reader()).execute(
+        PermissionId("perm-recipient"), page=0, size=20
+    )
+
+    assert count == 2
+    assert page.total == 0
+    assert repo.items["n1"].cleared_at is not None
+    assert repo.items["n1"].read_at is not None
+    assert repo.items["n2"].cleared_at is not None
+    assert repo.items["n3"].cleared_at is None

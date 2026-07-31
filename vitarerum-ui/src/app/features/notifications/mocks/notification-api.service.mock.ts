@@ -64,6 +64,12 @@ export class NotificationApiServiceMock implements NotificationApi {
     return of({ count });
   }
 
+  clearAll(): Observable<MarkAllNotificationsReadResponse> {
+    const current = this.activeItems();
+    this.items.set(this.permissionId(), []);
+    return of({ count: current.length });
+  }
+
   private activeItems(): Notification[] {
     const permissionId = this.permissionId();
     if (!this.items.has(permissionId)) {

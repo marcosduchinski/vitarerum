@@ -239,6 +239,35 @@ def proposal_assigned_email(
     )
 
 
+def proposal_taken_over_email(
+    *,
+    recipient_name: str,
+    proposal_reference: str,
+    taken_over_by_name: str,
+    note: str | None,
+    link: str,
+) -> EmailTemplate:
+    note_block_pt = f"\n\nNota: {note}" if note else ""
+    note_block_en = f"\n\nNote: {note}" if note else ""
+    return EmailTemplate(
+        subject=(
+            f"Proposta {proposal_reference} assumida por outro membro / "
+            f"Proposal {proposal_reference} taken over"
+        ),
+        body=(
+            f"Olá {recipient_name},\n\n"
+            f"{taken_over_by_name} assumiu a proposta {proposal_reference}, "
+            f"que estava atribuída a si.{note_block_pt}\n\n"
+            f"Aceda à proposta: {link}\n\n"
+            "---\n\n"
+            f"Hello {recipient_name},\n\n"
+            f"{taken_over_by_name} took over proposal {proposal_reference}, "
+            f"which was assigned to you.{note_block_en}\n\n"
+            f"Open the proposal: {link}"
+        ),
+    )
+
+
 def proposal_submitted_email(
     *,
     recipient_name: str,
@@ -310,6 +339,33 @@ def proposal_corrections_submitted_email(
             f"Hello {recipient_name},\n\n"
             f"{submitted_by_name} submitted corrections for proposal "
             f"{proposal_reference}.\n\n"
+            f"Open the proposal: {link}"
+        ),
+    )
+
+
+def proposal_rejected_email(
+    *,
+    requester_name: str,
+    proposal_reference: str,
+    rejected_by_name: str,
+    reason: str,
+    link: str,
+) -> EmailTemplate:
+    return EmailTemplate(
+        subject=(
+            f"Proposta {proposal_reference} rejeitada / "
+            f"Proposal {proposal_reference} rejected"
+        ),
+        body=(
+            f"Olá {requester_name},\n\n"
+            f"{rejected_by_name} rejeitou a proposta {proposal_reference}.\n\n"
+            f"Motivo: {reason}\n\n"
+            f"Aceda à proposta: {link}\n\n"
+            "---\n\n"
+            f"Hello {requester_name},\n\n"
+            f"{rejected_by_name} rejected proposal {proposal_reference}.\n\n"
+            f"Reason: {reason}\n\n"
             f"Open the proposal: {link}"
         ),
     )

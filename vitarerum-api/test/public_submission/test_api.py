@@ -26,6 +26,7 @@ from app.public_submission.presentation.dependencies import (
     get_notifications_dispatcher,
     get_proposal_notification_email_sender,
     get_reader,
+    get_staff_notification_recipients,
     get_submit_amendment_corrections,
     get_submit_use_case,
     get_uoc_proposal_repo,
@@ -122,6 +123,7 @@ class _Submit:
     async def execute(self, data: object) -> SimpleNamespace:
         return SimpleNamespace(
             proposal=SimpleNamespace(
+                id="proposal-public-1",
                 reference_number=SimpleNamespace(value="VRP-20260626-0007")
             ),
             conversation_id="conv-1",
@@ -174,10 +176,11 @@ class _NotificationDispatcher:
 
 class _ProposalNotificationEmail:
     def __init__(self) -> None:
+        self.submitted: list[dict[str, object]] = []
         self.corrections_submitted: list[dict[str, object]] = []
 
     async def send_proposal_submitted(self, **kwargs) -> None:
-        raise AssertionError("send_proposal_submitted should not be called")
+        self.submitted.append(kwargs)
 
     async def send_proposal_forwarded(self, **kwargs) -> None:
         raise AssertionError("send_proposal_forwarded should not be called")
@@ -185,11 +188,17 @@ class _ProposalNotificationEmail:
     async def send_proposal_assigned(self, **kwargs) -> None:
         raise AssertionError("send_proposal_assigned should not be called")
 
+    async def send_proposal_taken_over(self, **kwargs) -> None:
+        raise AssertionError("send_proposal_taken_over should not be called")
+
     async def send_proposal_documents_submitted(self, **kwargs) -> None:
         raise AssertionError("send_proposal_documents_submitted should not be called")
 
     async def send_proposal_corrections_submitted(self, **kwargs) -> None:
         self.corrections_submitted.append(kwargs)
+
+    async def send_proposal_rejected(self, **kwargs) -> None:
+        raise AssertionError("send_proposal_rejected should not be called")
 
 
 class _PermissionReader:
@@ -226,11 +235,26 @@ async def _passthrough_retry(op):  # type: ignore[no-untyped-def]
 
 @asynccontextmanager
 async def _client(
-    *, captcha_ok: bool = True, rate_limited: bool = False, fail_commit: bool = False
-) -> AsyncIterator[tuple[AsyncClient, _Repo, _Email, _Storage]]:
+    *,
+    captcha_ok: bool = True,
+    rate_limited: bool = False,
+    fail_commit: bool = False,
+    staff_recipients: list[SimpleNamespace] | None = None,
+    notification_dispatcher: _NotificationDispatcher | None = None,
+    proposal_email: _ProposalNotificationEmail | None = None,
+) -> AsyncIterator[
+    tuple[
+        AsyncClient,
+        _Repo,
+        _Email,
+        _Storage,
+    ]
+]:
     repo = _Repo()
     email = _Email()
     storage = _Storage()
+    notification_dispatcher = notification_dispatcher or _NotificationDispatcher()
+    proposal_email = proposal_email or _ProposalNotificationEmail()
     limiter = _Limiter(block=rate_limited)
     submit_uc = SubmitPublicProposal(
         repository=repo,
@@ -251,6 +275,15 @@ async def _client(
     app.dependency_overrides[get_submit_use_case] = lambda: submit_uc
     app.dependency_overrides[get_confirm_use_case] = lambda: confirm_uc
     app.dependency_overrides[get_email_sender] = lambda: email
+    app.dependency_overrides[get_staff_notification_recipients] = lambda: (
+        staff_recipients or []
+    )
+    app.dependency_overrides[get_notifications_dispatcher] = lambda: (
+        notification_dispatcher
+    )
+    app.dependency_overrides[get_proposal_notification_email_sender] = lambda: (
+        proposal_email
+    )
     app.dependency_overrides[get_async_session] = lambda: _Session(
         fail_commit=fail_commit
     )
@@ -470,6 +503,79 @@ async def test_submit_then_confirm_flow() -> None:
         assert again.json()["status"] == "ALREADY_CONFIRMED"
 
 
+async def test_confirm_public_proposal_notifies_staff_once() -> None:
+    staff_recipients = [
+        SimpleNamespace(
+            permission_id="perm-curatorial",
+            user=SimpleNamespace(
+                id="user-bob",
+                name="Bob Santos",
+                email="bob@example.test",
+            ),
+            group="CURATORIAL",
+        ),
+        SimpleNamespace(
+            permission_id="perm-collections",
+            user=SimpleNamespace(
+                id="user-bob",
+                name="Bob Santos",
+                email="bob@example.test",
+            ),
+            group="COLLECTIONS_MANAGEMENT",
+        ),
+        SimpleNamespace(
+            permission_id="perm-direction",
+            user=SimpleNamespace(
+                id="user-bob",
+                name="Bob Santos",
+                email="bob@example.test",
+            ),
+            group="DIRECTION",
+        ),
+    ]
+    notification_dispatcher = _NotificationDispatcher()
+    proposal_email = _ProposalNotificationEmail()
+    async with _client(
+        staff_recipients=staff_recipients,
+        notification_dispatcher=notification_dispatcher,
+        proposal_email=proposal_email,
+    ) as (client, _, email, _):
+        submitted = await _post_submit(client)
+        assert submitted.status_code == 202
+        token = email.sent[0][2]
+
+        confirmed = await client.post(_CONFIRM_URL, json={"token": token})
+        again = await client.post(_CONFIRM_URL, json={"token": token})
+
+    assert confirmed.status_code == 200
+    assert confirmed.json()["status"] == "CONFIRMED"
+    assert again.status_code == 200
+    assert again.json()["status"] == "ALREADY_CONFIRMED"
+    assert notification_dispatcher.calls == [
+        {
+            "recipient_permission_ids": [
+                PermissionId("perm-curatorial"),
+                PermissionId("perm-collections"),
+                PermissionId("perm-direction"),
+            ],
+            "kind": "PROPOSAL_SUBMITTED",
+            "triggered_by": None,
+            "related_resource_type": "PROPOSAL",
+            "related_resource_id": "proposal-public-1",
+            "related_resource_label": "VRP-20260626-0007",
+        }
+    ]
+    assert proposal_email.submitted == [
+        {
+            "to_email": "bob@example.test",
+            "recipient_name": "Bob Santos",
+            "proposal_reference": "VRP-20260626-0007",
+            "submitted_by_name": "Pedro Silva",
+            "link": "http://localhost:4200/p/collections/proposals/proposal-public-1",
+        },
+    ]
+
+
 async def test_submit_amendment_notifies_assigned_staff() -> None:
     raw_token = "raw-amendment-token"
     token = ProposalAmendmentToken(
@@ -565,7 +671,10 @@ async def test_submit_amendment_notifies_assigned_staff() -> None:
             "recipient_name": "Assignee User",
             "proposal_reference": "VRP-20260626-0007",
             "submitted_by_name": "Requester User",
-            "link": "http://localhost:4200/p/collections/proposals/prop-1",
+            "link": (
+                "http://localhost:4200/p/collections/proposals/"
+                "my-assignments/prop-1?tab=documents"
+            ),
         }
     ]
     assert token.used_at == _NOW

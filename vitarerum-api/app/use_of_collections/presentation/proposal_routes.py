@@ -173,6 +173,13 @@ def _proposal_link(proposal_id: ProposalId) -> str:
     return f"{settings.public_origin}/p/collections/proposals/{proposal_id}"
 
 
+def _proposal_documents_link(proposal_id: ProposalId) -> str:
+    return (
+        f"{settings.public_origin}/p/collections/proposals/my-assignments/"
+        f"{proposal_id}?tab=documents"
+    )
+
+
 async def _caller_display_name(
     caller: CallerPermission,
     session: DBSession,
@@ -191,6 +198,16 @@ def _staff_recipients_except(
         if excluded_permission_id is None
         or recipient.permission_id != excluded_permission_id
     ]
+
+
+def _distinct_email_recipients(
+    recipients: list[PermissionView],
+) -> list[PermissionView]:
+    distinct: dict[str, PermissionView] = {}
+    for recipient in recipients:
+        key = recipient.user.id or recipient.user.email.lower()
+        distinct.setdefault(key, recipient)
+    return list(distinct.values())
 
 
 async def _notify_staff_recipients(
@@ -222,7 +239,7 @@ async def _send_proposal_submitted_emails(
     proposal: Proposal,
     submitted_by_name: str,
 ) -> None:
-    for recipient in recipients:
+    for recipient in _distinct_email_recipients(recipients):
         await sender.send_proposal_submitted(
             to_email=recipient.user.email,
             recipient_name=recipient.user.name,
@@ -271,7 +288,7 @@ async def _send_documents_submitted_email(
         recipient_name=recipient.user.name,
         proposal_reference=proposal.reference_number.value,
         submitted_by_name=submitted_by_name,
-        link=_proposal_link(proposal.id),
+        link=_proposal_documents_link(proposal.id),
     )
 
 
@@ -682,6 +699,7 @@ async def assign_proposal(
         raise _not_found("proposal", proposal_id)
     assert_proposal_access(caller, proposal_before)
     require_staff(caller)
+    previous_assignee_id = proposal_before.assigned_to
     target_permission_id = (
         PermissionId(body.targetPermissionId) if body.targetPermissionId else None
     )
@@ -703,10 +721,25 @@ async def assign_proposal(
     should_notify_recipient = (
         recipient_permission_id is not None and recipient_permission_id != caller.id
     )
+    should_notify_takeover = (
+        recipient_permission_id == caller.id
+        and previous_assignee_id is not None
+        and previous_assignee_id != caller.id
+    )
     if should_notify_recipient and recipient_permission_id is not None:
         await notification_dispatcher.notify(
             recipient_permission_id=recipient_permission_id,
             kind=NotificationKind.PROPOSAL_ASSIGNED,
+            triggered_by=caller.id,
+            related_resource_type=RelatedResourceType.PROPOSAL,
+            related_resource_id=str(proposal.id),
+            related_resource_label=proposal.reference_number.value,
+            note=body.note,
+        )
+    if should_notify_takeover and previous_assignee_id is not None:
+        await notification_dispatcher.notify(
+            recipient_permission_id=previous_assignee_id,
+            kind=NotificationKind.PROPOSAL_TAKEN_OVER,
             triggered_by=caller.id,
             related_resource_type=RelatedResourceType.PROPOSAL,
             related_resource_id=str(proposal.id),
@@ -726,6 +759,23 @@ async def assign_proposal(
             recipient_name=recipient.user.name,
             proposal_reference=proposal.reference_number.value,
             assigned_by_name=assigner.user.name if assigner else caller.email,
+            note=body.note,
+            link=f"{settings.public_origin}/p/collections/proposals/{proposal.id}",
+        )
+    if should_notify_takeover and previous_assignee_id is not None:
+        previous_assignee = await hydrate_permission(previous_assignee_id, session)
+        if previous_assignee is None:
+            raise RuntimeError(
+                f"Cannot resolve notification recipient {previous_assignee_id}"
+            )
+        taken_over_by = await hydrate_permission(caller.id, session)
+        await proposal_notification_email_sender.send_proposal_taken_over(
+            to_email=previous_assignee.user.email,
+            recipient_name=previous_assignee.user.name,
+            proposal_reference=proposal.reference_number.value,
+            taken_over_by_name=(
+                taken_over_by.user.name if taken_over_by else caller.email
+            ),
             note=body.note,
             link=f"{settings.public_origin}/p/collections/proposals/{proposal.id}",
         )
@@ -1162,6 +1212,7 @@ async def reject_proposal(
     caller: CallerPermission,
     proposal_repo: ProposalRepo,
     conversation_repo: ConvRepo,
+    proposal_notification_email_sender: ProposalEmailSender,
     session: DBSession,
 ) -> ProposalCommandResponse:
     proposal_before = await proposal_repo.get_by_id(ProposalId(proposal_id))
@@ -1173,14 +1224,13 @@ async def reject_proposal(
         if proposal_before.requested_by is not None
         else None
     )
-    requester_email = (
-        requester.user.email
-        if requester is not None
-        else proposal_before.requester_contact.email.value
-        if proposal_before.requester_contact is not None
-        else None
-    )
-    if requester_email is None:
+    if requester is not None:
+        requester_email = requester.user.email
+        requester_name = requester.user.name
+    elif proposal_before.requester_contact is not None:
+        requester_email = proposal_before.requester_contact.email.value
+        requester_name = proposal_before.requester_contact.name
+    else:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={
@@ -1188,6 +1238,7 @@ async def reject_proposal(
                 "message": "Proposal has no requester contact.",
             },
         )
+    rejected_by_name = await _caller_display_name(caller, session)
     try:
         output = await RejectProposal(proposal_repo, conversation_repo).execute(
             RejectProposalInput(
@@ -1201,6 +1252,14 @@ async def reject_proposal(
         _handle_domain_errors(exc)
         raise
     await session.commit()
+    await proposal_notification_email_sender.send_proposal_rejected(
+        to_email=requester_email,
+        requester_name=requester_name,
+        proposal_reference=output.proposal.reference_number.value,
+        rejected_by_name=rejected_by_name,
+        reason=body.reason,
+        link=_proposal_link(output.proposal.id),
+    )
     last_event = (
         await _build_proposal_event(output.proposal.events[-1], session)
         if output.proposal.events

@@ -18,7 +18,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import get_async_session
-from app.identity.public import PermissionReader, get_permission_reader
+from app.identity.public import (
+    GroupName,
+    PermissionReader,
+    PermissionView,
+    get_permission_reader,
+)
 from app.notifications.public import (
     NotificationDispatcher,
 )
@@ -155,6 +160,29 @@ def get_reader(session: DBSession) -> PermissionReader:
     return get_permission_reader(session)
 
 
+async def get_staff_notification_recipients(
+    reader: Annotated[PermissionReader, Depends(get_reader)],
+) -> list[PermissionView]:
+    recipients: dict[str, PermissionView] = {}
+    for group in (
+        GroupName.CURATORIAL,
+        GroupName.COLLECTIONS_MANAGEMENT,
+        GroupName.DIRECTION,
+        GroupName.SYS_ADMIN,
+    ):
+        for permission in await reader.list_by_group(group):
+            recipients.setdefault(permission.permission_id, permission)
+    return list(recipients.values())
+
+
+def distinct_email_recipients(recipients: list[PermissionView]) -> list[PermissionView]:
+    distinct: dict[str, PermissionView] = {}
+    for recipient in recipients:
+        key = recipient.user.id or recipient.user.email.lower()
+        distinct.setdefault(key, recipient)
+    return list(distinct.values())
+
+
 def get_proposal_notification_email_sender() -> ProposalNotificationEmailSender:
     if not settings.smtp_host:
         return LoggingProposalNotificationEmailSender()
@@ -170,6 +198,11 @@ def get_proposal_notification_email_sender() -> ProposalNotificationEmailSender:
 
 def get_notifications_dispatcher(session: DBSession) -> NotificationDispatcher:
     return build_notification_dispatcher(session)
+
+
+StaffNotificationRecipients = Annotated[
+    list[PermissionView], Depends(get_staff_notification_recipients)
+]
 
 
 def get_submit_amendment_document(session: DBSession) -> SubmitAmendmentDocument:

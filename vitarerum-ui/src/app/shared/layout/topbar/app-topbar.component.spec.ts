@@ -8,6 +8,7 @@ import { IdentityServiceMock } from '@core/auth/identity.service.mock';
 import { NotificationApiServiceMock } from '@features/notifications/mocks/notification-api.service.mock';
 import { Notification } from '@features/notifications/models/notification.model';
 import { NOTIFICATION_API_SERVICE } from '@features/notifications/services/notification-api.service';
+import { NotificationsFacade } from '@features/notifications/state/notifications.facade';
 import { LayoutService } from '@layout/layout.service';
 
 import { AppTopbarComponent } from './app-topbar.component';
@@ -102,6 +103,7 @@ describe('AppTopbarComponent role switcher', () => {
     await identity.signIn({ email: 'bob@collections.example.com', password: 'vita2026' });
     const fixture = TestBed.createComponent(AppTopbarComponent);
     const component = fixture.componentInstance as unknown as {
+      notificationLink: (notification: Notification) => string | null;
       notificationText: (notification: Notification) => string;
     };
     const baseNotification: Omit<Notification, 'kind'> = {
@@ -125,7 +127,7 @@ describe('AppTopbarComponent role switcher', () => {
 
     expect(
       component.notificationText({ ...baseNotification, kind: 'PROPOSAL_SUBMITTED' }),
-    ).toBe('Alice Curator submitted VR-2026-001.');
+    ).toBe('New proposal VR-2026-001 was submitted.');
     expect(
       component.notificationText({
         ...baseNotification,
@@ -138,5 +140,46 @@ describe('AppTopbarComponent role switcher', () => {
         kind: 'PROPOSAL_CORRECTIONS_SUBMITTED',
       }),
     ).toBe('Corrections were submitted for VR-2026-001.');
+    expect(
+      component.notificationText({
+        ...baseNotification,
+        kind: 'PROPOSAL_TAKEN_OVER',
+      }),
+    ).toBe('Alice Curator took over VR-2026-001.');
+    expect(
+      component.notificationLink({
+        ...baseNotification,
+        kind: 'PROPOSAL_DOCUMENTS_SUBMITTED',
+      }),
+    ).toBe('/p/collections/proposals/my-assignments/proposal-1?tab=documents');
+    expect(
+      component.notificationLink({
+        ...baseNotification,
+        kind: 'PROPOSAL_CORRECTIONS_SUBMITTED',
+      }),
+    ).toBe('/p/collections/proposals/my-assignments/proposal-1?tab=documents');
+    expect(
+      component.notificationLink({
+        ...baseNotification,
+        kind: 'PROPOSAL_SUBMITTED',
+      }),
+    ).toBe('/p/collections/proposals/proposal-1');
+  });
+
+  it('clears all visible notifications from the popover state', async () => {
+    await identity.signIn({ email: 'bob@collections.example.com', password: 'vita2026' });
+    const facade = TestBed.inject(NotificationsFacade);
+    const fixture = TestBed.createComponent(AppTopbarComponent);
+    const component = fixture.componentInstance as unknown as {
+      clearNotifications: () => Promise<void>;
+    };
+
+    await facade.loadRecent();
+    expect(facade.recent().length).toBeGreaterThan(0);
+
+    await component.clearNotifications();
+
+    expect(facade.recent()).toEqual([]);
+    expect(facade.unreadCount()).toBe(0);
   });
 });
