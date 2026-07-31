@@ -320,7 +320,7 @@ async def test_confirm_reset_weak_new_password_raises() -> None:
 
     with pytest.raises(WeakPassword):
         await uc.execute(
-            raw_token="raw-token", new_password="short", remote_ip="1.2.3.4"
+            raw_token="raw-token", new_password="shrt", remote_ip="1.2.3.4"
         )
 
 
@@ -579,7 +579,7 @@ async def test_confirm_with_weak_password_and_valid_token_is_400(
 
             resp = await client.post(
                 "/api/v1/auth/password-reset/confirm",
-                json={"token": sender.last_reset_token, "newPassword": "short"},
+                json={"token": sender.last_reset_token, "newPassword": "shrt"},
             )
         assert resp.status_code == 400
         assert resp.json()["error"] == "WEAK_PASSWORD"

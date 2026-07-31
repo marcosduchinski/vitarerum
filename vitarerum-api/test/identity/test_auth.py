@@ -350,7 +350,7 @@ async def test_change_password_weak_new_password_raises() -> None:
         await uc.execute(
             email="alice@x.org",
             current_password="old-password",
-            new_password="short",
+            new_password="shrt",
         )
 
 
@@ -805,7 +805,7 @@ async def test_change_password_api_weak_new_password_is_400() -> None:
     async with change_password_client(user_rec) as client:
         resp = await client.post(
             "/api/v1/auth/change-password",
-            json={"currentPassword": "old-password", "newPassword": "short"},
+            json={"currentPassword": "old-password", "newPassword": "shrt"},
         )
 
     assert resp.status_code == 400

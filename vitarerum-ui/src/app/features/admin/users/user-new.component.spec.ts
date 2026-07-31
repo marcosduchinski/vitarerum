@@ -24,19 +24,19 @@ describe('UserNewComponent', () => {
     }).compileComponents();
   });
 
-  it('rejects a password shorter than the shared minimum (12 characters)', () => {
+  it('rejects a password shorter than the shared minimum (5 characters)', () => {
     const fixture = TestBed.createComponent(UserNewComponent);
     fixture.detectChanges();
     const root = fixture.nativeElement as HTMLElement;
 
     fillInput(root, 'user-name', 'New User');
     fillInput(root, 'user-email', 'new@example.org');
-    fillInput(root, 'user-password', 'short-pw');
+    fillInput(root, 'user-password', 'shrt');
     fixture.detectChanges();
 
     const submit = root.querySelector<HTMLButtonElement>('button[type="submit"]');
     expect(submit!.disabled).toBe(true);
-    expect(root.textContent).toContain('at least 12 characters');
+    expect(root.textContent).toContain('at least 5 characters');
   });
 
   it('enables submit once the password satisfies the shared policy', () => {

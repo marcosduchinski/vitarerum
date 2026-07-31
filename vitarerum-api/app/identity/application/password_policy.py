@@ -6,7 +6,7 @@ allows)."""
 
 from __future__ import annotations
 
-MIN_PASSWORD_LENGTH = 12
+MIN_PASSWORD_LENGTH = 5
 MAX_PASSWORD_LENGTH = 128
 
 
