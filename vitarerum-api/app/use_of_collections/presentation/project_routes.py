@@ -224,6 +224,8 @@ async def get_project(
                 displayTitle=obj.display_title,
                 objectName=obj.object_name,
                 briefDescriptionSnapshot=obj.brief_description_snapshot,
+                collectionId=obj.collection_id,
+                collectionName=obj.collection_name,
                 category=obj.category,
                 description=obj.description,
             )
@@ -319,6 +321,8 @@ async def add_project_objects(
                         display_title=obj.displayTitle,
                         object_name=obj.objectName,
                         brief_description_snapshot=obj.briefDescriptionSnapshot,
+                        collection_id=obj.collectionId,
+                        collection_name=obj.collectionName,
                         category=obj.category,
                         description=obj.description,
                     )

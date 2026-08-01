@@ -184,6 +184,8 @@ class ApproveProposal:
                     display_title=ro.display_title,
                     object_name=ro.object_name,
                     brief_description_snapshot=ro.brief_description_snapshot,
+                    collection_id=ro.collection_id,
+                    collection_name=ro.collection_name,
                 )
                 for ro in proposal.requested_objects
             ],
@@ -282,6 +284,8 @@ class CreateFollowUpProject:
                     brief_description_snapshot=selected_by_id[
                         object_id
                     ].brief_description_snapshot,
+                    collection_id=selected_by_id[object_id].collection_id,
+                    collection_name=selected_by_id[object_id].collection_name,
                     category=selected_by_id[object_id].category,
                     description=selected_by_id[object_id].description,
                     requested_at=selected_by_id[object_id].requested_at,
@@ -406,6 +410,8 @@ class ProjectObjectSnapshotInput:
     display_title: str
     object_name: str
     brief_description_snapshot: str | None = None
+    collection_id: str | None = None
+    collection_name: str | None = None
     category: str = ""
     description: str = ""
 
@@ -440,6 +446,8 @@ class AddProjectObjects:
                 display_title=item.display_title,
                 object_name=item.object_name,
                 brief_description_snapshot=item.brief_description_snapshot,
+                collection_id=item.collection_id,
+                collection_name=item.collection_name,
                 category=item.category,
                 description=item.description,
                 requested_at=now,

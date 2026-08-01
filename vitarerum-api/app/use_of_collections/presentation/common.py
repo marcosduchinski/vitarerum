@@ -142,6 +142,8 @@ def _object_reference_response(obj: CollectionUseObject) -> ObjectReferenceRespo
         displayTitle=obj.display_title,
         objectName=obj.object_name,
         briefDescriptionSnapshot=obj.brief_description_snapshot,
+        collectionId=obj.collection_id,
+        collectionName=obj.collection_name,
     )
 
 
@@ -329,6 +331,8 @@ async def _build_requested_object(
         displayTitle=ro.display_title,
         objectName=ro.object_name,
         briefDescriptionSnapshot=ro.brief_description_snapshot,
+        collectionId=ro.collection_id,
+        collectionName=ro.collection_name,
         category=ro.category,
         description=ro.description,
         requestedAt=ro.requested_at,

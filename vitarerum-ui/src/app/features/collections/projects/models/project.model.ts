@@ -25,6 +25,8 @@ export interface CollectionUseProjectObject {
   readonly displayTitle: string | null;
   readonly objectName: string | null;
   readonly briefDescriptionSnapshot: string | null;
+  readonly collectionId?: string | null;
+  readonly collectionName?: string | null;
   readonly category: string;
   readonly description: string;
 }
@@ -283,6 +285,8 @@ export interface ProjectObjectSnapshotInput {
   readonly displayTitle: string;
   readonly objectName: string;
   readonly briefDescriptionSnapshot?: string | null;
+  readonly collectionId?: string | null;
+  readonly collectionName?: string | null;
   readonly category?: string;
   readonly description?: string;
 }

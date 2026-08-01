@@ -548,6 +548,8 @@ async def get_proposal(
             displayTitle=ro.display_title,
             objectName=ro.object_name,
             briefDescriptionSnapshot=ro.brief_description_snapshot,
+            collectionId=ro.collection_id,
+            collectionName=ro.collection_name,
             category=ro.category,
             description=ro.description,
             requestedAt=ro.requested_at,
@@ -825,6 +827,8 @@ async def add_requested_objects(
                         display_title=o.displayTitle,
                         object_name=o.objectName,
                         brief_description_snapshot=o.briefDescriptionSnapshot,
+                        collection_id=o.collectionId,
+                        collection_name=o.collectionName,
                         category=o.category,
                         description=o.description,
                     )

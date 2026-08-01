@@ -260,6 +260,8 @@ export class ProposalApiServiceMock {
         displayTitle: o.displayTitle,
         objectName: o.objectName,
         briefDescriptionSnapshot: o.briefDescriptionSnapshot ?? null,
+        collectionId: o.collectionId ?? null,
+        collectionName: o.collectionName ?? null,
       },
       category: o.category ?? '',
       description: o.description ?? '',

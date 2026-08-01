@@ -111,6 +111,8 @@ class RequestedObjectResponse(BaseModel):
     displayTitle: str | None = None
     objectName: str | None = None
     briefDescriptionSnapshot: str | None = None
+    collectionId: str | None = None
+    collectionName: str | None = None
     category: str
     description: str
     requestedAt: datetime
@@ -279,6 +281,8 @@ class RequestedObjectSnapshotInput(BaseModel):
     displayTitle: str
     objectName: str
     briefDescriptionSnapshot: str | None = None
+    collectionId: str | None = None
+    collectionName: str | None = None
     category: str = ""
     description: str = ""
 
@@ -378,6 +382,8 @@ class ObjectReferenceResponse(BaseModel):
     displayTitle: str | None = None
     objectName: str | None = None
     briefDescriptionSnapshot: str | None = None
+    collectionId: str | None = None
+    collectionName: str | None = None
 
 
 class ObjectLogEntryResponse(BaseModel):
@@ -542,6 +548,8 @@ class CollectionUseObjectResponse(BaseModel):
     displayTitle: str | None = None
     objectName: str | None = None
     briefDescriptionSnapshot: str | None = None
+    collectionId: str | None = None
+    collectionName: str | None = None
     category: str
     description: str
 

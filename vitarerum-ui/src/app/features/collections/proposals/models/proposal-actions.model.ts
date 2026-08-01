@@ -63,6 +63,8 @@ export interface AddRequestedObjectsRequest {
     readonly displayTitle: string;
     readonly objectName: string;
     readonly briefDescriptionSnapshot?: string | null;
+    readonly collectionId?: string | null;
+    readonly collectionName?: string | null;
     readonly category?: string;
     readonly description?: string;
   }[];

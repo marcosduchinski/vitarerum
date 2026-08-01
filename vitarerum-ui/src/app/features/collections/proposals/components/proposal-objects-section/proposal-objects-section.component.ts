@@ -32,6 +32,8 @@ export class ProposalObjectsSectionComponent {
       displayTitle: object.objectReference.displayTitle,
       objectName: object.objectReference.objectName,
       briefDescriptionSnapshot: object.objectReference.briefDescriptionSnapshot,
+      collectionId: object.objectReference.collectionId,
+      collectionName: object.objectReference.collectionName,
       category: object.category,
       description: object.description,
       requestedAt: object.requestedAt,

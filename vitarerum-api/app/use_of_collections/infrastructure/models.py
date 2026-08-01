@@ -81,6 +81,10 @@ class CollectionUseObjectRecord(Base):
     display_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
     object_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     brief_description_snapshot: Mapped[str | None] = mapped_column(Text, nullable=True)
+    collection_id: Mapped[str | None] = mapped_column(
+        String(36), index=True, nullable=True
+    )
+    collection_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     category: Mapped[str] = mapped_column(String(255), default="")
     description: Mapped[str] = mapped_column(Text, default="")
     requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
@@ -409,6 +413,10 @@ class RequestedObjectRecord(Base):
     display_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
     object_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     brief_description_snapshot: Mapped[str | None] = mapped_column(Text, nullable=True)
+    collection_id: Mapped[str | None] = mapped_column(
+        String(36), index=True, nullable=True
+    )
+    collection_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     category: Mapped[str] = mapped_column(String(255), default="")
     description: Mapped[str] = mapped_column(Text, default="")
     requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

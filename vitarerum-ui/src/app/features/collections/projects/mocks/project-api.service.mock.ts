@@ -162,6 +162,8 @@ export class ProjectApiServiceMock {
       displayTitle: object.displayTitle,
       objectName: object.objectName,
       briefDescriptionSnapshot: object.briefDescriptionSnapshot ?? null,
+      collectionId: object.collectionId ?? null,
+      collectionName: object.collectionName ?? null,
       category: object.category ?? '',
       description: object.description ?? '',
     }));
@@ -178,6 +180,8 @@ export class ProjectApiServiceMock {
         displayTitle: object.displayTitle,
         objectName: object.objectName,
         briefDescriptionSnapshot: object.briefDescriptionSnapshot,
+        collectionId: object.collectionId,
+        collectionName: object.collectionName,
       },
       numberOfObjects: 1,
       addedAt,
@@ -355,12 +359,7 @@ export class ProjectApiServiceMock {
     const entry: ObjectLogEntry = {
       id: this.state.nextEntryId(),
       collectionUseObjectId: request.collectionUseObjectId,
-      objectReference: {
-        inventoryNumber: this.collectionUseObjectInventoryNumber(p, request.collectionUseObjectId),
-        displayTitle: null,
-        objectName: null,
-        briefDescriptionSnapshot: null,
-      },
+      objectReference: this.collectionUseObjectReference(p, request.collectionUseObjectId),
       numberOfObjects: request.numberOfObjects,
       addedAt: new Date().toISOString(),
       addedBy: currentPrincipal,
@@ -543,12 +542,7 @@ export class ProjectApiServiceMock {
     const entry: ObjectOccurrenceEntry = {
       id: this.state.nextEntryId(),
       collectionUseObjectId: request.collectionUseObjectId,
-      objectReference: {
-        inventoryNumber: this.collectionUseObjectInventoryNumber(p, request.collectionUseObjectId),
-        displayTitle: null,
-        objectName: null,
-        briefDescriptionSnapshot: null,
-      },
+      objectReference: this.collectionUseObjectReference(p, request.collectionUseObjectId),
       numberOfObjects: request.numberOfObjects,
       occurrenceDate: request.occurrenceDate,
       location: request.location,
@@ -960,18 +954,41 @@ export class ProjectApiServiceMock {
     };
   }
 
-  private collectionUseObjectInventoryNumber(
+  private collectionUseObjectReference(
     p: MutableProjectState,
     collectionUseObjectId: string,
-  ): string {
+  ): ObjectLogEntry['objectReference'] {
     const projectObject = p.objects?.find((object) => object.id === collectionUseObjectId);
-    if (projectObject) return projectObject.inventoryNumber;
-    if (!p.proposalId) return collectionUseObjectId;
+    if (projectObject) {
+      return {
+        inventoryNumber: projectObject.inventoryNumber,
+        displayTitle: projectObject.displayTitle,
+        objectName: projectObject.objectName,
+        briefDescriptionSnapshot: projectObject.briefDescriptionSnapshot,
+        collectionId: projectObject.collectionId,
+        collectionName: projectObject.collectionName,
+      };
+    }
+    if (!p.proposalId) {
+      return {
+        inventoryNumber: collectionUseObjectId,
+        displayTitle: null,
+        objectName: null,
+        briefDescriptionSnapshot: null,
+      };
+    }
 
     const proposalObject = this.state.proposals
       .get(p.proposalId)
       ?.requestedObjects.find((object) => object.id === collectionUseObjectId);
-    return proposalObject?.objectReference.inventoryNumber ?? collectionUseObjectId;
+    return (
+      proposalObject?.objectReference ?? {
+        inventoryNumber: collectionUseObjectId,
+        displayTitle: null,
+        objectName: null,
+        briefDescriptionSnapshot: null,
+      }
+    );
   }
 
   private toDetail(p: MutableProjectState): CollectionUseProjectDetail {

@@ -324,6 +324,8 @@ class CollectionUseObject:
     display_title: str | None = None
     object_name: str | None = None
     brief_description_snapshot: str | None = None
+    collection_id: str | None = None
+    collection_name: str | None = None
 
     def __post_init__(self) -> None:
         if not self.inventory_number:
@@ -537,6 +539,8 @@ class RequestedObject:
     object_name: str | None = None
     brief_description_snapshot: str | None = None
     requested_by: PermissionId | None = None
+    collection_id: str | None = None
+    collection_name: str | None = None
 
     def __post_init__(self) -> None:
         if not self.inventory_number:

@@ -183,6 +183,8 @@ describe('ProjectObjectsSectionComponent', () => {
             displayTitle: 'Jaguar',
             objectName: 'Jaguar',
             briefDescriptionSnapshot: 'Large cat.',
+            collectionId: 'col-zoo',
+            collectionName: 'Zoology',
             category: 'Zoology',
             description: 'Zoology / zoo.xlsx / Objects row 2',
           },

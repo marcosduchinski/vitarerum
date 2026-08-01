@@ -28,6 +28,8 @@ _OBJECT_REFERENCE = {
     "displayTitle",
     "objectName",
     "briefDescriptionSnapshot",
+    "collectionId",
+    "collectionName",
 }
 
 
@@ -216,6 +218,8 @@ async def test_golden_project_detail_and_list_shapes() -> None:
             "objects[].displayTitle",
             "objects[].objectName",
             "objects[].briefDescriptionSnapshot",
+            "objects[].collectionId",
+            "objects[].collectionName",
             "objects[].category",
             "objects[].description",
         }

@@ -42,6 +42,8 @@ type WireRequestedObject = RequestedObject & {
   readonly displayTitle?: string | null;
   readonly objectName?: string | null;
   readonly briefDescriptionSnapshot?: string | null;
+  readonly collectionId?: string | null;
+  readonly collectionName?: string | null;
 };
 
 // Public proposals awaiting approval have no system user/permission yet: the
@@ -67,7 +69,16 @@ function normalizeProposal<T extends ProposalSummary>(p: T): T {
 }
 
 function normalizeRequestedObject(object: WireRequestedObject): RequestedObject {
-  if (object.objectReference) return object;
+  if (object.objectReference) {
+    return {
+      ...object,
+      objectReference: {
+        ...object.objectReference,
+        collectionId: object.objectReference.collectionId ?? object.collectionId ?? null,
+        collectionName: object.objectReference.collectionName ?? object.collectionName ?? null,
+      },
+    };
+  }
   return {
     id: object.id,
     objectReference: {
@@ -75,6 +86,8 @@ function normalizeRequestedObject(object: WireRequestedObject): RequestedObject 
       displayTitle: object.displayTitle ?? null,
       objectName: object.objectName ?? null,
       briefDescriptionSnapshot: object.briefDescriptionSnapshot ?? null,
+      collectionId: object.collectionId ?? null,
+      collectionName: object.collectionName ?? null,
     },
     category: object.category,
     description: object.description,

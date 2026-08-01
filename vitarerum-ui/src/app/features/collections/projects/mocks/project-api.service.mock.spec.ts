@@ -256,6 +256,8 @@ describe('ProjectApiServiceMock', () => {
             inventoryNumber: 'INV-MOCK-004',
             displayTitle: 'Mock storage box',
             objectName: 'Box',
+            collectionId: 'col-mock',
+            collectionName: 'Mock collection',
           },
         ],
       }),
@@ -270,6 +272,10 @@ describe('ProjectApiServiceMock', () => {
         numberOfObjects: 1,
         observations: null,
         requestedObjectId: addedObject?.id,
+        objectReference: expect.objectContaining({
+          collectionId: 'col-mock',
+          collectionName: 'Mock collection',
+        }),
         attachments: [],
       }),
     ]);

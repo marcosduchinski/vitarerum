@@ -188,6 +188,8 @@ class RequestedObjectSnapshotInput:
     display_title: str
     object_name: str
     brief_description_snapshot: str | None = None
+    collection_id: str | None = None
+    collection_name: str | None = None
     category: str = ""
     description: str = ""
 
@@ -215,6 +217,8 @@ class AddRequestedObjects:
                 display_title=item.display_title,
                 object_name=item.object_name,
                 brief_description_snapshot=item.brief_description_snapshot,
+                collection_id=item.collection_id,
+                collection_name=item.collection_name,
                 category=item.category,
                 description=item.description,
                 requested_at=now,

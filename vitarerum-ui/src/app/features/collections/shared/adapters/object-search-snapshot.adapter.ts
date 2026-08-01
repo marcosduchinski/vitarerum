@@ -5,6 +5,8 @@ export interface ObjectSearchSnapshot {
   readonly displayTitle: string;
   readonly objectName: string;
   readonly briefDescriptionSnapshot?: string | null;
+  readonly collectionId?: string | null;
+  readonly collectionName?: string | null;
   readonly category?: string;
   readonly description?: string;
 }
@@ -42,6 +44,8 @@ export function adaptSearchHitToObjectSnapshot(
       displayTitle: snapshot.displayTitle,
       objectName: snapshot.objectName,
       briefDescriptionSnapshot: snapshot.briefDescriptionSnapshot,
+      collectionId: hit.collectionId,
+      collectionName: hit.collectionName,
       category: snapshot.category,
       description: `${hit.collectionName} / ${hit.fileName} / ${hit.sheet} row ${hit.rowNumber}`,
     },

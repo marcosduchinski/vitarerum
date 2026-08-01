@@ -319,6 +319,8 @@ def _collection_use_object(
         description="a fox head",
         requested_at=datetime(2026, 6, 1, tzinfo=UTC),
         requested_by=PermissionId("permission-1"),
+        collection_id="collection-zoology",
+        collection_name="Zoology",
     )
 
 
@@ -554,6 +556,8 @@ async def test_approve_proposal_creates_requested_project() -> None:
                 category="manuscript",
                 description="for study",
                 requested_at=datetime(2026, 6, 1, tzinfo=UTC),
+                collection_id="collection-manuscripts",
+                collection_name="Manuscripts",
             )
         ],
     )
@@ -588,6 +592,8 @@ async def test_approve_proposal_creates_requested_project() -> None:
     assert saved_project.title == "Collection study"
     assert saved_project.proposal_id == "proposal-1"
     assert saved_project.objects[0].requested_by == "permission-1"
+    assert saved_project.objects[0].collection_id == "collection-manuscripts"
+    assert saved_project.objects[0].collection_name == "Manuscripts"
     assert saved_project.events[0].type == UseEventType.REQUESTED
     assert saved_project.events[0].triggered_by == "curator-1"
 
@@ -633,6 +639,8 @@ async def test_create_follow_up_project_copies_selected_objects() -> None:
     assert len(created.objects) == 1
     assert created.objects[0].id != "cuo-2"
     assert created.objects[0].inventory_number == "INV-002"
+    assert created.objects[0].collection_id == "collection-zoology"
+    assert created.objects[0].collection_name == "Zoology"
     assert created.events[0].type == UseEventType.REQUESTED
     assert created.events[0].note is not None
     assert "Follow-up of project CUP-LOG00001" in created.events[0].note

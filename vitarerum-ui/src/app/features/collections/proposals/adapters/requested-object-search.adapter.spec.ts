@@ -31,6 +31,8 @@ describe('adaptSearchHitToRequestedObject', () => {
         displayTitle: 'Jaguar',
         objectName: 'Panthera onca',
         briefDescriptionSnapshot: 'Large cat.',
+        collectionId: 'col-zoo',
+        collectionName: 'Zoology',
         category: 'Zoology',
         description: 'Zoology / zoo.xlsx / Objects row 2',
       },

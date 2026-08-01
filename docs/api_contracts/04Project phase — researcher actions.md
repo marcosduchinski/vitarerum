@@ -102,6 +102,8 @@ project_id : UUID (required)
       "displayTitle": "string | null",
       "objectName": "string | null",
       "briefDescriptionSnapshot": "string | null",
+      "collectionId": "uuid | null",
+      "collectionName": "string | null",
       "category": "string",
       "description": "string"
     }
@@ -111,7 +113,7 @@ project_id : UUID (required)
 
 `authorisedBy` / `authorisedAt` and the hydrated `requestedBy` object are populated only for staff callers — all three are `null` for a researcher. `CollectionUseProject.requestedBy` remains the ownership field used for access control.
 
-`objects` lists the project's own `CollectionUseObject`s (copied from the proposal's requested objects when the project was approved); their `id`s are what journal entries reference via `collectionUseObjectId`. Researcher project detail still omits staff review context such as proposal documents and conversation summaries. Use the proposal endpoints for researcher-facing proposal data, and use `GET /collection-use-projects/{project_id}/log-entries` / `.../occurrence-entries` for paginated project log content.
+`objects` lists the project's own `CollectionUseObject`s (copied from the proposal's requested objects when the project was approved); their `id`s are what journal entries reference via `collectionUseObjectId`. Each object keeps the selected catalog collection snapshot in `collectionId` / `collectionName` when the source search result supplied it. Researcher project detail still omits staff review context such as proposal documents and conversation summaries. Use the proposal endpoints for researcher-facing proposal data, and use `GET /collection-use-projects/{project_id}/log-entries` / `.../occurrence-entries` for paginated project log content.
 
 **Response `403 Forbidden`**
 ```json
@@ -968,7 +970,7 @@ A few conventions worth noting across this group:
 
 **Two distinct journal resources** — both are per-project, curator-concluded log aggregates whose entries link to exactly one `CollectionUseObject` via `collectionUseObjectId`. `log-entries` belong to the **object access log** (`ObjectAccessLog`, `OAL-` reference number): each entry records a `numberOfObjects` and optional `observations`. `occurrence-entries` belong to the **object occurrence log** (`ObjectOccurrenceLog`, `OOL-` reference number): each entry records `numberOfObjects`, `occurrenceDate`, `location`, `reportedBy`, `detailedDescription` and an optional `testimonial`. Both logs are created lazily on the first entry (the **access log** is additionally seeded from the project's objects when the project is started — see `POST .../start`), reject entries and attachments once concluded, and are restricted to `IN_PROGRESS` projects for researchers. Every entry carries a required `collectionUseObjectId` tying it back to the `CollectionUseObject` it fulfils (log entry) or concerns (occurrence entry), giving end-to-end traceability from request → visit → attachments for a given object.
 
-**Entries reference collection use objects** — log-entry and occurrence-entry requests send a `collectionUseObjectId` identifying a `CollectionUseObject` of the project (copied from the proposal at approval). The inventory snapshot (`inventoryNumber`, `displayTitle`, `objectName`, `briefDescriptionSnapshot`) lives on that `CollectionUseObject` and is not duplicated on the journal entries.
+**Entries reference collection use objects** — log-entry and occurrence-entry requests send a `collectionUseObjectId` identifying a `CollectionUseObject` of the project (copied from the proposal at approval). The inventory snapshot (`inventoryNumber`, `displayTitle`, `objectName`, `briefDescriptionSnapshot`, `collectionId`, `collectionName`) lives on that `CollectionUseObject`; entry responses include the resolved object reference for display.
 
 **`addedBy` is a full permission object** — entry responses return `addedBy` as a nested `PermissionDetail`, not a bare UUID.
 

@@ -132,6 +132,8 @@ project_id : UUID (required)
       "displayTitle": "string | null",
       "objectName": "string | null",
       "briefDescriptionSnapshot": "string | null",
+      "collectionId": "uuid | null",
+      "collectionName": "string | null",
       "category": "string",
       "description": "string"
     }
@@ -139,7 +141,40 @@ project_id : UUID (required)
 }
 ```
 
-> `requestedBy` is a required `PermissionId` on `CollectionUseProject`; the API hydrates it as a permission detail for staff callers and returns `null` for non-staff. `authorisedBy` / `authorisedAt` are nullable and are populated only when a stored project has an `authorisedBy` permission that can be hydrated. `objects` lists the project's own `CollectionUseObject`s (copied from the proposal's requested objects at approval); it may be an empty list when the project was approved before operational object selection. Object `id`s are what journal entries reference via `collectionUseObjectId`. Other staff review context is not embedded here; use the linked proposal endpoints for proposal documents/conversation and the paginated project journal endpoints below for logs.
+> `requestedBy` is a required `PermissionId` on `CollectionUseProject`; the API hydrates it as a permission detail for staff callers and returns `null` for non-staff. `authorisedBy` / `authorisedAt` are nullable and are populated only when a stored project has an `authorisedBy` permission that can be hydrated. `objects` lists the project's own `CollectionUseObject`s (copied from the proposal's requested objects at approval); it may be an empty list when the project was approved before operational object selection. Each object keeps the selected catalog collection snapshot in `collectionId` / `collectionName` when supplied. Object `id`s are what journal entries reference via `collectionUseObjectId`. Other staff review context is not embedded here; use the linked proposal endpoints for proposal documents/conversation and the paginated project journal endpoints below for logs.
+
+---
+
+### `POST /collection-use-projects/{project_id}/objects`
+
+**Description** — Staff append operational collection objects directly to an existing project. The objects come from catalog search results and the client submits the snapshot it already holds; the server stores it as given and returns the updated project detail.
+
+**Path parameters**
+```
+project_id : UUID (required)
+```
+
+**Request body**
+```json
+{
+  "objects": [
+    {
+      "inventoryNumber": "INV-002",
+      "displayTitle": "Book of Hours",
+      "objectName": "Illuminated manuscript",
+      "briefDescriptionSnapshot": "string | null",
+      "collectionId": "uuid | null",
+      "collectionName": "string | null",
+      "category": "string",
+      "description": "string"
+    }
+  ]
+}
+```
+
+`inventoryNumber`, `displayTitle`, and `objectName` are required for each item. `briefDescriptionSnapshot`, `collectionId`, and `collectionName` are optional and default to `null`; `category` and `description` are optional and default to an empty string. When an access log already exists, one default `ObjectLogEntry` is created for each newly added object and its `objectReference` includes the same collection snapshot.
+
+**Response `201 Created`** — the updated `ProjectDetail`, with the new entries present in `objects`.
 
 **Response `404 Not Found`**
 ```json

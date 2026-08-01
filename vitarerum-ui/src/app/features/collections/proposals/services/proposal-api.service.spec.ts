@@ -197,6 +197,8 @@ describe('ProposalApiService', () => {
           displayTitle: 'Lynx pardinus study skin',
           objectName: 'Zoological study skin',
           briefDescriptionSnapshot: 'Historic Iberian lynx reference specimen.',
+          collectionId: 'col-zoo',
+          collectionName: 'Zoology',
           category: 'mammalogy',
           description: 'Requested for comparative research.',
         },

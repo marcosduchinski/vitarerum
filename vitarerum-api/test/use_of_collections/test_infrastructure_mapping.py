@@ -114,6 +114,10 @@ def test_collection_use_project_roundtrip_preserves_key_data() -> None:
                 id=CollectionUseObjectId("cuo-1"),
                 inventory_number="INV-001",
                 display_title="Illuminated manuscript",
+                object_name="Manuscript",
+                brief_description_snapshot="Book of hours.",
+                collection_id="collection-manuscripts",
+                collection_name="Manuscripts",
                 category="manuscript",
                 description="for study",
                 requested_at=now,
@@ -137,6 +141,10 @@ def test_collection_use_project_roundtrip_preserves_key_data() -> None:
     assert rebuilt.objects[0].id == "cuo-1"
     assert rebuilt.objects[0].inventory_number == "INV-001"
     assert rebuilt.objects[0].display_title == "Illuminated manuscript"
+    assert rebuilt.objects[0].object_name == "Manuscript"
+    assert rebuilt.objects[0].brief_description_snapshot == "Book of hours."
+    assert rebuilt.objects[0].collection_id == "collection-manuscripts"
+    assert rebuilt.objects[0].collection_name == "Manuscripts"
 
 
 def test_object_log_entry_roundtrip_preserves_reference_and_attachments() -> None:
@@ -345,6 +353,8 @@ def test_proposal_roundtrip_preserves_key_data() -> None:
                 category="manuscript",
                 description="for study",
                 requested_at=now,
+                collection_id="collection-manuscripts",
+                collection_name="Manuscripts",
             )
         ],
         documents=[
@@ -371,6 +381,8 @@ def test_proposal_roundtrip_preserves_key_data() -> None:
     assert rebuilt.submission_channel == SubmissionChannel.AUTHENTICATED
     assert rebuilt.events[0].type == ProposalEventType.SUBMITTED
     assert rebuilt.requested_objects[0].inventory_number == "INV-010"
+    assert rebuilt.requested_objects[0].collection_id == "collection-manuscripts"
+    assert rebuilt.requested_objects[0].collection_name == "Manuscripts"
     assert rebuilt.requested_objects[0].category == "manuscript"
     assert rebuilt.requested_objects[0].requested_by is None
     assert rebuilt.documents[0].type.value == "request-form"

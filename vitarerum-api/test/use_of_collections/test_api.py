@@ -1267,6 +1267,8 @@ async def test_relate_searched_objects_surfaces_them_on_detail() -> None:
                         "inventoryNumber": "INV-001",
                         "displayTitle": "Book of Hours",
                         "objectName": "Illuminated manuscript",
+                        "collectionId": "collection-manuscripts",
+                        "collectionName": "Manuscripts",
                         "category": "manuscript",
                     }
                 ]
@@ -1289,6 +1291,8 @@ async def test_relate_searched_objects_surfaces_them_on_detail() -> None:
     assert objects[0]["inventoryNumber"] == "INV-001"
     assert objects[0]["displayTitle"] == "Book of Hours"
     assert objects[0]["objectName"] == "Illuminated manuscript"
+    assert objects[0]["collectionId"] == "collection-manuscripts"
+    assert objects[0]["collectionName"] == "Manuscripts"
     assert objects[0]["category"] == "manuscript"
     assert objects[0]["requestedBy"] is None
 
@@ -2444,6 +2448,8 @@ async def test_staff_can_add_project_objects() -> None:
                         "displayTitle": "Specimen drawer",
                         "objectName": "Drawer",
                         "briefDescriptionSnapshot": "A drawer with specimens.",
+                        "collectionId": "collection-zoology",
+                        "collectionName": "Zoology",
                         "category": "zoology",
                         "description": "Selected from object index.",
                     }
@@ -2454,9 +2460,13 @@ async def test_staff_can_add_project_objects() -> None:
 
     assert response.status_code == 201
     assert response.json()["objects"][-1]["inventoryNumber"] == "INV-002"
+    assert response.json()["objects"][-1]["collectionId"] == "collection-zoology"
+    assert response.json()["objects"][-1]["collectionName"] == "Zoology"
     assert project is not None
     assert project.objects[-1].inventory_number == "INV-002"
     assert project.objects[-1].display_title == "Specimen drawer"
+    assert project.objects[-1].collection_id == "collection-zoology"
+    assert project.objects[-1].collection_name == "Zoology"
     assert project.objects[-1].requested_by == _STAFF_CALLER.id
 
 
