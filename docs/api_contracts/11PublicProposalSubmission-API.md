@@ -9,7 +9,7 @@ real protection MUST be enforced server-side:
 | # | Protection | Where |
 |---|------------|-------|
 | 1 | **Verify the Turnstile token** via Cloudflare `siteverify` (secret key stays on the server) | `POST /public/proposals` |
-| 2 | **Rate-limit** per IP, per e-mail, and globally → `429` + `Retry-After` | both endpoints |
+| 2 | **Rate-limit**: submit is capped at 50/IP/hour, 50/e-mail/day, and 500 global/hour; confirm is capped at 50/IP/hour → `429` + `Retry-After` | both endpoints |
 | 3 | **Validate & sanitise**: length caps, strip control chars, reject CR/LF in e-mail-bound fields, escape on render in the staff UI (stored-XSS defence) | both |
 | 4 | **Double opt-in**: create a *pending, unverified* record + e-mail a single-use signed TTL token; materialise the proposal only on confirm; discard unconfirmed after TTL | both |
 | 5 | **Honeypot** `website`: if non-empty, `202` with **no work** (accept-and-drop) | `POST /public/proposals` |

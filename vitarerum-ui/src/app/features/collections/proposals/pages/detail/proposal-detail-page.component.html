@@ -19,7 +19,6 @@
         @if (canAssign()) {
           <div class="proposal-actions__copy">
             <span class="proposal-actions__eyebrow">Decision desk</span>
-            <strong>Route this proposal</strong>
           </div>
           <div class="proposal-actions__buttons">
             <button
@@ -31,15 +30,16 @@
               <span class="pi pi-check-circle" aria-hidden="true"></span>
               {{ assuming() ? 'Assigning…' : 'Assign to me' }}
             </button>
+            <!--
             <button
               type="button"
               class="action-btn"
-              [class.action-btn--active]="forwardModalOpen()"
+              [class.action-btn&#45;&#45;active]="forwardModalOpen()"
               (click)="openForwardModal()"
             >
               <span class="pi pi-send" aria-hidden="true"></span>
               Forward
-            </button>
+            </button>-->
           </div>
         } @else {
           <div class="proposal-actions__copy">

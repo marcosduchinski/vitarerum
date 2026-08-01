@@ -44,8 +44,8 @@ from app.use_of_collections.domain.models import (
 )
 
 # Rate limits as (max_requests, window_seconds), mirroring the reference impl.
-RATE_LIMIT_PER_IP = (5, 60 * 60)
-RATE_LIMIT_PER_EMAIL = (3, 24 * 60 * 60)
+RATE_LIMIT_PER_IP = (50, 60 * 60)
+RATE_LIMIT_PER_EMAIL = (50, 24 * 60 * 60)
 RATE_LIMIT_GLOBAL = (500, 60 * 60)
 RETRY_AFTER_SECONDS = 60
 PUBLIC_DOCUMENT_TYPE = "PUBLIC_SUBMISSION"
