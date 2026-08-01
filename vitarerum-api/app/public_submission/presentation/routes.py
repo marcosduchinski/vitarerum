@@ -469,13 +469,20 @@ async def delete_amendment_document(
                 "message": "This document is not within the correction scope.",
             },
         )
-    await remove_document.execute(
-        RemoveAmendmentDocumentInput(
-            proposal_id=ProposalId(proposal.id),
-            document_id=DocumentId(document_id),
-            allowed_ids=allowed_ids,
+    try:
+        await remove_document.execute(
+            RemoveAmendmentDocumentInput(
+                proposal_id=ProposalId(proposal.id),
+                document_id=DocumentId(document_id),
+                allowed_ids=allowed_ids,
+            )
         )
-    )
+    except ValueError:
+        # Already gone — most likely auto-detached by a replacement upload
+        # (see Proposal.submit_amendment_document). The citizen's desired end
+        # state (document absent) already holds, so treat this as a no-op
+        # success rather than an error.
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
     await session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
