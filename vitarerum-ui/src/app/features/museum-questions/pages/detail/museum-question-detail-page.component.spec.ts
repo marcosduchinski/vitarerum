@@ -367,9 +367,13 @@ describe('MuseumQuestionDetailPageComponent', () => {
   let fixture: ComponentFixture<MuseumQuestionDetailPageComponent>;
   let service: ServiceStub;
 
-  async function setup(question: MuseumQuestion = QUESTION): Promise<HTMLElement> {
+  async function setup(
+    question: MuseumQuestion = QUESTION,
+    historyQuestions: MuseumQuestion[] = [PREVIOUS_QUESTION, OTHER_REQUESTER_QUESTION],
+  ): Promise<HTMLElement> {
     service = new ServiceStub();
     service.question = question;
+    service.historyQuestions = historyQuestions;
     await TestBed.configureTestingModule({
       imports: [MuseumQuestionDetailPageComponent],
       providers: [
@@ -475,6 +479,20 @@ describe('MuseumQuestionDetailPageComponent', () => {
     ).not.toBeNull();
   });
 
+  it('keeps later related messages visible when viewing an older history item', async () => {
+    const el = await setup(PREVIOUS_QUESTION, [QUESTION, OTHER_REQUESTER_QUESTION]);
+
+    el.querySelector<HTMLButtonElement>('#history-tab')!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(el.textContent).toContain('Visit question');
+    expect(
+      el.querySelector<HTMLAnchorElement>('a[href="/p/museum-questions/q1"]'),
+    ).not.toBeNull();
+  });
+
   it('runs AI triage from the message icon and switches to the AI assistance tab', async () => {
     const el = await setup();
     service.nextTriage = OUT_OF_SCOPE_TRIAGE;
@@ -488,6 +506,28 @@ describe('MuseumQuestionDetailPageComponent', () => {
     expect(
       el.querySelector('#ai-assistance-tab')?.classList.contains('question-detail__tab--active'),
     ).toBe(true);
+  });
+
+  it('does not allow AI triage for closed questions', async () => {
+    const el = await setup({ ...QUESTION, status: 'CLOSED', closedAt: '2026-07-05T12:00:00Z' });
+
+    expect(el.querySelector<HTMLButtonElement>('[aria-label="Run AI triage"]')).toBeNull();
+
+    el.querySelector<HTMLButtonElement>('#ai-assistance-tab')!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(el.textContent).toContain('AI triage unavailable');
+    expect(
+      Array.from(el.querySelectorAll<HTMLButtonElement>('button')).some((button) =>
+        button.textContent?.includes('Run AI triage'),
+      ),
+    ).toBe(false);
+
+    fixture.componentInstance['triggerTriage'](service.question);
+    await fixture.whenStable();
+    expect(service.triageCalls).toEqual([]);
   });
 
   it('explains what the AI assistance tab checks', async () => {

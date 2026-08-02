@@ -84,16 +84,18 @@
                           <span class="message__sender">{{ question.requesterName }}</span>
                           <span class="message__role">{{ question.requesterEmail }}</span>
                     </div>
-                    <button
-                      type="button"
-                      class="editor-btn"
-                      [disabled]="triageBusy()"
-                      (click)="triggerTriage(question)"
-                      aria-label="Run AI triage"
-                      title="Run AI triage"
-                    >
-                      <span class="pi pi-sparkles" aria-hidden="true"></span>
-                    </button>
+                    @if (question.status === 'SUBMITTED') {
+                      <button
+                        type="button"
+                        class="editor-btn"
+                        [disabled]="triageBusy()"
+                        (click)="triggerTriage(question)"
+                        aria-label="Run AI triage"
+                        title="Run AI triage"
+                      >
+                        <span class="pi pi-sparkles" aria-hidden="true"></span>
+                      </button>
+                    }
                     <span class="message__date">{{ formatDate(question.createdAt) }}</span>
                   </div>
                   <p class="message__subject">{{ question.subject }}</p>
@@ -402,7 +404,7 @@
               [apiError]="triageResourceError()!"
               (retry)="triageResource.reload()"
             />
-          } @else if (!triage()) {
+          } @else if (!triage() && question.status === 'SUBMITTED') {
             <app-empty-state
               title="No AI triage yet"
               message="Use the sparkle icon on the message to run it."
@@ -417,6 +419,11 @@
                 Run AI triage
               </button>
             </app-empty-state>
+          } @else if (!triage()) {
+            <app-empty-state
+              title="AI triage unavailable"
+              message="AI triage can only be run while the question is submitted."
+            />
           } @else if (triage(); as triage) {
             <section class="detail-card" aria-labelledby="triage-card-title">
               <h2 id="triage-card-title" class="detail-card__title">AI triage</h2>

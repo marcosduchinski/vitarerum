@@ -252,7 +252,7 @@ export class MuseumQuestionDetailPageComponent {
     const page = this.historyResource.value();
     if (!question || !page) return [];
     return page.content
-      .filter((item) => item.id !== question.id && item.createdAt < question.createdAt)
+      .filter((item) => item.id !== question.id)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   });
   protected readonly previousQuestionsTotal = computed(() => {
@@ -391,6 +391,10 @@ export class MuseumQuestionDetailPageComponent {
     return this.hasAnswerContent() && !this.busy();
   }
 
+  protected canRunTriage(question: MuseumQuestion): boolean {
+    return question.status === 'SUBMITTED' && !this.triageBusy();
+  }
+
   protected async answer(question: MuseumQuestion): Promise<void> {
     const answerBody = this.currentSanitizedAnswerBody();
     if (!answerBody) return;
@@ -426,7 +430,7 @@ export class MuseumQuestionDetailPageComponent {
   }
 
   protected async triggerTriage(question: MuseumQuestion): Promise<void> {
-    if (this.triageBusy()) return;
+    if (!this.canRunTriage(question)) return;
     this.triageBusy.set(true);
     this.triageError.set(null);
     this.selectPanel('ai-assistance');
