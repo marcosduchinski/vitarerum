@@ -267,7 +267,9 @@ export class ReportsApiServiceMock {
   }
 
   private toListItem(report: InSituVisitReport): InSituVisitReportListItem {
-    const record = this.generatedDetails.get(report.id)?.record ?? null;
+    const detail = this.generatedDetails.get(report.id);
+    const record = detail?.record ?? null;
+    const meta = detail?.narrative?.meta ?? null;
     return {
       ...report,
       code: record?.code ?? null,
@@ -275,6 +277,9 @@ export class ReportsApiServiceMock {
       placeName: record?.placeName ?? null,
       visitBeginDate: record?.visitBeginDate ?? null,
       visitEndDate: record?.visitEndDate ?? null,
+      narrativeType: meta?.resolvedNarrativeType ?? null,
+      targetLanguage: meta?.targetLanguage ?? null,
+      creativityTemperature: meta?.creativityTemperature ?? null,
     };
   }
 

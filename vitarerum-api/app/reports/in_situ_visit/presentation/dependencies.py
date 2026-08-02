@@ -66,7 +66,9 @@ def get_list_use_case(repository: Repository) -> ListInSituVisitReports:
 def get_list_all_use_case(
     session: DBSession, repository: Repository
 ) -> ListAllInSituVisitReportSummaries:
-    return ListAllInSituVisitReportSummaries(repository, CidocRecordReader(session))
+    return ListAllInSituVisitReportSummaries(
+        repository, CidocRecordReader(session), MuseumNarrativeReader(session)
+    )
 
 
 GetUseCase = Annotated[GetInSituVisitReport, Depends(get_report_by_id_use_case)]

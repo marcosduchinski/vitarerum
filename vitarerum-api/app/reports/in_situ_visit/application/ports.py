@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from datetime import date, datetime
 from typing import TYPE_CHECKING, Protocol
 
 from app.reports.in_situ_visit.domain.models import (
@@ -16,7 +18,17 @@ if TYPE_CHECKING:
     )
     from app.cidoc_crm.in_situ_visit_mapping.presentation.schemas import (
         InSituVisitRecordResponse,
-    )
+)
+
+
+@dataclass(frozen=True, slots=True)
+class InSituVisitReportFilters:
+    search: str | None = None
+    generated_from: datetime | None = None
+    generated_to: datetime | None = None
+    visit_from: date | None = None
+    visit_to: date | None = None
+    narrative_type: str | None = None
 
 
 class InSituVisitReportRepository(Protocol):
@@ -31,7 +43,7 @@ class InSituVisitReportRepository(Protocol):
     ) -> tuple[list[InSituVisitReport], int]: ...
 
     async def list_all(
-        self, page: int, size: int
+        self, page: int, size: int, filters: InSituVisitReportFilters | None = None
     ) -> tuple[list[InSituVisitReport], int]: ...
 
 

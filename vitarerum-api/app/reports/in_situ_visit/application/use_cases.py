@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 from app.reports.in_situ_visit.application.ports import (
     InSituVisitRecordExporter,
     InSituVisitRecordReader,
+    InSituVisitReportFilters,
     InSituVisitReportRepository,
     NarrativeGenerator,
     NarrativeReader,
@@ -106,6 +107,7 @@ class ListInSituVisitReportsInput:
 class ListAllInSituVisitReportsInput:
     page: int = 0
     size: int = 20
+    filters: InSituVisitReportFilters | None = None
 
 
 class GetInSituVisitReport:
@@ -151,6 +153,9 @@ class InSituVisitReportSummary:
     place_name: str | None
     visit_begin_date: date | None
     visit_end_date: date | None
+    narrative_type: str | None
+    target_language: str | None
+    creativity_temperature: float | None
 
 
 class ListAllInSituVisitReportSummaries:
@@ -164,17 +169,25 @@ class ListAllInSituVisitReportSummaries:
         self,
         repository: InSituVisitReportRepository,
         record_reader: InSituVisitRecordReader,
+        narrative_reader: NarrativeReader,
     ) -> None:
         self._repository = repository
         self._record_reader = record_reader
+        self._narrative_reader = narrative_reader
 
     async def execute(
         self, data: ListAllInSituVisitReportsInput
     ) -> tuple[list[InSituVisitReportSummary], int]:
-        reports, total = await self._repository.list_all(data.page, data.size)
+        reports, total = await self._repository.list_all(
+            data.page, data.size, data.filters
+        )
         summaries: list[InSituVisitReportSummary] = []
         for report in reports:
             record = await self._record_reader.get(report.in_situ_visit_record_id)
+            narrative = await self._narrative_reader.get(
+                report.in_situ_visit_record_id, report.narrative_id
+            )
+            meta = narrative.meta if narrative else None
             summaries.append(
                 InSituVisitReportSummary(
                     report=report,
@@ -183,6 +196,11 @@ class ListAllInSituVisitReportSummaries:
                     place_name=record.placeName if record else None,
                     visit_begin_date=record.visitBeginDate if record else None,
                     visit_end_date=record.visitEndDate if record else None,
+                    narrative_type=meta.resolved_narrative_type if meta else None,
+                    target_language=meta.target_language if meta else None,
+                    creativity_temperature=(
+                        meta.creativity_temperature if meta else None
+                    ),
                 )
             )
         return summaries, total

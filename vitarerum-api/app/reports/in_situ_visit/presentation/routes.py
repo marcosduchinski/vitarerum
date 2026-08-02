@@ -15,6 +15,7 @@ statuses via ``HTTPException(detail=...)`` and ``main.py``'s normaliser:
 from __future__ import annotations
 
 import math
+from datetime import date, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, status
@@ -31,6 +32,7 @@ from app.cidoc_crm.public import (
     ProjectNotFound,
     VisitNotEvidenced,
 )
+from app.reports.in_situ_visit.application.ports import InSituVisitReportFilters
 from app.reports.in_situ_visit.application.use_cases import (
     GenerateInSituVisitReportInput,
     GetInSituVisitReportInput,
@@ -171,6 +173,9 @@ def _to_summary(
         placeName=summary.place_name,
         visitBeginDate=summary.visit_begin_date,
         visitEndDate=summary.visit_end_date,
+        narrativeType=summary.narrative_type,
+        targetLanguage=summary.target_language,
+        creativityTemperature=summary.creativity_temperature,
     )
 
 
@@ -250,12 +255,26 @@ async def list_all_in_situ_visit_reports(
     use_case: ListAllUseCase,
     page: Annotated[int, Query(ge=0)] = 0,
     size: Annotated[int, Query(ge=1, le=100)] = 20,
+    search: Annotated[str | None, Query(max_length=255)] = None,
+    generated_from: Annotated[datetime | None, Query(alias="generatedFrom")] = None,
+    generated_to: Annotated[datetime | None, Query(alias="generatedTo")] = None,
+    visit_from: Annotated[date | None, Query(alias="visitFrom")] = None,
+    visit_to: Annotated[date | None, Query(alias="visitTo")] = None,
+    narrative_type: Annotated[str | None, Query(alias="narrativeType")] = None,
 ) -> PaginatedInSituVisitReportSummariesResponse:
     """List reports across all projects, newest first, each enriched with the
     visit's display fields (code, visitor, place, dates). Staff-only."""
     require_staff(caller)
+    filters = InSituVisitReportFilters(
+        search=search,
+        generated_from=generated_from,
+        generated_to=generated_to,
+        visit_from=visit_from,
+        visit_to=visit_to,
+        narrative_type=narrative_type,
+    )
     summaries, total = await use_case.execute(
-        ListAllInSituVisitReportsInput(page=page, size=size)
+        ListAllInSituVisitReportsInput(page=page, size=size, filters=filters)
     )
     return PaginatedInSituVisitReportSummariesResponse(
         content=[_to_summary(s) for s in summaries],

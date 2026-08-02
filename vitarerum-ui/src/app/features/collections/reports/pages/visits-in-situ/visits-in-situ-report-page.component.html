@@ -11,10 +11,113 @@
     <app-error-message [apiError]="listError()!" (retry)="reportResource.reload()" />
   } @else {
     <section class="report-list-panel" aria-label="In-situ visit report history">
+      <div class="report-filters" aria-label="Report filters">
+        <div class="report-filters__bar">
+          <label class="report-filter report-filter--search" for="reports-search">
+            <span class="report-filter__label">Find report</span>
+            <span class="report-filter__control report-filter__control--search">
+              <span class="pi pi-search" aria-hidden="true"></span>
+              <input
+                id="reports-search"
+                type="search"
+                [value]="filterDraft().search"
+                (input)="updateFilter('search', $event)"
+                (keydown.enter)="applyFilters()"
+                placeholder="Report, visit, visitor, place, project"
+              />
+            </span>
+          </label>
+          <div class="report-filters__actions">
+            @if (activeFilterCount() > 0) {
+              <span class="report-filters__count">{{ activeFilterCount() }} active</span>
+            }
+            <button type="button" class="action-btn action-btn--primary" (click)="applyFilters()">
+              <span class="pi pi-filter" aria-hidden="true"></span>
+              Search
+            </button>
+            <button
+              type="button"
+              class="action-btn"
+              [disabled]="!hasAppliedFilters()"
+              (click)="clearFilters()"
+            >
+              <span class="pi pi-times" aria-hidden="true"></span>
+              Clear
+            </button>
+          </div>
+        </div>
+
+        <div class="report-filters__groups">
+          <div class="report-filter-group">
+            <span class="report-filter-group__title">Generated</span>
+            <label class="report-filter" for="reports-generated-from">
+              <span class="report-filter__label">From</span>
+              <input
+                id="reports-generated-from"
+                type="date"
+                [value]="filterDraft().generatedFrom"
+                (input)="updateFilter('generatedFrom', $event)"
+              />
+            </label>
+            <label class="report-filter" for="reports-generated-to">
+              <span class="report-filter__label">To</span>
+              <input
+                id="reports-generated-to"
+                type="date"
+                [value]="filterDraft().generatedTo"
+                (input)="updateFilter('generatedTo', $event)"
+              />
+            </label>
+          </div>
+
+          <div class="report-filter-group">
+            <span class="report-filter-group__title">Visit</span>
+            <label class="report-filter" for="reports-visit-from">
+              <span class="report-filter__label">From</span>
+              <input
+                id="reports-visit-from"
+                type="date"
+                [value]="filterDraft().visitFrom"
+                (input)="updateFilter('visitFrom', $event)"
+              />
+            </label>
+            <label class="report-filter" for="reports-visit-to">
+              <span class="report-filter__label">To</span>
+              <input
+                id="reports-visit-to"
+                type="date"
+                [value]="filterDraft().visitTo"
+                (input)="updateFilter('visitTo', $event)"
+              />
+            </label>
+          </div>
+
+          <div class="report-filter-group report-filter-group--wide">
+            <span class="report-filter-group__title">Narrative</span>
+            <label class="report-filter" for="reports-narrative-type">
+              <span class="report-filter__label">Type</span>
+              <select
+                id="reports-narrative-type"
+                [value]="filterDraft().narrativeType"
+                (change)="updateFilter('narrativeType', $event)"
+              >
+                @for (option of narrativeTypeOptions; track option.value) {
+                  <option [value]="option.value">{{ option.label }}</option>
+                }
+              </select>
+            </label>
+          </div>
+        </div>
+      </div>
+
       @if (!rows().length) {
         <app-empty-state
-          title="No reports generated"
-          message="Generated in-situ visit reports will appear here."
+          [title]="hasAppliedFilters() ? 'No reports found' : 'No reports generated'"
+          [message]="
+            hasAppliedFilters()
+              ? 'No in-situ visit reports match the current filters.'
+              : 'Generated in-situ visit reports will appear here.'
+          "
         />
       } @else {
         <div class="report-table-shell">
@@ -24,6 +127,7 @@
               <col class="report-table__col-visitor" />
               <col class="report-table__col-place" />
               <col class="report-table__col-visit-dates" />
+              <col class="report-table__col-generation" />
               <col class="report-table__col-generated" />
               <col class="report-table__col-actions" />
             </colgroup>
@@ -33,6 +137,7 @@
                 <th scope="col">Visitor</th>
                 <th scope="col">Place</th>
                 <th scope="col">Visit dates</th>
+                <th scope="col">Generation</th>
                 <th scope="col">Report generated</th>
                 <th scope="col" class="report-table__actions-header">Actions</th>
               </tr>
@@ -67,6 +172,33 @@
                     "
                   >
                     {{ visitPeriod(report) }}
+                  </td>
+                  <td>
+                    @if (
+                      report.narrativeType ||
+                      report.targetLanguage ||
+                      report.creativityTemperature !== null
+                    ) {
+                      <div class="generation-chips" [title]="generationProfile(report)">
+                        @if (narrativeTypeLabel(report.narrativeType)) {
+                          <span class="generation-chip generation-chip--type">
+                            {{ narrativeTypeLabel(report.narrativeType) }}
+                          </span>
+                        }
+                        @if (targetLanguageLabel(report.targetLanguage)) {
+                          <span class="generation-chip generation-chip--language">
+                            {{ targetLanguageLabel(report.targetLanguage) }}
+                          </span>
+                        }
+                        @if (temperatureLabel(report.creativityTemperature)) {
+                          <span class="generation-chip generation-chip--temperature">
+                            {{ temperatureLabel(report.creativityTemperature) }}
+                          </span>
+                        }
+                      </div>
+                    } @else {
+                      <span class="report-table__unavailable">Unavailable</span>
+                    }
                   </td>
                   <td class="report-table__date">{{ formatDateTime(report.createdAt) }}</td>
                   <td>

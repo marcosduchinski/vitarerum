@@ -237,6 +237,12 @@ export class ReportsApiService {
     let params = new HttpParams();
     if (query.page !== undefined) params = params.set('page', String(query.page));
     if (query.size !== undefined) params = params.set('size', String(query.size));
+    if (query.search) params = params.set('search', query.search);
+    if (query.generatedFrom) params = params.set('generatedFrom', query.generatedFrom);
+    if (query.generatedTo) params = params.set('generatedTo', query.generatedTo);
+    if (query.visitFrom) params = params.set('visitFrom', query.visitFrom);
+    if (query.visitTo) params = params.set('visitTo', query.visitTo);
+    if (query.narrativeType) params = params.set('narrativeType', query.narrativeType);
     return params;
   }
 

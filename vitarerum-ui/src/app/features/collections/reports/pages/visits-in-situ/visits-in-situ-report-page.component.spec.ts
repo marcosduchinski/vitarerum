@@ -22,6 +22,9 @@ const REPORTS: readonly InSituVisitReportListItem[] = Array.from({ length: 25 },
   placeName: index === 1 ? null : 'Museum',
   visitBeginDate: index === 1 ? null : '2026-06-01',
   visitEndDate: index === 1 ? null : '2026-06-03',
+  narrativeType: index === 1 ? null : 'institutional',
+  targetLanguage: index === 1 ? null : 'pt',
+  creativityTemperature: index === 1 ? null : 0.3,
 }));
 
 class ReportsApiServiceStub {
@@ -84,11 +87,15 @@ describe('VisitsInSituReportPageComponent', () => {
     expect(text).toContain('Visitor');
     expect(text).toContain('Place');
     expect(text).toContain('Visit dates');
+    expect(text).toContain('Generation');
     expect(text).toContain('Report generated');
     expect(text).toContain('report-1');
     expect(text).toContain('CUP-0001');
     expect(text).toContain('Maria do Rosário');
     expect(text).toContain('Museum');
+    expect(text).toContain('Institutional');
+    expect(text).toContain('Portuguese');
+    expect(text).toContain('T 0.3');
     expect(text).toContain('Unavailable');
     expect(text).toContain('1-20 of 25 reports');
     expect(
@@ -166,6 +173,41 @@ describe('VisitsInSituReportPageComponent', () => {
 
     expect(reportsService.queries.at(-1)).toEqual({ page: 2, size: 10 });
   });
+
+  it('applies and clears report filters', async () => {
+    const fixture = TestBed.createComponent(VisitsInSituReportPageComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    setInputValue(fixture.nativeElement, '#reports-search', 'CUP-0004');
+    setInputValue(fixture.nativeElement, '#reports-generated-from', '2026-06-01');
+    setInputValue(fixture.nativeElement, '#reports-generated-to', '2026-06-30');
+    setInputValue(fixture.nativeElement, '#reports-visit-from', '2026-06-02');
+    setInputValue(fixture.nativeElement, '#reports-visit-to', '2026-06-03');
+    setSelectValue(fixture.nativeElement, '#reports-narrative-type', 'institutional');
+
+    buttonByText(fixture.nativeElement, 'Search').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(reportsService.queries.at(-1)).toEqual({
+      page: 0,
+      size: 20,
+      search: 'CUP-0004',
+      generatedFrom: '2026-06-01T00:00:00.000Z',
+      generatedTo: '2026-06-30T23:59:59.999Z',
+      visitFrom: '2026-06-02',
+      visitTo: '2026-06-03',
+      narrativeType: 'institutional',
+    });
+
+    buttonByText(fixture.nativeElement, 'Clear').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(reportsService.queries.at(-1)).toEqual({ page: 0, size: 20 });
+  });
 });
 
 function buttonByText(root: HTMLElement, text: string): HTMLButtonElement {
@@ -178,4 +220,18 @@ function buttonByText(root: HTMLElement, text: string): HTMLButtonElement {
   }
 
   return button;
+}
+
+function setInputValue(root: HTMLElement, selector: string, value: string): void {
+  const input = root.querySelector<HTMLInputElement>(selector);
+  if (!input) throw new Error(`Input not found: ${selector}`);
+  input.value = value;
+  input.dispatchEvent(new Event('input'));
+}
+
+function setSelectValue(root: HTMLElement, selector: string, value: string): void {
+  const select = root.querySelector<HTMLSelectElement>(selector);
+  if (!select) throw new Error(`Select not found: ${selector}`);
+  select.value = value;
+  select.dispatchEvent(new Event('change'));
 }

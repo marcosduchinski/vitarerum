@@ -61,6 +61,9 @@ describe('ReportsApiService', () => {
           placeName: 'Museum',
           visitBeginDate: '2026-06-01',
           visitEndDate: '2026-06-03',
+          narrativeType: 'institutional',
+          targetLanguage: 'pt',
+          creativityTemperature: 0.3,
         },
       ],
       page: 2,
@@ -69,6 +72,38 @@ describe('ReportsApiService', () => {
       totalPages: 3,
     });
     expect(receivedCode).toBe('CUP-ABCD1234');
+  });
+
+  it('lists in-situ visit reports with filters', () => {
+    service
+      .listInSituVisitReports({
+        page: 0,
+        size: 20,
+        search: 'CUP-ABCD1234',
+        generatedFrom: '2026-06-01T00:00:00.000Z',
+        generatedTo: '2026-06-30T23:59:59.999Z',
+        visitFrom: '2026-06-01',
+        visitTo: '2026-06-03',
+        narrativeType: 'institutional',
+      })
+      .subscribe();
+
+    const request = http.expectOne(
+      (candidate) =>
+        candidate.url === 'https://api.example.test/reports/collection-use/in_situ_visit',
+    );
+
+    expect(request.request.method).toBe('GET');
+    expect(request.request.params.get('search')).toBe('CUP-ABCD1234');
+    expect(request.request.params.get('generatedFrom')).toBe('2026-06-01T00:00:00.000Z');
+    expect(request.request.params.get('generatedTo')).toBe('2026-06-30T23:59:59.999Z');
+    expect(request.request.params.get('visitFrom')).toBe('2026-06-01');
+    expect(request.request.params.get('visitTo')).toBe('2026-06-03');
+    expect(request.request.params.get('narrativeType')).toBe('institutional');
+    expect(request.request.params.has('targetLanguage')).toBe(false);
+    expect(request.request.params.has('minTemperature')).toBe(false);
+    expect(request.request.params.has('maxTemperature')).toBe(false);
+    request.flush({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 });
   });
 
   it('loads and normalizes an in-situ visit report detail', () => {

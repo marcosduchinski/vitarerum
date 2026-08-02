@@ -44,6 +44,9 @@ export interface InSituVisitReportListItem extends InSituVisitReport {
   readonly placeName: string | null;
   readonly visitBeginDate: string | null;
   readonly visitEndDate: string | null;
+  readonly narrativeType: string | null;
+  readonly targetLanguage: string | null;
+  readonly creativityTemperature: number | null;
 }
 
 export interface InSituVisitReportNarrativeMeta {
@@ -207,7 +210,14 @@ export interface InSituVisitReportAuditTrail extends InSituVisitReport {
   readonly revisions: InSituVisitNarrativeRevisionPage | null;
 }
 
-export type InSituVisitReportsQuery = PageQuery;
+export interface InSituVisitReportsQuery extends PageQuery {
+  readonly search?: string;
+  readonly generatedFrom?: string;
+  readonly generatedTo?: string;
+  readonly visitFrom?: string;
+  readonly visitTo?: string;
+  readonly narrativeType?: InSituVisitReportNarrativeType | '';
+}
 export type InSituVisitReportListPage = Page<InSituVisitReportListItem>;
 // Kept until the list presentation migrates to the enriched row in REP-DETAIL-03.
 export type InSituVisitReportsPage = Page<InSituVisitReport>;

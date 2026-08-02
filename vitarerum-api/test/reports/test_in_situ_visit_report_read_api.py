@@ -13,6 +13,15 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
+from app.ai.museum_narrative.domain.models import (
+    GeneratedNarrative,
+    NarrativeId,
+    NarrativeType,
+    ResolutionSource,
+)
+from app.ai.museum_narrative.infrastructure.repositories import (
+    SqlAlchemyNarrativeRepository,
+)
 from app.cidoc_crm.in_situ_visit_mapping.domain.models import InSituVisitRecord
 from app.cidoc_crm.in_situ_visit_mapping.infrastructure.repositories import (
     SqlAlchemyInSituVisitRecordRepository,
@@ -43,6 +52,27 @@ def _report(project_id: str, *, at: datetime) -> InSituVisitReport:
     )
     report.created_at = at
     return report
+
+
+def _narrative(
+    *,
+    record_id: str,
+    narrative_id: str,
+    narrative_type: NarrativeType,
+    target_language: str,
+    temperature: float,
+) -> GeneratedNarrative:
+    narrative = GeneratedNarrative.create(
+        record_id=record_id,
+        narrative="Generated narrative.",
+        resolved_narrative_type=narrative_type,
+        resolution_source=ResolutionSource.REQUEST_BODY,
+        target_language=target_language,
+        creativity_temperature=temperature,
+        llm_model="test-model",
+    )
+    narrative.id = NarrativeId(narrative_id)
+    return narrative
 
 
 @asynccontextmanager
@@ -251,3 +281,110 @@ async def test_list_all_rows_carry_record_display_fields() -> None:
     assert item["placeName"] == "Museum"
     assert item["visitBeginDate"] == "2026-06-01"
     assert item["visitEndDate"] == "2026-06-03"
+
+
+async def test_list_all_filters_by_record_and_generation_metadata() -> None:
+    engine = create_async_engine(
+        "sqlite+aiosqlite://",
+        poolclass=StaticPool,
+        connect_args={"check_same_thread": False},
+    )
+    session_factory = async_sessionmaker(bind=engine, expire_on_commit=False)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    matching_record = InSituVisitRecord.create(
+        code="CUP-FILTER-1",
+        visit_begin_date=date(2026, 6, 1),
+        visit_end_date=date(2026, 6, 3),
+        visitor_name="Ana Curadora",
+        place_name="Herbarium",
+        requested_objects=[],
+        in_situ_occurrences=[],
+        in_situ_logs=[],
+        in_situ_publications=[],
+    )
+    other_record = InSituVisitRecord.create(
+        code="CUP-OTHER-1",
+        visit_begin_date=date(2026, 7, 1),
+        visit_end_date=date(2026, 7, 2),
+        visitor_name="Other Visitor",
+        place_name="Archive",
+        requested_objects=[],
+        in_situ_occurrences=[],
+        in_situ_logs=[],
+        in_situ_publications=[],
+    )
+    matching_report = InSituVisitReport.create(
+        created_by=PermissionId("perm-staff"),
+        project_id="project-filter",
+        narrative_id="nar-filter",
+        in_situ_visit_record_id=matching_record.id,
+    )
+    matching_report.created_at = datetime(2026, 6, 4, 10, tzinfo=UTC)
+    other_report = InSituVisitReport.create(
+        created_by=PermissionId("perm-staff"),
+        project_id="project-other",
+        narrative_id="nar-other",
+        in_situ_visit_record_id=other_record.id,
+    )
+    other_report.created_at = datetime(2026, 7, 4, 10, tzinfo=UTC)
+
+    async with session_factory() as session:
+        await SqlAlchemyInSituVisitRecordRepository(session).add(matching_record)
+        await SqlAlchemyInSituVisitRecordRepository(session).add(other_record)
+        await SqlAlchemyNarrativeRepository(session).add(
+            _narrative(
+                record_id=matching_record.id,
+                narrative_id=matching_report.narrative_id,
+                narrative_type=NarrativeType.INSTITUTIONAL,
+                target_language="pt",
+                temperature=0.3,
+            )
+        )
+        await SqlAlchemyNarrativeRepository(session).add(
+            _narrative(
+                record_id=other_record.id,
+                narrative_id=other_report.narrative_id,
+                narrative_type=NarrativeType.SCIENTIFIC,
+                target_language="en",
+                temperature=0.9,
+            )
+        )
+        await SqlAlchemyInSituVisitReportRepository(session).add(matching_report)
+        await SqlAlchemyInSituVisitReportRepository(session).add(other_report)
+        await session.commit()
+
+    async def _override_session() -> AsyncIterator:
+        async with session_factory() as session:
+            yield session
+
+    app.dependency_overrides[get_async_session] = _override_session
+    app.dependency_overrides[get_caller_permission] = lambda: _STAFF
+    transport = ASGITransport(app=app)
+    try:
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.get(
+                "/api/v1/reports/collection-use/in_situ_visit",
+                params={
+                    "search": "herbarium",
+                    "generatedFrom": "2026-06-01T00:00:00Z",
+                    "generatedTo": "2026-06-30T23:59:59Z",
+                    "visitFrom": "2026-05-31",
+                    "visitTo": "2026-06-04",
+                    "narrativeType": "institutional",
+                },
+            )
+    finally:
+        app.dependency_overrides.clear()
+        await engine.dispose()
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["totalElements"] == 1
+    item = body["content"][0]
+    assert item["id"] == matching_report.id
+    assert item["code"] == "CUP-FILTER-1"
+    assert item["narrativeType"] == "institutional"
+    assert item["targetLanguage"] == "pt"
+    assert item["creativityTemperature"] == 0.3

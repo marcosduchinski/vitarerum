@@ -55,6 +55,9 @@ class InSituVisitReportSummaryResponse(BaseModel):
     placeName: str | None = None
     visitBeginDate: date | None = None
     visitEndDate: date | None = None
+    narrativeType: str | None = None
+    targetLanguage: str | None = None
+    creativityTemperature: float | None = None
 
 
 class PaginatedInSituVisitReportSummariesResponse(BaseModel):
