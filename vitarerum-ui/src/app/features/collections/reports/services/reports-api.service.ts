@@ -198,6 +198,12 @@ export class ReportsApiService {
     );
   }
 
+  deleteInSituVisitReport(projectId: string, reportId: string) {
+    return this.http.delete<void>(
+      this.url(`/reports/collection-use/${projectId}/in_situ_visit/${reportId}`),
+    );
+  }
+
   getInSituVisitReportDetail(projectId: string, reportId: string) {
     return this.http
       .get<InSituVisitReportDetailDto>(

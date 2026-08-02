@@ -22,9 +22,10 @@ InSituVisitReportId = NewType("InSituVisitReportId", str)
 class InSituVisitReport:
     """One report tying a project to its exported record and generated narrative.
 
-    Append-only: a fresh report is created on every generation. The
-    ``*_id`` references point at aggregates owned by other contexts and are held
-    as plain strings (no cross-context foreign keys)."""
+    A fresh report is created on every generation and may later be hard-deleted
+    without deleting the underlying visit record. The ``*_id`` references point
+    at aggregates owned by other contexts and are held as plain strings (no
+    cross-context foreign keys)."""
 
     id: InSituVisitReportId
     created_at: datetime

@@ -20,6 +20,11 @@ from app.ai.museum_narrative.domain.models import (
     NarrativeType,
     ResolutionSource,
 )
+from app.ai.museum_narrative.infrastructure.models import (
+    GeneratedNarrativeOrm,
+    GeneratedNarrativeRevisionOrm,
+    NarrativeFactSnapshotOrm,
+)
 from app.ai.museum_narrative.infrastructure.repositories import (
     SqlAlchemyNarrativeRepository,
 )
@@ -28,13 +33,28 @@ from app.cidoc_crm.in_situ_visit_mapping.domain.models import (
     ChildData,
     InSituVisitRecord,
 )
+from app.cidoc_crm.in_situ_visit_mapping.infrastructure.models import (
+    InSituVisitRecordOrm,
+)
 from app.cidoc_crm.in_situ_visit_mapping.infrastructure.repositories import (
     SqlAlchemyInSituVisitRecordRepository,
 )
 from app.database import Base, get_async_session
+from app.external_publications.domain.models import (
+    ExternalPublication,
+    ExternalPublicationAccessMode,
+    ExternalPublicationProfile,
+    ExternalPublicationResourceType,
+    ExternalPublicationStatus,
+)
+from app.external_publications.infrastructure.models import ExternalPublicationOrm
+from app.external_publications.infrastructure.repositories import (
+    SqlAlchemyExternalPublicationRepository,
+)
 from app.identity.public import Actor, GroupName, PermissionId
 from app.main import app
 from app.reports.in_situ_visit.domain.models import InSituVisitReport
+from app.reports.in_situ_visit.infrastructure.models import InSituVisitReportOrm
 from app.reports.in_situ_visit.infrastructure.repositories import (
     SqlAlchemyInSituVisitReportRepository,
 )
@@ -242,3 +262,94 @@ async def test_detail_forbidden_for_external() -> None:
             f"/api/v1/reports/collection-use/p1/in_situ_visit/{report.id}/detail"
         )
     assert resp.status_code == 403
+
+
+async def test_delete_removes_report_and_generated_narrative_artifacts_only() -> None:
+    engine = create_async_engine(
+        "sqlite+aiosqlite://",
+        poolclass=StaticPool,
+        connect_args={"check_same_thread": False},
+    )
+    session_factory = async_sessionmaker(bind=engine, expire_on_commit=False)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    record = _record()
+    narrative = GeneratedNarrative.create(
+        record_id=record.id,
+        narrative="A fine vase.",
+        resolved_narrative_type=NarrativeType.INSTITUTIONAL,
+        resolution_source=ResolutionSource.DEFAULT,
+        target_language="pt",
+        creativity_temperature=0.3,
+        llm_model="llama3.1:8b",
+        facts_snapshot_id=None,
+    )
+    snapshot = NarrativeFactSnapshot.create(
+        record_id=record.id,
+        payload_json='{"project_reference":"CUP-XYZ","evidence_gaps":[]}',
+        payload_hash="sha256:facts",
+        builder_version="canonical-visit-facts-v1",
+        prompt_version="museum-narrative-institutional-v1",
+    )
+    narrative.facts_snapshot_id = snapshot.id
+    revision = narrative.edit_narrative(
+        "A fine vase, edited.", edited_by=PermissionId("perm-staff")
+    )
+    report = InSituVisitReport.create(
+        created_by=PermissionId("perm-staff"),
+        project_id="p1",
+        narrative_id=narrative.id,
+        in_situ_visit_record_id=record.id,
+    )
+    publication = ExternalPublication.publish(
+        resource_type=ExternalPublicationResourceType.IN_SITU_VISIT_REPORT,
+        resource_id=report.id,
+        access_mode=ExternalPublicationAccessMode.TOKEN,
+        profile=ExternalPublicationProfile.DETAIL,
+        created_by=PermissionId("perm-admin"),
+        token_hash="token-hash",
+    )
+    async with session_factory() as session:
+        narrative_repo = SqlAlchemyNarrativeRepository(session)
+        await SqlAlchemyInSituVisitRecordRepository(session).add(record)
+        await narrative_repo.add_facts_snapshot(snapshot)
+        await narrative_repo.add(narrative)
+        await narrative_repo.add_revision(revision)
+        await SqlAlchemyInSituVisitReportRepository(session).add(report)
+        await SqlAlchemyExternalPublicationRepository(session).add(publication)
+        await session.commit()
+
+    async def _override_session() -> AsyncIterator:
+        async with session_factory() as session:
+            yield session
+
+    app.dependency_overrides[get_async_session] = _override_session
+    app.dependency_overrides[get_caller_permission] = lambda: _STAFF
+    transport = ASGITransport(app=app)
+    try:
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.delete(
+                f"/api/v1/reports/collection-use/p1/in_situ_visit/{report.id}"
+            )
+        async with session_factory() as session:
+            report_row = await session.get(InSituVisitReportOrm, report.id)
+            narrative_row = await session.get(GeneratedNarrativeOrm, narrative.id)
+            revision_row = await session.get(GeneratedNarrativeRevisionOrm, revision.id)
+            snapshot_row = await session.get(NarrativeFactSnapshotOrm, snapshot.id)
+            record_row = await session.get(InSituVisitRecordOrm, record.id)
+            publication_row = await session.get(ExternalPublicationOrm, publication.id)
+    finally:
+        app.dependency_overrides.clear()
+        await engine.dispose()
+
+    assert resp.status_code == 204
+    assert report_row is None
+    assert narrative_row is None
+    assert revision_row is None
+    assert snapshot_row is None
+    assert record_row is not None
+    assert publication_row is not None
+    assert publication_row.status == ExternalPublicationStatus.REVOKED
+    assert publication_row.revoked_by == "perm-staff"
+    assert publication_row.revoked_at is not None

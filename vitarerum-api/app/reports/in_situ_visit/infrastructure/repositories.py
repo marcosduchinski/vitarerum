@@ -1,8 +1,8 @@
 """SQLAlchemy repository for the in-situ visit report aggregate.
 
-Append-only: each report is one row. ``add`` flushes so the row participates in
-the route's single end-of-request commit alongside the exported record and the
-generated narrative.
+Each report is one linkage row. ``add`` / ``delete`` flush so the row
+participates in the route's single end-of-request commit alongside the generated
+narrative artifacts.
 """
 
 from __future__ import annotations
@@ -88,21 +88,16 @@ class SqlAlchemyInSituVisitReportRepository:
         filters: InSituVisitReportFilters | None = None,
     ) -> tuple[list[InSituVisitReport], int]:
         criteria = self._list_all_criteria(filters)
-        base_from = (
-            InSituVisitReportOrm.__table__
-            .outerjoin(
-                InSituVisitRecordOrm.__table__,
-                InSituVisitRecordOrm.id
+        base_from = InSituVisitReportOrm.__table__.outerjoin(
+            InSituVisitRecordOrm.__table__,
+            InSituVisitRecordOrm.id == InSituVisitReportOrm.in_situ_visit_record_id,
+        ).outerjoin(
+            GeneratedNarrativeOrm.__table__,
+            and_(
+                GeneratedNarrativeOrm.id == InSituVisitReportOrm.narrative_id,
+                GeneratedNarrativeOrm.record_id
                 == InSituVisitReportOrm.in_situ_visit_record_id,
-            )
-            .outerjoin(
-                GeneratedNarrativeOrm.__table__,
-                and_(
-                    GeneratedNarrativeOrm.id == InSituVisitReportOrm.narrative_id,
-                    GeneratedNarrativeOrm.record_id
-                    == InSituVisitReportOrm.in_situ_visit_record_id,
-                ),
-            )
+            ),
         )
         count_stmt = select(func.count()).select_from(base_from).where(*criteria)
         total = (await self._session.execute(count_stmt)).scalar_one()
@@ -117,9 +112,15 @@ class SqlAlchemyInSituVisitReportRepository:
         orms = (await self._session.execute(data_stmt)).scalars().all()
         return [report_to_domain(orm) for orm in orms], total
 
-    def _list_all_criteria(
-        self, filters: InSituVisitReportFilters | None
-    ) -> list[Any]:
+    async def delete(self, report_id: InSituVisitReportId) -> bool:
+        orm = await self._session.get(InSituVisitReportOrm, report_id)
+        if orm is None:
+            return False
+        await self._session.delete(orm)
+        await self._session.flush()
+        return True
+
+    def _list_all_criteria(self, filters: InSituVisitReportFilters | None) -> list[Any]:
         if filters is None:
             return []
 

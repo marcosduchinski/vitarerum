@@ -10,6 +10,7 @@ from app.reports.in_situ_visit.domain.models import (
     InSituVisitReport,
     InSituVisitReportId,
 )
+from app.shared.kernel import PermissionId
 
 if TYPE_CHECKING:
     from app.ai.museum_narrative.presentation.schemas import (
@@ -18,7 +19,7 @@ if TYPE_CHECKING:
     )
     from app.cidoc_crm.in_situ_visit_mapping.presentation.schemas import (
         InSituVisitRecordResponse,
-)
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,6 +46,8 @@ class InSituVisitReportRepository(Protocol):
     async def list_all(
         self, page: int, size: int, filters: InSituVisitReportFilters | None = None
     ) -> tuple[list[InSituVisitReport], int]: ...
+
+    async def delete(self, report_id: InSituVisitReportId) -> bool: ...
 
 
 class InSituVisitRecordExporter(Protocol):
@@ -80,6 +83,20 @@ class NarrativeReader(Protocol):
     async def get(
         self, record_id: str, narrative_id: str
     ) -> StoredNarrativeResponse | None: ...
+
+
+class NarrativeDeleter(Protocol):
+    """Deletes a generated narrative through the museum-narrative context."""
+
+    async def delete(self, record_id: str, narrative_id: str) -> bool: ...
+
+
+class ExternalPublicationRevoker(Protocol):
+    """Revokes external publications that expose a generated report."""
+
+    async def revoke_for_report(
+        self, report_id: str, revoked_by: PermissionId
+    ) -> int: ...
 
 
 class NarrativeRevisionReader(Protocol):

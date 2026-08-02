@@ -147,9 +147,30 @@ async def list_narrative_revisions(
     )
 
 
+async def delete_narrative(
+    session: AsyncSession, record_id: str, narrative_id: str
+) -> bool:
+    """Hard delete a generated narrative and its generated artifacts.
+
+    The operation is scoped by ``record_id`` so callers cannot delete a
+    narrative through an unrelated record reference.
+    """
+    from app.ai.museum_narrative.domain.models import NarrativeId
+    from app.ai.museum_narrative.infrastructure.repositories import (
+        SqlAlchemyNarrativeRepository,
+    )
+
+    repository = SqlAlchemyNarrativeRepository(session)
+    narrative = await repository.get_by_id(NarrativeId(narrative_id))
+    if narrative is None or narrative.record_id != record_id:
+        return False
+    return await repository.delete(NarrativeId(narrative_id))
+
+
 __all__ = [
     "generate_narrative",
     "get_narrative_view",
+    "delete_narrative",
     "list_narrative_revisions",
     "ModelTimeout",
     "ModelUnavailable",

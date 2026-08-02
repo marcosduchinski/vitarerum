@@ -16,6 +16,7 @@ import { ErrorMessageComponent } from '@shared/components/error-message/error-me
 import { LoadingStateComponent } from '@shared/components/loading-state/loading-state.component';
 import { PageHeaderComponent } from '@shared/components/page-header/page-header.component';
 import { RowActionsComponent } from '@shared/components/row-actions/row-actions.component';
+import { ConfirmModalComponent } from '@shared/components/confirm-modal/confirm-modal.component';
 
 import {
   InSituVisitReportListItem,
@@ -98,6 +99,7 @@ function formatDate(iso: string): string {
     LoadingStateComponent,
     ErrorMessageComponent,
     EmptyStateComponent,
+    ConfirmModalComponent,
   ],
   templateUrl: './visits-in-situ-report-page.component.html',
   styleUrl: './visits-in-situ-report-page.component.scss',
@@ -111,6 +113,9 @@ export class VisitsInSituReportPageComponent {
   protected readonly pageSize = signal(DEFAULT_PAGE_SIZE);
   protected readonly filterDraft = signal<ReportFilterDraft>(EMPTY_FILTERS);
   protected readonly appliedFilters = signal<ReportFilterDraft>(EMPTY_FILTERS);
+  protected readonly deleteCandidate = signal<InSituVisitReportListItem | null>(null);
+  protected readonly deletingReportId = signal<string | null>(null);
+  protected readonly deleteError = signal<ApiError | null>(null);
 
   protected readonly reportResource = resource({
     params: () => ({
@@ -142,6 +147,13 @@ export class VisitsInSituReportPageComponent {
   protected readonly activeFilterCount = computed(
     () => Object.values(this.appliedFilters()).filter((value) => value.trim() !== '').length,
   );
+  protected readonly deleteMessage = computed(() => {
+    const report = this.deleteCandidate();
+    if (!report) return '';
+    const code = this.valueOrUnavailable(report.code);
+    return `This permanently removes report ${report.id} for visit ${code}. External publication links for this report are revoked automatically; the visit record remains available.`;
+  });
+  protected readonly isDeletePending = computed(() => this.deletingReportId() !== null);
 
   protected actionItemsFor(report: InSituVisitReportListItem): MenuItem[] {
     return [
@@ -156,6 +168,12 @@ export class VisitsInSituReportPageComponent {
             'audit-trail',
           ]);
         },
+      },
+      { separator: true },
+      {
+        label: 'Remove',
+        icon: 'pi pi-trash',
+        command: () => this.requestDelete(report),
       },
     ];
   }
@@ -221,6 +239,40 @@ export class VisitsInSituReportPageComponent {
     this.filterDraft.set(EMPTY_FILTERS);
     this.appliedFilters.set(EMPTY_FILTERS);
     this.currentPage.set(0);
+  }
+
+  protected requestDelete(report: InSituVisitReportListItem): void {
+    this.deleteError.set(null);
+    this.deleteCandidate.set(report);
+  }
+
+  protected cancelDelete(): void {
+    if (this.isDeletePending()) return;
+    this.deleteCandidate.set(null);
+    this.deleteError.set(null);
+  }
+
+  protected async confirmDelete(): Promise<void> {
+    const report = this.deleteCandidate();
+    if (!report) return;
+
+    this.deletingReportId.set(report.id);
+    this.deleteError.set(null);
+    try {
+      await firstValueFrom(
+        this.reportsService.deleteInSituVisitReport(report.projectId, report.id),
+      );
+      this.deleteCandidate.set(null);
+      if (this.rows().length === 1 && this.currentPage() > 0) {
+        this.currentPage.update((page) => page - 1);
+      } else {
+        this.reportResource.reload();
+      }
+    } catch (error) {
+      this.deleteError.set(toApiError(error));
+    } finally {
+      this.deletingReportId.set(null);
+    }
   }
 
   private toQueryFilters(filters: ReportFilterDraft): Partial<InSituVisitReportsQuery> {

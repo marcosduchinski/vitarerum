@@ -1,9 +1,9 @@
 """SQLAlchemy ORM model for the In-Situ Visit Report context.
 
-A single table, ``in_situ_visit_reports``, storing one immutable row per report
-(append-only history). ``project_id`` / ``narrative_id`` / ``in_situ_visit_record_id``
-reference aggregates in other contexts but are kept as plain strings (no
-cross-context FKs), matching the convention used by ``generated_narratives``.
+A single table, ``in_situ_visit_reports``, storing one row per generated report.
+``project_id`` / ``narrative_id`` / ``in_situ_visit_record_id`` reference
+aggregates in other contexts but are kept as plain strings (no cross-context
+FKs), matching the convention used by ``generated_narratives``.
 """
 
 from __future__ import annotations

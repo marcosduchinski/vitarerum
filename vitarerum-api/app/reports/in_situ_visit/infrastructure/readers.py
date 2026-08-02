@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.shared.kernel import PermissionId
+
 if TYPE_CHECKING:
     from app.ai.museum_narrative.presentation.schemas import (
         PaginatedNarrativeRevisionsResponse,
@@ -52,6 +54,34 @@ class MuseumNarrativeReader:
         from app.ai.museum_narrative.public import get_narrative_view
 
         return await get_narrative_view(self._session, record_id, narrative_id)
+
+
+class MuseumNarrativeDeleter:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def delete(self, record_id: str, narrative_id: str) -> bool:
+        from app.ai.museum_narrative.public import delete_narrative
+
+        return await delete_narrative(self._session, record_id, narrative_id)
+
+
+class ExternalPublicationRevoker:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def revoke_for_report(self, report_id: str, revoked_by: PermissionId) -> int:
+        from app.external_publications.public import (
+            ExternalPublicationResourceType,
+            revoke_publications_for_resource,
+        )
+
+        return await revoke_publications_for_resource(
+            self._session,
+            resource_type=ExternalPublicationResourceType.IN_SITU_VISIT_REPORT,
+            resource_id=report_id,
+            revoked_by=revoked_by,
+        )
 
 
 class MuseumNarrativeRevisionReader:

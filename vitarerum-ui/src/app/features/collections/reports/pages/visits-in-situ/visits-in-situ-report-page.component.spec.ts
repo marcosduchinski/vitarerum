@@ -29,6 +29,7 @@ const REPORTS: readonly InSituVisitReportListItem[] = Array.from({ length: 25 },
 
 class ReportsApiServiceStub {
   readonly queries: InSituVisitReportsQuery[] = [];
+  readonly deleted: { readonly projectId: string; readonly reportId: string }[] = [];
 
   listInSituVisitReports(query: InSituVisitReportsQuery = {}) {
     this.queries.push(query);
@@ -43,6 +44,11 @@ class ReportsApiServiceStub {
       totalElements: REPORTS.length,
       totalPages: Math.ceil(REPORTS.length / size),
     });
+  }
+
+  deleteInSituVisitReport(projectId: string, reportId: string) {
+    this.deleted.push({ projectId, reportId });
+    return of(void 0);
   }
 }
 
@@ -132,6 +138,37 @@ describe('VisitsInSituReportPageComponent', () => {
       'report-1',
       'audit-trail',
     ]);
+  });
+
+  it('confirms removing a report from the row action menu', async () => {
+    const fixture = TestBed.createComponent(VisitsInSituReportPageComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    (fixture.nativeElement as HTMLElement)
+      .querySelector<HTMLButtonElement>('[aria-label="More actions for report report-1"]')!
+      .click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const remove = Array.from(
+      document.body.querySelectorAll<HTMLElement>('.p-menu a, .p-menu button'),
+    ).find((item) => item.textContent?.trim() === 'Remove');
+    remove!.click();
+    fixture.detectChanges();
+
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('Remove report?');
+    expect(text).toContain('External publication links for this report are revoked automatically');
+    expect(text).toContain('the visit record remains available.');
+
+    buttonByText(fixture.nativeElement, 'Remove report').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(reportsService.deleted).toEqual([{ projectId: 'project-1', reportId: 'report-1' }]);
+    expect(reportsService.queries.at(-1)).toEqual({ page: 0, size: 20 });
   });
 
   it('changes page size and keeps pagination within bounds', async () => {

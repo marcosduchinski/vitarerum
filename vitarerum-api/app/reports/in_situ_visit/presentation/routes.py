@@ -34,6 +34,7 @@ from app.cidoc_crm.public import (
 )
 from app.reports.in_situ_visit.application.ports import InSituVisitReportFilters
 from app.reports.in_situ_visit.application.use_cases import (
+    DeleteInSituVisitReportInput,
     GenerateInSituVisitReportInput,
     GetInSituVisitReportInput,
     InSituVisitReportAuditTrail,
@@ -46,6 +47,7 @@ from app.reports.in_situ_visit.domain.models import InSituVisitReport
 from app.reports.in_situ_visit.presentation.dependencies import (
     AuditTrailUseCase,
     DBSession,
+    DeleteUseCase,
     DetailUseCase,
     GetUseCase,
     ListAllUseCase,
@@ -214,9 +216,7 @@ def _to_audit_trail_response(
             crmVersion=record.crmVersion if record else None,
             recordSchemaVersion=record.recordSchemaVersion if record else None,
             conforms=snapshot.cidoc_conforms if snapshot else None,
-            validationReport=(
-                snapshot.cidoc_validation_report if snapshot else None
-            ),
+            validationReport=(snapshot.cidoc_validation_report if snapshot else None),
         ),
         facts=InSituVisitAuditFactsResponse(
             snapshotId=snapshot.id if snapshot else None,
@@ -332,6 +332,38 @@ async def get_in_situ_visit_report(
             detail={"error": "REPORT_NOT_FOUND", "message": str(exc)},
         ) from None
     return _to_response(report)
+
+
+@reports_router.delete(
+    "/{project_id}/in_situ_visit/{report_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_in_situ_visit_report(
+    project_id: str,
+    report_id: str,
+    caller: CallerPermission,
+    use_case: DeleteUseCase,
+    session: DBSession,
+) -> None:
+    """Hard delete one generated report and its generated narrative artifacts.
+
+    The exported in-situ visit record is preserved.
+    """
+    require_staff(caller)
+    try:
+        await use_case.execute(
+            DeleteInSituVisitReportInput(
+                project_id=project_id,
+                report_id=report_id,
+                deleted_by=caller.id,
+            )
+        )
+    except InSituVisitReportNotFound as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": "REPORT_NOT_FOUND", "message": str(exc)},
+        ) from None
+    await session.commit()
 
 
 @reports_router.get(

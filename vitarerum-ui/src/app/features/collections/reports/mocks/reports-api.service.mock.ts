@@ -112,6 +112,28 @@ export class ReportsApiServiceMock {
     return of(structuredClone(report));
   }
 
+  deleteInSituVisitReport(projectId: string, reportId: string): Observable<void> {
+    if (!this.identity.isStaff()) {
+      return this.fail(403, 'ACCESS_DENIED', 'Reports are restricted to staff');
+    }
+
+    const index = this.generatedReports.findIndex(
+      (report) => report.id === reportId && report.projectId === projectId,
+    );
+    if (index < 0) {
+      return this.fail(
+        404,
+        'REPORT_NOT_FOUND',
+        `No report found with id ${reportId} for project ${projectId}`,
+      );
+    }
+
+    this.generatedReports.splice(index, 1);
+    this.generatedDetails.delete(reportId);
+    this.revisions.delete(reportId);
+    return of(void 0);
+  }
+
   getInSituVisitReportDetail(
     projectId: string,
     reportId: string,

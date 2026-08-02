@@ -16,10 +16,12 @@ from datetime import date
 from typing import TYPE_CHECKING
 
 from app.reports.in_situ_visit.application.ports import (
+    ExternalPublicationRevoker,
     InSituVisitRecordExporter,
     InSituVisitRecordReader,
     InSituVisitReportFilters,
     InSituVisitReportRepository,
+    NarrativeDeleter,
     NarrativeGenerator,
     NarrativeReader,
     NarrativeRevisionReader,
@@ -97,6 +99,13 @@ class GetInSituVisitReportInput:
 
 
 @dataclass(frozen=True, slots=True)
+class DeleteInSituVisitReportInput:
+    project_id: str
+    report_id: str
+    deleted_by: PermissionId
+
+
+@dataclass(frozen=True, slots=True)
 class ListInSituVisitReportsInput:
     project_id: str
     page: int = 0
@@ -139,6 +148,39 @@ class ListInSituVisitReports:
         return await self._repository.list_by_project(
             data.project_id, data.page, data.size
         )
+
+
+class DeleteInSituVisitReport:
+    """Hard delete a report linkage and its generated narrative artifacts.
+
+    The in-situ visit record is intentionally preserved: it represents the
+    perennial visit evidence, while reports are disposable generated outputs.
+    """
+
+    def __init__(
+        self,
+        repository: InSituVisitReportRepository,
+        narrative_deleter: NarrativeDeleter,
+        external_publication_revoker: ExternalPublicationRevoker,
+    ) -> None:
+        self._repository = repository
+        self._narrative_deleter = narrative_deleter
+        self._external_publication_revoker = external_publication_revoker
+
+    async def execute(self, data: DeleteInSituVisitReportInput) -> None:
+        report = await self._repository.get_by_id(InSituVisitReportId(data.report_id))
+        if report is None or report.project_id != data.project_id:
+            raise InSituVisitReportNotFound(
+                f"No report found with id {data.report_id} "
+                f"for project {data.project_id}"
+            )
+        await self._external_publication_revoker.revoke_for_report(
+            report.id, data.deleted_by
+        )
+        await self._narrative_deleter.delete(
+            report.in_situ_visit_record_id, report.narrative_id
+        )
+        await self._repository.delete(report.id)
 
 
 @dataclass(frozen=True, slots=True)

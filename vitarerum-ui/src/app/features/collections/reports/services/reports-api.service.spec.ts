@@ -106,6 +106,16 @@ describe('ReportsApiService', () => {
     request.flush({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 });
   });
 
+  it('deletes an in-situ visit report', () => {
+    service.deleteInSituVisitReport('project-1', 'report-1').subscribe();
+
+    const request = http.expectOne(
+      'https://api.example.test/reports/collection-use/project-1/in_situ_visit/report-1',
+    );
+    expect(request.request.method).toBe('DELETE');
+    request.flush(null, { status: 204, statusText: 'No Content' });
+  });
+
   it('loads and normalizes an in-situ visit report detail', () => {
     let received: InSituVisitReportDetail | null = null;
     service

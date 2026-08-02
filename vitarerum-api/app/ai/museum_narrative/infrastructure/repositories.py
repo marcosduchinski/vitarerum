@@ -6,7 +6,7 @@ visit record (newest first).
 
 from __future__ import annotations
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.museum_narrative.domain.models import (
@@ -182,9 +182,31 @@ class SqlAlchemyNarrativeRepository:
         self._session.add(revision_to_orm(revision))
         await self._session.flush()
 
-    async def _with_snapshot(
-        self, narrative: GeneratedNarrative
-    ) -> GeneratedNarrative:
+    async def delete(self, narrative_id: NarrativeId) -> bool:
+        narrative = await self.get_by_id(narrative_id)
+        if narrative is None:
+            return False
+
+        await self._session.execute(
+            delete(GeneratedNarrativeRevisionOrm).where(
+                GeneratedNarrativeRevisionOrm.narrative_id == narrative_id
+            )
+        )
+        await self._session.execute(
+            delete(GeneratedNarrativeOrm).where(
+                GeneratedNarrativeOrm.id == narrative_id
+            )
+        )
+        if narrative.facts_snapshot_id is not None:
+            await self._session.execute(
+                delete(NarrativeFactSnapshotOrm).where(
+                    NarrativeFactSnapshotOrm.id == narrative.facts_snapshot_id
+                )
+            )
+        await self._session.flush()
+        return True
+
+    async def _with_snapshot(self, narrative: GeneratedNarrative) -> GeneratedNarrative:
         if narrative.facts_snapshot_id is None:
             return narrative
         narrative.facts_snapshot = await self.get_facts_snapshot(

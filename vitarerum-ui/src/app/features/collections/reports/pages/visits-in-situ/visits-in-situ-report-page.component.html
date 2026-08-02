@@ -275,5 +275,21 @@
         }
       }
     </section>
+
+    <app-confirm-modal
+      [open]="deleteCandidate() !== null"
+      title="Remove report?"
+      [message]="deleteMessage()"
+      confirmLabel="Remove report"
+      cancelLabel="Keep report"
+      tone="danger"
+      [pending]="isDeletePending()"
+      (confirmed)="confirmDelete()"
+      (cancelled)="cancelDelete()"
+    >
+      @if (deleteError()) {
+        <app-error-message [apiError]="deleteError()" />
+      }
+    </app-confirm-modal>
   }
 </div>

@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_async_session
 from app.reports.in_situ_visit.application.ports import InSituVisitReportRepository
 from app.reports.in_situ_visit.application.use_cases import (
+    DeleteInSituVisitReport,
     GenerateInSituVisitReport,
     GetInSituVisitReport,
     GetInSituVisitReportAuditTrail,
@@ -23,6 +24,8 @@ from app.reports.in_situ_visit.application.use_cases import (
 from app.reports.in_situ_visit.infrastructure.readers import (
     CidocRecordExporter,
     CidocRecordReader,
+    ExternalPublicationRevoker,
+    MuseumNarrativeDeleter,
     MuseumNarrativeGenerator,
     MuseumNarrativeReader,
     MuseumNarrativeRevisionReader,
@@ -76,6 +79,19 @@ ListUseCase = Annotated[ListInSituVisitReports, Depends(get_list_use_case)]
 ListAllUseCase = Annotated[
     ListAllInSituVisitReportSummaries, Depends(get_list_all_use_case)
 ]
+
+
+def get_delete_use_case(
+    session: DBSession, repository: Repository
+) -> DeleteInSituVisitReport:
+    return DeleteInSituVisitReport(
+        repository,
+        MuseumNarrativeDeleter(session),
+        ExternalPublicationRevoker(session),
+    )
+
+
+DeleteUseCase = Annotated[DeleteInSituVisitReport, Depends(get_delete_use_case)]
 
 
 def get_detail_use_case(
