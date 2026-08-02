@@ -38,6 +38,14 @@ _REPLY_TEMPERATURE = 0.3
 logger = logging.getLogger(__name__)
 
 
+def _is_ollama_response_error(exc: BaseException) -> bool:
+    exc_type = type(exc)
+    return (
+        exc_type.__name__ == "ResponseError"
+        and exc_type.__module__.split(".", maxsplit=1)[0] == "ollama"
+    )
+
+
 class _MentionedObjectSchema(BaseModel):
     english: str = Field(description="The object/specimen name in English.")
     portuguese: str = Field(description="The object/specimen name in Portuguese.")
@@ -326,6 +334,18 @@ class OllamaTriageAdapter:
                 raise ModelUnavailable(
                     "The triage model is currently unavailable"
                 ) from fallback_exc
+            except Exception as fallback_exc:
+                if _is_ollama_response_error(fallback_exc):
+                    raise ModelUnavailable(
+                        "The triage model is currently unavailable"
+                    ) from fallback_exc
+                raise
+        except Exception as exc:
+            if _is_ollama_response_error(exc):
+                raise ModelUnavailable(
+                    "The triage model is currently unavailable"
+                ) from exc
+            raise
 
         return _parse_classification(result)
 
@@ -381,6 +401,18 @@ class OllamaTriageAdapter:
                 raise ModelUnavailable(
                     "The triage model is currently unavailable"
                 ) from fallback_exc
+            except Exception as fallback_exc:
+                if _is_ollama_response_error(fallback_exc):
+                    raise ModelUnavailable(
+                        "The triage model is currently unavailable"
+                    ) from fallback_exc
+                raise
+        except Exception as exc:
+            if _is_ollama_response_error(exc):
+                raise ModelUnavailable(
+                    "The triage model is currently unavailable"
+                ) from exc
+            raise
 
         return _parse_use_category_classification(result)
 
@@ -411,6 +443,12 @@ class OllamaTriageAdapter:
             raise ModelTimeout("The triage model did not respond in time") from exc
         except (httpx.ConnectError, httpx.HTTPError, ConnectionError, OSError) as exc:
             raise ModelUnavailable("The triage model is currently unavailable") from exc
+        except Exception as exc:
+            if _is_ollama_response_error(exc):
+                raise ModelUnavailable(
+                    "The triage model is currently unavailable"
+                ) from exc
+            raise
 
         text = str(response.content).strip()
         if not text:

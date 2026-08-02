@@ -14,6 +14,14 @@ from __future__ import annotations
 from app.ai.museum_narrative.domain.ports import ModelTimeout, ModelUnavailable
 
 
+def _is_ollama_response_error(exc: BaseException) -> bool:
+    exc_type = type(exc)
+    return (
+        exc_type.__name__ == "ResponseError"
+        and exc_type.__module__.split(".", maxsplit=1)[0] == "ollama"
+    )
+
+
 class OllamaNarrativeAdapter:
     def __init__(
         self,
@@ -59,4 +67,10 @@ class OllamaNarrativeAdapter:
             raise ModelUnavailable(
                 "The language model is currently unavailable"
             ) from exc
+        except Exception as exc:
+            if _is_ollama_response_error(exc):
+                raise ModelUnavailable(
+                    "The language model is currently unavailable"
+                ) from exc
+            raise
         return str(response.content)
