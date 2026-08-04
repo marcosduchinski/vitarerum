@@ -9,13 +9,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, column, func, or_, select, table
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai.museum_narrative.infrastructure.models import GeneratedNarrativeOrm
-from app.cidoc_crm.in_situ_visit_mapping.infrastructure.models import (
-    InSituVisitRecordOrm,
-)
 from app.reports.in_situ_visit.application.ports import InSituVisitReportFilters
 from app.reports.in_situ_visit.domain.models import (
     InSituVisitReport,
@@ -23,6 +19,24 @@ from app.reports.in_situ_visit.domain.models import (
 )
 from app.reports.in_situ_visit.infrastructure.models import InSituVisitReportOrm
 from app.shared.kernel import PermissionId
+
+
+_RECORDS = table(
+    "in_situ_visit_records",
+    column("id"),
+    column("code"),
+    column("visitor_name"),
+    column("place_name"),
+    column("project_title"),
+    column("visit_begin_date"),
+    column("visit_end_date"),
+)
+_NARRATIVES = table(
+    "generated_narratives",
+    column("id"),
+    column("record_id"),
+    column("narrative_type"),
+)
 
 
 def report_to_orm(report: InSituVisitReport) -> InSituVisitReportOrm:
@@ -89,14 +103,13 @@ class SqlAlchemyInSituVisitReportRepository:
     ) -> tuple[list[InSituVisitReport], int]:
         criteria = self._list_all_criteria(filters)
         base_from = InSituVisitReportOrm.__table__.outerjoin(
-            InSituVisitRecordOrm.__table__,
-            InSituVisitRecordOrm.id == InSituVisitReportOrm.in_situ_visit_record_id,
+            _RECORDS,
+            _RECORDS.c.id == InSituVisitReportOrm.in_situ_visit_record_id,
         ).outerjoin(
-            GeneratedNarrativeOrm.__table__,
+            _NARRATIVES,
             and_(
-                GeneratedNarrativeOrm.id == InSituVisitReportOrm.narrative_id,
-                GeneratedNarrativeOrm.record_id
-                == InSituVisitReportOrm.in_situ_visit_record_id,
+                _NARRATIVES.c.id == InSituVisitReportOrm.narrative_id,
+                _NARRATIVES.c.record_id == InSituVisitReportOrm.in_situ_visit_record_id,
             ),
         )
         count_stmt = select(func.count()).select_from(base_from).where(*criteria)
@@ -136,10 +149,10 @@ class SqlAlchemyInSituVisitReportRepository:
                     func.lower(InSituVisitReportOrm.in_situ_visit_record_id).like(
                         pattern
                     ),
-                    func.lower(InSituVisitRecordOrm.code).like(pattern),
-                    func.lower(InSituVisitRecordOrm.visitor_name).like(pattern),
-                    func.lower(InSituVisitRecordOrm.place_name).like(pattern),
-                    func.lower(InSituVisitRecordOrm.project_title).like(pattern),
+                    func.lower(_RECORDS.c.code).like(pattern),
+                    func.lower(_RECORDS.c.visitor_name).like(pattern),
+                    func.lower(_RECORDS.c.place_name).like(pattern),
+                    func.lower(_RECORDS.c.project_title).like(pattern),
                 )
             )
         if filters.generated_from:
@@ -147,11 +160,9 @@ class SqlAlchemyInSituVisitReportRepository:
         if filters.generated_to:
             criteria.append(InSituVisitReportOrm.created_at <= filters.generated_to)
         if filters.visit_from:
-            criteria.append(InSituVisitRecordOrm.visit_end_date >= filters.visit_from)
+            criteria.append(_RECORDS.c.visit_end_date >= filters.visit_from)
         if filters.visit_to:
-            criteria.append(InSituVisitRecordOrm.visit_begin_date <= filters.visit_to)
+            criteria.append(_RECORDS.c.visit_begin_date <= filters.visit_to)
         if filters.narrative_type:
-            criteria.append(
-                GeneratedNarrativeOrm.narrative_type == filters.narrative_type
-            )
+            criteria.append(_NARRATIVES.c.narrative_type == filters.narrative_type)
         return criteria
