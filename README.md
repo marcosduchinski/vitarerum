@@ -116,10 +116,10 @@ Postgres connectivity, Ollama Cloud, GCS, Secret Manager, and Cloud Build.
 Architecture:
 
 - [Architecture overview](./docs/architecture/README.md)
-- [Context map source](./docs/architecture/context-map.puml) and
-  [rendered SVG](./docs/architecture/vitarerum-context-map.svg)
-- [Simplified context map source](./docs/architecture/context-map-simplified.puml)
-  and [rendered SVG](./docs/architecture/vitarerum-context-map-simplified.svg)
+- [Context map](./docs/architecture/vitarerum-context-map.svg)
+  ([PlantUML source](./docs/architecture/context-map.puml))
+- [Simplified context map](./docs/architecture/vitarerum-context-map-simplified.svg)
+  ([PlantUML source](./docs/architecture/context-map-simplified.puml))
 - [Module boundaries](./docs/architecture/module-boundaries.md)
 - [Business flows](./docs/architecture/business-flows.md)
 - [Architecture decisions](./docs/architecture/adr/README.md)
