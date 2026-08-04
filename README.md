@@ -106,10 +106,9 @@ docker build -t vitarerum:local .
 docker run --rm -p 8080:8080 -e APP_ENV=local vitarerum:local
 ```
 
-Cloud Run deployment is documented in
-[docs/cloud/README.md](./docs/cloud/README.md). That tutorial is the operational
-guide for the integrated image, Cloud Run service, Cloud Run migration job,
-Postgres connectivity, Ollama Cloud, GCS, Secret Manager, and Cloud Build.
+Cloud Build configuration for the integrated image lives in
+[cloudbuild.yaml](./cloudbuild.yaml), with runtime environment examples under
+[docs/cloud](./docs/cloud/).
 
 ## Documentation Map
 
@@ -155,7 +154,6 @@ java -jar /path/to/plantuml.jar -tsvg docs/architecture docs/diagrams
 
 Planning and operations:
 
-- [Cloud deployment tutorial](./docs/cloud/README.md)
 - [Cloud Run env example](./docs/cloud/vitarerum-cloudrun.env.example.yaml)
 
 Implementation plans used during local development live under `docs/plans/`.

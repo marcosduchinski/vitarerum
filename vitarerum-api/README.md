@@ -166,9 +166,8 @@ docker run --rm -p 8000:8000 --env-file .env vitarerum-api:local
 ```
 
 For the production-oriented single image that includes both Angular and FastAPI,
-use the root repository [Dockerfile](../Dockerfile). Cloud Run deployment of
-that integrated image is documented in
-[docs/cloud/README.md](../docs/cloud/README.md).
+use the root repository [Dockerfile](../Dockerfile). Cloud Build configuration
+for that integrated image lives in [cloudbuild.yaml](../cloudbuild.yaml).
 
 ## Quality Gates
 
