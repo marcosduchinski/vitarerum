@@ -1,0 +1,53 @@
+@startuml vitarerum-context-map-simplified
+title Vitarerum bounded context map - simplified
+
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam componentStyle rectangle
+skinparam defaultTextAlignment center
+skinparam ArrowColor #475569
+skinparam ActorBorderColor #334155
+skinparam ActorBackgroundColor #F8FAFC
+skinparam RectangleBorderColor #334155
+skinparam RectangleBackgroundColor #F8FAFC
+skinparam PackageBorderColor #64748B
+skinparam PackageBackgroundColor #FFFFFF
+skinparam DatabaseBorderColor #475569
+skinparam FolderBorderColor #475569
+skinparam CloudBorderColor #475569
+skinparam note {
+  BackgroundColor #FFFBEB
+  BorderColor #B45309
+}
+
+  actor "Public visitor" as public_visitor
+  actor "Authenticated user\n/ staff" as staff_user
+  actor "External consumer" as external_consumer
+
+
+rectangle "Angular SPA" as spa
+
+package "Python backend\nmodular monolith" as backend {
+  rectangle "Core workflow\nIdentity\nUse of Collections\nPublic Submission" as core #E0F2FE
+  rectangle "Collection knowledge\nCollection Object Index\nDocument Templates\nMuseum Questions" as knowledge #ECFDF5
+  rectangle "In-situ reporting\nCIDOC-CRM Mapping\nMuseum Narrative\nReports\nExternal Publications" as reporting #FFF7ED
+  rectangle "AI support\nAI Prompts\nQuestion Triage" as ai_support #F5F3FF
+  rectangle "Operational support\nReference Numbers\nNotifications" as operations #F1F5F9
+}
+
+  database "Application DB" as db
+  folder "File storage" as storage
+  cloud "External services\nSMTP, Turnstile, Ollama" as external_services
+
+
+public_visitor --> spa
+staff_user --> spa
+spa --> backend : HTTP API
+
+external_consumer --> backend : publication token API
+
+backend --> db : persistence
+backend --> storage : documents/imports
+backend --> external_services : email, captcha, LLM
+
+@enduml
