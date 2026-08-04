@@ -6,8 +6,10 @@ durable architecture decisions.
 
 ## Start Here
 
-- [Context map](./vitarerum-context-map.svg): bounded contexts and allowed
-  cross-context communication.
+- Context map: bounded contexts and allowed cross-context communication.
+
+![Vitarerum context map](./vitarerum-context-map.svg)
+
 - [Module boundaries](./module-boundaries.md): business responsibility of each
   active context.
 - [Business flows](./business-flows.md): index of end-to-end flows and existing

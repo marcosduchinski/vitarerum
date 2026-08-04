@@ -115,8 +115,6 @@ Cloud Build configuration for the integrated image lives in
 Architecture:
 
 - [Architecture overview](./docs/architecture/README.md)
-- [Context map](./docs/architecture/vitarerum-context-map.svg)
-- [Simplified context map](./docs/architecture/vitarerum-context-map-simplified.svg)
 - [Module boundaries](./docs/architecture/module-boundaries.md)
 - [Business flows](./docs/architecture/business-flows.md)
 - [Architecture decisions](./docs/architecture/adr/README.md)
@@ -124,25 +122,9 @@ Architecture:
 Contracts and flows:
 
 - [API contracts](./docs/api_contracts/)
-- [Diagrams](./docs/diagrams/)
-- Rendered flow/domain diagrams:
-  [AI prompts](./docs/diagrams/ai-prompts-life-cycle.svg),
-  [CIDOC-CRM record model](./docs/diagrams/cidoc-crm-in-situ-visit-record-model.svg),
-  [CIDOC example](./docs/diagrams/cidoc-example-in-situ-visit.svg),
-  [dashboard summary](./docs/diagrams/dashboard-summary-flow.svg),
-  [external publications](./docs/diagrams/external-publications-flow.svg),
-  [in-situ visit narrative](./docs/diagrams/in-situ-visit-cidoc-narrative-flow.svg),
-  [in-situ context map](./docs/diagrams/in-situ-visit-context-map.svg),
-  [museum question triage](./docs/diagrams/museum-question-triage-flow.svg),
-  [museum questions public](./docs/diagrams/museum-questions-public-flow.svg),
-  [museum questions response](./docs/diagrams/museum-questions-response-flow.svg),
-  [notifications](./docs/diagrams/notifications-flow.svg),
-  [proposal lifecycle](./docs/diagrams/proposal-life-cycle.svg),
-  [public proposal lifecycle](./docs/diagrams/public-proposal-life-cycle.svg),
-  [public submission](./docs/diagrams/public-submission-double-opt-in.svg),
-  [reference number policies](./docs/diagrams/reference-number-policies.svg),
-  [use of collections lifecycle](./docs/diagrams/use-of-collections-life-cycle.svg),
-  and [domain model overview](./docs/diagrams/vitarerum-domain-model-overview.svg).
+- [Business flows](./docs/architecture/business-flows.md): rendered flow and
+  domain diagrams with links to the related API contracts.
+- [Diagrams](./docs/diagrams/): rendered SVG files and PlantUML sources.
 
 To regenerate the rendered diagrams from PlantUML sources:
 
