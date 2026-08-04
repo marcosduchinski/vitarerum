@@ -10,6 +10,8 @@ package "Core workflow" {
   [Identity] as identity
   [Use of Collections] as uoc
   [Public Submission] as public_submission
+  [Reference Numbers] as reference_numbers
+  [Notifications] as notifications
 }
 
 package "Collection knowledge" {
@@ -21,6 +23,7 @@ package "Collection knowledge" {
 package "In-situ reporting" {
   [Reports: In-Situ Visit] as reports_visit
   [CIDOC-CRM: In-Situ Visit Mapping] as cidoc_visit
+  [External Publications] as external_publications
 }
 
 package "AI-assisted contexts" {
@@ -43,6 +46,8 @@ folder "File storage" as storage
 cloud "SMTP" as smtp
 cloud "LLM/Ollama" as llm
 cloud "Cloudflare Turnstile" as turnstile
+actor "External consumer" as external_consumer
+component "External publication token API\n/api/v1/external/publications/*" as external_public_api
 
 authenticated_routes --> identity : login/session
 authenticated_routes --> uoc : authenticated proposals/projects
@@ -50,27 +55,43 @@ authenticated_routes --> object_index : object search/admin
 authenticated_routes --> doc_templates : template admin
 authenticated_routes --> questions : staff responses
 authenticated_routes --> reports_visit : in-situ reports
+authenticated_routes --> reference_numbers : reference policy admin
+authenticated_routes --> notifications : notification center/topbar
+authenticated_routes --> external_publications : publication admin
 
 public_routes --> public_submission : public proposal intake
 public_routes --> questions : public questions
+public_routes --> doc_templates : public template list/download
 
 public_submission --> uoc : materialise proposal\n(adapter coupling; tracked)
+public_submission --> reference_numbers : reference_numbers.public
+public_submission --> notifications : notifications.public
 public_submission --> smtp : confirmation/amendment email
 public_submission --> turnstile : captcha verification
 
 uoc --> identity : identity.public
+uoc --> reference_numbers : reference_numbers.public
+uoc --> notifications : notifications.public
 questions --> identity : identity.public via shared auth
 doc_templates --> identity : identity.public via shared auth
+reference_numbers --> identity : identity.public via shared auth
+notifications --> identity : identity.public
 
 cidoc_visit --> uoc : use_of_collections.public
 narrative --> cidoc_visit : cidoc_crm.public
 narrative --> prompts : ai.prompts.public
 reports_visit --> cidoc_visit : cidoc_crm.public
 reports_visit --> narrative : ai.museum_narrative.public
+reports_visit --> external_publications : external_publications.public\nrevoke on report deletion
 
 triage --> questions : museum_questions.public\nor narrow ACL
 triage --> object_index : object-search ACL
 triage --> prompts : future prompt consumer
+
+external_publications --> uoc : use_of_collections.public
+external_publications --> reports_visit : reports.public
+external_consumer --> external_public_api : token access
+external_public_api --> external_publications : published resource reader
 
 uoc --> storage : proposal/project documents
 doc_templates --> storage : template files
@@ -82,11 +103,14 @@ triage --> llm : question triage
 identity ..> db
 uoc ..> db
 public_submission ..> db
+reference_numbers ..> db
+notifications ..> db
 object_index ..> db
 doc_templates ..> db
 questions ..> db
 reports_visit ..> db
 cidoc_visit ..> db
+external_publications ..> db
 narrative ..> db
 triage ..> db
 prompts ..> db

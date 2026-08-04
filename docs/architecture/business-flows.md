@@ -18,8 +18,10 @@ records the gap without inventing an incomplete diagram.
   [proposal-life-cicle.puml](../diagrams/proposal-life-cicle.puml),
   [Proposal phase - staff actions](../api_contracts/03Proposal%20phase%20%E2%80%94%20staff%20actions.md).
 - Document correction and attachments: covered across proposal API contracts and
-  the public submission/amendment flow; a dedicated flow diagram is still to
-  document.
+  the public submission/amendment states in
+  [public-proposal-life-cicle.puml](../diagrams/public-proposal-life-cicle.puml).
+- Staff notifications triggered by proposal events:
+  [notifications-flow.puml](../diagrams/notifications-flow.puml).
 
 ## Collection Use Projects
 
@@ -30,6 +32,8 @@ records the gap without inventing an incomplete diagram.
 - Object search and requested-object snapshots:
   [CollectionDataSources Admin API](../api_contracts/15CollectionDataSources-Admin-API.md).
   A dedicated end-to-end diagram for object selection is still to document.
+- Reference number policy administration:
+  [reference-number-policies.puml](../diagrams/reference-number-policies.puml).
 
 ## In-Situ Visit, CIDOC-CRM, and Narrative
 
@@ -45,6 +49,8 @@ records the gap without inventing an incomplete diagram.
   [KG-RAG Narrative API](../api_contracts/09KG-RAG-Narrative.md).
 - Report aggregation:
   [Reports InSituVisit API](../api_contracts/10Reports-InSituVisit.md).
+- External publication of reports and JSON-LD:
+  [external-publications-flow.puml](../diagrams/external-publications-flow.puml).
 
 ## Museum Questions
 
@@ -55,8 +61,7 @@ records the gap without inventing an incomplete diagram.
   [museum-questions-response-flow.puml](../diagrams/museum-questions-response-flow.puml),
   [MuseumQuestions Internal API](../api_contracts/14MuseumQuestions-Internal-API.md).
 - AI triage:
-  covered by the triage context and related plans; a dedicated durable flow
-  diagram is still to document if the implementation changes materially.
+  [museum-question-triage-flow.puml](../diagrams/museum-question-triage-flow.puml).
 
 ## Administration
 
@@ -65,7 +70,10 @@ records the gap without inventing an incomplete diagram.
 - Collection data sources:
   [CollectionDataSources Admin API](../api_contracts/15CollectionDataSources-Admin-API.md).
 - AI prompts:
+  [ai-prompts-life-cycle.puml](../diagrams/ai-prompts-life-cycle.puml),
   [AI Prompts Admin API](../api_contracts/16AI-Prompts-Admin-API.md).
 - Dashboard summary:
+  [dashboard-summary-flow.puml](../diagrams/dashboard-summary-flow.puml),
   [Dashboard Summary API](../api_contracts/17Dashboard-Summary-API.md).
-
+- External publication administration:
+  [external-publications-flow.puml](../diagrams/external-publications-flow.puml).

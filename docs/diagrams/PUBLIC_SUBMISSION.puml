@@ -1,4 +1,4 @@
-@startuml PUBLIC_SUBMISSION
+@startuml public-submission-double-opt-in
 title Public Submission - Double Opt-In Proposal Intake
 
 skinparam shadowing false
@@ -15,162 +15,118 @@ skinparam note {
   BorderColor #B45309
 }
 
-|Citizen / Public SPA|
+|Citizen / Angular public route|
 start
-:Fill public proposal form; <<#DFF7E2>>
-:POST /api/v1/public/proposals; <<#DFF7E2>>
+:Fill /submit-proposal form;
+:POST /api/v1/public/proposals;
 
-|Presentation (routes.py / schemas.py)|
-:Validate PublicProposalSubmission schema; <<#DFF7E2>>
-if (Schema valid?) then (no)
-  :Return 422 validation error;
+|public_submission.presentation|
+:Validate request schema;
+if (Valid body?) then (no)
+  :Return 422;
   stop
-else (yes)
-  :Map request to SubmitPublicProposalInput; <<#DFF7E2>>
 endif
 
-|Application (SubmitPublicProposal)|
-if (Honeypot website field filled?) then (yes)
+|public_submission.application|
+if (Honeypot filled?) then (yes)
   :Accept and drop silently;
-  :Return token = null;
-  |Presentation (routes.py)|
-  :Commit database transaction;
-  :Skip e-mail;
-  :Return 202\nPENDING_CONFIRMATION + e-mail;
+  |public_submission.presentation|
+  :Return 202 same receipt shape\n(no row, no token, no email);
   stop
-else (no)
-  :Apply rate limits\nIP, e-mail, global; <<#DFF7E2>>
-  if (Any submit limit exceeded?) then (yes)
-    :Raise RateLimitExceeded;
-    |Presentation (routes.py)|
-    :Return 429 with Retry-After;
-    stop
-  else (no)
-    |Infrastructure adapters|
-    :Verify captcha\nCloudflare Turnstile or local AlwaysPass; <<#DFF7E2>>
-
-    |Application (SubmitPublicProposal)|
-    if (Captcha provider unreachable?) then (yes)
-      :Raise CaptchaUnavailable;
-      |Presentation (routes.py)|
-      :Return 503 captcha provider unreachable;
-      stop
-    else (no)
-      if (Captcha valid?) then (no)
-        :Raise CaptchaFailed;
-        |Presentation (routes.py)|
-        :Return 403 captcha verification failed;
-        stop
-      else (yes)
-        :Generate UUID and opaque confirmation token; <<#DFF7E2>>
-      endif
-    endif
-
-    |Domain (PendingPublicSubmission)|
-    :Create aggregate in\nPENDING_CONFIRMATION; <<#DFF7E2>>
-
-    |Infrastructure (SqlAlchemyPendingSubmissionRepository)|
-    :Insert public_proposal_submissions row; <<#DFF7E2>>
-    :Flush so token / constraint errors surface\nbefore side effects; <<#DFF7E2>>
-
-    |Application (SubmitPublicProposal)|
-    :Return e-mail, citizen name, token; <<#DFF7E2>>
-  endif
 endif
 
-|Presentation (routes.py)|
-:Commit database transaction; <<#DFF7E2>>
-|Infrastructure (ConfirmationEmailSender)|
-:Send or log confirmation link\n/public submit confirm route + token; <<#DFF7E2>>
-
-|Presentation (routes.py)|
-:Return 202\nPENDING_CONFIRMATION + e-mail; <<#DFF7E2>>
-
-|Citizen / Public SPA|
-:Open confirmation link from e-mail; <<#DFF7E2>>
-:POST /api/v1/public/proposals/confirm\nwith token; <<#DFF7E2>>
-
-|Presentation (routes.py / schemas.py)|
-:Validate PublicConfirmationRequest; <<#DFF7E2>>
-if (Schema valid?) then (no)
-  :Return 422 validation error;
-  stop
-else (yes)
-  :Pass token and client IP to ConfirmPublicProposal; <<#DFF7E2>>
-endif
-
-|Application (ConfirmPublicProposal)|
-:Apply confirm-IP rate limit; <<#DFF7E2>>
-if (Confirm limit exceeded?) then (yes)
-  :Raise RateLimitExceeded;
-  |Presentation (routes.py)|
+:Apply IP, e-mail and global rate limits;
+if (Limited?) then (yes)
+  |public_submission.presentation|
   :Return 429 with Retry-After;
   stop
-else (no)
-  |Infrastructure (SqlAlchemyPendingSubmissionRepository)|
-  :Load pending row by token\nwith SELECT ... FOR UPDATE; <<#DFF7E2>>
-
-  |Application (ConfirmPublicProposal)|
-  if (Submission found?) then (no)
-    :Return INVALID;
-    |Presentation (routes.py)|
-    :Commit database transaction;
-    :Return 200 PublicConfirmationResult\nstatus = INVALID;
-    stop
-  else (yes)
-    if (Already CONFIRMED?) then (yes)
-      :Return ALREADY_CONFIRMED\nwith stored proposal reference;
-      |Presentation (routes.py)|
-      :Commit database transaction;
-      :Return 200 PublicConfirmationResult\nstatus = ALREADY_CONFIRMED, referenceNumber;
-      stop
-    else (no)
-      |Domain (PendingPublicSubmission)|
-      :Check token expiry against configured TTL; <<#DFF7E2>>
-
-      |Application (ConfirmPublicProposal)|
-      if (Expired?) then (yes)
-        :Return EXPIRED;
-        |Presentation (routes.py)|
-        :Commit database transaction;
-        :Return 200 PublicConfirmationResult\nstatus = EXPIRED;
-        stop
-      else (no)
-        |Infrastructure (run_with_unique_retry)|
-        :Run materialisation with retry on\nreference-number unique conflict; <<#DFF7E2>>
-
-        |Identity published language|
-        :ProvisionExternalRequester\nfor citizen e-mail + name; <<#DFF7E2>>
-
-        |Use of Collections|
-        :SubmitProposal with citizen message; <<#DFF7E2>>
-        :Allocate proposal reference; <<#DFF7E2>>
-
-        |Domain (PendingPublicSubmission)|
-        :confirm(reference, now); <<#DFF7E2>>
-        :Set status CONFIRMED,\nconfirmed_at, proposal_reference; <<#DFF7E2>>
-
-        |Infrastructure (SqlAlchemyPendingSubmissionRepository)|
-        :Save confirmed pending submission; <<#DFF7E2>>
-
-        |Application (ConfirmPublicProposal)|
-        :Return CONFIRMED\nwith proposal reference; <<#DFF7E2>>
-
-        |Presentation (routes.py)|
-        :Commit database transaction; <<#DFF7E2>>
-        :Return 200 PublicConfirmationResult\nstatus = CONFIRMED, referenceNumber; <<#DFF7E2>>
-        stop
-      endif
-    endif
-  endif
 endif
 
-legend bottom
-  #DFF7E2 = happy path: valid form, no limits, valid captcha, fresh token, proposal materialized.
+|Captcha adapter|
+:Verify Cloudflare Turnstile\n(or local always-pass adapter);
+if (Provider unavailable?) then (yes)
+  |public_submission.presentation|
+  :Return 503;
+  stop
+elseif (Captcha failed?) then (yes)
+  |public_submission.presentation|
+  :Return 403;
+  stop
+endif
 
-  Public Submission owns only the PendingPublicSubmission aggregate.
-  The materialized proposal belongs to Use of Collections and is linked back
-  by the human-readable proposal_reference string, not a cross-context FK.
-endlegend
+|public_submission.domain|
+:Create PendingPublicSubmission\nstatus = PENDING_CONFIRMATION;
+
+|public_submission.infrastructure|
+:Persist pending submission and documents;
+
+|public_submission.presentation|
+:Commit transaction;
+
+|Email sender|
+:Send or log confirmation link;
+
+|public_submission.presentation|
+:Return 202 PENDING_CONFIRMATION receipt;
+
+|Citizen / Angular public route|
+:Open confirmation link;
+:POST /api/v1/public/proposals/confirm;
+
+|public_submission.application|
+:Rate-limit confirmation by IP;
+if (Limited?) then (yes)
+  |public_submission.presentation|
+  :Return 429 with Retry-After;
+  stop
+endif
+
+|public_submission.infrastructure|
+:Load pending submission by token\nwith row lock;
+
+|public_submission.application|
+if (Unknown token?) then (yes)
+  |public_submission.presentation|
+  :Commit;
+  :Return 200 INVALID;
+  stop
+elseif (Already confirmed?) then (yes)
+  |public_submission.presentation|
+  :Commit;
+  :Return 200 ALREADY_CONFIRMED\nwith proposal reference;
+  stop
+elseif (Expired by TTL?) then (yes)
+  |public_submission.presentation|
+  :Commit;
+  :Return 200 EXPIRED;
+  stop
+endif
+
+|Identity published language|
+:Provision/reuse EXTERNAL requester permission;
+
+|use_of_collections|
+:SubmitProposal\nsubmissionChannel = PUBLIC\nrequesterContact captured;
+:Allocate proposal reference;
+
+|public_submission.domain|
+:confirm(reference, now)\nstatus = CONFIRMED;
+
+|public_submission.presentation|
+:Commit transaction;
+
+|notifications + email|
+:Broadcast PROPOSAL_SUBMITTED\nto staff permissions;
+:Send deduplicated staff email;
+
+|public_submission.presentation|
+:Return 200 CONFIRMED\nwith proposal reference;
+stop
+
+note right
+  Public Submission owns PendingPublicSubmission and amendment tokens.
+  The materialized Proposal belongs to Use of Collections.
+  Staff notifications are side effects after successful materialization.
+end note
 
 @enduml

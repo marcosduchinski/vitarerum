@@ -1,0 +1,30 @@
+@startuml ai-prompts-life-cycle
+title AI Prompts - Template Version Life Cycle
+
+skinparam shadowing false
+skinparam state {
+  BackgroundColor #F8FAFC
+  BorderColor #334155
+}
+skinparam note {
+  BackgroundColor #FFFBEB
+  BorderColor #B45309
+}
+
+state "PromptTemplate" as Template {
+  [*] --> NoActiveVersion
+  NoActiveVersion --> HasActiveVersion : publish first version
+  HasActiveVersion --> HasActiveVersion : publish replacement version
+}
+
+state "PromptTemplateVersion" as Version {
+  [*] --> Draft : create draft\nor copy as new draft
+  Draft --> Published : publish
+  Draft --> Archived : archive draft
+  Published --> Archived : archive after another\nversion is published
+  Archived --> [*]
+}
+
+Template --> Version : owns versions
+
+@enduml

@@ -1,7 +1,5 @@
-```plantuml
-@startuml
-
-title Representação CIDOC CRM de uma visita in situ
+@startuml cidoc-example-in-situ-visit
+title CIDOC CRM Representation - In-Situ Visit
 
 left to right direction
 
@@ -9,91 +7,51 @@ skinparam backgroundColor white
 skinparam shadowing false
 skinparam roundCorner 12
 skinparam linetype ortho
-
 skinparam rectangle {
-    BackgroundColor white
-    BorderColor #333333
-    FontColor #222222
-    FontSize 13
+  BackgroundColor white
+  BorderColor #333333
+  FontColor #222222
+  FontSize 13
 }
-
 skinparam Arrow {
-    Color #444444
-    FontColor #333333
-    FontSize 11
-    Thickness 1.2
+  Color #444444
+  FontColor #333333
+  FontSize 11
+  Thickness 1.2
 }
 
-skinparam title {
-    FontSize 18
-    FontStyle bold
-}
-
-' Paleta correspondente às categorias CIDOC CRM
 !define activity_color #7CA4BC
 !define entity_color #C68E65
 !define space_time_color #97D197
 !define type_color #F9B264
 
-' =====================================================
-' Atividade principal
-' =====================================================
+rectangle "<b>E7 Activity</b>\nIn-situ visit\nCUP-2026-001" as E7 activity_color
+rectangle "<b>E21 Person</b>\nRequester / visitor" as E21 entity_color
+rectangle "<b>E53 Place</b>\nMuseum" as E53 space_time_color
+rectangle "<b>E52 Time-Span</b>\nObserved execution time" as E52 space_time_color
+rectangle "<b>E55 Type</b>\nIn-situ collection visit" as E55_VISIT type_color
 
-rectangle "<b>E7 Activity</b>\n—\nIn situ visit\nCUP-00A3B269" as E7 activity_color
+rectangle "<b>E22 Human-Made Object</b>\nCollection object snapshot" as E22 entity_color
+rectangle "<b>E31 Document</b>\nAccess log entry" as E31_ACCESS entity_color
+rectangle "<b>E31 Document</b>\nOccurrence log entry" as E31_OCC entity_color
+rectangle "<b>E31 Document</b>\nPublication entry" as E31_PUB entity_color
+rectangle "<b>E31 Document</b>\nAttachment / evidence file" as E31_ATTACH entity_color
+rectangle "<b>E55 Type</b>\nField document" as E55_DOC type_color
 
-' =====================================================
-' Contexto da atividade
-' =====================================================
+E21 -left-> E7 : <b>P14</b>\ncarried out by
+E7 -up-> E53 : <b>P7</b>\ntook place at
+E7 -right-> E52 : <b>P4</b>\nhas time-span
+E7 -down-> E55_VISIT : <b>P2</b>\nhas type
 
-rectangle "<b>E21 Person</b>\n—\nAlice" as E21 entity_color
+E7 -down-> E22 : <b>P16</b>\nused specific object
+E31_ACCESS -up-> E7 : <b>P70</b>\ndocuments
+E31_OCC -up-> E7 : <b>P70</b>\ndocuments
+E31_PUB -up-> E7 : <b>P70</b>\ndocuments
+E31_ATTACH -up-> E31_OCC : <b>P70</b>\ndocuments
 
-rectangle "<b>E53 Place</b>\n—\nMuseum" as E53 space_time_color
-
-rectangle "<b>E52 Time-Span</b>\n—\n01/01/2026 – 05/01/2026" as E52 space_time_color
-
-rectangle "<b>E55 Type</b>\n—\nIn situ collection visit" as E55_VISIT type_color
-
-' =====================================================
-' Documentação
-' =====================================================
-
-rectangle "<b>E31 Document</b>\n—\nLOG01\nNote: Houve alguma coisa..." as E31_LOG entity_color
-
-rectangle "<b>E55 Type</b>\n—\nField document" as E55_DOCUMENT type_color
-
-rectangle "<b>E31 Document</b>\n—\nsolicitacao_cepejur.txt" as E31_REQUEST entity_color
-
-' =====================================================
-' Relações da atividade
-' =====================================================
-
-E21      -left-> E7 : <b>P14</b>\ncarried out
-E7       -up-> E53 : <b>P7</b>\ntook place at
-E7       -right-> E52 : <b>P4</b>\nhas time-span
-E7       -down-> E55_VISIT : <b>P2</b>\nhas type
-
-' =====================================================
-' Relações documentais
-' =====================================================
-
-E31_LOG -up-> E7 : <b>P70</b>\ndocuments
-E31_LOG -right-> E55_DOCUMENT : <b>P2</b>\nhas type
-
-E31_REQUEST -up-> E31_LOG : <b>P70</b>\ndocuments
-E31_REQUEST -up-> E7 : <b>P70</b>\ndocuments
-
-' =====================================================
-' Controle de posicionamento
-' =====================================================
-
-E53 -[hidden]right- E7
-E7 -[hidden]right- E52
-
-E21 -[hidden]right- E7
-E7 -[hidden]down- E55_VISIT
-
-E31_REQUEST -[hidden]right- E31_LOG
-E31_LOG -[hidden]right- E55_DOCUMENT
+E31_ACCESS -right-> E55_DOC : <b>P2</b>\nhas type
+E31_OCC -right-> E55_DOC : <b>P2</b>\nhas type
+E31_PUB -right-> E55_DOC : <b>P2</b>\nhas type
+E31_ATTACH -right-> E55_DOC : <b>P2</b>\nhas type
 
 @enduml
-```

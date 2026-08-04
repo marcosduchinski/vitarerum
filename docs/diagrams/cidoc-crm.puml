@@ -1,90 +1,97 @@
-@startuml InSituVisitRecordModel
+@startuml cidoc-crm-in-situ-visit-record-model
+title CIDOC-CRM In-Situ Visit Snapshot Model
 
 skinparam classAttributeIconSize 0
 skinparam linetype ortho
 skinparam shadowing false
+skinparam packageStyle rectangle
 
+package "use_of_collections.public" <<Published Language>> {
+  class ProjectExportView <<DTO>> {
+    + projectId: String
+    + referenceNumber: String
+    + intendedUse: UseType
+    + objects: List<ObjectView>
+    + accessLogs: List<AccessView>
+    + occurrenceLogs: List<OccurrenceView>
+    + publicationLogs: List<PublicationView>
+  }
+}
 
-package "In Situ Visit CIDOC Mapping" <<Bounded Context>> {
-
-class InSituVisitRecord {
-    + id: UUID <<PK>>
+package "cidoc_crm.in_situ_visit_mapping" <<Bounded Context>> {
+  class InSituVisitRecord <<Aggregate Root>> {
+    + id: UUID
+    + sourceProjectId: String
     + code: String
-    + visitBeginDate: Date
-    + visitEndDate: Date
+    + mappingVersion: String
+    + crmVersion: String
+    + plannedBeginDate: Date?
+    + plannedEndDate: Date?
+    + executionOccurredAt: DateTime?
+    + approvedAt: DateTime?
     + visitorName: String
     + placeName: String
     + generatedAt: DateTime
-}
+  }
 
-class RequestedObjectRecord {
-    + id: UUID <<PK>>
-    + visitRecordId: UUID <<FK>>
+  class RequestedObjectRecord <<Entity>> {
+    + id: UUID
     + sourceId: String
+    + inventoryNumber: String
+    + displayTitle: String?
+    + objectName: String?
     + description: Text
     + position: Integer
-}
+  }
 
-class InSituOccurrenceRecord {
-    + id: UUID <<PK>>
-    + visitRecordId: UUID <<FK>>
+  class InSituOccurrenceRecord <<Entity>> {
+    + id: UUID
     + sourceId: String
     + description: Text
+    + occurrenceDate: DateTime?
+    + location: String?
+    + reportedBy: String?
     + position: Integer
-}
+  }
 
-class InSituOccurrenceAttachmentRecord {
-    + id: UUID <<PK>>
-    + occurrenceId: UUID <<FK>>
+  class InSituLogRecord <<Entity>> {
+    + id: UUID
     + sourceId: String
     + description: Text
-    + reference: String
+    + curatorName: String?
     + position: Integer
-}
+  }
 
-class InSituLogRecord {
-    + id: UUID <<PK>>
-    + visitRecordId: UUID <<FK>>
+  class InSituPublicationRecord <<Entity>> {
+    + id: UUID
     + sourceId: String
     + description: Text
+    + addedBy: String?
     + position: Integer
-}
+  }
 
-class InSituLogAttachmentRecord {
-    + id: UUID <<PK>>
-    + logId: UUID <<FK>>
-    + sourceId: String
-    + description: Text
-    + reference: String
-    + position: Integer
-}
-
-class InSituPublicationRecord {
-    + id: UUID <<PK>>
-    + visitRecordId: UUID <<FK>>
-    + sourceId: String
-    + description: Text
-    + position: Integer
-}
-
-class InSituPublicationAttachmentRecord {
-    + id: UUID <<PK>>
-    + publicationId: UUID <<FK>>
+  class AttachmentRecord <<Entity>> {
+    + id: UUID
     + sourceId: String
     + description: Text
     + reference: String
     + position: Integer
+  }
+
+  class CidocProjection <<Domain Service>> {
+    + map_record_to_cidoc(record)
+    + validate_cidoc(document)
+  }
 }
 
-InSituVisitRecord "1" *-- "0..*" RequestedObjectRecord : requestedObjects
-InSituVisitRecord "1" *-- "0..*" InSituOccurrenceRecord : inSituOccurrences
-InSituVisitRecord "1" *-- "0..*" InSituLogRecord : inSituLogs
-InSituVisitRecord "1" *-- "0..*" InSituPublicationRecord : inSituPublications
-
-InSituOccurrenceRecord "1" *-- "0..*" InSituOccurrenceAttachmentRecord : attachments
-InSituLogRecord "1" *-- "0..*" InSituLogAttachmentRecord : attachments
-InSituPublicationRecord "1" *-- "0..*" InSituPublicationAttachmentRecord : attachments
-
-
+ProjectExportView ..> InSituVisitRecord : ACL exports project snapshot
+InSituVisitRecord "1" *-- "0..*" RequestedObjectRecord
+InSituVisitRecord "1" *-- "0..*" InSituOccurrenceRecord
+InSituVisitRecord "1" *-- "0..*" InSituLogRecord
+InSituVisitRecord "1" *-- "0..*" InSituPublicationRecord
+InSituOccurrenceRecord "1" *-- "0..*" AttachmentRecord : attachments
+InSituLogRecord "1" *-- "0..*" AttachmentRecord : attachments
+InSituPublicationRecord "1" *-- "0..*" AttachmentRecord : attachments
+InSituVisitRecord ..> CidocProjection : semantic JSON-LD
 
 @enduml

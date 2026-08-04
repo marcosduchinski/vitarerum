@@ -1,31 +1,60 @@
 @startuml museum-questions-response-flow
-title Museum Questions — Internal Response Flow
+title Museum Questions - Internal Response Flow
 
-start
-:Staff opens /p/museum-questions;
-:GET /museum-questions\n(status?, page, size);
-:Staff selects question;
-:GET /museum-questions/{id};
+skinparam shadowing false
 
-if (Question status?) then (SUBMITTED)
-  if (In scope?) then (yes)
-    :Staff writes answer;
-    :POST /museum-questions/{id}/answer;
-    :Send manual e-mail;
-    :status = ANSWERED;
-  else (no)
-    :Staff confirms out-of-scope action;
-    :POST /museum-questions/{id}/mark-out-of-scope;
-    :Send standard out-of-scope e-mail;
-    :status = OUT_OF_SCOPE;
-  endif
-elseif (ANSWERED or OUT_OF_SCOPE)
-  :Staff may close;
-  :PATCH /museum-questions/{id}/close;
-  :status = CLOSED;
-else (CLOSED)
-  :No further action;
-endif
+actor Staff
+boundary "Angular /p/museum-questions" as UI
+control "museum_questions routes" as Routes
+control "Museum Questions use cases" as UseCases
+control "AI triage panel\n(optional read)" as Triage
+database "MuseumQuestionRepository" as Repo
+control "Email sender" as Email
 
-stop
+Staff -> UI : open list
+UI -> Routes : GET /api/v1/museum-questions\nstatus?, requesterEmail?, page, size
+Routes -> UseCases : list(caller, filters)
+UseCases -> Repo : query
+Repo --> UseCases : page
+UseCases --> Routes : page
+Routes --> UI : PaginatedMuseumQuestionsResponse
+
+Staff -> UI : open detail
+UI -> Routes : GET /api/v1/museum-questions/{id}
+Routes -> UseCases : get(caller, id)
+UseCases -> Repo : load
+Repo --> UseCases : MuseumQuestion
+UseCases --> Routes : question
+Routes --> UI : MuseumQuestionResponse
+
+UI -> Triage : read existing classification / object matches
+Triage --> UI : advisory result\n(no status change)
+
+alt question is SUBMITTED and staff answers
+  Staff -> UI : write answer
+  UI -> Routes : POST /api/v1/museum-questions/{id}/answer
+  Routes -> UseCases : answer(caller, id, body)
+  UseCases -> Repo : load + save ANSWERED
+  Routes -> Repo : commit transaction
+  Routes -> Email : send answer after commit
+  Routes --> UI : MuseumQuestionResponse
+else question is SUBMITTED and staff marks out-of-scope
+  Staff -> UI : confirm out-of-scope reason
+  UI -> Routes : POST /api/v1/museum-questions/{id}/mark-out-of-scope
+  Routes -> UseCases : markOutOfScope(caller, id, reason)
+  UseCases -> Repo : load + save OUT_OF_SCOPE
+  Routes -> Repo : commit transaction
+  Routes -> Email : send out-of-scope email after commit
+  Routes --> UI : MuseumQuestionResponse
+else question is ANSWERED or OUT_OF_SCOPE
+  Staff -> UI : close question
+  UI -> Routes : PATCH /api/v1/museum-questions/{id}/close
+  Routes -> UseCases : close(caller, id)
+  UseCases -> Repo : load + save CLOSED
+  Routes -> Repo : commit transaction
+  Routes --> UI : MuseumQuestionResponse
+else question is CLOSED
+  UI --> Staff : read-only archive state
+end
+
 @enduml

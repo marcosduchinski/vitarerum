@@ -1,0 +1,30 @@
+@startuml museum-question-triage-flow
+title Museum Question Triage - AI Assistance and Human Review
+
+skinparam shadowing false
+
+actor "Staff" as staff
+participant "Museum Questions UI" as ui
+participant "ai.museum_question_triage API" as api
+participant "museum_questions.public" as questions
+participant "collection_object_index ACL" as objects
+participant "LLM / embedding / cascade classifiers" as model
+database "triage tables" as store
+
+staff -> ui : open question detail / triage panel
+ui -> api : POST /api/v1/ai/museum-question-triage/...
+api -> questions : load QuestionView
+api -> objects : search candidate collection objects
+api -> model : classify scope, use category,\nmentioned objects\n(static prompts hardcoded in\napplication/prompts.py, not ai.prompts)
+model --> api : verdict, scores, extracted terms
+api -> store : persist MessageTriage\nand classifications
+api --> ui : triage result
+
+staff -> ui : review / override / calibrate
+ui -> api : patch/put classification or examples
+api -> store : store human decision,\ntraining example or prototype version
+
+ui -> questions : staff answer/out-of-scope/close\nthrough museum_questions API
+
+
+@enduml

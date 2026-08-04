@@ -1,0 +1,60 @@
+@startuml reference-number-policies
+title Reference Number Policies
+
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam packageStyle rectangle
+
+package "reference_numbers" <<Bounded Context>> {
+  class ReferencePolicy <<Aggregate Root>> {
+    - id: ReferencePolicyId
+    - kind: ReferenceKind
+    - mask: ReferenceMask
+    - status: ReferencePolicyStatus
+    + activate()
+    + deactivate()
+  }
+
+  class ReferenceMask <<Value Object>> {
+    - raw: String
+    + render(date, sequence): String
+  }
+
+  class ReferenceSequence <<Repository State>> {
+    - policyId: ReferencePolicyId
+    - scope: SequenceScope
+    - nextValue: Integer
+  }
+
+  enum ReferenceKind {
+    PROPOSAL
+    PROJECT
+    OBJECT_ACCESS_LOG
+    OBJECT_OCCURRENCE_LOG
+    PUBLICATION_LOG
+  }
+
+  enum ReferencePolicyStatus {
+    DRAFT
+    ACTIVE
+    INACTIVE
+  }
+
+  enum SequenceScope {
+    GLOBAL
+    YEAR
+  }
+}
+
+class "SYS_ADMIN" as admin
+class "Admin API\n/admin/reference-number-policies" as api
+class "Proposal/project/log use cases" as consumers
+
+admin --> api : preview / create / activate / deactivate
+api --> ReferencePolicy
+ReferencePolicy *-- ReferenceMask
+ReferencePolicy --> ReferenceSequence : allocates through active policy
+consumers ..> ReferencePolicy : request next reference by kind
+
+
+@enduml

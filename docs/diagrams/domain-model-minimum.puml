@@ -1,689 +1,267 @@
+@startuml vitarerum-domain-model-overview
+title Vitarerum Domain Model Overview
 
-@startuml MUHNAC-CollectionUse-Implemented
-
-skinparam linetype ortho
-skinparam packageStyle rectangle
-skinparam shadowing false
 skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+skinparam linetype ortho
+skinparam shadowing false
 
-' ============================================================
-' Implemented domain model
-' Source: app/use_of_collections/domain/models.py and enums.py
-' Note: this file keeps its historical name, but mirrors the implemented model.
-' ============================================================
+legend top
+  Conceptual overview only. Source of truth is vitarerum-api/app/.../domain.
+  Keep detailed tactical models in smaller bounded-context diagrams when a
+  context needs more fields than shown here.
+endlegend
 
-' ============================================================
-' Shared Kernel
-' ============================================================
-
-package "Shared Kernel" <<Shared Kernel>> {
-
-        class ReferenceNumber <<Value Object>> #e0afea {
-        - value: String
-        }
-
-        class EmailAddress <<Value Object>> #e0afea {
-        - value: String
-        }
-
-        class DocumentType <<Value Object>> #e0afea {
-        - value: String
-        }
-
-        class MessageAttachment <<Value Object>> #e0afea {
-        - documentId: DocumentId
-        - fileName: String
-        }
-
-        enum UseType #e0afea {
-        EXHIBITION
-        IN_SITU_VISIT
-        OTHER
-        }
+package "shared kernel" <<SharedKernel>> {
+  class ReferenceNumber <<ValueObject>> {
+    - value: String
+  }
+  class EmailAddress <<ValueObject>> {
+    - value: String
+  }
+  class DocumentType <<ValueObject>> {
+    - value: String
+  }
+  enum UseType {
+    EXHIBITION
+    IN_SITU_VISIT
+    OTHER
+  }
 }
 
-
-' ============================================================
-' Identity & Access
-' ============================================================
-
-package "Identity & Access" <<Bounded Context>> {
-
-        class Institution <<Aggregate Root>> #87bdd8 {
-        - id: InstitutionId
-        - name: String
-        - email: String
-        - address: String
-        - phone: String
-        }
-
-        class User <<Aggregate Root>> #87bdd8 {
-        - id: UserId
-        - name: String
-        - email: String
-        - passwordHash: String
-        }
-
-        class Group <<Aggregate Root>> #87bdd8 {
-        - id: GroupId
-        - name: GroupName
-        - institutionId: InstitutionId
-        }
-
-        class Permission <<Aggregate Root>> #87bdd8 {
-        - id: PermissionId
-        - userId: UserId
-        - groupId: GroupId
-        - user: User?
-        - group: Group?
-        }
-
-        enum GroupName #87bdd8 {
-        EXTERNAL
-        CURATORIAL
-        COLLECTIONS_MANAGEMENT
-        DIRECTION
-        SYS_ADMIN
-        }
-
-        Permission ..> User : userId
-        Permission ..> Group : groupId
-        Group ..> Institution : institutionId
+package "identity" <<BoundedContext>> {
+  class Institution <<AggregateRoot>> {
+    - id: InstitutionId
+    - name: String
+  }
+  class User <<AggregateRoot>> {
+    - id: UserId
+    - name: String
+    - email: String
+    - status: UserStatus
+    - passwordChangedAt: DateTime?
+  }
+  class Group <<AggregateRoot>> {
+    - id: GroupId
+    - name: GroupName
+    - institutionId: InstitutionId
+  }
+  class Permission <<AggregateRoot>> {
+    - id: PermissionId
+    - userId: UserId
+    - groupId: GroupId
+  }
+  class PasswordResetToken <<Entity>> {
+    - tokenHash: String
+    - expiresAt: DateTime
+    - usedAt: DateTime?
+  }
+  enum GroupName {
+    EXTERNAL
+    CURATORIAL
+    COLLECTIONS_MANAGEMENT
+    DIRECTION
+    SYS_ADMIN
+  }
+  enum UserStatus {
+    ACTIVE
+    DISABLED
+  }
 }
 
-
-' ============================================================
-' User Request
-' ============================================================
-
-package "User Request" <<Bounded Context>> {
-
-        class Proposal <<Aggregate Root>> #ffeead {
-        - id: ProposalId
-        - referenceNumber: ReferenceNumber
-        - title: String?
-        - collectionUseProjectId: CollectionUseProjectId?
-        - intendedUse: UseType?
-        - beginDate: LocalDate?
-        - endDate: LocalDate?
-        - status: ProposalStatus
-        - requestedBy: PermissionId?
-        - requesterContact: RequesterContact?
-        - submittedAt: DateTime
-        - assignedTo: PermissionId?
-        - events: List<ProposalEvent>
-        - requestedDocuments: List<RequestedDocument>
-        - requestedObjects: List<RequestedObject>
-        - documents: List<Document>
-        + __postInit__()
-        + recordSubmitted(...)
-        + assign(...)
-        + requestDocuments(...)
-        + addRequestedObjects(...)
-        + submitDocuments(...)
-        + forward(...)
-        + approve(...)
-        + reject(...)
-        }
-
-        class RequesterContact <<Value Object>> #ffeead {
-        - name: String
-        - email: EmailAddress
-        }
-
-        enum ProposalStatus #ffeead {
-        SUBMITTED
-        PENDING
-        APPROVED
-        REJECTED
-        CANCELLED
-        }
-
-        class ProposalEvent <<Value Object>> #ffeead {
-        - occurredAt: DateTime
-        - type: ProposalEventType
-        - triggeredBy: PermissionId?
-        - note: String?
-        }
-
-        enum ProposalEventType #ffeead {
-        SUBMITTED
-        ASSIGNED
-        FORWARDED
-        DOCUMENTS_REQUESTED
-        DOCUMENTS_SUBMITTED
-        REVIEW_STARTED
-        REFERRED_TO_DIRECTION
-        DIRECTION_CLARIFIED
-        APPROVED
-        REJECTED
-        CANCELLED
-        }
-
-        class RequestedDocument <<Entity>> #ffeead {
-        - id: RequestedDocumentId
-        - type: DocumentType
-        - description: String
-        - requestedAt: DateTime
-        - requestedBy: PermissionId
-        }
-
-        class RequestedObject <<Entity>> #ffeead {
-        - id: RequestedObjectId
-        - inventoryNumber: String
-        - displayTitle: String?
-        - objectName: String?
-        - briefDescriptionSnapshot: String?
-        - category: String
-        - description: String
-        - requestedAt: DateTime
-        - requestedBy: PermissionId
-        }
-
-        class Document <<Entity>> #c7ceea {
-        - id: DocumentId
-        - type: DocumentType
-        - fileName: String
-        - fileReference: String
-        - submittedAt: DateTime
-        - submittedBy: PermissionId?
-        }
-
-        class Conversation <<Aggregate Root>> #96ceb4 {
-        - id: ConversationId
-        - proposalId: ProposalId
-        - messages: List<Message>
-        - externalMessageId: String?
-        + start(...)
-        + addMessage(...)
-        }
-
-        class Message <<Entity>> #96ceb4 {
-        - id: MessageId
-        - sentAt: DateTime
-        - sender: EmailAddress
-        - recipient: EmailAddress
-        - subject: String
-        - body: String
-        - attachments: List<MessageAttachment>
-        }
-
-        Proposal ..> UseType : intendedUse
-        Proposal *-- "0..1" RequesterContact
-        Proposal *-- "0..*" ProposalEvent
-        Proposal *-- "0..*" RequestedDocument
-        Proposal *-- "0..*" RequestedObject
-        Proposal *-- "0..*" Document
-
-        RequestedDocument *-- DocumentType
-        Document *-- DocumentType
-        RequesterContact *-- EmailAddress
-
-        Proposal ..> Permission : requestedBy (system identity)
-        Proposal ..> Permission : assignedTo
-        Proposal ..> CollectionUseProject : collectionUseProjectId (after approval)
-        ProposalEvent ..> Permission : triggeredBy?
-        RequestedDocument ..> Permission : requestedBy
-        RequestedObject ..> Permission : requestedBy
-        Document ..> Permission : submittedBy?
-
-        Conversation *-- "1..*" Message
-        Conversation ..> Proposal : proposalId
-        Message *-- "0..*" MessageAttachment
-        Message ..> EmailAddress : sender
-        Message ..> EmailAddress : recipient
-        MessageAttachment ..> Document : documentId
+package "use_of_collections" <<BoundedContext>> {
+  class Proposal <<AggregateRoot>> {
+    - id: ProposalId
+    - referenceNumber: ReferenceNumber
+    - status: ProposalStatus
+    - submissionChannel: SubmissionChannel
+    - requestedBy: PermissionId?
+    - requesterContact: RequesterContact?
+    - assignedTo: PermissionId?
+    - correctionItems: List of DocumentCorrectionItem
+  }
+  class CollectionUseProject <<AggregateRoot>> {
+    - id: CollectionUseProjectId
+    - referenceNumber: ReferenceNumber
+    - status: UseStatus
+    - originProjectId: CollectionUseProjectId?
+    - objects: List of CollectionUseObject
+  }
+  class RequestedObject <<Entity>> {
+  }
+  class Document <<Entity>> {
+  }
+  class DocumentCorrectionItem <<Entity>> {
+    - status: DocumentCorrectionStatus
+  }
+  class CollectionUseObject <<Entity>> {
+  }
+  class ObjectAccessLog <<AggregateRoot>> {
+  }
+  class ObjectOccurrenceLog <<AggregateRoot>> {
+  }
+  class PublicationLog <<AggregateRoot>> {
+  }
+  class Conversation <<AggregateRoot>> {
+  }
+  class RequesterContact <<ValueObject>> {
+  }
+  enum ProposalStatus {
+    SUBMITTED
+    PENDING
+    APPROVED
+    REJECTED
+    CANCELLED
+  }
+  enum SubmissionChannel {
+    PUBLIC
+    AUTHENTICATED
+  }
+  enum UseStatus {
+    CREATED
+    IN_PROGRESS
+    COMPLETED
+    CANCELLED
+  }
 }
 
-
-' ============================================================
-' Collection Use
-' ============================================================
-
-package "Collection Use" <<Bounded Context>> {
-
-        class CollectionUseProject <<Aggregate Root>> #ff6f69 {
-        - id: CollectionUseProjectId
-        - referenceNumber: ReferenceNumber
-        - title: String
-        - purpose: String
-        - intendedUse: UseType
-        - status: UseStatus
-        - beginDate: LocalDate
-        - endDate: LocalDate
-        - requestedBy: PermissionId
-        - proposalId: ProposalId?
-        - requestNote: String?
-        - note: String?
-        - result: UseResult?
-        - authorisedBy: PermissionId?
-        - authorisedAt: DateTime?
-        - events: List<UseEvent>
-        - objects: List<CollectionUseObject>
-        + recordRequested(...)
-        + recordStarted(...)
-        + recordCompleted(...)
-        + recordCancelled(...)
-        }
-
-        class CollectionUseObject <<Entity>> #ff6f69 {
-        - id: CollectionUseObjectId
-        - inventoryNumber: String
-        - displayTitle: String?
-        - objectName: String?
-        - briefDescriptionSnapshot: String?
-        - category: String
-        - description: String
-        - requestedAt: DateTime
-        - requestedBy: PermissionId
-        }
-
-        enum UseStatus #ff6f69 {
-        CREATED
-        IN_PROGRESS
-        COMPLETED
-        CANCELLED
-        }
-
-        enum UseResult #ff6f69 {
-        COMPLETED
-        CANCELLED
-        }
-
-        class UseEvent <<Value Object>> #ff6f69 {
-        - occurredAt: DateTime
-        - type: UseEventType
-        - triggeredBy: PermissionId
-        - note: String?
-        }
-
-        enum UseEventType #ff6f69 {
-        REQUESTED
-        STARTED
-        COMPLETED
-        CANCELLED
-        }
-
-        class Attachment <<Value Object>> #ffb7b2 {
-        - fileReference: String
-        - fileName: String
-        - mediaType: MediaType
-        - uploadedAt: DateTime
-        - note: String?
-        }
-
-        enum MediaType #ffb7b2 {
-        DOCUMENT
-        IMAGE
-        VIDEO
-        OTHER
-        }
-
-        class ObjectAccessLog <<Aggregate Root>> #ffb7b2 {
-        - id: ObjectAccessLogId
-        - referenceNumber : ReferenceNumber
-        - collectionUseProjectId: CollectionUseProjectId
-        - dateConclusion: DateTime?
-        - curator: PermissionId?
-        - objects: List<ObjectLogEntry>
-        + addObjectLogEntry(...)
-        }
-
-        class ObjectLogEntry <<Entity>> #ffb7b2 {
-        - id: ObjectLogEntryId
-        - objectAccessLogId: ObjectAccessLogId
-        - collectionUseObjectId: CollectionUseObjectId
-        - numberOfObjects: Int
-        - addedAt: DateTime
-        - addedBy: PermissionId
-        - observations: String?
-        - attachments: List<Attachment>
-        + addAttachment(...)
-        + edit(...)
-        }
-
-
-        class ObjectOccurrenceLog <<Aggregate Root>> #ffb7b2 {
-        - id: ObjectOccurrenceLogId
-        - referenceNumber : ReferenceNumber
-        - collectionUseProjectId: CollectionUseProjectId
-        - dateConclusion: DateTime?
-        - curator: PermissionId?
-        - objects: List<ObjectOccurrenceEntry>
-        + addObjectOccurrenceEntry(...)
-        }
-
-
-        class ObjectOccurrenceEntry <<Entity>> #ffb7b2 {
-        - id: ObjectOccurrenceEntryId
-        - objectOccurrenceLogId: ObjectOccurrenceLogId
-        - collectionUseObjectId: CollectionUseObjectId
-        - numberOfObjects: Int
-        - occurrenceDate: DateTime
-        - location: String
-        - reportedBy: PermissionId
-        - detailedDescription: String
-        - testimonial: String?
-        - attachments: List<Attachment>
-        + addAttachment(...)
-        + edit(...)
-        }
-
-
-        class PublicationLog <<Aggregate Root>> #ffb7b2 {
-        - id: PublicationLogId
-        - referenceNumber : ReferenceNumber
-        - collectionUseProjectId: CollectionUseProjectId
-        - curator: PermissionId?
-        - entries: List<PublicationLogEntry>
-        + addEntry(...)
-        }
-
-
-        class PublicationLogEntry <<Entity>> #ffb7b2 {
-        - id: PublicationLogEntryId
-        - publicationLogId: PublicationLogId
-        - addedAt: DateTime
-        - addedBy: PermissionId
-        - note: String
-        - attachments: List<Attachment>
-        + addAttachment(...)
-        + edit(...)
-        }
-
-
-
-        CollectionUseProject *-- ReferenceNumber
-        CollectionUseProject ..> UseType : intendedUse
-        CollectionUseProject *-- "0..*" UseEvent
-        CollectionUseProject *-- "0..*" CollectionUseObject
-        CollectionUseProject ..> Proposal : proposalId
-        CollectionUseProject ..> Permission : requestedBy
-        CollectionUseProject ..> Permission : authorisedBy
-        CollectionUseObject ..> Permission : requestedBy
-        CollectionUseObject ..> RequestedObject : copied from on approve
-        UseEvent ..> Permission : triggeredBy
-
-
-        ObjectAccessLog "1..1" -- CollectionUseProject : collectionUseProjectId
-        ObjectAccessLog *-- "0..*" ObjectLogEntry
-        ObjectAccessLog *-- ReferenceNumber
-        ObjectAccessLog ..> Permission : curator
-
-        ObjectLogEntry *-- "0..*" Attachment
-        ObjectLogEntry ..> Permission : addedBy
-        ObjectLogEntry --> "1" CollectionUseObject : collectionUseObjectId
-
-        ObjectOccurrenceLog "1..1" -- CollectionUseProject : collectionUseProjectId
-        ObjectOccurrenceLog *-- "0..*" ObjectOccurrenceEntry
-        ObjectOccurrenceLog *-- ReferenceNumber
-        ObjectOccurrenceLog ..> Permission : curator
-
-        ObjectOccurrenceEntry *-- "0..*" Attachment
-        ObjectOccurrenceEntry ..> Permission : reportedBy
-        ObjectOccurrenceEntry --> "1" CollectionUseObject : collectionUseObjectId
-
-        PublicationLog "1..1" -- CollectionUseProject : collectionUseProjectId
-        PublicationLog *-- "0..*" PublicationLogEntry
-        PublicationLog *-- ReferenceNumber
-        PublicationLog ..> Permission : curator
-
-        PublicationLogEntry *-- "0..*" Attachment
-        PublicationLogEntry ..> Permission : addedBy
+package "public_submission" <<BoundedContext>> {
+  class PendingPublicSubmission <<AggregateRoot>> {
+    - status: PendingSubmissionStatus
+    - proposalReference: String?
+  }
+  class PublicDocumentSubmission <<Entity>> {
+  }
+  class ProposalAmendmentToken <<AggregateRoot>> {
+    - tokenHash: String
+    - expiresAt: DateTime
+    - usedAt: DateTime?
+  }
+  enum PendingSubmissionStatus {
+    PENDING_CONFIRMATION
+    CONFIRMED
+  }
 }
 
-
-package "Collection Object Index" <<Bounded Context>> {
-
-        class CollectionArea <<Aggregate Root>> #c3b1e1 {
-          - id: CollectionAreaId
-          - name: String
-          - createdAt: DateTime
-          - updatedAt: DateTime
-          + rename(name)
-          }
-
-
-        class Collection <<Aggregate Root>> #c3b1e1 {
-        - id: CollectionId
-        - areaId: CollectionAreaId
-        - name: String
-        - createdAt: DateTime
-        - updatedAt: DateTime
-        + rename(name)
-        }
-
-        class CuratorAssignment <<Value Object>> #c3b1e1 {
-        - collectionId: CollectionId
-        - permissionId: PermissionId
-        - assignedAt: DateTime
-        - assignedBy: PermissionId
-        }
-
-        class SourceDocument <<Aggregate Root>> #c3b1e1 {
-        - id: SourceDocumentId
-        - collectionId: CollectionId
-        - fileName: String
-        - fileReference: String
-        - sourceKind: SourceKind
-        - contentHash: String
-        - status: SourceDocumentStatus
-        - errorMessage: String?
-        - rowCount: Int?
-        - uploadedBy: PermissionId
-        - uploadedAt: DateTime
-        - indexedAt: DateTime?
-        - deletedAt: DateTime?
-        + markIndexed(...)
-        + markError(...)
-        + markDeleted(...)
-        }
-
-        class CollectionObject <<Entity>> #c3b1e1 {
-        - id: CollectionObjectId
-        - sourceDocumentId: SourceDocumentId
-        - collectionId: CollectionId
-        - sheet: String
-        - rowNumber: Int
-        - content: String
-        - cells: Map<String, String>
-        - tsv: String
-        }
-
-        enum SourceKind #c3b1e1 {
-        UPLOAD
-        }
-
-        enum SourceDocumentStatus #c3b1e1 {
-        UPLOADED
-        INDEXED
-        ERROR
-        }
-
-          CollectionArea "1" o-- "0..*" Collection
-        Collection *-- "0..*" CuratorAssignment
-        Collection *-- "0..*" SourceDocument
-        SourceDocument *-- "0..*" CollectionObject
-        CollectionObject ..> Collection : collectionId (denormalized)
-        Collection ..> CollectionArea : areaId
-
-        CuratorAssignment ..> Permission : permissionId
-        CuratorAssignment ..> Permission : assignedBy
-        SourceDocument ..> Permission : uploadedBy
+package "collection_object_index" <<BoundedContext>> {
+  class CollectionArea <<AggregateRoot>> {
+  }
+  class Collection <<AggregateRoot>> {
+  }
+  class CuratorAssignment <<ValueObject>> {
+  }
+  class SourceDocument <<AggregateRoot>> {
+    - status: SourceDocumentStatus
+  }
+  class CollectionObject <<ReadModel>> {
+  }
 }
 
-note as N_CollectionObjectIndex
-  "Collection" here is the scientific collection (Zoology, Botany, ...), distinct
-  from CollectionUseProject (Collection Use context) — same English word, different
-  concept. CollectionObject has no domain class in `domain/models.py` today; it
-  exists only as an infrastructure/read-side concern (parser + pg_index), shown
-  here to complete the data flow: collection -> source document (.xlsx) -> indexed
-  row. `tsv` is a generated tsvector (config 'simple') backing full-text search.
-  Staff search is broad across all indexed collections; collection filtering is
-  a convenience, not row-level ACL. SourceDocument.deletedAt soft-deletes the
-  document record and hard-removes its rows from the index.
-  Collection catalog administration (create/rename/remove) and curator
-  assign/remove are exclusive to SYS_ADMIN. There is no "inactive" state:
-  removing a collection is permanent and cascades — its curator assignments,
-  source documents, indexed rows, and files are all deleted, in that order.
-
-  CollectionArea is a catalogue classification one level above Collection
-  (e.g. "Natural History" groups Zoology, Botany, ...) — administered by
-  SYS_ADMIN (create/rename/remove, plus moving a collection to a different
-  area via a dedicated command, not a side effect of renaming). It does
-  **not** replace Collection: curator assignment, source documents and
-  indexed rows all stay at the Collection level, and an area grants no
-  authorization by itself (that may change later if the business ever needs
-  a curator to manage every collection of an area). Removing an area is
-  blocked while any collection is still assigned to it — unlike Collection's
-  permanent cascade, since cascading an area's removal would take out every
-  collection (and its documents/index/files) under it.
-end note
-N_CollectionObjectIndex .. Collection
-N_CollectionObjectIndex .. CollectionArea
-
-
-package "Public Submission" <<Bounded Context>> {
-    package "domain" {
-        enum PendingSubmissionStatus #b5ead7 {
-        PENDING_CONFIRMATION
-        CONFIRMED
-        }
-
-        class PendingPublicSubmission <<Aggregate Root>> #b5ead7 {
-        - id: String
-        - token: String
-        - citizenName: String
-        - citizenEmail: String
-        - subject: String
-        - body: String
-        - useType: UseType
-        - proposedBeginDate: LocalDate
-        - proposedEndDate: LocalDate
-        - consent: Boolean
-        - status: PendingSubmissionStatus
-        - createdAt: DateTime
-        - confirmedAt: DateTime?
-        - proposalReference: String?
-        + isExpired(now, ttl): Boolean
-        + confirm(proposalReference, occurredAt)
-        }
-
-        class PublicDocumentSubmission <<Entity>> #b5ead7 {
-        - id: String
-        - fileName: String
-        - fileReference: String
-        - submittedAt: DateTime
-        }
-    }
-
-    PendingPublicSubmission *-- PendingSubmissionStatus
-    PendingPublicSubmission *-- "1..*" PublicDocumentSubmission
+package "museum_questions" <<BoundedContext>> {
+  class MuseumQuestion <<AggregateRoot>> {
+    - status: MuseumQuestionStatus
+    - requesterEmail: String
+    - answerBody: String?
+  }
+  enum MuseumQuestionStatus {
+    SUBMITTED
+    ANSWERED
+    OUT_OF_SCOPE
+    CLOSED
+  }
 }
 
-PendingPublicSubmission ..> UseType : useType
-
-' --- cross-context integration ---
-PendingPublicSubmission ..> Proposal : materialises on confirm (SubmitProposal)
-PendingPublicSubmission ..> RequesterContact : captured as requesterContact
-RequesterContact ..> Permission : provisioned as EXTERNAL requester on approval
-PublicDocumentSubmission ..> Document : materialises as (submittedBy null)
-
-note as N_PublicSubmission
-  Unauthenticated citizen intake (double opt-in). Step 1 stores a pending,
-  unverified submission and e-mails a single-use token; step 2 confirms it,
-  materialising a Proposal through SubmitProposal (Use of Collections) with
-  requesterContact instead of a system Permission. Identity user/permission
-  provisioning and CollectionUseProject creation are deferred to approval.
-  Uploads are allowlisted, capped, and materialised as proposal documents
-  on confirm with submittedBy null.
-end note
-N_PublicSubmission .. PendingPublicSubmission
-
-package "Document Templates" <<Bounded Context>> {
-    package "domain" {
-        class DocumentTemplate <<Aggregate Root>> #c7ceea {
-        - id: String
-        - useType: UseType
-        - title: String
-        - description: String
-        - mandatory: Boolean
-        - active: Boolean
-        - displayOrder: Integer
-        - fileName: String
-        - fileReference: String
-        - uploadedBy: PermissionId
-        - uploadedAt: DateTime
-        + updateMetadata(...)
-        + replaceFile(fileName, fileReference)
-        }
-    }
+package "notifications" <<BoundedContext>> {
+  class Notification <<AggregateRoot>> {
+    - recipientPermissionId: PermissionId
+    - kind: NotificationKind
+    - readAt: DateTime?
+    - clearedAt: DateTime?
+  }
 }
 
-DocumentTemplate ..> UseType : useType
-
-note as N_DocumentTemplates
-  Staff-curated .docx templates offered per UseType on the public submission
-  screen. Public read-only endpoints list active templates and stream the file;
-  staff endpoints manage the catalog (upload/edit/activate/reorder/delete).
-  `mandatory` is display-only for now; enforcing attachment of mandatory
-  templates is deferred (matched later by a fulfillsTemplateId on upload).
-end note
-N_DocumentTemplates .. DocumentTemplate
-
-
-package "Museum Questions" <<Bounded Context>> {
-
-        class MuseumQuestion <<Aggregate Root>> #f4a261 {
-        - id: String
-        - requesterName: String
-        - requesterEmail: String
-        - subject: String
-        - message: String
-        - status: MuseumQuestionStatus
-        - createdAt: DateTime
-        - answeredAt: DateTime?
-        - answeredBy: PermissionId?
-        - answerBody: String?
-        - answerSentAt: DateTime?
-        - outOfScopeAt: DateTime?
-        - outOfScopeBy: PermissionId?
-        - outOfScopeReason: String?
-        - outOfScopeEmailSentAt: DateTime?
-        - closedAt: DateTime?
-        - closedBy: PermissionId?
-        + answer(body, answeredBy, answeredAt, sentAt)
-        + markOutOfScope(reason, by, occurredAt, emailSentAt)
-        + close(by, closedAt)
-        }
-
-        enum MuseumQuestionStatus #f4a261 {
-        SUBMITTED
-        ANSWERED
-        OUT_OF_SCOPE
-        CLOSED
-        }
-
-        MuseumQuestion ..> Permission : answeredBy?
-        MuseumQuestion ..> Permission : outOfScopeBy?
-        MuseumQuestion ..> Permission : closedBy?
+package "reference_numbers" <<BoundedContext>> {
+  class ReferencePolicy <<AggregateRoot>> {
+    - kind: ReferenceKind
+    - status: ReferencePolicyStatus
+  }
+  class ReferenceMask <<ValueObject>> {
+  }
 }
 
-note as N_MuseumQuestions
-  "Pergunte ao Museu" — a lightweight public question channel, deliberately
-  separate from Proposal/Conversation (User Request context): one question,
-  one reply e-mail, no thread, no account. The public intake plan
-  (museum-questions-public-page-plan.md, IMPLEMENTED) only ever produces
-  SUBMITTED rows; the answer/out-of-scope/close behaviour and their audit
-  fields are handled by the internal response section
-  (museum-questions-response-section-plan.md, IMPLEMENTED), which reuses the
-  existing schema and needs no migration of its own. CLOSED is reachable
-  only from ANSWERED or OUT_OF_SCOPE, never directly from SUBMITTED — every
-  question gets a real answer or an out-of-scope reply before it can be
-  archived. Catalog administration mirrors Collection Object Index's
-  SYS_ADMIN-only pattern where relevant (curator-style scoping does not
-  apply here — any staff member may answer, per require_staff).
-end note
-N_MuseumQuestions .. MuseumQuestion
+package "document_templates" <<BoundedContext>> {
+  class DocumentTemplate <<AggregateRoot>> {
+    - useType: UseType
+    - active: Boolean
+  }
+}
+
+package "external_publications" <<BoundedContext>> {
+  class ExternalPublication <<AggregateRoot>> {
+    - resourceType: ExternalPublicationResourceType
+    - status: ExternalPublicationStatus
+    - accessMode: ExternalPublicationAccessMode
+    - profile: ExternalPublicationProfile
+  }
+  class ExternalPublicationAccess <<Entity>> {
+  }
+}
+
+package "in-situ reporting and AI" {
+  class InSituVisitRecord <<AggregateRoot>> {
+  }
+  class InSituVisitReport <<AggregateRoot>> {
+  }
+  class NarrativeFactSnapshot <<Entity>> {
+  }
+  class GeneratedNarrative <<AggregateRoot>> {
+  }
+  class MessageTriage <<AggregateRoot>> {
+  }
+  class PromptTemplate <<AggregateRoot>> {
+  }
+  class PromptTemplateVersion <<Entity>> {
+  }
+}
+
+Institution "1" o-- "0..*" Group
+User "1" o-- "0..*" Permission
+Group "1" o-- "0..*" Permission
+User "1" o-- "0..*" PasswordResetToken
+
+Proposal *-- "0..*" RequestedObject
+Proposal *-- "0..*" Document
+Proposal *-- "0..*" DocumentCorrectionItem
+Proposal *-- "0..1" RequesterContact
+Proposal --> CollectionUseProject : approval creates/links
+CollectionUseProject *-- "0..*" CollectionUseObject
+CollectionUseProject --> CollectionUseProject : originProjectId
+ObjectAccessLog --> CollectionUseProject
+ObjectOccurrenceLog --> CollectionUseProject
+PublicationLog --> CollectionUseProject
+Conversation --> Proposal
+
+PendingPublicSubmission *-- "0..*" PublicDocumentSubmission
+PendingPublicSubmission ..> Proposal : materializes
+ProposalAmendmentToken ..> DocumentCorrectionItem : scoped correction ids
+
+CollectionArea "1" o-- "0..*" Collection
+Collection "1" o-- "0..*" SourceDocument
+SourceDocument "1" o-- "0..*" CollectionObject
+
+MuseumQuestion ..> MessageTriage : optional AI assistance
+Notification ..> Proposal : related resource
+Notification ..> CollectionUseProject : related resource
+ReferencePolicy ..> ReferenceNumber : allocates
+DocumentTemplate ..> UseType
+
+InSituVisitRecord ..> CollectionUseProject : exported snapshot
+GeneratedNarrative ..> NarrativeFactSnapshot
+InSituVisitReport ..> InSituVisitRecord
+InSituVisitReport ..> GeneratedNarrative
+PromptTemplate "1" o-- "0..*" PromptTemplateVersion
+ExternalPublication ..> Proposal
+ExternalPublication ..> CollectionUseProject
+ExternalPublication ..> InSituVisitReport
 
 @enduml

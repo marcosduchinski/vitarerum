@@ -1,0 +1,46 @@
+@startuml external-publications-flow
+title External Publications - Token Publication and Access Audit
+
+skinparam shadowing false
+
+actor "SYS_ADMIN" as admin
+actor "External consumer" as consumer
+participant "Angular admin UI" as ui
+participant "external_publications API" as api
+participant "Resource readers / ACLs" as readers
+participant "reports.in_situ_visit" as reports
+participant "cidoc_crm.public" as cidoc
+database "external_publications" as store
+
+admin -> ui : manage external publications
+ui -> api : GET /api/v1/external-publications/publishable-resources
+api -> readers : find eligible proposals/projects/reports
+readers --> api : publishable resource summaries
+api --> ui : paginated resources
+
+admin -> ui : publish resource
+ui -> api : POST /api/v1/external-publications\nresourceType, resourceId, profile, expiresAt
+api -> readers : validate resource exists and is eligible
+api -> store : create ExternalPublication\nstatus=PUBLISHED, accessMode=TOKEN
+api --> ui : token URL
+
+consumer -> api : GET /api/v1/external/publications/{token}
+api -> store : resolve token hash\ncheck published + expiry
+api -> readers : load stable external DTO
+readers --> api : proposal/project/report response
+api -> store : record access outcome GRANTED/DENIED
+api --> consumer : external response
+
+consumer -> api : GET /api/v1/external/publications/{token}/json-ld
+api -> store : resolve publication
+api -> reports : resolve report context
+api -> cidoc : load JSON-LD for report record
+api -> store : record access outcome
+api --> consumer : application/ld+json
+
+admin -> ui : revoke
+ui -> api : PATCH /api/v1/external-publications/{id}/revoke
+api -> store : status=REVOKED, revoked_by, revoked_at
+api --> ui : updated publication
+
+@enduml

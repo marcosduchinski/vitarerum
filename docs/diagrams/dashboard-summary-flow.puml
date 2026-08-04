@@ -1,0 +1,27 @@
+@startuml dashboard-summary-flow
+title Dashboard Summary - Read Model Aggregation
+
+skinparam shadowing false
+
+actor "Authenticated staff" as staff
+participant "Angular dashboard\n/p/dashboard" as ui
+participant "Dashboard API\n/api/v1/dashboard/summary" as dashboard
+participant "use_of_collections readers" as uoc
+participant "museum_questions readers" as questions
+participant "notifications readers" as notifications
+participant "collection_object_index readers" as objects
+database "Application DB" as db
+
+staff -> ui : open dashboard
+ui -> dashboard : GET /api/v1/dashboard/summary
+dashboard -> uoc : proposal/project counts\nassignment summaries
+uoc -> db
+dashboard -> questions : question status counts
+questions -> db
+dashboard -> notifications : unread count / recent attention
+notifications -> db
+dashboard -> objects : object/source status metrics\nwhen exposed
+objects -> db
+dashboard --> ui : DashboardSummaryResponse
+
+@enduml

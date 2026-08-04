@@ -1,51 +1,37 @@
-@startuml
+@startuml proposal-life-cycle
+title Proposal Life Cycle
 
-  [*] --> Submitted : An external user submits \n a use of collections proposal
-  note right of Submitted
-    status: SUBMITTED
-    event: SUBMITTED
-    visibility: New Assignments list (for curators and collections managers) and
-    My proposals list (for external requesters)
-  end note
+skinparam shadowing false
+skinparam state {
+  BackgroundColor #F8FAFC
+  BorderColor #334155
+  FontColor #111827
+}
+skinparam note {
+  BackgroundColor #FFFBEB
+  BorderColor #B45309
+}
 
-  Submitted --> Pending : Proposal is assumed by \n a curator or a collections manager \n and enters review process
-  note left of Pending
-      status: PENDING
-      event: {ASSIGNED, FORWARDED, DOCUMENTS_REQUESTED,
-              DOCUMENTS_SUBMITTED, REFERRED_TO_DIRECTION,
-              DIRECTION_CLARIFIED}
-      visibility : My assignments list
-      (for curators, collections managers)
-      My proposals list (for external requesters)
-   end note
+[*] --> Submitted : submit proposal\nAUTHENTICATED or PUBLIC materialization
 
-  Pending --> Pending : Proposal is updated \n during review \n (eg. messages exchange)
-  Submitted --> Cancelled : Requester cancels \n the proposal
-  Pending --> Cancelled : Requester cancels \n the proposal
-  Approved --> Cancelled : Requester cancels \n the proposal and project
-  note right of Cancelled
-      Status: CANCELLED
-       event: CANCELLED
-       visibility : Cancelled list (for curators and collections managers)
-       My proposals list (for external requesters)
-    end note
-  Pending --> Rejected : Rejected after review
-  note left of Rejected
-      Status: REJECTED
-       event: REJECTED
-       visibility : Rejected list (for curators and collections managers)
-       My proposals list (for external requesters)
-    end note
+state "SUBMITTED" as Submitted
+state "PENDING" as Pending
+state "APPROVED" as Approved
+state "REJECTED" as Rejected
+state "CANCELLED" as Cancelled
 
-  Pending --> Approved : Approved after review
-   note right of Approved
-      Status: APPROVED
-       event: APPROVED
-        visibility : Approved list (for curators and collections managers)
-        My proposals list (for external requesters)
-    end note
-  Approved --> [*] : Project is created after proposal approval
-  Rejected --> [*]
-  Cancelled --> [*]
+Submitted --> Pending : assign()\nProposalEvent.ASSIGNED
+
+Pending --> Pending
+Pending --> Approved : approve()\nProposalEvent.APPROVED
+Pending --> Rejected : reject()\nProposalEvent.REJECTED
+
+Submitted --> Cancelled : cancel()
+Pending --> Cancelled : cancel()
+Approved --> Cancelled : cancel approved proposal\nand coordinate project cancellation
+
+Approved --> [*] : project exists or is created
+Rejected --> [*]
+Cancelled --> [*]
 
 @enduml

@@ -1,0 +1,36 @@
+@startuml notifications-flow
+title Notifications - Proposal Events to Staff In-App and Email
+
+skinparam shadowing false
+
+actor "Staff actor" as staff
+participant "use_of_collections\napplication route/use case" as uoc
+participant "notifications.public\nor dispatcher" as dispatcher
+database "notifications table" as store
+participant "Identity published language" as identity
+participant "Email sender" as email
+participant "Angular topbar / notifications UI" as ui
+
+uoc -> dispatcher : proposal event\nsubmitted / assigned / forwarded /\ndocuments submitted / corrections submitted
+dispatcher -> identity : resolve target PermissionId(s)
+identity --> dispatcher : staff permissions + user emails
+dispatcher -> store : create Notification\nrecipient_permission_id
+dispatcher -> email : send staff email after commit\nwhere event requires email
+
+staff -> ui : open authenticated workspace
+ui -> store : GET /api/v1/notifications/unread-count
+store --> ui : unread count
+ui -> store : GET /api/v1/notifications\nunreadOnly?, page, size
+store -> identity : hydrate triggered_by label
+identity --> store : PermissionView
+store --> ui : paginated notifications
+
+staff -> ui : mark one read
+ui -> store : POST /api/v1/notifications/{id}/read
+store --> ui : updated NotificationResponse
+
+staff -> ui : mark all / clear all
+ui -> store : POST /api/v1/notifications/read-all\nor /clear-all
+store --> ui : affected count
+
+@enduml

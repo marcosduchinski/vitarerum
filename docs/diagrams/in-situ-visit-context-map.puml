@@ -1,19 +1,15 @@
 @startuml in-situ-visit-context-map
-title In Situ Visit — Context Map (source → CIDOC-CRM → narrative)
+title In-Situ Visit - Context Map
 
 skinparam componentStyle rectangle
 skinparam shadowing false
-skinparam component {
-  BackgroundColor #F8FAFC
-  BorderColor #334155
+skinparam package {
+  BackgroundColor #FFFFFF
+  BorderColor #64748B
 }
 skinparam interface {
   BackgroundColor #FEF3C7
   BorderColor #92400E
-}
-skinparam package {
-  BackgroundColor #FFFFFF
-  BorderColor #64748B
 }
 skinparam note {
   BackgroundColor #FFFBEB
@@ -21,59 +17,57 @@ skinparam note {
 }
 
 actor "Staff" as staff
+actor "External consumer" as external
 
 package "use_of_collections" <<Bounded Context>> {
-  component "CollectionUseProject\n+ journals + Proposal.events" as uoc_domain
+  component "CollectionUseProject\nobjects + logs + events" as uoc_domain
   interface "public" as uoc_public
   uoc_domain --> uoc_public
 }
 
-package "cidoc_crm" <<Bounded Context>> {
-  component "InSituVisitRecord\n(rich persisted snapshot)" as cidoc_record
-  component "CIDOC-CRM projection\n(compact JSON-LD + SHACL gate)" as cidoc_projection
+package "cidoc_crm.in_situ_visit_mapping" <<Bounded Context>> {
+  component "InSituVisitRecord\npersisted snapshot" as cidoc_record
+  component "CIDOC-CRM JSON-LD\n+ SHACL validation" as cidoc_projection
   interface "public" as cidoc_public
-  cidoc_record --> cidoc_projection : map_record_to_cidoc()
+  cidoc_record --> cidoc_projection
   cidoc_record --> cidoc_public
   cidoc_projection --> cidoc_public
 }
 
+package "ai.prompts" <<Bounded Context>> {
+  component "PromptTemplate\nPromptTemplateVersion" as prompt_model
+  interface "public" as prompts_public
+  prompt_model --> prompts_public
+}
+
 package "ai.museum_narrative" <<Bounded Context>> {
-  component "CanonicalVisitFacts\nprojection" as facts_projection
-  component "GeneratedNarrative\n(+ validation, revisions)" as narrative
+  component "CanonicalVisitFacts" as facts
+  component "GeneratedNarrative\n+ revisions" as narrative
   interface "public" as narrative_public
-  facts_projection --> narrative : prompt + LLM
+  facts --> narrative
   narrative --> narrative_public
 }
 
 package "reports.in_situ_visit" <<Bounded Context>> {
-  component "InSituVisitReport\n(aggregator)" as report
+  component "InSituVisitReport\naggregator" as report
 }
 
-component "UI\n(report detail page)" as ui
+package "external_publications" <<Open Host Service>> {
+  component "ExternalPublication\n+ access audit" as publication
+  interface "public token API" as external_api
+  publication --> external_api
+}
 
-' -- dependencies, published language only --
-cidoc_record ..> uoc_public : ACL\n(ExportInSituVisitFromProject)
-facts_projection ..> cidoc_public : ACL\n(SHACL gate preserved)
-report ..> cidoc_public : export_in_situ_visit_record()
-report ..> narrative_public : generate_narrative()
+staff --> report
+staff --> publication : manage published links
+external --> external_api : token access
 
-report --> ui
-staff --> ui
-
-note bottom of uoc_public
-  Every context is reachable ONLY through its
-  ``public.py`` — never through internal use cases,
-  domain models, or presentation.dependencies.
-  Enforced by import-linter.
-end note
-
-note right of cidoc_record
-  Two sibling projections share the
-  same InSituVisitRecord snapshot:
-  a semantic one (CIDOC-CRM/SHACL)
-  and a narrative one (CanonicalVisitFacts),
-  so what the LLM reads and what
-  interoperates with CIDOC never drift apart.
-end note
+cidoc_record ..> uoc_public : ACL export from project
+facts ..> cidoc_public : ACL + SHACL gate
+narrative ..> prompts_public : active prompt
+report ..> cidoc_public : export record
+report ..> narrative_public : generate/read narrative
+publication ..> report : report reader
+publication ..> cidoc_public : JSON-LD reader
 
 @enduml

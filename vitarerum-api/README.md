@@ -1,21 +1,27 @@
 # vitarerum-api
 
-Backend API for Vitarerum.
+FastAPI backend for Vitarerum.
 
-This project is a modular FastAPI backend foundation. 
+This project is a modular monolith. Bounded contexts live under `app/`, follow
+Clean Architecture layers, and communicate across context boundaries through
+published-language modules or narrow ACL adapters.
 
-## Technology Stack
+## Stack
 
 - Python 3.12+
-- FastAPI
-- Uvicorn
+- FastAPI and Uvicorn
 - Pydantic Settings
-- SQLAlchemy 2.x async
-- asyncpg
+- SQLAlchemy 2.x async and asyncpg
 - Alembic
-- pytest
+- PyJWT and bcrypt
+- aiosmtplib
+- rdflib, pySHACL, owlrl
+- LangChain Ollama integration
+- openpyxl
+- pytest and pytest-asyncio
 - Ruff
 - mypy
+- import-linter
 - uv
 
 ## Setup
@@ -33,13 +39,13 @@ Start PostgreSQL with Docker Compose:
 docker compose up -d postgres
 ```
 
-The default local connection string is:
+Default local connection string:
 
 ```text
 postgresql+asyncpg://vitarerum:vitarerum@localhost:5432/vitarerum
 ```
 
-Apply database migrations:
+Apply migrations:
 
 ```bash
 uv run alembic upgrade head
@@ -54,72 +60,6 @@ docker compose exec -T postgres psql -U vitarerum -d vitarerum < scripts/seed.sq
 This creates the fixed groups and an initial `SYS_ADMIN` permission,
 `perm-sys-admin`, for local user administration.
 
-## Configuration
-
-Settings are read from environment variables (or a local `.env` file) by
-`app/config.py`. Variable names are the upper-cased field names; unknown
-variables are ignored. Defaults are tuned for local development.
-
-| Variable                   | Default                                                             | Description                                                                 |
-| -------------------------- |---------------------------------------------------------------------| --------------------------------------------------------------------------- |
-| `APP_NAME`                 | `vitarerum-api`                                                     | Service name reported by the health endpoint and OpenAPI title.             |
-| `APP_ENV`                  | `local`                                                             | Environment name. Values `local`/`test`/`development` relax the security checks below; any other value (e.g. `production`) enforces them. |
-| `API_V1_PREFIX`            | `/api/v1`                                                           | URL prefix for all routers and the health endpoint.                         |
-| `DATABASE_URL`             | `postgresql+asyncpg://vitarerum:vitarerum@localhost:5432/vitarerum` | Async SQLAlchemy connection string (asyncpg driver). |
-| `DATA_DIR`                 | `./data`                                                            | Base directory for uploaded files, organised into readable subfolders (`proposals/`, `log-entries/`, `occurrence-entries/`, `publication-entries/`). |
-| `INSTITUTION_NAME`         | `Museum`                                                            | Institution name used as `placeName` when exporting an in-situ visit record from a project. |
-| `MAX_UPLOAD_BYTES`         | `26214400` (25 MiB)                                                 | Maximum accepted upload size; larger uploads return `413 FILE_TOO_LARGE`. |
-| `CORS_ORIGINS`             | `["*"]`                                                             | JSON list of allowed CORS origins, e.g. `["https://app.example.com"]`.      |
-| `JWT_SECRET`               | `change-me-too-local-dev-secret-32b`                                | Signing key for access tokens.                                              |
-| `JWT_ALGORITHM`            | `HS256`                                                             | JWT signing algorithm.                                                      |
-| `ACCESS_TOKEN_TTL_MINUTES` | `720`                                                               | Access-token lifetime in minutes (default 12 hours).                        |
-| `OLLAMA_BASE_URL`          | `http://localhost:11434`                                            | Base URL of the Ollama server. For Ollama Cloud use `https://ollama.com`.    |
-| `OLLAMA_API_KEY`           | _(empty)_                                                           | Bearer token for Ollama Cloud; leave empty for a local/self-hosted server.   |
-| `TURNSTILE_SECRET_KEY`     | _(always-pass test key)_                                            | Cloudflare Turnstile secret for the public submission captcha; must be set outside local/test. |
-| `PUBLIC_ORIGIN`            | `http://localhost:4200`                                             | Base URL of the public SPA; used to build the confirmation link `<PUBLIC_ORIGIN>/submit-proposal/confirm?token=…`. |
-| `PUBLIC_CONFIRM_TOKEN_TTL_HOURS` | `24`                                                                | Validity window of a confirmation token before it is reported `EXPIRED`.    |
-| `SMTP_HOST`                | _(empty)_                                                           | SMTP host for confirmation e-mails. Empty ⇒ the link is **logged**, not sent (local/dev). **Required** outside local/test. |
-| `SMTP_PORT`                | `587`                                                               | SMTP port. The sender uses STARTTLS; implicit TLS (465) is not supported.    |
-| `SMTP_USERNAME`            | _(empty)_                                                           | SMTP auth username (omit for an unauthenticated relay).                      |
-| `SMTP_PASSWORD`            | _(empty)_                                                           | SMTP auth password. For Gmail this is a 16-char App Password, not the account password. |
-| `SMTP_FROM_ADDRESS`        | `no-reply@vitarerum.example`                                        | `From` header. For Gmail it must match the authenticated account or a verified "send mail as" alias. |
-| `SMTP_USE_TLS`             | `true`                                                              | Use STARTTLS (port 587).                                                     |
-| `PASSWORD_RESET_TOKEN_TTL_MINUTES` | `60`                                                         | Validity window of a self-service password-reset token before it is rejected. |
-| `PASSWORD_RESET_PUBLIC_PATH` | `/reset-password`                                                 | Frontend path used to build the reset link `<PUBLIC_ORIGIN><PASSWORD_RESET_PUBLIC_PATH>?token=…`. Reuses `SMTP_HOST` above (empty ⇒ logged, not sent). |
-
-#### Using a Gmail account as the sender (e.g. from localhost)
-
-Gmail's SMTP works with the built-in sender. Selection is based on `SMTP_HOST`
-alone (independent of `APP_ENV`), so setting these locally sends real e-mail:
-
-```dotenv
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USERNAME=youraccount@gmail.com
-SMTP_PASSWORD=your-16-char-app-password
-SMTP_FROM_ADDRESS=youraccount@gmail.com
-SMTP_USE_TLS=true
-```
-
-Requires **2-Step Verification** on the Google account plus an **App Password**
-(Account → Security → App passwords); the normal password will not authenticate.
-Use port **587 (STARTTLS)** — implicit TLS on 465 is not supported by the
-sender. Keep the App Password in `.env` only (never commit it).
-
-### Security validation outside local environments
-
-When `APP_ENV` is **not** `local`/`test`/`development`, startup fails fast
-(`validate_non_local_security`) unless:
-
-- `JWT_SECRET` is changed from its default **and** is at least 32 bytes;
-- `TURNSTILE_SECRET_KEY` is set to a real key (not the always-pass test key);
-- `SMTP_HOST` is set (otherwise confirmation e-mails would only be logged);
-- `CORS_ORIGINS` does not contain `"*"`.
-
-This prevents shipping development defaults to a real deployment. See the
-[production configuration](#production-configuration) example under *Run with
-Docker*.
-
 ## Run API
 
 ```bash
@@ -132,72 +72,130 @@ Health endpoint:
 http://localhost:8000/api/v1/health
 ```
 
-## Run with Docker
+When a built SPA exists in `static/`, `app.main` also serves it for non-API
+paths. In ordinary backend-only development that directory is absent and
+non-API paths return 404.
 
-The full stack (API + PostgreSQL) is containerized. The `api` image is a
-multi-stage, non-root build; its entrypoint runs `alembic upgrade head` before
-starting Uvicorn, so the schema is migrated automatically on boot.
+## Configuration
 
-```bash
-docker compose up --build
+Settings are read from environment variables or a local `.env` file by
+`app/config.py`. Variable names are the upper-cased field names; unknown
+variables are ignored. Defaults are tuned for local development. Important
+settings are listed below; `app/config.py` is the source of truth for advanced
+classifier thresholds and other low-level tuning values.
+
+| Variable                                | Default                                                             | Description                                                                                   |
+| --------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `APP_NAME`                              | `vitarerum-api`                                                     | Service name reported by the health endpoint and OpenAPI title.                               |
+| `APP_ENV`                               | `local`                                                             | Environment name. `local`, `test`, and `development` relax production security checks.        |
+| `API_V1_PREFIX`                         | `/api/v1`                                                           | URL prefix for all routers and the health endpoint.                                           |
+| `DATABASE_URL`                          | `postgresql+asyncpg://vitarerum:vitarerum@localhost:5432/vitarerum` | Async SQLAlchemy connection string.                                                           |
+| `DATA_DIR`                              | `./data`                                                            | Base directory for uploaded files in local disk storage.                                      |
+| `MAX_UPLOAD_BYTES`                      | `26214400`                                                          | Maximum upload size, default 25 MiB.                                                          |
+| `INSTITUTION_NAME`                      | `Museum`                                                            | Place name used when exporting an in-situ visit record from a project.                        |
+| `CORS_ORIGINS`                          | `["*"]`                                                             | JSON list of allowed CORS origins.                                                            |
+| `JWT_SECRET`                            | `change-me-too-local-dev-secret-32b`                                | Signing key for access tokens.                                                                |
+| `JWT_ALGORITHM`                         | `HS256`                                                             | JWT signing algorithm.                                                                        |
+| `ACCESS_TOKEN_TTL_MINUTES`              | `720`                                                               | Access-token lifetime in minutes.                                                             |
+| `OLLAMA_BASE_URL`                       | `http://localhost:11434`                                            | Ollama endpoint. Use `https://ollama.com` for Ollama Cloud.                                   |
+| `OLLAMA_API_KEY`                        | empty                                                               | Bearer token for Ollama Cloud; leave empty for local/self-hosted Ollama.                      |
+| `NARRATIVE_MODEL`                       | `llama3.1:8b`                                                       | Model used by museum narrative generation.                                                    |
+| `NARRATIVE_TIMEOUT_SECONDS`             | `60.0`                                                              | Timeout for narrative model calls.                                                            |
+| `TRIAGE_MODEL`                          | `llama3.1:8b`                                                       | Model used by museum-question triage.                                                         |
+| `TRIAGE_TIMEOUT_SECONDS`                | `60.0`                                                              | Timeout for triage model calls.                                                               |
+| `USE_CATEGORY_CLASSIFICATION_ENABLED`   | `false`                                                             | Enables use-category classification features.                                                 |
+| `USE_CATEGORY_EMBEDDING_SHADOW_ENABLED` | `false`                                                             | Enables embedding shadow classification.                                                      |
+| `USE_CATEGORY_EMBEDDING_MODEL`          | `nomic-embed-text`                                                  | Embedding model for use-category classification.                                              |
+| `USE_CATEGORY_OPERATIONAL_CLASSIFIER`   | `LLM`                                                               | Operational classifier: `LLM`, `CASCADE_SEED`, or `CASCADE_CALIBRATED`.                       |
+| `USE_CATEGORY_CASCADE_ENABLED`          | `false`                                                             | Enables cascade classifier settings.                                                          |
+| `TURNSTILE_SECRET_KEY`                  | always-pass test key                                                | Cloudflare Turnstile secret for public submission captcha; must be real outside local/test.   |
+| `TURNSTILE_VERIFY_URL`                  | Cloudflare verify URL                                               | Turnstile verification endpoint.                                                              |
+| `PUBLIC_ORIGIN`                         | `http://localhost:4200`                                             | Public SPA origin used to build confirmation and reset links.                                 |
+| `PUBLIC_CONFIRM_TOKEN_TTL_HOURS`        | `24`                                                                | Public confirmation token validity window.                                                    |
+| `PASSWORD_RESET_TOKEN_TTL_MINUTES`      | `60`                                                                | Password reset token validity window.                                                         |
+| `PASSWORD_RESET_PUBLIC_PATH`            | `/reset-password`                                                   | Frontend path used to build reset links.                                                      |
+| `SMTP_HOST`                             | empty                                                               | SMTP host. Empty means links are logged, not sent, in local/dev. Required outside local/test. |
+| `SMTP_PORT`                             | `587`                                                               | SMTP port. The sender uses STARTTLS.                                                          |
+| `SMTP_USERNAME`                         | empty                                                               | SMTP auth username.                                                                           |
+| `SMTP_PASSWORD`                         | empty                                                               | SMTP auth password.                                                                           |
+| `SMTP_FROM_ADDRESS`                     | `no-reply@vitarerum.example`                                        | Sender address.                                                                               |
+| `SMTP_USE_TLS`                          | `true`                                                              | Use STARTTLS.                                                                                 |
+
+### Gmail SMTP
+
+Gmail works with the built-in sender. Selection is based on `SMTP_HOST`, so
+setting these locally sends real e-mail:
+
+```dotenv
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=youraccount@gmail.com
+SMTP_PASSWORD=your-16-char-app-password
+SMTP_FROM_ADDRESS=youraccount@gmail.com
+SMTP_USE_TLS=true
 ```
 
-This starts PostgreSQL, waits for it to become healthy, then builds and runs the
-API on [http://localhost:8000](http://localhost:8000). Uploaded files are stored
-on disk under `DATA_DIR` (`/app/data` in the container), kept on the
-`vitarerum_data` volume so they survive container restarts.
+Gmail requires 2-Step Verification plus an App Password. The normal account
+password will not authenticate. Keep the App Password in `.env` only.
 
-Bootstrap identity data once Postgres is up (same as local):
+### Security Validation Outside Local Environments
 
-```bash
-docker compose exec -T postgres psql -U vitarerum -d vitarerum < scripts/seed.sql
-```
+When `APP_ENV` is not `local`, `test`, or `development`, startup fails fast
+unless:
 
-### Production configuration
+- `JWT_SECRET` is changed from its default and is at least 32 bytes;
+- `TURNSTILE_SECRET_KEY` is set to a real key;
+- `SMTP_HOST` is set;
+- `CORS_ORIGINS` does not contain `"*"`.
 
-Outside `local`/`test`/`development`, the app refuses to start with default
-secrets or wildcard CORS (see `validate_non_local_security` in `app/config.py`).
-Provide real values via the environment:
+This prevents shipping development defaults to a real deployment.
 
-| Variable         | Required | Notes                                                        |
-| ---------------- | -------- | ------------------------------------------------------------ |
-| `APP_ENV`        | yes      | Set to `production` to enforce the security checks below.    |
-| `DATABASE_URL`   | yes      | `postgresql+asyncpg://USER:PASS@HOST:5432/DB`.               |
-| `JWT_SECRET`     | yes      | Long random string, **≥ 32 bytes**.                          |
-| `CORS_ORIGINS`   | yes      | Explicit JSON list, e.g. `["https://app.example.com"]`.      |
+## Docker
 
-Example:
+`vitarerum-api/docker-compose.yml` only defines the local PostgreSQL
+dependency described above (`docker compose up -d postgres`); it does not
+build or run the API.
 
-```bash
-APP_ENV=production \
-JWT_SECRET="$(openssl rand -base64 48)" \
-docker compose up --build -d
-```
-
-In production, point `DATABASE_URL` at a managed PostgreSQL instance and run the
-container behind a TLS-terminating reverse proxy (add `--proxy-headers` to the
-Uvicorn command if so). Scale out with replicas or Uvicorn `--workers`.
-
-## Tests
+`vitarerum-api/Dockerfile` builds a standalone backend image. Its
+`ENTRYPOINT` runs database migrations through
+`scripts/docker-entrypoint.sh` before handing off to Uvicorn on port 8000:
 
 ```bash
-uv run pytest
+docker build -t vitarerum-api:local .
+docker run --rm -p 8000:8000 --env-file .env vitarerum-api:local
 ```
 
-## API Contracts
+For the production-oriented single image that includes both Angular and FastAPI,
+use the root repository [Dockerfile](../Dockerfile). Cloud Run deployment of
+that integrated image is documented in
+[docs/cloud/README.md](../docs/cloud/README.md).
 
-Contract-sensitive behavior is documented under `docs/api_contracts/`.
-The collection-use project object lifecycle, including guarded cascade removal,
-is described in `docs/api_contracts/use_of_collections.md`.
-
-## Lint
+## Quality Gates
 
 ```bash
 uv run ruff check .
+uv run mypy app
+uv run lint-imports
+uv run pytest
 ```
 
-## Type Check
+`lint-imports` runs the import-linter contracts configured in
+`pyproject.toml`. Those contracts are architecture fitness checks for layer
+direction and allowed cross-context dependencies.
+
+## API Contracts
+
+Contract-sensitive behavior is documented under:
+
+- [root API contracts](../docs/api_contracts/)
+- [backend-local use-of-collections contract](./docs/api_contracts/use_of_collections.md)
+
+## Migrations
 
 ```bash
-uv run mypy app
+uv run alembic upgrade head
+uv run alembic downgrade -1
 ```
+
+Production deployment should run migrations through the dedicated Cloud Run Job
+described in the cloud tutorial, not from the serving container startup.

@@ -1,5 +1,5 @@
 @startuml museum-questions-public-flow
-title Museum Questions — Public Intake Flow
+title Museum Questions - Public Intake Flow
 
 skinparam shadowing false
 skinparam activity {
@@ -13,53 +13,40 @@ skinparam note {
 }
 
 start
-:Citizen opens the public landing page (/public);
+:Citizen opens /public;
 
 if (Choice?) then (Ask the Museum)
-  :Citizen fills the /ask-museum form\n(name, e-mail, subject, message, consent, captcha);
-  :POST /public/museum-questions;
+  :Fill /ask-museum form\nname, email, subject, message,\nconsent, captcha, honeypot;
+  :POST /api/v1/public/museum-questions;
 
   if (Honeypot filled?) then (yes)
-    :Silent accept-and-drop\n202, no work;
+    :Accept and drop silently\n202 same receipt shape;
     stop
-  else (no)
   endif
 
   if (Rate limit exceeded?) then (yes)
-    :429 Too Many Requests\n(Retry-After);
+    :429 Too Many Requests\nRetry-After;
     stop
-  else (no)
   endif
 
   if (Captcha valid?) then (no)
-    :403 Captcha failed\n(or 503 provider unreachable);
+    :403 captcha failed\nor 503 provider unavailable;
     stop
-  else (yes)
   endif
 
   if (Payload valid?) then (no)
-    :422 Validation failed;
+    :422 validation failed;
     stop
-  else (yes)
   endif
 
   :Persist MuseumQuestion\nstatus = SUBMITTED;
   :202 MuseumQuestionReceipt;
-  :Citizen sees /ask-museum/received;
+  :Citizen sees received page;
   stop
-
 else (Request an in-situ visit)
-  :Navigate to /submit-proposal\n(formal flow — see 11PublicProposalSubmission-API.md);
+  :Navigate to /submit-proposal;
+  :Formal proposal intake\nsee PUBLIC_SUBMISSION.puml;
   stop
 endif
-
-note right
-  This plan only ever produces SUBMITTED rows.
-  ANSWERED / OUT_OF_SCOPE / CLOSED belong to the
-  internal response section (see
-  museum-questions-response-flow.puml, not yet
-  implemented) — staff reply by e-mail; there is
-  no public follow-up, no thread, no status check.
-end note
 
 @enduml
