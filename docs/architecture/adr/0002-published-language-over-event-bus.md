@@ -47,4 +47,4 @@ Outbox/Inbox, or Event Sourcing as the default integration model.
 
 - [Backend architecture rules](../../../vitarerum-api/AGENTS.md)
 - [Backend import-linter contracts](../../../vitarerum-api/pyproject.toml)
-- [Context map](../context-map.puml)
+- [Context map](../vitarerum-context-map.svg)

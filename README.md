@@ -116,9 +116,7 @@ Architecture:
 
 - [Architecture overview](./docs/architecture/README.md)
 - [Context map](./docs/architecture/vitarerum-context-map.svg)
-  ([PlantUML source](./docs/architecture/context-map.puml))
 - [Simplified context map](./docs/architecture/vitarerum-context-map-simplified.svg)
-  ([PlantUML source](./docs/architecture/context-map-simplified.puml))
 - [Module boundaries](./docs/architecture/module-boundaries.md)
 - [Business flows](./docs/architecture/business-flows.md)
 - [Architecture decisions](./docs/architecture/adr/README.md)

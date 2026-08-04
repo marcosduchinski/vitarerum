@@ -7,7 +7,8 @@ in-situ visits, ready to be projected onto CIDOC-CRM. The aggregate root is
 `inSituOccurrences`, `inSituLogs`, `inSituPublications` — and the occurrence, log,
 and publication records each own a list of `attachments`. The whole graph is one
 consistency boundary: it is created in a single POST and read back whole. See
-`docs/cidoc-crm.puml` for the domain model.
+[cidoc-crm-in-situ-visit-record-model.svg](../diagrams/cidoc-crm-in-situ-visit-record-model.svg)
+for the domain model.
 
 A record is a **snapshot**: its `id` and `generatedAt` are assigned by the server at
 creation time and are never supplied by the client. Child and attachment ids are

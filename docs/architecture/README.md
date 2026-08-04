@@ -6,7 +6,7 @@ durable architecture decisions.
 
 ## Start Here
 
-- [Context map](./context-map.puml): bounded contexts and allowed
+- [Context map](./vitarerum-context-map.svg): bounded contexts and allowed
   cross-context communication.
 - [Module boundaries](./module-boundaries.md): business responsibility of each
   active context.
