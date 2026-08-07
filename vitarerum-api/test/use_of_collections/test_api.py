@@ -1,8 +1,10 @@
+import base64
 import io
 import zipfile
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, date, datetime
+from pathlib import Path
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -18,6 +20,7 @@ from app.identity.public import Actor, GroupName, PermissionId, PermissionView, 
 from app.main import app
 from app.reference_numbers.public import ReferenceKind
 from app.shared.dependencies import get_caller_permission
+from app.shared.file_storage import build_file_storage
 from app.use_of_collections.application.ports import (
     ProjectFilters,
     ProposalFilters,
@@ -708,7 +711,7 @@ async def client_with_repos(
     access_email_sender: RecordingAccessEmailSender | None = None,
     proposal_email_sender: RecordingProposalNotificationEmailSender | None = None,
     notification_dispatcher: RecordingNotificationDispatcher | None = None,
-    file_storage: InMemoryFileStorage | None = None,
+    file_storage: object | None = None,
 ) -> AsyncIterator[
     tuple[
         AsyncClient,
@@ -3725,6 +3728,65 @@ async def test_download_log_entry_attachment_returns_file() -> None:
     assert download.content == b"%PDF-1.4 bytes"
     assert download.headers["content-type"].startswith("application/pdf")
     assert "report.pdf" in download.headers["content-disposition"]
+
+
+async def test_log_entry_attachment_uses_configured_encrypted_storage(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    plaintext = b"plain route payload"
+    key = base64.b64encode(b"k" * 32).decode("ascii")
+    storage = build_file_storage(tmp_path, key)
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    monkeypatch.setattr(settings, "file_encryption_key", key)
+
+    async with client_with_repos(caller=_STAFF_CALLER, file_storage=storage) as (
+        client,
+        project_repo,
+        _,
+        _conversation_repo,
+    ):
+        await project_repo.add(
+            _project(
+                "project-1",
+                status=UseStatus.IN_PROGRESS,
+                objects=[_collection_use_object()],
+            )
+        )
+        created = await client.post(
+            "/api/v1/collection-use-projects/project-1/log-entries",
+            json={"collectionUseObjectId": "cuo-1", "numberOfObjects": 1},
+            headers={"X-Permission-Id": "permission-staff"},
+        )
+        entry_id = created.json()["id"]
+        uploaded = await client.post(
+            f"/api/v1/collection-use-projects/project-1/log-entries/{entry_id}/attachments",
+            files={"file": ("route.txt", plaintext, "text/plain")},
+            data={"mediaType": "DOCUMENT", "attachmentDescription": "Route payload"},
+            headers={"X-Permission-Id": "permission-staff"},
+        )
+        file_reference = uploaded.json()["fileReference"]
+        blob_path = tmp_path / file_reference
+        blob = blob_path.read_bytes()
+
+        download = await client.get(
+            f"/api/v1/collection-use-projects/project-1/log-entries/{entry_id}/attachments/{file_reference}",
+            headers={"X-Permission-Id": "permission-staff"},
+        )
+        moved_reference = f"{file_reference}.moved"
+        await storage.save(plaintext, moved_reference)
+        blob_path.write_bytes((tmp_path / moved_reference).read_bytes())
+        unreadable = await client.get(
+            f"/api/v1/collection-use-projects/project-1/log-entries/{entry_id}/attachments/{file_reference}",
+            headers={"X-Permission-Id": "permission-staff"},
+        )
+
+    assert blob.startswith(b"\x01")
+    assert plaintext not in blob
+    assert download.status_code == 200
+    assert download.content == plaintext
+    assert unreadable.status_code == 500
+    assert unreadable.json()["error"] == "FILE_UNREADABLE"
 
 
 async def test_download_log_entry_attachment_unknown_reference_returns_404() -> None:

@@ -12,6 +12,8 @@ durable architecture decisions.
 
 - [Module boundaries](./module-boundaries.md): business responsibility of each
   active context.
+- [File storage references](./file-storage-references.md): durable contract for
+  file references used by storage encryption and future remote storage.
 - [Business flows](./business-flows.md): index of end-to-end flows and existing
   diagrams.
 - [Architecture decisions](./adr/README.md): ADR index and template.

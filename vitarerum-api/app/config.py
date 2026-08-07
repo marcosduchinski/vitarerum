@@ -1,3 +1,5 @@
+import base64
+import binascii
 from pathlib import Path
 from typing import Literal
 
@@ -28,6 +30,9 @@ class Settings(BaseSettings):
     data_dir: Path = Path("./data")
     # Maximum accepted upload size in bytes (default 25 MiB); larger uploads 413.
     max_upload_bytes: int = 25 * 1024 * 1024
+    # File encryption key: 32 bytes encoded as base64. Empty local/test means
+    # file storage runs without encryption.
+    file_encryption_key: str = ""
     # Institution name used as the place_name when exporting in-situ visit records.
     institution_name: str = "Museum"
     cors_origins: list[str] = ["*"]
@@ -147,6 +152,18 @@ class Settings(BaseSettings):
         return self
 
     @model_validator(mode="after")
+    def validate_file_encryption_key_format(self) -> "Settings":
+        if not self.file_encryption_key:
+            return self
+        try:
+            raw = base64.b64decode(self.file_encryption_key, validate=True)
+        except (binascii.Error, ValueError):
+            raise ValueError("file_encryption_key must be valid base64") from None
+        if len(raw) != 32:
+            raise ValueError("file_encryption_key must decode to exactly 32 bytes")
+        return self
+
+    @model_validator(mode="after")
     def validate_non_local_security(self) -> "Settings":
         if self.app_env.lower() in _LOCAL_ENVS:
             return self
@@ -155,6 +172,8 @@ class Settings(BaseSettings):
             errors.append("jwt_secret must be configured outside local/test")
         if len(self.jwt_secret.encode()) < 32:
             errors.append("jwt_secret must be at least 32 bytes")
+        if not self.file_encryption_key:
+            errors.append("file_encryption_key must be configured outside local/test")
         if self.turnstile_secret_key.startswith("1x0000"):
             errors.append("turnstile_secret_key must be configured outside local/test")
         if not self.smtp_host:

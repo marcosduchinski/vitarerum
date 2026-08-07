@@ -1,8 +1,18 @@
+import base64
 import os
 import tempfile
 from pathlib import Path
+from typing import Protocol
 
 from anyio import to_thread
+
+from app.shared.file_encryption import EncryptedFileStorage
+
+
+class _InnerStorage(Protocol):
+    async def save(self, content: bytes, file_reference: str) -> str: ...
+    async def read(self, file_reference: str) -> bytes: ...
+    async def delete(self, file_reference: str) -> None: ...
 
 
 class LocalDiskFileStorage:
@@ -65,3 +75,15 @@ class LocalDiskFileStorage:
             dest.unlink()
         except FileNotFoundError:
             pass
+
+
+def build_file_storage(data_dir: Path, encryption_key: str) -> _InnerStorage:
+    """Build the shared file storage, encrypting content when a key is configured.
+
+    ``encryption_key`` is the base64-encoded 32-byte key already validated by
+    ``Settings``. An empty value intentionally keeps local/test storage plain.
+    """
+    inner = LocalDiskFileStorage(data_dir)
+    if not encryption_key:
+        return inner
+    return EncryptedFileStorage(inner, base64.b64decode(encryption_key))

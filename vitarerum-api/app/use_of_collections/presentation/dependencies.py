@@ -51,7 +51,6 @@ from app.use_of_collections.infrastructure.amendment_invitation import (
 from app.use_of_collections.infrastructure.external_requester import (
     IdentityExternalRequesterProvisioner,
 )
-from app.use_of_collections.infrastructure.file_storage import LocalDiskFileStorage
 from app.use_of_collections.infrastructure.proposal_notification_email import (
     LoggingProposalNotificationEmailSender,
     SmtpProposalNotificationEmailSender,
@@ -70,6 +69,7 @@ from app.use_of_collections.infrastructure.requester_access_email import (
 )
 
 from app.config import settings  # isort: skip
+from app.shared.file_storage import build_file_storage  # isort: skip
 
 DBSession = Annotated[AsyncSession, Depends(get_async_session)]
 
@@ -99,7 +99,7 @@ def get_publication_log_repo(session: DBSession) -> PublicationLogRepository:
 
 
 def get_file_storage() -> FileStoragePort:
-    return LocalDiskFileStorage(settings.data_dir)
+    return build_file_storage(settings.data_dir, settings.file_encryption_key)
 
 
 def get_amendment_invitation() -> AmendmentInvitationPort:

@@ -20,7 +20,6 @@ from app.reports.in_situ_visit.domain.models import (
 from app.reports.in_situ_visit.infrastructure.models import InSituVisitReportOrm
 from app.shared.kernel import PermissionId
 
-
 _RECORDS = table(
     "in_situ_visit_records",
     column("id"),

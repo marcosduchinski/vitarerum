@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request, status
@@ -49,11 +50,13 @@ from app.public_submission.presentation.routes import router as public_proposals
 from app.reference_numbers.presentation.routes import reference_policies_router
 from app.reports.in_situ_visit.presentation.routes import reports_router
 from app.shared.exceptions import AccessDenied, InsufficientGroup
+from app.shared.file_encryption import CorruptedEncryptedFile
 from app.use_of_collections.presentation.dependencies import get_amendment_invitation
 from app.use_of_collections.presentation.routes import projects_router, proposals_router
 
 STATIC_DIR = (Path(__file__).resolve().parent.parent / "static").resolve()
 API_PREFIX = settings.api_v1_prefix.strip("/")
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title=settings.app_name)
 
@@ -100,6 +103,20 @@ async def insufficient_group_handler(
     return JSONResponse(
         status_code=status.HTTP_403_FORBIDDEN,
         content={"error": "INSUFFICIENT_GROUP", "message": str(exc)},
+    )
+
+
+@app.exception_handler(CorruptedEncryptedFile)
+async def corrupted_encrypted_file_handler(
+    request: Request, exc: CorruptedEncryptedFile
+) -> JSONResponse:
+    logger.error("[storage] undecryptable file: %s", exc)
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={
+            "error": "FILE_UNREADABLE",
+            "message": "Stored file could not be read.",
+        },
     )
 
 

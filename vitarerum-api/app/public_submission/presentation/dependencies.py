@@ -60,6 +60,7 @@ from app.public_submission.infrastructure.repositories import (
     SqlAlchemyPendingSubmissionRepository,
 )
 from app.reference_numbers.public import get_reference_generator
+from app.shared.file_storage import build_file_storage
 from app.shared.persistence import run_with_unique_retry
 from app.use_of_collections.application.ports import (
     ProposalNotificationEmailSender,
@@ -71,7 +72,6 @@ from app.use_of_collections.application.use_cases import (
     SubmitAmendmentDocument,
     SubmitProposal,
 )
-from app.use_of_collections.infrastructure.file_storage import LocalDiskFileStorage
 from app.use_of_collections.infrastructure.proposal_notification_email import (
     LoggingProposalNotificationEmailSender,
     SmtpProposalNotificationEmailSender,
@@ -119,7 +119,9 @@ def get_submit_use_case(session: DBSession) -> SubmitPublicProposal:
         captcha=_captcha_verifier(),
         rate_limiter=_rate_limiter,
         clock=_clock,
-        file_storage=LocalDiskFileStorage(settings.data_dir),
+        file_storage=build_file_storage(
+            settings.data_dir, settings.file_encryption_key
+        ),
     )
 
 
@@ -144,7 +146,9 @@ def get_confirm_use_case(session: DBSession) -> ConfirmPublicProposal:
         clock=_clock,
         token_ttl=timedelta(hours=settings.public_confirm_token_ttl_hours),
         retry_runner=retry_runner,
-        file_storage=LocalDiskFileStorage(settings.data_dir),
+        file_storage=build_file_storage(
+            settings.data_dir, settings.file_encryption_key
+        ),
     )
 
 
@@ -208,14 +212,14 @@ StaffNotificationRecipients = Annotated[
 def get_submit_amendment_document(session: DBSession) -> SubmitAmendmentDocument:
     return SubmitAmendmentDocument(
         SqlAlchemyProposalRepository(session),
-        LocalDiskFileStorage(settings.data_dir),
+        build_file_storage(settings.data_dir, settings.file_encryption_key),
     )
 
 
 def get_remove_amendment_document(session: DBSession) -> RemoveAmendmentDocument:
     return RemoveAmendmentDocument(
         SqlAlchemyProposalRepository(session),
-        LocalDiskFileStorage(settings.data_dir),
+        build_file_storage(settings.data_dir, settings.file_encryption_key),
     )
 
 
