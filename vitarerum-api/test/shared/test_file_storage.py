@@ -117,6 +117,7 @@ async def test_file_storage_dependencies_use_configured_encryption_key(
     key = base64.b64encode(b"k" * 32).decode("ascii")
     monkeypatch.setattr(settings_owner.settings, "data_dir", tmp_path)
     monkeypatch.setattr(settings_owner.settings, "file_encryption_key", key)
+    monkeypatch.setattr(settings_owner.settings, "db_field_encryption_key", key)
     monkeypatch.setattr(settings_owner.settings, "jwt_secret", "x" * 32)
 
     storage = storage_factory()

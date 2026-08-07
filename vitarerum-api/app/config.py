@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     # File encryption key: 32 bytes encoded as base64. Empty local/test means
     # file storage runs without encryption.
     file_encryption_key: str = ""
+    # Database field encryption key: 32 bytes encoded as base64.
+    db_field_encryption_key: str = ""
     # Institution name used as the place_name when exporting in-situ visit records.
     institution_name: str = "Museum"
     cors_origins: list[str] = ["*"]
@@ -153,15 +155,29 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_file_encryption_key_format(self) -> "Settings":
-        if not self.file_encryption_key:
-            return self
-        try:
-            raw = base64.b64decode(self.file_encryption_key, validate=True)
-        except (binascii.Error, ValueError):
-            raise ValueError("file_encryption_key must be valid base64") from None
-        if len(raw) != 32:
-            raise ValueError("file_encryption_key must decode to exactly 32 bytes")
+        self._validate_optional_base64_32(
+            self.file_encryption_key,
+            setting_name="file_encryption_key",
+        )
         return self
+
+    @model_validator(mode="after")
+    def validate_db_field_encryption_key_format(self) -> "Settings":
+        self._validate_optional_base64_32(
+            self.db_field_encryption_key,
+            setting_name="db_field_encryption_key",
+        )
+        return self
+
+    def _validate_optional_base64_32(self, value: str, *, setting_name: str) -> None:
+        if not value:
+            return
+        try:
+            raw = base64.b64decode(value, validate=True)
+        except (binascii.Error, ValueError):
+            raise ValueError(f"{setting_name} must be valid base64") from None
+        if len(raw) != 32:
+            raise ValueError(f"{setting_name} must decode to exactly 32 bytes")
 
     @model_validator(mode="after")
     def validate_non_local_security(self) -> "Settings":
@@ -174,6 +190,10 @@ class Settings(BaseSettings):
             errors.append("jwt_secret must be at least 32 bytes")
         if not self.file_encryption_key:
             errors.append("file_encryption_key must be configured outside local/test")
+        if not self.db_field_encryption_key:
+            errors.append(
+                "db_field_encryption_key must be configured outside local/test"
+            )
         if self.turnstile_secret_key.startswith("1x0000"):
             errors.append("turnstile_secret_key must be configured outside local/test")
         if not self.smtp_host:

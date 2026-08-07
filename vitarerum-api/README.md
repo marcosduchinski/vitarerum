@@ -92,6 +92,8 @@ classifier thresholds and other low-level tuning values.
 | `DATABASE_URL`                          | `postgresql+asyncpg://vitarerum:vitarerum@localhost:5432/vitarerum` | Async SQLAlchemy connection string.                                                           |
 | `DATA_DIR`                              | `./data`                                                            | Base directory for uploaded files in local disk storage.                                      |
 | `MAX_UPLOAD_BYTES`                      | `26214400`                                                          | Maximum upload size, default 25 MiB.                                                          |
+| `FILE_ENCRYPTION_KEY`                   | empty                                                               | Base64-encoded 32-byte key for file storage encryption; required outside local/test.           |
+| `DB_FIELD_ENCRYPTION_KEY`               | empty                                                               | Base64-encoded 32-byte key for encrypted database fields; required in **every** environment — public submissions and museum questions fail without it. `.env.example` ships a development key. |
 | `INSTITUTION_NAME`                      | `Museum`                                                            | Place name used when exporting an in-situ visit record from a project.                        |
 | `CORS_ORIGINS`                          | `["*"]`                                                             | JSON list of allowed CORS origins.                                                            |
 | `JWT_SECRET`                            | `change-me-too-local-dev-secret-32b`                                | Signing key for access tokens.                                                                |
@@ -144,6 +146,8 @@ When `APP_ENV` is not `local`, `test`, or `development`, startup fails fast
 unless:
 
 - `JWT_SECRET` is changed from its default and is at least 32 bytes;
+- `FILE_ENCRYPTION_KEY` is set to a base64-encoded 32-byte key;
+- `DB_FIELD_ENCRYPTION_KEY` is set to a different base64-encoded 32-byte key;
 - `TURNSTILE_SECRET_KEY` is set to a real key;
 - `SMTP_HOST` is set;
 - `CORS_ORIGINS` does not contain `"*"`.

@@ -21,9 +21,9 @@ class PublicProposalSubmissionRecord(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     token: Mapped[str] = mapped_column(String(64), unique=True, index=True)
-    citizen_name: Mapped[str] = mapped_column(String(120))
-    citizen_email: Mapped[str] = mapped_column(String(180), index=True)
-    subject: Mapped[str] = mapped_column(String(160))
+    citizen_name: Mapped[str] = mapped_column(Text)
+    citizen_email: Mapped[str] = mapped_column(Text)
+    subject: Mapped[str] = mapped_column(Text)
     body: Mapped[str] = mapped_column(Text)
     use_type: Mapped[str] = mapped_column(String(32))
     proposed_begin_date: Mapped[date] = mapped_column(Date)
@@ -49,7 +49,7 @@ class PublicDocumentSubmissionRecord(Base):
     submission_id: Mapped[str] = mapped_column(
         ForeignKey("public_proposal_submissions.id"), index=True
     )
-    file_name: Mapped[str] = mapped_column(String(255))
+    file_name: Mapped[str] = mapped_column(Text)
     file_reference: Mapped[str] = mapped_column(String(512))
     submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
@@ -64,7 +64,7 @@ class ProposalAmendmentTokenRecord(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     proposal_id: Mapped[str] = mapped_column(String(36), index=True)
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
-    requester_email: Mapped[str] = mapped_column(String(180))
+    requester_email: Mapped[str] = mapped_column(Text)
     correction_item_ids: Mapped[list[str]] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)

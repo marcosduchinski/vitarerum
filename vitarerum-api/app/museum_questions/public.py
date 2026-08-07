@@ -30,11 +30,14 @@ async def get_question_summary(
 ) -> QuestionSummaryView | None:
     """Return a read-only summary of a museum question, or ``None`` if no
     question with ``question_id`` exists."""
+    from app.config import settings
     from app.museum_questions.infrastructure.repositories import (
         SqlAlchemyMuseumQuestionRepository,
     )
+    from app.shared.field_encryption import FieldEncryptor
 
-    question = await SqlAlchemyMuseumQuestionRepository(session).get_by_id(
+    encryptor = FieldEncryptor.from_base64(settings.db_field_encryption_key)
+    question = await SqlAlchemyMuseumQuestionRepository(session, encryptor).get_by_id(
         question_id
     )
     if question is None:

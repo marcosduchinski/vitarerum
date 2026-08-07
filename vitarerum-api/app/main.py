@@ -50,6 +50,7 @@ from app.public_submission.presentation.routes import router as public_proposals
 from app.reference_numbers.presentation.routes import reference_policies_router
 from app.reports.in_situ_visit.presentation.routes import reports_router
 from app.shared.exceptions import AccessDenied, InsufficientGroup
+from app.shared.field_encryption import CorruptedEncryptedField
 from app.shared.file_encryption import CorruptedEncryptedFile
 from app.use_of_collections.presentation.dependencies import get_amendment_invitation
 from app.use_of_collections.presentation.routes import projects_router, proposals_router
@@ -116,6 +117,20 @@ async def corrupted_encrypted_file_handler(
         content={
             "error": "FILE_UNREADABLE",
             "message": "Stored file could not be read.",
+        },
+    )
+
+
+@app.exception_handler(CorruptedEncryptedField)
+async def corrupted_encrypted_field_handler(
+    request: Request, exc: CorruptedEncryptedField
+) -> JSONResponse:
+    logger.error("[storage] undecryptable field: %s", exc)
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={
+            "error": "FIELD_UNREADABLE",
+            "message": "Stored field could not be read.",
         },
     )
 

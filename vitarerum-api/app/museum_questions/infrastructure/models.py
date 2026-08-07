@@ -20,9 +20,10 @@ class MuseumQuestionRecord(Base):
     __tablename__ = "museum_questions"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    requester_name: Mapped[str] = mapped_column(String(120))
-    requester_email: Mapped[str] = mapped_column(String(180))
-    subject: Mapped[str] = mapped_column(String(200))
+    requester_name: Mapped[str] = mapped_column(Text)
+    requester_email: Mapped[str] = mapped_column(Text)
+    requester_email_hash: Mapped[str] = mapped_column(String(64), index=True)
+    subject: Mapped[str] = mapped_column(Text)
     message: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(16), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)

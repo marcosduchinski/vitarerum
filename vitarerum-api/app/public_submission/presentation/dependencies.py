@@ -60,6 +60,7 @@ from app.public_submission.infrastructure.repositories import (
     SqlAlchemyPendingSubmissionRepository,
 )
 from app.reference_numbers.public import get_reference_generator
+from app.shared.field_encryption import FieldEncryptor
 from app.shared.file_storage import build_file_storage
 from app.shared.persistence import run_with_unique_retry
 from app.use_of_collections.application.ports import (
@@ -90,6 +91,10 @@ _rate_limiter = InMemorySlidingWindowRateLimiter()
 _clock = SystemClock()
 
 
+def _field_encryptor() -> FieldEncryptor:
+    return FieldEncryptor.from_base64(settings.db_field_encryption_key)
+
+
 def _captcha_verifier() -> CaptchaVerifier:
     if settings.app_env.lower() in _LOCAL_ENVS:
         return AlwaysPassVerifier()
@@ -115,7 +120,7 @@ def _email_sender() -> PublicEmailSender:
 
 def get_submit_use_case(session: DBSession) -> SubmitPublicProposal:
     return SubmitPublicProposal(
-        repository=SqlAlchemyPendingSubmissionRepository(session),
+        repository=SqlAlchemyPendingSubmissionRepository(session, _field_encryptor()),
         captcha=_captcha_verifier(),
         rate_limiter=_rate_limiter,
         clock=_clock,
@@ -140,7 +145,7 @@ def get_confirm_use_case(session: DBSession) -> ConfirmPublicProposal:
         return await run_with_unique_retry(session, operation)
 
     return ConfirmPublicProposal(
-        repository=SqlAlchemyPendingSubmissionRepository(session),
+        repository=SqlAlchemyPendingSubmissionRepository(session, _field_encryptor()),
         submit_proposal=submit,
         rate_limiter=_rate_limiter,
         clock=_clock,
@@ -153,7 +158,7 @@ def get_confirm_use_case(session: DBSession) -> ConfirmPublicProposal:
 
 
 def get_amendment_token_repo(session: DBSession) -> AmendmentTokenRepository:
-    return SqlAlchemyAmendmentTokenRepository(session)
+    return SqlAlchemyAmendmentTokenRepository(session, _field_encryptor())
 
 
 def get_uoc_proposal_repo(session: DBSession) -> ProposalRepository:
@@ -232,9 +237,12 @@ def get_amendment_invitation_adapter(
 ) -> PublicAmendmentInvitationAdapter:
     """Real invitation adapter — installed over the ``use_of_collections`` default
     at the composition root (``app.main``) via ``dependency_overrides``."""
+    token_repository = SqlAlchemyAmendmentTokenRepository(
+        session, _field_encryptor()
+    )
     return PublicAmendmentInvitationAdapter(
         session=session,
-        token_repository=SqlAlchemyAmendmentTokenRepository(session),
+        token_repository=token_repository,
         proposal_repository=SqlAlchemyProposalRepository(session),
         email_sender=_email_sender(),
         clock=_clock,

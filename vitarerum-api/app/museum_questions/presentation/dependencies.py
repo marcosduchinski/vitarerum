@@ -42,6 +42,7 @@ from app.museum_questions.infrastructure.rate_limiter import (
 from app.museum_questions.infrastructure.repositories import (
     SqlAlchemyMuseumQuestionRepository,
 )
+from app.shared.field_encryption import FieldEncryptor
 
 DBSession = Annotated[AsyncSession, Depends(get_async_session)]
 
@@ -50,6 +51,10 @@ _LOCAL_ENVS = {"local", "test", "development"}
 # Process-wide singletons (rate-limit windows must persist across requests).
 _rate_limiter = InMemorySlidingWindowRateLimiter()
 _clock = SystemClock()
+
+
+def _field_encryptor() -> FieldEncryptor:
+    return FieldEncryptor.from_base64(settings.db_field_encryption_key)
 
 
 def _captcha_verifier() -> CaptchaVerifier:
@@ -75,7 +80,7 @@ def _email_sender() -> MuseumQuestionEmailSender:
 
 
 def _repository(session: AsyncSession) -> MuseumQuestionRepository:
-    return SqlAlchemyMuseumQuestionRepository(session)
+    return SqlAlchemyMuseumQuestionRepository(session, _field_encryptor())
 
 
 def get_submit_use_case(session: DBSession) -> SubmitMuseumQuestion:

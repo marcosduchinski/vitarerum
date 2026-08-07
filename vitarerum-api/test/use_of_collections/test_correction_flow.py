@@ -15,6 +15,7 @@ from app.public_submission.domain.models import ProposalAmendmentToken
 from app.public_submission.infrastructure.repositories import (
     SqlAlchemyAmendmentTokenRepository,
 )
+from app.shared.field_encryption import FieldEncryptor
 from app.use_of_collections.application.use_cases import (
     CorrectionScopeError,
     DocumentCorrectionInput,
@@ -54,6 +55,10 @@ _STAFF = Actor(
     group=GroupName.COLLECTIONS_MANAGEMENT,
     email="curator@museum.pt",
 )
+
+
+def _field_encryptor() -> FieldEncryptor:
+    return FieldEncryptor(b"k" * 32)
 
 
 class _FakeStorage:
@@ -400,12 +405,12 @@ async def test_amendment_token_repository_round_trip() -> None:
         expires_at=_NOW + timedelta(hours=24),
     )
     async with factory() as session:
-        repo = SqlAlchemyAmendmentTokenRepository(session)
+        repo = SqlAlchemyAmendmentTokenRepository(session, _field_encryptor())
         await repo.add(token)
         await session.commit()
 
     async with factory() as session:
-        repo = SqlAlchemyAmendmentTokenRepository(session)
+        repo = SqlAlchemyAmendmentTokenRepository(session, _field_encryptor())
         loaded = await repo.get_by_hash("deadbeef")
         assert loaded is not None
         assert loaded.correction_item_ids == ["ci-1", "ci-2"]
@@ -414,7 +419,7 @@ async def test_amendment_token_repository_round_trip() -> None:
         await session.commit()
 
     async with factory() as session:
-        repo = SqlAlchemyAmendmentTokenRepository(session)
+        repo = SqlAlchemyAmendmentTokenRepository(session, _field_encryptor())
         reloaded = await repo.get_by_hash("deadbeef")
     assert reloaded is not None
     assert reloaded.is_used is True

@@ -17,17 +17,33 @@ from app.public_submission.infrastructure.models import (
     PublicDocumentSubmissionRecord,
     PublicProposalSubmissionRecord,
 )
+from app.shared.field_encryption import FieldEncryptor
 from app.shared.kernel import UseType
 
+_SUBMISSION_CITIZEN_NAME = "public_proposal_submissions.citizen_name"
+_SUBMISSION_CITIZEN_EMAIL = "public_proposal_submissions.citizen_email"
+_SUBMISSION_SUBJECT = "public_proposal_submissions.subject"
+_SUBMISSION_BODY = "public_proposal_submissions.body"
+_DOCUMENT_FILE_NAME = "public_proposal_submission_documents.file_name"
+_AMENDMENT_REQUESTER_EMAIL = "proposal_amendment_tokens.requester_email"
 
-def _to_domain(record: PublicProposalSubmissionRecord) -> PendingPublicSubmission:
+
+def _to_domain(
+    record: PublicProposalSubmissionRecord, encryptor: FieldEncryptor
+) -> PendingPublicSubmission:
     return PendingPublicSubmission(
         id=record.id,
         token=record.token,
-        citizen_name=record.citizen_name,
-        citizen_email=record.citizen_email,
-        subject=record.subject,
-        body=record.body,
+        citizen_name=encryptor.decrypt_text(
+            record.citizen_name, _SUBMISSION_CITIZEN_NAME
+        )
+        or "",
+        citizen_email=encryptor.decrypt_text(
+            record.citizen_email, _SUBMISSION_CITIZEN_EMAIL
+        )
+        or "",
+        subject=encryptor.decrypt_text(record.subject, _SUBMISSION_SUBJECT) or "",
+        body=encryptor.decrypt_text(record.body, _SUBMISSION_BODY) or "",
         use_type=UseType(record.use_type),
         consent=record.consent,
         created_at=record.created_at,
@@ -36,7 +52,10 @@ def _to_domain(record: PublicProposalSubmissionRecord) -> PendingPublicSubmissio
         documents=[
             PublicDocumentSubmission(
                 id=document.id,
-                file_name=document.file_name,
+                file_name=encryptor.decrypt_text(
+                    document.file_name, _DOCUMENT_FILE_NAME
+                )
+                or "",
                 file_reference=document.file_reference,
                 submitted_at=document.submitted_at,
             )
@@ -48,13 +67,21 @@ def _to_domain(record: PublicProposalSubmissionRecord) -> PendingPublicSubmissio
     )
 
 
-def _apply(record: PublicProposalSubmissionRecord, s: PendingPublicSubmission) -> None:
+def _apply(
+    record: PublicProposalSubmissionRecord,
+    s: PendingPublicSubmission,
+    encryptor: FieldEncryptor,
+) -> None:
     record.id = s.id
     record.token = s.token
-    record.citizen_name = s.citizen_name
-    record.citizen_email = s.citizen_email
-    record.subject = s.subject
-    record.body = s.body
+    record.citizen_name = encryptor.encrypt_required_text(
+        s.citizen_name, _SUBMISSION_CITIZEN_NAME
+    )
+    record.citizen_email = encryptor.encrypt_required_text(
+        s.citizen_email, _SUBMISSION_CITIZEN_EMAIL
+    )
+    record.subject = encryptor.encrypt_required_text(s.subject, _SUBMISSION_SUBJECT)
+    record.body = encryptor.encrypt_required_text(s.body, _SUBMISSION_BODY)
     record.use_type = s.use_type.value
     record.proposed_begin_date = s.proposed_begin_date
     record.proposed_end_date = s.proposed_end_date
@@ -66,7 +93,9 @@ def _apply(record: PublicProposalSubmissionRecord, s: PendingPublicSubmission) -
     record.documents = [
         PublicDocumentSubmissionRecord(
             id=document.id,
-            file_name=document.file_name,
+            file_name=encryptor.encrypt_required_text(
+                document.file_name, _DOCUMENT_FILE_NAME
+            ),
             file_reference=document.file_reference,
             submitted_at=document.submitted_at,
         )
@@ -75,12 +104,13 @@ def _apply(record: PublicProposalSubmissionRecord, s: PendingPublicSubmission) -
 
 
 class SqlAlchemyPendingSubmissionRepository:
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(self, session: AsyncSession, encryptor: FieldEncryptor) -> None:
         self._session = session
+        self._encryptor = encryptor
 
     async def add(self, submission: PendingPublicSubmission) -> None:
         record = PublicProposalSubmissionRecord()
-        _apply(record, submission)
+        _apply(record, submission, self._encryptor)
         self._session.add(record)
         # Flush so unique-token / constraint violations surface here, before any
         # side effect (e.g. the confirmation e-mail) is triggered by the caller.
@@ -93,7 +123,7 @@ class SqlAlchemyPendingSubmissionRepository:
             .where(PublicProposalSubmissionRecord.token == token)
         )
         record = result.scalar_one_or_none()
-        return _to_domain(record) if record is not None else None
+        return _to_domain(record, self._encryptor) if record is not None else None
 
     async def get_by_token_for_update(
         self, token: str
@@ -108,7 +138,7 @@ class SqlAlchemyPendingSubmissionRepository:
             .with_for_update()
         )
         record = result.scalar_one_or_none()
-        return _to_domain(record) if record is not None else None
+        return _to_domain(record, self._encryptor) if record is not None else None
 
     async def save(self, submission: PendingPublicSubmission) -> None:
         result = await self._session.execute(
@@ -117,7 +147,7 @@ class SqlAlchemyPendingSubmissionRepository:
             .where(PublicProposalSubmissionRecord.id == submission.id)
         )
         record = result.scalar_one()
-        _apply(record, submission)
+        _apply(record, submission, self._encryptor)
 
     async def delete(self, submission: PendingPublicSubmission) -> None:
         # Load the document collection so the ORM cascades the child-row deletes
@@ -132,12 +162,17 @@ class SqlAlchemyPendingSubmissionRepository:
             await self._session.delete(record)
 
 
-def _token_to_domain(record: ProposalAmendmentTokenRecord) -> ProposalAmendmentToken:
+def _token_to_domain(
+    record: ProposalAmendmentTokenRecord, encryptor: FieldEncryptor
+) -> ProposalAmendmentToken:
     return ProposalAmendmentToken(
         id=record.id,
         proposal_id=record.proposal_id,
         token_hash=record.token_hash,
-        requester_email=record.requester_email,
+        requester_email=encryptor.decrypt_text(
+            record.requester_email, _AMENDMENT_REQUESTER_EMAIL
+        )
+        or "",
         correction_item_ids=list(record.correction_item_ids),
         created_at=record.created_at,
         expires_at=record.expires_at,
@@ -146,15 +181,18 @@ def _token_to_domain(record: ProposalAmendmentTokenRecord) -> ProposalAmendmentT
 
 
 class SqlAlchemyAmendmentTokenRepository:
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(self, session: AsyncSession, encryptor: FieldEncryptor) -> None:
         self._session = session
+        self._encryptor = encryptor
 
     async def add(self, token: ProposalAmendmentToken) -> None:
         record = ProposalAmendmentTokenRecord(
             id=token.id,
             proposal_id=token.proposal_id,
             token_hash=token.token_hash,
-            requester_email=token.requester_email,
+            requester_email=self._encryptor.encrypt_required_text(
+                token.requester_email, _AMENDMENT_REQUESTER_EMAIL
+            ),
             correction_item_ids=list(token.correction_item_ids),
             created_at=token.created_at,
             expires_at=token.expires_at,
@@ -170,7 +208,9 @@ class SqlAlchemyAmendmentTokenRepository:
             )
         )
         record = result.scalar_one_or_none()
-        return _token_to_domain(record) if record is not None else None
+        return (
+            _token_to_domain(record, self._encryptor) if record is not None else None
+        )
 
     async def save(self, token: ProposalAmendmentToken) -> None:
         result = await self._session.execute(
@@ -179,7 +219,9 @@ class SqlAlchemyAmendmentTokenRepository:
             )
         )
         record = result.scalar_one()
-        record.requester_email = token.requester_email
+        record.requester_email = self._encryptor.encrypt_required_text(
+            token.requester_email, _AMENDMENT_REQUESTER_EMAIL
+        )
         record.correction_item_ids = list(token.correction_item_ids)
         record.expires_at = token.expires_at
         record.used_at = token.used_at
