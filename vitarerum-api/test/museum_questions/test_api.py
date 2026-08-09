@@ -11,7 +11,13 @@ from httpx import ASGITransport, AsyncClient
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
 from app.database import get_async_session
-from app.identity.public import Actor, GroupName, PermissionId
+from app.identity.public import (
+    Actor,
+    GroupName,
+    PermissionId,
+    PermissionView,
+    UserView,
+)
 from app.main import app
 from app.museum_questions.application.read_models import MuseumQuestionListItem
 from app.museum_questions.application.use_cases import (
@@ -35,6 +41,9 @@ from app.museum_questions.presentation.dependencies import (
     get_get_use_case,
     get_list_use_case,
     get_mark_out_of_scope_use_case,
+    get_museum_question_notification_email_recipients,
+    get_museum_question_notification_recipients,
+    get_notifications_dispatcher,
     get_submit_use_case,
 )
 from app.museum_questions.presentation.routes import _uploaded_images
@@ -44,7 +53,14 @@ _SUBMIT_URL = "/api/v1/public/museum-questions"
 _INTERNAL_URL = "/api/v1/museum-questions"
 _NOW = datetime(2026, 7, 5, 12, 0, tzinfo=UTC)
 _STAFF = Actor(
-    id=PermissionId("perm-staff"), group=GroupName.CURATORIAL, email="s@example.org"
+    id=PermissionId("perm-staff"),
+    group=GroupName.COLLECTIONS_MANAGEMENT,
+    email="s@example.org",
+)
+_DIRECTION = Actor(
+    id=PermissionId("perm-direction"),
+    group=GroupName.DIRECTION,
+    email="direction@example.org",
 )
 _EXTERNAL = Actor(
     id=PermissionId("perm-ext"), group=GroupName.EXTERNAL, email="e@example.org"
@@ -119,6 +135,7 @@ class _EmailSender:
     def __init__(self) -> None:
         self.answers: list[tuple[str, str]] = []
         self.out_of_scope: list[str] = []
+        self.question_submitted: list[tuple[str, str, str]] = []
 
     async def send_answer(
         self,
@@ -138,6 +155,25 @@ class _EmailSender:
         subject: str,
     ) -> None:
         self.out_of_scope.append(to_email)
+
+    async def send_question_submitted(
+        self,
+        *,
+        to_email: str,
+        recipient_name: str,
+        requester_name: str,
+        subject: str,
+        link: str,
+    ) -> None:
+        self.question_submitted.append((to_email, recipient_name, link))
+
+
+class _NotificationDispatcher:
+    def __init__(self) -> None:
+        self.many: list[dict[str, object]] = []
+
+    async def notify_many(self, **kwargs: object) -> None:
+        self.many.append(kwargs)
 
 
 class _Storage:
@@ -180,11 +216,15 @@ async def _client(
     fail_commit: bool = False,
     caller: Actor = _STAFF,
     questions: list[MuseumQuestion] | None = None,
+    notification_dispatcher: _NotificationDispatcher | None = None,
+    notification_recipients: list[PermissionView] | None = None,
+    notification_email_recipients: list[PermissionView] | None = None,
 ) -> AsyncIterator[tuple[AsyncClient, _Repo, _EmailSender, _Session, _Storage]]:
     repo = _Repo(questions)
     email_sender = _EmailSender()
     session = _Session(fail_commit=fail_commit)
     storage = _Storage()
+    dispatcher = notification_dispatcher or _NotificationDispatcher()
     use_case = SubmitMuseumQuestion(
         repository=repo,
         captcha=_Captcha(ok=captcha_ok, raise_error=captcha_raises),
@@ -206,6 +246,13 @@ async def _client(
     )
     app.dependency_overrides[get_email_sender] = lambda: email_sender
     app.dependency_overrides[get_file_storage] = lambda: storage
+    app.dependency_overrides[get_notifications_dispatcher] = lambda: dispatcher
+    app.dependency_overrides[get_museum_question_notification_recipients] = lambda: (
+        notification_recipients or []
+    )
+    app.dependency_overrides[get_museum_question_notification_email_recipients] = (
+        lambda: notification_email_recipients or []
+    )
     app.dependency_overrides[get_async_session] = lambda: session
     app.dependency_overrides[get_caller_permission] = lambda: caller
     transport = ASGITransport(app=app)
@@ -266,6 +313,21 @@ def _attachment(
     )
 
 
+def _permission(
+    permission_id: str,
+    *,
+    name: str,
+    email: str,
+    group: GroupName,
+    user_id: str | None = None,
+) -> PermissionView:
+    return PermissionView(
+        permission_id=permission_id,
+        user=UserView(id=user_id or permission_id, name=name, email=email),
+        group=group,
+    )
+
+
 async def test_submit_returns_202_receipt() -> None:
     async with _client() as (client, repo, _, _, _storage):
         resp = await client.post(_SUBMIT_URL, json=_payload())
@@ -274,6 +336,72 @@ async def test_submit_returns_202_receipt() -> None:
     assert len(repo.added) == 1
     assert repo.added[0].subject == "Duvida sobre visita in situ"
     assert repo.added[0].requester_name == "Ana Souza"
+
+
+async def test_submit_notifies_access_groups_and_emails_curators_and_managers() -> None:
+    dispatcher = _NotificationDispatcher()
+    notification_recipients = [
+        _permission(
+            "perm-collections",
+            name="Collections Manager",
+            email="collections@example.org",
+            group=GroupName.COLLECTIONS_MANAGEMENT,
+        ),
+        _permission(
+            "perm-curatorial",
+            name="Curator",
+            email="curator@example.org",
+            group=GroupName.CURATORIAL,
+        ),
+    ]
+    email_recipients = [
+        _permission(
+            "perm-curatorial",
+            name="Curator",
+            email="curator@example.org",
+            group=GroupName.CURATORIAL,
+        ),
+        _permission(
+            "perm-collections",
+            name="Collections Manager",
+            email="collections@example.org",
+            group=GroupName.COLLECTIONS_MANAGEMENT,
+        ),
+    ]
+    async with _client(
+        notification_dispatcher=dispatcher,
+        notification_recipients=notification_recipients,
+        notification_email_recipients=email_recipients,
+    ) as (client, repo, sender, _, _storage):
+        resp = await client.post(_SUBMIT_URL, json=_payload())
+    assert resp.status_code == 202
+    question_id = repo.added[0].id
+    assert dispatcher.many == [
+        {
+            "recipient_permission_ids": [
+                PermissionId("perm-collections"),
+                PermissionId("perm-curatorial"),
+            ],
+            "kind": "MUSEUM_QUESTION_SUBMITTED",
+            "triggered_by": None,
+            "related_resource_type": "MUSEUM_QUESTION",
+            "related_resource_id": question_id,
+            "related_resource_label": "Duvida sobre visita in situ",
+            "note": "Submitted by Ana Souza <ana@example.org>",
+        }
+    ]
+    assert sender.question_submitted == [
+        (
+            "curator@example.org",
+            "Curator",
+            f"http://localhost:4200/p/museum-questions/{question_id}",
+        ),
+        (
+            "collections@example.org",
+            "Collections Manager",
+            f"http://localhost:4200/p/museum-questions/{question_id}",
+        ),
+    ]
 
 
 async def test_submit_accepts_multipart_images() -> None:
@@ -294,6 +422,7 @@ async def test_submit_accepts_multipart_images() -> None:
         )
     assert resp.status_code == 202
     question = repo.added[0]
+    assert question.attachments is not None
     assert [item.file_name for item in question.attachments] == [
         "artifact.png",
         "detail.jpg",
@@ -375,10 +504,19 @@ async def test_submit_rate_limited_429_with_retry_after() -> None:
 
 
 async def test_submit_honeypot_returns_202_no_work() -> None:
-    async with _client() as (client, repo, _, _, _storage):
+    dispatcher = _NotificationDispatcher()
+    async with _client(notification_dispatcher=dispatcher) as (
+        client,
+        repo,
+        sender,
+        _,
+        _storage,
+    ):
         resp = await client.post(_SUBMIT_URL, json=_payload(website="http://spam"))
     assert resp.status_code == 202
     assert repo.added == []
+    assert dispatcher.many == []
+    assert sender.question_submitted == []
 
 
 async def test_submit_sanitizes_control_characters_and_crlf() -> None:
@@ -433,7 +571,17 @@ async def test_submit_over_length_message_is_rejected() -> None:
 
 
 async def test_submit_commit_failure_propagates() -> None:
-    async with _client(fail_commit=True) as (client, repo, _, _, storage):
+    async with _client(
+        fail_commit=True,
+        notification_email_recipients=[
+            _permission(
+                "perm-curatorial",
+                name="Curator",
+                email="curator@example.org",
+                group=GroupName.CURATORIAL,
+            )
+        ],
+    ) as (client, repo, sender, _, storage):
         with pytest.raises(RuntimeError):
             await client.post(
                 _SUBMIT_URL,
@@ -454,6 +602,7 @@ async def test_submit_commit_failure_propagates() -> None:
     assert len(repo.added) == 1
     assert storage.files == {}
     assert storage.deleted
+    assert sender.question_submitted == []
 
 
 async def test_list_internal_questions_filters_and_paginates() -> None:
@@ -502,6 +651,19 @@ async def test_list_internal_questions_filters_by_requester_email() -> None:
 
 async def test_internal_questions_reject_non_staff() -> None:
     async with _client(caller=_EXTERNAL, questions=[_question()]) as (
+        client,
+        _,
+        _,
+        _,
+        _storage,
+    ):
+        resp = await client.get(_INTERNAL_URL)
+    assert resp.status_code == 403
+    assert resp.json()["error"] == "INSUFFICIENT_GROUP"
+
+
+async def test_internal_questions_reject_direction_initial_access() -> None:
+    async with _client(caller=_DIRECTION, questions=[_question()]) as (
         client,
         _,
         _,

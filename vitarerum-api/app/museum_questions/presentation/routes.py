@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
+from app.config import settings
 from app.database import get_async_session
 from app.museum_questions.application.read_models import MuseumQuestionListItem
 from app.museum_questions.application.use_cases import (
@@ -37,8 +38,12 @@ from app.museum_questions.presentation.dependencies import (
     GetUseCase,
     ListUseCase,
     MarkOutOfScopeUseCase,
+    MuseumQuestionNotificationDispatch,
+    MuseumQuestionNotificationEmailRecipients,
+    MuseumQuestionNotificationRecipients,
     QuestionFileStorage,
     SubmitUseCase,
+    distinct_email_recipients,
 )
 from app.museum_questions.presentation.schemas import (
     AnswerMuseumQuestionRequest,
@@ -50,7 +55,9 @@ from app.museum_questions.presentation.schemas import (
     MuseumQuestionSubmission,
     PaginatedMuseumQuestionsResponse,
 )
+from app.notifications.public import NotificationKind, RelatedResourceType
 from app.shared.dependencies import CallerPermission
+from app.shared.kernel import PermissionId
 from app.shared.uploads import (
     ALLOWED_IMAGE_MAX_BYTES,
     ALLOWED_IMAGE_MAX_COUNT,
@@ -336,6 +343,10 @@ async def _uploaded_images(
 async def submit_museum_question(
     request: Request,
     use_case: SubmitUseCase,
+    notification_dispatcher: MuseumQuestionNotificationDispatch,
+    notification_recipients: MuseumQuestionNotificationRecipients,
+    notification_email_recipients: MuseumQuestionNotificationEmailRecipients,
+    email_sender: EmailSender,
     session: DBSession,
 ) -> MuseumQuestionReceipt:
     body, files = await _submission_from_request(request)
@@ -376,11 +387,34 @@ async def submit_museum_question(
             attachments=uploaded_images,
         )
     )
+    if output.question_id is not None:
+        await notification_dispatcher.notify_many(
+            recipient_permission_ids=[
+                PermissionId(recipient.permission_id)
+                for recipient in notification_recipients
+            ],
+            kind=NotificationKind.MUSEUM_QUESTION_SUBMITTED,
+            triggered_by=None,
+            related_resource_type=RelatedResourceType.MUSEUM_QUESTION,
+            related_resource_id=output.question_id,
+            related_resource_label=body.subject,
+            note=f"Submitted by {body.requesterName} <{body.requesterEmail}>",
+        )
     try:
         await session.commit()
     except Exception:
         await use_case.discard_uploaded_files(output.file_references)
         raise
+    if output.question_id is not None:
+        link = f"{settings.public_origin}/p/museum-questions/{output.question_id}"
+        for recipient in distinct_email_recipients(notification_email_recipients):
+            await email_sender.send_question_submitted(
+                to_email=recipient.user.email,
+                recipient_name=recipient.user.name,
+                requester_name=body.requesterName,
+                subject=body.subject,
+                link=link,
+            )
     return MuseumQuestionReceipt(email=output.email)
 
 

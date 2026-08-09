@@ -48,9 +48,7 @@ def password_changed_email(display_name: str) -> EmailTemplate:
     )
 
 
-def public_submission_confirmation_email(
-    citizen_name: str, link: str
-) -> EmailTemplate:
+def public_submission_confirmation_email(citizen_name: str, link: str) -> EmailTemplate:
     return EmailTemplate(
         subject="Confirme o seu pedido / Confirm your request",
         body=(
@@ -151,6 +149,29 @@ def museum_question_out_of_scope_email(subject: str) -> EmailTemplate:
             "or other museum services are not yet handled through this channel "
             "and will be made available in a future version.\n\n"
             "Thank you for your understanding."
+        ),
+    )
+
+
+def museum_question_submitted_staff_email(
+    *,
+    recipient_name: str,
+    requester_name: str,
+    subject: str,
+    link: str,
+) -> EmailTemplate:
+    return EmailTemplate(
+        subject=f"Nova pergunta pública / New public inquiry: {subject}",
+        body=(
+            f"Olá {recipient_name},\n\n"
+            f"{requester_name} submeteu uma nova pergunta pública ao museu.\n\n"
+            "Os curadores e gestores de coleções podem rever a pergunta no "
+            f"Vitarerum: {link}\n\n"
+            "---\n\n"
+            f"Hello {recipient_name},\n\n"
+            f"{requester_name} submitted a new public inquiry to the museum.\n\n"
+            "Curators and collection managers can review the inquiry in "
+            f"Vitarerum: {link}"
         ),
     )
 

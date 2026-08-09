@@ -94,6 +94,8 @@ export class AppTopbarComponent {
     const label = notification.relatedResourceLabel ?? notification.relatedResourceId ?? 'Proposal';
     const actor = notification.triggeredBy?.user.name ?? 'A staff member';
     switch (notification.kind) {
+      case 'MUSEUM_QUESTION_SUBMITTED':
+        return `New public inquiry ${label} was submitted.`;
       case 'PROPOSAL_SUBMITTED':
         return `New proposal ${label} was submitted.`;
       case 'PROPOSAL_FORWARDED':
@@ -127,6 +129,9 @@ export class AppTopbarComponent {
         return `/p/collections/proposals/my-assignments/${notification.relatedResourceId}?tab=documents`;
       }
       return `/p/collections/proposals/${notification.relatedResourceId}`;
+    }
+    if (notification.relatedResourceType === 'MUSEUM_QUESTION' && notification.relatedResourceId) {
+      return `/p/museum-questions/${notification.relatedResourceId}`;
     }
     return null;
   }

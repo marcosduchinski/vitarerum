@@ -32,8 +32,13 @@ from app.shared.exceptions import InsufficientGroup
 _NOW = datetime(2026, 7, 5, 12, 0, tzinfo=UTC)
 _STAFF = Actor(
     id=PermissionId("perm-staff"),
-    group=GroupName.CURATORIAL,
+    group=GroupName.COLLECTIONS_MANAGEMENT,
     email="staff@example.org",
+)
+_DIRECTION = Actor(
+    id=PermissionId("perm-direction"),
+    group=GroupName.DIRECTION,
+    email="direction@example.org",
 )
 _EXTERNAL = Actor(
     id=PermissionId("perm-ext"),
@@ -140,8 +145,8 @@ def _question(
     )
 
 
-def _input(**overrides: str) -> SubmitMuseumQuestionInput:
-    data = {
+def _input(**overrides: object) -> SubmitMuseumQuestionInput:
+    data: dict[str, object] = {
         "requester_name": "Ana Souza",
         "requester_email": "ana@example.org",
         "subject": "Duvida sobre visita in situ",
@@ -255,6 +260,7 @@ async def test_persist_uploads_images_and_tracks_attachment_metadata() -> None:
         )
     )
     question = repo.added[0]
+    assert question.attachments is not None
     attachment = question.attachments[0]
     assert output.file_references == [attachment.file_reference]
     assert question.attachments == [
@@ -302,6 +308,13 @@ async def test_list_questions_requires_staff() -> None:
     with pytest.raises(InsufficientGroup):
         await ListMuseumQuestions(_Repo()).execute(
             _EXTERNAL, status=None, page=0, size=20
+        )
+
+
+async def test_list_questions_rejects_direction_initial_access() -> None:
+    with pytest.raises(InsufficientGroup):
+        await ListMuseumQuestions(_Repo()).execute(
+            _DIRECTION, status=None, page=0, size=20
         )
 
 

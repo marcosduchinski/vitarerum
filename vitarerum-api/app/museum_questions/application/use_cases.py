@@ -11,7 +11,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 
-from app.identity.public import Actor
+from app.identity.public import Actor, GroupName
 from app.museum_questions.application.ports import (
     CaptchaVerifier,
     Clock,
@@ -27,7 +27,7 @@ from app.museum_questions.domain.models import (
     MuseumQuestionNotFound,
     MuseumQuestionStatus,
 )
-from app.shared.authorization import require_staff
+from app.shared.authorization import require_group
 
 # Rate limits as (max_requests, window_seconds), mirroring public_submission's
 # reference implementation (same policy, duplicated code — see the plan).
@@ -35,6 +35,14 @@ RATE_LIMIT_PER_IP = (5, 60 * 60)
 RATE_LIMIT_PER_EMAIL = (3, 24 * 60 * 60)
 RATE_LIMIT_GLOBAL = (500, 60 * 60)
 RETRY_AFTER_SECONDS = 60
+MUSEUM_QUESTION_ACCESS_GROUPS = (
+    GroupName.CURATORIAL,
+    GroupName.COLLECTIONS_MANAGEMENT,
+)
+
+
+def require_museum_question_access(caller: Actor) -> None:
+    require_group(caller, *MUSEUM_QUESTION_ACCESS_GROUPS)
 
 
 class RateLimitExceeded(Exception):
@@ -237,7 +245,7 @@ class ListMuseumQuestions:
         page: int,
         size: int,
     ) -> MuseumQuestionPage:
-        require_staff(caller)
+        require_museum_question_access(caller)
         normalized_requester_email = (
             requester_email.strip().lower() if requester_email else None
         )
@@ -255,7 +263,7 @@ class GetMuseumQuestion:
         self._repo = repository
 
     async def execute(self, caller: Actor, question_id: str) -> MuseumQuestion:
-        require_staff(caller)
+        require_museum_question_access(caller)
         question = await self._repo.get_by_id(question_id)
         if question is None:
             raise MuseumQuestionNotFound(question_id)
@@ -272,7 +280,7 @@ class AnswerMuseumQuestion:
         self._clock = clock
 
     async def execute(self, data: AnswerMuseumQuestionInput) -> MuseumQuestion:
-        require_staff(data.caller)
+        require_museum_question_access(data.caller)
         question = await self._repo.get_by_id(data.question_id)
         if question is None:
             raise MuseumQuestionNotFound(data.question_id)
@@ -303,7 +311,7 @@ class MarkMuseumQuestionOutOfScope:
         self._clock = clock
 
     async def execute(self, data: MarkMuseumQuestionOutOfScopeInput) -> MuseumQuestion:
-        require_staff(data.caller)
+        require_museum_question_access(data.caller)
         question = await self._repo.get_by_id(data.question_id)
         if question is None:
             raise MuseumQuestionNotFound(data.question_id)
@@ -328,7 +336,7 @@ class CloseMuseumQuestion:
         self._clock = clock
 
     async def execute(self, data: CloseMuseumQuestionInput) -> MuseumQuestion:
-        require_staff(data.caller)
+        require_museum_question_access(data.caller)
         question = await self._repo.get_by_id(data.question_id)
         if question is None:
             raise MuseumQuestionNotFound(data.question_id)

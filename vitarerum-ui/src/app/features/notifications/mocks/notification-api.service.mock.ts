@@ -47,7 +47,9 @@ export class NotificationApiServiceMock implements NotificationApi {
 
   markRead(notificationId: string): Observable<Notification> {
     const updated = this.activeItems().map((item) =>
-      item.id === notificationId ? { ...item, readAt: item.readAt ?? new Date().toISOString() } : item,
+      item.id === notificationId
+        ? { ...item, readAt: item.readAt ?? new Date().toISOString() }
+        : item,
     );
     this.items.set(this.permissionId(), updated);
     return of(updated.find((item) => item.id === notificationId) ?? this.seed()[0]);
@@ -84,6 +86,17 @@ export class NotificationApiServiceMock implements NotificationApi {
 
   private seed(): Notification[] {
     return [
+      {
+        id: 'notif-museum-question-1',
+        kind: 'MUSEUM_QUESTION_SUBMITTED',
+        relatedResourceType: 'MUSEUM_QUESTION',
+        relatedResourceId: 'mq-submitted-1',
+        relatedResourceLabel: 'Question about an in situ visit',
+        triggeredBy: null,
+        note: 'Submitted by Ana Souza <ana@example.org>',
+        createdAt: new Date(Date.now() - 1000 * 60 * 4).toISOString(),
+        readAt: null,
+      },
       {
         id: 'notif-submitted-1',
         kind: 'PROPOSAL_SUBMITTED',

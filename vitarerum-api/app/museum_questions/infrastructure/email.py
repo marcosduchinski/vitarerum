@@ -14,6 +14,7 @@ from app.shared.email_templates import (
     museum_question_answer_subject,
     museum_question_answer_text_body,
     museum_question_out_of_scope_email,
+    museum_question_submitted_staff_email,
 )
 
 logger = logging.getLogger(__name__)
@@ -161,6 +162,22 @@ class LoggingMuseumQuestionEmailSender:
             subject,
         )
 
+    async def send_question_submitted(
+        self,
+        *,
+        to_email: str,
+        recipient_name: str,
+        requester_name: str,
+        subject: str,
+        link: str,
+    ) -> None:
+        logger.info(
+            "[museum-questions] submitted notification e-mail for %s (%s): %s",
+            to_email,
+            subject,
+            link,
+        )
+
 
 class SmtpMuseumQuestionEmailSender:
     def __init__(
@@ -210,6 +227,28 @@ class SmtpMuseumQuestionEmailSender:
         message["From"] = self._from
         message["To"] = to_email
         template = museum_question_out_of_scope_email(subject)
+        message["Subject"] = template.subject
+        message.set_content(template.body)
+        await self._send(message)
+
+    async def send_question_submitted(
+        self,
+        *,
+        to_email: str,
+        recipient_name: str,
+        requester_name: str,
+        subject: str,
+        link: str,
+    ) -> None:
+        message = EmailMessage()
+        message["From"] = self._from
+        message["To"] = to_email
+        template = museum_question_submitted_staff_email(
+            recipient_name=recipient_name,
+            requester_name=requester_name,
+            subject=subject,
+            link=link,
+        )
         message["Subject"] = template.subject
         message.set_content(template.body)
         await self._send(message)

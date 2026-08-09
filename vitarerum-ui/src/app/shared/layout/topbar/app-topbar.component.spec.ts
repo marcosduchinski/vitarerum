@@ -45,9 +45,7 @@ describe('AppTopbarComponent role switcher', () => {
     const fixture = TestBed.createComponent(AppTopbarComponent);
     fixture.detectChanges();
 
-    expect(
-      (fixture.nativeElement as HTMLElement).querySelector('#role-switcher'),
-    ).toBeNull();
+    expect((fixture.nativeElement as HTMLElement).querySelector('#role-switcher')).toBeNull();
   });
 
   it('switches the active group and permission before navigating to the dashboard', async () => {
@@ -89,8 +87,9 @@ describe('AppTopbarComponent role switcher', () => {
     const fixture = TestBed.createComponent(AppTopbarComponent);
     fixture.detectChanges();
 
-    const items = (fixture.componentInstance as unknown as { userMenuItems: () => MenuItem[] })
-      .userMenuItems();
+    const items = (
+      fixture.componentInstance as unknown as { userMenuItems: () => MenuItem[] }
+    ).userMenuItems();
     const changePasswordItem = items.find((item) => item.label === 'Change password');
     expect(changePasswordItem).toBeDefined();
 
@@ -125,9 +124,18 @@ describe('AppTopbarComponent role switcher', () => {
       readAt: null,
     };
 
+    expect(component.notificationText({ ...baseNotification, kind: 'PROPOSAL_SUBMITTED' })).toBe(
+      'New proposal VR-2026-001 was submitted.',
+    );
     expect(
-      component.notificationText({ ...baseNotification, kind: 'PROPOSAL_SUBMITTED' }),
-    ).toBe('New proposal VR-2026-001 was submitted.');
+      component.notificationText({
+        ...baseNotification,
+        kind: 'MUSEUM_QUESTION_SUBMITTED',
+        relatedResourceType: 'MUSEUM_QUESTION',
+        relatedResourceId: 'question-1',
+        relatedResourceLabel: 'Question about a specimen',
+      }),
+    ).toBe('New public inquiry Question about a specimen was submitted.');
     expect(
       component.notificationText({
         ...baseNotification,
@@ -164,6 +172,14 @@ describe('AppTopbarComponent role switcher', () => {
         kind: 'PROPOSAL_SUBMITTED',
       }),
     ).toBe('/p/collections/proposals/proposal-1');
+    expect(
+      component.notificationLink({
+        ...baseNotification,
+        kind: 'MUSEUM_QUESTION_SUBMITTED',
+        relatedResourceType: 'MUSEUM_QUESTION',
+        relatedResourceId: 'question-1',
+      }),
+    ).toBe('/p/museum-questions/question-1');
   });
 
   it('clears all visible notifications from the popover state', async () => {

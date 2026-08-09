@@ -14,6 +14,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import get_async_session
+from app.identity.public import (
+    GroupName,
+    PermissionReader,
+    PermissionView,
+    get_permission_reader,
+)
 from app.museum_questions.application.ports import (
     CaptchaVerifier,
     FileStorage,
@@ -42,6 +48,10 @@ from app.museum_questions.infrastructure.rate_limiter import (
 )
 from app.museum_questions.infrastructure.repositories import (
     SqlAlchemyMuseumQuestionRepository,
+)
+from app.notifications.public import NotificationDispatcher
+from app.notifications.public import (
+    get_notification_dispatcher as build_notification_dispatcher,
 )
 from app.shared.field_encryption import FieldEncryptor
 from app.shared.file_storage import build_file_storage
@@ -125,6 +135,48 @@ def get_email_sender() -> MuseumQuestionEmailSender:
     return _email_sender()
 
 
+def get_reader(session: DBSession) -> PermissionReader:
+    return get_permission_reader(session)
+
+
+async def _recipients_for_groups(
+    reader: PermissionReader, groups: tuple[GroupName, ...]
+) -> list[PermissionView]:
+    recipients: dict[str, PermissionView] = {}
+    for group in groups:
+        for permission in await reader.list_by_group(group):
+            recipients.setdefault(permission.permission_id, permission)
+    return list(recipients.values())
+
+
+async def get_museum_question_notification_recipients(
+    reader: Annotated[PermissionReader, Depends(get_reader)],
+) -> list[PermissionView]:
+    return await _recipients_for_groups(
+        reader, (GroupName.CURATORIAL, GroupName.COLLECTIONS_MANAGEMENT)
+    )
+
+
+async def get_museum_question_notification_email_recipients(
+    reader: Annotated[PermissionReader, Depends(get_reader)],
+) -> list[PermissionView]:
+    return await _recipients_for_groups(
+        reader, (GroupName.CURATORIAL, GroupName.COLLECTIONS_MANAGEMENT)
+    )
+
+
+def distinct_email_recipients(recipients: list[PermissionView]) -> list[PermissionView]:
+    distinct: dict[str, PermissionView] = {}
+    for recipient in recipients:
+        key = recipient.user.id or recipient.user.email.lower()
+        distinct.setdefault(key, recipient)
+    return list(distinct.values())
+
+
+def get_notifications_dispatcher(session: DBSession) -> NotificationDispatcher:
+    return build_notification_dispatcher(session)
+
+
 SubmitUseCase = Annotated[SubmitMuseumQuestion, Depends(get_submit_use_case)]
 ListUseCase = Annotated[ListMuseumQuestions, Depends(get_list_use_case)]
 GetUseCase = Annotated[GetMuseumQuestion, Depends(get_get_use_case)]
@@ -135,3 +187,12 @@ MarkOutOfScopeUseCase = Annotated[
 CloseUseCase = Annotated[CloseMuseumQuestion, Depends(get_close_use_case)]
 EmailSender = Annotated[MuseumQuestionEmailSender, Depends(get_email_sender)]
 QuestionFileStorage = Annotated[FileStorage, Depends(get_file_storage)]
+MuseumQuestionNotificationDispatch = Annotated[
+    NotificationDispatcher, Depends(get_notifications_dispatcher)
+]
+MuseumQuestionNotificationRecipients = Annotated[
+    list[PermissionView], Depends(get_museum_question_notification_recipients)
+]
+MuseumQuestionNotificationEmailRecipients = Annotated[
+    list[PermissionView], Depends(get_museum_question_notification_email_recipients)
+]

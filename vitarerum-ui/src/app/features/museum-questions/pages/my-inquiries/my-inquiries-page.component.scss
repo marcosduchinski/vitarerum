@@ -1,0 +1,13 @@
+.my-inquiries-page {
+  display: grid;
+  gap: 1.5rem;
+  align-content: start;
+}
+
+.my-inquiries-panel {
+  padding: 1.25rem;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-panel);
+  box-shadow: var(--shadow-panel);
+}

@@ -74,3 +74,13 @@ class MuseumQuestionEmailSender(Protocol):
         requester_name: str,
         subject: str,
     ) -> None: ...
+
+    async def send_question_submitted(
+        self,
+        *,
+        to_email: str,
+        recipient_name: str,
+        requester_name: str,
+        subject: str,
+        link: str,
+    ) -> None: ...

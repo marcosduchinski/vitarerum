@@ -7,8 +7,9 @@ export type NotificationKind =
   | 'PROPOSAL_FORWARDED'
   | 'PROPOSAL_TAKEN_OVER'
   | 'PROPOSAL_DOCUMENTS_SUBMITTED'
-  | 'PROPOSAL_CORRECTIONS_SUBMITTED';
-export type RelatedResourceType = 'PROPOSAL' | 'PROJECT';
+  | 'PROPOSAL_CORRECTIONS_SUBMITTED'
+  | 'MUSEUM_QUESTION_SUBMITTED';
+export type RelatedResourceType = 'PROPOSAL' | 'PROJECT' | 'MUSEUM_QUESTION';
 
 export interface Notification {
   readonly id: string;

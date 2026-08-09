@@ -342,6 +342,10 @@ forbidden_modules = [
     "app.public_submission",
     "app.document_templates",
     "app.collection_object_index",
+    "app.notifications",
+]
+ignore_imports = [
+    "app.museum_questions.** -> app.notifications.public",
 ]
 
 [[tool.importlinter.contracts]]
@@ -355,6 +359,7 @@ ignore_imports = [
     # the internal response section (museum-questions-response-section-plan.md)
     # adds its authenticated endpoints.
     "app.museum_questions.application.use_cases -> app.identity.public",
+    "app.museum_questions.presentation.dependencies -> app.identity.public",
     "app.shared.authorization -> app.identity.public",
     "app.shared.dependencies -> app.identity.public",
 ]

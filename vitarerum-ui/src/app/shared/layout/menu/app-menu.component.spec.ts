@@ -87,15 +87,33 @@ describe('AppMenuComponent', () => {
     expect(visitsLink.getAttribute('href')).toBe('/p/collections/reports/visits-in-situ');
   });
 
-  it('shows public inquiries inside use of collections for staff', () => {
+  it('groups public inquiries with new and my inquiries submenus for staff', () => {
     activeSession.set(sessionForGroup('COLLECTIONS_MANAGEMENT'));
     const fixture = TestBed.createComponent(AppMenuComponent);
     fixture.detectChanges();
 
     const compiled = fixture.nativeElement as HTMLElement;
-    const questionsLink = linkByText(compiled, 'Public Inquiries');
     expect(compiled.textContent).toContain('Use of Collections');
-    expect(questionsLink.getAttribute('href')).toBe('/p/museum-questions');
+
+    buttonByText(compiled, 'Public Inquiries').click();
+    fixture.detectChanges();
+
+    expect(linkByText(compiled, 'New Inquiries').getAttribute('href')).toBe('/p/museum-questions');
+    expect(linkByText(compiled, 'My Inquiries').getAttribute('href')).toBe(
+      '/p/museum-questions/my',
+    );
+  });
+
+  it('does not show public inquiries for direction', () => {
+    activeSession.set(sessionForGroup('DIRECTION'));
+    const fixture = TestBed.createComponent(AppMenuComponent);
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.textContent).toContain('Use of Collections');
+    expect(compiled.textContent).not.toContain('Public Inquiries');
+    expect(compiled.textContent).not.toContain('New Inquiries');
+    expect(compiled.textContent).not.toContain('My Inquiries');
   });
 
   it('groups object search under objects inside use of collections for staff', () => {

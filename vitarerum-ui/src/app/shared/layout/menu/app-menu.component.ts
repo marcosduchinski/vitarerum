@@ -115,13 +115,34 @@ const USE_OF_COLLECTIONS_OBJECTS: MenuNode = {
 const MUSEUM_QUESTIONS_ITEM: MenuNode = {
   label: 'Public Inquiries',
   icon: 'pi pi-question-circle',
-  routerLink: '/p/museum-questions',
+  items: [
+    {
+      label: 'New Inquiries',
+      icon: 'pi pi-inbox',
+      routerLink: '/p/museum-questions',
+    },
+    {
+      label: 'My Inquiries',
+      icon: 'pi pi-user',
+      routerLink: '/p/museum-questions/my',
+    },
+  ],
 };
 
-const USE_OF_COLLECTIONS_STAFF: MenuNode = {
+const USE_OF_COLLECTIONS_WITH_PUBLIC_INQUIRIES: MenuNode = {
   label: 'Use of Collections',
   items: [
     MUSEUM_QUESTIONS_ITEM,
+    COLLECTION_PROPOSALS_STAFF,
+    COLLECTION_PROJECTS_STAFF,
+    USE_OF_COLLECTIONS_OBJECTS,
+    COLLECTION_REPORTS_STAFF,
+  ],
+};
+
+const USE_OF_COLLECTIONS_WITHOUT_PUBLIC_INQUIRIES: MenuNode = {
+  label: 'Use of Collections',
+  items: [
     COLLECTION_PROPOSALS_STAFF,
     COLLECTION_PROJECTS_STAFF,
     USE_OF_COLLECTIONS_OBJECTS,
@@ -176,9 +197,14 @@ const STAFF_ADMIN_MENU: MenuNode = {
 
 const MENUS: Record<GroupName, readonly MenuNode[]> = {
   EXTERNAL: [HOME, USE_OF_COLLECTIONS_EXTERNAL],
-  COLLECTIONS_MANAGEMENT: [HOME, USE_OF_COLLECTIONS_STAFF, AI_PROMPTS_STAFF, STAFF_ADMIN_MENU],
-  CURATORIAL: [HOME, USE_OF_COLLECTIONS_STAFF, AI_PROMPTS_STAFF, STAFF_ADMIN_MENU],
-  DIRECTION: [HOME, USE_OF_COLLECTIONS_STAFF, AI_PROMPTS_STAFF],
+  COLLECTIONS_MANAGEMENT: [
+    HOME,
+    USE_OF_COLLECTIONS_WITH_PUBLIC_INQUIRIES,
+    AI_PROMPTS_STAFF,
+    STAFF_ADMIN_MENU,
+  ],
+  CURATORIAL: [HOME, USE_OF_COLLECTIONS_WITH_PUBLIC_INQUIRIES, AI_PROMPTS_STAFF, STAFF_ADMIN_MENU],
+  DIRECTION: [HOME, USE_OF_COLLECTIONS_WITHOUT_PUBLIC_INQUIRIES, AI_PROMPTS_STAFF],
   SYS_ADMIN: [HOME, SYS_ADMIN_MENU],
 };
 
