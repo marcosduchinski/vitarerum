@@ -50,6 +50,8 @@ class MuseumQuestionRepository(Protocol):
         *,
         status: MuseumQuestionStatus | None,
         requester_email: str | None,
+        assigned_to: str | None,
+        unassigned_only: bool,
         page: int,
         size: int,
     ) -> tuple[list[MuseumQuestionListItem], int]: ...

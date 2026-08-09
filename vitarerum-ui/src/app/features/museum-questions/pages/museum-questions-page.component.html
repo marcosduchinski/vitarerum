@@ -1,9 +1,13 @@
 <div class="questions-page">
-  <app-page-header
-    eyebrow="Messages"
-    title="Museum questions"
-    description="Review public messages submitted through Ask the Museum."
-  />
+  <app-page-header eyebrow="Messages" [title]="headerTitle" [description]="headerDescription" />
+  @if (forwardSuccessMessage(); as message) {
+    <div class="questions-alert" role="status">
+      <span>{{ message }}</span>
+      <button type="button" class="questions-alert__dismiss" (click)="dismissForwardSuccess()">
+        Dismiss
+      </button>
+    </div>
+  }
 
   @if (questionsResource.isLoading()) {
     <app-loading-state />
@@ -11,26 +15,25 @@
     <app-error-message [apiError]="listError()!" (retry)="questionsResource.reload()" />
   } @else {
     <section class="questions-list-panel" aria-label="Museum questions list">
-      <div class="questions-toolbar">
-        <label class="questions-filter" for="museum-question-status">
-          <span>Status</span>
-          <select
-            id="museum-question-status"
-            [value]="statusFilter()"
-            (change)="onStatusFilterChange($event)"
-          >
-            @for (option of statusOptions; track option.value) {
-              <option [value]="option.value">{{ option.label }}</option>
-            }
-          </select>
-        </label>
-      </div>
+      @if (!isNewInquiriesMode) {
+        <div class="questions-toolbar">
+          <label class="questions-filter" for="museum-question-status">
+            <span>Status</span>
+            <select
+              id="museum-question-status"
+              [value]="statusFilter()"
+              (change)="onStatusFilterChange($event)"
+            >
+              @for (option of statusOptions; track option.value) {
+                <option [value]="option.value">{{ option.label }}</option>
+              }
+            </select>
+          </label>
+        </div>
+      }
 
       @if (!questions().length) {
-        <app-empty-state
-          title="No questions found"
-          message="There are no messages for the selected status."
-        />
+        <app-empty-state [title]="emptyTitle" [message]="emptyMessage" />
       } @else {
         <div class="questions-table-shell">
           <table class="questions-table" aria-label="Museum questions">
@@ -159,5 +162,40 @@
         }
       }
     </section>
+    @if (forwardModalQuestion(); as question) {
+      <app-confirm-modal
+        [open]="true"
+        title="Forward enquiry"
+        confirmLabel="Forward"
+        cancelLabel="Cancel"
+        tone="warning"
+        [pending]="forwardPending()"
+        [confirmDisabled]="!forwardTargetPermissionId() || usersResource.isLoading()"
+        (confirmed)="forward(question.id)"
+        (cancelled)="closeForwardModal()"
+      >
+        <div class="forward-modal-body">
+          <p class="forward-modal-body__hint">{{ question.subject }}</p>
+          @if (usersResource.isLoading()) {
+            <app-loading-state label="Loading staff..." />
+          } @else {
+            <label for="forward-modal-target">Curator or collections manager</label>
+            <select
+              id="forward-modal-target"
+              [value]="forwardTargetPermissionId()"
+              (change)="onForwardTargetChange($event)"
+            >
+              <option value="" disabled>Select a responsible person...</option>
+              @for (opt of staffOptions(); track opt.permissionId) {
+                <option [value]="opt.permissionId">{{ opt.label }}</option>
+              }
+            </select>
+            @if (forwardError()) {
+              <app-error-message [apiError]="forwardError()!" />
+            }
+          }
+        </div>
+      </app-confirm-modal>
+    }
   }
 </div>

@@ -96,6 +96,8 @@ export class AppTopbarComponent {
     switch (notification.kind) {
       case 'MUSEUM_QUESTION_SUBMITTED':
         return `New public inquiry ${label} was submitted.`;
+      case 'MUSEUM_QUESTION_FORWARDED':
+        return `${actor} forwarded public inquiry ${label} to you.`;
       case 'PROPOSAL_SUBMITTED':
         return `New proposal ${label} was submitted.`;
       case 'PROPOSAL_FORWARDED':

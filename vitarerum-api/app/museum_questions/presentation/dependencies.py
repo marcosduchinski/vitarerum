@@ -29,6 +29,7 @@ from app.museum_questions.application.ports import (
 from app.museum_questions.application.use_cases import (
     AnswerMuseumQuestion,
     CloseMuseumQuestion,
+    ForwardMuseumQuestion,
     GetMuseumQuestion,
     ListMuseumQuestions,
     MarkMuseumQuestionOutOfScope,
@@ -109,8 +110,15 @@ def get_submit_use_case(session: DBSession) -> SubmitMuseumQuestion:
     )
 
 
-def get_list_use_case(session: DBSession) -> ListMuseumQuestions:
-    return ListMuseumQuestions(_repository(session))
+def get_reader(session: DBSession) -> PermissionReader:
+    return get_permission_reader(session)
+
+
+def get_list_use_case(
+    session: DBSession,
+    reader: Annotated[PermissionReader, Depends(get_reader)],
+) -> ListMuseumQuestions:
+    return ListMuseumQuestions(_repository(session), reader)
 
 
 def get_get_use_case(session: DBSession) -> GetMuseumQuestion:
@@ -131,12 +139,12 @@ def get_close_use_case(session: DBSession) -> CloseMuseumQuestion:
     return CloseMuseumQuestion(_repository(session), _clock)
 
 
+def get_forward_use_case(session: DBSession) -> ForwardMuseumQuestion:
+    return ForwardMuseumQuestion(_repository(session))
+
+
 def get_email_sender() -> MuseumQuestionEmailSender:
     return _email_sender()
-
-
-def get_reader(session: DBSession) -> PermissionReader:
-    return get_permission_reader(session)
 
 
 async def _recipients_for_groups(
@@ -185,6 +193,7 @@ MarkOutOfScopeUseCase = Annotated[
     MarkMuseumQuestionOutOfScope, Depends(get_mark_out_of_scope_use_case)
 ]
 CloseUseCase = Annotated[CloseMuseumQuestion, Depends(get_close_use_case)]
+ForwardUseCase = Annotated[ForwardMuseumQuestion, Depends(get_forward_use_case)]
 EmailSender = Annotated[MuseumQuestionEmailSender, Depends(get_email_sender)]
 QuestionFileStorage = Annotated[FileStorage, Depends(get_file_storage)]
 MuseumQuestionNotificationDispatch = Annotated[

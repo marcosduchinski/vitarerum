@@ -358,8 +358,11 @@ ignore_imports = [
     # shared staff-auth helpers (CallerPermission / require_staff) — needed once
     # the internal response section (museum-questions-response-section-plan.md)
     # adds its authenticated endpoints.
+    "app.museum_questions.application.read_models -> app.identity.public",
     "app.museum_questions.application.use_cases -> app.identity.public",
     "app.museum_questions.presentation.dependencies -> app.identity.public",
+    "app.museum_questions.presentation.routes -> app.identity.public",
+    "app.museum_questions.presentation.schemas -> app.identity.public",
     "app.shared.authorization -> app.identity.public",
     "app.shared.dependencies -> app.identity.public",
 ]

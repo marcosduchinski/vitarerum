@@ -15,6 +15,7 @@ describe('MuseumQuestionManagementServiceMock', () => {
     expect(page.content.map((question) => question.id)).toEqual(['q-1']);
     expect(page.content[0].attachmentCount).toBe(1);
     expect('attachments' in page.content[0]).toBe(false);
+    expect(page.content[0].assignedTo).toBeNull();
   });
 
   it('keeps attachment metadata on the detail response', async () => {
@@ -32,6 +33,27 @@ describe('MuseumQuestionManagementServiceMock', () => {
 
     expect(updated.status).toBe('ANSWERED');
     expect(updated.answerBody).toBe('<p>Manual answer</p>');
+  });
+
+  it('forwards a submitted question to my enquiries', async () => {
+    const updated = await firstValueFrom(
+      service.forward('q-1', { targetPermissionId: 'perm-carol' }),
+    );
+    const page = await firstValueFrom(
+      service.list({ assignedTo: 'perm-carol', status: 'SUBMITTED', page: 0, size: 20 }),
+    );
+
+    expect(updated.assignedTo?.permissionId).toBe('perm-carol');
+    expect(page.content.map((question) => question.id)).toContain('q-1');
+  });
+
+  it('removes forwarded questions from new inquiries', async () => {
+    await firstValueFrom(service.forward('q-1', { targetPermissionId: 'perm-carol' }));
+    const page = await firstValueFrom(
+      service.list({ status: 'SUBMITTED', unassignedOnly: true, page: 0, size: 20 }),
+    );
+
+    expect(page.content.map((question) => question.id)).not.toContain('q-1');
   });
 
   it('marks a submitted question out of scope', async () => {

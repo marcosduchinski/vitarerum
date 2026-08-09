@@ -117,12 +117,17 @@ const MUSEUM_QUESTIONS_ITEM: MenuNode = {
   icon: 'pi pi-question-circle',
   items: [
     {
-      label: 'New Inquiries',
-      icon: 'pi pi-inbox',
+      label: 'All Enquiries',
+      icon: 'pi pi-list',
       routerLink: '/p/museum-questions',
     },
     {
-      label: 'My Inquiries',
+      label: 'New Inquiries',
+      icon: 'pi pi-inbox',
+      routerLink: '/p/museum-questions/new',
+    },
+    {
+      label: 'My Enquiries',
       icon: 'pi pi-user',
       routerLink: '/p/museum-questions/my',
     },

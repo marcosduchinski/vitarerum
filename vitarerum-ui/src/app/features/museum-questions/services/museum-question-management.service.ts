@@ -6,6 +6,7 @@ import { Observable } from 'rxjs';
 
 import {
   AnswerMuseumQuestionRequest,
+  ForwardMuseumQuestionRequest,
   MarkOutOfScopeRequest,
   MuseumQuestion,
   MuseumQuestionAttachment,
@@ -17,6 +18,7 @@ export interface MuseumQuestionManagementApi {
   list(query: MuseumQuestionListQuery): Observable<MuseumQuestionPage>;
   get(questionId: string): Observable<MuseumQuestion>;
   answer(questionId: string, body: AnswerMuseumQuestionRequest): Observable<MuseumQuestion>;
+  forward(questionId: string, body: ForwardMuseumQuestionRequest): Observable<MuseumQuestion>;
   markOutOfScope(questionId: string, body: MarkOutOfScopeRequest): Observable<MuseumQuestion>;
   close(questionId: string): Observable<MuseumQuestion>;
   getAttachment(questionId: string, attachment: MuseumQuestionAttachment): Observable<Blob>;
@@ -35,6 +37,8 @@ export class MuseumQuestionManagementService implements MuseumQuestionManagement
     let params = new HttpParams().set('page', query.page).set('size', query.size);
     if (query.status) params = params.set('status', query.status);
     if (query.requesterEmail) params = params.set('requesterEmail', query.requesterEmail);
+    if (query.assignedTo) params = params.set('assignedTo', query.assignedTo);
+    if (query.unassignedOnly) params = params.set('unassignedOnly', true);
     return this.http.get<MuseumQuestionPage>(this.url('/museum-questions'), { params });
   }
 
@@ -44,6 +48,13 @@ export class MuseumQuestionManagementService implements MuseumQuestionManagement
 
   answer(questionId: string, body: AnswerMuseumQuestionRequest): Observable<MuseumQuestion> {
     return this.http.post<MuseumQuestion>(this.url(`/museum-questions/${questionId}/answer`), body);
+  }
+
+  forward(questionId: string, body: ForwardMuseumQuestionRequest): Observable<MuseumQuestion> {
+    return this.http.post<MuseumQuestion>(
+      this.url(`/museum-questions/${questionId}/forward`),
+      body,
+    );
   }
 
   markOutOfScope(questionId: string, body: MarkOutOfScopeRequest): Observable<MuseumQuestion> {

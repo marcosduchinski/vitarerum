@@ -1,4 +1,5 @@
 import { Page } from '@shared/models/page.model';
+import { PermissionPrincipal } from '@core/auth/models/permission.model';
 
 export type MuseumQuestionStatus = 'SUBMITTED' | 'ANSWERED' | 'OUT_OF_SCOPE' | 'CLOSED';
 
@@ -20,6 +21,7 @@ export interface MuseumQuestion {
   readonly outOfScopeEmailSentAt: string | null;
   readonly closedAt: string | null;
   readonly closedBy: string | null;
+  readonly assignedTo: PermissionPrincipal | null;
   readonly attachments: readonly MuseumQuestionAttachment[];
 }
 
@@ -41,6 +43,7 @@ export interface MuseumQuestionListItem {
   readonly outOfScopeEmailSentAt: string | null;
   readonly closedAt: string | null;
   readonly closedBy: string | null;
+  readonly assignedTo: PermissionPrincipal | null;
   readonly attachmentCount: number;
 }
 
@@ -57,6 +60,8 @@ export type MuseumQuestionPage = Page<MuseumQuestionListItem>;
 export interface MuseumQuestionListQuery {
   readonly status?: MuseumQuestionStatus | '';
   readonly requesterEmail?: string;
+  readonly assignedTo?: string;
+  readonly unassignedOnly?: boolean;
   readonly page: number;
   readonly size: number;
 }
@@ -67,4 +72,8 @@ export interface AnswerMuseumQuestionRequest {
 
 export interface MarkOutOfScopeRequest {
   readonly reason: string | null;
+}
+
+export interface ForwardMuseumQuestionRequest {
+  readonly targetPermissionId: string;
 }

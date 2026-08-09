@@ -11,7 +11,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 
-from app.identity.public import Actor, GroupName
+from app.identity.public import Actor, GroupName, PermissionId, PermissionReader
 from app.museum_questions.application.ports import (
     CaptchaVerifier,
     Clock,
@@ -232,9 +232,21 @@ class CloseMuseumQuestionInput:
     question_id: str
 
 
+@dataclass(frozen=True, slots=True)
+class ForwardMuseumQuestionInput:
+    caller: Actor
+    question_id: str
+    target_permission_id: str
+
+
 class ListMuseumQuestions:
-    def __init__(self, repository: MuseumQuestionRepository) -> None:
+    def __init__(
+        self,
+        repository: MuseumQuestionRepository,
+        permission_reader: PermissionReader | None = None,
+    ) -> None:
         self._repo = repository
+        self._permission_reader = permission_reader
 
     async def execute(
         self,
@@ -242,6 +254,8 @@ class ListMuseumQuestions:
         *,
         status: MuseumQuestionStatus | None,
         requester_email: str | None = None,
+        assigned_to: str | None = None,
+        unassigned_only: bool = False,
         page: int,
         size: int,
     ) -> MuseumQuestionPage:
@@ -252,9 +266,28 @@ class ListMuseumQuestions:
         content, total = await self._repo.list(
             status=status,
             requester_email=normalized_requester_email,
+            assigned_to=assigned_to,
+            unassigned_only=unassigned_only,
             page=page,
             size=size,
         )
+        if self._permission_reader is not None:
+            hydrated: list[MuseumQuestionListItem] = []
+            for item in content:
+                hydrated.append(
+                    MuseumQuestionListItem(
+                        question=item.question,
+                        attachment_count=item.attachment_count,
+                        assigned_to=(
+                            await self._permission_reader.get_detail(
+                                PermissionId(item.question.assigned_to)
+                            )
+                            if item.question.assigned_to
+                            else None
+                        ),
+                    )
+                )
+            content = hydrated
         return MuseumQuestionPage(content=content, page=page, size=size, total=total)
 
 
@@ -341,5 +374,19 @@ class CloseMuseumQuestion:
         if question is None:
             raise MuseumQuestionNotFound(data.question_id)
         question.close(by=str(data.caller.id), closed_at=self._clock.now())
+        await self._repo.save(question)
+        return question
+
+
+class ForwardMuseumQuestion:
+    def __init__(self, repository: MuseumQuestionRepository) -> None:
+        self._repo = repository
+
+    async def execute(self, data: ForwardMuseumQuestionInput) -> MuseumQuestion:
+        require_museum_question_access(data.caller)
+        question = await self._repo.get_by_id(data.question_id)
+        if question is None:
+            raise MuseumQuestionNotFound(data.question_id)
+        question.forward(target_permission_id=data.target_permission_id)
         await self._repo.save(question)
         return question

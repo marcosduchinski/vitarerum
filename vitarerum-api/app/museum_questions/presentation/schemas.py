@@ -13,6 +13,8 @@ from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
+from app.identity.public import GroupName
+
 _CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 _CRLF = re.compile(r"[\r\n]")
 
@@ -61,6 +63,18 @@ class MuseumQuestionAttachmentResponse(BaseModel):
     createdAt: datetime
 
 
+class UserSummary(BaseModel):
+    id: str
+    name: str
+    email: str
+
+
+class PermissionDetail(BaseModel):
+    permissionId: str
+    user: UserSummary
+    group: GroupName
+
+
 class MuseumQuestionListItemResponse(BaseModel):
     id: str
     requesterName: str
@@ -79,6 +93,7 @@ class MuseumQuestionListItemResponse(BaseModel):
     outOfScopeEmailSentAt: datetime | None = None
     closedAt: datetime | None = None
     closedBy: str | None = None
+    assignedTo: PermissionDetail | None = None
     attachmentCount: int = 0
 
 
@@ -100,6 +115,7 @@ class MuseumQuestionDetailResponse(BaseModel):
     outOfScopeEmailSentAt: datetime | None = None
     closedAt: datetime | None = None
     closedBy: str | None = None
+    assignedTo: PermissionDetail | None = None
     attachments: list[MuseumQuestionAttachmentResponse] = Field(default_factory=list)
 
 
@@ -133,3 +149,7 @@ class MarkOutOfScopeRequest(BaseModel):
             return None
         cleaned = _CONTROL_CHARS.sub("", v).strip()
         return cleaned or None
+
+
+class ForwardMuseumQuestionRequest(BaseModel):
+    targetPermissionId: str = Field(min_length=1, max_length=36)

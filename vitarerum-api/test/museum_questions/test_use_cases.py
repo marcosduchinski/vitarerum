@@ -13,6 +13,8 @@ from app.museum_questions.application.use_cases import (
     CaptchaUnavailable,
     CloseMuseumQuestion,
     CloseMuseumQuestionInput,
+    ForwardMuseumQuestion,
+    ForwardMuseumQuestionInput,
     ListMuseumQuestions,
     MarkMuseumQuestionOutOfScope,
     MarkMuseumQuestionOutOfScopeInput,
@@ -66,6 +68,8 @@ class _Repo:
         *,
         status: MuseumQuestionStatus | None,
         requester_email: str | None,
+        assigned_to: str | None,
+        unassigned_only: bool,
         page: int,
         size: int,
     ) -> tuple[list[MuseumQuestionListItem], int]:
@@ -78,6 +82,10 @@ class _Repo:
                 for q in rows
                 if q.requester_email.lower() == requester_email.strip().lower()
             ]
+        if assigned_to:
+            rows = [q for q in rows if q.assigned_to == assigned_to]
+        if unassigned_only:
+            rows = [q for q in rows if q.assigned_to is None]
         return [
             MuseumQuestionListItem(q, len(q.attachments or []))
             for q in rows[page * size : page * size + size]
@@ -133,6 +141,7 @@ def _question(
     status: MuseumQuestionStatus = MuseumQuestionStatus.SUBMITTED,
     created_at: datetime = _NOW,
     requester_email: str = "ana@example.org",
+    assigned_to: str | None = None,
 ) -> MuseumQuestion:
     return MuseumQuestion(
         id=question_id,
@@ -142,6 +151,7 @@ def _question(
         message="Gostaria de agendar uma visita para pesquisa.",
         created_at=created_at,
         status=status,
+        assigned_to=assigned_to,
     )
 
 
@@ -350,6 +360,24 @@ async def test_mark_out_of_scope_updates_status() -> None:
     assert result.out_of_scope_reason == "Exhibition question"
     assert result.out_of_scope_by == _STAFF.id
     assert result.out_of_scope_email_sent_at == _NOW
+
+
+async def test_forward_question_assigns_submitted_question() -> None:
+    repo = _Repo([_question()])
+    result = await ForwardMuseumQuestion(repo).execute(
+        ForwardMuseumQuestionInput(_STAFF, "q1", "perm-curator")
+    )
+    assert result.status == MuseumQuestionStatus.SUBMITTED
+    assert result.assigned_to == "perm-curator"
+    assert repo.questions["q1"].assigned_to == "perm-curator"
+
+
+async def test_forward_question_rejects_finalized_question() -> None:
+    repo = _Repo([_question(status=MuseumQuestionStatus.ANSWERED)])
+    with pytest.raises(InvalidMuseumQuestionTransition):
+        await ForwardMuseumQuestion(repo).execute(
+            ForwardMuseumQuestionInput(_STAFF, "q1", "perm-curator")
+        )
 
 
 @pytest.mark.parametrize(

@@ -13,12 +13,14 @@ from starlette.datastructures import UploadFile as StarletteUploadFile
 
 from app.config import settings
 from app.database import get_async_session
+from app.identity.public import GroupName, PermissionReader, PermissionView
 from app.museum_questions.application.read_models import MuseumQuestionListItem
 from app.museum_questions.application.use_cases import (
     AnswerMuseumQuestionInput,
     CaptchaFailed,
     CaptchaUnavailable,
     CloseMuseumQuestionInput,
+    ForwardMuseumQuestionInput,
     MarkMuseumQuestionOutOfScopeInput,
     RateLimitExceeded,
     SubmitMuseumQuestionInput,
@@ -35,6 +37,7 @@ from app.museum_questions.presentation.dependencies import (
     AnswerUseCase,
     CloseUseCase,
     EmailSender,
+    ForwardUseCase,
     GetUseCase,
     ListUseCase,
     MarkOutOfScopeUseCase,
@@ -44,9 +47,11 @@ from app.museum_questions.presentation.dependencies import (
     QuestionFileStorage,
     SubmitUseCase,
     distinct_email_recipients,
+    get_reader,
 )
 from app.museum_questions.presentation.schemas import (
     AnswerMuseumQuestionRequest,
+    ForwardMuseumQuestionRequest,
     MarkOutOfScopeRequest,
     MuseumQuestionAttachmentResponse,
     MuseumQuestionDetailResponse,
@@ -54,6 +59,8 @@ from app.museum_questions.presentation.schemas import (
     MuseumQuestionReceipt,
     MuseumQuestionSubmission,
     PaginatedMuseumQuestionsResponse,
+    PermissionDetail,
+    UserSummary,
 )
 from app.notifications.public import NotificationKind, RelatedResourceType
 from app.shared.dependencies import CallerPermission
@@ -72,6 +79,8 @@ router = APIRouter(prefix="/public", tags=["public-museum-questions"])
 internal_router = APIRouter(prefix="/museum-questions", tags=["museum-questions"])
 
 DBSession = Annotated[AsyncSession, Depends(get_async_session)]
+PermissionReaderDep = Annotated[PermissionReader, Depends(get_reader)]
+FORWARD_TARGET_GROUPS = (GroupName.CURATORIAL, GroupName.COLLECTIONS_MANAGEMENT)
 
 
 def _client_ip(request: Request) -> str:
@@ -132,6 +141,44 @@ def _attachment_response(
     )
 
 
+def _permission_detail(view: PermissionView | None) -> PermissionDetail | None:
+    if view is None:
+        return None
+    return PermissionDetail(
+        permissionId=view.permission_id,
+        user=UserSummary(id=view.user.id, name=view.user.name, email=view.user.email),
+        group=view.group,
+    )
+
+
+async def _hydrate_permission_detail(
+    permission_id: str | None,
+    reader: PermissionReader,
+) -> PermissionDetail | None:
+    if permission_id is None:
+        return None
+    return _permission_detail(await reader.get_detail(PermissionId(permission_id)))
+
+
+async def _require_forward_target(
+    permission_id: PermissionId,
+    reader: PermissionReader,
+) -> PermissionView:
+    view = await reader.get_detail(permission_id)
+    if view is None or view.group not in FORWARD_TARGET_GROUPS:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={
+                "error": "INVALID_PERMISSION_TARGET",
+                "message": (
+                    "Forward target must be a curatorial or collections "
+                    "management permission."
+                ),
+            },
+        )
+    return view
+
+
 def _question_list_item_response(
     item: MuseumQuestionListItem,
 ) -> MuseumQuestionListItemResponse:
@@ -154,11 +201,15 @@ def _question_list_item_response(
         outOfScopeEmailSentAt=question.out_of_scope_email_sent_at,
         closedAt=question.closed_at,
         closedBy=question.closed_by,
+        assignedTo=_permission_detail(item.assigned_to),
         attachmentCount=item.attachment_count,
     )
 
 
-def _question_detail_response(question: MuseumQuestion) -> MuseumQuestionDetailResponse:
+async def _question_detail_response(
+    question: MuseumQuestion,
+    reader: PermissionReader,
+) -> MuseumQuestionDetailResponse:
     return MuseumQuestionDetailResponse(
         id=question.id,
         requesterName=question.requester_name,
@@ -177,6 +228,7 @@ def _question_detail_response(question: MuseumQuestion) -> MuseumQuestionDetailR
         outOfScopeEmailSentAt=question.out_of_scope_email_sent_at,
         closedAt=question.closed_at,
         closedBy=question.closed_by,
+        assignedTo=await _hydrate_permission_detail(question.assigned_to, reader),
         attachments=[
             _attachment_response(attachment)
             for attachment in question.attachments or []
@@ -424,6 +476,8 @@ async def list_museum_questions(
     use_case: ListUseCase,
     status_filter: Annotated[MuseumQuestionStatus | None, Query(alias="status")] = None,
     requester_email: Annotated[str | None, Query(alias="requesterEmail")] = None,
+    assigned_to: Annotated[str | None, Query(alias="assignedTo")] = None,
+    unassigned_only: Annotated[bool, Query(alias="unassignedOnly")] = False,
     page: Annotated[int, Query(ge=0)] = 0,
     size: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> PaginatedMuseumQuestionsResponse:
@@ -431,6 +485,8 @@ async def list_museum_questions(
         caller,
         status=status_filter,
         requester_email=requester_email,
+        assigned_to=assigned_to,
+        unassigned_only=unassigned_only,
         page=page,
         size=size,
     )
@@ -448,12 +504,13 @@ async def get_museum_question(
     question_id: str,
     caller: CallerPermission,
     use_case: GetUseCase,
+    reader: PermissionReaderDep,
 ) -> MuseumQuestionDetailResponse:
     try:
         question = await use_case.execute(caller, question_id)
     except MuseumQuestionNotFound as exc:
         raise _not_found(question_id) from exc
-    return _question_detail_response(question)
+    return await _question_detail_response(question, reader)
 
 
 @internal_router.post(
@@ -466,6 +523,7 @@ async def answer_museum_question(
     use_case: AnswerUseCase,
     email_sender: EmailSender,
     session: DBSession,
+    reader: PermissionReaderDep,
 ) -> MuseumQuestionDetailResponse:
     try:
         question = await use_case.execute(
@@ -488,7 +546,7 @@ async def answer_museum_question(
         subject=question.subject,
         answer_body=body.answerBody,
     )
-    return _question_detail_response(question)
+    return await _question_detail_response(question, reader)
 
 
 @internal_router.post(
@@ -501,6 +559,7 @@ async def mark_museum_question_out_of_scope(
     use_case: MarkOutOfScopeUseCase,
     email_sender: EmailSender,
     session: DBSession,
+    reader: PermissionReaderDep,
 ) -> MuseumQuestionDetailResponse:
     try:
         question = await use_case.execute(
@@ -519,7 +578,46 @@ async def mark_museum_question_out_of_scope(
         requester_name=question.requester_name,
         subject=question.subject,
     )
-    return _question_detail_response(question)
+    return await _question_detail_response(question, reader)
+
+
+@internal_router.post(
+    "/{question_id}/forward", response_model=MuseumQuestionDetailResponse
+)
+async def forward_museum_question(
+    question_id: str,
+    body: ForwardMuseumQuestionRequest,
+    caller: CallerPermission,
+    use_case: ForwardUseCase,
+    notification_dispatcher: MuseumQuestionNotificationDispatch,
+    session: DBSession,
+    reader: PermissionReaderDep,
+) -> MuseumQuestionDetailResponse:
+    target_permission_id = PermissionId(body.targetPermissionId)
+    target = await _require_forward_target(target_permission_id, reader)
+    try:
+        question = await use_case.execute(
+            ForwardMuseumQuestionInput(
+                caller=caller,
+                question_id=question_id,
+                target_permission_id=target.permission_id,
+            )
+        )
+    except MuseumQuestionNotFound as exc:
+        raise _not_found(question_id) from exc
+    except InvalidMuseumQuestionTransition as exc:
+        raise _invalid_transition(exc) from exc
+    if target_permission_id != caller.id:
+        await notification_dispatcher.notify(
+            recipient_permission_id=target_permission_id,
+            kind=NotificationKind.MUSEUM_QUESTION_FORWARDED,
+            triggered_by=caller.id,
+            related_resource_type=RelatedResourceType.MUSEUM_QUESTION,
+            related_resource_id=question.id,
+            related_resource_label=question.subject,
+        )
+    await session.commit()
+    return await _question_detail_response(question, reader)
 
 
 @internal_router.get("/{question_id}/attachments/{attachment_id}")
@@ -564,6 +662,7 @@ async def close_museum_question(
     caller: CallerPermission,
     use_case: CloseUseCase,
     session: DBSession,
+    reader: PermissionReaderDep,
 ) -> MuseumQuestionDetailResponse:
     try:
         question = await use_case.execute(
@@ -574,4 +673,4 @@ async def close_museum_question(
     except InvalidMuseumQuestionTransition as exc:
         raise _invalid_transition(exc) from exc
     await session.commit()
-    return _question_detail_response(question)
+    return await _question_detail_response(question, reader)

@@ -63,6 +63,7 @@ class MuseumQuestion:
     out_of_scope_email_sent_at: datetime | None = None
     closed_at: datetime | None = None
     closed_by: str | None = None
+    assigned_to: str | None = None
     attachments: list[MuseumQuestionAttachment] | None = None
 
     def __post_init__(self) -> None:
@@ -120,3 +121,10 @@ class MuseumQuestion:
         self.status = MuseumQuestionStatus.CLOSED
         self.closed_by = by
         self.closed_at = closed_at
+
+    def forward(self, *, target_permission_id: str) -> None:
+        if self.status != MuseumQuestionStatus.SUBMITTED:
+            raise InvalidMuseumQuestionTransition(
+                "Only submitted questions can be forwarded."
+            )
+        self.assigned_to = target_permission_id

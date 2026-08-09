@@ -47,6 +47,9 @@ class MuseumQuestionRecord(Base):
         DateTime(timezone=True), nullable=True
     )
     closed_by: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    assigned_to: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, index=True
+    )
 
     attachments: Mapped[list[MuseumQuestionAttachmentRecord]] = relationship(
         back_populates="question",

@@ -23,6 +23,7 @@ from app.museum_questions.application.read_models import MuseumQuestionListItem
 from app.museum_questions.application.use_cases import (
     AnswerMuseumQuestion,
     CloseMuseumQuestion,
+    ForwardMuseumQuestion,
     GetMuseumQuestion,
     ListMuseumQuestions,
     MarkMuseumQuestionOutOfScope,
@@ -38,12 +39,14 @@ from app.museum_questions.presentation.dependencies import (
     get_close_use_case,
     get_email_sender,
     get_file_storage,
+    get_forward_use_case,
     get_get_use_case,
     get_list_use_case,
     get_mark_out_of_scope_use_case,
     get_museum_question_notification_email_recipients,
     get_museum_question_notification_recipients,
     get_notifications_dispatcher,
+    get_reader,
     get_submit_use_case,
 )
 from app.museum_questions.presentation.routes import _uploaded_images
@@ -86,6 +89,8 @@ class _Repo:
         *,
         status: MuseumQuestionStatus | None,
         requester_email: str | None,
+        assigned_to: str | None,
+        unassigned_only: bool,
         page: int,
         size: int,
     ) -> tuple[list[MuseumQuestionListItem], int]:
@@ -98,6 +103,10 @@ class _Repo:
                 for q in rows
                 if q.requester_email.lower() == requester_email.strip().lower()
             ]
+        if assigned_to:
+            rows = [q for q in rows if q.assigned_to == assigned_to]
+        if unassigned_only:
+            rows = [q for q in rows if q.assigned_to is None]
         return [
             MuseumQuestionListItem(q, len(q.attachments or []))
             for q in rows[page * size : page * size + size]
@@ -170,10 +179,31 @@ class _EmailSender:
 
 class _NotificationDispatcher:
     def __init__(self) -> None:
+        self.single: list[dict[str, object]] = []
         self.many: list[dict[str, object]] = []
+
+    async def notify(self, **kwargs: object) -> None:
+        self.single.append(kwargs)
 
     async def notify_many(self, **kwargs: object) -> None:
         self.many.append(kwargs)
+
+
+class _Reader:
+    def __init__(self, permissions: list[PermissionView] | None = None) -> None:
+        self.permissions = {
+            permission.permission_id: permission for permission in permissions or []
+        }
+
+    async def get_detail(self, permission_id: PermissionId) -> PermissionView | None:
+        return self.permissions.get(permission_id)
+
+    async def list_by_group(self, group: GroupName) -> list[PermissionView]:
+        return [
+            permission
+            for permission in self.permissions.values()
+            if permission.group == group
+        ]
 
 
 class _Storage:
@@ -219,12 +249,14 @@ async def _client(
     notification_dispatcher: _NotificationDispatcher | None = None,
     notification_recipients: list[PermissionView] | None = None,
     notification_email_recipients: list[PermissionView] | None = None,
+    permissions: list[PermissionView] | None = None,
 ) -> AsyncIterator[tuple[AsyncClient, _Repo, _EmailSender, _Session, _Storage]]:
     repo = _Repo(questions)
     email_sender = _EmailSender()
     session = _Session(fail_commit=fail_commit)
     storage = _Storage()
     dispatcher = notification_dispatcher or _NotificationDispatcher()
+    reader = _Reader(permissions)
     use_case = SubmitMuseumQuestion(
         repository=repo,
         captcha=_Captcha(ok=captcha_ok, raise_error=captcha_raises),
@@ -233,7 +265,9 @@ async def _client(
         file_storage=storage,
     )
     app.dependency_overrides[get_submit_use_case] = lambda: use_case
-    app.dependency_overrides[get_list_use_case] = lambda: ListMuseumQuestions(repo)
+    app.dependency_overrides[get_list_use_case] = lambda: ListMuseumQuestions(
+        repo, reader
+    )
     app.dependency_overrides[get_get_use_case] = lambda: GetMuseumQuestion(repo)
     app.dependency_overrides[get_answer_use_case] = lambda: AnswerMuseumQuestion(
         repo, _Clock()
@@ -244,9 +278,11 @@ async def _client(
     app.dependency_overrides[get_close_use_case] = lambda: CloseMuseumQuestion(
         repo, _Clock()
     )
+    app.dependency_overrides[get_forward_use_case] = lambda: ForwardMuseumQuestion(repo)
     app.dependency_overrides[get_email_sender] = lambda: email_sender
     app.dependency_overrides[get_file_storage] = lambda: storage
     app.dependency_overrides[get_notifications_dispatcher] = lambda: dispatcher
+    app.dependency_overrides[get_reader] = lambda: reader
     app.dependency_overrides[get_museum_question_notification_recipients] = lambda: (
         notification_recipients or []
     )
@@ -282,6 +318,7 @@ def _question(
     status: MuseumQuestionStatus = MuseumQuestionStatus.SUBMITTED,
     created_at: datetime = _NOW,
     requester_email: str = "ana@example.org",
+    assigned_to: str | None = None,
 ) -> MuseumQuestion:
     return MuseumQuestion(
         id=question_id,
@@ -291,6 +328,7 @@ def _question(
         message="Gostaria de agendar uma visita para pesquisa.",
         created_at=created_at,
         status=status,
+        assigned_to=assigned_to,
     )
 
 
@@ -649,6 +687,62 @@ async def test_list_internal_questions_filters_by_requester_email() -> None:
     assert [item["id"] for item in body["content"]] == ["q1"]
 
 
+async def test_list_questions_filters_by_assignee_and_hydrates_assignment() -> None:
+    assignee = _permission(
+        "perm-curator",
+        name="Curator",
+        email="curator@example.org",
+        group=GroupName.CURATORIAL,
+    )
+    questions = [
+        _question("q1", assigned_to="perm-curator"),
+        _question("q2", assigned_to="perm-other"),
+    ]
+    async with _client(questions=questions, permissions=[assignee]) as (
+        client,
+        _,
+        _,
+        _,
+        _storage,
+    ):
+        resp = await client.get(
+            _INTERNAL_URL,
+            params={"assignedTo": "perm-curator", "page": 0, "size": 20},
+        )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert [item["id"] for item in body["content"]] == ["q1"]
+    assert body["content"][0]["assignedTo"] == {
+        "permissionId": "perm-curator",
+        "user": {
+            "id": "perm-curator",
+            "name": "Curator",
+            "email": "curator@example.org",
+        },
+        "group": "CURATORIAL",
+    }
+
+
+async def test_list_questions_filters_unassigned_submitted() -> None:
+    questions = [
+        _question("q1"),
+        _question("q2", assigned_to="perm-curator"),
+        _question("q3", status=MuseumQuestionStatus.ANSWERED),
+    ]
+    async with _client(questions=questions) as (client, _, _, _, _storage):
+        resp = await client.get(
+            _INTERNAL_URL,
+            params={
+                "status": "SUBMITTED",
+                "unassignedOnly": "true",
+                "page": 0,
+                "size": 20,
+            },
+        )
+    assert resp.status_code == 200
+    assert [item["id"] for item in resp.json()["content"]] == ["q1"]
+
+
 async def test_internal_questions_reject_non_staff() -> None:
     async with _client(caller=_EXTERNAL, questions=[_question()]) as (
         client,
@@ -676,13 +770,23 @@ async def test_internal_questions_reject_direction_initial_access() -> None:
 
 
 async def test_get_internal_question_detail() -> None:
-    async with _client(questions=[_question()]) as (client, _, _, _, _storage):
+    assignee = _permission(
+        "perm-curator",
+        name="Curator",
+        email="curator@example.org",
+        group=GroupName.CURATORIAL,
+    )
+    async with _client(
+        questions=[_question(assigned_to="perm-curator")],
+        permissions=[assignee],
+    ) as (client, _, _, _, _storage):
         resp = await client.get(f"{_INTERNAL_URL}/q1")
     assert resp.status_code == 200
     body = resp.json()
     assert body["id"] == "q1"
     assert body["message"] == "Gostaria de agendar uma visita para pesquisa."
     assert body["attachments"] == []
+    assert body["assignedTo"]["permissionId"] == "perm-curator"
 
 
 async def test_get_internal_question_detail_includes_attachments() -> None:
@@ -800,6 +904,81 @@ async def test_mark_out_of_scope_sends_standard_email() -> None:
     assert resp.json()["status"] == "OUT_OF_SCOPE"
     assert repo.questions["q1"].out_of_scope_reason == "Exhibition request"
     assert sender.out_of_scope == ["ana@example.org"]
+
+
+async def test_forward_internal_question_assigns_and_notifies_target() -> None:
+    dispatcher = _NotificationDispatcher()
+    assignee = _permission(
+        "perm-curator",
+        name="Curator",
+        email="curator@example.org",
+        group=GroupName.CURATORIAL,
+    )
+    async with _client(
+        questions=[_question()],
+        permissions=[assignee],
+        notification_dispatcher=dispatcher,
+    ) as (client, repo, _, session, _storage):
+        resp = await client.post(
+            f"{_INTERNAL_URL}/q1/forward",
+            json={"targetPermissionId": "perm-curator"},
+        )
+    assert resp.status_code == 200
+    assert repo.questions["q1"].assigned_to == "perm-curator"
+    assert resp.json()["assignedTo"]["permissionId"] == "perm-curator"
+    assert dispatcher.single == [
+        {
+            "recipient_permission_id": PermissionId("perm-curator"),
+            "kind": "MUSEUM_QUESTION_FORWARDED",
+            "triggered_by": _STAFF.id,
+            "related_resource_type": "MUSEUM_QUESTION",
+            "related_resource_id": "q1",
+            "related_resource_label": "Duvida sobre visita in situ",
+        }
+    ]
+    assert session.committed is True
+
+
+async def test_forward_internal_question_rejects_invalid_target_group() -> None:
+    direction = _permission(
+        "perm-direction",
+        name="Director",
+        email="direction@example.org",
+        group=GroupName.DIRECTION,
+    )
+    async with _client(questions=[_question()], permissions=[direction]) as (
+        client,
+        repo,
+        _,
+        _session,
+        _storage,
+    ):
+        resp = await client.post(
+            f"{_INTERNAL_URL}/q1/forward",
+            json={"targetPermissionId": "perm-direction"},
+        )
+    assert resp.status_code == 422
+    assert resp.json()["error"] == "INVALID_PERMISSION_TARGET"
+    assert repo.questions["q1"].assigned_to is None
+
+
+async def test_forward_internal_question_rejects_answered_question() -> None:
+    assignee = _permission(
+        "perm-curator",
+        name="Curator",
+        email="curator@example.org",
+        group=GroupName.CURATORIAL,
+    )
+    async with _client(
+        questions=[_question(status=MuseumQuestionStatus.ANSWERED)],
+        permissions=[assignee],
+    ) as (client, repo, _, _session, _storage):
+        resp = await client.post(
+            f"{_INTERNAL_URL}/q1/forward",
+            json={"targetPermissionId": "perm-curator"},
+        )
+    assert resp.status_code == 409
+    assert repo.questions["q1"].assigned_to is None
 
 
 @pytest.mark.parametrize(

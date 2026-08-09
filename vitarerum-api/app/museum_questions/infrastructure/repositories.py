@@ -56,6 +56,7 @@ def _to_domain(
         out_of_scope_email_sent_at=record.out_of_scope_email_sent_at,
         closed_at=record.closed_at,
         closed_by=record.closed_by,
+        assigned_to=record.assigned_to,
         attachments=[
             MuseumQuestionAttachment(
                 id=attachment.id,
@@ -106,6 +107,7 @@ def _apply(
     record.out_of_scope_email_sent_at = question.out_of_scope_email_sent_at
     record.closed_at = question.closed_at
     record.closed_by = question.closed_by
+    record.assigned_to = question.assigned_to
     record.attachments = [
         MuseumQuestionAttachmentRecord(
             id=attachment.id,
@@ -141,6 +143,7 @@ class SqlAlchemyMuseumQuestionRepository:
             out_of_scope_email_sent_at=question.out_of_scope_email_sent_at,
             closed_at=question.closed_at,
             closed_by=question.closed_by,
+            assigned_to=question.assigned_to,
         )
         _apply(record, question, self._encryptor)
         self._session.add(record)
@@ -162,6 +165,8 @@ class SqlAlchemyMuseumQuestionRepository:
         *,
         status: MuseumQuestionStatus | None,
         requester_email: str | None,
+        assigned_to: str | None,
+        unassigned_only: bool,
         page: int,
         size: int,
     ) -> tuple[list[MuseumQuestionListItem], int]:
@@ -173,6 +178,10 @@ class SqlAlchemyMuseumQuestionRepository:
                 MuseumQuestionRecord.requester_email_hash
                 == self._encryptor.lookup_hash(requester_email, _REQUESTER_EMAIL_HASH)
             )
+        if assigned_to:
+            filters.append(MuseumQuestionRecord.assigned_to == assigned_to)
+        if unassigned_only:
+            filters.append(MuseumQuestionRecord.assigned_to.is_(None))
 
         total_stmt = select(func.count()).select_from(MuseumQuestionRecord)
         attachment_counts = (

@@ -87,7 +87,7 @@ describe('AppMenuComponent', () => {
     expect(visitsLink.getAttribute('href')).toBe('/p/collections/reports/visits-in-situ');
   });
 
-  it('groups public inquiries with new and my inquiries submenus for staff', () => {
+  it('groups public enquiries with all, new, and my enquiries submenus for staff', () => {
     activeSession.set(sessionForGroup('COLLECTIONS_MANAGEMENT'));
     const fixture = TestBed.createComponent(AppMenuComponent);
     fixture.detectChanges();
@@ -98,8 +98,11 @@ describe('AppMenuComponent', () => {
     buttonByText(compiled, 'Public Inquiries').click();
     fixture.detectChanges();
 
-    expect(linkByText(compiled, 'New Inquiries').getAttribute('href')).toBe('/p/museum-questions');
-    expect(linkByText(compiled, 'My Inquiries').getAttribute('href')).toBe(
+    expect(linkByText(compiled, 'All Enquiries').getAttribute('href')).toBe('/p/museum-questions');
+    expect(linkByText(compiled, 'New Inquiries').getAttribute('href')).toBe(
+      '/p/museum-questions/new',
+    );
+    expect(linkByText(compiled, 'My Enquiries').getAttribute('href')).toBe(
       '/p/museum-questions/my',
     );
   });
@@ -112,8 +115,9 @@ describe('AppMenuComponent', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.textContent).toContain('Use of Collections');
     expect(compiled.textContent).not.toContain('Public Inquiries');
+    expect(compiled.textContent).not.toContain('All Enquiries');
     expect(compiled.textContent).not.toContain('New Inquiries');
-    expect(compiled.textContent).not.toContain('My Inquiries');
+    expect(compiled.textContent).not.toContain('My Enquiries');
   });
 
   it('groups object search under objects inside use of collections for staff', () => {

@@ -6,11 +6,15 @@ import {
   resource,
   signal,
 } from '@angular/core';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { MenuItem } from 'primeng/api';
 import { firstValueFrom } from 'rxjs';
 
 import { ApiError, toApiError } from '@core/http/api-error.model';
+import { GroupName } from '@core/auth/models/group-name.enum';
+import { groupNameOf } from '@core/auth/models/permission.model';
+import { USER_MANAGEMENT_SERVICE } from '@features/admin/services/user-management.service';
+import { ConfirmModalComponent } from '@shared/components/confirm-modal/confirm-modal.component';
 import { EmptyStateComponent } from '@shared/components/empty-state/empty-state.component';
 import { ErrorMessageComponent } from '@shared/components/error-message/error-message.component';
 import { LoadingStateComponent } from '@shared/components/loading-state/loading-state.component';
@@ -29,13 +33,24 @@ const STATUS_OPTIONS: readonly { value: MuseumQuestionStatus | ''; label: string
   { value: 'CLOSED', label: 'Closed' },
   { value: '', label: 'All statuses' },
 ];
-
 const STATUS_LABELS: Record<MuseumQuestionStatus, string> = {
   SUBMITTED: 'Submitted',
   ANSWERED: 'Answered',
   OUT_OF_SCOPE: 'Out of scope',
   CLOSED: 'Closed',
 };
+
+const GROUP_LABELS: Partial<Record<GroupName, string>> = {
+  CURATORIAL: 'Curatorial',
+  COLLECTIONS_MANAGEMENT: 'Collections management',
+};
+
+interface ForwardStaffOption {
+  readonly label: string;
+  readonly permissionId: string;
+}
+
+type MuseumQuestionListMode = 'all' | 'new';
 
 @Component({
   selector: 'app-museum-questions-page',
@@ -47,6 +62,7 @@ const STATUS_LABELS: Record<MuseumQuestionStatus, string> = {
     ErrorMessageComponent,
     EmptyStateComponent,
     RowActionsComponent,
+    ConfirmModalComponent,
   ],
   templateUrl: './museum-questions-page.component.html',
   styleUrl: './museum-questions-page.component.scss',
@@ -54,13 +70,28 @@ const STATUS_LABELS: Record<MuseumQuestionStatus, string> = {
 })
 export class MuseumQuestionsPageComponent {
   private readonly service = inject(MUSEUM_QUESTION_MANAGEMENT_SERVICE);
+  private readonly userService = inject(USER_MANAGEMENT_SERVICE);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
+  private readonly mode = (this.route.snapshot.data['museumQuestionListMode'] ??
+    'all') as MuseumQuestionListMode;
 
   protected readonly statusOptions = STATUS_OPTIONS;
   protected readonly currentPage = signal(0);
   protected readonly pageSize = signal(DEFAULT_PAGE_SIZE);
   protected readonly statusFilter = signal<MuseumQuestionStatus | ''>('SUBMITTED');
   protected readonly pageSizeOptions = PAGE_SIZE_OPTIONS;
+  protected readonly isNewInquiriesMode = this.mode === 'new';
+  protected readonly headerTitle = this.isNewInquiriesMode ? 'New inquiries' : 'All enquiries';
+  protected readonly headerDescription = this.isNewInquiriesMode
+    ? 'Submitted public enquiries waiting to be forwarded.'
+    : 'Review public messages submitted through Ask the Museum.';
+  protected readonly emptyTitle = this.isNewInquiriesMode
+    ? 'No new inquiries'
+    : 'No questions found';
+  protected readonly emptyMessage = this.isNewInquiriesMode
+    ? 'There are no submitted enquiries waiting to be forwarded.'
+    : 'There are no messages for the selected status.';
 
   protected readonly questionsResource = resource({
     params: () => ({
@@ -73,9 +104,14 @@ export class MuseumQuestionsPageComponent {
         this.service.list({
           page: params.page,
           size: params.size,
-          status: params.status,
+          status: this.isNewInquiriesMode ? 'SUBMITTED' : params.status,
+          unassignedOnly: this.isNewInquiriesMode,
         }),
       ),
+  });
+
+  protected readonly usersResource = resource({
+    loader: () => firstValueFrom(this.userService.listUsers({ size: 100 })),
   });
 
   protected readonly questions = computed(() => this.questionsResource.value()?.content ?? []);
@@ -93,10 +129,33 @@ export class MuseumQuestionsPageComponent {
     const err = this.questionsResource.error();
     return err ? toApiError(err) : null;
   });
+  protected readonly staffOptions = computed<ForwardStaffOption[]>(() =>
+    (this.usersResource.value()?.content ?? []).flatMap((user) =>
+      user.permissions.flatMap((permission) => {
+        const groupName = groupNameOf(permission.group);
+        if (groupName !== 'CURATORIAL' && groupName !== 'COLLECTIONS_MANAGEMENT') return [];
+        return [
+          {
+            label: `${user.name} — ${GROUP_LABELS[groupName]}`,
+            permissionId: permission.permissionId,
+          },
+        ];
+      }),
+    ),
+  );
 
   protected actionItemsFor(question: MuseumQuestionListItem): MenuItem[] {
     const questionId = question.id;
     return [
+      ...(question.status === 'SUBMITTED' && question.assignedTo === null
+        ? [
+            {
+              label: 'Forward',
+              icon: 'pi pi-send',
+              command: () => this.openForwardModal(questionId),
+            },
+          ]
+        : []),
       {
         label: 'Details',
         icon: 'pi pi-eye',
@@ -110,6 +169,58 @@ export class MuseumQuestionsPageComponent {
   protected onStatusFilterChange(event: Event): void {
     this.statusFilter.set((event.target as HTMLSelectElement).value as MuseumQuestionStatus | '');
     this.currentPage.set(0);
+  }
+
+  protected readonly forwardModalQuestionId = signal<string | null>(null);
+  protected readonly forwardModalQuestion = computed(() => {
+    const questionId = this.forwardModalQuestionId();
+    return this.questions().find((question) => question.id === questionId) ?? null;
+  });
+  protected readonly forwardTargetPermissionId = signal('');
+  protected readonly forwardTargetLabel = computed(
+    () =>
+      this.staffOptions().find((option) => option.permissionId === this.forwardTargetPermissionId())
+        ?.label ?? 'the selected staff member',
+  );
+  protected readonly forwardPending = signal(false);
+  protected readonly forwardError = signal<ApiError | null>(null);
+  protected readonly forwardSuccessMessage = signal<string | null>(null);
+
+  protected openForwardModal(questionId: string): void {
+    this.forwardModalQuestionId.set(questionId);
+    this.forwardTargetPermissionId.set('');
+    this.forwardError.set(null);
+  }
+
+  protected closeForwardModal(): void {
+    if (this.forwardPending()) return;
+    this.forwardModalQuestionId.set(null);
+  }
+
+  protected onForwardTargetChange(event: Event): void {
+    this.forwardTargetPermissionId.set((event.target as HTMLSelectElement).value);
+  }
+
+  protected dismissForwardSuccess(): void {
+    this.forwardSuccessMessage.set(null);
+  }
+
+  protected async forward(questionId: string): Promise<void> {
+    const targetPermissionId = this.forwardTargetPermissionId();
+    if (!targetPermissionId || this.forwardPending()) return;
+    const subject = this.forwardModalQuestion()?.subject ?? 'The enquiry';
+    this.forwardPending.set(true);
+    this.forwardError.set(null);
+    try {
+      await firstValueFrom(this.service.forward(questionId, { targetPermissionId }));
+      this.forwardModalQuestionId.set(null);
+      this.forwardSuccessMessage.set(`${subject} was forwarded to ${this.forwardTargetLabel()}.`);
+      this.questionsResource.reload();
+    } catch (err) {
+      this.forwardError.set(toApiError(err));
+    } finally {
+      this.forwardPending.set(false);
+    }
   }
 
   protected onPageSizeChange(event: Event): void {

@@ -1,8 +1,10 @@
 import { Injectable } from '@angular/core';
+import { PermissionPrincipal } from '@core/auth/models/permission.model';
 import { delay, Observable, of, throwError } from 'rxjs';
 
 import {
   AnswerMuseumQuestionRequest,
+  ForwardMuseumQuestionRequest,
   MarkOutOfScopeRequest,
   MuseumQuestion,
   MuseumQuestionAttachment,
@@ -14,6 +16,19 @@ import {
 import { MuseumQuestionManagementApi } from '../services/museum-question-management.service';
 
 const NOW = '2026-07-05T12:00:00Z';
+
+const PRINCIPALS: Record<string, PermissionPrincipal> = {
+  'perm-bob': {
+    permissionId: 'perm-bob',
+    user: { id: 'u-bob', name: 'Bob Santos', email: 'bob@collections.example.com' },
+    group: 'COLLECTIONS_MANAGEMENT',
+  },
+  'perm-carol': {
+    permissionId: 'perm-carol',
+    user: { id: 'u-carol', name: 'Carol Souza', email: 'carol@curatorial.example.com' },
+    group: 'CURATORIAL',
+  },
+};
 
 @Injectable()
 export class MuseumQuestionManagementServiceMock implements MuseumQuestionManagementApi {
@@ -36,6 +51,7 @@ export class MuseumQuestionManagementServiceMock implements MuseumQuestionManage
       outOfScopeEmailSentAt: null,
       closedAt: null,
       closedBy: null,
+      assignedTo: null,
       attachments: [
         {
           id: 'att-1',
@@ -64,6 +80,7 @@ export class MuseumQuestionManagementServiceMock implements MuseumQuestionManage
       outOfScopeEmailSentAt: NOW,
       closedAt: null,
       closedBy: null,
+      assignedTo: null,
       attachments: [],
     },
     {
@@ -84,12 +101,18 @@ export class MuseumQuestionManagementServiceMock implements MuseumQuestionManage
       outOfScopeEmailSentAt: null,
       closedAt: null,
       closedBy: null,
+      assignedTo: PRINCIPALS['perm-carol'],
       attachments: [],
     },
   ];
 
   list(query: MuseumQuestionListQuery): Observable<MuseumQuestionPage> {
-    const filtered = this.filtered(query.status, query.requesterEmail);
+    const filtered = this.filtered(
+      query.status,
+      query.requesterEmail,
+      query.assignedTo,
+      query.unassignedOnly ?? false,
+    );
     const start = query.page * query.size;
     const content = filtered.slice(start, start + query.size).map((q) => this.toListItem(q));
     return of({
@@ -117,6 +140,18 @@ export class MuseumQuestionManagementServiceMock implements MuseumQuestionManage
         answeredAt: NOW,
         answeredBy: 'perm-staff',
         answerSentAt: NOW,
+      }),
+    ).pipe(delay(250));
+  }
+
+  forward(questionId: string, body: ForwardMuseumQuestionRequest): Observable<MuseumQuestion> {
+    const question = this.require(questionId);
+    if (question.status !== 'SUBMITTED') return this.invalidTransition();
+    const assignedTo = PRINCIPALS[body.targetPermissionId] ?? PRINCIPALS['perm-carol'];
+    return of(
+      this.replace(questionId, {
+        ...question,
+        assignedTo,
       }),
     ).pipe(delay(250));
   }
@@ -166,6 +201,8 @@ export class MuseumQuestionManagementServiceMock implements MuseumQuestionManage
   private filtered(
     status: MuseumQuestionStatus | '' | undefined,
     requesterEmail: string | undefined,
+    assignedTo: string | undefined,
+    unassignedOnly: boolean,
   ): MuseumQuestion[] {
     const ordered = [...this.questions].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     return ordered.filter((q) => {
@@ -176,6 +213,8 @@ export class MuseumQuestionManagementServiceMock implements MuseumQuestionManage
       ) {
         return false;
       }
+      if (assignedTo && q.assignedTo?.permissionId !== assignedTo) return false;
+      if (unassignedOnly && q.assignedTo !== null) return false;
       return true;
     });
   }
@@ -210,6 +249,7 @@ export class MuseumQuestionManagementServiceMock implements MuseumQuestionManage
       outOfScopeEmailSentAt: question.outOfScopeEmailSentAt,
       closedAt: question.closedAt,
       closedBy: question.closedBy,
+      assignedTo: question.assignedTo,
       attachmentCount: question.attachments.length,
     };
   }

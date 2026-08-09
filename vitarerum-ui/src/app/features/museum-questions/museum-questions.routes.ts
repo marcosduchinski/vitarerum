@@ -6,14 +6,23 @@ export const MUSEUM_QUESTIONS_ROUTES: Routes = [
   {
     path: '',
     pathMatch: 'full',
-    title: 'Public Inquiries',
+    title: 'All Enquiries',
+    data: { museumQuestionListMode: 'all' },
+    canMatch: [museumQuestionAccessGuard],
+    loadComponent: () =>
+      import('./pages/museum-questions-page.component').then((m) => m.MuseumQuestionsPageComponent),
+  },
+  {
+    path: 'new',
+    title: 'New Inquiries',
+    data: { museumQuestionListMode: 'new' },
     canMatch: [museumQuestionAccessGuard],
     loadComponent: () =>
       import('./pages/museum-questions-page.component').then((m) => m.MuseumQuestionsPageComponent),
   },
   {
     path: 'my',
-    title: 'My Inquiries',
+    title: 'My Enquiries',
     canMatch: [museumQuestionAccessGuard],
     loadComponent: () =>
       import('./pages/my-inquiries/my-inquiries-page.component').then(

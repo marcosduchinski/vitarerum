@@ -30,6 +30,7 @@ const QUESTION: MuseumQuestion = {
   outOfScopeEmailSentAt: null,
   closedAt: null,
   closedBy: null,
+  assignedTo: null,
   attachments: [],
 };
 
@@ -149,6 +150,7 @@ class ServiceStub {
       outOfScopeEmailSentAt: question.outOfScopeEmailSentAt,
       closedAt: question.closedAt,
       closedBy: question.closedBy,
+      assignedTo: question.assignedTo,
       attachmentCount: question.attachments.length,
     };
   }

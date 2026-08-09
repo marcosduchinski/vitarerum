@@ -5,9 +5,131 @@
 }
 
 .my-inquiries-panel {
-  padding: 1.25rem;
+  display: grid;
+  gap: 0;
+  overflow: hidden;
   border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
   background: var(--color-panel);
   box-shadow: var(--shadow-panel);
+}
+
+.my-inquiries-panel__header {
+  padding: 0.75rem 0.85rem;
+  border-bottom: 1px solid var(--color-line);
+  background: color-mix(in srgb, var(--color-panel-muted) 60%, var(--color-panel));
+  color: var(--color-subtle);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.my-inquiries-table-shell {
+  max-height: 70vh;
+  overflow: auto;
+}
+
+.my-inquiries-table {
+  width: 100%;
+  min-width: 58rem;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 0.875rem;
+}
+
+.my-inquiries-table__col-subject {
+  width: 22rem;
+}
+
+.my-inquiries-table__col-requester {
+  width: 16rem;
+}
+
+.my-inquiries-table__col-status {
+  width: 9rem;
+}
+
+.my-inquiries-table__col-date {
+  width: 10rem;
+}
+
+.my-inquiries-table__col-actions {
+  width: 8rem;
+}
+
+.my-inquiries-table th,
+.my-inquiries-table td {
+  padding: 0.65rem 0.85rem;
+  text-align: left;
+  border-bottom: 1px solid var(--color-line);
+  vertical-align: middle;
+}
+
+.my-inquiries-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: color-mix(in srgb, var(--color-panel-muted) 78%, var(--color-panel));
+  box-shadow: inset 0 -1px 0 var(--color-line);
+  color: var(--color-subtle);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+}
+
+.my-inquiries-table tbody tr:hover {
+  background: color-mix(in srgb, var(--color-panel-muted) 55%, var(--color-panel));
+}
+
+.my-inquiries-table__actions-header {
+  text-align: right;
+}
+
+.my-inquiries-table__title {
+  color: var(--color-accent-strong);
+  font-weight: 600;
+  overflow-wrap: break-word;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.my-inquiries-table__requester {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.my-inquiries-table__requester-email,
+.my-inquiries-table__date {
+  color: var(--color-subtle);
+  font-size: 0.8rem;
+}
+
+.my-inquiries-table__date {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.my-inquiries-table__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.55rem;
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.74rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.status-chip--submitted {
+  background: var(--color-accent-soft);
+  color: var(--color-accent-strong);
 }

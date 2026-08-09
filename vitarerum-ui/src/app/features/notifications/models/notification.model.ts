@@ -8,7 +8,8 @@ export type NotificationKind =
   | 'PROPOSAL_TAKEN_OVER'
   | 'PROPOSAL_DOCUMENTS_SUBMITTED'
   | 'PROPOSAL_CORRECTIONS_SUBMITTED'
-  | 'MUSEUM_QUESTION_SUBMITTED';
+  | 'MUSEUM_QUESTION_SUBMITTED'
+  | 'MUSEUM_QUESTION_FORWARDED';
 export type RelatedResourceType = 'PROPOSAL' | 'PROJECT' | 'MUSEUM_QUESTION';
 
 export interface Notification {

@@ -1,14 +1,82 @@
 <div class="my-inquiries-page">
   <app-page-header
     eyebrow="Messages"
-    title="My inquiries"
-    description="Questions assigned to your profile will appear here."
+    title="My enquiries"
+    description="Questions forwarded to your active profile."
   />
 
-  <section class="my-inquiries-panel" aria-label="My public inquiries">
-    <app-empty-state
-      title="No assigned inquiries"
-      message="Profile-based inquiry management is not available yet."
-    />
-  </section>
+  @if (questionsResource.isLoading()) {
+    <app-loading-state />
+  } @else if (listError()) {
+    <app-error-message [apiError]="listError()!" (retry)="questionsResource.reload()" />
+  } @else {
+    <section class="my-inquiries-panel" aria-label="My public enquiries">
+      @if (!questions().length) {
+        <app-empty-state
+          title="No assigned enquiries"
+          message="There are no submitted enquiries assigned to your active profile."
+        />
+      } @else {
+        <div class="my-inquiries-panel__header">
+          <span>{{ totalQuestions() }} assigned</span>
+        </div>
+        <div class="my-inquiries-table-shell">
+          <table class="my-inquiries-table" aria-label="My public enquiries">
+            <colgroup>
+              <col class="my-inquiries-table__col-subject" />
+              <col class="my-inquiries-table__col-requester" />
+              <col class="my-inquiries-table__col-status" />
+              <col class="my-inquiries-table__col-date" />
+              <col class="my-inquiries-table__col-actions" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th scope="col">Subject</th>
+                <th scope="col">Requester</th>
+                <th scope="col">Status</th>
+                <th scope="col">Received</th>
+                <th scope="col" class="my-inquiries-table__actions-header">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (question of questions(); track question.id) {
+                <tr>
+                  <td>
+                    <a
+                      class="my-inquiries-table__title"
+                      [routerLink]="['/p/museum-questions', question.id]"
+                    >
+                      {{ question.subject }}
+                    </a>
+                  </td>
+                  <td>
+                    <div class="my-inquiries-table__requester">
+                      <span>{{ question.requesterName }}</span>
+                      <span class="my-inquiries-table__requester-email">
+                        {{ question.requesterEmail }}
+                      </span>
+                    </div>
+                  </td>
+                  <td>
+                    <span class="status-chip status-chip--submitted">
+                      {{ statusLabel(question.status) }}
+                    </span>
+                  </td>
+                  <td class="my-inquiries-table__date">{{ formatDate(question.createdAt) }}</td>
+                  <td>
+                    <div class="my-inquiries-table__actions">
+                      <app-row-actions
+                        [items]="actionItemsFor(question)"
+                        ariaLabel="More actions for {{ question.subject }}"
+                      />
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+  }
 </div>

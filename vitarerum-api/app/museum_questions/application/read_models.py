@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from app.identity.public import PermissionView
 from app.museum_questions.domain.models import MuseumQuestion
 
 
@@ -14,3 +15,4 @@ from app.museum_questions.domain.models import MuseumQuestion
 class MuseumQuestionListItem:
     question: MuseumQuestion
     attachment_count: int
+    assigned_to: PermissionView | None = None
