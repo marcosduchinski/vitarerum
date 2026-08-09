@@ -17,7 +17,7 @@ import { LoadingStateComponent } from '@shared/components/loading-state/loading-
 import { PageHeaderComponent } from '@shared/components/page-header/page-header.component';
 import { RowActionsComponent } from '@shared/components/row-actions/row-actions.component';
 
-import { MuseumQuestion, MuseumQuestionStatus } from '../models/museum-question.model';
+import { MuseumQuestionListItem, MuseumQuestionStatus } from '../models/museum-question.model';
 import { MUSEUM_QUESTION_MANAGEMENT_SERVICE } from '../services/museum-question-management.service';
 
 const DEFAULT_PAGE_SIZE = 20;
@@ -94,7 +94,7 @@ export class MuseumQuestionsPageComponent {
     return err ? toApiError(err) : null;
   });
 
-  protected actionItemsFor(question: MuseumQuestion): MenuItem[] {
+  protected actionItemsFor(question: MuseumQuestionListItem): MenuItem[] {
     const questionId = question.id;
     return [
       {

@@ -320,6 +320,68 @@
   padding-left: 0.75rem;
 }
 
+.message-attachments {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: 0.75rem;
+  margin: 0.35rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.message-attachments__item {
+  display: grid;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.message-attachments__preview {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-panel);
+  color: var(--color-subtle);
+  text-decoration: none;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+  }
+}
+
+.message-attachments__preview--loading {
+  font-size: 1.25rem;
+}
+
+.message-attachments__meta {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.message-attachments__name {
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message-attachments__detail {
+  color: var(--color-subtle);
+  font-size: 0.74rem;
+}
+
 .reply-composer {
   display: grid;
   gap: 0.85rem;

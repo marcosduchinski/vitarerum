@@ -2,25 +2,28 @@
 
 ``SubmitMuseumQuestion`` enforces the server-side defences — honeypot, rate
 limits, captcha verification — then persists the question as ``SUBMITTED``.
-Unlike ``public_submission``'s proposal flow, there is no double opt-in and no
-file upload: a single call after admission is enough.
+Unlike ``public_submission``'s proposal flow, there is no double opt-in: a
+single call after admission is enough.
 """
 
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from app.identity.public import Actor
 from app.museum_questions.application.ports import (
     CaptchaVerifier,
     Clock,
+    FileStorage,
     MuseumQuestionRepository,
     RateLimiter,
 )
+from app.museum_questions.application.read_models import MuseumQuestionListItem
 from app.museum_questions.domain.models import (
     InvalidMuseumQuestionTransition,
     MuseumQuestion,
+    MuseumQuestionAttachment,
     MuseumQuestionNotFound,
     MuseumQuestionStatus,
 )
@@ -49,6 +52,14 @@ class CaptchaUnavailable(Exception):
 
 
 @dataclass(slots=True)
+class UploadedMuseumQuestionImage:
+    file_name: str
+    content: bytes
+    content_type: str
+    extension: str
+
+
+@dataclass(slots=True)
 class SubmitMuseumQuestionInput:
     # Consent is enforced by the request schema (Literal[True]) before this
     # input is ever constructed, and the domain model doesn't persist it (see
@@ -61,6 +72,7 @@ class SubmitMuseumQuestionInput:
     captcha_token: str
     website: str
     remote_ip: str
+    attachments: list[UploadedMuseumQuestionImage] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -68,6 +80,7 @@ class SubmitMuseumQuestionOutput:
     email: str
     # None for the honeypot accept-and-drop path (nothing was persisted).
     question_id: str | None = None
+    file_references: list[str] = field(default_factory=list)
 
 
 class SubmitMuseumQuestion:
@@ -77,11 +90,13 @@ class SubmitMuseumQuestion:
         captcha: CaptchaVerifier,
         rate_limiter: RateLimiter,
         clock: Clock,
+        file_storage: FileStorage,
     ) -> None:
         self._repo = repository
         self._captcha = captcha
         self._rate_limiter = rate_limiter
         self._clock = clock
+        self._storage = file_storage
 
     async def admit(
         self,
@@ -120,17 +135,47 @@ class SubmitMuseumQuestion:
         self, data: SubmitMuseumQuestionInput
     ) -> SubmitMuseumQuestionOutput:
         """Assumes :meth:`admit` has already granted admission for ``data``."""
-        question = MuseumQuestion(
-            id=str(uuid.uuid4()),
-            requester_name=data.requester_name,
-            requester_email=data.requester_email,
-            subject=data.subject,
-            message=data.message,
-            created_at=self._clock.now(),
-        )
-        await self._repo.add(question)
+        question_id = str(uuid.uuid4())
+        now = self._clock.now()
+        saved_references: list[str] = []
+        attachments: list[MuseumQuestionAttachment] = []
+        try:
+            for sort_order, image in enumerate(data.attachments):
+                attachment_id = str(uuid.uuid4())
+                reference = (
+                    f"museum-questions/{question_id}/{attachment_id}{image.extension}"
+                )
+                file_reference = await self._storage.save(image.content, reference)
+                saved_references.append(file_reference)
+                attachments.append(
+                    MuseumQuestionAttachment(
+                        id=attachment_id,
+                        question_id=question_id,
+                        file_name=image.file_name,
+                        file_reference=file_reference,
+                        content_type=image.content_type,
+                        size_bytes=len(image.content),
+                        created_at=now,
+                        sort_order=sort_order,
+                    )
+                )
+            question = MuseumQuestion(
+                id=question_id,
+                requester_name=data.requester_name,
+                requester_email=data.requester_email,
+                subject=data.subject,
+                message=data.message,
+                created_at=now,
+                attachments=attachments,
+            )
+            await self._repo.add(question)
+        except Exception:
+            await self.discard_uploaded_files(saved_references)
+            raise
         return SubmitMuseumQuestionOutput(
-            email=data.requester_email, question_id=question.id
+            email=data.requester_email,
+            question_id=question.id,
+            file_references=saved_references,
         )
 
     async def execute(
@@ -146,10 +191,14 @@ class SubmitMuseumQuestion:
             return SubmitMuseumQuestionOutput(email=data.requester_email)
         return await self.persist(data)
 
+    async def discard_uploaded_files(self, file_references: list[str]) -> None:
+        for file_reference in file_references:
+            await self._storage.delete(file_reference)
+
 
 @dataclass(frozen=True, slots=True)
 class MuseumQuestionPage:
-    content: list[MuseumQuestion]
+    content: list[MuseumQuestionListItem]
     page: int
     size: int
     total: int

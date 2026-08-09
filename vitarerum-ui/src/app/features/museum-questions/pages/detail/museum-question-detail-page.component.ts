@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   ElementRef,
   computed,
   inject,
@@ -21,6 +22,8 @@ import { LoadingStateComponent } from '@shared/components/loading-state/loading-
 
 import {
   MuseumQuestion,
+  MuseumQuestionAttachment,
+  MuseumQuestionListItem,
   MuseumQuestionPage,
   MuseumQuestionStatus,
 } from '../../models/museum-question.model';
@@ -28,6 +31,11 @@ import { MUSEUM_QUESTION_MANAGEMENT_SERVICE } from '../../services/museum-questi
 
 type QuestionDetailPanel = 'message' | 'history';
 type ReplyEditorCommand = 'bold' | 'italic' | 'insertUnorderedList' | 'removeFormat';
+
+interface AttachmentPreview {
+  readonly url: string | null;
+  readonly error: boolean;
+}
 
 const ELEMENT_NODE = 1;
 const TEXT_NODE = 3;
@@ -62,7 +70,9 @@ export class MuseumQuestionDetailPageComponent {
   private readonly service = inject(MUSEUM_QUESTION_MANAGEMENT_SERVICE);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
+  private readonly destroyRef = inject(DestroyRef);
   private readonly replyEditor = viewChild<ElementRef<HTMLElement>>('replyEditor');
+  private readonly attachmentObjectUrls = new Set<string>();
 
   readonly id = input.required<string>();
   readonly tab = input<string>();
@@ -119,11 +129,52 @@ export class MuseumQuestionDetailPageComponent {
     },
   });
 
+  protected readonly attachmentPreviewResource = resource<
+    ReadonlyMap<string, AttachmentPreview>,
+    {
+      readonly questionId: string | null;
+      readonly attachments: readonly MuseumQuestionAttachment[];
+    }
+  >({
+    params: () => {
+      const question = this.question();
+      return {
+        questionId: question?.id ?? null,
+        attachments: question?.attachments ?? [],
+      };
+    },
+    loader: async ({ params }) => {
+      this.revokeAttachmentObjectUrls();
+      if (!params.questionId || !params.attachments.length) return new Map();
+      const entries: readonly (readonly [string, AttachmentPreview])[] = await Promise.all(
+        params.attachments.map(async (attachment) => {
+          try {
+            const blob = await firstValueFrom(
+              this.service.getAttachment(params.questionId!, attachment),
+            );
+            const url = URL.createObjectURL(blob);
+            this.attachmentObjectUrls.add(url);
+            return [attachment.id, { url, error: false }] as const satisfies readonly [
+              string,
+              AttachmentPreview,
+            ];
+          } catch {
+            return [attachment.id, { url: null, error: true }] as const satisfies readonly [
+              string,
+              AttachmentPreview,
+            ];
+          }
+        }),
+      );
+      return new Map(entries);
+    },
+  });
+
   protected readonly historyError = computed<ApiError | null>(() => {
     const err = this.historyResource.error();
     return err ? toApiError(err) : null;
   });
-  protected readonly previousQuestions = computed<readonly MuseumQuestion[]>(() => {
+  protected readonly previousQuestions = computed<readonly MuseumQuestionListItem[]>(() => {
     const question = this.question();
     const page = this.historyResource.value();
     if (!question || !page) return [];
@@ -208,12 +259,29 @@ export class MuseumQuestionDetailPageComponent {
     return STATUS_LABELS[status];
   }
 
+  protected attachmentPreview(attachment: MuseumQuestionAttachment): AttachmentPreview {
+    return (
+      this.attachmentPreviewResource.value()?.get(attachment.id) ?? { url: null, error: false }
+    );
+  }
+
   protected formatDate(value: string | null): string {
     if (!value) return '-';
     return new Intl.DateTimeFormat(undefined, {
       dateStyle: 'medium',
       timeStyle: 'short',
     }).format(new Date(value));
+  }
+
+  protected formatBytes(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    const mib = bytes / (1024 * 1024);
+    if (mib >= 1) return `${mib.toFixed(mib >= 10 ? 0 : 1)} MB`;
+    return `${Math.ceil(bytes / 1024)} KB`;
+  }
+
+  constructor() {
+    this.destroyRef.onDestroy(() => this.revokeAttachmentObjectUrls());
   }
 
   private normalizeTab(tab: string | undefined): QuestionDetailPanel {
@@ -304,5 +372,12 @@ export class MuseumQuestionDetailPageComponent {
         element.removeAttribute(attribute.name);
       }
     }
+  }
+
+  private revokeAttachmentObjectUrls(): void {
+    for (const url of this.attachmentObjectUrls) {
+      URL.revokeObjectURL(url);
+    }
+    this.attachmentObjectUrls.clear();
   }
 }

@@ -1,9 +1,11 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { of } from 'rxjs';
+import { vi } from 'vitest';
 
 import {
   MuseumQuestion,
+  MuseumQuestionListItem,
   MuseumQuestionListQuery,
   MuseumQuestionPage,
 } from '../../models/museum-question.model';
@@ -28,6 +30,7 @@ const QUESTION: MuseumQuestion = {
   outOfScopeEmailSentAt: null,
   closedAt: null,
   closedBy: null,
+  attachments: [],
 };
 
 const PREVIOUS_QUESTION: MuseumQuestion = {
@@ -75,7 +78,9 @@ class ServiceStub {
       )
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     const page: MuseumQuestionPage = {
-      content: filtered.slice(query.page * query.size, query.page * query.size + query.size),
+      content: filtered
+        .slice(query.page * query.size, query.page * query.size + query.size)
+        .map((item) => this.toListItem(item)),
       page: query.page,
       size: query.size,
       totalElements: filtered.length,
@@ -120,6 +125,33 @@ class ServiceStub {
     };
     return of(this.question);
   }
+
+  getAttachment() {
+    return of(new Blob([new Uint8Array([1, 2, 3])], { type: 'image/png' }));
+  }
+
+  private toListItem(question: MuseumQuestion): MuseumQuestionListItem {
+    return {
+      id: question.id,
+      requesterName: question.requesterName,
+      requesterEmail: question.requesterEmail,
+      subject: question.subject,
+      message: question.message,
+      status: question.status,
+      createdAt: question.createdAt,
+      answeredAt: question.answeredAt,
+      answeredBy: question.answeredBy,
+      answerBody: question.answerBody,
+      answerSentAt: question.answerSentAt,
+      outOfScopeAt: question.outOfScopeAt,
+      outOfScopeBy: question.outOfScopeBy,
+      outOfScopeReason: question.outOfScopeReason,
+      outOfScopeEmailSentAt: question.outOfScopeEmailSentAt,
+      closedAt: question.closedAt,
+      closedBy: question.closedBy,
+      attachmentCount: question.attachments.length,
+    };
+  }
 }
 
 describe('MuseumQuestionDetailPageComponent', () => {
@@ -158,6 +190,37 @@ describe('MuseumQuestionDetailPageComponent', () => {
     expect(el.textContent).toContain('ana@example.org');
     expect(el.textContent).toContain('<b>Please do not render as HTML</b>');
     expect(el.querySelector('b')).toBeNull();
+  });
+
+  it('renders requester image attachments in the message tab', async () => {
+    Object.defineProperty(URL, 'createObjectURL', {
+      configurable: true,
+      value: vi.fn(() => 'blob:question-image'),
+    });
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      configurable: true,
+      value: vi.fn(),
+    });
+    const el = await setup({
+      ...QUESTION,
+      attachments: [
+        {
+          id: 'att-1',
+          fileName: 'artifact.png',
+          contentType: 'image/png',
+          sizeBytes: 1024,
+          createdAt: '2026-07-05T10:00:00Z',
+        },
+      ],
+    });
+
+    expect(el.textContent).toContain('artifact.png');
+    expect(el.textContent).toContain('image/png');
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(el.querySelector<HTMLImageElement>('img[alt="artifact.png"]')?.src).toBe(
+      'blob:question-image',
+    );
   });
 
   it('only renders manual message and history tabs', async () => {

@@ -95,6 +95,42 @@
       }
     </div>
 
+    <div class="field" [class.field--error]="submitted() && attachmentError()">
+      <label class="field__label" for="attachments">Images</label>
+      <input
+        id="attachments"
+        type="file"
+        class="field__input field__input--file"
+        accept="image/png,image/jpeg"
+        multiple
+        (change)="onAttachmentsChange($event)"
+        [attr.aria-invalid]="submitted() && attachmentError() ? true : null"
+      />
+      <p class="field__hint">{{ attachmentInputHint() }}</p>
+      @if (attachments().length) {
+        <ul class="attachment-list" aria-label="Selected images">
+          @for (file of attachments(); track file.name + file.size + $index) {
+            <li class="attachment-list__item">
+              <span class="pi pi-image" aria-hidden="true"></span>
+              <span class="attachment-list__name">{{ file.name }}</span>
+              <span class="attachment-list__size">{{ formatBytes(file.size) }}</span>
+              <button
+                type="button"
+                class="attachment-list__remove"
+                [attr.aria-label]="'Remove ' + file.name"
+                (click)="removeAttachment($index)"
+              >
+                <span class="pi pi-times" aria-hidden="true"></span>
+              </button>
+            </li>
+          }
+        </ul>
+      }
+      @if (submitted() && attachmentError()) {
+        <p class="field__error" role="alert">{{ attachmentError() }}</p>
+      }
+    </div>
+
     <div class="field field--checkbox" [class.field--error]="consentError()">
       <label class="consent">
         <input

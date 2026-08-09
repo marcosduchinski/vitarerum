@@ -1,15 +1,19 @@
 """API tests for the public Museum Questions endpoint."""
 
+import io
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from fastapi import HTTPException
 from httpx import ASGITransport, AsyncClient
+from starlette.datastructures import UploadFile as StarletteUploadFile
 
 from app.database import get_async_session
 from app.identity.public import Actor, GroupName, PermissionId
 from app.main import app
+from app.museum_questions.application.read_models import MuseumQuestionListItem
 from app.museum_questions.application.use_cases import (
     AnswerMuseumQuestion,
     CloseMuseumQuestion,
@@ -18,16 +22,22 @@ from app.museum_questions.application.use_cases import (
     MarkMuseumQuestionOutOfScope,
     SubmitMuseumQuestion,
 )
-from app.museum_questions.domain.models import MuseumQuestion, MuseumQuestionStatus
+from app.museum_questions.domain.models import (
+    MuseumQuestion,
+    MuseumQuestionAttachment,
+    MuseumQuestionStatus,
+)
 from app.museum_questions.presentation.dependencies import (
     get_answer_use_case,
     get_close_use_case,
     get_email_sender,
+    get_file_storage,
     get_get_use_case,
     get_list_use_case,
     get_mark_out_of_scope_use_case,
     get_submit_use_case,
 )
+from app.museum_questions.presentation.routes import _uploaded_images
 from app.shared.dependencies import get_caller_permission
 
 _SUBMIT_URL = "/api/v1/public/museum-questions"
@@ -62,7 +72,7 @@ class _Repo:
         requester_email: str | None,
         page: int,
         size: int,
-    ) -> tuple[list[MuseumQuestion], int]:
+    ) -> tuple[list[MuseumQuestionListItem], int]:
         rows = sorted(self.questions.values(), key=lambda q: q.created_at)
         if status is not None:
             rows = [q for q in rows if q.status == status]
@@ -72,7 +82,10 @@ class _Repo:
                 for q in rows
                 if q.requester_email.lower() == requester_email.strip().lower()
             ]
-        return rows[page * size : page * size + size], len(rows)
+        return [
+            MuseumQuestionListItem(q, len(q.attachments or []))
+            for q in rows[page * size : page * size + size]
+        ], len(rows)
 
     async def save(self, question: MuseumQuestion) -> None:
         self.questions[question.id] = question
@@ -127,6 +140,26 @@ class _EmailSender:
         self.out_of_scope.append(to_email)
 
 
+class _Storage:
+    def __init__(self) -> None:
+        self.files: dict[str, bytes] = {}
+        self.deleted: list[str] = []
+
+    async def save(self, content: bytes, reference: str) -> str:
+        self.files[reference] = content
+        return reference
+
+    async def read(self, reference: str) -> bytes:
+        try:
+            return self.files[reference]
+        except KeyError as exc:
+            raise FileNotFoundError(reference) from exc
+
+    async def delete(self, reference: str) -> None:
+        self.deleted.append(reference)
+        self.files.pop(reference, None)
+
+
 class _Session:
     def __init__(self, *, fail_commit: bool = False) -> None:
         self.committed = False
@@ -147,15 +180,17 @@ async def _client(
     fail_commit: bool = False,
     caller: Actor = _STAFF,
     questions: list[MuseumQuestion] | None = None,
-) -> AsyncIterator[tuple[AsyncClient, _Repo, _EmailSender, _Session]]:
+) -> AsyncIterator[tuple[AsyncClient, _Repo, _EmailSender, _Session, _Storage]]:
     repo = _Repo(questions)
     email_sender = _EmailSender()
     session = _Session(fail_commit=fail_commit)
+    storage = _Storage()
     use_case = SubmitMuseumQuestion(
         repository=repo,
         captcha=_Captcha(ok=captcha_ok, raise_error=captcha_raises),
         rate_limiter=_Limiter(block=rate_limited),
         clock=_Clock(),
+        file_storage=storage,
     )
     app.dependency_overrides[get_submit_use_case] = lambda: use_case
     app.dependency_overrides[get_list_use_case] = lambda: ListMuseumQuestions(repo)
@@ -170,12 +205,13 @@ async def _client(
         repo, _Clock()
     )
     app.dependency_overrides[get_email_sender] = lambda: email_sender
+    app.dependency_overrides[get_file_storage] = lambda: storage
     app.dependency_overrides[get_async_session] = lambda: session
     app.dependency_overrides[get_caller_permission] = lambda: caller
     transport = ASGITransport(app=app)
     try:
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            yield client, repo, email_sender, session
+            yield client, repo, email_sender, session, storage
     finally:
         app.dependency_overrides.clear()
 
@@ -211,8 +247,27 @@ def _question(
     )
 
 
+def _attachment(
+    *,
+    attachment_id: str = "att-1",
+    question_id: str = "q1",
+    file_name: str = "artifact.png",
+    file_reference: str = "museum-questions/q1/att-1.png",
+) -> MuseumQuestionAttachment:
+    return MuseumQuestionAttachment(
+        id=attachment_id,
+        question_id=question_id,
+        file_name=file_name,
+        file_reference=file_reference,
+        content_type="image/png",
+        size_bytes=13,
+        created_at=_NOW,
+        sort_order=0,
+    )
+
+
 async def test_submit_returns_202_receipt() -> None:
-    async with _client() as (client, repo, _, _):
+    async with _client() as (client, repo, _, _, _storage):
         resp = await client.post(_SUBMIT_URL, json=_payload())
     assert resp.status_code == 202
     assert resp.json() == {"status": "RECEIVED", "email": "ana@example.org"}
@@ -221,15 +276,83 @@ async def test_submit_returns_202_receipt() -> None:
     assert repo.added[0].requester_name == "Ana Souza"
 
 
+async def test_submit_accepts_multipart_images() -> None:
+    async with _client() as (client, repo, _, _, storage):
+        resp = await client.post(
+            _SUBMIT_URL,
+            data={
+                key: str(value).lower() if value is True else str(value)
+                for key, value in _payload().items()
+            },
+            files=[
+                (
+                    "attachments",
+                    ("artifact.png", b"\x89PNG\r\n\x1a\nimage", "image/png"),
+                ),
+                ("attachments", ("detail.jpg", b"\xff\xd8\xffimage", "image/jpeg")),
+            ],
+        )
+    assert resp.status_code == 202
+    question = repo.added[0]
+    assert [item.file_name for item in question.attachments] == [
+        "artifact.png",
+        "detail.jpg",
+    ]
+    assert [item.sort_order for item in question.attachments] == [0, 1]
+    assert set(storage.files) == {item.file_reference for item in question.attachments}
+
+
+async def test_submit_rejects_more_than_ten_images() -> None:
+    async with _client() as (client, repo, _, _, _storage):
+        resp = await client.post(
+            _SUBMIT_URL,
+            data={
+                key: str(value).lower() if value is True else str(value)
+                for key, value in _payload().items()
+            },
+            files=[
+                ("attachments", (f"{idx}.png", b"\x89PNG\r\n\x1a\nimage", "image/png"))
+                for idx in range(11)
+            ],
+        )
+    assert resp.status_code == 422
+    assert repo.added == []
+
+
+async def test_submit_rejects_non_image_attachment() -> None:
+    async with _client() as (client, repo, _, _, _storage):
+        resp = await client.post(
+            _SUBMIT_URL,
+            data={
+                key: str(value).lower() if value is True else str(value)
+                for key, value in _payload().items()
+            },
+            files=[("attachments", ("notes.txt", b"not an image", "text/plain"))],
+        )
+    assert resp.status_code == 415
+    assert resp.json()["error"] == "UNSUPPORTED_FILE_TYPE"
+    assert repo.added == []
+
+
+async def test_uploaded_images_rejects_configurable_total_limit() -> None:
+    files = [
+        StarletteUploadFile(io.BytesIO(b"\x89PNG\r\n\x1a\n1234"), filename="one.png"),
+        StarletteUploadFile(io.BytesIO(b"\x89PNG\r\n\x1a\n5678"), filename="two.png"),
+    ]
+    with pytest.raises(HTTPException) as exc_info:
+        await _uploaded_images(files, total_limit=15)
+    assert exc_info.value.status_code == 413
+
+
 async def test_submit_missing_consent_is_rejected() -> None:
-    async with _client() as (client, repo, _, _):
+    async with _client() as (client, repo, _, _, _storage):
         resp = await client.post(_SUBMIT_URL, json=_payload(consent=False))
     assert resp.status_code == 422
     assert repo.added == []
 
 
 async def test_submit_captcha_failure_403() -> None:
-    async with _client(captcha_ok=False) as (client, repo, _, _):
+    async with _client(captcha_ok=False) as (client, repo, _, _, _storage):
         resp = await client.post(_SUBMIT_URL, json=_payload())
     assert resp.status_code == 403
     assert resp.json()["message"] == "Captcha verification failed."
@@ -237,14 +360,14 @@ async def test_submit_captcha_failure_403() -> None:
 
 
 async def test_submit_captcha_unavailable_503() -> None:
-    async with _client(captcha_raises=True) as (client, repo, _, _):
+    async with _client(captcha_raises=True) as (client, repo, _, _, _storage):
         resp = await client.post(_SUBMIT_URL, json=_payload())
     assert resp.status_code == 503
     assert repo.added == []
 
 
 async def test_submit_rate_limited_429_with_retry_after() -> None:
-    async with _client(rate_limited=True) as (client, repo, _, _):
+    async with _client(rate_limited=True) as (client, repo, _, _, _storage):
         resp = await client.post(_SUBMIT_URL, json=_payload())
     assert resp.status_code == 429
     assert resp.headers["Retry-After"] == "60"
@@ -252,14 +375,14 @@ async def test_submit_rate_limited_429_with_retry_after() -> None:
 
 
 async def test_submit_honeypot_returns_202_no_work() -> None:
-    async with _client() as (client, repo, _, _):
+    async with _client() as (client, repo, _, _, _storage):
         resp = await client.post(_SUBMIT_URL, json=_payload(website="http://spam"))
     assert resp.status_code == 202
     assert repo.added == []
 
 
 async def test_submit_sanitizes_control_characters_and_crlf() -> None:
-    async with _client() as (client, repo, _, _):
+    async with _client() as (client, repo, _, _, _storage):
         resp = await client.post(
             _SUBMIT_URL,
             json=_payload(requesterName="Ana\x00Souza", subject="Linha1\r\nLinha2"),
@@ -275,7 +398,7 @@ async def test_submit_whitespace_only_fields_are_rejected() -> None:
     # min_length=1 alone would accept "   " and let it collapse to "" after
     # the control-char/strip validator, silently persisting empty required
     # fields — this must 422 instead.
-    async with _client() as (client, repo, _, _):
+    async with _client() as (client, repo, _, _, _storage):
         resp = await client.post(
             _SUBMIT_URL,
             json=_payload(requesterName="   ", subject="   ", message="   "),
@@ -285,7 +408,7 @@ async def test_submit_whitespace_only_fields_are_rejected() -> None:
 
 
 async def test_submit_missing_field_is_rejected() -> None:
-    async with _client() as (client, repo, _, _):
+    async with _client() as (client, repo, _, _, _storage):
         payload = _payload()
         del payload["subject"]
         resp = await client.post(_SUBMIT_URL, json=payload)
@@ -294,7 +417,7 @@ async def test_submit_missing_field_is_rejected() -> None:
 
 
 async def test_submit_invalid_email_is_rejected() -> None:
-    async with _client() as (client, repo, _, _):
+    async with _client() as (client, repo, _, _, _storage):
         resp = await client.post(
             _SUBMIT_URL, json=_payload(requesterEmail="not-an-email")
         )
@@ -303,20 +426,34 @@ async def test_submit_invalid_email_is_rejected() -> None:
 
 
 async def test_submit_over_length_message_is_rejected() -> None:
-    async with _client() as (client, repo, _, _):
+    async with _client() as (client, repo, _, _, _storage):
         resp = await client.post(_SUBMIT_URL, json=_payload(message="x" * 4001))
     assert resp.status_code == 422
     assert repo.added == []
 
 
 async def test_submit_commit_failure_propagates() -> None:
-    async with _client(fail_commit=True) as (client, repo, _, _):
+    async with _client(fail_commit=True) as (client, repo, _, _, storage):
         with pytest.raises(RuntimeError):
-            await client.post(_SUBMIT_URL, json=_payload())
+            await client.post(
+                _SUBMIT_URL,
+                data={
+                    key: str(value).lower() if value is True else str(value)
+                    for key, value in _payload().items()
+                },
+                files=[
+                    (
+                        "attachments",
+                        ("artifact.png", b"\x89PNG\r\n\x1a\nimage", "image/png"),
+                    )
+                ],
+            )
     # The fake repo persisted in-memory before the (failed) commit — a real DB
     # session would roll this back; this only proves the route doesn't
     # swallow the commit error.
     assert len(repo.added) == 1
+    assert storage.files == {}
+    assert storage.deleted
 
 
 async def test_list_internal_questions_filters_and_paginates() -> None:
@@ -325,7 +462,7 @@ async def test_list_internal_questions_filters_and_paginates() -> None:
         _question("q1", created_at=_NOW),
         _question("q3", status=MuseumQuestionStatus.ANSWERED),
     ]
-    async with _client(questions=questions) as (client, _, _, _):
+    async with _client(questions=questions) as (client, _, _, _, _storage):
         resp = await client.get(
             _INTERNAL_URL, params={"status": "SUBMITTED", "page": 0, "size": 1}
         )
@@ -334,6 +471,7 @@ async def test_list_internal_questions_filters_and_paginates() -> None:
     assert body["totalElements"] == 2
     assert body["totalPages"] == 2
     assert [item["id"] for item in body["content"]] == ["q1"]
+    assert body["content"][0]["attachmentCount"] == 0
 
 
 async def test_list_internal_questions_filters_by_requester_email() -> None:
@@ -346,7 +484,7 @@ async def test_list_internal_questions_filters_by_requester_email() -> None:
         ),
         _question("q3", status=MuseumQuestionStatus.SUBMITTED),
     ]
-    async with _client(questions=questions) as (client, _, _, _):
+    async with _client(questions=questions) as (client, _, _, _, _storage):
         resp = await client.get(
             _INTERNAL_URL,
             params={
@@ -363,30 +501,73 @@ async def test_list_internal_questions_filters_by_requester_email() -> None:
 
 
 async def test_internal_questions_reject_non_staff() -> None:
-    async with _client(caller=_EXTERNAL, questions=[_question()]) as (client, _, _, _):
+    async with _client(caller=_EXTERNAL, questions=[_question()]) as (
+        client,
+        _,
+        _,
+        _,
+        _storage,
+    ):
         resp = await client.get(_INTERNAL_URL)
     assert resp.status_code == 403
     assert resp.json()["error"] == "INSUFFICIENT_GROUP"
 
 
 async def test_get_internal_question_detail() -> None:
-    async with _client(questions=[_question()]) as (client, _, _, _):
+    async with _client(questions=[_question()]) as (client, _, _, _, _storage):
         resp = await client.get(f"{_INTERNAL_URL}/q1")
     assert resp.status_code == 200
     body = resp.json()
     assert body["id"] == "q1"
     assert body["message"] == "Gostaria de agendar uma visita para pesquisa."
+    assert body["attachments"] == []
+
+
+async def test_get_internal_question_detail_includes_attachments() -> None:
+    question = _question()
+    question.attachments = [_attachment()]
+    async with _client(questions=[question]) as (client, _, _, _, _storage):
+        resp = await client.get(f"{_INTERNAL_URL}/q1")
+    assert resp.status_code == 200
+    assert resp.json()["attachments"] == [
+        {
+            "id": "att-1",
+            "fileName": "artifact.png",
+            "contentType": "image/png",
+            "sizeBytes": 13,
+            "createdAt": _NOW.isoformat().replace("+00:00", "Z"),
+        }
+    ]
+
+
+async def test_download_internal_question_attachment_returns_inline_image() -> None:
+    question = _question()
+    question.attachments = [_attachment()]
+    async with _client(questions=[question]) as (client, _, _, _, storage):
+        storage.files["museum-questions/q1/att-1.png"] = b"\x89PNG\r\n\x1a\nimage"
+        resp = await client.get(f"{_INTERNAL_URL}/q1/attachments/att-1")
+    assert resp.status_code == 200
+    assert resp.content == b"\x89PNG\r\n\x1a\nimage"
+    assert resp.headers["content-type"] == "image/png"
+    assert resp.headers["x-content-type-options"] == "nosniff"
+    assert resp.headers["content-disposition"].startswith("inline;")
 
 
 async def test_get_internal_question_unknown_is_404() -> None:
-    async with _client() as (client, _, _, _):
+    async with _client() as (client, _, _, _, _storage):
         resp = await client.get(f"{_INTERNAL_URL}/missing")
     assert resp.status_code == 404
     assert resp.json()["error"] == "MUSEUM_QUESTION_NOT_FOUND"
 
 
 async def test_answer_internal_question_sends_email_and_commits() -> None:
-    async with _client(questions=[_question()]) as (client, repo, sender, session):
+    async with _client(questions=[_question()]) as (
+        client,
+        repo,
+        sender,
+        session,
+        _storage,
+    ):
         resp = await client.post(
             f"{_INTERNAL_URL}/q1/answer",
             json={"answerBody": "  Please contact collections.  "},
@@ -407,6 +588,7 @@ async def test_answer_internal_question_does_not_email_when_commit_fails() -> No
         _,
         sender,
         _,
+        _storage,
     ):
         with pytest.raises(RuntimeError):
             await client.post(
@@ -421,6 +603,7 @@ async def test_mark_out_of_scope_does_not_email_when_commit_fails() -> None:
         _,
         sender,
         _,
+        _storage,
     ):
         with pytest.raises(RuntimeError):
             await client.post(
@@ -435,6 +618,7 @@ async def test_answer_internal_question_rejects_already_answered() -> None:
         _,
         sender,
         _,
+        _storage,
     ):
         resp = await client.post(
             f"{_INTERNAL_URL}/q1/answer", json={"answerBody": "Again"}
@@ -445,7 +629,7 @@ async def test_answer_internal_question_rejects_already_answered() -> None:
 
 
 async def test_mark_out_of_scope_sends_standard_email() -> None:
-    async with _client(questions=[_question()]) as (client, repo, sender, _):
+    async with _client(questions=[_question()]) as (client, repo, sender, _, _storage):
         resp = await client.post(
             f"{_INTERNAL_URL}/q1/mark-out-of-scope",
             json={"reason": "  Exhibition request  "},
@@ -468,6 +652,7 @@ async def test_close_internal_question_after_response(
         repo,
         sender,
         _,
+        _storage,
     ):
         resp = await client.patch(f"{_INTERNAL_URL}/q1/close")
     assert resp.status_code == 200
@@ -478,7 +663,7 @@ async def test_close_internal_question_after_response(
 
 
 async def test_close_submitted_internal_question_is_rejected() -> None:
-    async with _client(questions=[_question()]) as (client, _, _, _):
+    async with _client(questions=[_question()]) as (client, _, _, _, _storage):
         resp = await client.patch(f"{_INTERNAL_URL}/q1/close")
     assert resp.status_code == 409
     assert resp.json()["error"] == "INVALID_MUSEUM_QUESTION_TRANSITION"

@@ -26,15 +26,30 @@ export class MuseumQuestionApiService implements MuseumQuestionApi {
   private readonly apiBaseUrl = inject(API_BASE_URL);
 
   submit(submission: MuseumQuestionSubmission): Observable<MuseumQuestionReceipt> {
-    return this.http.post<MuseumQuestionReceipt>(this.url('/public/museum-questions'), {
-      requesterName: submission.requesterName,
-      requesterEmail: submission.requesterEmail,
-      subject: submission.subject,
-      message: submission.message,
-      consent: submission.consent,
-      captchaToken: submission.captchaToken,
-      website: submission.website ?? '',
-    });
+    if (!submission.attachments?.length) {
+      return this.http.post<MuseumQuestionReceipt>(this.url('/public/museum-questions'), {
+        requesterName: submission.requesterName,
+        requesterEmail: submission.requesterEmail,
+        subject: submission.subject,
+        message: submission.message,
+        consent: submission.consent,
+        captchaToken: submission.captchaToken,
+        website: submission.website ?? '',
+      });
+    }
+
+    const formData = new FormData();
+    formData.append('requesterName', submission.requesterName);
+    formData.append('requesterEmail', submission.requesterEmail);
+    formData.append('subject', submission.subject);
+    formData.append('message', submission.message);
+    formData.append('consent', String(submission.consent));
+    formData.append('captchaToken', submission.captchaToken);
+    formData.append('website', submission.website ?? '');
+    for (const file of submission.attachments ?? []) {
+      formData.append('attachments', file, file.name);
+    }
+    return this.http.post<MuseumQuestionReceipt>(this.url('/public/museum-questions'), formData);
   }
 
   private url(path: string): string {

@@ -5,6 +5,8 @@ import {
   AnswerMuseumQuestionRequest,
   MarkOutOfScopeRequest,
   MuseumQuestion,
+  MuseumQuestionAttachment,
+  MuseumQuestionListItem,
   MuseumQuestionListQuery,
   MuseumQuestionPage,
   MuseumQuestionStatus,
@@ -34,6 +36,15 @@ export class MuseumQuestionManagementServiceMock implements MuseumQuestionManage
       outOfScopeEmailSentAt: null,
       closedAt: null,
       closedBy: null,
+      attachments: [
+        {
+          id: 'att-1',
+          fileName: 'collection-label.png',
+          contentType: 'image/png',
+          sizeBytes: 1462,
+          createdAt: '2026-07-05T10:00:00Z',
+        },
+      ],
     },
     {
       id: 'q-2',
@@ -53,6 +64,7 @@ export class MuseumQuestionManagementServiceMock implements MuseumQuestionManage
       outOfScopeEmailSentAt: NOW,
       closedAt: null,
       closedBy: null,
+      attachments: [],
     },
     {
       id: 'q-3',
@@ -72,13 +84,14 @@ export class MuseumQuestionManagementServiceMock implements MuseumQuestionManage
       outOfScopeEmailSentAt: null,
       closedAt: null,
       closedBy: null,
+      attachments: [],
     },
   ];
 
   list(query: MuseumQuestionListQuery): Observable<MuseumQuestionPage> {
     const filtered = this.filtered(query.status, query.requesterEmail);
     const start = query.page * query.size;
-    const content = filtered.slice(start, start + query.size);
+    const content = filtered.slice(start, start + query.size).map((q) => this.toListItem(q));
     return of({
       content,
       page: query.page,
@@ -138,6 +151,18 @@ export class MuseumQuestionManagementServiceMock implements MuseumQuestionManage
     ).pipe(delay(200));
   }
 
+  getAttachment(questionId: string, attachment: MuseumQuestionAttachment): Observable<Blob> {
+    this.require(questionId);
+    const pngPixel = Uint8Array.from([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44,
+      0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f,
+      0x15, 0xc4, 0x89, 0x00, 0x00, 0x00, 0x0a, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0xf8,
+      0xcf, 0xc0, 0x00, 0x00, 0x03, 0x01, 0x01, 0x00, 0xc9, 0xfe, 0x92, 0xef, 0x00, 0x00, 0x00,
+      0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+    ]);
+    return of(new Blob([pngPixel], { type: attachment.contentType })).pipe(delay(150));
+  }
+
   private filtered(
     status: MuseumQuestionStatus | '' | undefined,
     requesterEmail: string | undefined,
@@ -164,6 +189,29 @@ export class MuseumQuestionManagementServiceMock implements MuseumQuestionManage
   private replace(questionId: string, question: MuseumQuestion): MuseumQuestion {
     this.questions = this.questions.map((q) => (q.id === questionId ? question : q));
     return question;
+  }
+
+  private toListItem(question: MuseumQuestion): MuseumQuestionListItem {
+    return {
+      id: question.id,
+      requesterName: question.requesterName,
+      requesterEmail: question.requesterEmail,
+      subject: question.subject,
+      message: question.message,
+      status: question.status,
+      createdAt: question.createdAt,
+      answeredAt: question.answeredAt,
+      answeredBy: question.answeredBy,
+      answerBody: question.answerBody,
+      answerSentAt: question.answerSentAt,
+      outOfScopeAt: question.outOfScopeAt,
+      outOfScopeBy: question.outOfScopeBy,
+      outOfScopeReason: question.outOfScopeReason,
+      outOfScopeEmailSentAt: question.outOfScopeEmailSentAt,
+      closedAt: question.closedAt,
+      closedBy: question.closedBy,
+      attachmentCount: question.attachments.length,
+    };
   }
 
   private notFound(): Observable<never> {

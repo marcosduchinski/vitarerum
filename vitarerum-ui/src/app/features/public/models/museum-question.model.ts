@@ -15,6 +15,7 @@ export interface MuseumQuestionSubmission {
   readonly consent: boolean;
   /** Cloudflare Turnstile token; the server must verify it via siteverify. */
   readonly captchaToken: string;
+  readonly attachments?: readonly File[];
   /**
    * Honeypot. Must stay empty for real humans (the field is visually hidden).
    * A non-empty value signals a bot; the server accepts-and-drops silently.

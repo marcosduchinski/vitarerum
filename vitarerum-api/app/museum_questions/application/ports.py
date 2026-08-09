@@ -12,6 +12,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Protocol
 
+from app.museum_questions.application.read_models import MuseumQuestionListItem
 from app.museum_questions.domain.models import MuseumQuestion, MuseumQuestionStatus
 
 
@@ -33,6 +34,12 @@ class Clock(Protocol):
     def now(self) -> datetime: ...
 
 
+class FileStorage(Protocol):
+    async def save(self, content: bytes, file_reference: str) -> str: ...
+    async def read(self, file_reference: str) -> bytes: ...
+    async def delete(self, file_reference: str) -> None: ...
+
+
 class MuseumQuestionRepository(Protocol):
     async def add(self, question: MuseumQuestion) -> None: ...
 
@@ -45,7 +52,7 @@ class MuseumQuestionRepository(Protocol):
         requester_email: str | None,
         page: int,
         size: int,
-    ) -> tuple[list[MuseumQuestion], int]: ...
+    ) -> tuple[list[MuseumQuestionListItem], int]: ...
 
     async def save(self, question: MuseumQuestion) -> None: ...
 

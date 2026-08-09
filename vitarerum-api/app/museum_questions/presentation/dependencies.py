@@ -16,6 +16,7 @@ from app.config import settings
 from app.database import get_async_session
 from app.museum_questions.application.ports import (
     CaptchaVerifier,
+    FileStorage,
     MuseumQuestionEmailSender,
     MuseumQuestionRepository,
 )
@@ -43,6 +44,7 @@ from app.museum_questions.infrastructure.repositories import (
     SqlAlchemyMuseumQuestionRepository,
 )
 from app.shared.field_encryption import FieldEncryptor
+from app.shared.file_storage import build_file_storage
 
 DBSession = Annotated[AsyncSession, Depends(get_async_session)]
 
@@ -83,12 +85,17 @@ def _repository(session: AsyncSession) -> MuseumQuestionRepository:
     return SqlAlchemyMuseumQuestionRepository(session, _field_encryptor())
 
 
+def get_file_storage() -> FileStorage:
+    return build_file_storage(settings.data_dir, settings.file_encryption_key)
+
+
 def get_submit_use_case(session: DBSession) -> SubmitMuseumQuestion:
     return SubmitMuseumQuestion(
         repository=_repository(session),
         captcha=_captcha_verifier(),
         rate_limiter=_rate_limiter,
         clock=_clock,
+        file_storage=get_file_storage(),
     )
 
 
@@ -127,3 +134,4 @@ MarkOutOfScopeUseCase = Annotated[
 ]
 CloseUseCase = Annotated[CloseMuseumQuestion, Depends(get_close_use_case)]
 EmailSender = Annotated[MuseumQuestionEmailSender, Depends(get_email_sender)]
+QuestionFileStorage = Annotated[FileStorage, Depends(get_file_storage)]

@@ -34,7 +34,7 @@ Turnstile token, and the honeypot are deterrents only — the real protection is
 | 2 | **Rate-limit** per IP, per e-mail, and globally → `429` + `Retry-After` (same policy/limits as `public_submission`, own in-process implementation) | same |
 | 3 | **Validate & sanitise**: length caps, strip control chars, reject CR/LF in name/subject, escape on render in the staff UI (stored-XSS defence) | same |
 | 4 | **Honeypot** `website`: if non-empty, `202` with **no work** (accept-and-drop) | same |
-| 5 | **No cookies/credentials; CORS locked to the public origin.** No file uploads for this flow. | same |
+| 5 | **No cookies/credentials; CORS locked to the public origin.** Optional image uploads are magic-byte checked, capped, and stored outside any web root. | same |
 
 Unlike `submit-proposal`, there is **no double opt-in** — a valid submission is persisted as
 `SUBMITTED` in a single call; there is no confirmation e-mail/link to click.
@@ -58,7 +58,11 @@ citizen only ever sees the masked confirmation screen.
 
 ### Request body
 
-Content type: `application/json`.
+Content type:
+
+- `application/json` for submissions without attachments.
+- `multipart/form-data` for submissions with attachments. Text fields keep the same names
+  and validation rules as the JSON body.
 
 | Field | Type | Required | Constraints |
 |---|---|---|---|
@@ -69,6 +73,7 @@ Content type: `application/json`.
 | `consent` | boolean | ✅ | **must be `true`** (RGPD) |
 | `captchaToken` | string | ✅ | Turnstile response token; server verifies via `siteverify` |
 | `website` | string | — | **honeypot** — should be empty (≤255 chars accepted); non-empty ⇒ silent accept-and-drop (`202`, no work) |
+| `attachments` | file[] | — | Multipart only; 0–10 files; PNG/JPEG only; ≤5 MiB each and ≤25 MiB total |
 
 ```http
 POST /api/v1/public/museum-questions
@@ -85,12 +90,27 @@ Content-Type: application/json
 }
 ```
 
+```http
+POST /api/v1/public/museum-questions
+Content-Type: multipart/form-data
+
+requesterName=Ana Souza
+requesterEmail=ana@example.test
+subject=Dúvida sobre visita in situ
+message=Gostaria de confirmar esta etiqueta.
+consent=true
+captchaToken=0.AbC...turnstile-response-token
+attachments=@etiqueta.png;type=image/png
+```
+
 ### Responses
 
 | Status | Meaning | Body |
 |---|---|---|
 | `202` | Accepted; question persisted as `SUBMITTED` (or honeypot drop) | `MuseumQuestionReceipt` |
-| `422` | Validation failed (missing/invalid fields, consent not given) | `ServerError` |
+| `422` | Validation failed (missing/invalid fields, consent not given, too many attachments) | `ServerError` |
+| `413` | One image exceeds 5 MiB, or image attachments exceed 25 MiB total | `ServerError` |
+| `415` | An attachment is not a PNG or JPEG by byte signature | `ServerError` |
 | `403` | Turnstile verification failed (missing/invalid/expired) | `ServerError` |
 | `429` | Rate limit exceeded (`Retry-After` header) | `ServerError` |
 | `503` | Captcha provider unreachable | `ServerError` |
@@ -128,6 +148,9 @@ consumes. Request-validation failures (`422`) carry a field-error array under `e
   landing page is additive, not a redirect.
 - The SPA posts this unauthenticated; `auth.interceptor.ts` adds no headers when there is no
   session.
+- The SPA sends JSON while no files are selected and switches to `FormData` only when at
+  least one image is attached. This preserves deploy compatibility with older backends for
+  the no-attachment path.
 - Public Turnstile **site key** ships in the SPA via `turnstile-site-key`
   (`src/config/environment.json`) — the same key already used by `submit-proposal`. The
   **secret key** lives only on the server (`turnstile_secret_key` setting, also shared).

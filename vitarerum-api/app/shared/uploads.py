@@ -15,7 +15,8 @@ import re
 import zipfile
 from urllib.parse import quote
 
-from fastapi import HTTPException, UploadFile, status
+from fastapi import HTTPException, status
+from starlette.datastructures import UploadFile
 
 from app.config import settings
 
@@ -23,6 +24,9 @@ _UPLOAD_CHUNK = 1024 * 1024
 _CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
 ALLOWED_DOCUMENT_MAX_BYTES = 10 * 1024 * 1024
 ALLOWED_DOCUMENT_MAX_COUNT = 5
+ALLOWED_IMAGE_MAX_COUNT = 10
+ALLOWED_IMAGE_MAX_BYTES = 5 * 1024 * 1024
+ALLOWED_IMAGE_TOTAL_MAX_BYTES = 25 * 1024 * 1024
 
 
 def safe_basename(name: str, *, default: str = "file") -> str:
@@ -39,7 +43,9 @@ def safe_basename(name: str, *, default: str = "file") -> str:
     return base
 
 
-def content_disposition_attachment(filename: str, *, default: str = "file") -> str:
+def content_disposition_attachment(
+    filename: str, *, default: str = "file", disposition: str = "attachment"
+) -> str:
     """Build a safe ``Content-Disposition`` attachment header value.
 
     Sanitizes to a basename first, then emits both an ASCII ``filename`` (with
@@ -47,7 +53,9 @@ def content_disposition_attachment(filename: str, *, default: str = "file") -> s
     ``filename*`` for full-fidelity Unicode names."""
     safe = safe_basename(filename, default=default)
     ascii_fallback = safe.encode("ascii", "replace").decode("ascii").replace('"', "")
-    return f"attachment; filename=\"{ascii_fallback}\"; filename*=UTF-8''{quote(safe)}"
+    return (
+        f"{disposition}; filename=\"{ascii_fallback}\"; filename*=UTF-8''{quote(safe)}"
+    )
 
 
 async def read_upload_capped(file: UploadFile, *, limit: int | None = None) -> bytes:
@@ -109,6 +117,21 @@ def ensure_allowed_document(content: bytes) -> None:
                 "message": "Only PDF, JPG, PNG, and DOCX files are accepted.",
             },
         ) from None
+
+
+def ensure_allowed_image(content: bytes) -> tuple[str, str]:
+    """Return the trusted MIME type and extension for a PNG/JPEG upload."""
+    if content.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png", ".png"
+    if content.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg", ".jpg"
+    raise HTTPException(
+        status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+        detail={
+            "error": "UNSUPPORTED_FILE_TYPE",
+            "message": "Only PNG and JPEG images are accepted.",
+        },
+    )
 
 
 def ensure_xlsx(content: bytes) -> None:

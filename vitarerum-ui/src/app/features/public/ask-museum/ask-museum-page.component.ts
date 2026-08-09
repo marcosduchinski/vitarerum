@@ -18,6 +18,10 @@ import { TurnstileComponent } from '../components/turnstile/turnstile.component'
 import { MUSEUM_QUESTION_API_SERVICE } from '../services/museum-question-api.service';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MAX_IMAGE_COUNT = 10;
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_TOTAL_IMAGE_BYTES = 25 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = new Set(['image/png', 'image/jpeg']);
 
 /**
  * "Pergunte ao Museu" public form. Scope is deliberately narrow (see the
@@ -48,6 +52,7 @@ export class AskMuseumPageComponent {
   // Honeypot: bound to a visually hidden field. Real users leave it empty.
   protected readonly website = signal('');
   protected readonly captchaToken = signal('');
+  protected readonly attachments = signal<readonly File[]>([]);
 
   protected readonly submitted = signal(false);
   protected readonly submitting = signal(false);
@@ -60,6 +65,26 @@ export class AskMuseumPageComponent {
   protected readonly subjectError = computed(() => this.submitted() && !this.subject().trim());
   protected readonly messageError = computed(() => this.submitted() && !this.message().trim());
   protected readonly consentError = computed(() => this.submitted() && !this.consent());
+  protected readonly attachmentError = computed(() => {
+    const files = this.attachments();
+    if (files.length > MAX_IMAGE_COUNT) return `Attach at most ${MAX_IMAGE_COUNT} images.`;
+    if (files.some((file) => !ALLOWED_IMAGE_TYPES.has(file.type))) {
+      return 'Only PNG and JPEG images are accepted.';
+    }
+    if (files.some((file) => file.size > MAX_IMAGE_BYTES)) {
+      return 'Each image must be 5 MB or smaller.';
+    }
+    const total = files.reduce((sum, file) => sum + file.size, 0);
+    if (total > MAX_TOTAL_IMAGE_BYTES)
+      return 'Image attachments must be 25 MB or smaller in total.';
+    return '';
+  });
+  protected readonly attachmentInputHint = computed(() => {
+    const files = this.attachments();
+    if (!files.length) return 'Optional: up to 10 PNG or JPEG images, 5 MB each, 25 MB total.';
+    const total = files.reduce((sum, file) => sum + file.size, 0);
+    return `${files.length} image${files.length === 1 ? '' : 's'} selected · ${this.formatBytes(total)} total`;
+  });
 
   // No site key configured → no widget rendered → don't block submission on it
   // (the server still verifies whatever token, or lack of one, it receives).
@@ -75,6 +100,7 @@ export class AskMuseumPageComponent {
       !!this.subject().trim() &&
       !!this.message().trim() &&
       this.consent() &&
+      !this.attachmentError() &&
       (!this.captchaRequired() || !!this.captchaToken()),
   );
 
@@ -106,6 +132,15 @@ export class AskMuseumPageComponent {
     this.consent.set((event.target as HTMLInputElement).checked);
   }
 
+  protected onAttachmentsChange(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    this.attachments.set(Array.from(input.files ?? []));
+  }
+
+  protected removeAttachment(index: number): void {
+    this.attachments.update((files) => files.filter((_, currentIndex) => currentIndex !== index));
+  }
+
   protected onVerified(token: string): void {
     this.captchaToken.set(token);
   }
@@ -132,6 +167,7 @@ export class AskMuseumPageComponent {
           consent: this.consent(),
           captchaToken: this.captchaToken(),
           website: this.website(),
+          attachments: this.attachments(),
         }),
       );
 
@@ -146,5 +182,12 @@ export class AskMuseumPageComponent {
     } finally {
       this.submitting.set(false);
     }
+  }
+
+  protected formatBytes(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    const mib = bytes / (1024 * 1024);
+    if (mib >= 1) return `${mib.toFixed(mib >= 10 ? 0 : 1)} MB`;
+    return `${Math.ceil(bytes / 1024)} KB`;
   }
 }

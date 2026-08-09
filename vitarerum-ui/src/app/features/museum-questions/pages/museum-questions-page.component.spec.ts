@@ -4,14 +4,14 @@ import { of } from 'rxjs';
 import { vi } from 'vitest';
 
 import {
-  MuseumQuestion,
+  MuseumQuestionListItem,
   MuseumQuestionListQuery,
   MuseumQuestionPage,
 } from '../models/museum-question.model';
 import { MUSEUM_QUESTION_MANAGEMENT_SERVICE } from '../services/museum-question-management.service';
 import { MuseumQuestionsPageComponent } from './museum-questions-page.component';
 
-const QUESTION: MuseumQuestion = {
+const QUESTION: MuseumQuestionListItem = {
   id: 'q1',
   requesterName: 'Ana Souza',
   requesterEmail: 'ana@example.org',
@@ -29,6 +29,7 @@ const QUESTION: MuseumQuestion = {
   outOfScopeEmailSentAt: null,
   closedAt: null,
   closedBy: null,
+  attachmentCount: 0,
 };
 
 class ServiceStub {

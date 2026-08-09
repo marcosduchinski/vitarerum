@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from app.identity.public import Actor, GroupName, PermissionId
+from app.museum_questions.application.read_models import MuseumQuestionListItem
 from app.museum_questions.application.use_cases import (
     AnswerMuseumQuestion,
     AnswerMuseumQuestionInput,
@@ -18,10 +19,12 @@ from app.museum_questions.application.use_cases import (
     RateLimitExceeded,
     SubmitMuseumQuestion,
     SubmitMuseumQuestionInput,
+    UploadedMuseumQuestionImage,
 )
 from app.museum_questions.domain.models import (
     InvalidMuseumQuestionTransition,
     MuseumQuestion,
+    MuseumQuestionAttachment,
     MuseumQuestionStatus,
 )
 from app.shared.exceptions import InsufficientGroup
@@ -60,7 +63,7 @@ class _Repo:
         requester_email: str | None,
         page: int,
         size: int,
-    ) -> tuple[list[MuseumQuestion], int]:
+    ) -> tuple[list[MuseumQuestionListItem], int]:
         rows = sorted(self.questions.values(), key=lambda q: q.created_at)
         if status is not None:
             rows = [q for q in rows if q.status == status]
@@ -70,7 +73,10 @@ class _Repo:
                 for q in rows
                 if q.requester_email.lower() == requester_email.strip().lower()
             ]
-        return rows[page * size : page * size + size], len(rows)
+        return [
+            MuseumQuestionListItem(q, len(q.attachments or []))
+            for q in rows[page * size : page * size + size]
+        ], len(rows)
 
     async def save(self, question: MuseumQuestion) -> None:
         self.questions[question.id] = question
@@ -98,6 +104,23 @@ class _Limiter:
 class _Clock:
     def now(self) -> datetime:
         return _NOW
+
+
+class _Storage:
+    def __init__(self) -> None:
+        self.files: dict[str, bytes] = {}
+        self.deleted: list[str] = []
+
+    async def save(self, content: bytes, reference: str) -> str:
+        self.files[reference] = content
+        return reference
+
+    async def read(self, reference: str) -> bytes:
+        return self.files[reference]
+
+    async def delete(self, reference: str) -> None:
+        self.deleted.append(reference)
+        self.files.pop(reference, None)
 
 
 def _question(
@@ -133,7 +156,7 @@ def _input(**overrides: str) -> SubmitMuseumQuestionInput:
 
 async def test_execute_persists_submitted_question() -> None:
     repo = _Repo()
-    use_case = SubmitMuseumQuestion(repo, _Captcha(), _Limiter(), _Clock())
+    use_case = SubmitMuseumQuestion(repo, _Captcha(), _Limiter(), _Clock(), _Storage())
     output = await use_case.execute(_input())
     assert output.email == "ana@example.org"
     assert output.question_id is not None
@@ -146,7 +169,7 @@ async def test_execute_persists_submitted_question() -> None:
 
 async def test_honeypot_accepts_and_drops() -> None:
     repo = _Repo()
-    use_case = SubmitMuseumQuestion(repo, _Captcha(), _Limiter(), _Clock())
+    use_case = SubmitMuseumQuestion(repo, _Captcha(), _Limiter(), _Clock(), _Storage())
     output = await use_case.execute(_input(website="http://spam"))
     assert output.question_id is None
     assert repo.added == []
@@ -154,7 +177,9 @@ async def test_honeypot_accepts_and_drops() -> None:
 
 async def test_rate_limit_raises() -> None:
     repo = _Repo()
-    use_case = SubmitMuseumQuestion(repo, _Captcha(), _Limiter(block=True), _Clock())
+    use_case = SubmitMuseumQuestion(
+        repo, _Captcha(), _Limiter(block=True), _Clock(), _Storage()
+    )
     with pytest.raises(RateLimitExceeded):
         await use_case.execute(_input())
     assert repo.added == []
@@ -162,7 +187,9 @@ async def test_rate_limit_raises() -> None:
 
 async def test_captcha_failure_raises() -> None:
     repo = _Repo()
-    use_case = SubmitMuseumQuestion(repo, _Captcha(ok=False), _Limiter(), _Clock())
+    use_case = SubmitMuseumQuestion(
+        repo, _Captcha(ok=False), _Limiter(), _Clock(), _Storage()
+    )
     with pytest.raises(CaptchaFailed):
         await use_case.execute(_input())
     assert repo.added == []
@@ -171,7 +198,7 @@ async def test_captcha_failure_raises() -> None:
 async def test_captcha_unavailable_raises() -> None:
     repo = _Repo()
     use_case = SubmitMuseumQuestion(
-        repo, _Captcha(raise_error=True), _Limiter(), _Clock()
+        repo, _Captcha(raise_error=True), _Limiter(), _Clock(), _Storage()
     )
     with pytest.raises(CaptchaUnavailable):
         await use_case.execute(_input())
@@ -186,7 +213,7 @@ async def test_list_questions_filters_and_orders() -> None:
         _STAFF, status=MuseumQuestionStatus.SUBMITTED, page=0, size=20
     )
     assert result.total == 1
-    assert [q.id for q in result.content] == ["q-old"]
+    assert [item.question.id for item in result.content] == ["q-old"]
 
 
 async def test_list_questions_filters_by_requester_email() -> None:
@@ -208,7 +235,67 @@ async def test_list_questions_filters_by_requester_email() -> None:
         size=20,
     )
     assert result.total == 1
-    assert [q.id for q in result.content] == ["q-ana"]
+    assert [item.question.id for item in result.content] == ["q-ana"]
+
+
+async def test_persist_uploads_images_and_tracks_attachment_metadata() -> None:
+    repo = _Repo()
+    storage = _Storage()
+    use_case = SubmitMuseumQuestion(repo, _Captcha(), _Limiter(), _Clock(), storage)
+    output = await use_case.execute(
+        _input(
+            attachments=[
+                UploadedMuseumQuestionImage(
+                    file_name="artifact.png",
+                    content=b"\x89PNG\r\n\x1a\nimage",
+                    content_type="image/png",
+                    extension=".png",
+                )
+            ]
+        )
+    )
+    question = repo.added[0]
+    attachment = question.attachments[0]
+    assert output.file_references == [attachment.file_reference]
+    assert question.attachments == [
+        MuseumQuestionAttachment(
+            id=attachment.id,
+            question_id=question.id,
+            file_name="artifact.png",
+            file_reference=attachment.file_reference,
+            content_type="image/png",
+            size_bytes=13,
+            created_at=_NOW,
+            sort_order=0,
+        )
+    ]
+    assert storage.files[attachment.file_reference] == b"\x89PNG\r\n\x1a\nimage"
+
+
+async def test_persist_discards_uploaded_files_when_repository_fails() -> None:
+    class FailingRepo(_Repo):
+        async def add(self, question: MuseumQuestion) -> None:
+            raise RuntimeError("db failed")
+
+    storage = _Storage()
+    use_case = SubmitMuseumQuestion(
+        FailingRepo(), _Captcha(), _Limiter(), _Clock(), storage
+    )
+    with pytest.raises(RuntimeError):
+        await use_case.execute(
+            _input(
+                attachments=[
+                    UploadedMuseumQuestionImage(
+                        file_name="artifact.jpg",
+                        content=b"\xff\xd8\xffimage",
+                        content_type="image/jpeg",
+                        extension=".jpg",
+                    )
+                ]
+            )
+        )
+    assert storage.files == {}
+    assert storage.deleted
 
 
 async def test_list_questions_requires_staff() -> None:

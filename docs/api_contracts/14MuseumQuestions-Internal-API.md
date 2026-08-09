@@ -26,7 +26,8 @@ OUT_OF_SCOPE -> CLOSED
 
 ### `GET /museum-questions?status=&page=&size=`
 
-Returns a paginated queue ordered by `createdAt ASC`.
+Returns a paginated queue ordered by `createdAt ASC`. List items include
+`attachmentCount`, not full attachment metadata.
 
 Response:
 
@@ -44,7 +45,8 @@ Response:
 
 ### `GET /museum-questions/{id}`
 
-Returns one `MuseumQuestion`.
+Returns one `MuseumQuestionDetail`, including `attachments: []` for questions without
+images.
 
 ### `POST /museum-questions/{id}/answer`
 
@@ -74,6 +76,12 @@ out-of-scope e-mail, records `outOfScopeAt`, `outOfScopeBy`, `outOfScopeReason`,
 Valid only from `ANSWERED` or `OUT_OF_SCOPE`. Records `closedAt` and `closedBy`.
 No e-mail is sent.
 
+### `GET /museum-questions/{questionId}/attachments/{attachmentId}`
+
+Returns the raw image bytes for a question attachment. Staff-only. The endpoint verifies the
+attachment belongs to the question, returns the trusted image `Content-Type`, sets
+`Content-Disposition: inline`, and includes `X-Content-Type-Options: nosniff`.
+
 ### `GET /museum-questions/summary`
 
 Returns staff dashboard counts by status.
@@ -84,7 +92,7 @@ Response:
 { "submitted": 9, "answered": 120, "outOfScope": 3, "closed": 45 }
 ```
 
-## `MuseumQuestion`
+## `MuseumQuestionListItem`
 
 ```json
 {
@@ -104,7 +112,41 @@ Response:
   "outOfScopeReason": null,
   "outOfScopeEmailSentAt": null,
   "closedAt": null,
-  "closedBy": null
+  "closedBy": null,
+  "attachmentCount": 1
+}
+```
+
+## `MuseumQuestionDetail`
+
+```json
+{
+  "id": "q1",
+  "requesterName": "Ana Souza",
+  "requesterEmail": "ana@example.org",
+  "subject": "Visit question",
+  "message": "Plain text citizen message",
+  "status": "SUBMITTED",
+  "createdAt": "2026-07-05T10:00:00Z",
+  "answeredAt": null,
+  "answeredBy": null,
+  "answerBody": null,
+  "answerSentAt": null,
+  "outOfScopeAt": null,
+  "outOfScopeBy": null,
+  "outOfScopeReason": null,
+  "outOfScopeEmailSentAt": null,
+  "closedAt": null,
+  "closedBy": null,
+  "attachments": [
+    {
+      "id": "att-1",
+      "fileName": "artifact.png",
+      "contentType": "image/png",
+      "sizeBytes": 1024,
+      "createdAt": "2026-07-05T10:00:00Z"
+    }
+  ]
 }
 ```
 
@@ -113,6 +155,7 @@ Response:
 - `401`: missing/invalid authentication.
 - `403`: caller is not staff.
 - `404 MUSEUM_QUESTION_NOT_FOUND`: unknown question id.
+- `404 MUSEUM_QUESTION_ATTACHMENT_NOT_FOUND`: unknown attachment id for the question.
 - `409 INVALID_MUSEUM_QUESTION_TRANSITION`: action is not valid for the current status.
 - `422`: invalid request body.
 

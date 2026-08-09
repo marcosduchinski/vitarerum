@@ -29,6 +29,18 @@ class InvalidMuseumQuestionTransition(Exception):
 
 
 @dataclass(slots=True)
+class MuseumQuestionAttachment:
+    id: str
+    question_id: str
+    file_name: str
+    file_reference: str
+    content_type: str
+    size_bytes: int
+    created_at: datetime
+    sort_order: int
+
+
+@dataclass(slots=True)
 class MuseumQuestion:
     """Aggregate root — a citizen's question, independent of any proposal or
     account. Created object-free from the public form; the citizen's own
@@ -51,6 +63,11 @@ class MuseumQuestion:
     out_of_scope_email_sent_at: datetime | None = None
     closed_at: datetime | None = None
     closed_by: str | None = None
+    attachments: list[MuseumQuestionAttachment] | None = None
+
+    def __post_init__(self) -> None:
+        if self.attachments is None:
+            self.attachments = []
 
     def answer(
         self,

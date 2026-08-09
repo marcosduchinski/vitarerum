@@ -76,6 +76,46 @@
                   </div>
                   <p class="message__subject">{{ question.subject }}</p>
                   <p class="message__body">{{ question.message }}</p>
+                  @if (question.attachments.length) {
+                    <ul class="message-attachments" aria-label="Question image attachments">
+                      @for (attachment of question.attachments; track attachment.id) {
+                        <li class="message-attachments__item">
+                          @if (attachmentPreview(attachment); as preview) {
+                            @if (preview.url) {
+                              <a
+                                class="message-attachments__preview"
+                                [href]="preview.url"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                [attr.aria-label]="'Open ' + attachment.fileName"
+                              >
+                                <img [src]="preview.url" [alt]="attachment.fileName" />
+                              </a>
+                            } @else {
+                              <div
+                                class="message-attachments__preview message-attachments__preview--loading"
+                              >
+                                @if (preview.error) {
+                                  <span
+                                    class="pi pi-exclamation-triangle"
+                                    aria-hidden="true"
+                                  ></span>
+                                } @else {
+                                  <span class="pi pi-image" aria-hidden="true"></span>
+                                }
+                              </div>
+                            }
+                          }
+                          <div class="message-attachments__meta">
+                            <span class="message-attachments__name">{{ attachment.fileName }}</span>
+                            <span class="message-attachments__detail">
+                              {{ attachment.contentType }} · {{ formatBytes(attachment.sizeBytes) }}
+                            </span>
+                          </div>
+                        </li>
+                      }
+                    </ul>
+                  }
                 </div>
               </li>
 

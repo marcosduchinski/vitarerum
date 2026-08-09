@@ -63,6 +63,22 @@
   }
 }
 
+.field__input--file {
+  padding: 0.45rem 0.6rem;
+
+  &::file-selector-button {
+    margin-right: 0.75rem;
+    padding: 0.4rem 0.75rem;
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-sm);
+    background: var(--color-panel);
+    color: var(--color-text);
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+  }
+}
+
 .field--error .field__input {
   border-color: var(--status-rejected-text);
 }
@@ -78,6 +94,57 @@
   margin: 0;
   color: var(--color-muted);
   font-size: 0.8rem;
+}
+
+.attachment-list {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.attachment-list__item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.4rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-panel-muted);
+  color: var(--color-text);
+  font-size: 0.85rem;
+}
+
+.attachment-list__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment-list__size {
+  color: var(--color-subtle);
+  font-size: 0.78rem;
+}
+
+.attachment-list__remove {
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+
+  &:hover {
+    border-color: var(--color-line);
+    color: var(--status-rejected-text);
+    background: var(--color-panel);
+  }
 }
 
 /* Honeypot: removed from layout and assistive tech, but still in the DOM so

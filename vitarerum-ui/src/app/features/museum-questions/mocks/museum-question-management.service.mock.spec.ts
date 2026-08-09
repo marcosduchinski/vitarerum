@@ -13,6 +13,16 @@ describe('MuseumQuestionManagementServiceMock', () => {
     const page = await firstValueFrom(service.list({ status: 'SUBMITTED', page: 0, size: 20 }));
 
     expect(page.content.map((question) => question.id)).toEqual(['q-1']);
+    expect(page.content[0].attachmentCount).toBe(1);
+    expect('attachments' in page.content[0]).toBe(false);
+  });
+
+  it('keeps attachment metadata on the detail response', async () => {
+    const question = await firstValueFrom(service.get('q-1'));
+
+    expect(question.attachments.map((attachment) => attachment.fileName)).toEqual([
+      'collection-label.png',
+    ]);
   });
 
   it('answers a submitted question', async () => {

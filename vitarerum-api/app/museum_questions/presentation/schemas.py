@@ -53,7 +53,15 @@ class MuseumQuestionReceipt(BaseModel):
 MuseumQuestionStatusValue = Literal["SUBMITTED", "ANSWERED", "OUT_OF_SCOPE", "CLOSED"]
 
 
-class MuseumQuestionResponse(BaseModel):
+class MuseumQuestionAttachmentResponse(BaseModel):
+    id: str
+    fileName: str
+    contentType: str
+    sizeBytes: int
+    createdAt: datetime
+
+
+class MuseumQuestionListItemResponse(BaseModel):
     id: str
     requesterName: str
     requesterEmail: EmailStr
@@ -71,10 +79,32 @@ class MuseumQuestionResponse(BaseModel):
     outOfScopeEmailSentAt: datetime | None = None
     closedAt: datetime | None = None
     closedBy: str | None = None
+    attachmentCount: int = 0
+
+
+class MuseumQuestionDetailResponse(BaseModel):
+    id: str
+    requesterName: str
+    requesterEmail: EmailStr
+    subject: str
+    message: str
+    status: MuseumQuestionStatusValue
+    createdAt: datetime
+    answeredAt: datetime | None = None
+    answeredBy: str | None = None
+    answerBody: str | None = None
+    answerSentAt: datetime | None = None
+    outOfScopeAt: datetime | None = None
+    outOfScopeBy: str | None = None
+    outOfScopeReason: str | None = None
+    outOfScopeEmailSentAt: datetime | None = None
+    closedAt: datetime | None = None
+    closedBy: str | None = None
+    attachments: list[MuseumQuestionAttachmentResponse] = Field(default_factory=list)
 
 
 class PaginatedMuseumQuestionsResponse(BaseModel):
-    content: list[MuseumQuestionResponse]
+    content: list[MuseumQuestionListItemResponse]
     page: int
     size: int
     totalElements: int

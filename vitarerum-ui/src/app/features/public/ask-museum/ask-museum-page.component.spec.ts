@@ -85,6 +85,55 @@ describe('AskMuseumPageComponent', () => {
     });
   });
 
+  it('includes selected image attachments in the submission', async () => {
+    await setup('');
+    const fixture = TestBed.createComponent(AskMuseumPageComponent);
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    setInputValue(compiled, '#name', 'Ana Souza');
+    setInputValue(compiled, '#email', 'ana@example.test');
+    setInputValue(compiled, '#subject', 'Duvida sobre visita in situ');
+    setInputValue(compiled, '#message', 'Gostaria de agendar uma visita para pesquisa.');
+    setChecked(compiled, '.consent input[type="checkbox"]', true);
+    setFiles(compiled, '#attachments', [
+      new File([new Uint8Array([1, 2, 3])], 'artifact.png', { type: 'image/png' }),
+    ]);
+
+    submitForm(compiled);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(api.submitCalls[0].attachments?.map((file) => file.name)).toEqual(['artifact.png']);
+  });
+
+  it('blocks submission when more than ten images are selected', async () => {
+    await setup();
+    const fixture = TestBed.createComponent(AskMuseumPageComponent);
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    setInputValue(compiled, '#name', 'Ana Souza');
+    setInputValue(compiled, '#email', 'ana@example.test');
+    setInputValue(compiled, '#subject', 'Subject');
+    setInputValue(compiled, '#message', 'Message body.');
+    setChecked(compiled, '.consent input[type="checkbox"]', true);
+    setFiles(
+      compiled,
+      '#attachments',
+      Array.from(
+        { length: 11 },
+        (_, index) => new File([new Uint8Array([1])], `${index}.png`, { type: 'image/png' }),
+      ),
+    );
+
+    submitForm(compiled);
+    fixture.detectChanges();
+
+    expect(api.submitCalls).toHaveLength(0);
+    expect(compiled.textContent).toContain('Attach at most 10 images.');
+  });
+
   it('blocks submission until consent is given', async () => {
     await setup();
     const fixture = TestBed.createComponent(AskMuseumPageComponent);
@@ -151,6 +200,16 @@ function setChecked(root: HTMLElement, selector: string, checked: boolean): void
   expect(box).not.toBeNull();
   box!.checked = checked;
   box!.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+function setFiles(root: HTMLElement, selector: string, files: readonly File[]): void {
+  const input = root.querySelector<HTMLInputElement>(selector);
+  expect(input).not.toBeNull();
+  Object.defineProperty(input, 'files', {
+    configurable: true,
+    value: files,
+  });
+  input!.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
 function submitForm(root: HTMLElement): void {

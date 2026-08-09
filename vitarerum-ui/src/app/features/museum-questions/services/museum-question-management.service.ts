@@ -8,6 +8,7 @@ import {
   AnswerMuseumQuestionRequest,
   MarkOutOfScopeRequest,
   MuseumQuestion,
+  MuseumQuestionAttachment,
   MuseumQuestionListQuery,
   MuseumQuestionPage,
 } from '../models/museum-question.model';
@@ -18,6 +19,7 @@ export interface MuseumQuestionManagementApi {
   answer(questionId: string, body: AnswerMuseumQuestionRequest): Observable<MuseumQuestion>;
   markOutOfScope(questionId: string, body: MarkOutOfScopeRequest): Observable<MuseumQuestion>;
   close(questionId: string): Observable<MuseumQuestion>;
+  getAttachment(questionId: string, attachment: MuseumQuestionAttachment): Observable<Blob>;
 }
 
 export const MUSEUM_QUESTION_MANAGEMENT_SERVICE = new InjectionToken<MuseumQuestionManagementApi>(
@@ -53,6 +55,17 @@ export class MuseumQuestionManagementService implements MuseumQuestionManagement
 
   close(questionId: string): Observable<MuseumQuestion> {
     return this.http.patch<MuseumQuestion>(this.url(`/museum-questions/${questionId}/close`), {});
+  }
+
+  getAttachment(questionId: string, attachment: MuseumQuestionAttachment): Observable<Blob> {
+    return this.http.get(
+      this.url(
+        `/museum-questions/${encodeURIComponent(questionId)}/attachments/${encodeURIComponent(
+          attachment.id,
+        )}`,
+      ),
+      { responseType: 'blob' },
+    );
   }
 
   private url(path: string): string {
