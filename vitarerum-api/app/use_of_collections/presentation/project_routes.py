@@ -17,6 +17,7 @@ from fastapi import (
     status,
 )
 
+from app.config import settings
 from app.shared.authorization import require_staff
 from app.shared.dependencies import CallerPermission
 from app.use_of_collections.application.authorization import (
@@ -52,6 +53,7 @@ from app.use_of_collections.domain.enums import (
 )
 from app.use_of_collections.domain.models import (
     CollectionUseObjectId,
+    CollectionUseProject,
     CollectionUseProjectId,
 )
 from app.use_of_collections.presentation.common import (
@@ -60,6 +62,7 @@ from app.use_of_collections.presentation.common import (
     _detail_or_none,
     _find_project_proposal,
     _handle_domain_errors,
+    _load_permission_detail,
     _not_found,
     projects_router,
 )
@@ -71,10 +74,12 @@ from app.use_of_collections.presentation.dependencies import (
     OccurrenceLogRepo,
     ProjectDetailQuery,
     ProjectRepo,
+    ProposalEmailSender,
     ProposalRepo,
     PublicationLogRepo,
     ReferenceGenerator,
 )
+from app.use_of_collections.presentation.permissions import hydrate_permission
 from app.use_of_collections.presentation.schemas import (
     AddProjectObjectsRequest,
     CollectionUseObjectResponse,
@@ -82,6 +87,7 @@ from app.use_of_collections.presentation.schemas import (
     NoteRequest,
     PaginatedEventsResponse,
     PaginatedProjectsResponse,
+    PermissionDetail,
     ProjectCommandResponse,
     ProjectDetailResponse,
     ProjectListItemResponse,
@@ -95,6 +101,22 @@ from app.use_of_collections.presentation.schemas import (
 # ═══════════════════════════════════════════════════════════════════════════════
 # Project endpoints
 # ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _project_link(project_id: CollectionUseProjectId) -> str:
+    return f"{settings.public_origin}/p/collections/projects/{project_id}"
+
+
+async def _caller_display_name(caller: CallerPermission, session: DBSession) -> str:
+    caller_detail = await hydrate_permission(caller.id, session)
+    return caller_detail.user.name if caller_detail else caller.email
+
+
+async def _project_requester(
+    project: CollectionUseProject,
+    session: DBSession,
+) -> PermissionDetail:
+    return await _load_permission_detail(project.requested_by, session)
 
 
 @projects_router.get("", response_model=PaginatedProjectsResponse)
@@ -120,9 +142,7 @@ async def list_projects(
             use_type=type_filter,
             requested_by=requested_by,
             origin_project_id=(
-                CollectionUseProjectId(origin_project_id)
-                if origin_project_id
-                else None
+                CollectionUseProjectId(origin_project_id) if origin_project_id else None
             ),
             date_from=date_from,
             date_to=date_to,
@@ -505,6 +525,7 @@ async def start_project(
     proposal_repo: ProposalRepo,
     access_log_repo: AccessLogRepo,
     reference_generator: ReferenceGenerator,
+    proposal_notification_email_sender: ProposalEmailSender,
     session: DBSession,
 ) -> ProjectCommandResponse:
     await _assert_existing_project_access(
@@ -523,6 +544,14 @@ async def start_project(
     except Exception as exc:
         _handle_domain_errors(exc)
     await session.commit()
+    requester = await _project_requester(project, session)
+    await proposal_notification_email_sender.send_project_started(
+        to_email=requester.user.email,
+        requester_name=requester.user.name,
+        project_reference=project.reference_number.value,
+        started_by_name=await _caller_display_name(caller, session),
+        link=_project_link(project.id),
+    )
     last_event = (
         await _build_use_event(project.events[-1], session) if project.events else None
     )
@@ -536,6 +565,7 @@ async def complete_project(
     caller: CallerPermission,
     project_repo: ProjectRepo,
     proposal_repo: ProposalRepo,
+    proposal_notification_email_sender: ProposalEmailSender,
     session: DBSession,
 ) -> ProjectCommandResponse:
     await _assert_existing_project_access(
@@ -552,6 +582,14 @@ async def complete_project(
     except Exception as exc:
         _handle_domain_errors(exc)
     await session.commit()
+    requester = await _project_requester(project, session)
+    await proposal_notification_email_sender.send_project_completed(
+        to_email=requester.user.email,
+        requester_name=requester.user.name,
+        project_reference=project.reference_number.value,
+        completed_by_name=await _caller_display_name(caller, session),
+        link=_project_link(project.id),
+    )
     last_event = (
         await _build_use_event(project.events[-1], session) if project.events else None
     )
@@ -565,6 +603,7 @@ async def cancel_project(
     caller: CallerPermission,
     project_repo: ProjectRepo,
     proposal_repo: ProposalRepo,
+    proposal_notification_email_sender: ProposalEmailSender,
     session: DBSession,
 ) -> ProjectCommandResponse:
     await _assert_existing_project_access(
@@ -581,12 +620,19 @@ async def cancel_project(
     except Exception as exc:
         _handle_domain_errors(exc)
     await session.commit()
+    requester = await _project_requester(project, session)
+    await proposal_notification_email_sender.send_project_cancelled(
+        to_email=requester.user.email,
+        requester_name=requester.user.name,
+        project_reference=project.reference_number.value,
+        cancelled_by_name=await _caller_display_name(caller, session),
+        reason=body.reason,
+        link=_project_link(project.id),
+    )
     last_event = (
         await _build_use_event(project.events[-1], session) if project.events else None
     )
     return _project_command_response(project, last_event)
-
-
 
 
 @projects_router.get(

@@ -124,7 +124,7 @@ class _Submit:
         return SimpleNamespace(
             proposal=SimpleNamespace(
                 id="proposal-public-1",
-                reference_number=SimpleNamespace(value="VRP-20260626-0007")
+                reference_number=SimpleNamespace(value="VRP-20260626-0007"),
             ),
             conversation_id="conv-1",
         )
@@ -199,6 +199,18 @@ class _ProposalNotificationEmail:
 
     async def send_proposal_rejected(self, **kwargs) -> None:
         raise AssertionError("send_proposal_rejected should not be called")
+
+    async def send_proposal_approved(self, **kwargs) -> None:
+        raise AssertionError("send_proposal_approved should not be called")
+
+    async def send_project_started(self, **kwargs) -> None:
+        raise AssertionError("send_project_started should not be called")
+
+    async def send_project_cancelled(self, **kwargs) -> None:
+        raise AssertionError("send_project_cancelled should not be called")
+
+    async def send_project_completed(self, **kwargs) -> None:
+        raise AssertionError("send_project_completed should not be called")
 
 
 class _PermissionReader:

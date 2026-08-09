@@ -662,6 +662,10 @@ class RecordingProposalNotificationEmailSender:
         self.documents_submitted_calls: list[dict[str, object]] = []
         self.corrections_submitted_calls: list[dict[str, object]] = []
         self.rejected_calls: list[dict[str, object]] = []
+        self.approved_calls: list[dict[str, object]] = []
+        self.project_started_calls: list[dict[str, object]] = []
+        self.project_cancelled_calls: list[dict[str, object]] = []
+        self.project_completed_calls: list[dict[str, object]] = []
 
     async def send_proposal_submitted(self, **kwargs) -> None:
         self.submitted_calls.append(kwargs)
@@ -683,6 +687,18 @@ class RecordingProposalNotificationEmailSender:
 
     async def send_proposal_rejected(self, **kwargs) -> None:
         self.rejected_calls.append(kwargs)
+
+    async def send_proposal_approved(self, **kwargs) -> None:
+        self.approved_calls.append(kwargs)
+
+    async def send_project_started(self, **kwargs) -> None:
+        self.project_started_calls.append(kwargs)
+
+    async def send_project_cancelled(self, **kwargs) -> None:
+        self.project_cancelled_calls.append(kwargs)
+
+    async def send_project_completed(self, **kwargs) -> None:
+        self.project_completed_calls.append(kwargs)
 
 
 class RecordingNotificationDispatcher:
@@ -2432,6 +2448,133 @@ async def test_complete_project_without_objects_returns_409() -> None:
     assert project.status == UseStatus.IN_PROGRESS
 
 
+async def test_start_project_notifies_external_requester() -> None:
+    proposal_email_sender = RecordingProposalNotificationEmailSender()
+    async with client_with_repos(
+        caller=_STAFF_CALLER,
+        permission_records={
+            "permission-1": _permission_record(
+                "permission-1",
+                GroupName.EXTERNAL,
+                user_name="Alice Requester",
+                user_email="alice@example.org",
+            ),
+            "permission-staff": _permission_record(
+                "permission-staff",
+                GroupName.CURATORIAL,
+                user_name="Curator One",
+                user_email="curator@example.org",
+            ),
+        },
+        proposal_email_sender=proposal_email_sender,
+    ) as (client, project_repo, proposal_repo, _):
+        await project_repo.add(
+            _project(status=UseStatus.CREATED, objects=[_collection_use_object()])
+        )
+        await proposal_repo.add(_proposal(status=ProposalStatus.APPROVED))
+
+        response = await client.post(
+            "/api/v1/collection-use-projects/proj-1/start",
+            json={"note": "Starting work."},
+        )
+
+    assert response.status_code == 200
+    assert proposal_email_sender.project_started_calls == [
+        {
+            "to_email": "alice@example.org",
+            "requester_name": "Alice Requester",
+            "project_reference": "CUP-ABCDEFG1",
+            "started_by_name": "Curator One",
+            "link": f"{settings.public_origin}/p/collections/projects/proj-1",
+        }
+    ]
+
+
+async def test_cancel_project_notifies_external_requester() -> None:
+    proposal_email_sender = RecordingProposalNotificationEmailSender()
+    async with client_with_repos(
+        caller=_STAFF_CALLER,
+        permission_records={
+            "permission-1": _permission_record(
+                "permission-1",
+                GroupName.EXTERNAL,
+                user_name="Alice Requester",
+                user_email="alice@example.org",
+            ),
+            "permission-staff": _permission_record(
+                "permission-staff",
+                GroupName.CURATORIAL,
+                user_name="Curator One",
+                user_email="curator@example.org",
+            ),
+        },
+        proposal_email_sender=proposal_email_sender,
+    ) as (client, project_repo, proposal_repo, _):
+        await project_repo.add(
+            _project(status=UseStatus.IN_PROGRESS, objects=[_collection_use_object()])
+        )
+        await proposal_repo.add(_proposal(status=ProposalStatus.APPROVED))
+
+        response = await client.post(
+            "/api/v1/collection-use-projects/proj-1/cancel",
+            json={"reason": "Loan no longer possible."},
+        )
+
+    assert response.status_code == 200
+    assert proposal_email_sender.project_cancelled_calls == [
+        {
+            "to_email": "alice@example.org",
+            "requester_name": "Alice Requester",
+            "project_reference": "CUP-ABCDEFG1",
+            "cancelled_by_name": "Curator One",
+            "reason": "Loan no longer possible.",
+            "link": f"{settings.public_origin}/p/collections/projects/proj-1",
+        }
+    ]
+
+
+async def test_complete_project_notifies_external_requester() -> None:
+    proposal_email_sender = RecordingProposalNotificationEmailSender()
+    async with client_with_repos(
+        caller=_STAFF_CALLER,
+        permission_records={
+            "permission-1": _permission_record(
+                "permission-1",
+                GroupName.EXTERNAL,
+                user_name="Alice Requester",
+                user_email="alice@example.org",
+            ),
+            "permission-staff": _permission_record(
+                "permission-staff",
+                GroupName.CURATORIAL,
+                user_name="Curator One",
+                user_email="curator@example.org",
+            ),
+        },
+        proposal_email_sender=proposal_email_sender,
+    ) as (client, project_repo, proposal_repo, _):
+        await project_repo.add(
+            _project(status=UseStatus.IN_PROGRESS, objects=[_collection_use_object()])
+        )
+        await proposal_repo.add(_proposal(status=ProposalStatus.APPROVED))
+
+        response = await client.post(
+            "/api/v1/collection-use-projects/proj-1/complete",
+            json={"note": "Research completed."},
+        )
+
+    assert response.status_code == 200
+    assert proposal_email_sender.project_completed_calls == [
+        {
+            "to_email": "alice@example.org",
+            "requester_name": "Alice Requester",
+            "project_reference": "CUP-ABCDEFG1",
+            "completed_by_name": "Curator One",
+            "link": f"{settings.public_origin}/p/collections/projects/proj-1",
+        }
+    ]
+
+
 async def test_staff_can_add_project_objects() -> None:
     async with client_with_repos(caller=_STAFF_CALLER) as (
         client,
@@ -2676,26 +2819,26 @@ async def test_follow_up_project_owner_can_access_created_follow_up_project() ->
 
     app.dependency_overrides[get_project_repo] = lambda: project_repo
     app.dependency_overrides[get_proposal_repo] = lambda: proposal_repo
-    app.dependency_overrides[get_conversation_repo] = (
-        lambda: InMemoryConversationRepository()
+    app.dependency_overrides[get_conversation_repo] = lambda: (
+        InMemoryConversationRepository()
     )
-    app.dependency_overrides[get_access_log_repo] = (
-        lambda: InMemoryAccessLogRepository()
+    app.dependency_overrides[get_access_log_repo] = lambda: (
+        InMemoryAccessLogRepository()
     )
-    app.dependency_overrides[get_occurrence_log_repo] = (
-        lambda: InMemoryOccurrenceLogRepository()
+    app.dependency_overrides[get_occurrence_log_repo] = lambda: (
+        InMemoryOccurrenceLogRepository()
     )
-    app.dependency_overrides[get_publication_log_repo] = (
-        lambda: InMemoryPublicationLogRepository()
+    app.dependency_overrides[get_publication_log_repo] = lambda: (
+        InMemoryPublicationLogRepository()
     )
     app.dependency_overrides[get_file_storage] = lambda: InMemoryFileStorage()
     app.dependency_overrides[get_async_session] = lambda: session
     app.dependency_overrides[get_caller_permission] = lambda: caller_holder["actor"]
-    app.dependency_overrides[get_external_requester_provisioner] = (
-        lambda: RecordingRequesterProvisioner()
+    app.dependency_overrides[get_external_requester_provisioner] = lambda: (
+        RecordingRequesterProvisioner()
     )
-    app.dependency_overrides[get_requester_access_email_sender] = (
-        lambda: RecordingAccessEmailSender()
+    app.dependency_overrides[get_requester_access_email_sender] = lambda: (
+        RecordingAccessEmailSender()
     )
     app.dependency_overrides[get_reference_number_generator] = lambda: (
         InMemoryReferenceNumberGenerator(proposal_repo)
@@ -2844,9 +2987,7 @@ async def test_add_project_objects_syncs_new_objects_to_existing_access_log() ->
             },
         )
         new_ids = [obj["id"] for obj in added.json()["objects"][-2:]]
-        listing = await client.get(
-            "/api/v1/collection-use-projects/proj-1/log-entries"
-        )
+        listing = await client.get("/api/v1/collection-use-projects/proj-1/log-entries")
 
     assert added.status_code == 201
     assert listing.status_code == 200
@@ -2882,16 +3023,15 @@ async def test_add_project_objects_creates_access_log_when_missing() -> None:
                 ]
             },
         )
-        listing = await client.get(
-            "/api/v1/collection-use-projects/proj-1/log-entries"
-        )
+        listing = await client.get("/api/v1/collection-use-projects/proj-1/log-entries")
 
     assert added.status_code == 201
     assert listing.status_code == 200
     assert listing.json()["accessLog"]["referenceNumber"].startswith("OAL-")
     assert len(listing.json()["content"]) == 1
-    assert listing.json()["content"][0]["collectionUseObjectId"] == (
-        added.json()["objects"][-1]["id"]
+    assert (
+        listing.json()["content"][0]["collectionUseObjectId"]
+        == (added.json()["objects"][-1]["id"])
     )
     assert listing.json()["content"][0]["numberOfObjects"] == 1
 
@@ -3144,7 +3284,25 @@ async def test_approve_proposal_invalid_date_range_returns_422() -> None:
 
 
 async def test_approve_proposal_without_objects_creates_empty_project() -> None:
-    async with client_with_repos(caller=_STAFF_CALLER) as (
+    proposal_email_sender = RecordingProposalNotificationEmailSender()
+    async with client_with_repos(
+        caller=_STAFF_CALLER,
+        permission_records={
+            "permission-1": _permission_record(
+                "permission-1",
+                GroupName.EXTERNAL,
+                user_name="Alice Requester",
+                user_email="alice@example.org",
+            ),
+            "permission-staff": _permission_record(
+                "permission-staff",
+                GroupName.CURATORIAL,
+                user_name="Curator One",
+                user_email="curator@example.org",
+            ),
+        },
+        proposal_email_sender=proposal_email_sender,
+    ) as (
         client,
         project_repo,
         proposal_repo,
@@ -3185,6 +3343,21 @@ async def test_approve_proposal_without_objects_creates_empty_project() -> None:
     assert detail.json()["objects"] == []
     assert project is not None
     assert project.objects == []
+    assert proposal_email_sender.approved_calls == [
+        {
+            "to_email": "alice@example.org",
+            "requester_name": "Alice Requester",
+            "proposal_reference": "VRP-20260601-0001",
+            "project_reference": response.json()["collectionUseProject"][
+                "referenceNumber"
+            ],
+            "approved_by_name": "Curator One",
+            "link": (
+                f"{settings.public_origin}/p/collections/projects/"
+                f"{response.json()['collectionUseProject']['id']}"
+            ),
+        }
+    ]
 
 
 async def test_approve_public_proposal_sends_access_email_after_commit() -> None:
@@ -3255,6 +3428,122 @@ async def test_approve_public_proposal_sends_access_email_after_commit() -> None
             f"{settings.public_origin}/login",
             "Temp-Pw-123!",
         )
+    ]
+
+
+async def test_approve_public_proposal_new_account_skips_approval_email() -> None:
+    resolved = ResolvedExternalRequester(
+        actor=Actor(
+            id=PermissionId("permission-external-1"),
+            group=GroupName.EXTERNAL,
+            email="pedro@example.test",
+        ),
+        temporary_password="Temp-Pw-123!",
+    )
+    proposal_email_sender = RecordingProposalNotificationEmailSender()
+
+    async with client_with_repos(
+        caller=_STAFF_CALLER,
+        requester_provisioner=RecordingRequesterProvisioner(resolved),
+        proposal_email_sender=proposal_email_sender,
+    ) as (client, _, proposal_repo, _):
+        await proposal_repo.add(
+            Proposal(
+                id=ProposalId("prop-1"),
+                reference_number=ReferenceNumber("VRP-20260601-0001"),
+                title="Proposal title",
+                collection_use_project_id=None,
+                intended_use=UseType.IN_SITU_VISIT,
+                begin_date=date(2026, 6, 1),
+                end_date=date(2026, 6, 7),
+                status=ProposalStatus.PENDING,
+                requested_by=None,
+                requester_contact=RequesterContact(
+                    name="Pedro Silva", email=EmailAddress("pedro@example.test")
+                ),
+                submitted_at=datetime(2026, 6, 7, tzinfo=UTC),
+                submission_channel=SubmissionChannel.PUBLIC,
+            )
+        )
+
+        response = await client.post(
+            "/api/v1/proposals/prop-1/approve",
+            json={
+                "title": "Approved project",
+                "purpose": "Use the collection",
+                "beginDate": "2026-06-07",
+                "endDate": "2026-06-30",
+            },
+        )
+
+    assert response.status_code == 200
+    assert proposal_email_sender.approved_calls == []
+
+
+async def test_approve_public_proposal_existing_account_sends_approval_email() -> None:
+    resolved = ResolvedExternalRequester(
+        actor=Actor(
+            id=PermissionId("permission-external-1"),
+            group=GroupName.EXTERNAL,
+            email="pedro@example.test",
+        ),
+        temporary_password=None,
+    )
+    proposal_email_sender = RecordingProposalNotificationEmailSender()
+
+    async with client_with_repos(
+        caller=_STAFF_CALLER,
+        permission_records={
+            "permission-staff": _permission_record(
+                "permission-staff",
+                GroupName.CURATORIAL,
+                user_name="Curator One",
+                user_email="curator@example.org",
+            ),
+        },
+        requester_provisioner=RecordingRequesterProvisioner(resolved),
+        proposal_email_sender=proposal_email_sender,
+    ) as (client, _, proposal_repo, _):
+        await proposal_repo.add(
+            Proposal(
+                id=ProposalId("prop-1"),
+                reference_number=ReferenceNumber("VRP-20260601-0001"),
+                title="Proposal title",
+                collection_use_project_id=None,
+                intended_use=UseType.IN_SITU_VISIT,
+                begin_date=date(2026, 6, 1),
+                end_date=date(2026, 6, 7),
+                status=ProposalStatus.PENDING,
+                requested_by=None,
+                requester_contact=RequesterContact(
+                    name="Pedro Silva", email=EmailAddress("pedro@example.test")
+                ),
+                submitted_at=datetime(2026, 6, 7, tzinfo=UTC),
+                submission_channel=SubmissionChannel.PUBLIC,
+            )
+        )
+
+        response = await client.post(
+            "/api/v1/proposals/prop-1/approve",
+            json={
+                "title": "Approved project",
+                "purpose": "Use the collection",
+                "beginDate": "2026-06-07",
+                "endDate": "2026-06-30",
+            },
+        )
+
+    project = response.json()["collectionUseProject"]
+    assert response.status_code == 200
+    assert proposal_email_sender.approved_calls == [
+        {
+            "to_email": "pedro@example.test",
+            "requester_name": "Pedro Silva",
+            "proposal_reference": "VRP-20260601-0001",
+            "project_reference": project["referenceNumber"],
+            "approved_by_name": "Curator One",
+            "link": f"{settings.public_origin}/p/collections/projects/{project['id']}",
+        }
     ]
 
 

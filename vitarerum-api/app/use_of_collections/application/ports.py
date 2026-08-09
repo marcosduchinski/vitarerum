@@ -371,6 +371,48 @@ class ProposalNotificationEmailSender(Protocol):
         link: str,
     ) -> None: ...
 
+    async def send_proposal_approved(
+        self,
+        *,
+        to_email: str,
+        requester_name: str,
+        proposal_reference: str,
+        project_reference: str,
+        approved_by_name: str,
+        link: str,
+    ) -> None: ...
+
+    async def send_project_started(
+        self,
+        *,
+        to_email: str,
+        requester_name: str,
+        project_reference: str,
+        started_by_name: str,
+        link: str,
+    ) -> None: ...
+
+    async def send_project_cancelled(
+        self,
+        *,
+        to_email: str,
+        requester_name: str,
+        project_reference: str,
+        cancelled_by_name: str,
+        reason: str,
+        link: str,
+    ) -> None: ...
+
+    async def send_project_completed(
+        self,
+        *,
+        to_email: str,
+        requester_name: str,
+        project_reference: str,
+        completed_by_name: str,
+        link: str,
+    ) -> None: ...
+
 
 class ReferenceNumberGeneratorPort(Protocol):
     async def generate(

@@ -349,9 +349,7 @@ async def submit_proposal(
     submitted_documents: list[Document] = []
     try:
         for upload in documents:
-            content = await read_upload_capped(
-                upload, limit=ALLOWED_DOCUMENT_MAX_BYTES
-            )
+            content = await read_upload_capped(upload, limit=ALLOWED_DOCUMENT_MAX_BYTES)
             ensure_allowed_document(content)
             file_name = upload.filename or "document"
             reference = route_file_reference("proposals", upload_namespace, file_name)
@@ -1131,6 +1129,7 @@ async def approve_proposal(
     project_repo: ProjectRepo,
     requester_provisioner: RequesterProvisioner,
     access_email_sender: AccessEmailSender,
+    proposal_notification_email_sender: ProposalEmailSender,
     reference_generator: ReferenceGenerator,
     session: DBSession,
 ) -> DualAggregateResponse:
@@ -1177,6 +1176,25 @@ async def approve_proposal(
             requester_name=notification.name,
             login_url=f"{settings.public_origin}/login",
             temporary_password=notification.temporary_password,
+        )
+    else:
+        requester_contact = output.proposal.requester_contact
+        if requester_contact is not None:
+            requester_email = requester_contact.email.value
+            requester_name = requester_contact.name
+        else:
+            requester = await _load_permission_detail(
+                output.project.requested_by, session
+            )
+            requester_email = requester.user.email
+            requester_name = requester.user.name
+        await proposal_notification_email_sender.send_proposal_approved(
+            to_email=requester_email,
+            requester_name=requester_name,
+            proposal_reference=output.proposal.reference_number.value,
+            project_reference=output.project.reference_number.value,
+            approved_by_name=await _caller_display_name(caller, session),
+            link=f"{settings.public_origin}/p/collections/projects/{output.project.id}",
         )
     last_event = (
         await _build_proposal_event(output.proposal.events[-1], session)

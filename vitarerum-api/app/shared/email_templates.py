@@ -392,6 +392,110 @@ def proposal_rejected_email(
     )
 
 
+def proposal_approved_email(
+    *,
+    requester_name: str,
+    proposal_reference: str,
+    project_reference: str,
+    approved_by_name: str,
+    link: str,
+) -> EmailTemplate:
+    return EmailTemplate(
+        subject=(
+            f"Proposta {proposal_reference} aprovada / "
+            f"Proposal {proposal_reference} approved"
+        ),
+        body=(
+            f"Olá {requester_name},\n\n"
+            f"{approved_by_name} aprovou a proposta {proposal_reference}.\n\n"
+            f"O projeto {project_reference} foi criado para acompanhar o uso da "
+            f"coleção.\n\n"
+            f"Aceda ao projeto: {link}\n\n"
+            "---\n\n"
+            f"Hello {requester_name},\n\n"
+            f"{approved_by_name} approved proposal {proposal_reference}.\n\n"
+            f"Project {project_reference} was created to track the collection "
+            f"use.\n\n"
+            f"Open the project: {link}"
+        ),
+    )
+
+
+def project_started_email(
+    *,
+    requester_name: str,
+    project_reference: str,
+    started_by_name: str,
+    link: str,
+) -> EmailTemplate:
+    return EmailTemplate(
+        subject=(
+            f"Projeto {project_reference} iniciado / "
+            f"Project {project_reference} started"
+        ),
+        body=(
+            f"Olá {requester_name},\n\n"
+            f"{started_by_name} iniciou o projeto {project_reference}.\n\n"
+            f"Aceda ao projeto: {link}\n\n"
+            "---\n\n"
+            f"Hello {requester_name},\n\n"
+            f"{started_by_name} started project {project_reference}.\n\n"
+            f"Open the project: {link}"
+        ),
+    )
+
+
+def project_cancelled_email(
+    *,
+    requester_name: str,
+    project_reference: str,
+    cancelled_by_name: str,
+    reason: str,
+    link: str,
+) -> EmailTemplate:
+    return EmailTemplate(
+        subject=(
+            f"Projeto {project_reference} cancelado / "
+            f"Project {project_reference} cancelled"
+        ),
+        body=(
+            f"Olá {requester_name},\n\n"
+            f"{cancelled_by_name} cancelou o projeto {project_reference}.\n\n"
+            f"Motivo: {reason}\n\n"
+            f"Aceda ao projeto: {link}\n\n"
+            "---\n\n"
+            f"Hello {requester_name},\n\n"
+            f"{cancelled_by_name} cancelled project {project_reference}.\n\n"
+            f"Reason: {reason}\n\n"
+            f"Open the project: {link}"
+        ),
+    )
+
+
+def project_completed_email(
+    *,
+    requester_name: str,
+    project_reference: str,
+    completed_by_name: str,
+    link: str,
+) -> EmailTemplate:
+    return EmailTemplate(
+        subject=(
+            f"Projeto {project_reference} encerrado / "
+            f"Project {project_reference} completed"
+        ),
+        body=(
+            f"Olá {requester_name},\n\n"
+            f"{completed_by_name} encerrou o projeto {project_reference}.\n\n"
+            f"Aceda ao projeto: {link}\n\n"
+            "---\n\n"
+            f"Hello {requester_name},\n\n"
+            f"{completed_by_name} completed project {project_reference}.\n\n"
+            f"Open the project: {link}"
+        ),
+    )
+
+
 def _bullet_block(title: str, items: list[str]) -> str:
     if not items:
         return ""
