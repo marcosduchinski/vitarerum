@@ -360,6 +360,7 @@ ignore_imports = [
     # adds its authenticated endpoints.
     "app.museum_questions.application.read_models -> app.identity.public",
     "app.museum_questions.application.use_cases -> app.identity.public",
+    "app.museum_questions.presentation.commands -> app.identity.public",
     "app.museum_questions.presentation.dependencies -> app.identity.public",
     "app.museum_questions.presentation.routes -> app.identity.public",
     "app.museum_questions.presentation.schemas -> app.identity.public",

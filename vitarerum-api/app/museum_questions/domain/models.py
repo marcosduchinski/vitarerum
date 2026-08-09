@@ -52,6 +52,7 @@ class MuseumQuestion:
     subject: str
     message: str
     created_at: datetime
+    response_due_at: datetime
     status: MuseumQuestionStatus = MuseumQuestionStatus.SUBMITTED
     answered_at: datetime | None = None
     answered_by: str | None = None
@@ -64,6 +65,7 @@ class MuseumQuestion:
     closed_at: datetime | None = None
     closed_by: str | None = None
     assigned_to: str | None = None
+    response_overdue_notified_at: datetime | None = None
     attachments: list[MuseumQuestionAttachment] | None = None
 
     def __post_init__(self) -> None:
@@ -128,3 +130,13 @@ class MuseumQuestion:
                 "Only submitted questions can be forwarded."
             )
         self.assigned_to = target_permission_id
+
+    def is_unanswered_overdue(self, now: datetime) -> bool:
+        return (
+            self.status == MuseumQuestionStatus.SUBMITTED
+            and self.answered_at is None
+            and self.response_due_at <= now
+        )
+
+    def mark_response_overdue_notified(self, notified_at: datetime) -> None:
+        self.response_overdue_notified_at = notified_at

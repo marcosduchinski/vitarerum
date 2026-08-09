@@ -33,6 +33,7 @@ from app.museum_questions.application.use_cases import (
     GetMuseumQuestion,
     ListMuseumQuestions,
     MarkMuseumQuestionOutOfScope,
+    NotifyOverdueMuseumQuestions,
     SubmitMuseumQuestion,
 )
 from app.museum_questions.infrastructure.captcha import (
@@ -141,6 +142,16 @@ def get_close_use_case(session: DBSession) -> CloseMuseumQuestion:
 
 def get_forward_use_case(session: DBSession) -> ForwardMuseumQuestion:
     return ForwardMuseumQuestion(_repository(session))
+
+
+def get_notify_overdue_use_case(
+    session: AsyncSession,
+    reader: PermissionReader,
+    dispatcher: NotificationDispatcher,
+) -> NotifyOverdueMuseumQuestions:
+    return NotifyOverdueMuseumQuestions(
+        _repository(session), reader, dispatcher, _clock
+    )
 
 
 def get_email_sender() -> MuseumQuestionEmailSender:

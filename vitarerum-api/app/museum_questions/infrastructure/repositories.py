@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from datetime import datetime
+
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -43,6 +46,7 @@ def _to_domain(
         subject=encryptor.decrypt_text(record.subject, _SUBJECT) or "",
         message=encryptor.decrypt_text(record.message, _MESSAGE) or "",
         created_at=record.created_at,
+        response_due_at=record.response_due_at,
         status=MuseumQuestionStatus(record.status),
         answered_at=record.answered_at,
         answered_by=record.answered_by,
@@ -57,6 +61,7 @@ def _to_domain(
         closed_at=record.closed_at,
         closed_by=record.closed_by,
         assigned_to=record.assigned_to,
+        response_overdue_notified_at=record.response_overdue_notified_at,
         attachments=[
             MuseumQuestionAttachment(
                 id=attachment.id,
@@ -95,6 +100,8 @@ def _apply(
     record.message = encryptor.encrypt_required_text(question.message, _MESSAGE)
     record.status = question.status.value
     record.created_at = question.created_at
+    record.response_due_at = question.response_due_at
+    record.response_overdue_notified_at = question.response_overdue_notified_at
     record.answered_at = question.answered_at
     record.answered_by = question.answered_by
     record.answer_body = encryptor.encrypt_text(question.answer_body, _ANSWER_BODY)
@@ -135,6 +142,8 @@ class SqlAlchemyMuseumQuestionRepository:
             id=question.id,
             status=question.status.value,
             created_at=question.created_at,
+            response_due_at=question.response_due_at,
+            response_overdue_notified_at=question.response_overdue_notified_at,
             answered_at=question.answered_at,
             answered_by=question.answered_by,
             answer_sent_at=question.answer_sent_at,
@@ -216,6 +225,26 @@ class SqlAlchemyMuseumQuestionRepository:
             )
             for record, attachment_count in result.all()
         ], int(total or 0)
+
+    async def list_unanswered_due_for_overdue_notification(
+        self, *, now: datetime, limit: int
+    ) -> Sequence[MuseumQuestion]:
+        result = await self._session.execute(
+            select(MuseumQuestionRecord)
+            .where(
+                MuseumQuestionRecord.status == MuseumQuestionStatus.SUBMITTED.value,
+                MuseumQuestionRecord.answered_at.is_(None),
+                MuseumQuestionRecord.response_due_at <= now,
+                MuseumQuestionRecord.response_overdue_notified_at.is_(None),
+            )
+            .order_by(
+                MuseumQuestionRecord.response_due_at.asc(),
+                MuseumQuestionRecord.created_at.asc(),
+                MuseumQuestionRecord.id.asc(),
+            )
+            .limit(limit)
+        )
+        return [_to_domain(record, self._encryptor, []) for record in result.scalars()]
 
     async def save(self, question: MuseumQuestion) -> None:
         result = await self._session.execute(

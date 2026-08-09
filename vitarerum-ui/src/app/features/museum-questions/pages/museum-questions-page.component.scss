@@ -160,6 +160,10 @@
   width: 10rem;
 }
 
+.questions-table__col-due {
+  width: 12rem;
+}
+
 .questions-table__col-actions {
   width: 8rem;
 }
@@ -260,6 +264,24 @@
 .status-chip--closed {
   background: var(--color-panel-muted);
   color: var(--color-subtle);
+}
+
+.due-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.55rem;
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  background: var(--color-panel-muted);
+  color: var(--color-subtle);
+  font-size: 0.74rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.due-chip--overdue {
+  background: color-mix(in srgb, #ef4444 14%, var(--color-panel));
+  color: #b91c1c;
 }
 
 .action-btn {

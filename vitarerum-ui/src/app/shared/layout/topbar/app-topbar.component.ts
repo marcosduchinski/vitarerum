@@ -98,6 +98,8 @@ export class AppTopbarComponent {
         return `New public inquiry ${label} was submitted.`;
       case 'MUSEUM_QUESTION_FORWARDED':
         return `${actor} forwarded public inquiry ${label} to you.`;
+      case 'MUSEUM_QUESTION_RESPONSE_OVERDUE':
+        return `Public inquiry ${label} has been unanswered for 15 days.`;
       case 'PROPOSAL_SUBMITTED':
         return `New proposal ${label} was submitted.`;
       case 'PROPOSAL_FORWARDED':

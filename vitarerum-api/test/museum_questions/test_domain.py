@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -19,6 +19,7 @@ def test_new_question_defaults_to_submitted_with_no_audit_fields() -> None:
         subject="Duvida sobre visita in situ",
         message="Gostaria de agendar uma visita para pesquisa.",
         created_at=_NOW,
+        response_due_at=_NOW + timedelta(days=15),
     )
     assert question.status == MuseumQuestionStatus.SUBMITTED
     assert question.answered_at is None
@@ -63,5 +64,22 @@ def _question(
         subject="Duvida sobre visita in situ",
         message="Gostaria de agendar uma visita para pesquisa.",
         created_at=_NOW,
+        response_due_at=_NOW + timedelta(days=15),
         status=status,
     )
+
+
+def test_submitted_question_is_overdue_after_response_due_at() -> None:
+    question = _question()
+    assert question.is_unanswered_overdue(_NOW + timedelta(days=15))
+
+
+def test_answered_question_is_not_overdue() -> None:
+    question = _question()
+    question.answer(
+        body="Response body",
+        answered_by="perm-1",
+        answered_at=_NOW,
+        sent_at=_NOW,
+    )
+    assert not question.is_unanswered_overdue(_NOW + timedelta(days=16))

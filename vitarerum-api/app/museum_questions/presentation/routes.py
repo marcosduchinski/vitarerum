@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from datetime import UTC, datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
@@ -181,6 +182,8 @@ async def _require_forward_target(
 
 def _question_list_item_response(
     item: MuseumQuestionListItem,
+    *,
+    now: datetime,
 ) -> MuseumQuestionListItemResponse:
     question = item.question
     return MuseumQuestionListItemResponse(
@@ -191,6 +194,9 @@ def _question_list_item_response(
         message=question.message,
         status=question.status.value,
         createdAt=question.created_at,
+        responseDueAt=question.response_due_at,
+        responseOverdueNotifiedAt=question.response_overdue_notified_at,
+        responseOverdue=question.is_unanswered_overdue(now),
         answeredAt=question.answered_at,
         answeredBy=question.answered_by,
         answerBody=question.answer_body,
@@ -209,7 +215,10 @@ def _question_list_item_response(
 async def _question_detail_response(
     question: MuseumQuestion,
     reader: PermissionReader,
+    *,
+    now: datetime | None = None,
 ) -> MuseumQuestionDetailResponse:
+    response_now = now or datetime.now(tz=UTC)
     return MuseumQuestionDetailResponse(
         id=question.id,
         requesterName=question.requester_name,
@@ -218,6 +227,9 @@ async def _question_detail_response(
         message=question.message,
         status=question.status.value,
         createdAt=question.created_at,
+        responseDueAt=question.response_due_at,
+        responseOverdueNotifiedAt=question.response_overdue_notified_at,
+        responseOverdue=question.is_unanswered_overdue(response_now),
         answeredAt=question.answered_at,
         answeredBy=question.answered_by,
         answerBody=question.answer_body,
@@ -490,8 +502,12 @@ async def list_museum_questions(
         page=page,
         size=size,
     )
+    response_now = datetime.now(tz=UTC)
     return PaginatedMuseumQuestionsResponse(
-        content=[_question_list_item_response(item) for item in result.content],
+        content=[
+            _question_list_item_response(item, now=response_now)
+            for item in result.content
+        ],
         page=result.page,
         size=result.size,
         totalElements=result.total,

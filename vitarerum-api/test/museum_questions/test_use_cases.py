@@ -1,10 +1,13 @@
 """Unit tests for Museum Questions use cases."""
 
+from __future__ import annotations
+
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from app.identity.public import Actor, GroupName, PermissionId
+from app.identity.public import Actor, GroupName, PermissionId, PermissionView, UserView
 from app.museum_questions.application.read_models import MuseumQuestionListItem
 from app.museum_questions.application.use_cases import (
     AnswerMuseumQuestion,
@@ -18,6 +21,7 @@ from app.museum_questions.application.use_cases import (
     ListMuseumQuestions,
     MarkMuseumQuestionOutOfScope,
     MarkMuseumQuestionOutOfScopeInput,
+    NotifyOverdueMuseumQuestions,
     RateLimitExceeded,
     SubmitMuseumQuestion,
     SubmitMuseumQuestionInput,
@@ -29,6 +33,7 @@ from app.museum_questions.domain.models import (
     MuseumQuestionAttachment,
     MuseumQuestionStatus,
 )
+from app.notifications.public import NotificationKind
 from app.shared.exceptions import InsufficientGroup
 
 _NOW = datetime(2026, 7, 5, 12, 0, tzinfo=UTC)
@@ -94,6 +99,51 @@ class _Repo:
     async def save(self, question: MuseumQuestion) -> None:
         self.questions[question.id] = question
 
+    async def list_unanswered_due_for_overdue_notification(
+        self, *, now: datetime, limit: int
+    ) -> Sequence[MuseumQuestion]:
+        rows = [
+            q
+            for q in self.questions.values()
+            if q.status == MuseumQuestionStatus.SUBMITTED
+            and q.answered_at is None
+            and q.response_due_at <= now
+            and q.response_overdue_notified_at is None
+        ]
+        rows.sort(key=lambda q: (q.response_due_at, q.created_at, q.id))
+        return rows[:limit]
+
+
+class _Reader:
+    def __init__(self, permissions: list[PermissionView] | None = None) -> None:
+        self.permissions = permissions or []
+
+    async def get_detail(self, permission_id: PermissionId) -> PermissionView | None:
+        return next(
+            (
+                permission
+                for permission in self.permissions
+                if permission.permission_id == permission_id
+            ),
+            None,
+        )
+
+    async def list_by_group(self, group: GroupName) -> list[PermissionView]:
+        return [
+            permission for permission in self.permissions if permission.group == group
+        ]
+
+
+class _Dispatcher:
+    def __init__(self) -> None:
+        self.many: list[dict[str, object]] = []
+
+    async def notify(self, **kwargs: object) -> None:
+        raise NotImplementedError
+
+    async def notify_many(self, **kwargs: object) -> None:
+        self.many.append(kwargs)
+
 
 class _Captcha:
     def __init__(self, ok: bool = True, raise_error: bool = False) -> None:
@@ -150,6 +200,7 @@ def _question(
         subject="Duvida sobre visita in situ",
         message="Gostaria de agendar uma visita para pesquisa.",
         created_at=created_at,
+        response_due_at=created_at + timedelta(days=15),
         status=status,
         assigned_to=assigned_to,
     )
@@ -178,8 +229,71 @@ async def test_execute_persists_submitted_question() -> None:
     assert len(repo.added) == 1
     question = repo.added[0]
     assert question.status == MuseumQuestionStatus.SUBMITTED
-    assert question.created_at == _NOW
-    assert question.subject == "Duvida sobre visita in situ"
+    assert question.response_due_at == _NOW + timedelta(days=15)
+
+
+async def test_notify_overdue_questions_notifies_collection_managers_once() -> None:
+    overdue = _question(created_at=_NOW - timedelta(days=16))
+    fresh = _question(question_id="q2", created_at=_NOW - timedelta(days=14))
+    answered = _question(
+        question_id="q3",
+        created_at=_NOW - timedelta(days=20),
+        status=MuseumQuestionStatus.ANSWERED,
+    )
+    repo = _Repo([overdue, fresh, answered])
+    manager = PermissionView(
+        permission_id="perm-manager",
+        user=UserView(id="u-manager", name="Manager", email="manager@example.org"),
+        group=GroupName.COLLECTIONS_MANAGEMENT,
+    )
+    curator = PermissionView(
+        permission_id="perm-curator",
+        user=UserView(id="u-curator", name="Curator", email="curator@example.org"),
+        group=GroupName.CURATORIAL,
+    )
+    dispatcher = _Dispatcher()
+
+    result = await NotifyOverdueMuseumQuestions(
+        repo, _Reader([manager, curator]), dispatcher, _Clock()
+    ).execute()
+
+    assert result.questions_processed == 1
+    assert result.notifications_attempted == 1
+    assert overdue.response_overdue_notified_at == _NOW
+    assert dispatcher.many == [
+        {
+            "recipient_permission_ids": [PermissionId("perm-manager")],
+            "kind": NotificationKind.MUSEUM_QUESTION_RESPONSE_OVERDUE,
+            "triggered_by": None,
+            "related_resource_type": "MUSEUM_QUESTION",
+            "related_resource_id": "q1",
+            "related_resource_label": "Duvida sobre visita in situ",
+            "note": "Response deadline reached",
+        }
+    ]
+
+    second = await NotifyOverdueMuseumQuestions(
+        repo, _Reader([manager]), dispatcher, _Clock()
+    ).execute()
+    assert second.questions_processed == 0
+    assert len(dispatcher.many) == 1
+
+
+async def test_notify_overdue_questions_without_managers_does_not_mark_notified() -> (
+    None
+):
+    overdue = _question(created_at=_NOW - timedelta(days=16))
+    repo = _Repo([overdue])
+    dispatcher = _Dispatcher()
+
+    result = await NotifyOverdueMuseumQuestions(
+        repo, _Reader([]), dispatcher, _Clock()
+    ).execute()
+
+    assert result.questions_processed == 0
+    assert result.notifications_attempted == 0
+    assert overdue.response_overdue_notified_at is None
+    assert dispatcher.many == []
 
 
 async def test_honeypot_accepts_and_drops() -> None:

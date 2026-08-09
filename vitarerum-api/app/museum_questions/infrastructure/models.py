@@ -27,6 +27,12 @@ class MuseumQuestionRecord(Base):
     message: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(16), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    response_due_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), index=True
+    )
+    response_overdue_notified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     answered_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

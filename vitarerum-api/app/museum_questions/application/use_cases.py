@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
+from datetime import timedelta
 
 from app.identity.public import Actor, GroupName, PermissionId, PermissionReader
 from app.museum_questions.application.ports import (
@@ -27,6 +28,11 @@ from app.museum_questions.domain.models import (
     MuseumQuestionNotFound,
     MuseumQuestionStatus,
 )
+from app.notifications.public import (
+    NotificationDispatcher,
+    NotificationKind,
+    RelatedResourceType,
+)
 from app.shared.authorization import require_group
 
 # Rate limits as (max_requests, window_seconds), mirroring public_submission's
@@ -35,6 +41,7 @@ RATE_LIMIT_PER_IP = (5, 60 * 60)
 RATE_LIMIT_PER_EMAIL = (3, 24 * 60 * 60)
 RATE_LIMIT_GLOBAL = (500, 60 * 60)
 RETRY_AFTER_SECONDS = 60
+RESPONSE_DEADLINE_DAYS = 15
 MUSEUM_QUESTION_ACCESS_GROUPS = (
     GroupName.CURATORIAL,
     GroupName.COLLECTIONS_MANAGEMENT,
@@ -174,6 +181,7 @@ class SubmitMuseumQuestion:
                 subject=data.subject,
                 message=data.message,
                 created_at=now,
+                response_due_at=now + timedelta(days=RESPONSE_DEADLINE_DAYS),
                 attachments=attachments,
             )
             await self._repo.add(question)
@@ -390,3 +398,58 @@ class ForwardMuseumQuestion:
         question.forward(target_permission_id=data.target_permission_id)
         await self._repo.save(question)
         return question
+
+
+@dataclass(frozen=True, slots=True)
+class NotifyOverdueMuseumQuestionsOutput:
+    questions_processed: int
+    notifications_attempted: int
+
+
+class NotifyOverdueMuseumQuestions:
+    def __init__(
+        self,
+        repository: MuseumQuestionRepository,
+        permission_reader: PermissionReader,
+        notification_dispatcher: NotificationDispatcher,
+        clock: Clock,
+    ) -> None:
+        self._repo = repository
+        self._reader = permission_reader
+        self._dispatcher = notification_dispatcher
+        self._clock = clock
+
+    async def execute(self, *, limit: int = 100) -> NotifyOverdueMuseumQuestionsOutput:
+        now = self._clock.now()
+        questions = await self._repo.list_unanswered_due_for_overdue_notification(
+            now=now, limit=limit
+        )
+        recipients = await self._reader.list_by_group(GroupName.COLLECTIONS_MANAGEMENT)
+        recipient_ids = [
+            PermissionId(recipient.permission_id) for recipient in recipients
+        ]
+        if not recipient_ids:
+            return NotifyOverdueMuseumQuestionsOutput(
+                questions_processed=0,
+                notifications_attempted=0,
+            )
+        notification_count = 0
+        for question in questions:
+            if not question.is_unanswered_overdue(now):
+                continue
+            await self._dispatcher.notify_many(
+                recipient_permission_ids=recipient_ids,
+                kind=NotificationKind.MUSEUM_QUESTION_RESPONSE_OVERDUE,
+                triggered_by=None,
+                related_resource_type=RelatedResourceType.MUSEUM_QUESTION,
+                related_resource_id=question.id,
+                related_resource_label=question.subject[:128],
+                note="Response deadline reached",
+            )
+            notification_count += len(set(recipient_ids))
+            question.mark_response_overdue_notified(now)
+            await self._repo.save(question)
+        return NotifyOverdueMuseumQuestionsOutput(
+            questions_processed=len(questions),
+            notifications_attempted=notification_count,
+        )

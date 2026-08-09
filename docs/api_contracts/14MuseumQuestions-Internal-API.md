@@ -8,14 +8,14 @@ standard e-mail, and close already-finalized questions.
 
 Authentication: bearer token + `X-Permission-Id`.
 
-Authorization: any staff group (`CURATORIAL`, `COLLECTIONS_MANAGEMENT`, `DIRECTION`,
-`SYS_ADMIN`) via `require_staff`.
+Authorization: `CURATORIAL` and `COLLECTIONS_MANAGEMENT`.
 
 ## Status Transitions
 
 ```text
 SUBMITTED -> ANSWERED
 SUBMITTED -> OUT_OF_SCOPE
+SUBMITTED -> SUBMITTED (forward/assign responsible staff)
 ANSWERED -> CLOSED
 OUT_OF_SCOPE -> CLOSED
 ```
@@ -24,7 +24,7 @@ OUT_OF_SCOPE -> CLOSED
 
 ## Endpoints
 
-### `GET /museum-questions?status=&page=&size=`
+### `GET /museum-questions?status=&requesterEmail=&assignedTo=&unassignedOnly=&page=&size=`
 
 Returns a paginated queue ordered by `createdAt ASC`. List items include
 `attachmentCount`, not full attachment metadata.
@@ -41,7 +41,12 @@ Response:
 }
 ```
 
-`status` is optional: `SUBMITTED`, `ANSWERED`, `OUT_OF_SCOPE`, `CLOSED`.
+Filters:
+
+- `status` is optional: `SUBMITTED`, `ANSWERED`, `OUT_OF_SCOPE`, `CLOSED`
+- `requesterEmail` matches the encrypted lookup hash
+- `assignedTo` filters questions forwarded to a permission id
+- `unassignedOnly=true` filters questions that have not been forwarded
 
 ### `GET /museum-questions/{id}`
 
@@ -71,6 +76,18 @@ Request:
 out-of-scope e-mail, records `outOfScopeAt`, `outOfScopeBy`, `outOfScopeReason`,
 `outOfScopeEmailSentAt`, and returns status `OUT_OF_SCOPE`.
 
+### `POST /museum-questions/{id}/forward`
+
+Request:
+
+```json
+{ "targetPermissionId": "perm-curator" }
+```
+
+Valid only from `SUBMITTED`. The target permission must belong to `CURATORIAL`
+or `COLLECTIONS_MANAGEMENT`. Records `assignedTo`, sends an in-app notification
+to the target, and keeps the question in `SUBMITTED`.
+
 ### `PATCH /museum-questions/{id}/close`
 
 Valid only from `ANSWERED` or `OUT_OF_SCOPE`. Records `closedAt` and `closedBy`.
@@ -92,6 +109,27 @@ Response:
 { "submitted": 9, "answered": 120, "outOfScope": 3, "closed": 45 }
 ```
 
+## Response deadline
+
+Each question receives a response deadline of 15 calendar days from
+`createdAt`. The deadline is persisted as `responseDueAt`.
+
+Questions are overdue when:
+
+- `status` is `SUBMITTED`
+- `answeredAt` is `null`
+- `responseDueAt` is in the past
+
+A scheduled operational command sends one in-app
+`MUSEUM_QUESTION_RESPONSE_OVERDUE` notification to collection managers when a
+question first becomes overdue:
+
+```bash
+uv run python -m app.museum_questions.presentation.commands notify-overdue --limit 100
+```
+
+The command is idempotent per question through `responseOverdueNotifiedAt`.
+
 ## `MuseumQuestionListItem`
 
 ```json
@@ -103,6 +141,9 @@ Response:
   "message": "Plain text citizen message",
   "status": "SUBMITTED",
   "createdAt": "2026-07-05T10:00:00Z",
+  "responseDueAt": "2026-07-20T10:00:00Z",
+  "responseOverdueNotifiedAt": null,
+  "responseOverdue": false,
   "answeredAt": null,
   "answeredBy": null,
   "answerBody": null,
@@ -113,6 +154,7 @@ Response:
   "outOfScopeEmailSentAt": null,
   "closedAt": null,
   "closedBy": null,
+  "assignedTo": null,
   "attachmentCount": 1
 }
 ```
@@ -128,6 +170,9 @@ Response:
   "message": "Plain text citizen message",
   "status": "SUBMITTED",
   "createdAt": "2026-07-05T10:00:00Z",
+  "responseDueAt": "2026-07-20T10:00:00Z",
+  "responseOverdueNotifiedAt": null,
+  "responseOverdue": false,
   "answeredAt": null,
   "answeredBy": null,
   "answerBody": null,
@@ -138,6 +183,7 @@ Response:
   "outOfScopeEmailSentAt": null,
   "closedAt": null,
   "closedBy": null,
+  "assignedTo": null,
   "attachments": [
     {
       "id": "att-1",

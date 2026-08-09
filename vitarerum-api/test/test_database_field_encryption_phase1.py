@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.orm import selectinload
 from sqlalchemy.pool import StaticPool
 
+from app.config import settings as app_settings
 from app.database import Base
 from app.museum_questions.domain.models import MuseumQuestion
 from app.museum_questions.infrastructure.models import MuseumQuestionRecord
@@ -60,6 +61,10 @@ _ENCRYPTOR_FACTORIES: list[tuple[Any, Callable[[], FieldEncryptor]]] = [
 ]
 
 
+def _settings(owner: Any) -> Any:
+    return owner.settings
+
+
 @pytest.mark.parametrize("settings_owner, factory", _ENCRYPTOR_FACTORIES)
 def test_context_encryptor_uses_configured_db_field_key(
     settings_owner: Any,
@@ -72,8 +77,9 @@ def test_context_encryptor_uses_configured_db_field_key(
     the wrong setting would still produce a usable encryptor, so the assertion
     decrypts a value sealed with the *expected* key instead of merely checking
     that a round-trip works."""
-    monkeypatch.setattr(settings_owner.settings, "db_field_encryption_key", _DB_KEY)
-    monkeypatch.setattr(settings_owner.settings, "file_encryption_key", _DECOY_FILE_KEY)
+    owner_settings = _settings(settings_owner)
+    monkeypatch.setattr(owner_settings, "db_field_encryption_key", _DB_KEY)
+    monkeypatch.setattr(owner_settings, "file_encryption_key", _DECOY_FILE_KEY)
     aad = "museum_questions.requester_email"
     sealed = FieldEncryptor.from_base64(_DB_KEY).encrypt_text("ana@example.org", aad)
 
@@ -88,7 +94,7 @@ def test_context_encryptor_rejects_missing_db_field_key(
 ) -> None:
     """An unset key must fail loudly. There is no unencrypted fallback here,
     unlike file storage — see ``.env.example``."""
-    monkeypatch.setattr(settings_owner.settings, "db_field_encryption_key", "")
+    monkeypatch.setattr(_settings(settings_owner), "db_field_encryption_key", "")
 
     with pytest.raises(ValueError, match="db_field_encryption_key must be configured"):
         factory()
@@ -99,9 +105,7 @@ async def test_museum_questions_wiring_encrypts_through_context_dependencies(
 ) -> None:
     """Exercise the composition, not just the repository: build the repository
     the way the context wires it and confirm the row lands encrypted."""
-    monkeypatch.setattr(
-        museum_questions_deps.settings, "db_field_encryption_key", _DB_KEY
-    )
+    monkeypatch.setattr(app_settings, "db_field_encryption_key", _DB_KEY)
     factory = await _session_factory()
     question = MuseumQuestion(
         id="q-wiring",
@@ -110,6 +114,7 @@ async def test_museum_questions_wiring_encrypts_through_context_dependencies(
         subject="Sensitive subject",
         message="Sensitive message",
         created_at=_NOW,
+        response_due_at=_NOW + timedelta(days=15),
     )
 
     async with factory() as session:
@@ -191,6 +196,7 @@ async def test_museum_question_repository_filters_by_hash_and_encrypts() -> None
         subject="Sensitive subject",
         message="Sensitive message",
         created_at=_NOW,
+        response_due_at=_NOW + timedelta(days=15),
     )
     question.answer(
         body="Sensitive answer",
@@ -219,14 +225,16 @@ async def test_museum_question_repository_filters_by_hash_and_encrypts() -> None
         rows, total = await repo.list(
             status=None,
             requester_email="ANA@example.org",
+            assigned_to=None,
+            unassigned_only=False,
             page=0,
             size=20,
         )
 
     assert total == 1
-    assert rows[0].requester_name == "Ana Souza"
-    assert rows[0].requester_email == "ana@example.org"
-    assert rows[0].answer_body == "Sensitive answer"
+    assert rows[0].question.requester_name == "Ana Souza"
+    assert rows[0].question.requester_email == "ana@example.org"
+    assert rows[0].question.answer_body == "Sensitive answer"
 
 
 async def test_amendment_token_repository_stores_requester_email_encrypted() -> None:

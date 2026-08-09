@@ -11,6 +11,9 @@ export interface MuseumQuestion {
   readonly message: string;
   readonly status: MuseumQuestionStatus;
   readonly createdAt: string;
+  readonly responseDueAt: string;
+  readonly responseOverdueNotifiedAt: string | null;
+  readonly responseOverdue: boolean;
   readonly answeredAt: string | null;
   readonly answeredBy: string | null;
   readonly answerBody: string | null;
@@ -33,6 +36,9 @@ export interface MuseumQuestionListItem {
   readonly message: string;
   readonly status: MuseumQuestionStatus;
   readonly createdAt: string;
+  readonly responseDueAt: string;
+  readonly responseOverdueNotifiedAt: string | null;
+  readonly responseOverdue: boolean;
   readonly answeredAt: string | null;
   readonly answeredBy: string | null;
   readonly answerBody: string | null;

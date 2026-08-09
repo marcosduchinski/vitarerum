@@ -301,6 +301,17 @@
   font-size: 0.8rem;
 }
 
+.message__deadline {
+  margin: 0;
+  color: var(--color-subtle);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.message__deadline--overdue {
+  color: #b91c1c;
+}
+
 .message__subject {
   margin: 0;
   font-weight: 600;
@@ -690,4 +701,27 @@ textarea {
 .status-chip--closed {
   background: var(--color-panel-muted);
   color: var(--color-subtle);
+}
+
+.due-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.55rem;
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  background: var(--color-panel-muted);
+  color: var(--color-subtle);
+  font-size: 0.74rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.due-chip--overdue {
+  background: color-mix(in srgb, #ef4444 14%, var(--color-panel));
+  color: #b91c1c;
+}
+
+.due-chip--notified {
+  background: color-mix(in srgb, var(--color-accent) 10%, var(--color-panel));
+  color: var(--color-accent-strong);
 }

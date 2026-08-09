@@ -9,6 +9,7 @@ are duplicated here rather than shared.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Protocol
 
@@ -55,6 +56,10 @@ class MuseumQuestionRepository(Protocol):
         page: int,
         size: int,
     ) -> tuple[list[MuseumQuestionListItem], int]: ...
+
+    async def list_unanswered_due_for_overdue_notification(
+        self, *, now: datetime, limit: int
+    ) -> Sequence[MuseumQuestion]: ...
 
     async def save(self, question: MuseumQuestion) -> None: ...
 

@@ -1,7 +1,9 @@
 """API tests for the public Museum Questions endpoint."""
 
+from __future__ import annotations
+
 import io
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 
@@ -114,6 +116,20 @@ class _Repo:
 
     async def save(self, question: MuseumQuestion) -> None:
         self.questions[question.id] = question
+
+    async def list_unanswered_due_for_overdue_notification(
+        self, *, now: datetime, limit: int
+    ) -> Sequence[MuseumQuestion]:
+        rows = [
+            q
+            for q in self.questions.values()
+            if q.status == MuseumQuestionStatus.SUBMITTED
+            and q.answered_at is None
+            and q.response_due_at <= now
+            and q.response_overdue_notified_at is None
+        ]
+        rows.sort(key=lambda q: (q.response_due_at, q.created_at, q.id))
+        return rows[:limit]
 
 
 class _Captcha:
@@ -327,6 +343,7 @@ def _question(
         subject="Duvida sobre visita in situ",
         message="Gostaria de agendar uma visita para pesquisa.",
         created_at=created_at,
+        response_due_at=created_at + timedelta(days=15),
         status=status,
         assigned_to=assigned_to,
     )

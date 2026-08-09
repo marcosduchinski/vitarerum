@@ -255,4 +255,9 @@ export class MuseumQuestionsPageComponent {
       timeStyle: 'short',
     }).format(new Date(value));
   }
+
+  protected dueLabel(question: MuseumQuestionListItem): string {
+    const due = this.formatDate(question.responseDueAt);
+    return question.responseOverdue ? `Overdue · ${due}` : due;
+  }
 }

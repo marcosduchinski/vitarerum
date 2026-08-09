@@ -83,6 +83,9 @@ class MuseumQuestionListItemResponse(BaseModel):
     message: str
     status: MuseumQuestionStatusValue
     createdAt: datetime
+    responseDueAt: datetime
+    responseOverdueNotifiedAt: datetime | None = None
+    responseOverdue: bool = False
     answeredAt: datetime | None = None
     answeredBy: str | None = None
     answerBody: str | None = None
@@ -105,6 +108,9 @@ class MuseumQuestionDetailResponse(BaseModel):
     message: str
     status: MuseumQuestionStatusValue
     createdAt: datetime
+    responseDueAt: datetime
+    responseOverdueNotifiedAt: datetime | None = None
+    responseOverdue: bool = False
     answeredAt: datetime | None = None
     answeredBy: str | None = None
     answerBody: str | None = None

@@ -20,6 +20,14 @@
           >
             {{ statusLabel(question.status) }}
           </span>
+          <span class="due-chip" [class.due-chip--overdue]="question.responseOverdue">
+            {{ dueLabel(question) }}
+          </span>
+          @if (question.responseOverdueNotifiedAt) {
+            <span class="due-chip due-chip--notified">
+              Alert sent {{ formatDate(question.responseOverdueNotifiedAt) }}
+            </span>
+          }
         </div>
       </div>
     </header>
@@ -74,6 +82,12 @@
                     </div>
                     <span class="message__date">{{ formatDate(question.createdAt) }}</span>
                   </div>
+                  <p
+                    class="message__deadline"
+                    [class.message__deadline--overdue]="question.responseOverdue"
+                  >
+                    Response due {{ formatDate(question.responseDueAt) }}
+                  </p>
                   <p class="message__subject">{{ question.subject }}</p>
                   <p class="message__body">{{ question.message }}</p>
                   @if (question.attachments.length) {

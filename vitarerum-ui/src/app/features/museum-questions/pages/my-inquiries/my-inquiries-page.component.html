@@ -27,6 +27,7 @@
               <col class="my-inquiries-table__col-requester" />
               <col class="my-inquiries-table__col-status" />
               <col class="my-inquiries-table__col-date" />
+              <col class="my-inquiries-table__col-due" />
               <col class="my-inquiries-table__col-actions" />
             </colgroup>
             <thead>
@@ -35,6 +36,7 @@
                 <th scope="col">Requester</th>
                 <th scope="col">Status</th>
                 <th scope="col">Received</th>
+                <th scope="col">Response due</th>
                 <th scope="col" class="my-inquiries-table__actions-header">Actions</th>
               </tr>
             </thead>
@@ -63,6 +65,11 @@
                     </span>
                   </td>
                   <td class="my-inquiries-table__date">{{ formatDate(question.createdAt) }}</td>
+                  <td>
+                    <span class="due-chip" [class.due-chip--overdue]="question.responseOverdue">
+                      {{ dueLabel(question) }}
+                    </span>
+                  </td>
                   <td>
                     <div class="my-inquiries-table__actions">
                       <app-row-actions

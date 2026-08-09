@@ -259,6 +259,11 @@ export class MuseumQuestionDetailPageComponent {
     return STATUS_LABELS[status];
   }
 
+  protected dueLabel(question: MuseumQuestion): string {
+    const due = this.formatDate(question.responseDueAt);
+    return question.responseOverdue ? `Overdue · ${due}` : `Due ${due}`;
+  }
+
   protected attachmentPreview(attachment: MuseumQuestionAttachment): AttachmentPreview {
     return (
       this.attachmentPreviewResource.value()?.get(attachment.id) ?? { url: null, error: false }
