@@ -1,22 +1,9 @@
-"""SQLAlchemy ORM model for the museum-question triage context.
+"""Historical ORM metadata for removed museum-question triage tables.
 
-A single table, ``museum_question_triages``, storing one row per triage run.
-``question_id`` references a ``MuseumQuestion`` in the ``museum_questions``
-context but is kept as a plain string (no cross-context FK, same convention
-as ``generated_narratives.record_id``). Each entry in
-``mentioned_objects``/``object_matches`` carries both an English and a
-Portuguese name (``{"english": ..., "portuguese": ...}``), since the catalogue
-is searched in both languages. ``object_matches`` also stores a snapshot of
-the catalogue search results so the "AI assistance" tab doesn't need to
-re-search on reload.
-
-Mutability: ``verdict``/``is_visit_related``/``llm_model``/``created_at`` are
-fixed at creation. ``mentioned_objects``, ``object_matches`` and
-``suggested_reply`` can be revised in place afterwards (see
-``domain/models.py``'s module docstring), and the three ``staff_override_*``
-columns record a staff correction of the scope verdict — last-write-wins, no
-optimistic-concurrency check (accepted MVP limitation, see
-docs/plans/museum-questions-ai-triage-refinements-plan.md).
+The active triage feature was removed, but Alembic still imports this module so
+the historical tables remain present in ``target_metadata`` until a deliberate
+data-retention migration drops them. Keeping the models here prevents unrelated
+``alembic revision --autogenerate`` runs from proposing accidental table drops.
 """
 
 from __future__ import annotations

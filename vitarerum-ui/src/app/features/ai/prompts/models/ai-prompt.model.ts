@@ -1,5 +1,4 @@
-export type AiPromptPurpose =
-  'in_situ_narrative' | 'museum_question_triage' | 'proposal_assistance' | 'project_assistance';
+export type AiPromptPurpose = 'in_situ_narrative' | 'proposal_assistance' | 'project_assistance';
 
 export type AiPromptStatus = 'draft' | 'published' | 'archived';
 

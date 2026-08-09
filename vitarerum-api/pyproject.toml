@@ -183,36 +183,6 @@ ignore_imports = [
 ]
 
 [[tool.importlinter.contracts]]
-name = "Museum question triage layers (presentation > infrastructure > application > domain)"
-type = "layers"
-layers = [
-    "app.ai.museum_question_triage.presentation",
-    "app.ai.museum_question_triage.infrastructure",
-    "app.ai.museum_question_triage.application",
-    "app.ai.museum_question_triage.domain",
-]
-
-[[tool.importlinter.contracts]]
-name = "Museum question triage may only reach Museum Questions and Collection Object Index via narrow ACLs"
-type = "forbidden"
-source_modules = ["app.ai.museum_question_triage"]
-forbidden_modules = ["app.museum_questions", "app.collection_object_index"]
-ignore_imports = [
-    # Permanent: museum_questions.public is the published language this context
-    # reads a question through (mirrors app.ai.museum_narrative -> cidoc_crm.public).
-    "app.ai.museum_question_triage.infrastructure.museum_questions_acl -> app.museum_questions.public",
-    # Permanent: the search ACL calls Collection Object Index's own generic,
-    # already-reusable SearchCollectionObjects use case directly (same pattern
-    # as reports.in_situ_visit's cross-context use-case imports below).
-    "app.ai.museum_question_triage.infrastructure.object_search_acl -> app.collection_object_index.application.use_cases",
-    "app.ai.museum_question_triage.infrastructure.object_search_acl -> app.collection_object_index.application.ports",
-    # Permanent: the composition root reuses Collection Object Index's own
-    # get_object_index provider instead of recreating the adapter.
-    "app.ai.museum_question_triage.presentation.dependencies -> app.collection_object_index.presentation.dependencies",
-    "app.ai.museum_question_triage.presentation.dependencies -> app.collection_object_index.application.ports",
-]
-
-[[tool.importlinter.contracts]]
 name = "AI Prompts layers (presentation > infrastructure > application > domain)"
 type = "layers"
 layers = [
@@ -416,7 +386,6 @@ type = "forbidden"
 source_modules = [
     "app.use_of_collections.domain",
     "app.ai.museum_narrative.domain",
-    "app.ai.museum_question_triage.domain",
     "app.ai.prompts.domain",
     "app.cidoc_crm.in_situ_visit_mapping.domain",
     "app.reports.in_situ_visit.domain",
@@ -436,7 +405,6 @@ source_modules = [
     "app.use_of_collections.application",
     "app.identity.application",
     "app.ai.museum_narrative.application",
-    "app.ai.museum_question_triage.application",
     "app.ai.prompts.application",
     "app.cidoc_crm.in_situ_visit_mapping.application",
     "app.reports.in_situ_visit.application",

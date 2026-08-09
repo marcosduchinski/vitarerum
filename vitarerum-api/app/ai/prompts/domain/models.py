@@ -13,7 +13,6 @@ PromptTemplateVersionId = NewType("PromptTemplateVersionId", str)
 
 class PromptPurpose(StrEnum):
     IN_SITU_NARRATIVE = "in_situ_narrative"
-    MUSEUM_QUESTION_TRIAGE = "museum_question_triage"
     PROPOSAL_ASSISTANCE = "proposal_assistance"
     PROJECT_ASSISTANCE = "project_assistance"
 

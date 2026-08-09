@@ -8,7 +8,7 @@ The current application covers proposal intake, collection-use projects,
 public proposal submission, public museum questions, in-situ visit records,
 CIDOC-CRM mapping, reports, object data sources, document templates, external
 publication links, notifications, identity/permissions, dashboards, and
-AI-assisted narrative and triage workflows.
+AI-assisted narrative workflows.
 
 ## Repository Layout
 

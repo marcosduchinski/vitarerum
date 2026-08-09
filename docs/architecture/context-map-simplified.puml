@@ -31,7 +31,7 @@ package "Python backend\nmodular monolith" as backend {
   rectangle "Core workflow\nIdentity\nUse of Collections\nPublic Submission" as core #E0F2FE
   rectangle "Collection knowledge\nCollection Object Index\nDocument Templates\nMuseum Questions" as knowledge #ECFDF5
   rectangle "In-situ reporting\nCIDOC-CRM Mapping\nMuseum Narrative\nReports\nExternal Publications" as reporting #FFF7ED
-  rectangle "AI support\nAI Prompts\nQuestion Triage" as ai_support #F5F3FF
+  rectangle "AI support\nAI Prompts" as ai_support #F5F3FF
   rectangle "Operational support\nReference Numbers\nNotifications" as operations #F1F5F9
 }
 

@@ -1,23 +1,11 @@
 import base64
 import binascii
 from pathlib import Path
-from typing import Literal
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _LOCAL_ENVS = {"local", "test", "development"}
-_USE_CATEGORY_VALUES = {
-    "EXHIBITION",
-    "PUBLISHING_IMAGES",
-    "LEARNING_EVENTS",
-    "ANSWERING_ENQUIRIES",
-    "RESEARCH_PROJECTS",
-    "OPERATING_MACHINERY",
-    "PLAYING_INSTRUMENTS",
-    "FILMING",
-    "INSPIRING_NEW_WORK",
-}
 
 
 class Settings(BaseSettings):
@@ -49,27 +37,6 @@ class Settings(BaseSettings):
     # KG-RAG museum-narrative generation (local Llama via Ollama).
     narrative_model: str = "llama3.1:8b"
     narrative_timeout_seconds: float = 60.0
-    # Museum-question triage (in/out-of-scope classification + object
-    # extraction, local Llama via Ollama).
-    triage_model: str = "llama3.1:8b"
-    triage_timeout_seconds: float = 60.0
-    use_category_classification_enabled: bool = False
-    use_category_embedding_shadow_enabled: bool = False
-    use_category_embedding_model: str = "nomic-embed-text"
-    use_category_embedding_low_threshold: float = 0.58
-    use_category_embedding_high_threshold: float = 0.74
-    use_category_embedding_long_message_words: int = 80
-    use_category_embedding_profile_version: str = "embedding-prototypes-v1"
-    use_category_embedding_prototype_source: Literal["PROMOTED", "JSON_SEED"] = (
-        "PROMOTED"
-    )
-    use_category_operational_classifier: Literal[
-        "LLM", "CASCADE_SEED", "CASCADE_CALIBRATED"
-    ] = "LLM"
-    use_category_cascade_enabled: bool = False
-    use_category_cascade_margin_delta: float = 0.08
-    use_category_cascade_classifier_version: str = "cascade-v1"
-    use_category_cascade_category_high_thresholds: dict[str, float] = {}
     # Public proposal submission (unauthenticated citizen intake, double opt-in).
     # Default is Cloudflare's always-passing test secret key; override in prod.
     turnstile_secret_key: str = "1x0000000000000000000000000000000AA"
@@ -106,51 +73,6 @@ class Settings(BaseSettings):
             and self.smtp_password
         ):
             self.smtp_password = "".join(self.smtp_password.split())
-        return self
-
-    @model_validator(mode="after")
-    def validate_use_category_operational_classifier(self) -> "Settings":
-        if (
-            self.use_category_operational_classifier != "LLM"
-            and not self.use_category_cascade_enabled
-        ):
-            raise ValueError(
-                "use_category_cascade_enabled must be true when "
-                "use_category_operational_classifier uses CASCADE"
-            )
-        if (
-            self.use_category_operational_classifier == "CASCADE_SEED"
-            and self.use_category_embedding_prototype_source != "JSON_SEED"
-        ):
-            raise ValueError(
-                "CASCADE_SEED requires "
-                "use_category_embedding_prototype_source='JSON_SEED'"
-            )
-        if (
-            self.use_category_operational_classifier == "CASCADE_CALIBRATED"
-            and self.use_category_embedding_prototype_source != "PROMOTED"
-        ):
-            raise ValueError(
-                "CASCADE_CALIBRATED requires "
-                "use_category_embedding_prototype_source='PROMOTED'"
-            )
-        return self
-
-    @model_validator(mode="after")
-    def validate_triage_cascade_thresholds(self) -> "Settings":
-        errors: list[str] = []
-        for (
-            category_value,
-            threshold,
-        ) in self.use_category_cascade_category_high_thresholds.items():
-            if category_value not in _USE_CATEGORY_VALUES:
-                errors.append(f"unknown use category {category_value!r}")
-            if not 0 <= threshold <= 1:
-                errors.append(
-                    f"use category {category_value!r} threshold must be between 0 and 1"
-                )
-        if errors:
-            raise ValueError("; ".join(errors))
         return self
 
     @model_validator(mode="after")

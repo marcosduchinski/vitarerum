@@ -24,7 +24,6 @@ Primary bounded contexts:
 - `museum_questions`: public museum questions and staff responses.
 - `reports.in_situ_visit`: in-situ visit report aggregation across record and narrative contexts.
 - `ai.museum_narrative`: AI-assisted (KG-RAG) museum narrative generation.
-- `ai.museum_question_triage`: AI-assisted triage for public museum questions.
 - `ai.prompts`: versioned prompt templates used by AI-assisted contexts.
 - `cidoc_crm.in_situ_visit_mapping`: persisted in-situ visit records for CIDOC-CRM mapping.
 - `shared`: exceptions, authorization helpers, and shared kernel value objects.

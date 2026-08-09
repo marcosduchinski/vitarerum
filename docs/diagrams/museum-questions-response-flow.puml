@@ -7,7 +7,6 @@ actor Staff
 boundary "Angular /p/museum-questions" as UI
 control "museum_questions routes" as Routes
 control "Museum Questions use cases" as UseCases
-control "AI triage panel\n(optional read)" as Triage
 database "MuseumQuestionRepository" as Repo
 control "Email sender" as Email
 
@@ -26,9 +25,6 @@ UseCases -> Repo : load
 Repo --> UseCases : MuseumQuestion
 UseCases --> Routes : question
 Routes --> UI : MuseumQuestionResponse
-
-UI -> Triage : read existing classification / object matches
-Triage --> UI : advisory result\n(no status change)
 
 alt question is SUBMITTED and staff answers
   Staff -> UI : write answer

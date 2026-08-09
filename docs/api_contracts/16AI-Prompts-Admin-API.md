@@ -11,8 +11,8 @@ same staff policy used by narrative generation.
 
 Optional query params:
 
-- `purpose`: one of `in_situ_narrative`, `museum_question_triage`,
-  `proposal_assistance`, `project_assistance`
+- `purpose`: one of `in_situ_narrative`, `proposal_assistance`,
+  `project_assistance`
 - `status`: one of `draft`, `published`, `archived`
 
 Response `200 OK`:

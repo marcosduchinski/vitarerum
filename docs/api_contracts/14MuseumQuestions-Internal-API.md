@@ -1,4 +1,4 @@
-# Museum Questions — Internal API Contract
+# Museum Questions - Internal API Contract
 
 ## Purpose
 
@@ -46,154 +46,6 @@ Response:
 
 Returns one `MuseumQuestion`.
 
-### `POST /museum-questions/{id}/triage`
-
-Runs AI triage for one question and returns a `MuseumQuestionTriage`.
-
-When `use_category_classification_enabled` is enabled, the response still waits only for
-the binary triage. The experimental use-category classification is created as
-`PENDING` in the same transaction and processed asynchronously after commit.
-When `use_category_embedding_shadow_enabled` is also enabled, a second shadow
-classification with `classifierKind=EMBEDDING` is created and processed
-asynchronously for calibration; operational responses continue to surface only the
-current `LLM` use-category classification.
-When `use_category_cascade_enabled` is also enabled, a `classifierKind=CASCADE`
-classification is created and processed asynchronously. The cascade runs
-embeddings first and escalates to the LLM on low confidence, narrow margin,
-long messages, or uncertain categories. If Tier 2 fails after Tier 1 succeeded,
-the row is completed with `quality=DEGRADED` and fallback metadata; the
-operational `GET /triage` response still surfaces only the current `LLM` line
-until the UI/operations phase promotes `CASCADE`.
-
-### `GET /museum-questions/{id}/triage`
-
-Returns the latest stored `MuseumQuestionTriage`.
-
-If the binary triage has never been run, returns `404 TRIAGE_NOT_FOUND`.
-
-### `GET /museum-questions/{id}/triage/classifications`
-
-Returns the current use-category classifier executions attached to the latest
-stored triage. This endpoint is for internal evaluation/calibration: it can show
-the operational `LLM` line, the shadow `EMBEDDING` line, and the experimental
-`CASCADE` line side by side, including execution metadata. It does not change
-the operational triage response.
-
-If the binary triage has never been run, returns `404 TRIAGE_NOT_FOUND`.
-
-### `PUT /museum-questions/{id}/triage/use-categories`
-
-Request:
-
-```json
-{
-  "categories": ["ANSWERING_ENQUIRIES", "RESEARCH_PROJECTS"],
-  "humanOutcome": "CATEGORIZED"
-}
-```
-
-Persists the staff-reviewed final category set for the latest triage. This creates
-a new current `classifierKind=CASCADE` classification with
-`classifierVersion=staff-reviewed-v1`, `confidence=1.0` scores, and metadata
-including `staff_reviewed`, `reviewed_by`, `reviewed_at`, `human_outcome`, and
-`training_example_id`. The same transaction also creates a separate
-`UseCategoryTrainingExample` for embedding calibration. If a current `CASCADE`
-line exists, it is superseded and the new line receives `runNumber + 1`.
-
-For "no category applies", send:
-
-```json
-{ "categories": [], "humanOutcome": "UNCLEAR" }
-```
-
-`humanOutcome` is required; `UNCLEAR` is not inferred from an empty list alone.
-This action does not change `verdict`, `effectiveVerdict`, or
-`staffOverrideVerdict`.
-
-Response: `UseCategoryClassificationAuditList` for the latest triage.
-
-### `POST /museum-questions/triage/embedding-prototypes`
-
-Curatorial-only administrative job. Generates a persisted
-`EmbeddingPrototypeVersion` from active human training examples linked to each
-question's latest triage. The endpoint computes embeddings inside the
-application environment; it does not export citizen message text.
-
-Request:
-
-```json
-{
-  "version": "embedding-prototypes-2026-07-13-v1",
-  "aggregationMethod": "MAX_EXAMPLE",
-  "promote": true
-}
-```
-
-`aggregationMethod` may be `MAX_EXAMPLE`, `MEAN`, or `HYBRID`. The initial
-recommended/default method is `MAX_EXAMPLE`, because it preserves individual
-human examples while the dataset is small. If `promote=true`, any previously
-promoted version is retired and the new version becomes the active promoted
-snapshot. Generation is transactional: a failure while reading examples,
-validating hashes, embedding text, or persisting the snapshot does not publish a
-partial version.
-
-Response: `EmbeddingPrototypeVersion`, including `version`, `embeddingModel`,
-`aggregationMethod`, `thresholdProfile`, `exampleIds`, `prototypes`, `metrics`,
-`createdAt`, `promotedAt`, and `retiredAt`.
-
-Failure cases:
-
-- `409 NOT_ENOUGH_TRAINING_EXAMPLES` when there are no active positive human
-  examples.
-- `422 INVALID_PROTOTYPE_VERSION` when the version already exists or a source
-  message hash no longer matches the reviewed example.
-
-### `GET /museum-questions/triage/embedding-prototypes`
-
-Curatorial-only. Lists persisted embedding prototype versions for audit and
-rollout review. The response does not include citizen message text.
-
-### `GET /museum-questions/triage/classifications/calibration.csv?limit=100`
-
-Exports a calibration CSV for human labelling and threshold/prototype tuning.
-The file intentionally omits citizen message text, requester name, and requester
-e-mail. It includes `message_hash_sha256`, computed from normalized message text,
-so exported rows can be checked against the live application without storing
-personal data in git or a shared spreadsheet.
-
-Columns:
-
-```csv
-triage_id,question_id,internal_link,question_status,triage_created_at,binary_effective_verdict,message_hash_sha256,llm_status,llm_outcome,llm_assigned_categories,llm_category_scores,embedding_status,embedding_outcome,embedding_assigned_categories,embedding_category_scores,embedding_metadata,human_categories
-```
-
-`human_categories` is blank by design; the curatorial reviewer fills it outside
-the system after consulting the original question in the application.
-
-### `PATCH /museum-questions/{id}/triage/verdict`
-
-Request:
-
-```json
-{ "verdict": "OUT_OF_SCOPE" }
-```
-
-Records a staff correction of the binary AI verdict and returns the updated
-`MuseumQuestionTriage`.
-
-### `PUT /museum-questions/{id}/triage/search-terms`
-
-Request:
-
-```json
-{
-  "terms": [{ "english": "Allende meteorite", "portuguese": "Meteorito Allende" }]
-}
-```
-
-Reconciles staff-edited search terms for an in-scope triage and returns the updated
-`MuseumQuestionTriage`.
-
 ### `POST /museum-questions/{id}/answer`
 
 Request:
@@ -222,6 +74,16 @@ out-of-scope e-mail, records `outOfScopeAt`, `outOfScopeBy`, `outOfScopeReason`,
 Valid only from `ANSWERED` or `OUT_OF_SCOPE`. Records `closedAt` and `closedBy`.
 No e-mail is sent.
 
+### `GET /museum-questions/summary`
+
+Returns staff dashboard counts by status.
+
+Response:
+
+```json
+{ "submitted": 9, "answered": 120, "outOfScope": 3, "closed": 45 }
+```
+
 ## `MuseumQuestion`
 
 ```json
@@ -246,110 +108,11 @@ No e-mail is sent.
 }
 ```
 
-## `MuseumQuestionTriage`
-
-```json
-{
-  "id": "triage-1",
-  "questionId": "q1",
-  "verdict": "IN_SCOPE",
-  "effectiveVerdict": "IN_SCOPE",
-  "staffOverrideVerdict": null,
-  "isVisitRelated": true,
-  "mentionedObjects": [
-    { "english": "Allende meteorite", "portuguese": "Meteorito Allende", "origin": "AI" }
-  ],
-  "objectMatches": [],
-  "suggestedReply": null,
-  "searchStrategy": "Correspondência aproximada por similaridade textual...",
-  "modelName": "llama3.1:8b",
-  "createdAt": "2026-07-10T12:00:00Z",
-  "useCategoryClassification": {
-    "status": "COMPLETED",
-    "outcome": "CATEGORIZED",
-    "quality": "FULL",
-    "classifierKind": "LLM",
-    "classifierModel": "llama3.1:8b",
-    "classifierVersion": "llm-use-category-v1",
-    "assignedCategories": [
-      { "category": "RESEARCH_PROJECTS", "confidence": 0.91, "source": "LLM" }
-    ],
-    "categoryScores": [
-      { "category": "RESEARCH_PROJECTS", "confidence": 0.91, "source": "LLM" }
-    ],
-    "classifiedAt": "2026-07-10T12:00:05Z",
-    "error": null
-  }
-}
-```
-
-`useCategoryClassification.status` values:
-
-- `NOT_REQUESTED`: synthesized by the API when no current child row exists; never
-  persisted.
-- `PENDING`: the child row exists and asynchronous classification has not finished.
-- `COMPLETED`: classification finished successfully; `outcome`, `quality`, and
-  `classifiedAt` are non-null.
-- `FAILED`: classification was attempted and failed; `error` and `classifiedAt` are
-  non-null.
-
-When no current child row exists, `useCategoryClassification` is returned as:
-
-```json
-{
-  "status": "NOT_REQUESTED",
-  "outcome": null,
-  "quality": null,
-  "classifierKind": null,
-  "classifierModel": null,
-  "classifierVersion": null,
-  "assignedCategories": [],
-  "categoryScores": [],
-  "classifiedAt": null,
-  "error": null
-}
-```
-
-## `UseCategoryClassificationAuditList`
-
-```json
-{
-  "triageId": "triage-1",
-  "classifications": [
-    {
-      "id": "classification-1",
-      "triageId": "triage-1",
-      "status": "COMPLETED",
-      "outcome": "CATEGORIZED",
-      "quality": "FULL",
-      "classifierKind": "EMBEDDING",
-      "classifierModel": "nomic-embed-text",
-      "classifierVersion": "embedding-prototypes-v1",
-      "runNumber": 1,
-      "supersededAt": null,
-      "assignedCategories": [
-        { "category": "RESEARCH_PROJECTS", "confidence": 0.86, "source": "EMBEDDING" }
-      ],
-      "categoryScores": [],
-      "classifiedAt": "2026-07-10T12:01:00Z",
-      "error": null,
-      "metadata": {
-        "threshold_profile": "embedding-prototypes-v1",
-        "would_escalate_due_to_length": false
-      },
-      "createdAt": "2026-07-10T11:59:00Z"
-    }
-  ]
-}
-```
-
 ## Errors
 
 - `401`: missing/invalid authentication.
 - `403`: caller is not staff.
 - `404 MUSEUM_QUESTION_NOT_FOUND`: unknown question id.
-- `404 TRIAGE_NOT_FOUND`: no AI triage has been run for the question.
-- `409 TRIAGE_NOT_IN_SCOPE`: search terms were submitted for an out-of-scope triage.
 - `409 INVALID_MUSEUM_QUESTION_TRANSITION`: action is not valid for the current status.
 - `422`: invalid request body.
 

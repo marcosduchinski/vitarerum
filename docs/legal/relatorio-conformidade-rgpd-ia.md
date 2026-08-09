@@ -181,17 +181,16 @@ vincule o subcontratante ao responsável.
 
 ### Problema encontrado
 
-O texto livre submetido pelo cidadão é enviado a um serviço de terceiro fora da
-União Europeia para efeitos de triagem automática:
+Os textos usados na geração de narrativas assistidas por IA podem ser enviados
+a um serviço de terceiro fora da União Europeia:
 
 - `docs/cloud/vitarerum-cloudrun.env.example.yaml:2` — `OLLAMA_BASE_URL: https://ollama.com`
-- `ai/museum_question_triage/infrastructure/model_ollama.py:287` — método `classify(self, message: str)`, que transmite a mensagem ao modelo
+- `ai/museum_narrative/infrastructure/llm_ollama.py` — cliente Ollama usado pela geração de narrativas
 
-O campo de mensagem admite até 4000 caracteres de texto livre
-(`museum_questions/presentation/schemas.py:25`) sem qualquer advertência ao
-cidadão para não incluir informação sensível. Consequentemente, o conteúdo
-transmitido pode conter dados das categorias especiais do Art. 9.º — por
-exemplo, num pedido de acessibilidade que revele dados de saúde.
+O fluxo de perguntas públicas deixou de enviar o texto livre do cidadão para
+classificação automática por IA. Ainda assim, os dados de projetos e visitas usados em narrativa
+podem conter dados pessoais ou identificadores indiretos, pelo que a
+transferência para Ollama Cloud continua a exigir avaliação documental.
 
 Adicionalmente, a própria residência dos dados é extracomunitária: o serviço é
 implantado em `us-east1` (`cloudbuild.yaml:2`).
@@ -225,8 +224,7 @@ preferência:
    impacto da transferência, e inclusão do destinatário na política de
    privacidade.
 
-Em qualquer cenário, acrescentar advertência no formulário público a pedir que
-o cidadão não inclua dados sensíveis, e documentar a triagem automática na
+Em qualquer cenário, documentar os destinatários e finalidades de IA na
 informação prestada nos termos do Art. 13.º.
 
 ---
@@ -258,17 +256,17 @@ Não existe política de privacidade. A verificação de `src/app/app.routes.ts`
 confirma a ausência de rota e de componente correspondentes.
 
 Falta, portanto, a quase totalidade dos elementos obrigatórios: identidade do
-responsável, base jurídica, prazo de conservação, destinatários — incluindo o
-serviço de IA referido em [RGPD-03](#rgpd-03) —, direitos do titular, contacto
-do encarregado de proteção de dados e direito de reclamação.
+responsável, base jurídica, prazo de conservação, destinatários — incluindo os
+serviços externos referidos em [RGPD-03](#rgpd-03) —, direitos do titular,
+contacto do encarregado de proteção de dados e direito de reclamação.
 
 ### Recomendação
 
 1. Criar uma página de política de privacidade em rota pública
    (`/privacidade`), acessível sem autenticação, e ligá-la a partir de **ambos**
    os formulários públicos e do rodapé.
-2. Cobrir explicitamente a triagem por IA e o destinatário extracomunitário. É o
-   ponto mais provável de omissão e o de maior exposição.
+2. Cobrir explicitamente os destinatários extracomunitários e as finalidades de
+   IA ainda ativas.
 3. Substituir a frase do consentimento por uma remissão informada: *"Li e
    compreendi a [política de privacidade]"*, com hiperligação.
 4. Versionar o texto da política e registar, em cada submissão, a versão em
@@ -469,7 +467,7 @@ museológico —, a obrigação é incondicional.
 
 1. Elaborar o registo cobrindo, no mínimo, as atividades identificadas nesta
    análise: submissão pública de propostas, perguntas ao museu, gestão de
-   utilizadores internos, triagem assistida por IA e publicação externa.
+   utilizadores internos, narrativa assistida por IA e publicação externa.
 2. Colocá-lo sob controlo de versões, em `docs/legal/`, junto deste relatório. O
    registo tem de acompanhar a evolução do sistema; mantido fora do repositório,
    desatualiza-se.
@@ -534,19 +532,19 @@ avaliação sistemática com recurso a tratamento automatizado.
 
 O campo de mensagem aceita 4000 caracteres de texto livre sem qualquer
 orientação quanto ao que não deve ser incluído
-(`museum_questions/presentation/schemas.py:25`). É simultaneamente o campo com
-maior probabilidade de conter dados sensíveis e o que é transmitido ao serviço
-de IA externo.
+(`museum_questions/presentation/schemas.py:25`). Continua a ser um dos campos
+com maior probabilidade de conter dados sensíveis, embora já não seja
+transmitido ao serviço de IA externo por classificação automática.
 
 Não há indício, no repositório, de que tenha sido realizada avaliação de
-impacto. A combinação de triagem automatizada de dados de cidadãos com
-transferência para país terceiro corresponde ao perfil que habitualmente a
-desencadeia.
+impacto. A combinação de texto livre de cidadãos, dados de projetos e
+transferências para país terceiro deve continuar a ser avaliada.
 
 ### Recomendação
 
-1. Realizar uma avaliação de impacto centrada na triagem por IA. Esta análise
-   pode servir-lhe de base factual.
+1. Realizar uma avaliação de impacto centrada nos textos livres, narrativas
+   assistidas por IA e transferências internacionais. Esta análise pode
+   servir-lhe de base factual.
 2. Acrescentar orientação no formulário público: indicar o tipo de informação
    necessária e advertir para não incluir dados de saúde ou outros dados
    sensíveis.
@@ -613,12 +611,11 @@ verificado no código:
 
 - `museum_questions/application/use_cases.py:257` — `require_staff(data.caller)` em `MarkMuseumQuestionOutOfScope`
 - `museum_questions/application/use_cases.py:267` — o fundamento (`reason`) é redigido por pessoal, não gerado
-- Todos os pontos finais de IA exigem `require_staff`, tanto na triagem como na narrativa
+- Todos os pontos finais de IA ativos exigem `require_staff`
 
 A IA **sugere**; a decisão é humana. Isto mantém o sistema fora do alto risco e,
 adicionalmente, afasta a aplicação do **Art. 22.º do RGPD** (decisões
-individuais automatizadas) — que constituiria um problema sério caso a triagem
-indeferisse pedidos autonomamente.
+individuais automatizadas).
 
 **Enquadramento resultante:** risco mínimo, com obrigações de **transparência
 (Art. 50.º)** e de **literacia (Art. 4.º)**.
@@ -758,17 +755,14 @@ independentemente do nível de risco.
 
 ### Problema encontrado
 
-Existe um princípio de cumprimento, e é genuíno: o painel *"How AI assistance
-works"* explica ao funcionário que a triagem **estima** o âmbito e **rascunha**
-uma resposta
-(`vitarerum-ui/src/app/features/museum-questions/pages/detail/museum-question-detail-page.component.html:383-390`).
-A formulação é adequada, por descrever a funcionalidade como assistência e não
-como decisão.
+Existe um princípio de cumprimento, e é genuíno: a geração de narrativas é
+apresentada como assistência editorial com revisão humana, não como decisão
+automática.
 
 Falta, porém, a componente organizacional que o artigo exige: medidas de
 formação registadas para quem utiliza a ferramenta, e documentação das
-limitações conhecidas — propensão a alucinação, desempenho desigual entre
-línguas, e o facto de a triagem operar sobre texto livre não estruturado.
+limitações conhecidas — propensão a alucinação e desempenho desigual entre
+línguas.
 
 ### Recomendação
 
@@ -777,8 +771,8 @@ línguas, e o facto de a triagem operar sobre texto livre não estruturado.
    existente.
 2. Registar a formação ministrada — data, participantes, conteúdos. O artigo
    exige medidas, e as medidas devem ser demonstráveis.
-3. Ampliar o painel existente com as limitações, aproximando-o do ponto de
-   utilização. É o local onde a informação tem maior probabilidade de ser lida.
+3. Expor as limitações junto do ponto de geração de narrativas. É o local onde
+   a informação tem maior probabilidade de ser lida.
 
 ---
 
@@ -808,9 +802,7 @@ no armazenamento (`file_storage.py:26-29`).
 
 **Rastreabilidade da IA.** Proveniência completa persistida por narrativa —
 modelo, versão do prompt, temperatura, instante de geração — acompanhada de
-`payload_hash` e relatório de validação CIDOC. As classificações de triagem
-conservam a versão do classificador, o que permite auditar deriva ao longo do
-tempo.
+`payload_hash` e relatório de validação CIDOC.
 
 Esta última é a razão pela qual a conformidade com o Regulamento de IA é
 alcançável a baixo custo: **a arquitetura pressuposta pelo Art. 50.º já existe**.
@@ -864,7 +856,7 @@ das partes.
 |---|---|
 | Decisão sobre o Ollama: auto-hospedagem, pseudonimização ou contrato | [RGPD-03](#rgpd-03) |
 | Verificação documental das salvaguardas do Google Cloud | [RGPD-03](#rgpd-03) |
-| Avaliação de impacto sobre a triagem por IA | [RGPD-10](#rgpd-10) |
+| Avaliação de impacto sobre narrativas assistidas por IA e transferências internacionais | [RGPD-10](#rgpd-10) |
 
 ## Fase 5 — Reforço
 

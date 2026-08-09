@@ -30,7 +30,6 @@ import { AI_PROMPT_MANAGEMENT_SERVICE } from '../../services/ai-prompt-managemen
 
 const PURPOSE_OPTIONS: readonly { readonly value: AiPromptPurpose; readonly label: string }[] = [
   { value: 'in_situ_narrative', label: 'Narrative' },
-  { value: 'museum_question_triage', label: 'Museum question triage' },
   { value: 'proposal_assistance', label: 'Proposal assistance' },
   { value: 'project_assistance', label: 'Project assistance' },
 ];

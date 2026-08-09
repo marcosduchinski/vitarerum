@@ -140,7 +140,7 @@ Buckets map 1:1 to `MuseumQuestionStatus`:
 { "submitted": 9, "answered": 120, "outOfScope": 3, "closed": 45 }
 ```
 
-The dashboard card should highlight `submitted` (pending triage) as the
+The dashboard card should highlight `submitted` (pending staff review) as the
 actionable number, the rest as context.
 
 **`403 INSUFFICIENT_GROUP`** — caller is not staff.

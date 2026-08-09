@@ -1,10 +1,10 @@
 """Museum Questions published language (Open Host Service).
 
 The ONLY ``museum_questions`` module other bounded contexts may import —
-enforced by import-linter. Exposes a narrow read-only view of a question so an
-AI context (e.g. ``ai.museum_question_triage``) can read it without touching
-internals. Mirrors the ``app.ai.museum_narrative.public`` pattern (lazy infra
-import inside the function body).
+enforced by import-linter. Exposes a deliberately narrow read-only view of a
+question for future downstream contexts without allowing access to internals.
+Mirrors the ``app.ai.museum_narrative.public`` pattern (lazy infra import inside
+the function body).
 """
 
 from __future__ import annotations

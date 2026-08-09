@@ -9,9 +9,6 @@ from fastapi.responses import FileResponse, JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.ai.museum_narrative.presentation.routes import museum_narrative_router
-from app.ai.museum_question_triage.presentation.routes import (
-    museum_question_triage_router,
-)
 from app.ai.prompts.presentation.routes import ai_prompts_router
 from app.cidoc_crm.in_situ_visit_mapping.presentation.routes import (
     in_situ_visit_router,
@@ -181,7 +178,6 @@ app.include_router(object_search_router, prefix=prefix)
 app.include_router(museum_questions_router, prefix=prefix)
 app.include_router(notifications_router, prefix=prefix)
 app.include_router(internal_museum_questions_router, prefix=prefix)
-app.include_router(museum_question_triage_router, prefix=prefix)
 app.include_router(ai_prompts_router, prefix=prefix)
 app.include_router(reference_policies_router, prefix=prefix)
 app.include_router(external_publications_router, prefix=prefix)

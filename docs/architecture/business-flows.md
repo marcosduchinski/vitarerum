@@ -80,10 +80,6 @@ records the gap without inventing an incomplete diagram.
 
 ![Museum questions response flow](../diagrams/museum-questions-response-flow.svg)
 
-- AI triage:
-
-![Museum question triage flow](../diagrams/museum-question-triage-flow.svg)
-
 ## Administration
 
 - Document templates:

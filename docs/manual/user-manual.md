@@ -66,7 +66,7 @@ até ao projeto de investigação em curso, incluindo:
 - Gestão de projetos de uso de coleções
 - Pesquisa de objetos de coleção
 - Visitas técnicas *in situ* e o respetivo registo mapeado para o modelo CIDOC-CRM
-- Perguntas públicas dirigidas ao museu ("Pergunte ao Museu") e a sua triagem
+- Perguntas públicas dirigidas ao museu ("Pergunte ao Museu") e resposta pela equipa
 - Geração de narrativas assistida por IA a partir dos registos *in situ*
 - Administração de utilizadores, instituições, modelos de documentos e outras
   configurações
@@ -550,26 +550,6 @@ arquiva a pergunta — **não envia email**.
 perguntas já enviadas pelo mesmo email, para dar contexto antes de
 responder.
 
-**14.6 Triagem por IA** ("AI assistance"): disponível enquanto a
-pergunta está `SUBMITTED`. Ao correr a triagem (ícone de "sparkles"), o
-sistema:
-- estima se o pedido está dentro do âmbito ("In scope" / "Out of scope")
-  e permite à equipa **corrigir esse veredito** manualmente
-  ("Staff-corrected");
-- quando fora de âmbito, sugere uma resposta automática que pode ser
-  inserida diretamente no editor ("Use in reply");
-- quando dentro de âmbito, extrai possíveis termos de pesquisa (em
-  português e inglês) a partir da mensagem, procura-os automaticamente no
-  catálogo de objetos e mostra os resultados; a equipa pode editar os
-  termos e voltar a pesquisar, selecionar resultados relevantes e
-  inseri-los na resposta;
-- sugere categorias de uso da pergunta, que a equipa também pode rever e
-  corrigir antes de gravar.
-
-A IA nunca decide sozinha — todas as sugestões (veredito, termos de
-pesquisa, categorias, resposta) ficam disponíveis para revisão e correção
-humana antes de qualquer resposta ser enviada ao requerente.
-
 ### 15. Visitas *in situ* e registo CIDOC-CRM
 
 Para projetos cujo uso pretendido é **visita in situ**, o Vitarerum pode
@@ -657,8 +637,7 @@ veio cada afirmação do texto final.
 Esta parte destina-se a quem tem acesso ao menu "AI" (COLLECTIONS_MANAGEMENT,
 CURATORIAL e DIRECTION) e explica como o Vitarerum gere os textos que
 instruem os modelos de IA usados nas Partes IV — a geração de narrativas de
-visitas *in situ* (secção 16) e a triagem de perguntas públicas (secção
-14). Não é preciso saber nada de IA para usar este ecrã: é, na prática, um
+visitas *in situ* (secção 16). Não é preciso saber nada de IA para usar este ecrã: é, na prática, um
 gestor de versões de texto, com histórico e um "banco de testes" para
 experimentar alterações antes de as tornar ativas.
 
@@ -670,8 +649,6 @@ institucional a partir destes factos, em português, com este tom"). Cada
 prompt do Vitarerum serve uma **finalidade** fixa:
 - **In-situ narrative** — usado na geração de narrativas de relatórios de
   visita (Parte IV, secção 16);
-- **Museum question triage** — usado na triagem de perguntas públicas
-  (Parte IV, secção 14.6);
 - **Proposal assistance** e **Project assistance** — finalidades já
   previstas no sistema mas ainda sem workflow associado; aparecem como
   opção de filtro mas não têm, para já, nenhum ecrã que as use.
@@ -713,12 +690,8 @@ autor da última publicação, e filtros por finalidade e estado.
 
 ### 18. Boas práticas
 
-**18.1 A IA nunca decide sozinha.** Em toda a triagem de perguntas
-públicas (secção 14.6), o veredito, os termos de pesquisa e as categorias
-sugeridas pela IA ficam sempre disponíveis para correção humana antes de
-qualquer resposta seguir para o requerente. O mesmo vale para as
-narrativas geradas (secção 16.3): o texto é editável e cada correção
-manual fica registada no histórico de revisões.
+**18.1 A IA nunca decide sozinha.** As narrativas geradas (secção 16.3)
+são editáveis e cada correção manual fica registada no histórico de revisões.
 
 **18.2 Testar antes de publicar.** Alterar o texto de um prompt afeta
 imediatamente todas as gerações seguintes dessa finalidade, em todo o
@@ -1114,10 +1087,6 @@ atual serve uma única instituição (MUHNAC).
 antes do pedido concreto (por exemplo, "escreve esta narrativa neste
 tom"). Gerido por versões com estado *draft*/*published*/*archived*
 (Parte V).
-
-**Triagem** — análise automática (assistida por IA) de uma pergunta
-pública, que estima se está dentro do âmbito, sugere termos de pesquisa
-e categorias, mas nunca decide sozinha (Parte IV, secção 14.6).
 
 **Número de referência** — identificador legível atribuído
 automaticamente a propostas (`VRP-...`), projetos (`CUP-...`), registos

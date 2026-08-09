@@ -5,32 +5,31 @@ import { MuseumQuestionManagementServiceMock } from './museum-question-managemen
 describe('MuseumQuestionManagementServiceMock', () => {
   let service: MuseumQuestionManagementServiceMock;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     service = new MuseumQuestionManagementServiceMock();
-    await firstValueFrom(service.runTriage('q-1'));
   });
 
-  it('normalizes submitted search terms like the real API: trims, drops blanks, dedupes, and fills a missing language', async () => {
-    const result = await firstValueFrom(
-      service.syncTriageSearchTerms('q-1', [
-        { english: '  Fox  ', portuguese: '  Raposa  ' },
-        { english: '', portuguese: '' },
-        { english: '   ', portuguese: '   ' },
-        { english: 'FOX', portuguese: 'RAPOSA' },
-        { english: '', portuguese: 'Only Portuguese' },
-      ]),
+  it('lists submitted questions by default filters', async () => {
+    const page = await firstValueFrom(service.list({ status: 'SUBMITTED', page: 0, size: 20 }));
+
+    expect(page.content.map((question) => question.id)).toEqual(['q-1']);
+  });
+
+  it('answers a submitted question', async () => {
+    const updated = await firstValueFrom(
+      service.answer('q-1', { answerBody: '<p>Manual answer</p>' }),
     );
 
-    expect(result.mentionedObjects).toEqual([
-      { english: 'Fox', portuguese: 'Raposa', origin: 'STAFF' },
-      { english: 'Only Portuguese', portuguese: 'Only Portuguese', origin: 'STAFF' },
-    ]);
+    expect(updated.status).toBe('ANSWERED');
+    expect(updated.answerBody).toBe('<p>Manual answer</p>');
   });
 
-  it('rejects more than the staff search-term limit only after normalizing', async () => {
-    // 11 blank rows normalize down to 0 terms — must not be rejected as "too many".
-    const blankRows = Array.from({ length: 11 }, () => ({ english: '', portuguese: '' }));
-    const result = await firstValueFrom(service.syncTriageSearchTerms('q-1', blankRows));
-    expect(result.mentionedObjects).toEqual([]);
+  it('marks a submitted question out of scope', async () => {
+    const updated = await firstValueFrom(
+      service.markOutOfScope('q-1', { reason: 'Exhibition question' }),
+    );
+
+    expect(updated.status).toBe('OUT_OF_SCOPE');
+    expect(updated.outOfScopeReason).toBe('Exhibition question');
   });
 });

@@ -31,7 +31,6 @@ package "In-situ reporting" {
 
 package "AI support" {
   [AI Prompts] as prompts
-  [Question Triage] as triage
 }
 
 package "Operational support" {
@@ -78,11 +77,6 @@ reports_visit --> narrative : narrative public language
 reports_visit --> external_publications : revoke publications
 external_publications --> uoc : publishable proposals/projects
 external_publications --> reports_visit : publishable reports
-
-triage --> questions : question public language
-triage --> object_index : object-search ACL
-triage --> prompts : prompt consumer
-triage --> external_services : LLM
 
 questions --> identity : shared auth
 doc_templates --> identity : shared auth

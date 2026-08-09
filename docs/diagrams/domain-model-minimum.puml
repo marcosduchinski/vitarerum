@@ -216,8 +216,6 @@ package "in-situ reporting and AI" {
   }
   class GeneratedNarrative <<AggregateRoot>> {
   }
-  class MessageTriage <<AggregateRoot>> {
-  }
   class PromptTemplate <<AggregateRoot>> {
   }
   class PromptTemplateVersion <<Entity>> {
@@ -249,7 +247,6 @@ CollectionArea "1" o-- "0..*" Collection
 Collection "1" o-- "0..*" SourceDocument
 SourceDocument "1" o-- "0..*" CollectionObject
 
-MuseumQuestion ..> MessageTriage : optional AI assistance
 Notification ..> Proposal : related resource
 Notification ..> CollectionUseProject : related resource
 ReferencePolicy ..> ReferenceNumber : allocates

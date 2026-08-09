@@ -45,8 +45,9 @@ shared storage composition where appropriate.
 ### `museum_questions`
 
 Owns public questions sent to the museum and staff response workflows. It
-exposes selected question data through `museum_questions.public` for AI triage
-and uses Identity through the shared authenticated staff helpers.
+uses Identity through the shared authenticated staff helpers. The
+`museum_questions.public` Open Host Service is deliberately retained as a
+small read-only extension point for future downstream contexts.
 
 ### `notifications`
 
@@ -72,12 +73,6 @@ its record vocabulary through `cidoc_crm.public`.
 Owns AI-assisted narrative generation for museum/in-situ material. It consumes
 CIDOC-CRM records through `cidoc_crm.public`, resolves prompt templates through
 `ai.prompts.public`, and keeps generated outputs in a human-review posture.
-
-### `ai.museum_question_triage`
-
-Owns AI-assisted triage of public museum questions. It reads question data and
-collection-object search results through explicit ACLs/published interfaces and
-does not make final workflow decisions without human review.
 
 ### `ai.prompts`
 
