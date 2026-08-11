@@ -8,18 +8,21 @@
     <label class="public-shell__language-label" for="public-locale">
       {{ 'public.shell.language' | t }}
     </label>
-    <select
-      id="public-locale"
-      class="public-shell__language"
-      (change)="onLocaleChange($event)"
-      [attr.aria-label]="'public.shell.language' | t"
-    >
-      @for (locale of locales; track locale) {
-        <option [value]="locale" [selected]="locale === i18n.locale()">
-          {{ 'public.shell.language.' + locale | t }}
-        </option>
-      }
-    </select>
+    <span class="public-shell__language-control">
+      <app-locale-flag [locale]="i18n.locale()" />
+      <select
+        id="public-locale"
+        class="public-shell__language"
+        (change)="onLocaleChange($event)"
+        [attr.aria-label]="'public.shell.language' | t"
+      >
+        @for (locale of locales; track locale) {
+          <option [value]="locale" [selected]="locale === i18n.locale()">
+            {{ 'public.shell.language.' + locale | t }}
+          </option>
+        }
+      </select>
+    </span>
   </header>
 
   <main class="public-shell__main">

@@ -13,6 +13,7 @@ import { filter, map, startWith } from 'rxjs';
 import { AppFooterComponent } from '@layout/footer/app-footer.component';
 import { LogoMarkComponent } from '@shared/components/logo-mark/logo-mark.component';
 
+import { LocaleFlagComponent } from './i18n/locale-flag.component';
 import { PUBLIC_LOCALES, PublicLocale } from './i18n/public-i18n.model';
 import { PublicI18nPipe } from './i18n/public-i18n.pipe';
 import { PublicI18nService } from './i18n/public-i18n.service';
@@ -31,7 +32,14 @@ import { PublicI18nService } from './i18n/public-i18n.service';
   selector: 'app-public-shell',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterOutlet, RouterLink, AppFooterComponent, LogoMarkComponent, PublicI18nPipe],
+  imports: [
+    RouterOutlet,
+    RouterLink,
+    AppFooterComponent,
+    LogoMarkComponent,
+    PublicI18nPipe,
+    LocaleFlagComponent,
+  ],
   templateUrl: './public-shell.component.html',
   styleUrl: './public-shell.component.scss',
 })

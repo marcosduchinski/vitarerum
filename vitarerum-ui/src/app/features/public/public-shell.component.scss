@@ -33,6 +33,13 @@
   color: var(--color-muted);
 }
 
+// Keeps the flag visually attached to the control it describes.
+.public-shell__language-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
 .public-shell__language {
   height: 2.25rem;
   padding: 0 0.625rem;

@@ -87,6 +87,31 @@ describe('PublicShellComponent', () => {
     expect(options.find((option) => option.selected)?.value).toBe('pt-PT');
   });
 
+  it('flies the flag of the active language, and swaps it on a switch', async () => {
+    const fixture = await shell();
+    const root = fixture.nativeElement as HTMLElement;
+    // The two flags are told apart by their viewBox: the Portuguese drawing is
+    // 600x400, the Union Jack 60x30.
+    const flagViewBox = () =>
+      root.querySelector('app-locale-flag svg')?.getAttribute('viewBox');
+
+    expect(flagViewBox()).toBe('0 0 600 400');
+
+    const select = root.querySelector<HTMLSelectElement>('.public-shell__language');
+    select!.value = 'en';
+    select!.dispatchEvent(new Event('change'));
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(flagViewBox()).toBe('0 0 60 30');
+  });
+
+  it('hides the flag from assistive tech, which already gets the language by name', async () => {
+    const root = (await shell()).nativeElement as HTMLElement;
+
+    expect(root.querySelector('app-locale-flag svg')?.getAttribute('aria-hidden')).toBe('true');
+  });
+
   it('switches the active locale when a language is picked', async () => {
     const fixture = await shell();
     const select = (fixture.nativeElement as HTMLElement).querySelector<HTMLSelectElement>(
