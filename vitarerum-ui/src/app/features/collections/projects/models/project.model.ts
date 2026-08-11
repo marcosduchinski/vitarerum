@@ -132,6 +132,31 @@ export interface ProjectActionPermissions {
   readonly canCreateOccurrenceEntry: boolean;
 }
 
+export interface ProjectTodoItem {
+  readonly id: string;
+  readonly projectId: string;
+  readonly text: string;
+  readonly completed: boolean;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly completedAt: string | null;
+  readonly position: number;
+}
+
+export interface ProjectTodoItemsResponse {
+  readonly projectId: string;
+  readonly items: readonly ProjectTodoItem[];
+}
+
+export interface CreateProjectTodoItemRequest {
+  readonly text: string;
+}
+
+export interface UpdateProjectTodoItemRequest {
+  readonly text?: string;
+  readonly position?: number;
+}
+
 export interface ProjectStaffProposalContext {
   readonly id: string;
   readonly referenceNumber: string;

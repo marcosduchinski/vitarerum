@@ -309,6 +309,15 @@ class RemoveProjectObjectRequest(BaseModel):
     reason: str = ""
 
 
+class CreateProjectTodoItemRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=160)
+
+
+class UpdateProjectTodoItemRequest(BaseModel):
+    text: str | None = Field(default=None, min_length=1, max_length=160)
+    position: int | None = Field(default=None, ge=0)
+
+
 class ForwardProposalRequest(BaseModel):
     targetPermissionId: str
     note: str | None = None
@@ -596,6 +605,22 @@ class ProjectCommandResponse(BaseModel):
     status: UseStatus
     result: UseResult | None = None
     lastEvent: UseEventResponse | None = None
+
+
+class ProjectTodoItemResponse(BaseModel):
+    id: str
+    projectId: str
+    text: str
+    completed: bool
+    createdAt: datetime
+    updatedAt: datetime
+    completedAt: datetime | None = None
+    position: int
+
+
+class ProjectTodoItemsResponse(BaseModel):
+    projectId: str
+    items: list[ProjectTodoItemResponse]
 
 
 class ErrorResponse(BaseModel):

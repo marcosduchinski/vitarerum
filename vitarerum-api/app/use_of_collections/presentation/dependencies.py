@@ -38,6 +38,7 @@ from app.use_of_collections.application.ports import (
     ProposalRepository,
     PublicationLogRepository,
     RequesterAccessEmailSender,
+    StaffProjectTodoRepository,
 )
 from app.use_of_collections.application.queries import (
     GetProjectDetail,
@@ -62,6 +63,7 @@ from app.use_of_collections.infrastructure.repositories import (
     SqlAlchemyObjectOccurrenceLogRepository,
     SqlAlchemyProposalRepository,
     SqlAlchemyPublicationLogRepository,
+    SqlAlchemyStaffProjectTodoRepository,
 )
 from app.use_of_collections.infrastructure.requester_access_email import (
     LoggingRequesterAccessEmailSender,
@@ -96,6 +98,10 @@ def get_occurrence_log_repo(session: DBSession) -> ObjectOccurrenceLogRepository
 
 def get_publication_log_repo(session: DBSession) -> PublicationLogRepository:
     return SqlAlchemyPublicationLogRepository(session)
+
+
+def get_project_todo_repo(session: DBSession) -> StaffProjectTodoRepository:
+    return SqlAlchemyStaffProjectTodoRepository(session)
 
 
 def get_file_storage() -> FileStoragePort:
@@ -179,6 +185,7 @@ OccurrenceLogRepo = Annotated[
 PublicationLogRepo = Annotated[
     PublicationLogRepository, Depends(get_publication_log_repo)
 ]
+ProjectTodoRepo = Annotated[StaffProjectTodoRepository, Depends(get_project_todo_repo)]
 FileStorage = Annotated[FileStoragePort, Depends(get_file_storage)]
 AmendmentInvitation = Annotated[
     AmendmentInvitationPort, Depends(get_amendment_invitation)

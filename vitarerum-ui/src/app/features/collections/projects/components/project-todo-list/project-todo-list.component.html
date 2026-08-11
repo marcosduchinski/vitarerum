@@ -7,7 +7,15 @@
     <span class="todo-board__count" aria-label="Total items">{{ items().length }}</span>
   </header>
 
-  <p class="todo-board__notice">Items are kept only for this demonstration and are not saved.</p>
+  @if (todoResource.isLoading()) {
+    <p class="todo-board__notice" role="status">Loading items...</p>
+  }
+
+  @if (todoResource.error() || error()) {
+    <p class="todo-board__error" role="alert">
+      {{ error() ?? 'Could not load the TODO list.' }}
+    </p>
+  }
 
   <form class="todo-compose" (submit)="addItem($event)">
     <label for="project-todo-input">New item</label>
@@ -21,14 +29,14 @@
         [value]="draft()"
         (input)="onDraftInput($event)"
       />
-      <button type="submit" [disabled]="!draft().trim()">
+      <button type="submit" [disabled]="!draft().trim() || adding()">
         <span class="pi pi-plus" aria-hidden="true"></span>
-        Add item
+        {{ adding() ? 'Adding...' : 'Add item' }}
       </button>
     </div>
   </form>
 
-  @if (items().length) {
+  @if (!todoResource.isLoading() && items().length) {
     <ul class="todo-list" aria-label="Project TODO items">
       @for (item of items(); track item.id) {
         <li class="todo-item" [class.todo-item--completed]="item.completed">
@@ -36,22 +44,24 @@
             <input
               type="checkbox"
               [checked]="item.completed"
-              (change)="setCompleted(item.id, $event)"
+              [disabled]="busyItemId() === item.id"
+              (change)="setCompleted(item, $event)"
             />
             <span>{{ item.text }}</span>
           </label>
           <button
             type="button"
             class="todo-item__remove"
+            [disabled]="busyItemId() === item.id"
             [attr.aria-label]="'Remove ' + item.text"
-            (click)="removeItem(item.id)"
+            (click)="removeItem(item)"
           >
             <span class="pi pi-trash" aria-hidden="true"></span>
           </button>
         </li>
       }
     </ul>
-  } @else {
+  } @else if (!todoResource.isLoading() && !todoResource.error()) {
     <div class="todo-empty" role="status">
       <span class="pi pi-check-square" aria-hidden="true"></span>
       <div>

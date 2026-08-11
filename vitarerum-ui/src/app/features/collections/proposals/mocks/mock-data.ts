@@ -13,6 +13,7 @@ import {
   ObjectLogEntry,
   ObjectOccurrenceEntry,
   ObjectOccurrenceLog,
+  ProjectTodoItem,
   PublicationLog,
   PublicationLogEntry,
   UseEvent,
@@ -912,6 +913,7 @@ export class MockProjectState {
   readonly events = new Map<string, UseEvent[]>(
     Object.entries(this.seed?.projectEvents ?? {}).map(([k, v]) => [k, structuredClone(v)]),
   );
+  readonly todoItems = new Map<string, ProjectTodoItem[]>();
   private nextId = 200;
 
   materializeProjectForProposal(
@@ -1044,6 +1046,10 @@ export class MockProjectState {
 
   nextProjectObjectId(): string {
     return `project-object-${this.nextId++}`;
+  }
+
+  nextTodoItemId(): string {
+    return `todo-${this.nextId++}`;
   }
 
   nextFileReference(): string {

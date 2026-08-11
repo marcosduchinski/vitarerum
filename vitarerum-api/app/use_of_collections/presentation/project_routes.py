@@ -33,18 +33,29 @@ from app.use_of_collections.application.use_cases import (
     CancelProjectInput,
     CompleteProject,
     CompleteProjectInput,
+    CompleteStaffProjectTodo,
     CreateFollowUpProject,
     CreateFollowUpProjectInput,
+    CreateStaffProjectTodo,
+    CreateStaffProjectTodoInput,
+    DeleteStaffProjectTodo,
+    DeleteStaffProjectTodoInput,
     EditProjectDetails,
     EditProjectDetailsInput,
+    ListStaffProjectTodos,
+    ListStaffProjectTodosInput,
     ProjectObjectHasDependencies,
     ProjectObjectSnapshotInput,
     RemoveProjectObject,
     RemoveProjectObjectCascade,
     RemoveProjectObjectCascadeInput,
     RemoveProjectObjectInput,
+    ReopenStaffProjectTodo,
     StartProject,
     StartProjectInput,
+    ToggleStaffProjectTodoInput,
+    UpdateStaffProjectTodo,
+    UpdateStaffProjectTodoInput,
 )
 from app.use_of_collections.domain.enums import (
     UseEventType,
@@ -55,6 +66,8 @@ from app.use_of_collections.domain.models import (
     CollectionUseObjectId,
     CollectionUseProject,
     CollectionUseProjectId,
+    StaffProjectTodoItem,
+    StaffProjectTodoItemId,
 )
 from app.use_of_collections.presentation.common import (
     _assert_existing_project_access,
@@ -65,6 +78,7 @@ from app.use_of_collections.presentation.common import (
     _load_permission_detail,
     _not_found,
     projects_router,
+    route_now,
 )
 from app.use_of_collections.presentation.dependencies import (
     AccessLogRepo,
@@ -74,6 +88,7 @@ from app.use_of_collections.presentation.dependencies import (
     OccurrenceLogRepo,
     ProjectDetailQuery,
     ProjectRepo,
+    ProjectTodoRepo,
     ProposalEmailSender,
     ProposalRepo,
     PublicationLogRepo,
@@ -84,6 +99,7 @@ from app.use_of_collections.presentation.schemas import (
     AddProjectObjectsRequest,
     CollectionUseObjectResponse,
     CreateFollowUpProjectRequest,
+    CreateProjectTodoItemRequest,
     NoteRequest,
     PaginatedEventsResponse,
     PaginatedProjectsResponse,
@@ -91,10 +107,13 @@ from app.use_of_collections.presentation.schemas import (
     ProjectCommandResponse,
     ProjectDetailResponse,
     ProjectListItemResponse,
+    ProjectTodoItemResponse,
+    ProjectTodoItemsResponse,
     ProposalRefSummary,
     ReasonRequest,
     RemoveProjectObjectRequest,
     UpdateProjectRequest,
+    UpdateProjectTodoItemRequest,
     UseEventResponse,
 )
 
@@ -105,6 +124,19 @@ from app.use_of_collections.presentation.schemas import (
 
 def _project_link(project_id: CollectionUseProjectId) -> str:
     return f"{settings.public_origin}/p/collections/projects/{project_id}"
+
+
+def _todo_item_response(item: StaffProjectTodoItem) -> ProjectTodoItemResponse:
+    return ProjectTodoItemResponse(
+        id=item.id,
+        projectId=item.project_id,
+        text=item.text,
+        completed=item.completed,
+        createdAt=item.created_at,
+        updatedAt=item.updated_at,
+        completedAt=item.completed_at,
+        position=item.position,
+    )
 
 
 async def _caller_display_name(caller: CallerPermission, session: DBSession) -> str:
@@ -252,6 +284,193 @@ async def get_project(
             for obj in project.objects
         ],
     )
+
+
+@projects_router.get(
+    "/{project_id}/todo-items", response_model=ProjectTodoItemsResponse
+)
+async def list_project_todo_items(
+    project_id: str,
+    caller: CallerPermission,
+    todo_repo: ProjectTodoRepo,
+    project_repo: ProjectRepo,
+    proposal_repo: ProposalRepo,
+) -> ProjectTodoItemsResponse:
+    try:
+        items = await ListStaffProjectTodos(
+            todo_repo, project_repo, proposal_repo
+        ).execute(
+            ListStaffProjectTodosInput(
+                caller=caller,
+                project_id=CollectionUseProjectId(project_id),
+            )
+        )
+    except Exception as exc:
+        _handle_domain_errors(exc)
+    return ProjectTodoItemsResponse(
+        projectId=project_id,
+        items=[_todo_item_response(item) for item in items],
+    )
+
+
+@projects_router.post(
+    "/{project_id}/todo-items",
+    response_model=ProjectTodoItemResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_project_todo_item(
+    project_id: str,
+    body: CreateProjectTodoItemRequest,
+    caller: CallerPermission,
+    todo_repo: ProjectTodoRepo,
+    project_repo: ProjectRepo,
+    proposal_repo: ProposalRepo,
+    session: DBSession,
+) -> ProjectTodoItemResponse:
+    try:
+        item = await CreateStaffProjectTodo(
+            todo_repo, project_repo, proposal_repo
+        ).execute(
+            CreateStaffProjectTodoInput(
+                caller=caller,
+                project_id=CollectionUseProjectId(project_id),
+                text=body.text,
+                now=route_now(),
+            )
+        )
+        await session.commit()
+        return _todo_item_response(item)
+    except Exception as exc:
+        await session.rollback()
+        _handle_domain_errors(exc)
+        raise RuntimeError("unreachable") from None
+
+
+@projects_router.patch(
+    "/{project_id}/todo-items/{item_id}", response_model=ProjectTodoItemResponse
+)
+async def update_project_todo_item(
+    project_id: str,
+    item_id: str,
+    body: UpdateProjectTodoItemRequest,
+    caller: CallerPermission,
+    todo_repo: ProjectTodoRepo,
+    project_repo: ProjectRepo,
+    proposal_repo: ProposalRepo,
+    session: DBSession,
+) -> ProjectTodoItemResponse:
+    try:
+        item = await UpdateStaffProjectTodo(
+            todo_repo, project_repo, proposal_repo
+        ).execute(
+            UpdateStaffProjectTodoInput(
+                caller=caller,
+                project_id=CollectionUseProjectId(project_id),
+                item_id=StaffProjectTodoItemId(item_id),
+                now=route_now(),
+                text=body.text,
+                update_text="text" in body.model_fields_set,
+                position=body.position,
+                update_position="position" in body.model_fields_set,
+            )
+        )
+        await session.commit()
+        return _todo_item_response(item)
+    except Exception as exc:
+        await session.rollback()
+        _handle_domain_errors(exc)
+        raise RuntimeError("unreachable") from None
+
+
+@projects_router.post(
+    "/{project_id}/todo-items/{item_id}/complete",
+    response_model=ProjectTodoItemResponse,
+)
+async def complete_project_todo_item(
+    project_id: str,
+    item_id: str,
+    caller: CallerPermission,
+    todo_repo: ProjectTodoRepo,
+    project_repo: ProjectRepo,
+    proposal_repo: ProposalRepo,
+    session: DBSession,
+) -> ProjectTodoItemResponse:
+    try:
+        item = await CompleteStaffProjectTodo(
+            todo_repo, project_repo, proposal_repo
+        ).execute(
+            ToggleStaffProjectTodoInput(
+                caller=caller,
+                project_id=CollectionUseProjectId(project_id),
+                item_id=StaffProjectTodoItemId(item_id),
+                now=route_now(),
+            )
+        )
+        await session.commit()
+        return _todo_item_response(item)
+    except Exception as exc:
+        await session.rollback()
+        _handle_domain_errors(exc)
+        raise RuntimeError("unreachable") from None
+
+
+@projects_router.post(
+    "/{project_id}/todo-items/{item_id}/reopen",
+    response_model=ProjectTodoItemResponse,
+)
+async def reopen_project_todo_item(
+    project_id: str,
+    item_id: str,
+    caller: CallerPermission,
+    todo_repo: ProjectTodoRepo,
+    project_repo: ProjectRepo,
+    proposal_repo: ProposalRepo,
+    session: DBSession,
+) -> ProjectTodoItemResponse:
+    try:
+        item = await ReopenStaffProjectTodo(
+            todo_repo, project_repo, proposal_repo
+        ).execute(
+            ToggleStaffProjectTodoInput(
+                caller=caller,
+                project_id=CollectionUseProjectId(project_id),
+                item_id=StaffProjectTodoItemId(item_id),
+                now=route_now(),
+            )
+        )
+        await session.commit()
+        return _todo_item_response(item)
+    except Exception as exc:
+        await session.rollback()
+        _handle_domain_errors(exc)
+        raise RuntimeError("unreachable") from None
+
+
+@projects_router.delete(
+    "/{project_id}/todo-items/{item_id}", status_code=status.HTTP_204_NO_CONTENT
+)
+async def delete_project_todo_item(
+    project_id: str,
+    item_id: str,
+    caller: CallerPermission,
+    todo_repo: ProjectTodoRepo,
+    project_repo: ProjectRepo,
+    proposal_repo: ProposalRepo,
+    session: DBSession,
+) -> Response:
+    try:
+        await DeleteStaffProjectTodo(todo_repo, project_repo, proposal_repo).execute(
+            DeleteStaffProjectTodoInput(
+                caller=caller,
+                project_id=CollectionUseProjectId(project_id),
+                item_id=StaffProjectTodoItemId(item_id),
+            )
+        )
+        await session.commit()
+    except Exception as exc:
+        await session.rollback()
+        _handle_domain_errors(exc)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @projects_router.patch("/{project_id}", response_model=ProjectDetailResponse)

@@ -11,6 +11,7 @@ import {
   AddProjectObjectsRequest,
   CollectionUseProjectDetail,
   CollectionUseProjectSummary,
+  CreateProjectTodoItemRequest,
   CreateFollowUpProjectRequest,
   CreateObjectLogEntryRequest,
   CreateObjectOccurrenceEntryRequest,
@@ -26,6 +27,8 @@ import {
   ProjectEventsPage,
   ProjectEventsQuery,
   ProjectListQuery,
+  ProjectTodoItem,
+  ProjectTodoItemsResponse,
   PublicationEntriesPage,
   PublicationEntriesQuery,
   PublicationLog,
@@ -33,6 +36,7 @@ import {
   ReasonRequest,
   RemoveProjectObjectRequest,
   UpdateProjectRequest,
+  UpdateProjectTodoItemRequest,
   UpdateObjectLogEntryRequest,
   UpdateObjectOccurrenceEntryRequest,
   UseEvent,
@@ -150,6 +154,53 @@ export class ProjectApiService {
     return this.http.post<void>(
       this.url(`/collection-use-projects/${projectId}/objects/${objectId}/remove`),
       request,
+    );
+  }
+
+  listTodoItems(projectId: string): Observable<ProjectTodoItemsResponse> {
+    return this.http.get<ProjectTodoItemsResponse>(
+      this.url(`/collection-use-projects/${projectId}/todo-items`),
+    );
+  }
+
+  createTodoItem(
+    projectId: string,
+    request: CreateProjectTodoItemRequest,
+  ): Observable<ProjectTodoItem> {
+    return this.http.post<ProjectTodoItem>(
+      this.url(`/collection-use-projects/${projectId}/todo-items`),
+      request,
+    );
+  }
+
+  updateTodoItem(
+    projectId: string,
+    itemId: string,
+    request: UpdateProjectTodoItemRequest,
+  ): Observable<ProjectTodoItem> {
+    return this.http.patch<ProjectTodoItem>(
+      this.url(`/collection-use-projects/${projectId}/todo-items/${itemId}`),
+      request,
+    );
+  }
+
+  completeTodoItem(projectId: string, itemId: string): Observable<ProjectTodoItem> {
+    return this.http.post<ProjectTodoItem>(
+      this.url(`/collection-use-projects/${projectId}/todo-items/${itemId}/complete`),
+      {},
+    );
+  }
+
+  reopenTodoItem(projectId: string, itemId: string): Observable<ProjectTodoItem> {
+    return this.http.post<ProjectTodoItem>(
+      this.url(`/collection-use-projects/${projectId}/todo-items/${itemId}/reopen`),
+      {},
+    );
+  }
+
+  deleteTodoItem(projectId: string, itemId: string): Observable<void> {
+    return this.http.delete<void>(
+      this.url(`/collection-use-projects/${projectId}/todo-items/${itemId}`),
     );
   }
 

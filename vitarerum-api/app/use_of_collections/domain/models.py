@@ -48,6 +48,7 @@ ObjectOccurrenceLogId = NewType("ObjectOccurrenceLogId", str)
 ObjectOccurrenceEntryId = NewType("ObjectOccurrenceEntryId", str)
 PublicationLogId = NewType("PublicationLogId", str)
 PublicationLogEntryId = NewType("PublicationLogEntryId", str)
+StaffProjectTodoItemId = NewType("StaffProjectTodoItemId", str)
 ProposalId = NewType("ProposalId", str)
 RequestedDocumentId = NewType("RequestedDocumentId", str)
 DocumentCorrectionItemId = NewType("DocumentCorrectionItemId", str)
@@ -330,6 +331,57 @@ class CollectionUseObject:
     def __post_init__(self) -> None:
         if not self.inventory_number:
             raise ValueError("inventoryNumber is required.")
+
+
+@dataclass(slots=True)
+class StaffProjectTodoItem:
+    id: StaffProjectTodoItemId
+    project_id: CollectionUseProjectId
+    owner_permission_id: PermissionId
+    text: str
+    completed: bool
+    created_at: datetime
+    updated_at: datetime
+    completed_at: datetime | None = None
+    position: int = 0
+
+    def __post_init__(self) -> None:
+        self.text = _clean_todo_text(self.text)
+        if self.position < 0:
+            raise ValueError("position must be greater than or equal to 0")
+
+    def rename(self, text: str, now: datetime) -> None:
+        self.text = _clean_todo_text(text)
+        self.updated_at = now
+
+    def mark_completed(self, now: datetime) -> None:
+        if self.completed:
+            return
+        self.completed = True
+        self.completed_at = now
+        self.updated_at = now
+
+    def mark_open(self, now: datetime) -> None:
+        if not self.completed:
+            return
+        self.completed = False
+        self.completed_at = None
+        self.updated_at = now
+
+    def move_to(self, position: int, now: datetime) -> None:
+        if position < 0:
+            raise ValueError("position must be greater than or equal to 0")
+        self.position = position
+        self.updated_at = now
+
+
+def _clean_todo_text(text: str) -> str:
+    cleaned = text.strip()
+    if not cleaned:
+        raise ValueError("text is required")
+    if len(cleaned) > 160:
+        raise ValueError("text must be at most 160 characters")
+    return cleaned
 
 
 @dataclass(slots=True)

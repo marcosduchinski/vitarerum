@@ -26,6 +26,8 @@ from app.use_of_collections.domain.models import (
     PublicationLogEntryId,
     PublicationLogId,
     ReferenceNumber,
+    StaffProjectTodoItem,
+    StaffProjectTodoItemId,
 )
 
 
@@ -70,6 +72,30 @@ class CollectionUseProjectRepository(Protocol):
         page: int,
         size: int,
     ) -> tuple[list[CollectionUseProject], int]: ...
+
+
+class StaffProjectTodoRepository(Protocol):
+    async def list_for_project_and_owner(
+        self,
+        project_id: CollectionUseProjectId,
+        owner_permission_id: str,
+    ) -> list[StaffProjectTodoItem]: ...
+
+    async def get_by_id(
+        self, item_id: StaffProjectTodoItemId
+    ) -> StaffProjectTodoItem | None: ...
+
+    async def add(self, item: StaffProjectTodoItem) -> None: ...
+
+    async def save(self, item: StaffProjectTodoItem) -> None: ...
+
+    async def delete(self, item: StaffProjectTodoItem) -> None: ...
+
+    async def next_position(
+        self,
+        project_id: CollectionUseProjectId,
+        owner_permission_id: str,
+    ) -> int: ...
 
 
 class ProposalRepository(Protocol):

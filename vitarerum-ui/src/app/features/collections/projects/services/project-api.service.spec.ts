@@ -639,4 +639,86 @@ describe('ProjectApiService', () => {
     expect(request.request.method).toBe('DELETE');
     request.flush(null, { status: 204, statusText: 'No Content' });
   });
+
+  it('calls project TODO item endpoints', () => {
+    service.listTodoItems('project-1').subscribe();
+    const listRequest = http.expectOne(
+      'https://api.example.test/collection-use-projects/project-1/todo-items',
+    );
+    expect(listRequest.request.method).toBe('GET');
+    listRequest.flush({ projectId: 'project-1', items: [] });
+
+    service.createTodoItem('project-1', { text: 'Confirm handling conditions' }).subscribe();
+    const createRequest = http.expectOne(
+      'https://api.example.test/collection-use-projects/project-1/todo-items',
+    );
+    expect(createRequest.request.method).toBe('POST');
+    expect(createRequest.request.body).toEqual({ text: 'Confirm handling conditions' });
+    createRequest.flush({
+      id: 'todo-1',
+      projectId: 'project-1',
+      text: 'Confirm handling conditions',
+      completed: false,
+      createdAt: '2026-08-11T10:00:00Z',
+      updatedAt: '2026-08-11T10:00:00Z',
+      completedAt: null,
+      position: 10,
+    });
+
+    service.updateTodoItem('project-1', 'todo-1', { text: 'Confirm conservation' }).subscribe();
+    const updateRequest = http.expectOne(
+      'https://api.example.test/collection-use-projects/project-1/todo-items/todo-1',
+    );
+    expect(updateRequest.request.method).toBe('PATCH');
+    expect(updateRequest.request.body).toEqual({ text: 'Confirm conservation' });
+    updateRequest.flush({
+      id: 'todo-1',
+      projectId: 'project-1',
+      text: 'Confirm conservation',
+      completed: false,
+      createdAt: '2026-08-11T10:00:00Z',
+      updatedAt: '2026-08-11T10:01:00Z',
+      completedAt: null,
+      position: 10,
+    });
+
+    service.completeTodoItem('project-1', 'todo-1').subscribe();
+    const completeRequest = http.expectOne(
+      'https://api.example.test/collection-use-projects/project-1/todo-items/todo-1/complete',
+    );
+    expect(completeRequest.request.method).toBe('POST');
+    completeRequest.flush({
+      id: 'todo-1',
+      projectId: 'project-1',
+      text: 'Confirm conservation',
+      completed: true,
+      createdAt: '2026-08-11T10:00:00Z',
+      updatedAt: '2026-08-11T10:02:00Z',
+      completedAt: '2026-08-11T10:02:00Z',
+      position: 10,
+    });
+
+    service.reopenTodoItem('project-1', 'todo-1').subscribe();
+    const reopenRequest = http.expectOne(
+      'https://api.example.test/collection-use-projects/project-1/todo-items/todo-1/reopen',
+    );
+    expect(reopenRequest.request.method).toBe('POST');
+    reopenRequest.flush({
+      id: 'todo-1',
+      projectId: 'project-1',
+      text: 'Confirm conservation',
+      completed: false,
+      createdAt: '2026-08-11T10:00:00Z',
+      updatedAt: '2026-08-11T10:03:00Z',
+      completedAt: null,
+      position: 10,
+    });
+
+    service.deleteTodoItem('project-1', 'todo-1').subscribe();
+    const deleteRequest = http.expectOne(
+      'https://api.example.test/collection-use-projects/project-1/todo-items/todo-1',
+    );
+    expect(deleteRequest.request.method).toBe('DELETE');
+    deleteRequest.flush(null, { status: 204, statusText: 'No Content' });
+  });
 });

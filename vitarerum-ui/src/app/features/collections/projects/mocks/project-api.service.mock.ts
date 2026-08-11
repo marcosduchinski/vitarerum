@@ -10,6 +10,7 @@ import {
   AddProjectObjectsRequest,
   CollectionUseProjectDetail,
   CollectionUseProjectSummary,
+  CreateProjectTodoItemRequest,
   CreateFollowUpProjectRequest,
   CreateObjectLogEntryRequest,
   CreateObjectOccurrenceEntryRequest,
@@ -28,6 +29,8 @@ import {
   ProjectEventsQuery,
   ProjectListQuery,
   ProjectStaffContext,
+  ProjectTodoItem,
+  ProjectTodoItemsResponse,
   PublicationEntriesPage,
   PublicationEntriesQuery,
   PublicationLog,
@@ -35,6 +38,7 @@ import {
   ReasonRequest,
   RemoveProjectObjectRequest,
   UpdateProjectRequest,
+  UpdateProjectTodoItemRequest,
   UpdateObjectLogEntryRequest,
   UpdateObjectOccurrenceEntryRequest,
   UseEvent,
@@ -338,6 +342,89 @@ export class ProjectApiServiceMock {
       ),
     );
     p.objects = (p.objects ?? []).filter((object) => object.id !== objectId);
+    return of(void 0);
+  }
+
+  listTodoItems(projectId: string): Observable<ProjectTodoItemsResponse> {
+    const p = this.state.projects.get(projectId);
+    if (!p) return throwError(() => ({ status: 404, error: 'NOT_FOUND' }));
+    if (!this.identity.isStaff()) {
+      return throwError(() => ({ status: 403, error: 'INSUFFICIENT_GROUP' }));
+    }
+    return of({
+      projectId,
+      items: [...this.currentTodoItems(projectId)].sort((a, b) => {
+        if (a.position !== b.position) return a.position - b.position;
+        return a.createdAt.localeCompare(b.createdAt);
+      }),
+    });
+  }
+
+  createTodoItem(
+    projectId: string,
+    request: CreateProjectTodoItemRequest,
+  ): Observable<ProjectTodoItem> {
+    const p = this.state.projects.get(projectId);
+    if (!p) return throwError(() => ({ status: 404, error: 'NOT_FOUND' }));
+    if (!this.identity.isStaff()) {
+      return throwError(() => ({ status: 403, error: 'INSUFFICIENT_GROUP' }));
+    }
+    const text = request.text.trim();
+    if (!text || text.length > 160) {
+      return throwError(() => ({ status: 422, error: 'VALIDATION_ERROR' }));
+    }
+    const now = new Date().toISOString();
+    const items = this.currentTodoItems(projectId);
+    const item: ProjectTodoItem = {
+      id: this.state.nextTodoItemId(),
+      projectId,
+      text,
+      completed: false,
+      createdAt: now,
+      updatedAt: now,
+      completedAt: null,
+      position: Math.max(0, ...items.map((candidate) => candidate.position)) + 10,
+    };
+    this.state.todoItems.set(this.todoKey(projectId), [...items, item]);
+    return of(item);
+  }
+
+  updateTodoItem(
+    projectId: string,
+    itemId: string,
+    request: UpdateProjectTodoItemRequest,
+  ): Observable<ProjectTodoItem> {
+    const items = this.currentTodoItems(projectId);
+    const item = items.find((candidate) => candidate.id === itemId);
+    if (!item) return throwError(() => ({ status: 404, error: 'NOT_FOUND' }));
+    const text = request.text !== undefined ? request.text.trim() : item.text;
+    if (!text || text.length > 160) {
+      return throwError(() => ({ status: 422, error: 'VALIDATION_ERROR' }));
+    }
+    const updated: ProjectTodoItem = {
+      ...item,
+      text,
+      position: request.position ?? item.position,
+      updatedAt: new Date().toISOString(),
+    };
+    this.replaceTodoItem(projectId, updated);
+    return of(updated);
+  }
+
+  completeTodoItem(projectId: string, itemId: string): Observable<ProjectTodoItem> {
+    return this.setTodoCompleted(projectId, itemId, true);
+  }
+
+  reopenTodoItem(projectId: string, itemId: string): Observable<ProjectTodoItem> {
+    return this.setTodoCompleted(projectId, itemId, false);
+  }
+
+  deleteTodoItem(projectId: string, itemId: string): Observable<void> {
+    const items = this.currentTodoItems(projectId);
+    const next = items.filter((candidate) => candidate.id !== itemId);
+    if (next.length === items.length)
+      return throwError(() => ({ status: 404, error: 'NOT_FOUND' }));
+    this.state.todoItems.set(this.todoKey(projectId), next);
     return of(void 0);
   }
 
@@ -1011,9 +1098,10 @@ export class ProjectApiServiceMock {
         })) ??
         [],
       actions: this.projectActions(p, group),
-      staffContext: isStaffGroup && proposal && p.proposalStatus
-        ? this.staffContext(p, group as Exclude<GroupName, 'EXTERNAL'>)
-        : null,
+      staffContext:
+        isStaffGroup && proposal && p.proposalStatus
+          ? this.staffContext(p, group as Exclude<GroupName, 'EXTERNAL'>)
+          : null,
     };
   }
 
@@ -1223,6 +1311,41 @@ export class ProjectApiServiceMock {
 
   private principalByEmail(email: string) {
     return Object.values(P).find((p) => p.user.email === email) ?? null;
+  }
+
+  private todoKey(projectId: string): string {
+    return `${projectId}::${this.identity.getPermissionId() ?? 'anonymous'}`;
+  }
+
+  private currentTodoItems(projectId: string): ProjectTodoItem[] {
+    return this.state.todoItems.get(this.todoKey(projectId)) ?? [];
+  }
+
+  private replaceTodoItem(projectId: string, item: ProjectTodoItem): void {
+    this.state.todoItems.set(
+      this.todoKey(projectId),
+      this.currentTodoItems(projectId).map((candidate) =>
+        candidate.id === item.id ? item : candidate,
+      ),
+    );
+  }
+
+  private setTodoCompleted(
+    projectId: string,
+    itemId: string,
+    completed: boolean,
+  ): Observable<ProjectTodoItem> {
+    const item = this.currentTodoItems(projectId).find((candidate) => candidate.id === itemId);
+    if (!item) return throwError(() => ({ status: 404, error: 'NOT_FOUND' }));
+    const now = new Date().toISOString();
+    const updated: ProjectTodoItem = {
+      ...item,
+      completed,
+      completedAt: completed ? (item.completedAt ?? now) : null,
+      updatedAt: item.completed === completed ? item.updatedAt : now,
+    };
+    this.replaceTodoItem(projectId, updated);
+    return of(updated);
   }
 
   private ensureObjectAccessLog(projectId: string): ObjectAccessLog {

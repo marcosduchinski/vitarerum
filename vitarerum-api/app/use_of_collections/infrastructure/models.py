@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+import app.identity.infrastructure.models  # noqa: F401
 from app.database import Base
 from app.use_of_collections.domain.enums import (
     MediaType,
@@ -97,6 +98,37 @@ class CollectionUseObjectRecord(Base):
     occurrence_entries: Mapped[list[ObjectOccurrenceEntryRecord]] = relationship(
         back_populates="collection_use_object"
     )
+
+
+class StaffProjectTodoItemRecord(Base):
+    __tablename__ = "staff_project_todo_items"
+    __table_args__ = (
+        Index(
+            "ix_staff_project_todo_project_owner_position_created",
+            "project_id",
+            "owner_permission_id",
+            "position",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("collection_use_projects.id"),
+        nullable=False,
+    )
+    owner_permission_id: Mapped[str] = mapped_column(
+        ForeignKey("identity_permissions.id"),
+        nullable=False,
+    )
+    text: Mapped[str] = mapped_column(String(160))
+    completed: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    position: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class UseEventRecord(Base):

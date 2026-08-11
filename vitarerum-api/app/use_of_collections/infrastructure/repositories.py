@@ -55,6 +55,8 @@ from app.use_of_collections.domain.models import (
     RequestedObject,
     RequestedObjectId,
     RequesterContact,
+    StaffProjectTodoItem,
+    StaffProjectTodoItemId,
     UseEvent,
 )
 from app.use_of_collections.infrastructure.models import (
@@ -78,6 +80,7 @@ from app.use_of_collections.infrastructure.models import (
     PublicationLogRecord,
     RequestedDocumentRecord,
     RequestedObjectRecord,
+    StaffProjectTodoItemRecord,
     UseEventRecord,
 )
 
@@ -381,6 +384,34 @@ def publication_log_to_domain(
         collection_use_project_id=CollectionUseProjectId(record.project_id),
         curator=PermissionId(record.curator) if record.curator else None,
         entries=[publication_entry_to_domain(e) for e in record.entries],
+    )
+
+
+def todo_item_to_record(item: StaffProjectTodoItem) -> StaffProjectTodoItemRecord:
+    return StaffProjectTodoItemRecord(
+        id=item.id,
+        project_id=item.project_id,
+        owner_permission_id=item.owner_permission_id,
+        text=item.text,
+        completed=item.completed,
+        created_at=item.created_at,
+        updated_at=item.updated_at,
+        completed_at=item.completed_at,
+        position=item.position,
+    )
+
+
+def todo_item_to_domain(record: StaffProjectTodoItemRecord) -> StaffProjectTodoItem:
+    return StaffProjectTodoItem(
+        id=StaffProjectTodoItemId(record.id),
+        project_id=CollectionUseProjectId(record.project_id),
+        owner_permission_id=PermissionId(record.owner_permission_id),
+        text=record.text,
+        completed=record.completed,
+        created_at=record.created_at,
+        updated_at=record.updated_at,
+        completed_at=record.completed_at,
+        position=record.position,
     )
 
 
@@ -765,6 +796,64 @@ class SqlAlchemyCollectionUseProjectRepository:
         return [project_to_domain(r) for r in records], total
 
 
+class SqlAlchemyStaffProjectTodoRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def list_for_project_and_owner(
+        self,
+        project_id: CollectionUseProjectId,
+        owner_permission_id: str,
+    ) -> list[StaffProjectTodoItem]:
+        stmt = (
+            select(StaffProjectTodoItemRecord)
+            .where(
+                StaffProjectTodoItemRecord.project_id == project_id,
+                StaffProjectTodoItemRecord.owner_permission_id == owner_permission_id,
+            )
+            .order_by(
+                StaffProjectTodoItemRecord.position.asc(),
+                StaffProjectTodoItemRecord.created_at.asc(),
+                StaffProjectTodoItemRecord.id.asc(),
+            )
+        )
+        result = await self._session.execute(stmt)
+        return [todo_item_to_domain(record) for record in result.scalars().all()]
+
+    async def get_by_id(
+        self, item_id: StaffProjectTodoItemId
+    ) -> StaffProjectTodoItem | None:
+        record = await self._session.get(StaffProjectTodoItemRecord, item_id)
+        return todo_item_to_domain(record) if record else None
+
+    async def add(self, item: StaffProjectTodoItem) -> None:
+        self._session.add(todo_item_to_record(item))
+        await self._session.flush()
+
+    async def save(self, item: StaffProjectTodoItem) -> None:
+        await self._session.merge(todo_item_to_record(item))
+        await self._session.flush()
+
+    async def delete(self, item: StaffProjectTodoItem) -> None:
+        record = await self._session.get(StaffProjectTodoItemRecord, item.id)
+        if record is not None:
+            await self._session.delete(record)
+            await self._session.flush()
+
+    async def next_position(
+        self,
+        project_id: CollectionUseProjectId,
+        owner_permission_id: str,
+    ) -> int:
+        stmt = select(func.max(StaffProjectTodoItemRecord.position)).where(
+            StaffProjectTodoItemRecord.project_id == project_id,
+            StaffProjectTodoItemRecord.owner_permission_id == owner_permission_id,
+        )
+        result = await self._session.execute(stmt)
+        current = result.scalar_one()
+        return int(current or 0) + 10
+
+
 class SqlAlchemyProposalRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -1132,9 +1221,7 @@ class SqlAlchemyObjectOccurrenceLogRepository:
         records = (await self._session.execute(stmt)).scalars().all()
         return [occurrence_entry_to_domain(record) for record in records]
 
-    async def remove_entries(
-        self, entry_ids: list[ObjectOccurrenceEntryId]
-    ) -> None:
+    async def remove_entries(self, entry_ids: list[ObjectOccurrenceEntryId]) -> None:
         if not entry_ids:
             return
         await self._session.execute(
@@ -1263,8 +1350,7 @@ class SqlAlchemyPublicationLogRepository:
             select(PublicationLogEntryRecord)
             .join(
                 PublicationLogRecord,
-                PublicationLogEntryRecord.publication_log_id
-                == PublicationLogRecord.id,
+                PublicationLogEntryRecord.publication_log_id == PublicationLogRecord.id,
             )
             .where(
                 PublicationLogRecord.project_id == project_id,
