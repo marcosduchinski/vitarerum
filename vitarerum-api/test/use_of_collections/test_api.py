@@ -7,6 +7,7 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 
 import pytest
+from docx import Document as DocxDocument
 from httpx import ASGITransport, AsyncClient
 
 from app.config import settings
@@ -63,6 +64,9 @@ from app.use_of_collections.domain.models import (
     RequestedObject,
     RequestedObjectId,
     RequesterContact,
+)
+from app.use_of_collections.infrastructure.object_access_log_docx import (
+    DOCX_MEDIA_TYPE,
 )
 from app.use_of_collections.presentation.dependencies import (
     get_access_log_repo,
@@ -4486,6 +4490,180 @@ async def test_get_object_access_log_returns_404_without_entries() -> None:
 
         response = await client.get(
             "/api/v1/collection-use-projects/project-1/object-access-log",
+            headers={"X-Permission-Id": "permission-staff"},
+        )
+
+    assert response.status_code == 404
+    assert response.json()["error"] == "OBJECT_ACCESS_LOG_NOT_FOUND"
+
+
+async def _seed_access_log_for_document(
+    project_repo: InMemoryProjectRepository,
+) -> InMemoryAccessLogRepository:
+    logged_object = CollectionUseObject(
+        id=CollectionUseObjectId("cuo-1"),
+        inventory_number="INV-001",
+        category="peles",
+        description="a fox head",
+        requested_at=datetime(2026, 6, 1, tzinfo=UTC),
+        requested_by=PermissionId("permission-1"),
+        display_title="Vulpes vulpes",
+        collection_name="Zoologia",
+    )
+    await project_repo.add(
+        _project("proj-1", status=UseStatus.IN_PROGRESS, objects=[logged_object])
+    )
+    access_log_repo = app.dependency_overrides[get_access_log_repo]()
+    await access_log_repo.add(
+        ObjectAccessLog(
+            id=ObjectAccessLogId("log-1"),
+            reference_number=ReferenceNumber("OAL-ABCDEFG1"),
+            collection_use_project_id=CollectionUseProjectId("proj-1"),
+            date_conclusion=datetime(2026, 6, 9, tzinfo=UTC),
+            curator=PermissionId("permission-staff"),
+        )
+    )
+    await access_log_repo.save_entry(
+        ObjectLogEntry(
+            id=ObjectLogEntryId("entry-1"),
+            object_access_log_id=ObjectAccessLogId("log-1"),
+            collection_use_object_id=CollectionUseObjectId("cuo-1"),
+            number_of_objects=3,
+            added_at=datetime(2026, 6, 2, tzinfo=UTC),
+            added_by=PermissionId("permission-staff"),
+            observations="Handled with gloves",
+        )
+    )
+    return access_log_repo
+
+
+async def test_download_object_access_log_document_fills_the_rais_form() -> None:
+    async with client_with_repos(
+        caller=_STAFF_CALLER,
+        permission_records={
+            "permission-1": _permission_record(
+                "permission-1",
+                GroupName.EXTERNAL,
+                user_name="Ana Silva",
+                user_email="ana@example.org",
+            ),
+            "permission-staff": _permission_record(
+                "permission-staff",
+                GroupName.CURATORIAL,
+                user_name="Nuno Curador",
+            ),
+        },
+    ) as (client, project_repo, _, _):
+        await _seed_access_log_for_document(project_repo)
+
+        response = await client.get(
+            "/api/v1/collection-use-projects/proj-1/object-access-log/document",
+            headers={"X-Permission-Id": "permission-staff"},
+        )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == DOCX_MEDIA_TYPE
+    assert "OAL-ABCDEFG1-RAIS.docx" in response.headers["content-disposition"]
+
+    document = DocxDocument(io.BytesIO(response.content))
+    header = [cell.text for cell in document.tables[0].rows[2].cells]
+    assert header[0] == "OAL-ABCDEFG1"
+    assert header[1] == "RAIS"
+    assert header[3] == "Ana Silva"
+
+    identification = {
+        row.cells[0].text.split("\n")[0]: row.cells[1].text
+        for row in document.tables[1].rows
+    }
+    assert identification["Nome"] == "Ana Silva"
+    assert identification["Email"] == "ana@example.org"
+    assert identification["Coleção"] == "Zoologia"
+    assert identification["Curador"] == "Nuno Curador"
+
+    objects = document.tables[2]
+    assert [cell.text for cell in objects.rows[1].cells] == [
+        "INV-001",
+        "Vulpes vulpes",
+        "peles",
+        "3",
+        "02-06-2026",
+        "Handled with gloves",
+    ]
+    # One header row plus the form's fifteen object lines: a short log is padded
+    # with blanks rather than shrinking the museum's form.
+    assert len(objects.rows) == 16
+    assert [cell.text for cell in objects.rows[2].cells] == [""] * 6
+    assert document.tables[3].rows[1].cells[1].text == "09-06-2026"
+
+
+async def test_download_object_access_log_document_is_denied_to_other_researchers() -> (
+    None
+):
+    other_researcher = Actor(
+        id=PermissionId("permission-9"),
+        group=GroupName.EXTERNAL,
+        email="mallory@example.org",
+    )
+    async with client_with_repos(caller=other_researcher) as (
+        client,
+        project_repo,
+        proposal_repo,
+        _,
+    ):
+        await _seed_access_log_for_document(project_repo)
+        await proposal_repo.add(_proposal())
+
+        response = await client.get(
+            "/api/v1/collection-use-projects/proj-1/object-access-log/document",
+            headers={"X-Permission-Id": "permission-9"},
+        )
+
+    assert response.status_code == 403
+
+
+async def test_download_object_access_log_document_falls_back_to_proposal_contact() -> (
+    None
+):
+    """A citizen whose proposal has not been provisioned into Identity yet still
+    names the researcher on the form."""
+    async with client_with_repos(caller=_STAFF_CALLER) as (
+        client,
+        project_repo,
+        proposal_repo,
+        _,
+    ):
+        await _seed_access_log_for_document(project_repo)
+        proposal = _proposal()
+        proposal.requester_contact = RequesterContact(
+            name="Pedro Silva", email=EmailAddress("pedro@example.test")
+        )
+        await proposal_repo.add(proposal)
+
+        response = await client.get(
+            "/api/v1/collection-use-projects/proj-1/object-access-log/document",
+            headers={"X-Permission-Id": "permission-staff"},
+        )
+
+    assert response.status_code == 200
+    identification = {
+        row.cells[0].text.split("\n")[0]: row.cells[1].text
+        for row in DocxDocument(io.BytesIO(response.content)).tables[1].rows
+    }
+    assert identification["Nome"] == "Pedro Silva"
+    assert identification["Email"] == "pedro@example.test"
+
+
+async def test_download_object_access_log_document_returns_404_without_log() -> None:
+    async with client_with_repos(caller=_STAFF_CALLER) as (
+        client,
+        project_repo,
+        _,
+        _,
+    ):
+        await project_repo.add(_project("proj-1", status=UseStatus.IN_PROGRESS))
+
+        response = await client.get(
+            "/api/v1/collection-use-projects/proj-1/object-access-log/document",
             headers={"X-Permission-Id": "permission-staff"},
         )
 

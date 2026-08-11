@@ -294,10 +294,10 @@ describe('project log pages', () => {
     expect(buttonByText(root, 'Download DOCX').disabled).toBe(true);
   });
 
-  it('downloads a frontend-only DOCX placeholder when access entries exist', async () => {
+  it('saves the RAIS form the endpoint renders when access entries exist', async () => {
     const service = TestBed.inject(PROJECT_API_SERVICE);
-    const downloadAttachment = vi.spyOn(service, 'downloadLogEntryAttachment');
-    const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:log-docx-demo');
+    const downloadDocument = vi.spyOn(service, 'downloadObjectAccessLogDocument');
+    const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:log-docx');
     const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
     const anchorClick = vi
       .spyOn(HTMLAnchorElement.prototype, 'click')
@@ -313,19 +313,34 @@ describe('project log pages', () => {
     expect(downloadButton.disabled).toBe(false);
 
     downloadButton.click();
+    await fixture.whenStable();
 
+    expect(downloadDocument).toHaveBeenCalledWith('proj-3');
     expect(createObjectURL).toHaveBeenCalledOnce();
-    const blob = createObjectURL.mock.calls[0][0] as Blob;
-    await expect(blob.text()).resolves.toContain('INV-ZOO-1892-001');
-    await expect(blob.text()).resolves.toContain('Number of objects: 1');
-    await expect(blob.text()).resolves.toContain(
-      'Observations: Reviewed and compared with specimen records.',
-    );
     expect(anchorClick).toHaveBeenCalledOnce();
     const anchor = anchorClick.mock.instances[0] as HTMLAnchorElement;
-    expect(anchor.download).toMatch(/^OAL-.*-research-log\.docx$/);
-    expect(revokeObjectURL).toHaveBeenCalledWith('blob:log-docx-demo');
-    expect(downloadAttachment).not.toHaveBeenCalled();
+    expect(anchor.download).toMatch(/^OAL-.*-RAIS\.docx$/);
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:log-docx');
+  });
+
+  it('blocks the RAIS download while object entries have unsaved changes', async () => {
+    const service = TestBed.inject(PROJECT_API_SERVICE);
+    const downloadDocument = vi.spyOn(service, 'downloadObjectAccessLogDocument');
+    const fixture = TestBed.createComponent(ProjectObjectLogPanelComponent);
+    fixture.componentRef.setInput('projectId', 'proj-3');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const root = fixture.nativeElement as HTMLElement;
+    const observations = root.querySelector<HTMLTextAreaElement>('.object-register__textarea')!;
+    observations.value = 'Edited but not saved';
+    observations.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    expect(buttonByText(root, 'Download DOCX').disabled).toBe(true);
+    expect(root.textContent).toContain('Save your changes before downloading the form.');
+    expect(downloadDocument).not.toHaveBeenCalled();
   });
 
   it('locks researcher entry controls when the project is not in progress', async () => {

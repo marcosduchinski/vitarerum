@@ -268,6 +268,15 @@ export class ProjectApiService {
     );
   }
 
+  // The object access log rendered onto MUHNAC's RAIS form (.docx). Serves the
+  // persisted entries only, so unsaved edits must be saved first.
+  downloadObjectAccessLogDocument(projectId: string): Observable<Blob> {
+    return this.http.get(
+      this.url(`/collection-use-projects/${projectId}/object-access-log/document`),
+      { responseType: 'blob' },
+    );
+  }
+
   // Downloads a log-entry attachment's binary content. The endpoint streams the
   // file (Content-Disposition: attachment); the Bearer token is added by the
   // auth interceptor, so it must be fetched here rather than linked directly.

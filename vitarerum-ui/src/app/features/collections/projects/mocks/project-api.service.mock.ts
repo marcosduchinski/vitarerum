@@ -564,6 +564,20 @@ export class ProjectApiServiceMock {
     return of(accessLog);
   }
 
+  // The real endpoint renders the museum's .docx form; the mock only needs to
+  // stream something with the right name to exercise the download flow.
+  downloadObjectAccessLogDocument(projectId: string): Observable<Blob> {
+    const accessLog = this.state.objectAccessLogs.get(projectId);
+    if (!accessLog) {
+      return throwError(() => ({
+        status: 404,
+        error: 'OBJECT_ACCESS_LOG_NOT_FOUND',
+        message: 'No object_access_log found with id uuid',
+      }));
+    }
+    return of(this.mockAttachmentBlob(`${accessLog.referenceNumber}-RAIS.docx`));
+  }
+
   uploadLogEntryAttachment(
     projectId: string,
     entryId: string,

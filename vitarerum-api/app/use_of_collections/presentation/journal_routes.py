@@ -19,6 +19,7 @@ from fastapi import (
 )
 
 from app.shared.dependencies import CallerPermission
+from app.shared.uploads import content_disposition_attachment
 from app.use_of_collections.application.use_cases import (
     AddLogEntryAttachment,
     AddLogEntryAttachmentInput,
@@ -60,6 +61,9 @@ from app.use_of_collections.domain.models import (
     ObjectOccurrenceEntryId,
     PublicationLogEntryId,
 )
+from app.use_of_collections.infrastructure.object_access_log_docx import (
+    DOCX_MEDIA_TYPE,
+)
 from app.use_of_collections.presentation.common import (
     _assert_existing_project_access,
     _build_access_log_response,
@@ -75,8 +79,10 @@ from app.use_of_collections.presentation.common import (
     _not_found,
     projects_router,
     read_upload_capped,
+    route_now,
 )
 from app.use_of_collections.presentation.dependencies import (
+    AccessLogRenderer,
     AccessLogRepo,
     DBSession,
     FileStorage,
@@ -85,6 +91,9 @@ from app.use_of_collections.presentation.dependencies import (
     ProposalRepo,
     PublicationLogRepo,
     ReferenceGenerator,
+)
+from app.use_of_collections.presentation.object_access_log_document import (
+    build_object_access_log_document,
 )
 from app.use_of_collections.presentation.schemas import (
     AddLogEntryRequest,
@@ -104,6 +113,10 @@ from app.use_of_collections.presentation.schemas import (
     PublicationLogEntryResponse,
     PublicationLogResponse,
 )
+
+# The register prints every logged object; the cap only guards against an
+# unbounded read, well above any plausible in-situ visit.
+_DOCUMENT_ENTRY_CAP = 1000
 
 
 async def _download_attachment(
@@ -290,6 +303,52 @@ async def get_object_access_log(
     if access_log is None:
         raise _not_found("object_access_log", project_id)
     return await _build_access_log_response(access_log, session)
+
+
+@projects_router.get(
+    "/{project_id}/object-access-log/document",
+    response_class=Response,
+    responses={200: {"content": {DOCX_MEDIA_TYPE: {}}}},
+)
+async def download_object_access_log_document(
+    project_id: str,
+    caller: CallerPermission,
+    project_repo: ProjectRepo,
+    proposal_repo: ProposalRepo,
+    access_log_repo: AccessLogRepo,
+    renderer: AccessLogRenderer,
+    session: DBSession,
+) -> Response:
+    """The project's object access log rendered onto MUHNAC's RAIS form."""
+    typed_project_id = CollectionUseProjectId(project_id)
+    project = await _assert_existing_project_access(
+        project_id, caller, project_repo, proposal_repo
+    )
+    access_log = await access_log_repo.get_by_project_id(typed_project_id)
+    if access_log is None:
+        raise _not_found("object_access_log", project_id)
+    entries, _ = await access_log_repo.list_entries_by_project(
+        typed_project_id, None, 0, _DOCUMENT_ENTRY_CAP
+    )
+    proposal = await proposal_repo.get_by_project_id(typed_project_id)
+    document = await build_object_access_log_document(
+        project,
+        access_log,
+        entries,
+        session,
+        issued_on=route_now().date(),
+        requester_contact=proposal.requester_contact if proposal else None,
+    )
+    return Response(
+        content=await renderer.render(document),
+        media_type=DOCX_MEDIA_TYPE,
+        headers={
+            "Content-Disposition": content_disposition_attachment(
+                f"{access_log.reference_number.value}-RAIS.docx",
+                default="object-access-log.docx",
+            )
+        },
+    )
 
 
 @projects_router.post(

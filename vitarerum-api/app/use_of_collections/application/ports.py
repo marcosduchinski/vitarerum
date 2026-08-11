@@ -4,6 +4,7 @@ from typing import Protocol
 
 from app.identity.public import Actor
 from app.reference_numbers.public import ReferenceKind
+from app.use_of_collections.application.documents import ObjectAccessLogDocument
 from app.use_of_collections.domain.enums import ProposalStatus, UseStatus, UseType
 from app.use_of_collections.domain.models import (
     CollectionUseObjectId,
@@ -479,4 +480,10 @@ class FileStoragePort(Protocol):
 
     async def delete(self, file_reference: str) -> None:
         """Delete a stored file by fileReference (no error if already gone)."""
+        ...
+
+
+class ObjectAccessLogDocumentRenderer(Protocol):
+    async def render(self, document: ObjectAccessLogDocument) -> bytes:
+        """Render the object access log onto the museum form, returning .docx bytes."""
         ...

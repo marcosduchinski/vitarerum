@@ -8,15 +8,20 @@
           <button
             type="button"
             class="access-sheet__action access-sheet__action--download"
-            [disabled]="!canDownloadDocxDemo()"
-            title="Demonstration export; backend document generation is not connected"
-            (click)="downloadObjectAccessLogDemo()"
+            [disabled]="!canDownloadDocument()"
+            [title]="documentBlockedMessage() ?? 'Download the filled-in RAIS form'"
+            (click)="downloadObjectAccessLogDocument()"
           >
             <span class="pi pi-download" aria-hidden="true"></span>
-            Download DOCX
-            <span class="access-sheet__action-badge">Demo</span>
+            {{ documentDownloading() ? 'Preparing DOCX…' : 'Download DOCX' }}
           </button>
+          @if (documentBlockedMessage()) {
+            <p class="access-sheet__action-hint">{{ documentBlockedMessage() }}</p>
+          }
         </div>
+        @if (documentError()) {
+          <app-error-message [apiError]="documentError()!" />
+        }
       </div>
 
       <dl class="access-summary" aria-label="Object access log summary">

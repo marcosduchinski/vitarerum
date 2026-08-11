@@ -10,6 +10,7 @@ dependencies = [
     "asyncpg>=0.29.0",
     "bcrypt>=4.2.0",
     "cryptography>=43.0.0",
+    "docxtpl>=0.20.2",
     "email-validator>=2.0.0",
     "fastapi>=0.115.0",
     "httpx>=0.28.1",
@@ -61,9 +62,9 @@ warn_return_any = true
 warn_unused_configs = true
 exclude = ["alembic/versions"]
 
-# Ollama / owlrl ship no type stubs; imported lazily by adapters.
+# Ollama / owlrl / docxtpl ship no type stubs; imported lazily by adapters.
 [[tool.mypy.overrides]]
-module = ["langchain_ollama.*", "langchain_core.*", "owlrl.*"]
+module = ["langchain_ollama.*", "langchain_core.*", "owlrl.*", "docxtpl.*"]
 ignore_missing_imports = true
 
 # ── Architecture fitness function (HEXAGONAL_UP.md Step 0) ───────────────────

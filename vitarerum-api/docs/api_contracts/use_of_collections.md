@@ -165,3 +165,30 @@ Side effects:
 Clients must not use this endpoint as the default removal path. First call the
 non-cascade `DELETE`; call this endpoint only after showing the dependency
 summary and collecting an explicit reason.
+
+## Object Access Log Document
+
+`GET /collection-use-projects/{projectId}/object-access-log/document`
+
+Returns the project's object access log rendered onto MUHNAC's RAIS register
+(`RAIS_formColecoesAcessoInSituRegisto`). Readable by anyone who may read the
+log itself, staff and the project's own researcher alike.
+
+Successful response: `200 OK` with
+
+- `Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document`
+- `Content-Disposition: attachment; filename="{accessLogReferenceNumber}-RAIS.docx"`
+
+The rendered form carries the log's reference number, the download date, the
+researcher's name and e-mail, the collections reached, the curator, the
+conclusion date (blank while the log is open), and one object line per entry —
+inventory number, designation, type (the project object's `category`), number of
+objects, access date and observations. Dates print day-first (`DD-MM-YYYY`).
+Fewer than fifteen entries are padded with blank lines so the document keeps the
+printed form's shape; more than fifteen extend the table.
+
+Only persisted entries appear: unsaved edits in a client must be saved before
+downloading.
+
+Returns `404 OBJECT_ACCESS_LOG_NOT_FOUND` when the project has no access log yet
+(no object has been logged).

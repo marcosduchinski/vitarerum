@@ -65,12 +65,21 @@ export class ProjectObjectLogPanelComponent {
     }
     return null;
   });
-  protected readonly canDownloadDocxDemo = computed(
+  protected readonly documentDownloading = signal(false);
+  protected readonly documentError = signal<ApiError | null>(null);
+  protected readonly canDownloadDocument = computed(
     () =>
       !this.logResource.isLoading() &&
       !this.logError() &&
       !!this.accessLog() &&
-      this.logEntries().length > 0,
+      this.logEntries().length > 0 &&
+      !this.documentDownloading() &&
+      !this.hasObjectDraftChanges(),
+  );
+  // The document is rendered from persisted entries, so drafts would silently
+  // be left out of it.
+  protected readonly documentBlockedMessage = computed(() =>
+    this.hasObjectDraftChanges() ? 'Save your changes before downloading the form.' : null,
   );
   protected readonly logError = computed<ApiError | null>(() => {
     const err = this.logResource.error();
@@ -266,15 +275,29 @@ export class ProjectObjectLogPanelComponent {
     }
   }
 
-  protected downloadObjectAccessLogDemo(): void {
-    if (!this.canDownloadDocxDemo()) return;
+  protected async downloadObjectAccessLogDocument(): Promise<void> {
+    if (!this.canDownloadDocument()) return;
 
-    const blob = new Blob([this.objectAccessLogDemoContent()], {
-      type: 'text/plain;charset=utf-8',
-    });
+    this.documentDownloading.set(true);
+    this.documentError.set(null);
+    try {
+      const blob = await firstValueFrom(
+        this.projectService.downloadObjectAccessLogDocument(this.projectId()),
+      );
+      this.saveBlob(blob, this.documentFileName());
+    } catch (err) {
+      this.documentError.set(toApiError(err));
+    } finally {
+      this.documentDownloading.set(false);
+    }
+  }
+
+  // Mirrors the filename the endpoint sets on Content-Disposition, which a blob
+  // response does not expose.
+  private documentFileName(): string {
     const reference = this.accessLog()?.referenceNumber ?? `project-${this.projectId()}`;
     const safeReference = reference.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
-    this.saveBlob(blob, `${safeReference || 'object-access-log'}-research-log.docx`);
+    return `${safeReference || 'object-access-log'}-RAIS.docx`;
   }
 
   private saveBlob(blob: Blob, fileName: string): void {
@@ -286,33 +309,6 @@ export class ProjectObjectLogPanelComponent {
     anchor.download = fileName;
     anchor.click();
     URL.revokeObjectURL(url);
-  }
-
-  private objectAccessLogDemoContent(): string {
-    const log = this.accessLog();
-    const lines = [
-      'DEMONSTRATION DOCX EXPORT',
-      'This placeholder contains plain text and will be replaced by the document endpoint.',
-      '',
-      `Log reference: ${log?.referenceNumber ?? 'Not issued'}`,
-      `Project ID: ${this.projectId()}`,
-      `Curator: ${log?.curator?.user.name ?? '—'}`,
-      '',
-      'OBJECTS CONSULTED',
-    ];
-
-    this.logEntries().forEach((entry, index) => {
-      lines.push(
-        '',
-        `${index + 1}. ${entry.objectReference.inventoryNumber}`,
-        `Object: ${entry.objectReference.displayTitle ?? entry.objectReference.objectName ?? '—'}`,
-        `Access date: ${this.draftAddedAt(entry)}`,
-        `Number of objects: ${this.draftNumberOfObjects(entry)}`,
-        `Observations: ${this.draftObservations(entry) || '—'}`,
-      );
-    });
-
-    return lines.join('\r\n');
   }
 
   protected toggleObjectAttachments(entryId: string): void {
