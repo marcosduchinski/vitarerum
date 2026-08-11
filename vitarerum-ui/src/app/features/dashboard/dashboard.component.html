@@ -13,15 +13,21 @@
         <p class="postits__eyebrow">Open TODOs</p>
         <h3 id="postits-title">My post-its</h3>
       </div>
-      <span class="postits__count">{{ postits().length }}</span>
+      <span class="postits__count" aria-label="Open TODO count">{{ postits().length }}</span>
     </header>
 
     @if (postitsResource.isLoading()) {
-      <div class="postits__state" aria-live="polite">Loading TODOs...</div>
+      <div class="postits__state" aria-live="polite">
+        <span class="pi pi-spin pi-spinner" aria-hidden="true"></span>
+        Loading TODOs...
+      </div>
     } @else if (error()) {
       <div class="postits__state postits__state--error" role="alert">{{ error() }}</div>
     } @else if (postits().length === 0) {
-      <div class="postits__state">No open TODOs for this staff profile.</div>
+      <div class="postits__state postits__state--empty">
+        <span class="pi pi-check-square" aria-hidden="true"></span>
+        No open TODOs for this staff profile.
+      </div>
     } @else {
       <div class="postits__grid">
         @for (item of postits(); track item.id) {
@@ -32,8 +38,18 @@
             </a>
             <p class="postit__text">{{ item.text }}</p>
             <footer class="postit__footer">
-              <span class="postit__status">{{ item.projectStatus }}</span>
-              <span class="postit__date">{{ formatUpdatedAt(item.updatedAt) }}</span>
+              <div class="postit__meta">
+                <span class="postit__status">{{ item.projectStatus }}</span>
+                <span class="postit__date">{{ formatUpdatedAt(item.updatedAt) }}</span>
+              </div>
+              <a
+                class="postit__open"
+                [routerLink]="projectDetailRoute(item.projectId)"
+                aria-label="Open project"
+                title="Open project"
+              >
+                <i class="pi pi-arrow-up-right" aria-hidden="true"></i>
+              </a>
               <button
                 type="button"
                 class="postit__complete"

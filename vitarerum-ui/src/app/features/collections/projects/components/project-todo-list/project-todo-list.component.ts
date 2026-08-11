@@ -50,6 +50,8 @@ export class ProjectTodoListComponent {
   protected readonly completedCount = computed(
     () => this.items().filter((item) => item.completed).length,
   );
+  protected readonly openCount = computed(() => this.items().length - this.completedCount());
+  protected readonly draftRemaining = computed(() => 160 - this.draft().length);
   protected readonly error = signal<string | null>(null);
   protected readonly adding = signal(false);
   protected readonly busyItemId = signal<string | null>(null);

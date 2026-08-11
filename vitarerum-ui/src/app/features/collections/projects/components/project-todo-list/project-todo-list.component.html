@@ -1,10 +1,19 @@
 <section class="todo-board" aria-labelledby="project-todo-heading">
   <header class="todo-board__header">
     <div>
-      <p class="todo-board__eyebrow">Working notes</p>
+      <p class="todo-board__eyebrow">Profile TODOs</p>
       <h2 id="project-todo-heading">Project TODO List</h2>
     </div>
-    <span class="todo-board__count" aria-label="Total items">{{ items().length }}</span>
+    <div class="todo-board__metrics" aria-label="TODO summary">
+      <span>
+        <strong>{{ openCount() }}</strong>
+        open
+      </span>
+      <span>
+        <strong>{{ completedCount() }}</strong>
+        done
+      </span>
+    </div>
   </header>
 
   @if (todoResource.isLoading()) {
@@ -18,7 +27,10 @@
   }
 
   <form class="todo-compose" (submit)="addItem($event)">
-    <label for="project-todo-input">New item</label>
+    <div class="todo-compose__label-row">
+      <label for="project-todo-input">New item</label>
+      <span>{{ draftRemaining() }} characters left</span>
+    </div>
     <div class="todo-compose__controls">
       <input
         id="project-todo-input"
@@ -30,8 +42,13 @@
         (input)="onDraftInput($event)"
       />
       <button type="submit" [disabled]="!draft().trim() || adding()">
-        <span class="pi pi-plus" aria-hidden="true"></span>
-        {{ adding() ? 'Adding...' : 'Add item' }}
+        @if (adding()) {
+          <span class="pi pi-spin pi-spinner" aria-hidden="true"></span>
+          Adding
+        } @else {
+          <span class="pi pi-plus" aria-hidden="true"></span>
+          Add
+        }
       </button>
     </div>
   </form>
@@ -47,7 +64,10 @@
               [disabled]="busyItemId() === item.id"
               (change)="setCompleted(item, $event)"
             />
-            <span>{{ item.text }}</span>
+            <span class="todo-item__body">
+              <strong>{{ item.text }}</strong>
+              <small>{{ item.completed ? 'Completed' : 'Open' }}</small>
+            </span>
           </label>
           <button
             type="button"
@@ -71,7 +91,9 @@
     </div>
   }
 
-  <p class="todo-progress" aria-live="polite">
-    {{ completedCount() }} of {{ items().length }} completed
-  </p>
+  @if (items().length) {
+    <p class="todo-progress" aria-live="polite">
+      {{ completedCount() }} of {{ items().length }} completed
+    </p>
+  }
 </section>

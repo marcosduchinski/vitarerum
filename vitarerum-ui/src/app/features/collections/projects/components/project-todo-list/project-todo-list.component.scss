@@ -5,7 +5,7 @@
 .todo-board {
   display: grid;
   gap: 1.25rem;
-  padding: clamp(1rem, 3vw, 1.5rem);
+  padding: clamp(1rem, 3vw, 1.4rem);
   border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
   background:
@@ -15,6 +15,7 @@
       transparent 42%
     ),
     var(--color-panel);
+  box-shadow: 0 0.75rem 2rem rgba(15, 23, 42, 0.06);
 }
 
 .todo-board__header {
@@ -31,7 +32,7 @@
   h2 {
     margin-top: 0.2rem;
     color: var(--color-text);
-    font-size: 1.2rem;
+    font-size: 1.12rem;
   }
 }
 
@@ -43,15 +44,31 @@
   text-transform: uppercase;
 }
 
-.todo-board__count {
+.todo-board__metrics {
   display: grid;
-  min-width: 2.25rem;
-  height: 2.25rem;
-  place-items: center;
-  border-radius: 999px;
-  background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
-  font-weight: 800;
+  grid-template-columns: repeat(2, minmax(4.25rem, auto));
+  gap: 0.45rem;
+
+  span {
+    display: grid;
+    gap: 0.05rem;
+    min-height: 2.7rem;
+    padding: 0.45rem 0.65rem;
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--color-panel) 84%, var(--color-accent-soft));
+    color: var(--color-subtle);
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-align: center;
+    text-transform: uppercase;
+  }
+
+  strong {
+    color: var(--color-accent-strong);
+    font-size: 1rem;
+    line-height: 1;
+  }
 }
 
 .todo-board__notice,
@@ -70,11 +87,28 @@
 .todo-compose {
   display: grid;
   gap: 0.45rem;
+  padding: 0.75rem;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-panel) 92%, var(--color-accent-soft));
+}
+
+.todo-compose__label-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
 
   label {
     color: var(--color-text);
     font-size: 0.82rem;
     font-weight: 700;
+  }
+
+  span {
+    color: var(--color-subtle);
+    font-size: 0.74rem;
+    font-weight: 700;
+    white-space: nowrap;
   }
 }
 
@@ -88,7 +122,8 @@
 
   input {
     min-width: 0;
-    padding: 0.72rem 0.85rem;
+    height: 2.65rem;
+    padding: 0 0.85rem;
     border: 1px solid var(--color-line-strong);
     border-radius: var(--radius-sm);
     background: var(--color-panel);
@@ -101,7 +136,9 @@
     align-items: center;
     justify-content: center;
     gap: 0.45rem;
-    padding: 0.72rem 1rem;
+    min-width: 5.75rem;
+    height: 2.65rem;
+    padding: 0 0.95rem;
     border: 1px solid var(--color-accent);
     border-radius: var(--radius-sm);
     background: var(--color-accent);
@@ -125,7 +162,7 @@
 
 .todo-list {
   display: grid;
-  gap: 0.55rem;
+  gap: 0.5rem;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -136,10 +173,21 @@
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 0.75rem;
   align-items: center;
-  padding: 0.8rem 0.9rem;
+  min-height: 3.35rem;
+  padding: 0.65rem 0.75rem;
   border: 1px solid var(--color-line);
   border-radius: var(--radius-sm);
   background: var(--color-panel-muted);
+  transition:
+    border-color 140ms ease,
+    background 140ms ease,
+    transform 140ms ease;
+
+  &:hover {
+    border-color: color-mix(in srgb, var(--color-accent) 30%, var(--color-line));
+    background: var(--color-panel);
+    transform: translateY(-1px);
+  }
 }
 
 .todo-item__check {
@@ -151,19 +199,34 @@
   cursor: pointer;
 
   input {
-    width: 1.1rem;
-    height: 1.1rem;
+    width: 1.05rem;
+    height: 1.05rem;
     flex: 0 0 auto;
-    margin-top: 0.12rem;
+    margin-top: 0.2rem;
     accent-color: var(--color-accent);
   }
 
-  span {
+  strong {
     overflow-wrap: anywhere;
+    font-size: 0.9rem;
+    font-weight: 700;
+    line-height: 1.35;
   }
 }
 
-.todo-item--completed .todo-item__check span {
+.todo-item__body {
+  display: grid;
+  gap: 0.12rem;
+  min-width: 0;
+
+  small {
+    color: var(--color-subtle);
+    font-size: 0.72rem;
+    font-weight: 700;
+  }
+}
+
+.todo-item--completed .todo-item__body strong {
   color: var(--color-subtle);
   text-decoration: line-through;
 }
@@ -200,6 +263,7 @@
   display: flex;
   gap: 0.85rem;
   align-items: center;
+  min-height: 5.75rem;
   padding: 1rem;
   border: 1px dashed var(--color-line-strong);
   border-radius: var(--radius-sm);
@@ -229,4 +293,17 @@
 .todo-progress {
   justify-self: end;
   font-weight: 700;
+}
+
+@media (max-width: 560px) {
+  .todo-board__header,
+  .todo-compose__label-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .todo-board__metrics {
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
