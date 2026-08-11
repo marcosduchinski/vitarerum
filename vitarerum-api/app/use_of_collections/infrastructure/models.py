@@ -110,6 +110,12 @@ class StaffProjectTodoItemRecord(Base):
             "position",
             "created_at",
         ),
+        Index(
+            "ix_staff_project_todo_owner_completed_updated",
+            "owner_permission_id",
+            "completed",
+            "updated_at",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)

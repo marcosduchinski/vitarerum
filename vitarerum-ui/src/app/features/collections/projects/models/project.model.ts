@@ -148,6 +148,21 @@ export interface ProjectTodoItemsResponse {
   readonly items: readonly ProjectTodoItem[];
 }
 
+export interface ProjectTodoPostit extends ProjectTodoItem {
+  readonly projectReferenceNumber: string;
+  readonly projectTitle: string;
+  readonly projectStatus: UseStatus;
+}
+
+export interface ProjectTodoPostitsResponse {
+  readonly items: readonly ProjectTodoPostit[];
+}
+
+export interface ProjectTodoPostitsQuery {
+  readonly completed?: boolean;
+  readonly limit?: number;
+}
+
 export interface CreateProjectTodoItemRequest {
   readonly text: string;
 }

@@ -50,9 +50,18 @@ def upgrade() -> None:
         "staff_project_todo_items",
         ["project_id", "owner_permission_id", "position", "created_at"],
     )
+    op.create_index(
+        "ix_staff_project_todo_owner_completed_updated",
+        "staff_project_todo_items",
+        ["owner_permission_id", "completed", "updated_at"],
+    )
 
 
 def downgrade() -> None:
+    op.drop_index(
+        "ix_staff_project_todo_owner_completed_updated",
+        table_name="staff_project_todo_items",
+    )
     op.drop_index(
         "ix_staff_project_todo_project_owner_position_created",
         table_name="staff_project_todo_items",

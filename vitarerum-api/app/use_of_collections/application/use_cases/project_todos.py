@@ -10,6 +10,7 @@ from app.use_of_collections.application.authorization import assert_project_acce
 from app.use_of_collections.application.ports import (
     CollectionUseProjectRepository,
     ProposalRepository,
+    StaffProjectTodoPostit,
     StaffProjectTodoRepository,
 )
 from app.use_of_collections.domain.models import (
@@ -59,6 +60,13 @@ class DeleteStaffProjectTodoInput:
     caller: Actor
     project_id: CollectionUseProjectId
     item_id: StaffProjectTodoItemId
+
+
+@dataclass(slots=True)
+class ListMyStaffProjectTodoPostitsInput:
+    caller: Actor
+    completed: bool | None = False
+    limit: int = 20
 
 
 async def _assert_project_access(
@@ -121,6 +129,23 @@ class ListStaffProjectTodos:
         )
         return await self._todo_repository.list_for_project_and_owner(
             data.project_id, _owner_id(data.caller)
+        )
+
+
+class ListMyStaffProjectTodoPostits:
+    def __init__(self, todo_repository: StaffProjectTodoRepository) -> None:
+        self._todo_repository = todo_repository
+
+    async def execute(
+        self, data: ListMyStaffProjectTodoPostitsInput
+    ) -> list[StaffProjectTodoPostit]:
+        require_staff(data.caller)
+        if data.limit < 1 or data.limit > 100:
+            raise ValueError("limit must be between 1 and 100")
+        return await self._todo_repository.list_dashboard_items_for_owner(
+            _owner_id(data.caller),
+            completed=data.completed,
+            limit=data.limit,
         )
 
 

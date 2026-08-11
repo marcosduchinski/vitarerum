@@ -25,6 +25,7 @@ from app.use_of_collections.application.authorization import (
 )
 from app.use_of_collections.application.ports import (
     ProjectFilters,
+    StaffProjectTodoPostit,
 )
 from app.use_of_collections.application.use_cases import (
     AddProjectObjects,
@@ -42,6 +43,8 @@ from app.use_of_collections.application.use_cases import (
     DeleteStaffProjectTodoInput,
     EditProjectDetails,
     EditProjectDetailsInput,
+    ListMyStaffProjectTodoPostits,
+    ListMyStaffProjectTodoPostitsInput,
     ListStaffProjectTodos,
     ListStaffProjectTodosInput,
     ProjectObjectHasDependencies,
@@ -109,6 +112,8 @@ from app.use_of_collections.presentation.schemas import (
     ProjectListItemResponse,
     ProjectTodoItemResponse,
     ProjectTodoItemsResponse,
+    ProjectTodoPostitResponse,
+    ProjectTodoPostitsResponse,
     ProposalRefSummary,
     ReasonRequest,
     RemoveProjectObjectRequest,
@@ -130,6 +135,22 @@ def _todo_item_response(item: StaffProjectTodoItem) -> ProjectTodoItemResponse:
     return ProjectTodoItemResponse(
         id=item.id,
         projectId=item.project_id,
+        text=item.text,
+        completed=item.completed,
+        createdAt=item.created_at,
+        updatedAt=item.updated_at,
+        completedAt=item.completed_at,
+        position=item.position,
+    )
+
+
+def _todo_postit_response(item: StaffProjectTodoPostit) -> ProjectTodoPostitResponse:
+    return ProjectTodoPostitResponse(
+        id=item.id,
+        projectId=item.project_id,
+        projectReferenceNumber=item.project_reference_number.value,
+        projectTitle=item.project_title,
+        projectStatus=item.project_status,
         text=item.text,
         completed=item.completed,
         createdAt=item.created_at,
@@ -223,6 +244,28 @@ async def list_projects(
         size=size,
         totalElements=total,
         totalPages=math.ceil(total / size) if size > 0 and total > 0 else 0,
+    )
+
+
+@projects_router.get("/my-todo-items", response_model=ProjectTodoPostitsResponse)
+async def list_my_project_todo_postits(
+    caller: CallerPermission,
+    todo_repo: ProjectTodoRepo,
+    completed: Annotated[bool | None, Query()] = False,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> ProjectTodoPostitsResponse:
+    try:
+        items = await ListMyStaffProjectTodoPostits(todo_repo).execute(
+            ListMyStaffProjectTodoPostitsInput(
+                caller=caller,
+                completed=completed,
+                limit=limit,
+            )
+        )
+    except Exception as exc:
+        _handle_domain_errors(exc)
+    return ProjectTodoPostitsResponse(
+        items=[_todo_postit_response(item) for item in items]
     )
 
 

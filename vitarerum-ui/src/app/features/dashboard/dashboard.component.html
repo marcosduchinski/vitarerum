@@ -1,11 +1,53 @@
 <section class="dashboard" aria-labelledby="dashboard-title">
-  <div class="dashboard__message">
-    <p class="dashboard__eyebrow">Workspace</p>
-    <h2 id="dashboard-title">Dashboard coming soon</h2>
-    <p>
-      This area will bring together the main indicators and pending work for your
-      institution. For now, use the navigation menu to access proposals, projects,
-      reports, and administration tools.
-    </p>
-  </div>
+  <header class="dashboard__header">
+    <div>
+      <p class="dashboard__eyebrow">Workspace</p>
+      <h2 id="dashboard-title">Dashboard</h2>
+    </div>
+    <span class="dashboard__profile">{{ groupLabel(activeGroup()) }}</span>
+  </header>
+
+  <section class="postits" aria-labelledby="postits-title">
+    <header class="postits__header">
+      <div>
+        <p class="postits__eyebrow">Open TODOs</p>
+        <h3 id="postits-title">My post-its</h3>
+      </div>
+      <span class="postits__count">{{ postits().length }}</span>
+    </header>
+
+    @if (postitsResource.isLoading()) {
+      <div class="postits__state" aria-live="polite">Loading TODOs...</div>
+    } @else if (error()) {
+      <div class="postits__state postits__state--error" role="alert">{{ error() }}</div>
+    } @else if (postits().length === 0) {
+      <div class="postits__state">No open TODOs for this staff profile.</div>
+    } @else {
+      <div class="postits__grid">
+        @for (item of postits(); track item.id) {
+          <article class="postit" [class.postit--busy]="busyPostitId() === item.id">
+            <a class="postit__project" [routerLink]="projectDetailRoute(item.projectId)">
+              <span>{{ item.projectReferenceNumber }}</span>
+              <strong>{{ item.projectTitle }}</strong>
+            </a>
+            <p class="postit__text">{{ item.text }}</p>
+            <footer class="postit__footer">
+              <span class="postit__status">{{ item.projectStatus }}</span>
+              <span class="postit__date">{{ formatUpdatedAt(item.updatedAt) }}</span>
+              <button
+                type="button"
+                class="postit__complete"
+                [disabled]="busyPostitId() === item.id"
+                (click)="completePostit(item)"
+                aria-label="Complete TODO item"
+                title="Complete TODO item"
+              >
+                <i class="pi pi-check" aria-hidden="true"></i>
+              </button>
+            </footer>
+          </article>
+        }
+      </div>
+    }
+  </section>
 </section>

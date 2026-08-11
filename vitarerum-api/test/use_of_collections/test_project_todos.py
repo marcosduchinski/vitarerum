@@ -5,13 +5,19 @@ import pytest
 
 from app.identity.public import Actor, GroupName
 from app.shared.exceptions import InsufficientGroup
-from app.use_of_collections.application.ports import ProjectFilters, ProposalRepository
+from app.use_of_collections.application.ports import (
+    ProjectFilters,
+    ProposalRepository,
+    StaffProjectTodoPostit,
+)
 from app.use_of_collections.application.use_cases import (
     CompleteStaffProjectTodo,
     CreateStaffProjectTodo,
     CreateStaffProjectTodoInput,
     DeleteStaffProjectTodo,
     DeleteStaffProjectTodoInput,
+    ListMyStaffProjectTodoPostits,
+    ListMyStaffProjectTodoPostitsInput,
     ListStaffProjectTodos,
     ListStaffProjectTodosInput,
     ToggleStaffProjectTodoInput,
@@ -107,7 +113,8 @@ class InMemoryProposalRepository:
 
 
 class InMemoryTodoRepository:
-    def __init__(self) -> None:
+    def __init__(self, project_repo: InMemoryProjectRepository) -> None:
+        self.project_repo = project_repo
         self.items: dict[str, StaffProjectTodoItem] = {}
 
     async def list_for_project_and_owner(
@@ -129,6 +136,41 @@ class InMemoryTodoRepository:
         self, item_id: StaffProjectTodoItemId
     ) -> StaffProjectTodoItem | None:
         return self.items.get(item_id)
+
+    async def list_dashboard_items_for_owner(
+        self,
+        owner_permission_id: str,
+        completed: bool | None,
+        limit: int,
+    ) -> list[StaffProjectTodoPostit]:
+        items = [
+            item
+            for item in self.items.values()
+            if item.owner_permission_id == owner_permission_id
+            and (completed is None or item.completed is completed)
+        ]
+        items.sort(
+            key=lambda item: (item.updated_at, item.created_at, item.id), reverse=True
+        )
+        postits: list[StaffProjectTodoPostit] = []
+        for item in items[:limit]:
+            project = self.project_repo.items[item.project_id]
+            postits.append(
+                StaffProjectTodoPostit(
+                    id=item.id,
+                    project_id=item.project_id,
+                    project_reference_number=project.reference_number,
+                    project_title=project.title,
+                    project_status=project.status.value,
+                    text=item.text,
+                    completed=item.completed,
+                    created_at=item.created_at,
+                    updated_at=item.updated_at,
+                    completed_at=item.completed_at,
+                    position=item.position,
+                )
+            )
+        return postits
 
     async def add(self, item: StaffProjectTodoItem) -> None:
         self.items[item.id] = item
@@ -158,8 +200,8 @@ def _use_cases() -> tuple[
     InMemoryProjectRepository,
     ProposalRepository,
 ]:
-    todo_repo = InMemoryTodoRepository()
     project_repo = InMemoryProjectRepository()
+    todo_repo = InMemoryTodoRepository(project_repo)
     proposal_repo = InMemoryProposalRepository()
     return todo_repo, project_repo, cast(ProposalRepository, proposal_repo)
 
@@ -259,6 +301,73 @@ async def test_external_callers_cannot_use_project_todos() -> None:
                 project_id=CollectionUseProjectId("project-1"),
             )
         )
+
+
+async def test_dashboard_postits_list_only_current_staff_profile_items() -> None:
+    todo_repo, project_repo, proposal_repo = _use_cases()
+    project_repo.items["project-2"] = CollectionUseProject(
+        id=CollectionUseProjectId("project-2"),
+        reference_number=ReferenceNumber("CUP-TODO002"),
+        title="Second project",
+        purpose="Loan support",
+        intended_use=UseType.EXHIBITION,
+        status=UseStatus.IN_PROGRESS,
+        begin_date=date(2026, 8, 13),
+        end_date=date(2026, 8, 14),
+        requested_by=PermissionId("perm-alice"),
+        proposal_id=ProposalId("proposal-2"),
+    )
+
+    curator_first = await CreateStaffProjectTodo(
+        todo_repo, project_repo, proposal_repo
+    ).execute(
+        CreateStaffProjectTodoInput(
+            caller=CURATOR_BOB,
+            project_id=CollectionUseProjectId("project-1"),
+            text="Prepare condition notes",
+            now=NOW,
+        )
+    )
+    curator_second = await CreateStaffProjectTodo(
+        todo_repo, project_repo, proposal_repo
+    ).execute(
+        CreateStaffProjectTodoInput(
+            caller=CURATOR_BOB,
+            project_id=CollectionUseProjectId("project-2"),
+            text="Confirm display requirements",
+            now=NOW.replace(hour=11),
+        )
+    )
+    await CompleteStaffProjectTodo(todo_repo, project_repo, proposal_repo).execute(
+        ToggleStaffProjectTodoInput(
+            caller=CURATOR_BOB,
+            project_id=CollectionUseProjectId("project-1"),
+            item_id=curator_first.id,
+            now=NOW.replace(hour=12),
+        )
+    )
+    await CreateStaffProjectTodo(todo_repo, project_repo, proposal_repo).execute(
+        CreateStaffProjectTodoInput(
+            caller=COLLECTIONS_BOB,
+            project_id=CollectionUseProjectId("project-2"),
+            text="Reserve handling kit",
+            now=NOW.replace(hour=13),
+        )
+    )
+
+    postits = await ListMyStaffProjectTodoPostits(todo_repo).execute(
+        ListMyStaffProjectTodoPostitsInput(
+            caller=CURATOR_BOB,
+            completed=False,
+            limit=20,
+        )
+    )
+
+    assert [postit.id for postit in postits] == [curator_second.id]
+    assert postits[0].project_id == "project-2"
+    assert postits[0].project_reference_number.value == "CUP-TODO002"
+    assert postits[0].project_title == "Second project"
+    assert postits[0].project_status == UseStatus.IN_PROGRESS.value
 
 
 def test_todo_text_is_trimmed_and_limited() -> None:

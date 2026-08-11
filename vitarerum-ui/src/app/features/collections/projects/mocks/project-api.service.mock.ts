@@ -31,6 +31,9 @@ import {
   ProjectStaffContext,
   ProjectTodoItem,
   ProjectTodoItemsResponse,
+  ProjectTodoPostit,
+  ProjectTodoPostitsQuery,
+  ProjectTodoPostitsResponse,
   PublicationEntriesPage,
   PublicationEntriesQuery,
   PublicationLog,
@@ -358,6 +361,36 @@ export class ProjectApiServiceMock {
         return a.createdAt.localeCompare(b.createdAt);
       }),
     });
+  }
+
+  listMyTodoPostits(query: ProjectTodoPostitsQuery = {}): Observable<ProjectTodoPostitsResponse> {
+    const permissionId = this.identity.getPermissionId() ?? 'anonymous';
+    const completed = query.completed ?? false;
+    const limit = Math.max(1, Math.min(100, query.limit ?? 20));
+    const items: ProjectTodoPostit[] = [];
+
+    for (const project of this.state.projects.values()) {
+      const projectItems =
+        this.state.todoItems.get(this.todoKeyFor(project.id, permissionId)) ?? [];
+      for (const item of projectItems) {
+        if (query.completed !== undefined && item.completed !== completed) continue;
+        items.push({
+          ...item,
+          projectReferenceNumber: project.referenceNumber,
+          projectTitle: project.title,
+          projectStatus: project.status,
+        });
+      }
+    }
+
+    items.sort((a, b) => {
+      const updated = b.updatedAt.localeCompare(a.updatedAt);
+      if (updated !== 0) return updated;
+      const created = b.createdAt.localeCompare(a.createdAt);
+      if (created !== 0) return created;
+      return a.id.localeCompare(b.id);
+    });
+    return of({ items: items.slice(0, limit) });
   }
 
   createTodoItem(
@@ -1314,7 +1347,11 @@ export class ProjectApiServiceMock {
   }
 
   private todoKey(projectId: string): string {
-    return `${projectId}::${this.identity.getPermissionId() ?? 'anonymous'}`;
+    return this.todoKeyFor(projectId, this.identity.getPermissionId() ?? 'anonymous');
+  }
+
+  private todoKeyFor(projectId: string, permissionId: string): string {
+    return `${projectId}::${permissionId}`;
   }
 
   private currentTodoItems(projectId: string): ProjectTodoItem[] {

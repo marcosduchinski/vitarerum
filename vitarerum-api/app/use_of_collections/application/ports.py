@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 from typing import Protocol
 
 from app.identity.public import Actor
@@ -53,6 +53,21 @@ class ProposalFilters:
     search: str | None = None
 
 
+@dataclass(slots=True)
+class StaffProjectTodoPostit:
+    id: StaffProjectTodoItemId
+    project_id: CollectionUseProjectId
+    project_reference_number: ReferenceNumber
+    project_title: str
+    project_status: str
+    text: str
+    completed: bool
+    created_at: datetime
+    updated_at: datetime
+    completed_at: datetime | None
+    position: int
+
+
 class CollectionUseProjectRepository(Protocol):
     async def add(self, project: CollectionUseProject) -> None: ...
 
@@ -80,6 +95,13 @@ class StaffProjectTodoRepository(Protocol):
         project_id: CollectionUseProjectId,
         owner_permission_id: str,
     ) -> list[StaffProjectTodoItem]: ...
+
+    async def list_dashboard_items_for_owner(
+        self,
+        owner_permission_id: str,
+        completed: bool | None,
+        limit: int,
+    ) -> list[StaffProjectTodoPostit]: ...
 
     async def get_by_id(
         self, item_id: StaffProjectTodoItemId

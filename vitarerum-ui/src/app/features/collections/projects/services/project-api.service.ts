@@ -29,6 +29,8 @@ import {
   ProjectListQuery,
   ProjectTodoItem,
   ProjectTodoItemsResponse,
+  ProjectTodoPostitsQuery,
+  ProjectTodoPostitsResponse,
   PublicationEntriesPage,
   PublicationEntriesQuery,
   PublicationLog,
@@ -160,6 +162,13 @@ export class ProjectApiService {
   listTodoItems(projectId: string): Observable<ProjectTodoItemsResponse> {
     return this.http.get<ProjectTodoItemsResponse>(
       this.url(`/collection-use-projects/${projectId}/todo-items`),
+    );
+  }
+
+  listMyTodoPostits(query: ProjectTodoPostitsQuery = {}): Observable<ProjectTodoPostitsResponse> {
+    return this.http.get<ProjectTodoPostitsResponse>(
+      this.url('/collection-use-projects/my-todo-items'),
+      { params: buildHttpParams(query) },
     );
   }
 

@@ -14,7 +14,11 @@ from app.use_of_collections.application.context_views import (
     build_approval_view,
     build_visit_execution_evidence,
 )
-from app.use_of_collections.application.ports import ProjectFilters, ProposalFilters
+from app.use_of_collections.application.ports import (
+    ProjectFilters,
+    ProposalFilters,
+    StaffProjectTodoPostit,
+)
 from app.use_of_collections.domain.enums import DocumentCorrectionStatus
 from app.use_of_collections.domain.models import (
     Attachment,
@@ -819,6 +823,53 @@ class SqlAlchemyStaffProjectTodoRepository:
         )
         result = await self._session.execute(stmt)
         return [todo_item_to_domain(record) for record in result.scalars().all()]
+
+    async def list_dashboard_items_for_owner(
+        self,
+        owner_permission_id: str,
+        completed: bool | None,
+        limit: int,
+    ) -> list[StaffProjectTodoPostit]:
+        stmt = (
+            select(
+                StaffProjectTodoItemRecord,
+                CollectionUseProjectRecord.reference_number,
+                CollectionUseProjectRecord.title,
+                CollectionUseProjectRecord.status,
+            )
+            .join(
+                CollectionUseProjectRecord,
+                CollectionUseProjectRecord.id == StaffProjectTodoItemRecord.project_id,
+            )
+            .where(
+                StaffProjectTodoItemRecord.owner_permission_id == owner_permission_id
+            )
+            .order_by(
+                StaffProjectTodoItemRecord.updated_at.desc(),
+                StaffProjectTodoItemRecord.created_at.desc(),
+                StaffProjectTodoItemRecord.id.asc(),
+            )
+            .limit(limit)
+        )
+        if completed is not None:
+            stmt = stmt.where(StaffProjectTodoItemRecord.completed == completed)
+        result = await self._session.execute(stmt)
+        return [
+            StaffProjectTodoPostit(
+                id=StaffProjectTodoItemId(record.id),
+                project_id=CollectionUseProjectId(record.project_id),
+                project_reference_number=ReferenceNumber(reference_number),
+                project_title=title,
+                project_status=status.value,
+                text=record.text,
+                completed=record.completed,
+                created_at=record.created_at,
+                updated_at=record.updated_at,
+                completed_at=record.completed_at,
+                position=record.position,
+            )
+            for record, reference_number, title, status in result.all()
+        ]
 
     async def get_by_id(
         self, item_id: StaffProjectTodoItemId

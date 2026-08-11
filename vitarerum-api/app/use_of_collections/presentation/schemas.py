@@ -623,6 +623,16 @@ class ProjectTodoItemsResponse(BaseModel):
     items: list[ProjectTodoItemResponse]
 
 
+class ProjectTodoPostitResponse(ProjectTodoItemResponse):
+    projectReferenceNumber: str
+    projectTitle: str
+    projectStatus: UseStatus
+
+
+class ProjectTodoPostitsResponse(BaseModel):
+    items: list[ProjectTodoPostitResponse]
+
+
 class ErrorResponse(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
