@@ -3,6 +3,8 @@ import { RouterLink } from '@angular/router';
 
 import { PageHeaderComponent } from '@shared/components/page-header/page-header.component';
 
+import { PublicI18nPipe } from '../i18n/public-i18n.pipe';
+
 /**
  * Public entry point offering two distinct paths, so simple questions no
  * longer get funnelled into the formal proposal flow (see
@@ -12,7 +14,7 @@ import { PageHeaderComponent } from '@shared/components/page-header/page-header.
   selector: 'app-public-landing-page',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [PageHeaderComponent, RouterLink],
+  imports: [PageHeaderComponent, RouterLink, PublicI18nPipe],
   templateUrl: './public-landing-page.component.html',
   styleUrl: './public-landing-page.component.scss',
 })

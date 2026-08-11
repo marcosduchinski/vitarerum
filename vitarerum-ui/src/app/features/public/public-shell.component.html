@@ -1,9 +1,25 @@
 <div class="public-shell">
   <header class="public-shell__header">
-    <a class="public-shell__brand" routerLink="/login">
+    <a class="public-shell__brand" routerLink="/login" [attr.aria-label]="'public.shell.home' | t">
       <app-logo-mark class="public-shell__mark" />
       <span class="public-shell__wordmark">Vitarerum</span>
     </a>
+
+    <label class="public-shell__language-label" for="public-locale">
+      {{ 'public.shell.language' | t }}
+    </label>
+    <select
+      id="public-locale"
+      class="public-shell__language"
+      (change)="onLocaleChange($event)"
+      [attr.aria-label]="'public.shell.language' | t"
+    >
+      @for (locale of locales; track locale) {
+        <option [value]="locale" [selected]="locale === i18n.locale()">
+          {{ 'public.shell.language.' + locale | t }}
+        </option>
+      }
+    </select>
   </header>
 
   <main class="public-shell__main">

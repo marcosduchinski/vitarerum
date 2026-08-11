@@ -1,16 +1,20 @@
 <div class="public-submit">
   <app-page-header
-    eyebrow="Public submission"
-    title="Submit a proposal"
-    description="Any member of the public may request access to our collections. Tell us who you are and what you need — we'll e-mail you a link to confirm your request."
+    [eyebrow]="'public.submitProposal.eyebrow' | t"
+    [title]="'public.submitProposal.title' | t"
+    [description]="'public.submitProposal.description' | t"
   />
 
   <form class="submit-form" (submit)="submit($event)" novalidate>
     <fieldset class="submit-form__section">
-      <legend class="submit-form__section-title">Your details</legend>
+      <legend class="submit-form__section-title">
+        {{ 'public.submitProposal.sections.details' | t }}
+      </legend>
 
       <div class="field" [class.field--error]="nameError()">
-        <label class="field__label" for="name">Full name <span aria-hidden="true">*</span></label>
+        <label class="field__label" for="name">
+          {{ 'public.submitProposal.form.name.label' | t }} <span aria-hidden="true">*</span>
+        </label>
         <input
           id="name"
           type="text"
@@ -22,33 +26,37 @@
           [attr.aria-invalid]="nameError() || null"
         />
         @if (nameError()) {
-          <p class="field__error" role="alert">Your name is required.</p>
+          <p class="field__error" role="alert">
+            {{ 'public.submitProposal.form.name.required' | t }}
+          </p>
         }
       </div>
 
       <div class="field" [class.field--error]="emailError()">
-        <label class="field__label" for="email">E-mail <span aria-hidden="true">*</span></label>
+        <label class="field__label" for="email">
+          {{ 'public.submitProposal.form.email.label' | t }} <span aria-hidden="true">*</span>
+        </label>
         <input
           id="email"
           type="email"
           class="field__input"
           autocomplete="email"
           maxlength="180"
-          placeholder="you@example.com"
+          [placeholder]="'public.submitProposal.form.email.placeholder' | t"
           [value]="email()"
           (input)="onInput('email', $event)"
           [attr.aria-invalid]="emailError() || null"
         />
         @if (emailError()) {
-          <p class="field__error" role="alert">A valid e-mail address is required.</p>
+          <p class="field__error" role="alert">
+            {{ 'public.submitProposal.form.email.invalid' | t }}
+          </p>
         }
-        <p class="field__hint">
-          We'll send a confirmation link here. Your request is only forwarded after you confirm.
-        </p>
+        <p class="field__hint">{{ 'public.submitProposal.form.email.hint' | t }}</p>
       </div>
 
-      <!-- Honeypot: hidden from real users, irresistible to bots. Kept out of the
-           tab order and announced to nobody. -->
+      <!-- Honeypot: hidden from real users and assistive tech alike, so its
+           label is never read and deliberately stays out of the catalogue. -->
       <div class="submit-form__honeypot" aria-hidden="true">
         <label for="website">Website</label>
         <input
@@ -63,16 +71,17 @@
     </fieldset>
 
     <fieldset class="submit-form__section">
-      <legend class="submit-form__section-title">Your request</legend>
+      <legend class="submit-form__section-title">
+        {{ 'public.submitProposal.sections.request' | t }}
+      </legend>
       <p class="submit-form__section-hint">
-        Your proposal opens a conversation with the collections team. Describe what you'd like to
-        access and why.
+        {{ 'public.submitProposal.sections.requestHint' | t }}
       </p>
 
       <div class="field" [class.field--error]="useTypeError()">
-        <label class="field__label" for="useType"
-          >Intended use <span aria-hidden="true">*</span></label
-        >
+        <label class="field__label" for="useType">
+          {{ 'public.submitProposal.form.useType.label' | t }} <span aria-hidden="true">*</span>
+        </label>
         <select
           id="useType"
           class="field__input"
@@ -80,29 +89,33 @@
           (change)="onUseTypeChange($event)"
           [attr.aria-invalid]="useTypeError() || null"
         >
-          <option value="" disabled>Select how you'll use the collection…</option>
-          @for (option of useTypeOptions; track option.value) {
-            <option [value]="option.value">{{ option.label }}</option>
+          <option value="" disabled>
+            {{ 'public.submitProposal.form.useType.placeholder' | t }}
+          </option>
+          @for (option of useTypeOptions; track option) {
+            <option [value]="option">
+              {{ 'public.submitProposal.useTypes.' + option | t }}
+            </option>
           }
         </select>
         @if (useTypeError()) {
-          <p class="field__error" role="alert">Please choose how you'll use the collection.</p>
+          <p class="field__error" role="alert">
+            {{ 'public.submitProposal.form.useType.required' | t }}
+          </p>
         }
         @if (unsupportedUseTypeSelected()) {
           <p class="field__notice" role="status">
-            Only in-situ visit requests are operational at the moment. Exhibition and other uses
-            will be implemented later.
+            {{ 'public.submitProposal.form.useType.unsupported' | t }}
           </p>
         }
       </div>
 
       @if (useType() && templates().length > 0) {
         <section class="templates" aria-labelledby="templates-heading">
-          <h2 id="templates-heading" class="templates__title">Required documents</h2>
-          <p class="templates__intro">
-            Download the template(s) below, fill them in and attach the completed files to your
-            request.
-          </p>
+          <h2 id="templates-heading" class="templates__title">
+            {{ 'public.submitProposal.templates.title' | t }}
+          </h2>
+          <p class="templates__intro">{{ 'public.submitProposal.templates.intro' | t }}</p>
           <ul class="templates__list">
             @for (template of templates(); track template.id) {
               <li class="templates__item">
@@ -115,7 +128,9 @@
                     >{{ template.title }}</a
                   >
                   @if (template.mandatory) {
-                    <span class="templates__badge">Mandatory</span>
+                    <span class="templates__badge">
+                      {{ 'public.submitProposal.templates.mandatory' | t }}
+                    </span>
                   }
                 </div>
                 @if (template.description) {
@@ -131,9 +146,13 @@
         class="field"
         [class.field--error]="beginDateError() || endDateError() || dateRangeError()"
       >
-        <span class="field__label">Proposed dates <span aria-hidden="true">*</span></span>
+        <span class="field__label">
+          {{ 'public.submitProposal.form.dates.label' | t }} <span aria-hidden="true">*</span>
+        </span>
         <div class="field__row">
-          <label class="field__sublabel" for="proposedBeginDate">From</label>
+          <label class="field__sublabel" for="proposedBeginDate">
+            {{ 'public.submitProposal.form.dates.from' | t }}
+          </label>
           <input
             id="proposedBeginDate"
             type="date"
@@ -142,7 +161,9 @@
             (input)="onInput('proposedBeginDate', $event)"
             [attr.aria-invalid]="beginDateError() || dateRangeError() || null"
           />
-          <label class="field__sublabel" for="proposedEndDate">To</label>
+          <label class="field__sublabel" for="proposedEndDate">
+            {{ 'public.submitProposal.form.dates.to' | t }}
+          </label>
           <input
             id="proposedEndDate"
             type="date"
@@ -153,52 +174,64 @@
           />
         </div>
         @if (beginDateError() || endDateError()) {
-          <p class="field__error" role="alert">Please give both a start and an end date.</p>
+          <p class="field__error" role="alert">
+            {{ 'public.submitProposal.form.dates.required' | t }}
+          </p>
         } @else if (dateRangeError()) {
-          <p class="field__error" role="alert">The end date can't be before the start date.</p>
+          <p class="field__error" role="alert">
+            {{ 'public.submitProposal.form.dates.invalidRange' | t }}
+          </p>
         } @else {
-          <p class="field__hint">When would you like to access the collection?</p>
+          <p class="field__hint">{{ 'public.submitProposal.form.dates.hint' | t }}</p>
         }
       </div>
 
       <div class="field" [class.field--error]="subjectError()">
-        <label class="field__label" for="subject">Subject <span aria-hidden="true">*</span></label>
+        <label class="field__label" for="subject">
+          {{ 'public.submitProposal.form.subject.label' | t }} <span aria-hidden="true">*</span>
+        </label>
         <input
           id="subject"
           type="text"
           class="field__input"
           maxlength="160"
-          placeholder="Brief subject line"
+          [placeholder]="'public.submitProposal.form.subject.placeholder' | t"
           [value]="subject()"
           (input)="onInput('subject', $event)"
           [attr.aria-invalid]="subjectError() || null"
         />
         @if (subjectError()) {
-          <p class="field__error" role="alert">Subject is required.</p>
+          <p class="field__error" role="alert">
+            {{ 'public.submitProposal.form.subject.required' | t }}
+          </p>
         }
       </div>
 
       <div class="field" [class.field--error]="bodyError()">
-        <label class="field__label" for="body">Message <span aria-hidden="true">*</span></label>
+        <label class="field__label" for="body">
+          {{ 'public.submitProposal.form.body.label' | t }} <span aria-hidden="true">*</span>
+        </label>
         <textarea
           id="body"
           class="field__input field__input--textarea"
           rows="7"
           maxlength="4000"
-          placeholder="Introduce yourself and describe what you need…"
+          [placeholder]="'public.submitProposal.form.body.placeholder' | t"
           [value]="body()"
           (input)="onInput('body', $event)"
           [attr.aria-invalid]="bodyError() || null"
         ></textarea>
         @if (bodyError()) {
-          <p class="field__error" role="alert">Message body is required.</p>
+          <p class="field__error" role="alert">
+            {{ 'public.submitProposal.form.body.required' | t }}
+          </p>
         }
       </div>
 
       <div class="field" [class.field--error]="documentsError()">
-        <label class="field__label" for="documents"
-          >Supporting documents <span aria-hidden="true">*</span></label
-        >
+        <label class="field__label" for="documents">
+          {{ 'public.submitProposal.form.documents.label' | t }} <span aria-hidden="true">*</span>
+        </label>
         <input
           #documentsInput
           id="documents"
@@ -210,7 +243,10 @@
           [attr.aria-invalid]="documentsError() || null"
         />
         @if (documents().length) {
-          <ul class="document-list" aria-label="Selected supporting documents">
+          <ul
+            class="document-list"
+            [attr.aria-label]="'public.submitProposal.form.documents.listLabel' | t"
+          >
             @for (document of documents(); track document.name + document.size; let i = $index) {
               <li class="document-list__item">
                 <span class="document-list__name">{{ document.name }}</span>
@@ -220,7 +256,7 @@
                   class="document-list__remove"
                   (click)="removeDocument(i, documentsInput)"
                 >
-                  Remove
+                  {{ 'public.submitProposal.form.documents.remove' | t }}
                 </button>
               </li>
             }
@@ -229,9 +265,7 @@
         @if (documentsError()) {
           <p class="field__error" role="alert">{{ documentValidationMessage() }}</p>
         } @else {
-          <p class="field__hint">
-            Attach 1-5 files. PDF, JPG, PNG, and DOCX are accepted, up to 10 MB each.
-          </p>
+          <p class="field__hint">{{ 'public.submitProposal.form.documents.hint' | t }}</p>
         }
       </div>
     </fieldset>
@@ -245,12 +279,14 @@
           [attr.aria-invalid]="consentError() || null"
         />
         <span>
-          I agree that Vitarerum may process the personal data in this form to handle my request.
+          {{ 'public.submitProposal.form.consent.label' | t }}
           <span aria-hidden="true">*</span>
         </span>
       </label>
       @if (consentError()) {
-        <p class="field__error" role="alert">Consent is required to submit.</p>
+        <p class="field__error" role="alert">
+          {{ 'public.submitProposal.form.consent.required' | t }}
+        </p>
       }
     </div>
 
@@ -262,7 +298,9 @@
           (invalidated)="onCaptchaInvalidated()"
         />
         @if (captchaError()) {
-          <p class="field__error" role="alert">Please complete the verification.</p>
+          <p class="field__error" role="alert">
+            {{ 'public.submitProposal.form.captcha.required' | t }}
+          </p>
         }
       </div>
     }
@@ -273,7 +311,12 @@
 
     <div class="submit-form__footer">
       <button type="submit" class="submit-btn" [disabled]="submitting()">
-        {{ submitting() ? 'Submitting…' : 'Submit proposal' }}
+        {{
+          (submitting()
+            ? 'public.submitProposal.form.submitting'
+            : 'public.submitProposal.form.submit'
+          ) | t
+        }}
       </button>
     </div>
   </form>

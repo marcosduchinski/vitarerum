@@ -1,44 +1,49 @@
 <div class="public-edit">
   @if (state() === 'loading') {
-    <app-loading-state label="Loading your correction request..." />
+    <app-loading-state [label]="'public.submitProposal.edit.loading' | t" />
   } @else if (state() === 'submitted') {
     <app-feedback-message
       tone="success"
-      title="Documents submitted"
-      message="Thank you. The collections team has received your corrected documents."
+      [title]="'public.submitProposal.edit.submitted.title' | t"
+      [message]="'public.submitProposal.edit.submitted.message' | t"
     />
   } @else if (state() === 'conflict') {
     <app-feedback-message
       tone="warning"
-      title="This request is no longer editable"
-      message="The proposal has already moved forward. Please contact the collections team if you have questions."
+      [title]="'public.submitProposal.edit.conflict.title' | t"
+      [message]="'public.submitProposal.edit.conflict.message' | t"
     />
   } @else if (state() === 'invalid') {
     <app-feedback-message
       tone="danger"
-      title="Invalid or expired link"
-      message="This correction link is invalid, expired or already used."
+      [title]="'public.submitProposal.edit.invalid.title' | t"
+      [message]="'public.submitProposal.edit.invalid.message' | t"
     />
     @if (loadingError()) {
       <app-error-message [apiError]="loadingError()" />
     }
     <p class="public-edit__note">
-      <a routerLink="/submit-proposal">Start a new request</a>
+      <a routerLink="/submit-proposal">{{ 'public.submitProposal.edit.startNew' | t }}</a>
     </p>
   } @else if (amendment(); as current) {
     <app-page-header
-      eyebrow="Document correction"
-      title="Correct your documents"
+      [eyebrow]="'public.submitProposal.edit.eyebrow' | t"
+      [title]="'public.submitProposal.edit.title' | t"
       [description]="
-        'Proposal ' +
-        current.referenceNumber +
-        ' is waiting for the document changes requested below.'
+        'public.submitProposal.edit.description' | t: { reference: current.referenceNumber }
       "
     />
 
-    <section class="edit-summary" aria-label="Correction request summary">
-      <span>Status: {{ current.status }}</span>
-      <span>Link expires: {{ formatDate(current.expiresAt) }}</span>
+    <section
+      class="edit-summary"
+      [attr.aria-label]="'public.submitProposal.edit.summaryLabel' | t"
+    >
+      <span>
+        {{ 'public.submitProposal.edit.status' | t: { status: statusLabel(current.status) } }}
+      </span>
+      <span>
+        {{ 'public.submitProposal.edit.expires' | t: { date: formatDate(current.expiresAt) } }}
+      </span>
     </section>
 
     @if (actionError()) {
@@ -51,9 +56,16 @@
           <header class="correction-item__header">
             <div>
               <p class="correction-item__type">{{ item.documentType }}</p>
-              <h2>{{ item.documentId ? 'Replace document' : 'Attach missing document' }}</h2>
+              <h2>
+                {{
+                  (item.documentId
+                    ? 'public.submitProposal.edit.replaceDocument'
+                    : 'public.submitProposal.edit.attachMissingDocument'
+                  ) | t
+                }}
+              </h2>
             </div>
-            <span class="correction-item__status">{{ item.status }}</span>
+            <span class="correction-item__status">{{ statusLabel(item.status) }}</span>
           </header>
 
           <p class="correction-item__reason">{{ item.reason }}</p>
@@ -67,21 +79,33 @@
                 [disabled]="busyKey() === 'delete:' + document.id || submitting()"
                 (click)="removeDocument(document)"
               >
-                {{ busyKey() === 'delete:' + document.id ? 'Removing...' : 'Remove' }}
+                {{
+                  (busyKey() === 'delete:' + document.id
+                    ? 'public.submitProposal.edit.removing'
+                    : 'public.submitProposal.edit.remove'
+                  ) | t
+                }}
               </button>
             </div>
           } @else {
             @for (document of documentsForType(item.documentType); track document.id) {
               <div class="document-row">
                 <span class="document-row__name">{{ document.fileName }}</span>
-                <span class="document-row__tag">Uploaded</span>
+                <span class="document-row__tag">
+                  {{ 'public.submitProposal.edit.uploaded' | t }}
+                </span>
               </div>
             }
           }
 
           <div class="field">
             <label class="field__label" [for]="'amendment-file-' + item.id">
-              {{ item.documentId ? 'Replacement file' : 'Document file' }}
+              {{
+                (item.documentId
+                  ? 'public.submitProposal.edit.replacementFile'
+                  : 'public.submitProposal.edit.documentFile'
+                ) | t
+              }}
             </label>
             <input
               class="field__input"
@@ -94,7 +118,7 @@
             @if (fileValidationMessage(selectedFile(item.id)); as message) {
               <p class="field__error" role="alert">{{ message }}</p>
             } @else {
-              <p class="field__hint">Accepted formats: PDF, JPG, PNG or DOCX, up to 10 MB.</p>
+              <p class="field__hint">{{ 'public.submitProposal.edit.fileHint' | t }}</p>
             }
           </div>
 
@@ -110,7 +134,12 @@
               "
               (click)="upload(item)"
             >
-              {{ busyKey() === 'upload:' + item.id ? 'Uploading...' : 'Upload file' }}
+              {{
+                (busyKey() === 'upload:' + item.id
+                  ? 'public.submitProposal.edit.uploading'
+                  : 'public.submitProposal.edit.upload'
+                ) | t
+              }}
             </button>
           </footer>
         </article>
@@ -120,8 +149,8 @@
     @if (!hasPendingItems()) {
       <app-feedback-message
         tone="success"
-        title="No pending document corrections"
-        message="There are no open document corrections for this link."
+        [title]="'public.submitProposal.edit.noPending.title' | t"
+        [message]="'public.submitProposal.edit.noPending.message' | t"
       />
     }
 
@@ -132,7 +161,12 @@
         [disabled]="submitting() || busyKey() !== null"
         (click)="submit()"
       >
-        {{ submitting() ? 'Submitting...' : 'Submit corrected documents' }}
+        {{
+          (submitting()
+            ? 'public.submitProposal.edit.submitting'
+            : 'public.submitProposal.edit.submit'
+          ) | t
+        }}
       </button>
     </footer>
   }

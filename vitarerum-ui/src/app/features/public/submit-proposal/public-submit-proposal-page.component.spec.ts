@@ -7,6 +7,7 @@ import { TURNSTILE_SITE_KEY } from '@core/config/app-config.model';
 import { UseType } from '@shared/models/collection-use-status.model';
 
 import { PublicProposalSubmission } from '../models/public-proposal.model';
+import { providePublicI18nTesting } from '../i18n/public-i18n.testing';
 import { PUBLIC_DOCUMENT_TEMPLATE_API_SERVICE } from '../services/public-document-template-api.service';
 import { PUBLIC_PROPOSAL_API_SERVICE } from '../services/public-proposal-api.service';
 import { PublicSubmitProposalPageComponent } from './public-submit-proposal-page.component';
@@ -41,12 +42,29 @@ class PublicDocumentTemplateApiStub {
   }
 }
 
+/** Only the entries these tests assert on; anything else echoes its key. */
+const CATALOG = {
+  'public.submitProposal.templates.mandatory': 'Obrigatório',
+  'public.submitProposal.form.useType.unsupported':
+    'De momento só estão operacionais os pedidos de visita in situ. Exposição e outras utilizações serão implementadas mais tarde.',
+  'public.submitProposal.form.useType.required': 'Escolha como vai utilizar a coleção.',
+  'public.submitProposal.form.email.invalid': 'É obrigatório um endereço de e-mail válido.',
+  'public.submitProposal.form.consent.required': 'É obrigatório dar consentimento para submeter.',
+  'public.submitProposal.form.dates.required': 'Indique a data de início e a de fim.',
+  'public.submitProposal.form.dates.invalidRange':
+    'A data de fim não pode ser anterior à de início.',
+  'public.submitProposal.form.documents.required': 'Anexe pelo menos um documento comprovativo.',
+  'public.submitProposal.form.documents.tooMany':
+    'Não anexe mais do que cinco documentos comprovativos.',
+  'public.submitProposal.form.documents.tooLarge': '{{name}} excede os 10 MB.',
+};
+
 describe('PublicSubmitProposalPageComponent', () => {
   let api: PublicProposalApiStub;
   let templates: PublicDocumentTemplateApiStub;
   let router: Router;
 
-  async function setup(siteKey = ''): Promise<void> {
+  async function setup(siteKey = '', catalog: Record<string, string> = CATALOG): Promise<void> {
     api = new PublicProposalApiStub();
     templates = new PublicDocumentTemplateApiStub();
 
@@ -57,6 +75,7 @@ describe('PublicSubmitProposalPageComponent', () => {
         { provide: PUBLIC_PROPOSAL_API_SERVICE, useValue: api },
         { provide: PUBLIC_DOCUMENT_TEMPLATE_API_SERVICE, useValue: templates },
         { provide: TURNSTILE_SITE_KEY, useValue: siteKey },
+        providePublicI18nTesting('pt-PT', catalog),
       ],
     }).compileComponents();
 
@@ -91,7 +110,31 @@ describe('PublicSubmitProposalPageComponent', () => {
     const link = section?.querySelector<HTMLAnchorElement>('.templates__download');
     expect(link?.textContent).toContain('Safety form');
     expect(link?.getAttribute('href')).toBe('/api/v1/public/document-templates/tpl-1/file');
-    expect(section?.querySelector('.templates__badge')?.textContent).toContain('Mandatory');
+    expect(section?.querySelector('.templates__badge')?.textContent).toContain('Obrigatório');
+  });
+
+  it('takes every visible string from the catalogue', async () => {
+    // Rendered with an empty catalogue, so the service echoes keys back: any
+    // copy still hardcoded in the template shows up here as prose.
+    await setup('', {});
+    const fixture = TestBed.createComponent(PublicSubmitProposalPageComponent);
+    fixture.detectChanges();
+    const compiled = fixture.nativeElement as HTMLElement;
+
+    const prose = visibleText(compiled).filter(
+      (text) =>
+        !text.startsWith('public.submitProposal.') &&
+        // Required-field markers and the bot honeypot, neither of which is
+        // product copy a citizen reads.
+        text !== '*' &&
+        text !== 'Website',
+    );
+    expect(prose).toEqual([]);
+
+    const placeholders = Array.from(
+      compiled.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('[placeholder]'),
+    ).map((field) => field.placeholder);
+    expect(placeholders.every((value) => value.startsWith('public.submitProposal.'))).toBe(true);
   });
 
   it('warns that exhibition and other intended uses are not operational yet', async () => {
@@ -99,7 +142,7 @@ describe('PublicSubmitProposalPageComponent', () => {
     const fixture = TestBed.createComponent(PublicSubmitProposalPageComponent);
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
-    const noticeText = 'Only in-situ visit requests are operational at the moment.';
+    const noticeText = 'só estão operacionais os pedidos de visita in situ';
 
     expect(compiled.textContent).not.toContain(noticeText);
 
@@ -107,7 +150,7 @@ describe('PublicSubmitProposalPageComponent', () => {
     fixture.detectChanges();
 
     expect(compiled.textContent).toContain(noticeText);
-    expect(compiled.textContent).toContain('will be implemented later');
+    expect(compiled.textContent).toContain('serão implementadas mais tarde');
 
     setSelectValue(compiled, '#useType', 'OTHER');
     fixture.detectChanges();
@@ -176,7 +219,7 @@ describe('PublicSubmitProposalPageComponent', () => {
     fixture.detectChanges();
 
     expect(api.submitCalls).toHaveLength(0);
-    expect(compiled.textContent).toContain('Consent is required to submit.');
+    expect(compiled.textContent).toContain('É obrigatório dar consentimento para submeter.');
   });
 
   it('submits the proposed dates', async () => {
@@ -226,7 +269,7 @@ describe('PublicSubmitProposalPageComponent', () => {
     fixture.detectChanges();
 
     expect(api.submitCalls).toHaveLength(0);
-    expect(compiled.textContent).toContain('Please give both a start and an end date.');
+    expect(compiled.textContent).toContain('Indique a data de início e a de fim.');
   });
 
   it('blocks submission until a supporting document is attached', async () => {
@@ -248,7 +291,7 @@ describe('PublicSubmitProposalPageComponent', () => {
     fixture.detectChanges();
 
     expect(api.submitCalls).toHaveLength(0);
-    expect(compiled.textContent).toContain('Attach at least one supporting document.');
+    expect(compiled.textContent).toContain('Anexe pelo menos um documento comprovativo.');
   });
 
   it('blocks more than five supporting documents', async () => {
@@ -278,7 +321,7 @@ describe('PublicSubmitProposalPageComponent', () => {
     fixture.detectChanges();
 
     expect(api.submitCalls).toHaveLength(0);
-    expect(compiled.textContent).toContain('Attach no more than five supporting documents.');
+    expect(compiled.textContent).toContain('Não anexe mais do que cinco documentos comprovativos.');
   });
 
   it('blocks oversized supporting documents', async () => {
@@ -305,7 +348,7 @@ describe('PublicSubmitProposalPageComponent', () => {
     fixture.detectChanges();
 
     expect(api.submitCalls).toHaveLength(0);
-    expect(compiled.textContent).toContain('large.pdf is larger than 10 MB.');
+    expect(compiled.textContent).toContain('large.pdf excede os 10 MB.');
   });
 
   it('blocks submission when the end date precedes the start date', async () => {
@@ -327,7 +370,7 @@ describe('PublicSubmitProposalPageComponent', () => {
     fixture.detectChanges();
 
     expect(api.submitCalls).toHaveLength(0);
-    expect(compiled.textContent).toContain("The end date can't be before the start date.");
+    expect(compiled.textContent).toContain('A data de fim não pode ser anterior à de início.');
   });
 
   it('blocks submission until an intended use is selected', async () => {
@@ -347,7 +390,7 @@ describe('PublicSubmitProposalPageComponent', () => {
     fixture.detectChanges();
 
     expect(api.submitCalls).toHaveLength(0);
-    expect(compiled.textContent).toContain("Please choose how you'll use the collection.");
+    expect(compiled.textContent).toContain('Escolha como vai utilizar a coleção.');
   });
 
   it('rejects an invalid e-mail address', async () => {
@@ -366,7 +409,7 @@ describe('PublicSubmitProposalPageComponent', () => {
     fixture.detectChanges();
 
     expect(api.submitCalls).toHaveLength(0);
-    expect(compiled.textContent).toContain('A valid e-mail address is required.');
+    expect(compiled.textContent).toContain('É obrigatório um endereço de e-mail válido.');
   });
 });
 
@@ -405,4 +448,15 @@ function submitForm(root: HTMLElement): void {
   root
     .querySelector<HTMLFormElement>('form')
     ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+}
+
+/** Every non-empty text node rendered, in document order. */
+function visibleText(root: HTMLElement): string[] {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const texts: string[] = [];
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const text = node.textContent?.trim();
+    if (text) texts.push(text);
+  }
+  return texts;
 }

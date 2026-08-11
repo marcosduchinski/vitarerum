@@ -17,6 +17,8 @@ import { PageHeaderComponent } from '@shared/components/page-header/page-header.
 import { UseType } from '@shared/models/collection-use-status.model';
 
 import { TurnstileComponent } from '../components/turnstile/turnstile.component';
+import { PublicI18nPipe } from '../i18n/public-i18n.pipe';
+import { PublicI18nService } from '../i18n/public-i18n.service';
 import { PUBLIC_DOCUMENT_TEMPLATE_API_SERVICE } from '../services/public-document-template-api.service';
 import { PUBLIC_PROPOSAL_API_SERVICE } from '../services/public-proposal-api.service';
 
@@ -31,18 +33,18 @@ const ALLOWED_DOCUMENT_MIME_TYPES = new Set([
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ]);
 
-/** The intended-use options offered to a citizen, in display order. */
-const USE_TYPE_OPTIONS: readonly { readonly value: UseType; readonly label: string }[] = [
-  { value: 'IN_SITU_VISIT', label: 'In-situ visit' },
-  { value: 'EXHIBITION', label: 'Exhibition' },
-  { value: 'OTHER', label: 'Other' },
-];
+/**
+ * The intended-use options offered to a citizen, in display order. Only the
+ * stable codes live here; the template resolves each label through
+ * `public.submitProposal.useTypes.<CODE>`.
+ */
+const USE_TYPE_OPTIONS: readonly UseType[] = ['IN_SITU_VISIT', 'EXHIBITION', 'OTHER'];
 
 @Component({
   selector: 'app-public-submit-proposal-page',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [PageHeaderComponent, ErrorMessageComponent, TurnstileComponent],
+  imports: [PageHeaderComponent, ErrorMessageComponent, TurnstileComponent, PublicI18nPipe],
   templateUrl: './public-submit-proposal-page.component.html',
   styleUrl: './public-submit-proposal-page.component.scss',
 })
@@ -50,6 +52,7 @@ export class PublicSubmitProposalPageComponent {
   private readonly publicProposals = inject(PUBLIC_PROPOSAL_API_SERVICE);
   private readonly documentTemplates = inject(PUBLIC_DOCUMENT_TEMPLATE_API_SERVICE);
   private readonly router = inject(Router);
+  private readonly i18n = inject(PublicI18nService);
 
   protected readonly siteKey = inject(TURNSTILE_SITE_KEY);
 
@@ -106,18 +109,22 @@ export class PublicSubmitProposalPageComponent {
   private readonly documentValidationError = computed(() => {
     const documents = this.documents();
     if (documents.length === 0) {
-      return 'Attach at least one supporting document.';
+      return this.i18n.t('public.submitProposal.form.documents.required');
     }
     if (documents.length > MAX_DOCUMENTS) {
-      return 'Attach no more than five supporting documents.';
+      return this.i18n.t('public.submitProposal.form.documents.tooMany');
     }
     const oversized = documents.find((document) => document.size > MAX_DOCUMENT_BYTES);
     if (oversized) {
-      return `${oversized.name} is larger than 10 MB.`;
+      return this.i18n.t('public.submitProposal.form.documents.tooLarge', {
+        name: oversized.name,
+      });
     }
     const unsupported = documents.find((document) => !this.isAllowedDocument(document));
     if (unsupported) {
-      return `${unsupported.name} is not a supported file type.`;
+      return this.i18n.t('public.submitProposal.form.documents.invalidType', {
+        name: unsupported.name,
+      });
     }
     return null;
   });
@@ -215,9 +222,13 @@ export class PublicSubmitProposalPageComponent {
 
   protected formatFileSize(size: number): string {
     if (size < 1024 * 1024) {
-      return `${Math.max(1, Math.round(size / 1024))} KB`;
+      return `${this.i18n.formatNumber(Math.max(1, Math.round(size / 1024)))} KB`;
     }
-    return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+    // Only this branch has a fraction, and Portuguese writes it "1,5".
+    return `${this.i18n.formatNumber(size / (1024 * 1024), {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    })} MB`;
   }
 
   protected onVerified(token: string): void {

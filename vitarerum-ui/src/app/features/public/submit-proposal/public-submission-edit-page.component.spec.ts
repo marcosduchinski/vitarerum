@@ -3,6 +3,7 @@ import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { of } from 'rxjs';
 
 import { PublicAmendmentDocument, PublicAmendmentView } from '../models/public-proposal.model';
+import { providePublicI18nTesting } from '../i18n/public-i18n.testing';
 import { PUBLIC_PROPOSAL_API_SERVICE } from '../services/public-proposal-api.service';
 import { PublicSubmissionEditPageComponent } from './public-submission-edit-page.component';
 
@@ -41,6 +42,12 @@ class PublicProposalApiStub {
   }
 }
 
+/** Only the entries these tests assert on; anything else echoes its key. */
+const CATALOG = {
+  'public.submitProposal.edit.upload': 'Carregar ficheiro',
+  'public.submitProposal.edit.uploading': 'A carregar…',
+};
+
 describe('PublicSubmissionEditPageComponent', () => {
   let fixture: ComponentFixture<PublicSubmissionEditPageComponent>;
   let api: PublicProposalApiStub;
@@ -50,6 +57,7 @@ describe('PublicSubmissionEditPageComponent', () => {
     await TestBed.configureTestingModule({
       imports: [PublicSubmissionEditPageComponent],
       providers: [
+        providePublicI18nTesting('pt-PT', CATALOG),
         { provide: PUBLIC_PROPOSAL_API_SERVICE, useValue: api },
         {
           provide: ActivatedRoute,
@@ -81,7 +89,7 @@ describe('PublicSubmissionEditPageComponent', () => {
     fixture.detectChanges();
 
     Array.from(el.querySelectorAll<HTMLButtonElement>('.edit-button'))
-      .find((b) => b.textContent?.includes('Upload file'))!
+      .find((b) => b.textContent?.includes('Carregar ficheiro'))!
       .click();
     await fixture.whenStable();
 

@@ -15,6 +15,8 @@ import { ErrorMessageComponent } from '@shared/components/error-message/error-me
 import { PageHeaderComponent } from '@shared/components/page-header/page-header.component';
 
 import { TurnstileComponent } from '../components/turnstile/turnstile.component';
+import { PublicI18nPipe } from '../i18n/public-i18n.pipe';
+import { PublicI18nService } from '../i18n/public-i18n.service';
 import { MUSEUM_QUESTION_API_SERVICE } from '../services/museum-question-api.service';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -32,13 +34,14 @@ const ALLOWED_IMAGE_TYPES = new Set(['image/png', 'image/jpeg']);
   selector: 'app-ask-museum-page',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [PageHeaderComponent, ErrorMessageComponent, TurnstileComponent],
+  imports: [PageHeaderComponent, ErrorMessageComponent, TurnstileComponent, PublicI18nPipe],
   templateUrl: './ask-museum-page.component.html',
   styleUrl: './ask-museum-page.component.scss',
 })
 export class AskMuseumPageComponent {
   private readonly museumQuestions = inject(MUSEUM_QUESTION_API_SERVICE);
   private readonly router = inject(Router);
+  private readonly i18n = inject(PublicI18nService);
 
   protected readonly siteKey = inject(TURNSTILE_SITE_KEY);
 
@@ -67,23 +70,28 @@ export class AskMuseumPageComponent {
   protected readonly consentError = computed(() => this.submitted() && !this.consent());
   protected readonly attachmentError = computed(() => {
     const files = this.attachments();
-    if (files.length > MAX_IMAGE_COUNT) return `Attach at most ${MAX_IMAGE_COUNT} images.`;
+    if (files.length > MAX_IMAGE_COUNT) {
+      return this.i18n.t('public.askMuseum.form.images.tooMany', { count: MAX_IMAGE_COUNT });
+    }
     if (files.some((file) => !ALLOWED_IMAGE_TYPES.has(file.type))) {
-      return 'Only PNG and JPEG images are accepted.';
+      return this.i18n.t('public.askMuseum.form.images.invalidType');
     }
     if (files.some((file) => file.size > MAX_IMAGE_BYTES)) {
-      return 'Each image must be 5 MB or smaller.';
+      return this.i18n.t('public.askMuseum.form.images.tooLarge');
     }
     const total = files.reduce((sum, file) => sum + file.size, 0);
-    if (total > MAX_TOTAL_IMAGE_BYTES)
-      return 'Image attachments must be 25 MB or smaller in total.';
+    if (total > MAX_TOTAL_IMAGE_BYTES) {
+      return this.i18n.t('public.askMuseum.form.images.totalTooLarge');
+    }
     return '';
   });
   protected readonly attachmentInputHint = computed(() => {
     const files = this.attachments();
-    if (!files.length) return 'Optional: up to 10 PNG or JPEG images, 5 MB each, 25 MB total.';
+    if (!files.length) return this.i18n.t('public.askMuseum.form.images.hint');
     const total = files.reduce((sum, file) => sum + file.size, 0);
-    return `${files.length} image${files.length === 1 ? '' : 's'} selected · ${this.formatBytes(total)} total`;
+    return this.i18n.tPlural('public.askMuseum.form.images.selected', files.length, {
+      size: this.formatBytes(total),
+    });
   });
 
   // No site key configured → no widget rendered → don't block submission on it
@@ -185,9 +193,16 @@ export class AskMuseumPageComponent {
   }
 
   protected formatBytes(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024) return `${this.i18n.formatNumber(bytes)} B`;
     const mib = bytes / (1024 * 1024);
-    if (mib >= 1) return `${mib.toFixed(mib >= 10 ? 0 : 1)} MB`;
-    return `${Math.ceil(bytes / 1024)} KB`;
+    if (mib >= 1) {
+      // Only this branch has a fraction, and Portuguese writes it "1,5".
+      const digits = mib >= 10 ? 0 : 1;
+      return `${this.i18n.formatNumber(mib, {
+        minimumFractionDigits: digits,
+        maximumFractionDigits: digits,
+      })} MB`;
+    }
+    return `${this.i18n.formatNumber(Math.ceil(bytes / 1024))} KB`;
   }
 }

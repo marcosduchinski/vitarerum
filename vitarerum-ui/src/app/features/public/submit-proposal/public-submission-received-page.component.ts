@@ -1,7 +1,10 @@
-import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 import { FeedbackMessageComponent } from '@shared/components/feedback-message/feedback-message.component';
+
+import { PublicI18nPipe } from '../i18n/public-i18n.pipe';
+import { PublicI18nService } from '../i18n/public-i18n.service';
 
 /**
  * Shown right after a public submission. The proposal does NOT exist yet — the
@@ -12,17 +15,20 @@ import { FeedbackMessageComponent } from '@shared/components/feedback-message/fe
   selector: 'app-public-submission-received-page',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FeedbackMessageComponent, RouterLink],
+  imports: [FeedbackMessageComponent, RouterLink, PublicI18nPipe],
   template: `
     <div class="public-result">
       <app-feedback-message
         tone="success"
-        title="Almost there — check your inbox"
+        [title]="'public.submitProposal.received.title' | t"
         [message]="confirmationMessage()"
       />
       <p class="public-result__note">
-        Didn't get the e-mail? It can take a few minutes. Check your spam folder, or
-        <a routerLink="/submit-proposal">start a new request</a>.
+        {{ 'public.submitProposal.received.note' | t }}
+        <a routerLink="/submit-proposal">{{
+          'public.submitProposal.received.noteLink' | t
+        }}</a
+        >.
       </p>
     </div>
   `,
@@ -39,11 +45,17 @@ import { FeedbackMessageComponent } from '@shared/components/feedback-message/fe
   `,
 })
 export class PublicSubmissionReceivedPageComponent {
+  private readonly i18n = inject(PublicI18nService);
+
   /** Bound from ?email=… */
   readonly email = input<string>('');
 
   protected confirmationMessage(): string {
-    const target = this.email() ? ` to ${this.email()}` : '';
-    return `We've sent a confirmation link${target}. Click it to forward your request to the collections team. The link expires in 24 hours.`;
+    const email = this.email();
+    // Two entries rather than an optional fragment: naming the address changes
+    // the shape of the sentence, not just a slot inside it.
+    return email
+      ? this.i18n.t('public.submitProposal.received.messageTo', { email })
+      : this.i18n.t('public.submitProposal.received.message');
   }
 }

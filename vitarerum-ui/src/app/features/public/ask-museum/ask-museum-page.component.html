@@ -1,19 +1,17 @@
 <div class="ask-museum">
   <app-page-header
-    eyebrow="Ask the Museum"
-    title="Ask the Museum"
-    description="Have a quick question? Tell us who you are and what you'd like to know — we'll reply by e-mail."
+    [eyebrow]="'public.askMuseum.eyebrow' | t"
+    [title]="'public.askMuseum.title' | t"
+    [description]="'public.askMuseum.description' | t"
   />
 
-  <div class="scope-alert" role="note">
-    At this time, Ask the Museum is only available for questions related to the use of collections,
-    especially in-situ visits for research. Questions about exhibitions, loans, events, educational
-    activities, or other museum services will be closed with an automatic e-mail reply.
-  </div>
+  <div class="scope-alert" role="note">{{ 'public.askMuseum.scopeNotice' | t }}</div>
 
   <form class="ask-form" (submit)="submit($event)" novalidate>
     <div class="field" [class.field--error]="nameError()">
-      <label class="field__label" for="name">Full name <span aria-hidden="true">*</span></label>
+      <label class="field__label" for="name">
+        {{ 'public.askMuseum.form.name.label' | t }} <span aria-hidden="true">*</span>
+      </label>
       <input
         id="name"
         type="text"
@@ -25,30 +23,33 @@
         [attr.aria-invalid]="nameError() || null"
       />
       @if (nameError()) {
-        <p class="field__error" role="alert">Your name is required.</p>
+        <p class="field__error" role="alert">{{ 'public.askMuseum.form.name.required' | t }}</p>
       }
     </div>
 
     <div class="field" [class.field--error]="emailError()">
-      <label class="field__label" for="email">E-mail <span aria-hidden="true">*</span></label>
+      <label class="field__label" for="email">
+        {{ 'public.askMuseum.form.email.label' | t }} <span aria-hidden="true">*</span>
+      </label>
       <input
         id="email"
         type="email"
         class="field__input"
         autocomplete="email"
         maxlength="180"
-        placeholder="you@example.com"
+        [placeholder]="'public.askMuseum.form.email.placeholder' | t"
         [value]="email()"
         (input)="onInput('email', $event)"
         [attr.aria-invalid]="emailError() || null"
       />
       @if (emailError()) {
-        <p class="field__error" role="alert">A valid e-mail address is required.</p>
+        <p class="field__error" role="alert">{{ 'public.askMuseum.form.email.invalid' | t }}</p>
       }
-      <p class="field__hint">We'll send our reply here.</p>
+      <p class="field__hint">{{ 'public.askMuseum.form.email.hint' | t }}</p>
     </div>
 
-    <!-- Honeypot: hidden from real users, irresistible to bots. -->
+    <!-- Honeypot: hidden from real users and assistive tech alike, so its label
+         is never read and deliberately stays out of the catalogue. -->
     <div class="ask-form__honeypot" aria-hidden="true">
       <label for="website">Website</label>
       <input
@@ -62,41 +63,47 @@
     </div>
 
     <div class="field" [class.field--error]="subjectError()">
-      <label class="field__label" for="subject">Subject <span aria-hidden="true">*</span></label>
+      <label class="field__label" for="subject">
+        {{ 'public.askMuseum.form.subject.label' | t }} <span aria-hidden="true">*</span>
+      </label>
       <input
         id="subject"
         type="text"
         class="field__input"
         maxlength="200"
-        placeholder="Brief subject line"
+        [placeholder]="'public.askMuseum.form.subject.placeholder' | t"
         [value]="subject()"
         (input)="onInput('subject', $event)"
         [attr.aria-invalid]="subjectError() || null"
       />
       @if (subjectError()) {
-        <p class="field__error" role="alert">Subject is required.</p>
+        <p class="field__error" role="alert">{{ 'public.askMuseum.form.subject.required' | t }}</p>
       }
     </div>
 
     <div class="field" [class.field--error]="messageError()">
-      <label class="field__label" for="message">Message <span aria-hidden="true">*</span></label>
+      <label class="field__label" for="message">
+        {{ 'public.askMuseum.form.message.label' | t }} <span aria-hidden="true">*</span>
+      </label>
       <textarea
         id="message"
         class="field__input field__input--textarea"
         rows="6"
         maxlength="4000"
-        placeholder="Ask your question…"
+        [placeholder]="'public.askMuseum.form.message.placeholder' | t"
         [value]="message()"
         (input)="onInput('message', $event)"
         [attr.aria-invalid]="messageError() || null"
       ></textarea>
       @if (messageError()) {
-        <p class="field__error" role="alert">Your question is required.</p>
+        <p class="field__error" role="alert">{{ 'public.askMuseum.form.message.required' | t }}</p>
       }
     </div>
 
     <div class="field" [class.field--error]="submitted() && attachmentError()">
-      <label class="field__label" for="attachments">Images</label>
+      <label class="field__label" for="attachments">
+        {{ 'public.askMuseum.form.images.label' | t }}
+      </label>
       <input
         id="attachments"
         type="file"
@@ -108,7 +115,7 @@
       />
       <p class="field__hint">{{ attachmentInputHint() }}</p>
       @if (attachments().length) {
-        <ul class="attachment-list" aria-label="Selected images">
+        <ul class="attachment-list" [attr.aria-label]="'public.askMuseum.form.images.listLabel' | t">
           @for (file of attachments(); track file.name + file.size + $index) {
             <li class="attachment-list__item">
               <span class="pi pi-image" aria-hidden="true"></span>
@@ -117,7 +124,7 @@
               <button
                 type="button"
                 class="attachment-list__remove"
-                [attr.aria-label]="'Remove ' + file.name"
+                [attr.aria-label]="'public.askMuseum.form.images.remove' | t: { name: file.name }"
                 (click)="removeAttachment($index)"
               >
                 <span class="pi pi-times" aria-hidden="true"></span>
@@ -140,12 +147,12 @@
           [attr.aria-invalid]="consentError() || null"
         />
         <span>
-          I agree that Vitarerum may process the personal data in this form to handle my question.
+          {{ 'public.askMuseum.form.consent.label' | t }}
           <span aria-hidden="true">*</span>
         </span>
       </label>
       @if (consentError()) {
-        <p class="field__error" role="alert">Consent is required to submit.</p>
+        <p class="field__error" role="alert">{{ 'public.askMuseum.form.consent.required' | t }}</p>
       }
     </div>
 
@@ -157,7 +164,9 @@
           (invalidated)="onCaptchaInvalidated()"
         />
         @if (captchaError()) {
-          <p class="field__error" role="alert">Please complete the verification.</p>
+          <p class="field__error" role="alert">
+            {{ 'public.askMuseum.form.captcha.required' | t }}
+          </p>
         }
       </div>
     }
@@ -168,7 +177,9 @@
 
     <div class="ask-form__footer">
       <button type="submit" class="submit-btn" [disabled]="submitting()">
-        {{ submitting() ? 'Sending…' : 'Send question' }}
+        {{
+          (submitting() ? 'public.askMuseum.form.submitting' : 'public.askMuseum.form.submit') | t
+        }}
       </button>
     </div>
   </form>

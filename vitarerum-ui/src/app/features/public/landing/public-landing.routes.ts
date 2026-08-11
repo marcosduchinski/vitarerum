@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 
+import { publicI18nResolver } from '../i18n/public-i18n.resolver';
 import { PublicShellComponent } from '../public-shell.component';
 
 /**
@@ -11,11 +12,12 @@ export const PUBLIC_LANDING_ROUTES: Routes = [
   {
     path: '',
     component: PublicShellComponent,
+    resolve: { i18n: publicI18nResolver },
     children: [
       {
         path: '',
         pathMatch: 'full',
-        title: 'Vitarerum',
+        data: { titleKey: 'public.routes.landing' },
         loadComponent: () =>
           import('./public-landing-page.component').then((m) => m.PublicLandingPageComponent),
       },

@@ -1,7 +1,10 @@
-import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 import { FeedbackMessageComponent } from '@shared/components/feedback-message/feedback-message.component';
+
+import { PublicI18nPipe } from '../i18n/public-i18n.pipe';
+import { PublicI18nService } from '../i18n/public-i18n.service';
 
 /**
  * Shown right after a question is submitted. There is no public follow-up —
@@ -12,17 +15,18 @@ import { FeedbackMessageComponent } from '@shared/components/feedback-message/fe
   selector: 'app-ask-museum-received-page',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FeedbackMessageComponent, RouterLink],
+  imports: [FeedbackMessageComponent, RouterLink, PublicI18nPipe],
   template: `
     <div class="ask-result">
       <app-feedback-message
         tone="success"
-        title="Question received"
+        [title]="'public.askMuseum.received.title' | t"
         [message]="receivedMessage()"
       />
       <p class="ask-result__note">
-        We'll reply by e-mail. Didn't mean to send this? No action is needed —
-        <a routerLink="/ask-museum">ask another question</a>.
+        {{ 'public.askMuseum.received.note' | t }}
+        <a routerLink="/ask-museum">{{ 'public.askMuseum.received.noteLink' | t }}</a
+        >.
       </p>
     </div>
   `,
@@ -39,11 +43,17 @@ import { FeedbackMessageComponent } from '@shared/components/feedback-message/fe
   `,
 })
 export class AskMuseumReceivedPageComponent {
+  private readonly i18n = inject(PublicI18nService);
+
   /** Bound from ?email=… */
   readonly email = input<string>('');
 
   protected receivedMessage(): string {
-    const target = this.email() ? ` to ${this.email()}` : '';
-    return `Thank you for your question. We've received it and will reply${target} as soon as possible.`;
+    const email = this.email();
+    // Two entries rather than an optional fragment: naming the address changes
+    // the shape of the sentence, not just a slot inside it.
+    return email
+      ? this.i18n.t('public.askMuseum.received.messageTo', { email })
+      : this.i18n.t('public.askMuseum.received.message');
   }
 }

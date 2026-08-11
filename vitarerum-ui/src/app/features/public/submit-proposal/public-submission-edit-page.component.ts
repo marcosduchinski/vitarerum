@@ -8,6 +8,8 @@ import { FeedbackMessageComponent } from '@shared/components/feedback-message/fe
 import { LoadingStateComponent } from '@shared/components/loading-state/loading-state.component';
 import { PageHeaderComponent } from '@shared/components/page-header/page-header.component';
 
+import { PublicI18nPipe } from '../i18n/public-i18n.pipe';
+import { PublicI18nService } from '../i18n/public-i18n.service';
 import {
   PublicAmendmentCorrectionItem,
   PublicAmendmentDocument,
@@ -36,6 +38,7 @@ type EditState = 'loading' | 'ready' | 'submitted' | 'invalid' | 'conflict';
     LoadingStateComponent,
     PageHeaderComponent,
     RouterLink,
+    PublicI18nPipe,
   ],
   templateUrl: './public-submission-edit-page.component.html',
   styleUrl: './public-submission-edit-page.component.scss',
@@ -43,6 +46,7 @@ type EditState = 'loading' | 'ready' | 'submitted' | 'invalid' | 'conflict';
 export class PublicSubmissionEditPageComponent {
   private readonly publicProposals = inject(PUBLIC_PROPOSAL_API_SERVICE);
   private readonly route = inject(ActivatedRoute);
+  private readonly i18n = inject(PublicI18nService);
 
   private readonly token = this.route.snapshot.queryParamMap.get('token') ?? '';
 
@@ -141,16 +145,27 @@ export class PublicSubmissionEditPageComponent {
 
   protected fileValidationMessage(file: File | null): string | null {
     if (!file) return null;
-    if (file.size > MAX_DOCUMENT_BYTES) return `${file.name} is larger than 10 MB.`;
-    if (!this.isAllowedDocument(file)) return `${file.name} is not a supported file type.`;
+    if (file.size > MAX_DOCUMENT_BYTES) {
+      return this.i18n.t('public.submitProposal.edit.file.tooLarge', { name: file.name });
+    }
+    if (!this.isAllowedDocument(file)) {
+      return this.i18n.t('public.submitProposal.edit.file.invalidType', { name: file.name });
+    }
     return null;
   }
 
+  /**
+   * Backend status codes are open-ended, so an unknown one falls back to the
+   * raw code rather than to an empty span.
+   */
+  protected statusLabel(status: string): string {
+    const key = `public.submitProposal.statuses.${status}`;
+    const label = this.i18n.t(key);
+    return label === key ? status : label;
+  }
+
   protected formatDate(value: string): string {
-    return new Intl.DateTimeFormat(undefined, {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    }).format(new Date(value));
+    return this.i18n.formatDate(value, { dateStyle: 'medium', timeStyle: 'short' });
   }
 
   private async load(): Promise<void> {
