@@ -211,13 +211,9 @@ class ListProjects:
         proposals = await self._proposal_repo.list_by_project_ids(
             [p.id for p in projects]
         )
-        proposals_by_project = {
-            pr.collection_use_project_id: pr for pr in proposals
-        }
+        proposals_by_project = {pr.collection_use_project_id: pr for pr in proposals}
 
-        permission_ids: list[PermissionId | None] = [
-            pr.assigned_to for pr in proposals
-        ]
+        permission_ids: list[PermissionId | None] = [pr.assigned_to for pr in proposals]
         if caller_is_staff:
             permission_ids += [p.requested_by for p in projects]
         views = await _resolve_views(self._reader, permission_ids)
@@ -287,9 +283,7 @@ class GetProjectDetail:
                 if proposal and proposal.assigned_to
                 else None
             ),
-            requested_by=(
-                views.get(project.requested_by) if caller_is_staff else None
-            ),
+            requested_by=(views.get(project.requested_by) if caller_is_staff else None),
             authorised_by=(
                 views.get(project.authorised_by)
                 if caller_is_staff and project.authorised_by

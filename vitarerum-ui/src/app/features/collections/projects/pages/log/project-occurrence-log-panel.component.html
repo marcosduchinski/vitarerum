@@ -6,10 +6,21 @@
         <h2 id="object-occurrence-log-heading" class="access-sheet__title">
           Object occurrence log
         </h2>
-        <p class="access-sheet__hint">
-          The ROC report covers a single incident, so each occurrence has its own document —
-          download it from the occurrence's row.
-        </p>
+        <div class="access-sheet__actions">
+          <button
+            type="button"
+            class="access-sheet__action access-sheet__action--download"
+            [disabled]="!canDownloadDocument()"
+            title="Download the ROC report with every occurrence in this log"
+            (click)="downloadOccurrenceDocument()"
+          >
+            <span class="pi pi-download" aria-hidden="true"></span>
+            {{ documentDownloading() ? 'Preparing DOCX…' : 'Download DOCX' }}
+          </button>
+        </div>
+        @if (documentError()) {
+          <app-error-message [apiError]="documentError()!" />
+        }
       </div>
 
       <dl class="access-summary" aria-label="Object occurrence log summary">
@@ -229,28 +240,6 @@
                                       >
                                         Edit
                                       </button>
-                                      <button
-                                        type="button"
-                                        class="occurrence-register__action occurrence-register__action--secondary"
-                                        [disabled]="occurrenceDocumentDownloading()[entry.id]"
-                                        [attr.aria-label]="
-                                          'Download the ROC report for occurrence ' +
-                                          entry.objectReference.inventoryNumber
-                                        "
-                                        (click)="downloadOccurrenceDocument(entry)"
-                                      >
-                                        <span class="pi pi-download" aria-hidden="true"></span>
-                                        {{
-                                          occurrenceDocumentDownloading()[entry.id]
-                                            ? 'Preparing…'
-                                            : 'ROC'
-                                        }}
-                                      </button>
-                                      @if (occurrenceDocumentErrors()[entry.id]) {
-                                        <app-error-message
-                                          [apiError]="occurrenceDocumentErrors()[entry.id]!"
-                                        />
-                                      }
                                     </td>
                                   </tr>
                                   @if (expandedOccurrenceEntryId() === entry.id) {

@@ -277,11 +277,12 @@ export class ProjectApiService {
     );
   }
 
-  // One occurrence rendered onto MUHNAC's ROC form (.docx). The form holds a
-  // single incident, so it is one report per entry rather than one per log.
-  downloadObjectOccurrenceDocument(projectId: string, entryId: string): Observable<Blob> {
+  // The project's occurrence log rendered onto MUHNAC's ROC form (.docx). The
+  // form holds a single incident, so its information table repeats once per
+  // occurrence, each block naming its own collection and object.
+  downloadObjectOccurrenceDocument(projectId: string): Observable<Blob> {
     return this.http.get(
-      this.url(`/collection-use-projects/${projectId}/occurrence-entries/${entryId}/document`),
+      this.url(`/collection-use-projects/${projectId}/object-occurrence-log/document`),
       { responseType: 'blob' },
     );
   }

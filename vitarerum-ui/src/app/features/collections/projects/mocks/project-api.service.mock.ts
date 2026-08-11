@@ -777,7 +777,7 @@ export class ProjectApiServiceMock {
 
   // See downloadObjectAccessLogDocument — the real endpoint renders the ROC
   // form; the mock only needs the right filename to exercise the flow.
-  downloadObjectOccurrenceDocument(projectId: string, entryId: string): Observable<Blob> {
+  downloadObjectOccurrenceDocument(projectId: string): Observable<Blob> {
     const occurrenceLog = this.state.objectOccurrenceLogs.get(projectId);
     if (!occurrenceLog) {
       return throwError(() => ({
@@ -786,13 +786,7 @@ export class ProjectApiServiceMock {
         message: 'No object_occurrence_log found with id uuid',
       }));
     }
-    const entry = (this.state.occurrenceEntries.get(projectId) ?? []).find((e) => e.id === entryId);
-    if (!entry) return throwError(() => ({ status: 404, error: 'ENTRY_NOT_FOUND' }));
-    return of(
-      this.mockAttachmentBlob(
-        `${occurrenceLog.referenceNumber}-${entry.objectReference.inventoryNumber}-ROC.docx`,
-      ),
-    );
+    return of(this.mockAttachmentBlob(`${occurrenceLog.referenceNumber}-ROC.docx`));
   }
 
   uploadOccurrenceEntryAttachment(

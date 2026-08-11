@@ -465,13 +465,13 @@ describe('project log pages', () => {
     expect(root.querySelector('#occurrence-inventory-number')).toBeNull();
     expect(root.textContent).toContain('INV-ZOO-1892-001');
     expect(root.textContent).toContain('Add occurrence');
-    // The ROC form reports one incident, so the panel header offers no download.
-    expect(root.textContent).toContain('each occurrence has its own document');
+    // Nothing to report yet, so the log's ROC download is unavailable.
+    expect(buttonByText(root, 'Download DOCX').disabled).toBe(true);
   });
 
-  it('saves the ROC report the endpoint renders for one occurrence', async () => {
+  it("saves one ROC report covering the project's whole occurrence log", async () => {
     const service = TestBed.inject(PROJECT_API_SERVICE);
-    const entry = await firstValueFrom(
+    await firstValueFrom(
       service.createObjectOccurrenceEntry('proj-3', {
         collectionUseObjectId: 'INV-ZOO-1892-001',
         numberOfObjects: 1,
@@ -499,28 +499,17 @@ describe('project log pages', () => {
     fixture.detectChanges();
 
     const root = fixture.nativeElement as HTMLElement;
-    const objectToggle = Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find(
-      (button) => button.getAttribute('aria-controls')?.startsWith('object-occurrences-'),
-    );
-    objectToggle!.click();
-    fixture.detectChanges();
+    const downloadButton = buttonByText(root, 'Download DOCX');
+    expect(downloadButton.disabled).toBe(false);
 
-    const downloadButton = Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find(
-      (button) =>
-        button.getAttribute('aria-label') ===
-        'Download the ROC report for occurrence INV-ZOO-1892-001',
-    );
-    expect(downloadButton).toBeTruthy();
-    expect(downloadButton!.disabled).toBe(false);
-
-    downloadButton!.click();
+    downloadButton.click();
     await fixture.whenStable();
 
-    expect(downloadDocument).toHaveBeenCalledWith('proj-3', entry.id);
+    expect(downloadDocument).toHaveBeenCalledWith('proj-3');
     expect(createObjectURL).toHaveBeenCalledOnce();
     expect(anchorClick).toHaveBeenCalledOnce();
     const anchor = anchorClick.mock.instances[0] as HTMLAnchorElement;
-    expect(anchor.download).toMatch(/^OOL-.*-INV-ZOO-1892-001-ROC\.docx$/);
+    expect(anchor.download).toMatch(/^OOL-.*-ROC\.docx$/);
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:occurrence-docx');
   });
 

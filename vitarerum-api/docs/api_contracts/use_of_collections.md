@@ -197,33 +197,36 @@ Returns `404 OBJECT_ACCESS_LOG_NOT_FOUND` when the project has no access log yet
 
 ## Object Occurrence Report Document
 
-`GET /collection-use-projects/{projectId}/occurrence-entries/{entryId}/document`
+`GET /collection-use-projects/{projectId}/object-occurrence-log/document`
 
-Returns one occurrence rendered onto MUHNAC's ROC report
-(`ROC_formOcorrenciaColecoes`). The form holds a single date, place and
-description, so this is one report per occurrence rather than one per log — the
-occurrence log has no document of its own. Readable by anyone who may read the
-log itself.
+Returns the project's whole occurrence log rendered onto MUHNAC's ROC report
+(`ROC_formOcorrenciaColecoes`). The form describes a single incident, so its
+information table repeats once per occurrence — each block naming its own
+collection and object, which is what lets one document carry the entire log.
+Blocks run oldest first, across objects. Readable by anyone who may read the log
+itself.
 
 Successful response: `200 OK` with
 
 - `Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document`
-- `Content-Disposition: attachment; filename="{occurrenceLogReferenceNumber}-{inventoryNumber}-ROC.docx"`,
+- `Content-Disposition: attachment; filename="{occurrenceLogReferenceNumber}-ROC.docx"`,
   with the reference's slashes folded to hyphens
 
-The rendered report carries the log's reference number, the download date, the
-requester as the institution, and the entry's collection, designation, inventory
-number, date, place, detailed description, testimonials and reporter. The blank
-form's instruction text is replaced, so an unfilled field comes out empty rather
-than showing its instructions.
+Each block carries the entry's collection, designation, inventory number, date,
+place, detailed description, testimonials and images. The blank form's
+instruction text is replaced, so an unfilled field comes out empty rather than
+showing its instructions.
 
-Two fields are adapted to the form's shape:
+Three fields are adapted to the form's shape:
 
-- the form has no quantity field, so an entry covering more than one object
-  prints as `INV-001 (3 objetos)`;
+- the form has no quantity field, so a block covering more than one object
+  prints its inventory number as `INV-001 (3 objetos)`;
 - `Imagens` lists the entry's attachments by name and description, one per line.
-  The files themselves stay attached to the entry and are downloaded separately.
+  The files themselves stay attached to the entry and are downloaded separately;
+- the form signs off once, so "Reportado por" names every distinct reporter in
+  the log, joined with `; `.
+
+Entries whose project object has since been removed are omitted.
 
 Returns `404 OBJECT_OCCURRENCE_LOG_NOT_FOUND` when the project has no occurrence
-log, and `404 ENTRY_NOT_FOUND` when the entry does not belong to it or its object
-is no longer on the project.
+log yet (no occurrence has been reported).

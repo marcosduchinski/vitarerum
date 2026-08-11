@@ -160,9 +160,7 @@ class PublishedUseOfCollectionsReader:
     async def get_project(self, project_id: str) -> PublishedProjectView | None:
         from app.use_of_collections.domain.models import CollectionUseProjectId
 
-        project = await self._project_repo.get_by_id(
-            CollectionUseProjectId(project_id)
-        )
+        project = await self._project_repo.get_by_id(CollectionUseProjectId(project_id))
         if project is None or project.status not in {
             UseStatus.IN_PROGRESS,
             UseStatus.COMPLETED,

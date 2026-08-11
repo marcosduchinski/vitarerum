@@ -4686,8 +4686,22 @@ async def _seed_occurrence_for_document(
         display_title="Roaz-corvineiro, Tursiops truncatus",
         collection_name="Zoologia",
     )
+    other_object = CollectionUseObject(
+        id=CollectionUseObjectId("cuo-2"),
+        inventory_number="INV-002",
+        category="documentos",
+        description="a field notebook",
+        requested_at=datetime(2026, 6, 1, tzinfo=UTC),
+        requested_by=PermissionId("permission-1"),
+        display_title="Caderno de campo",
+        collection_name="Arquivo",
+    )
     await project_repo.add(
-        _project("proj-1", status=UseStatus.IN_PROGRESS, objects=[affected_object])
+        _project(
+            "proj-1",
+            status=UseStatus.IN_PROGRESS,
+            objects=[affected_object, other_object],
+        )
     )
     occurrence_log_repo = app.dependency_overrides[get_occurrence_log_repo]()
     await occurrence_log_repo.add(
@@ -4695,6 +4709,20 @@ async def _seed_occurrence_for_document(
             id=ObjectOccurrenceLogId("occ-log-1"),
             reference_number=ReferenceNumber("OO-MUHNAC/COL/2026/0001"),
             collection_use_project_id=CollectionUseProjectId("proj-1"),
+        )
+    )
+    # Two occurrences of the same object, seeded newest first so the report has
+    # to order them.
+    await occurrence_log_repo.save_entry(
+        ObjectOccurrenceEntry(
+            id=ObjectOccurrenceEntryId("occ-entry-2"),
+            object_occurrence_log_id=ObjectOccurrenceLogId("occ-log-1"),
+            collection_use_object_id=CollectionUseObjectId("cuo-2"),
+            number_of_objects=1,
+            occurrence_date=datetime(2026, 7, 8, tzinfo=UTC),
+            location="Sala 1, exposição",
+            reported_by=PermissionId("permission-1"),
+            detailed_description="Segunda ocorrência.",
         )
     )
     await occurrence_log_repo.save_entry(
@@ -4741,16 +4769,14 @@ async def test_download_object_occurrence_document_fills_the_roc_form() -> None:
         await _seed_occurrence_for_document(project_repo)
 
         response = await client.get(
-            "/api/v1/collection-use-projects/proj-1"
-            "/occurrence-entries/occ-entry-1/document",
+            "/api/v1/collection-use-projects/proj-1/object-occurrence-log/document",
             headers={"X-Permission-Id": "permission-staff"},
         )
 
     assert response.status_code == 200
     assert response.headers["content-type"] == DOCX_MEDIA_TYPE
     assert (
-        "OO-MUHNAC-COL-2026-0001-INV-001-ROC.docx"
-        in response.headers["content-disposition"]
+        "OO-MUHNAC-COL-2026-0001-ROC.docx" in response.headers["content-disposition"]
     )
 
     document = DocxDocument(io.BytesIO(response.content))
@@ -4759,42 +4785,48 @@ async def test_download_object_occurrence_document_fills_the_roc_form() -> None:
     assert header[1] == "ROC"
     assert header[3] == "Ana Silva"
 
-    fields = {
-        row.cells[0].text.split("\n")[0].strip(): row.cells[1].text
-        for row in document.tables[1].rows
-    }
-    assert fields["Coleção"] == "Zoologia"
-    assert fields["Designação do(s) objeto(s)"] == "Roaz-corvineiro, Tursiops truncatus"
-    # The form has no quantity field, so the count rides with the number.
-    assert fields["Nº(s) Inventário"] == "INV-001 (2 objetos)"
-    assert fields["Data"] == "02-06-2026"
-    assert fields["Local"] == "Sala 3, reserva"
-    assert "Primeira linha." in fields["Descrição detalhada"]
-    assert fields["Depoimentos recolhidos (se aplicável)"] == "Hugo Martins"
-    assert fields["Imagens"] == "before.jpg — Antes"
+    fields = document.tables[1]
+    # The whole information table repeats, so every block names its own object.
+    labels = [row.cells[0].text.split("\n")[0].strip() for row in fields.rows]
+    assert labels == [
+        "Coleção",
+        "Designação do(s) objeto(s)",
+        "Nº(s) Inventário",
+        "Data",
+        "Local",
+        "Descrição detalhada",
+        "Depoimentos recolhidos (se aplicável)",
+        "Imagens",
+    ] * 2
+
+    values = [row.cells[1].text for row in fields.rows]
+    # Oldest first, across objects. The form has no quantity field, so the count
+    # rides with the inventory number.
+    assert values[:8] == [
+        "Zoologia",
+        "Roaz-corvineiro, Tursiops truncatus",
+        "INV-001 (2 objetos)",
+        "02-06-2026",
+        "Sala 3, reserva",
+        "Primeira linha.\nSegunda linha.",
+        "Hugo Martins",
+        "before.jpg — Antes",
+    ]
+    assert values[8:] == [
+        "Arquivo",
+        "Caderno de campo",
+        "INV-002",
+        "08-07-2026",
+        "Sala 1, exposição",
+        "Segunda ocorrência.",
+        "",
+        "",
+    ]
     # The blank form's instruction text is replaced, not appended to.
-    assert "Identificar a coleção" not in document.tables[1].rows[0].cells[1].text
+    assert "Identificar a coleção" not in values[0]
 
-    assert document.tables[2].rows[0].cells[1].text == "Nuno Curador"
-
-
-async def test_download_object_occurrence_document_rejects_a_foreign_entry() -> None:
-    async with client_with_repos(caller=_STAFF_CALLER) as (
-        client,
-        project_repo,
-        _,
-        _,
-    ):
-        await _seed_occurrence_for_document(project_repo)
-
-        response = await client.get(
-            "/api/v1/collection-use-projects/proj-1"
-            "/occurrence-entries/does-not-exist/document",
-            headers={"X-Permission-Id": "permission-staff"},
-        )
-
-    assert response.status_code == 404
-    assert response.json()["error"] == "ENTRY_NOT_FOUND"
+    # The form signs off once; both reporters are named.
+    assert document.tables[2].rows[0].cells[1].text == "Nuno Curador; Ana Silva"
 
 
 async def test_download_object_occurrence_document_returns_404_without_log() -> None:
@@ -4804,11 +4836,16 @@ async def test_download_object_occurrence_document_returns_404_without_log() -> 
         _,
         _,
     ):
-        await project_repo.add(_project("proj-1", status=UseStatus.IN_PROGRESS))
+        await project_repo.add(
+            _project(
+                "proj-1",
+                status=UseStatus.IN_PROGRESS,
+                objects=[_collection_use_object()],
+            )
+        )
 
         response = await client.get(
-            "/api/v1/collection-use-projects/proj-1"
-            "/occurrence-entries/occ-entry-1/document",
+            "/api/v1/collection-use-projects/proj-1/object-occurrence-log/document",
             headers={"X-Permission-Id": "permission-staff"},
         )
 

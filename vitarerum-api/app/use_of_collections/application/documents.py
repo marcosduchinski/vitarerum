@@ -55,12 +55,9 @@ class ObjectOccurrenceDocumentImage:
 
 
 @dataclass(frozen=True, slots=True)
-class ObjectOccurrenceDocument:
-    """A single object occurrence as the ROC report presents it."""
+class ObjectOccurrenceDocumentEntry:
+    """One incident block of the report, naming the object it concerns."""
 
-    reference_number: str
-    issued_on: date
-    institution: str
     collection: str
     designation: str
     inventory_number: str
@@ -71,3 +68,17 @@ class ObjectOccurrenceDocument:
     testimonial: str
     images: tuple[ObjectOccurrenceDocumentImage, ...]
     reported_by: str
+
+
+@dataclass(frozen=True, slots=True)
+class ObjectOccurrenceDocument:
+    """A project's whole occurrence log as the ROC report presents it.
+
+    Each block identifies its own collection and object, which is what lets one
+    document carry every occurrence. Ordered oldest first, as a log reads.
+    """
+
+    reference_number: str
+    issued_on: date
+    institution: str
+    occurrences: tuple[ObjectOccurrenceDocumentEntry, ...]

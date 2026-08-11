@@ -98,10 +98,17 @@ export class ProjectOccurrenceLogPanelComponent {
     const err = this.projectResource.error();
     return err ? toApiError(err) : null;
   });
-  // The ROC form reports a single incident, so each entry has its own document
-  // and its own download state, keyed by entry id.
-  protected readonly occurrenceDocumentDownloading = signal<Record<string, boolean>>({});
-  protected readonly occurrenceDocumentErrors = signal<Record<string, ApiError | null>>({});
+  // One ROC report per project, covering the whole occurrence log.
+  protected readonly documentDownloading = signal(false);
+  protected readonly documentError = signal<ApiError | null>(null);
+  protected readonly canDownloadDocument = computed(
+    () =>
+      !this.occurrenceResource.isLoading() &&
+      !this.occurrenceError() &&
+      !!this.occurrenceLog() &&
+      this.occurrenceEntries().length > 0 &&
+      !this.documentDownloading(),
+  );
   protected readonly expandedObjectKey = signal<string | null>(null);
   protected readonly selectedOccurrenceObjectKey = signal<string | null>(null);
   protected readonly selectedOccurrenceObject = computed(() => {
@@ -435,30 +442,29 @@ export class ProjectOccurrenceLogPanelComponent {
     }
   }
 
-  protected async downloadOccurrenceDocument(entry: ObjectOccurrenceEntry): Promise<void> {
-    if (this.occurrenceDocumentDownloading()[entry.id]) return;
+  protected async downloadOccurrenceDocument(): Promise<void> {
+    if (!this.canDownloadDocument()) return;
 
-    this.setEntryRecord(this.occurrenceDocumentDownloading, entry.id, true);
-    this.setEntryRecord(this.occurrenceDocumentErrors, entry.id, null);
+    this.documentDownloading.set(true);
+    this.documentError.set(null);
     try {
       const blob = await firstValueFrom(
-        this.projectService.downloadObjectOccurrenceDocument(this.projectId(), entry.id),
+        this.projectService.downloadObjectOccurrenceDocument(this.projectId()),
       );
-      this.saveBlob(blob, this.occurrenceDocumentFileName(entry));
+      this.saveBlob(blob, this.occurrenceDocumentFileName());
     } catch (err) {
-      this.setEntryRecord(this.occurrenceDocumentErrors, entry.id, toApiError(err));
+      this.documentError.set(toApiError(err));
     } finally {
-      this.setEntryRecord(this.occurrenceDocumentDownloading, entry.id, false);
+      this.documentDownloading.set(false);
     }
   }
 
   // Mirrors the filename the endpoint sets on Content-Disposition, which a blob
   // response does not expose.
-  private occurrenceDocumentFileName(entry: ObjectOccurrenceEntry): string {
+  private occurrenceDocumentFileName(): string {
     const reference = this.occurrenceLog()?.referenceNumber ?? `project-${this.projectId()}`;
-    const name = `${reference}-${entry.objectReference.inventoryNumber}`;
-    const safeName = name.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
-    return `${safeName || 'object-occurrence'}-ROC.docx`;
+    const safeName = reference.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
+    return `${safeName || 'object-occurrence-log'}-ROC.docx`;
   }
 
   private saveBlob(blob: Blob, fileName: string): void {

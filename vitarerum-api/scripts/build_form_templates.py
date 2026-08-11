@@ -78,6 +78,29 @@ def _relax_row_height(row: Any) -> None:
         height.set(qn("w:hRule"), "atLeast")
 
 
+def _insert_tag_row(table: Any, index: int, tag: str, *, after: bool = False) -> int:
+    """Clone a row to carry a docxtpl ``{%tr %}`` tag, returning its position.
+
+    The blank forms have no spare rows for loop tags, so one is cloned from the
+    row being wrapped — it inherits the borders and cell widths, which keeps the
+    table well-formed if the tag is ever left unrendered. docxtpl deletes the
+    row when it runs the loop.
+    """
+    anchor = table.rows[index]._tr
+    clone = deepcopy(anchor)
+    if after:
+        anchor.addnext(clone)
+        position = index + 1
+    else:
+        anchor.addprevious(clone)
+        position = index
+    inserted = table.rows[position]
+    _set_cell_text(inserted.cells[0], tag)
+    for cell in inserted.cells[1:]:
+        _set_cell_text(cell, "")
+    return position
+
+
 def _inspect(document: Any) -> None:
     for table_index, table in enumerate(document.tables):
         print(f"--- table {table_index}: {len(table.rows)}x{len(table.columns)}")
@@ -125,11 +148,15 @@ def annotate_rais(source: Path, target: Path) -> None:
 
 
 def annotate_roc(source: Path, target: Path) -> None:
-    """The occurrence report: one incident per document, one field per row.
+    """The occurrence report: one project's whole occurrence log.
 
     The right-hand column holds instruction text ("Local da ocorrência.") that
     the placeholders replace, so a rendered report reads as a filled-in form
     rather than as the blank one.
+
+    The form describes a single incident, so the whole information table repeats
+    once per occurrence — each block naming its own collection and object, which
+    is what makes a single document able to carry the entire log.
     """
     document = Document(str(source))
 
@@ -140,19 +167,21 @@ def annotate_roc(source: Path, target: Path) -> None:
     _set_cell_text(header[3], "{{ institution }}")
 
     fields = document.tables[1]
-    for row_index, placeholder in enumerate(
+    _insert_tag_row(fields, 0, "{%tr for occurrence in occurrences %}")
+    for offset, placeholder in enumerate(
         (
-            "{{ collection }}",
-            "{{ designation }}",
-            "{{ inventory_numbers }}",
-            "{{ occurrence_date }}",
-            "{{ location }}",
-            "{{ detailed_description }}",
-            "{{ testimonial }}",
-            "{{ images }}",
+            "{{ occurrence.collection }}",
+            "{{ occurrence.designation }}",
+            "{{ occurrence.inventory_numbers }}",
+            "{{ occurrence.occurrence_date }}",
+            "{{ occurrence.location }}",
+            "{{ occurrence.detailed_description }}",
+            "{{ occurrence.testimonial }}",
+            "{{ occurrence.images }}",
         )
     ):
-        _set_cell_text(fields.rows[row_index].cells[1], placeholder)
+        _set_cell_text(fields.rows[1 + offset].cells[1], placeholder)
+    _insert_tag_row(fields, 8, "{%tr endfor %}", after=True)
 
     signature = document.tables[2]
     _set_cell_text(signature.rows[0].cells[1], "{{ reported_by }}")

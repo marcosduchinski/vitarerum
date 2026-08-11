@@ -40,6 +40,15 @@
   font-size: 1.25rem;
 }
 
+.access-sheet__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  align-items: center;
+  margin-top: 0.75rem;
+}
+
+.access-sheet__action,
 .occurrence-entry-form__submit,
 .occurrence-register__action,
 .occurrence-modal__secondary {
@@ -58,6 +67,7 @@
   }
 }
 
+.access-sheet__action,
 .occurrence-register__action--secondary,
 .occurrence-modal__secondary {
   border: 1px solid var(--color-line-strong);
@@ -65,11 +75,14 @@
   color: var(--color-text);
 }
 
-.access-sheet__hint {
-  margin: 0.5rem 0 0;
-  max-width: 46ch;
-  color: var(--color-muted);
-  font-size: 0.75rem;
+.access-sheet__action {
+  gap: 0.4rem;
+  font-size: 0.8rem;
+}
+
+.access-sheet__action--download:not(:disabled) {
+  border-color: var(--color-accent);
+  color: var(--color-accent-strong);
 }
 
 .occurrence-entry-form__submit,

@@ -646,13 +646,12 @@ async def get_object_occurrence_log(
 
 
 @projects_router.get(
-    "/{project_id}/occurrence-entries/{entry_id}/document",
+    "/{project_id}/object-occurrence-log/document",
     response_class=Response,
     responses={200: {"content": {DOCX_MEDIA_TYPE: {}}}},
 )
 async def download_object_occurrence_document(
     project_id: str,
-    entry_id: str,
     caller: CallerPermission,
     project_repo: ProjectRepo,
     proposal_repo: ProposalRepo,
@@ -660,10 +659,10 @@ async def download_object_occurrence_document(
     renderer: OccurrenceRenderer,
     session: DBSession,
 ) -> Response:
-    """One occurrence rendered onto MUHNAC's ROC report.
+    """The project's occurrence log rendered onto MUHNAC's ROC report.
 
-    The form holds a single date, place and description, so it is one report per
-    occurrence rather than one per log.
+    The form describes a single incident, so its information table repeats once
+    per occurrence — each block naming its own collection and object.
     """
     typed_project_id = CollectionUseProjectId(project_id)
     project = await _assert_existing_project_access(
@@ -672,22 +671,14 @@ async def download_object_occurrence_document(
     occurrence_log = await occurrence_log_repo.get_by_project_id(typed_project_id)
     if occurrence_log is None:
         raise _not_found("object_occurrence_log", project_id)
-    entry = await occurrence_log_repo.get_entry_by_id(
-        ObjectOccurrenceEntryId(entry_id)
+    entries, _ = await occurrence_log_repo.list_entries_by_project(
+        typed_project_id, None, 0, _DOCUMENT_ENTRY_CAP
     )
-    if entry is None or entry.object_occurrence_log_id != occurrence_log.id:
-        raise _not_found("entry", entry_id)
-    collection_use_object = _collection_use_objects_by_id(project).get(
-        entry.collection_use_object_id
-    )
-    if collection_use_object is None:
-        raise _not_found("entry", entry_id)
     proposal = await proposal_repo.get_by_project_id(typed_project_id)
     document = await build_object_occurrence_document(
         project,
         occurrence_log,
-        entry,
-        collection_use_object,
+        entries,
         session,
         issued_on=route_now().date(),
         requester_contact=proposal.requester_contact if proposal else None,
@@ -697,12 +688,8 @@ async def download_object_occurrence_document(
         media_type=DOCX_MEDIA_TYPE,
         headers={
             "Content-Disposition": content_disposition_attachment(
-                _document_file_name(
-                    occurrence_log.reference_number.value,
-                    collection_use_object.inventory_number,
-                    "ROC.docx",
-                ),
-                default="object-occurrence.docx",
+                _document_file_name(occurrence_log.reference_number.value, "ROC.docx"),
+                default="object-occurrence-log.docx",
             )
         },
     )

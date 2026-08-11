@@ -75,9 +75,7 @@ class _TestOnlyLegacyReferenceNumberGenerator:
     transactional sequence entirely.
     """
 
-    async def generate(
-        self, *, kind: ReferenceKind, on_date: date
-    ) -> ReferenceNumber:
+    async def generate(self, *, kind: ReferenceKind, on_date: date) -> ReferenceNumber:
         if kind is ReferenceKind.COLLECTION_USE_PROJECT:
             return ReferenceNumber(_new_reference_number())
         if kind is ReferenceKind.OBJECT_ACCESS_LOG:

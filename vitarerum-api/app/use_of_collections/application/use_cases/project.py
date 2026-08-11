@@ -229,9 +229,7 @@ class CreateFollowUpProject:
         self._project_repo = project_repository
         self._reference_generator = reference_generator or default_reference_generator()
 
-    async def execute(
-        self, data: CreateFollowUpProjectInput
-    ) -> CollectionUseProject:
+    async def execute(self, data: CreateFollowUpProjectInput) -> CollectionUseProject:
         origin_project = await self._project_repo.get_by_id(data.origin_project_id)
         if origin_project is None:
             raise LookupError(f"No project found with id {data.origin_project_id}")
@@ -617,8 +615,7 @@ class RemoveProjectObjectCascade:
             )
         for occurrence_entry in occurrence_entries:
             attachment_references.extend(
-                attachment.file_reference
-                for attachment in occurrence_entry.attachments
+                attachment.file_reference for attachment in occurrence_entry.attachments
             )
         for publication_entry in publication_entries:
             attachment_references.extend(

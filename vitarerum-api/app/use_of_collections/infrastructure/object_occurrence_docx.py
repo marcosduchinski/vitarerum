@@ -1,10 +1,13 @@
-"""docxtpl adapter that fills MUHNAC's ROC report with one object occurrence."""
+"""docxtpl adapter that fills MUHNAC's ROC report with one object's occurrences."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from app.use_of_collections.application.documents import ObjectOccurrenceDocument
+from app.use_of_collections.application.documents import (
+    ObjectOccurrenceDocument,
+    ObjectOccurrenceDocumentEntry,
+)
 from app.use_of_collections.infrastructure.docx_rendering import (
     DATE_FORMAT,
     TEMPLATE_DIR,
@@ -26,26 +29,36 @@ class DocxObjectOccurrenceRenderer:
             "reference_number": document.reference_number,
             "issued_on": issued_on,
             "institution": document.institution,
-            "collection": document.collection,
-            "designation": document.designation,
-            "inventory_numbers": self._inventory_numbers(document),
-            "occurrence_date": document.occurred_at.strftime(DATE_FORMAT),
-            "location": document.location,
-            "detailed_description": document.detailed_description,
-            "testimonial": document.testimonial,
-            "images": self._images(document),
-            "reported_by": document.reported_by,
+            "occurrences": [
+                self._occurrence_block(occurrence)
+                for occurrence in document.occurrences
+            ],
+            "reported_by": self._reporters(document),
             # The form's "Data do Relatório" is the day the report was produced.
             "reported_on": issued_on,
         }
 
-    def _inventory_numbers(self, document: ObjectOccurrenceDocument) -> str:
-        """The form has no quantity field, so the count rides with the number."""
-        if document.number_of_objects <= 1:
-            return document.inventory_number
-        return f"{document.inventory_number} ({document.number_of_objects} objetos)"
+    def _occurrence_block(
+        self, occurrence: ObjectOccurrenceDocumentEntry
+    ) -> dict[str, str]:
+        return {
+            "collection": occurrence.collection,
+            "designation": occurrence.designation,
+            "inventory_numbers": self._inventory_numbers(occurrence),
+            "occurrence_date": occurrence.occurred_at.strftime(DATE_FORMAT),
+            "location": occurrence.location,
+            "detailed_description": occurrence.detailed_description,
+            "testimonial": occurrence.testimonial,
+            "images": self._images(occurrence),
+        }
 
-    def _images(self, document: ObjectOccurrenceDocument) -> str:
+    def _inventory_numbers(self, occurrence: ObjectOccurrenceDocumentEntry) -> str:
+        """The form has no quantity field, so the count rides with the number."""
+        if occurrence.number_of_objects <= 1:
+            return occurrence.inventory_number
+        return f"{occurrence.inventory_number} ({occurrence.number_of_objects} objetos)"
+
+    def _images(self, occurrence: ObjectOccurrenceDocumentEntry) -> str:
         # The files themselves stay attached to the entry; the report names them
         # so a printed copy still says what should accompany it. docxtpl turns
         # the newlines into line breaks.
@@ -53,5 +66,13 @@ class DocxObjectOccurrenceRenderer:
             f"{image.file_name} — {image.description}"
             if image.description
             else image.file_name
-            for image in document.images
+            for image in occurrence.images
         )
+
+    def _reporters(self, document: ObjectOccurrenceDocument) -> str:
+        """The form signs off once, but occurrences may have different reporters."""
+        names: dict[str, None] = {}
+        for occurrence in document.occurrences:
+            if occurrence.reported_by:
+                names.setdefault(occurrence.reported_by, None)
+        return "; ".join(names)
