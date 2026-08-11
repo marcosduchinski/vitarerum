@@ -98,13 +98,10 @@ export class ProjectOccurrenceLogPanelComponent {
     const err = this.projectResource.error();
     return err ? toApiError(err) : null;
   });
-  protected readonly canDownloadDocxDemo = computed(
-    () =>
-      !this.occurrenceResource.isLoading() &&
-      !this.occurrenceError() &&
-      !!this.occurrenceLog() &&
-      this.occurrenceEntries().length > 0,
-  );
+  // The ROC form reports a single incident, so each entry has its own document
+  // and its own download state, keyed by entry id.
+  protected readonly occurrenceDocumentDownloading = signal<Record<string, boolean>>({});
+  protected readonly occurrenceDocumentErrors = signal<Record<string, ApiError | null>>({});
   protected readonly expandedObjectKey = signal<string | null>(null);
   protected readonly selectedOccurrenceObjectKey = signal<string | null>(null);
   protected readonly selectedOccurrenceObject = computed(() => {
@@ -438,15 +435,30 @@ export class ProjectOccurrenceLogPanelComponent {
     }
   }
 
-  protected downloadObjectOccurrenceLogDemo(): void {
-    if (!this.canDownloadDocxDemo()) return;
+  protected async downloadOccurrenceDocument(entry: ObjectOccurrenceEntry): Promise<void> {
+    if (this.occurrenceDocumentDownloading()[entry.id]) return;
 
-    const blob = new Blob([this.objectOccurrenceLogDemoContent()], {
-      type: 'text/plain;charset=utf-8',
-    });
+    this.setEntryRecord(this.occurrenceDocumentDownloading, entry.id, true);
+    this.setEntryRecord(this.occurrenceDocumentErrors, entry.id, null);
+    try {
+      const blob = await firstValueFrom(
+        this.projectService.downloadObjectOccurrenceDocument(this.projectId(), entry.id),
+      );
+      this.saveBlob(blob, this.occurrenceDocumentFileName(entry));
+    } catch (err) {
+      this.setEntryRecord(this.occurrenceDocumentErrors, entry.id, toApiError(err));
+    } finally {
+      this.setEntryRecord(this.occurrenceDocumentDownloading, entry.id, false);
+    }
+  }
+
+  // Mirrors the filename the endpoint sets on Content-Disposition, which a blob
+  // response does not expose.
+  private occurrenceDocumentFileName(entry: ObjectOccurrenceEntry): string {
     const reference = this.occurrenceLog()?.referenceNumber ?? `project-${this.projectId()}`;
-    const safeReference = reference.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
-    this.saveBlob(blob, `${safeReference || 'object-occurrence-log'}-occurrence-log.docx`);
+    const name = `${reference}-${entry.objectReference.inventoryNumber}`;
+    const safeName = name.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
+    return `${safeName || 'object-occurrence'}-ROC.docx`;
   }
 
   private saveBlob(blob: Blob, fileName: string): void {
@@ -458,37 +470,6 @@ export class ProjectOccurrenceLogPanelComponent {
     anchor.download = fileName;
     anchor.click();
     URL.revokeObjectURL(url);
-  }
-
-  private objectOccurrenceLogDemoContent(): string {
-    const log = this.occurrenceLog();
-    const lines = [
-      'DEMONSTRATION DOCX EXPORT',
-      'This placeholder contains plain text and will be replaced by the document endpoint.',
-      '',
-      `Log reference: ${log?.referenceNumber ?? 'Not issued'}`,
-      `Project ID: ${this.projectId()}`,
-      `Curator: ${log?.curator?.user.name ?? '—'}`,
-      '',
-      'OCCURRENCES',
-    ];
-
-    this.occurrenceEntries().forEach((entry, index) => {
-      lines.push(
-        '',
-        `${index + 1}. ${entry.objectReference.inventoryNumber}`,
-        `Object: ${entry.objectReference.displayTitle ?? entry.objectReference.objectName ?? '—'}`,
-        `Number of objects: ${entry.numberOfObjects}`,
-        `Occurrence date: ${entry.occurrenceDate}`,
-        `Location: ${entry.location}`,
-        `Reported by: ${entry.reportedBy.user.name}`,
-        `Description: ${entry.detailedDescription}`,
-        `Testimonial: ${entry.testimonial ?? '—'}`,
-        `Attachments: ${entry.attachments.length}`,
-      );
-    });
-
-    return lines.join('\r\n');
   }
 
   protected toggleOccurrenceAttachments(entryId: string): void {

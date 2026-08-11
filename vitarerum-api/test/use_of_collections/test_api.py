@@ -28,12 +28,14 @@ from app.use_of_collections.application.ports import (
     ResolvedExternalRequester,
 )
 from app.use_of_collections.domain.enums import (
+    MediaType,
     ProposalStatus,
     SubmissionChannel,
     UseStatus,
     UseType,
 )
 from app.use_of_collections.domain.models import (
+    Attachment,
     CollectionUseObject,
     CollectionUseObjectId,
     CollectionUseProject,
@@ -65,9 +67,7 @@ from app.use_of_collections.domain.models import (
     RequestedObjectId,
     RequesterContact,
 )
-from app.use_of_collections.infrastructure.object_access_log_docx import (
-    DOCX_MEDIA_TYPE,
-)
+from app.use_of_collections.infrastructure.docx_rendering import DOCX_MEDIA_TYPE
 from app.use_of_collections.presentation.dependencies import (
     get_access_log_repo,
     get_conversation_repo,
@@ -4517,7 +4517,7 @@ async def _seed_access_log_for_document(
     await access_log_repo.add(
         ObjectAccessLog(
             id=ObjectAccessLogId("log-1"),
-            reference_number=ReferenceNumber("OAL-ABCDEFG1"),
+            reference_number=ReferenceNumber("OL-MUHNAC/COL/2026/0001"),
             collection_use_project_id=CollectionUseProjectId("proj-1"),
             date_conclusion=datetime(2026, 6, 9, tzinfo=UTC),
             curator=PermissionId("permission-staff"),
@@ -4563,11 +4563,13 @@ async def test_download_object_access_log_document_fills_the_rais_form() -> None
 
     assert response.status_code == 200
     assert response.headers["content-type"] == DOCX_MEDIA_TYPE
-    assert "OAL-ABCDEFG1-RAIS.docx" in response.headers["content-disposition"]
+    assert (
+        "OL-MUHNAC-COL-2026-0001-RAIS.docx" in response.headers["content-disposition"]
+    )
 
     document = DocxDocument(io.BytesIO(response.content))
     header = [cell.text for cell in document.tables[0].rows[2].cells]
-    assert header[0] == "OAL-ABCDEFG1"
+    assert header[0] == "OL-MUHNAC/COL/2026/0001"
     assert header[1] == "RAIS"
     assert header[3] == "Ana Silva"
 
@@ -4669,6 +4671,149 @@ async def test_download_object_access_log_document_returns_404_without_log() -> 
 
     assert response.status_code == 404
     assert response.json()["error"] == "OBJECT_ACCESS_LOG_NOT_FOUND"
+
+
+async def _seed_occurrence_for_document(
+    project_repo: InMemoryProjectRepository,
+) -> InMemoryOccurrenceLogRepository:
+    affected_object = CollectionUseObject(
+        id=CollectionUseObjectId("cuo-1"),
+        inventory_number="INV-001",
+        category="peles",
+        description="a fox head",
+        requested_at=datetime(2026, 6, 1, tzinfo=UTC),
+        requested_by=PermissionId("permission-1"),
+        display_title="Roaz-corvineiro, Tursiops truncatus",
+        collection_name="Zoologia",
+    )
+    await project_repo.add(
+        _project("proj-1", status=UseStatus.IN_PROGRESS, objects=[affected_object])
+    )
+    occurrence_log_repo = app.dependency_overrides[get_occurrence_log_repo]()
+    await occurrence_log_repo.add(
+        ObjectOccurrenceLog(
+            id=ObjectOccurrenceLogId("occ-log-1"),
+            reference_number=ReferenceNumber("OO-MUHNAC/COL/2026/0001"),
+            collection_use_project_id=CollectionUseProjectId("proj-1"),
+        )
+    )
+    await occurrence_log_repo.save_entry(
+        ObjectOccurrenceEntry(
+            id=ObjectOccurrenceEntryId("occ-entry-1"),
+            object_occurrence_log_id=ObjectOccurrenceLogId("occ-log-1"),
+            collection_use_object_id=CollectionUseObjectId("cuo-1"),
+            number_of_objects=2,
+            occurrence_date=datetime(2026, 6, 2, tzinfo=UTC),
+            location="Sala 3, reserva",
+            reported_by=PermissionId("permission-staff"),
+            detailed_description="Primeira linha.\nSegunda linha.",
+            testimonial="Hugo Martins",
+            attachments=[
+                Attachment(
+                    file_reference="occurrences/occ-entry-1/before.jpg",
+                    file_name="before.jpg",
+                    media_type=MediaType.IMAGE,
+                    uploaded_at=datetime(2026, 6, 3, tzinfo=UTC),
+                    description="Antes",
+                )
+            ],
+        )
+    )
+    return occurrence_log_repo
+
+
+async def test_download_object_occurrence_document_fills_the_roc_form() -> None:
+    async with client_with_repos(
+        caller=_STAFF_CALLER,
+        permission_records={
+            "permission-1": _permission_record(
+                "permission-1",
+                GroupName.EXTERNAL,
+                user_name="Ana Silva",
+            ),
+            "permission-staff": _permission_record(
+                "permission-staff",
+                GroupName.CURATORIAL,
+                user_name="Nuno Curador",
+            ),
+        },
+    ) as (client, project_repo, _, _):
+        await _seed_occurrence_for_document(project_repo)
+
+        response = await client.get(
+            "/api/v1/collection-use-projects/proj-1"
+            "/occurrence-entries/occ-entry-1/document",
+            headers={"X-Permission-Id": "permission-staff"},
+        )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == DOCX_MEDIA_TYPE
+    assert (
+        "OO-MUHNAC-COL-2026-0001-INV-001-ROC.docx"
+        in response.headers["content-disposition"]
+    )
+
+    document = DocxDocument(io.BytesIO(response.content))
+    header = [cell.text for cell in document.tables[0].rows[2].cells]
+    assert header[0] == "OO-MUHNAC/COL/2026/0001"
+    assert header[1] == "ROC"
+    assert header[3] == "Ana Silva"
+
+    fields = {
+        row.cells[0].text.split("\n")[0].strip(): row.cells[1].text
+        for row in document.tables[1].rows
+    }
+    assert fields["Coleção"] == "Zoologia"
+    assert fields["Designação do(s) objeto(s)"] == "Roaz-corvineiro, Tursiops truncatus"
+    # The form has no quantity field, so the count rides with the number.
+    assert fields["Nº(s) Inventário"] == "INV-001 (2 objetos)"
+    assert fields["Data"] == "02-06-2026"
+    assert fields["Local"] == "Sala 3, reserva"
+    assert "Primeira linha." in fields["Descrição detalhada"]
+    assert fields["Depoimentos recolhidos (se aplicável)"] == "Hugo Martins"
+    assert fields["Imagens"] == "before.jpg — Antes"
+    # The blank form's instruction text is replaced, not appended to.
+    assert "Identificar a coleção" not in document.tables[1].rows[0].cells[1].text
+
+    assert document.tables[2].rows[0].cells[1].text == "Nuno Curador"
+
+
+async def test_download_object_occurrence_document_rejects_a_foreign_entry() -> None:
+    async with client_with_repos(caller=_STAFF_CALLER) as (
+        client,
+        project_repo,
+        _,
+        _,
+    ):
+        await _seed_occurrence_for_document(project_repo)
+
+        response = await client.get(
+            "/api/v1/collection-use-projects/proj-1"
+            "/occurrence-entries/does-not-exist/document",
+            headers={"X-Permission-Id": "permission-staff"},
+        )
+
+    assert response.status_code == 404
+    assert response.json()["error"] == "ENTRY_NOT_FOUND"
+
+
+async def test_download_object_occurrence_document_returns_404_without_log() -> None:
+    async with client_with_repos(caller=_STAFF_CALLER) as (
+        client,
+        project_repo,
+        _,
+        _,
+    ):
+        await project_repo.add(_project("proj-1", status=UseStatus.IN_PROGRESS))
+
+        response = await client.get(
+            "/api/v1/collection-use-projects/proj-1"
+            "/occurrence-entries/occ-entry-1/document",
+            headers={"X-Permission-Id": "permission-staff"},
+        )
+
+    assert response.status_code == 404
+    assert response.json()["error"] == "OBJECT_OCCURRENCE_LOG_NOT_FOUND"
 
 
 async def test_add_occurrence_entry_returns_201_with_occurrence_log_created() -> None:

@@ -34,6 +34,7 @@ from app.use_of_collections.application.ports import (
     FileStoragePort,
     ObjectAccessLogDocumentRenderer,
     ObjectAccessLogRepository,
+    ObjectOccurrenceDocumentRenderer,
     ObjectOccurrenceLogRepository,
     ProposalNotificationEmailSender,
     ProposalRepository,
@@ -55,6 +56,9 @@ from app.use_of_collections.infrastructure.external_requester import (
 )
 from app.use_of_collections.infrastructure.object_access_log_docx import (
     DocxObjectAccessLogRenderer,
+)
+from app.use_of_collections.infrastructure.object_occurrence_docx import (
+    DocxObjectOccurrenceRenderer,
 )
 from app.use_of_collections.infrastructure.proposal_notification_email import (
     LoggingProposalNotificationEmailSender,
@@ -114,6 +118,10 @@ def get_file_storage() -> FileStoragePort:
 
 def get_object_access_log_renderer() -> ObjectAccessLogDocumentRenderer:
     return DocxObjectAccessLogRenderer()
+
+
+def get_object_occurrence_renderer() -> ObjectOccurrenceDocumentRenderer:
+    return DocxObjectOccurrenceRenderer()
 
 
 def get_amendment_invitation() -> AmendmentInvitationPort:
@@ -197,6 +205,9 @@ ProjectTodoRepo = Annotated[StaffProjectTodoRepository, Depends(get_project_todo
 FileStorage = Annotated[FileStoragePort, Depends(get_file_storage)]
 AccessLogRenderer = Annotated[
     ObjectAccessLogDocumentRenderer, Depends(get_object_access_log_renderer)
+]
+OccurrenceRenderer = Annotated[
+    ObjectOccurrenceDocumentRenderer, Depends(get_object_occurrence_renderer)
 ]
 AmendmentInvitation = Annotated[
     AmendmentInvitationPort, Depends(get_amendment_invitation)

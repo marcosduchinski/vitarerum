@@ -61,9 +61,7 @@ from app.use_of_collections.domain.models import (
     ObjectOccurrenceEntryId,
     PublicationLogEntryId,
 )
-from app.use_of_collections.infrastructure.object_access_log_docx import (
-    DOCX_MEDIA_TYPE,
-)
+from app.use_of_collections.infrastructure.docx_rendering import DOCX_MEDIA_TYPE
 from app.use_of_collections.presentation.common import (
     _assert_existing_project_access,
     _build_access_log_response,
@@ -87,6 +85,7 @@ from app.use_of_collections.presentation.dependencies import (
     DBSession,
     FileStorage,
     OccurrenceLogRepo,
+    OccurrenceRenderer,
     ProjectRepo,
     ProposalRepo,
     PublicationLogRepo,
@@ -94,6 +93,9 @@ from app.use_of_collections.presentation.dependencies import (
 )
 from app.use_of_collections.presentation.object_access_log_document import (
     build_object_access_log_document,
+)
+from app.use_of_collections.presentation.object_occurrence_document import (
+    build_object_occurrence_document,
 )
 from app.use_of_collections.presentation.schemas import (
     AddLogEntryRequest,
@@ -117,6 +119,17 @@ from app.use_of_collections.presentation.schemas import (
 # The register prints every logged object; the cap only guards against an
 # unbounded read, well above any plausible in-situ visit.
 _DOCUMENT_ENTRY_CAP = 1000
+
+
+def _document_file_name(*parts: str) -> str:
+    """Join reference numbers into a file name safely.
+
+    Reference masks embed slashes (``OO-MUHNAC/COL/2026/0001``), which
+    ``safe_basename`` would read as directory components and strip — leaving
+    just ``0001``. Fold them into hyphens first so the whole reference survives.
+    """
+    joined = "-".join(part for part in parts if part)
+    return "".join("-" if char in "/\\" else char for char in joined)
 
 
 async def _download_attachment(
@@ -344,7 +357,7 @@ async def download_object_access_log_document(
         media_type=DOCX_MEDIA_TYPE,
         headers={
             "Content-Disposition": content_disposition_attachment(
-                f"{access_log.reference_number.value}-RAIS.docx",
+                _document_file_name(access_log.reference_number.value, "RAIS.docx"),
                 default="object-access-log.docx",
             )
         },
@@ -630,6 +643,69 @@ async def get_object_occurrence_log(
     if occurrence_log is None:
         raise _not_found("object_occurrence_log", project_id)
     return await _build_occurrence_log_response(occurrence_log, session)
+
+
+@projects_router.get(
+    "/{project_id}/occurrence-entries/{entry_id}/document",
+    response_class=Response,
+    responses={200: {"content": {DOCX_MEDIA_TYPE: {}}}},
+)
+async def download_object_occurrence_document(
+    project_id: str,
+    entry_id: str,
+    caller: CallerPermission,
+    project_repo: ProjectRepo,
+    proposal_repo: ProposalRepo,
+    occurrence_log_repo: OccurrenceLogRepo,
+    renderer: OccurrenceRenderer,
+    session: DBSession,
+) -> Response:
+    """One occurrence rendered onto MUHNAC's ROC report.
+
+    The form holds a single date, place and description, so it is one report per
+    occurrence rather than one per log.
+    """
+    typed_project_id = CollectionUseProjectId(project_id)
+    project = await _assert_existing_project_access(
+        project_id, caller, project_repo, proposal_repo
+    )
+    occurrence_log = await occurrence_log_repo.get_by_project_id(typed_project_id)
+    if occurrence_log is None:
+        raise _not_found("object_occurrence_log", project_id)
+    entry = await occurrence_log_repo.get_entry_by_id(
+        ObjectOccurrenceEntryId(entry_id)
+    )
+    if entry is None or entry.object_occurrence_log_id != occurrence_log.id:
+        raise _not_found("entry", entry_id)
+    collection_use_object = _collection_use_objects_by_id(project).get(
+        entry.collection_use_object_id
+    )
+    if collection_use_object is None:
+        raise _not_found("entry", entry_id)
+    proposal = await proposal_repo.get_by_project_id(typed_project_id)
+    document = await build_object_occurrence_document(
+        project,
+        occurrence_log,
+        entry,
+        collection_use_object,
+        session,
+        issued_on=route_now().date(),
+        requester_contact=proposal.requester_contact if proposal else None,
+    )
+    return Response(
+        content=await renderer.render(document),
+        media_type=DOCX_MEDIA_TYPE,
+        headers={
+            "Content-Disposition": content_disposition_attachment(
+                _document_file_name(
+                    occurrence_log.reference_number.value,
+                    collection_use_object.inventory_number,
+                    "ROC.docx",
+                ),
+                default="object-occurrence.docx",
+            )
+        },
+    )
 
 
 @projects_router.post(

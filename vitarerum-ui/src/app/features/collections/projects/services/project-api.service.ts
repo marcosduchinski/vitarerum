@@ -277,6 +277,15 @@ export class ProjectApiService {
     );
   }
 
+  // One occurrence rendered onto MUHNAC's ROC form (.docx). The form holds a
+  // single incident, so it is one report per entry rather than one per log.
+  downloadObjectOccurrenceDocument(projectId: string, entryId: string): Observable<Blob> {
+    return this.http.get(
+      this.url(`/collection-use-projects/${projectId}/occurrence-entries/${entryId}/document`),
+      { responseType: 'blob' },
+    );
+  }
+
   // Downloads a log-entry attachment's binary content. The endpoint streams the
   // file (Content-Disposition: attachment); the Bearer token is added by the
   // auth interceptor, so it must be fetched here rather than linked directly.

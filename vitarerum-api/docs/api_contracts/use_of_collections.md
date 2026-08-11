@@ -177,7 +177,9 @@ log itself, staff and the project's own researcher alike.
 Successful response: `200 OK` with
 
 - `Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document`
-- `Content-Disposition: attachment; filename="{accessLogReferenceNumber}-RAIS.docx"`
+- `Content-Disposition: attachment; filename="{accessLogReferenceNumber}-RAIS.docx"`,
+  with the reference's slashes folded to hyphens
+  (`OL-MUHNAC/COL/2026/0001` → `OL-MUHNAC-COL-2026-0001-RAIS.docx`)
 
 The rendered form carries the log's reference number, the download date, the
 researcher's name and e-mail, the collections reached, the curator, the
@@ -192,3 +194,36 @@ downloading.
 
 Returns `404 OBJECT_ACCESS_LOG_NOT_FOUND` when the project has no access log yet
 (no object has been logged).
+
+## Object Occurrence Report Document
+
+`GET /collection-use-projects/{projectId}/occurrence-entries/{entryId}/document`
+
+Returns one occurrence rendered onto MUHNAC's ROC report
+(`ROC_formOcorrenciaColecoes`). The form holds a single date, place and
+description, so this is one report per occurrence rather than one per log — the
+occurrence log has no document of its own. Readable by anyone who may read the
+log itself.
+
+Successful response: `200 OK` with
+
+- `Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document`
+- `Content-Disposition: attachment; filename="{occurrenceLogReferenceNumber}-{inventoryNumber}-ROC.docx"`,
+  with the reference's slashes folded to hyphens
+
+The rendered report carries the log's reference number, the download date, the
+requester as the institution, and the entry's collection, designation, inventory
+number, date, place, detailed description, testimonials and reporter. The blank
+form's instruction text is replaced, so an unfilled field comes out empty rather
+than showing its instructions.
+
+Two fields are adapted to the form's shape:
+
+- the form has no quantity field, so an entry covering more than one object
+  prints as `INV-001 (3 objetos)`;
+- `Imagens` lists the entry's attachments by name and description, one per line.
+  The files themselves stay attached to the entry and are downloaded separately.
+
+Returns `404 OBJECT_OCCURRENCE_LOG_NOT_FOUND` when the project has no occurrence
+log, and `404 ENTRY_NOT_FOUND` when the entry does not belong to it or its object
+is no longer on the project.

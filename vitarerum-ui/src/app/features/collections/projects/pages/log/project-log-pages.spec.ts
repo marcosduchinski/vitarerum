@@ -465,12 +465,13 @@ describe('project log pages', () => {
     expect(root.querySelector('#occurrence-inventory-number')).toBeNull();
     expect(root.textContent).toContain('INV-ZOO-1892-001');
     expect(root.textContent).toContain('Add occurrence');
-    expect(buttonByText(root, 'Download DOCX').disabled).toBe(true);
+    // The ROC form reports one incident, so the panel header offers no download.
+    expect(root.textContent).toContain('each occurrence has its own document');
   });
 
-  it('downloads a frontend-only DOCX placeholder when occurrence entries exist', async () => {
+  it('saves the ROC report the endpoint renders for one occurrence', async () => {
     const service = TestBed.inject(PROJECT_API_SERVICE);
-    await firstValueFrom(
+    const entry = await firstValueFrom(
       service.createObjectOccurrenceEntry('proj-3', {
         collectionUseObjectId: 'INV-ZOO-1892-001',
         numberOfObjects: 1,
@@ -480,7 +481,7 @@ describe('project log pages', () => {
         testimonial: 'No damage was observed.',
       }),
     );
-    const downloadAttachment = vi.spyOn(service, 'downloadOccurrenceEntryAttachment');
+    const downloadDocument = vi.spyOn(service, 'downloadObjectOccurrenceDocument');
     const createObjectURL = vi
       .spyOn(URL, 'createObjectURL')
       .mockReturnValue('blob:occurrence-docx');
@@ -498,23 +499,29 @@ describe('project log pages', () => {
     fixture.detectChanges();
 
     const root = fixture.nativeElement as HTMLElement;
-    const downloadButton = buttonByText(root, 'Download DOCX');
-    expect(downloadButton.disabled).toBe(false);
-
-    downloadButton.click();
-
-    expect(createObjectURL).toHaveBeenCalledOnce();
-    const blob = createObjectURL.mock.calls[0][0] as Blob;
-    await expect(blob.text()).resolves.toContain('INV-ZOO-1892-001');
-    await expect(blob.text()).resolves.toContain('Location: Research room 2');
-    await expect(blob.text()).resolves.toContain(
-      'Description: Specimen condition documented after consultation.',
+    const objectToggle = Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find(
+      (button) => button.getAttribute('aria-controls')?.startsWith('object-occurrences-'),
     );
+    objectToggle!.click();
+    fixture.detectChanges();
+
+    const downloadButton = Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find(
+      (button) =>
+        button.getAttribute('aria-label') ===
+        'Download the ROC report for occurrence INV-ZOO-1892-001',
+    );
+    expect(downloadButton).toBeTruthy();
+    expect(downloadButton!.disabled).toBe(false);
+
+    downloadButton!.click();
+    await fixture.whenStable();
+
+    expect(downloadDocument).toHaveBeenCalledWith('proj-3', entry.id);
+    expect(createObjectURL).toHaveBeenCalledOnce();
     expect(anchorClick).toHaveBeenCalledOnce();
     const anchor = anchorClick.mock.instances[0] as HTMLAnchorElement;
-    expect(anchor.download).toMatch(/^OOL-.*-occurrence-log\.docx$/);
+    expect(anchor.download).toMatch(/^OOL-.*-INV-ZOO-1892-001-ROC\.docx$/);
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:occurrence-docx');
-    expect(downloadAttachment).not.toHaveBeenCalled();
   });
 
   it('registers object occurrence entries from an object row with required contract fields', async () => {

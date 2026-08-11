@@ -2,23 +2,14 @@
   <section class="access-sheet" aria-labelledby="object-occurrence-log-heading">
     <header class="access-sheet__header">
       <div>
-        <p class="access-sheet__eyebrow">RAIS · Collection occurrence</p>
+        <p class="access-sheet__eyebrow">ROC · Collection occurrence</p>
         <h2 id="object-occurrence-log-heading" class="access-sheet__title">
           Object occurrence log
         </h2>
-        <div class="access-sheet__actions">
-          <button
-            type="button"
-            class="access-sheet__action access-sheet__action--download"
-            [disabled]="!canDownloadDocxDemo()"
-            title="Demonstration export; backend document generation is not connected"
-            (click)="downloadObjectOccurrenceLogDemo()"
-          >
-            <span class="pi pi-download" aria-hidden="true"></span>
-            Download DOCX
-            <span class="access-sheet__action-badge">Demo</span>
-          </button>
-        </div>
+        <p class="access-sheet__hint">
+          The ROC report covers a single incident, so each occurrence has its own document —
+          download it from the occurrence's row.
+        </p>
       </div>
 
       <dl class="access-summary" aria-label="Object occurrence log summary">
@@ -238,6 +229,28 @@
                                       >
                                         Edit
                                       </button>
+                                      <button
+                                        type="button"
+                                        class="occurrence-register__action occurrence-register__action--secondary"
+                                        [disabled]="occurrenceDocumentDownloading()[entry.id]"
+                                        [attr.aria-label]="
+                                          'Download the ROC report for occurrence ' +
+                                          entry.objectReference.inventoryNumber
+                                        "
+                                        (click)="downloadOccurrenceDocument(entry)"
+                                      >
+                                        <span class="pi pi-download" aria-hidden="true"></span>
+                                        {{
+                                          occurrenceDocumentDownloading()[entry.id]
+                                            ? 'Preparing…'
+                                            : 'ROC'
+                                        }}
+                                      </button>
+                                      @if (occurrenceDocumentErrors()[entry.id]) {
+                                        <app-error-message
+                                          [apiError]="occurrenceDocumentErrors()[entry.id]!"
+                                        />
+                                      }
                                     </td>
                                   </tr>
                                   @if (expandedOccurrenceEntryId() === entry.id) {
@@ -588,7 +601,11 @@
               >
                 <span class="initial-files__label">File descriptions</span>
                 <ul class="initial-files__list" aria-label="Occurrence file descriptions">
-                  @for (file of occurrenceFiles(); track file.name + ':' + $index; let index = $index) {
+                  @for (
+                    file of occurrenceFiles();
+                    track file.name + ':' + $index;
+                    let index = $index
+                  ) {
                     <li class="initial-files__item">
                       <span class="initial-files__name">{{ file.name }}</span>
                       <input

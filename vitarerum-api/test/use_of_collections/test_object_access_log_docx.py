@@ -9,6 +9,7 @@ import io
 from datetime import UTC, date, datetime
 
 from docx import Document as DocxDocument
+from docx.oxml.ns import qn
 
 from app.use_of_collections.application.documents import (
     ObjectAccessLogDocument,
@@ -25,9 +26,10 @@ _FORM_OBJECT_LINES = 15
 def _document(
     objects: tuple[ObjectAccessLogDocumentObject, ...],
     conclusion_date: date | None = None,
+    reference_number: str = "OAL-ABCDEFG1",
 ) -> ObjectAccessLogDocument:
     return ObjectAccessLogDocument(
-        reference_number="OAL-ABCDEFG1",
+        reference_number=reference_number,
         issued_on=date(2026, 8, 11),
         requester="Ana Silva",
         researcher_name="Ana Silva",
@@ -79,6 +81,19 @@ async def test_render_leaves_the_conclusion_date_blank_while_open() -> None:
     rendered = await _render(_document((_object("INV-001"),)))
 
     assert rendered.tables[3].rows[1].cells[1].text == ""
+
+
+async def test_render_lets_the_header_row_grow_for_a_full_reference() -> None:
+    """See the ROC test of the same name — both forms print the reference in a
+    row the blank form fixed at one line."""
+    rendered = await _render(
+        _document((_object("INV-001"),), reference_number="OL-MUHNAC/COL/2026/0001")
+    )
+
+    header_row = rendered.tables[0].rows[2]
+    assert header_row.cells[0].text == "OL-MUHNAC/COL/2026/0001"
+    height = header_row._tr.find(qn("w:trPr")).find(qn("w:trHeight"))
+    assert height.get(qn("w:hRule")) != "exact"
 
 
 async def test_render_prints_dates_in_the_forms_day_first_format() -> None:
