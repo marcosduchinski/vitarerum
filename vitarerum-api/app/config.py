@@ -23,7 +23,9 @@ class Settings(BaseSettings):
     file_encryption_key: str = ""
     # Database field encryption key: 32 bytes encoded as base64.
     db_field_encryption_key: str = ""
-    # Institution name used as the place_name when exporting in-situ visit records.
+    # Institution operating this deployment. Captured on every exported in-situ
+    # visit record, as both its place_name and the dcterms:creator of the CIDOC
+    # graph. The default is a placeholder and is rejected outside local/test.
     institution_name: str = "Museum"
     cors_origins: list[str] = ["*"]
     jwt_secret: str = "change-me-too-local-dev-secret-32b"
@@ -125,6 +127,11 @@ class Settings(BaseSettings):
             )
         if "*" in self.cors_origins:
             errors.append("cors_origins cannot contain '*' outside local/test")
+        if self.institution_name.strip() in {"", "Museum"}:
+            errors.append(
+                "institution_name must be configured outside local/test "
+                "(it is published as the creator of exported CIDOC-CRM graphs)"
+            )
         if errors:
             raise ValueError("; ".join(errors))
         return self

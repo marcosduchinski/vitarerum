@@ -178,6 +178,11 @@ class InSituVisitRecord:
     visitor_name: str
     place_name: str
     generated_at: datetime
+    # The institution that produced this snapshot, captured at export time.
+    # Stored rather than read back from configuration so that regenerating the
+    # CIDOC graph of an old record still credits whoever produced it, even
+    # after the institution is renamed.
+    institution_name: str = ""
     record_schema_version: int | None = None
     mapping_version: str | None = None
     crm_version: str | None = None
@@ -207,6 +212,7 @@ class InSituVisitRecord:
         visit_end_date: date,
         visitor_name: str,
         place_name: str,
+        institution_name: str = "",
         record_schema_version: int = 2,
         mapping_version: str | None = None,
         crm_version: str | None = None,
@@ -237,6 +243,7 @@ class InSituVisitRecord:
             visitor_name=visitor_name,
             place_name=place_name,
             generated_at=_now(),
+            institution_name=institution_name,
             record_schema_version=record_schema_version,
             mapping_version=mapping_version,
             crm_version=crm_version,

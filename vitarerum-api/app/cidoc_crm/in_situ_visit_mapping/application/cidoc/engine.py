@@ -400,16 +400,21 @@ def _build_provenance(
     record: InSituVisitRecord, mapping: dict[str, Any]
 ) -> dict[str, Any]:
     meta = mapping.get("metadata", {})
-    return {
+    node: dict[str, Any] = {
         "@id": f"ex:graph/visit-{record.id}",
         "@type": "crm:E73_Information_Object",
         "rdfs:label": f"CIDOC CRM graph for visit {record.code}",
         "dcterms:conformsTo": {"@id": meta.get("crm_context_url", "")},
-        "dcterms:creator": meta.get("institution", ""),
         "dcterms:created": record.generated_at.isoformat(),
         "ex:mapping_version": meta.get("mapping_version", ""),
         "ex:crm_version": meta.get("crm_version", ""),
     }
+    # The producing institution is a property of the deployment, not of the
+    # mapping rules, so it is read off the snapshot rather than off `metadata`.
+    # Omitted when unknown, like every other unset fact in this graph.
+    if record.institution_name:
+        node["dcterms:creator"] = record.institution_name
+    return node
 
 
 def map_record_to_cidoc(

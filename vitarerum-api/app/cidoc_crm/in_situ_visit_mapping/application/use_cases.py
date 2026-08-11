@@ -190,8 +190,9 @@ class ExportInSituVisitFromProject:
     """Generate and persist an in-situ visit record from a collection-use project.
 
     Only projects whose intended use is ``IN_SITU_VISIT`` can be exported; the
-    project reference number becomes the record code and the configured
-    institution name its place.
+    project reference number becomes the record code, and the configured
+    institution name is captured both as the visit's place and as the producer
+    of the snapshot (the CIDOC graph's ``dcterms:creator``).
     """
 
     def __init__(
@@ -229,6 +230,7 @@ class ExportInSituVisitFromProject:
             visit_end_date=export.end_date,
             visitor_name=export.visitor_name,
             place_name=self._institution_name,
+            institution_name=self._institution_name,
             mapping_version=self._mapping_version,
             crm_version=self._crm_version,
             source_project_id=export.project_id,

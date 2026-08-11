@@ -29,6 +29,7 @@ def test_non_local_settings_reject_placeholder_secrets_and_wildcard_cors() -> No
     assert "turnstile_secret_key must be configured" in message
     assert "smtp_host must be configured" in message
     assert "cors_origins cannot contain '*'" in message
+    assert "institution_name must be configured" in message
 
 
 def test_non_local_settings_require_strong_jwt_secret() -> None:
@@ -51,6 +52,7 @@ def test_non_local_settings_accept_explicit_security_values() -> None:
         turnstile_secret_key="a-real-turnstile-secret",
         smtp_host="smtp.example.org",
         cors_origins=["https://app.example.org"],
+        institution_name="Museu Nacional de História Natural e da Ciência",
     )
 
     assert settings.app_env == "production"

@@ -4,7 +4,6 @@
     "mapping_version": "0.7.0",
     "crm_version": "7.1.3",
     "crm_context_url": "https://cidoc-crm.org/rdfs/7.1.3/CIDOC_CRM_v7.1.3_JSON-LD_Context.jsonld",
-    "institution": "Museu Nacional de História Natural e da Ciência de Lisboa",
     "source_schema": "InSituVisitRecord",
     "target_schema": "CIDOC CRM JSON-LD",
     "created": "2026-06-19",

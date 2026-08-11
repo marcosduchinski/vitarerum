@@ -158,6 +158,9 @@ async def test_export_maps_project_into_record_and_persists() -> None:
     assert record.visitor_name == "Maria do Rosário"
     # place_name comes from the configured institution, not the project.
     assert record.place_name == _INSTITUTION
+    # The producing institution is captured on the snapshot, so regenerating
+    # the CIDOC graph later does not depend on the configuration of that day.
+    assert record.institution_name == _INSTITUTION
     assert [ro.source_id for ro in record.requested_objects] == ["INV-1"]
     assert record.project_title == "Wolf study"
     assert record.project_purpose == "Study collection objects in situ"

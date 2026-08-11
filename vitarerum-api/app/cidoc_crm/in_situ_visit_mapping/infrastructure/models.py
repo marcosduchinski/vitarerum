@@ -26,6 +26,7 @@ class InSituVisitRecordOrm(Base):
     visitor_name: Mapped[str] = mapped_column(String(255))
     place_name: Mapped[str] = mapped_column(String(255))
     generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    institution_name: Mapped[str] = mapped_column(String(255), default="")
     record_schema_version: Mapped[int | None] = mapped_column(Integer, default=None)
     mapping_version: Mapped[str | None] = mapped_column(String(64), default=None)
     crm_version: Mapped[str | None] = mapped_column(String(64), default=None)

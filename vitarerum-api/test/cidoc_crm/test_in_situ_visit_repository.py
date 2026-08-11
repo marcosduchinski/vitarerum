@@ -26,6 +26,7 @@ def _record() -> InSituVisitRecord:
         visit_end_date=date(2026, 6, 3),
         visitor_name="Maria do Rosario",
         place_name="Test Museum",
+        institution_name="Test Museum",
         mapping_version="test-mapping-v1",
         crm_version="7.1.3-test",
         source_project_id="p1",
@@ -121,6 +122,7 @@ async def test_repository_round_trips_enriched_snapshot_fields() -> None:
 
     assert reloaded is not None
     assert reloaded.record_schema_version == 2
+    assert reloaded.institution_name == "Test Museum"
     assert reloaded.mapping_version == "test-mapping-v1"
     assert reloaded.crm_version == "7.1.3-test"
     assert reloaded.source_project_id == "p1"

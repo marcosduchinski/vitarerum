@@ -4,6 +4,7 @@ from datetime import UTC, date, datetime
 import pytest
 
 from app.cidoc_crm.in_situ_visit_mapping.application.cidoc.engine import (
+    load_mapping_definition,
     map_record_to_cidoc,
 )
 from app.cidoc_crm.in_situ_visit_mapping.application.use_cases import (
@@ -143,6 +144,33 @@ def test_targets_cidoc_713() -> None:
         n for n in doc["@graph"] if n["@id"].startswith("ex:graph/")
     )
     assert provenance["ex:crm_version"] == "7.1.3"
+
+
+def test_graph_creator_comes_from_the_record_not_from_the_mapping_rules() -> None:
+    # The institution is deployment data captured on the snapshot, so it must
+    # not be hard-coded in the versioned mapping document.
+    assert "institution" not in load_mapping_definition()["metadata"]
+
+    record = _sample_record()
+    record.institution_name = "Museu Nacional de História Natural e da Ciência"
+    provenance = next(
+        n
+        for n in map_record_to_cidoc(record)["@graph"]
+        if n["@id"].startswith("ex:graph/")
+    )
+    assert (
+        provenance["dcterms:creator"]
+        == "Museu Nacional de História Natural e da Ciência"
+    )
+
+
+def test_graph_creator_is_omitted_when_the_record_has_no_institution() -> None:
+    provenance = next(
+        n
+        for n in map_record_to_cidoc(_sample_record())["@graph"]
+        if n["@id"].startswith("ex:graph/")
+    )
+    assert "dcterms:creator" not in provenance
 
 
 def test_attachments_carry_content_url() -> None:
