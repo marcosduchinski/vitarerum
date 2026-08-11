@@ -1,7 +1,7 @@
 {
   "metadata": {
     "mapping_id": "in-situ-visit-record-to-cidoc-crm",
-    "mapping_version": "0.6.1",
+    "mapping_version": "0.7.0",
     "crm_version": "7.1.3",
     "crm_context_url": "https://cidoc-crm.org/rdfs/7.1.3/CIDOC_CRM_v7.1.3_JSON-LD_Context.jsonld",
     "institution": "Museu Nacional de História Natural e da Ciência de Lisboa",
@@ -89,6 +89,12 @@
       "id": "ex:type/scientific-return-publication",
       "type": "crm:E55_Type",
       "label": "Scientific return publication"
+    },
+    {
+      "key": "type_collection_object",
+      "id": "ex:type/collection-object",
+      "type": "crm:E55_Type",
+      "label": "Collection object"
     }
   ],
   "collection_nodes": [
@@ -96,9 +102,11 @@
       "key": "requested_object",
       "source_collection": "requested_objects",
       "id_template": "ex:object/visit-{_visit_id}/{source_id|slug}",
-      "type": "crm:E20_Biological_Object",
+      "type": "crm:E19_Physical_Object",
+      "type_vocab": "type_collection_object",
       "label_template": "{display_title|object_name|description|source_id}",
       "link": {"predicate": "crm:P16_used_specific_object", "direction": "from_visit"},
+      "rationale": "E19_Physical_Object subsumes both natural-history specimens (E20) and human-made items such as scientific instruments or artworks (E22), so the class stays true whatever the collection holds; the nature of the object is carried by P2_has_type rather than by the class.",
       "field_mappings": [
         {
           "predicate": "crm:P3_has_note",

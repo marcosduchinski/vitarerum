@@ -17,6 +17,9 @@ durable architecture decisions.
   associated data.
 - [Business flows](./business-flows.md): index of end-to-end flows and existing
   diagrams.
+- [CIDOC-CRM in-situ visit alignment](./cidoc-crm-in-situ-visit-alignment.md):
+  how the `InSituVisitRecord` aggregate is mapped onto CIDOC-CRM 7.1.3 classes
+  and properties, how the rules are externalised, and how the graph is validated.
 - [Architecture decisions](./adr/README.md): ADR index and template.
 
 ## Related Sources

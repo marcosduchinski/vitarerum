@@ -3,7 +3,7 @@
 #  - sh:targetSubjectsOf  → the subject must be of the property's CRM domain
 #  - sh:targetObjectsOf   → the object must be of the property's CRM range
 # Range/domain values rely on rdfs subclass entailment from crm_hierarchy.ttl
-# (e.g. E21 ⊑ E39, E20 ⊑ E70, E65 ⊑ E4, E73 ⊑ E28).
+# (e.g. E21 ⊑ E39, E19 ⊑ E70, E65 ⊑ E4, E73 ⊑ E28).
 @prefix sh:  <http://www.w3.org/ns/shacl#> .
 @prefix crm: <http://www.cidoc-crm.org/cidoc-crm/> .
 

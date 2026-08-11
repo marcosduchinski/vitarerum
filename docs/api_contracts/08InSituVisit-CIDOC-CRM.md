@@ -253,8 +253,8 @@ record, mapping the aggregate onto CRM entities and properties. The visit become
 `E7_Activity`; the visitor an `E21_Person` (`P14_carried_out_by`); the place an
 `E53_Place` (`P7_took_place_at`); the dates an `E52_Time-Span` (`P4_has_time-span`)
 whose interval is declared with `P170i_time_is_defined_by` → an `E61` Time Primitive
-literal. Each `requestedObject` becomes an `E20_Biological_Object`
-(`P16_used_specific_object`); each occurrence an `E7_Activity` sub-event
+literal. Each `requestedObject` becomes an `E19_Physical_Object`
+(`P16_used_specific_object`) typed `ex:type/collection-object` via `P2_has_type`; each occurrence an `E7_Activity` sub-event
 (`P9_consists_of`, note via `P3_has_note`); each publication an `E65_Creation`
 (`P9_consists_of`) that `P94_has_created` an `E73_Information_Object`; each log an
 `E31_Document` (`P70_documents`); each attachment an `E31_Document` with

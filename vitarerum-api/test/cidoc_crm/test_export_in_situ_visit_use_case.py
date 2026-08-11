@@ -144,7 +144,7 @@ async def test_export_maps_project_into_record_and_persists() -> None:
     assert repo.added is record
     assert record.code == "CUP-ABCD1234"
     assert record.record_schema_version == 2
-    assert record.mapping_version == "0.6.1"
+    assert record.mapping_version == "0.7.0"
     assert record.crm_version == "7.1.3"
     assert record.source_project_id == "p1"
     assert record.visit_begin_date == date(2026, 6, 1)

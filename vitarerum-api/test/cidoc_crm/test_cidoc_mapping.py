@@ -70,12 +70,26 @@ def test_full_expansion_emits_a_node_per_child() -> None:
     assert counts["crm:E21_Person"] == 1
     assert counts["crm:E53_Place"] == 1
     assert counts.get("crm:E52_Time-Span", 0) == 0
-    assert counts["crm:E20_Biological_Object"] == 1
+    assert counts["crm:E19_Physical_Object"] == 1
     assert counts["crm:E65_Creation"] == 1
     # publication's created Information Object + the provenance graph node
     assert counts["crm:E73_Information_Object"] == 2
     # one log + three attachments
     assert counts["crm:E31_Document"] == 4
+
+
+def test_requested_objects_are_typed_generically_not_as_biological_objects() -> None:
+    # E19 covers specimens, scientific instruments and artworks alike; the
+    # nature of the object is carried by P2_has_type, not by the class.
+    doc = map_record_to_cidoc(_sample_record())
+    obj = next(n for n in doc["@graph"] if n["@id"].startswith("ex:object/"))
+
+    assert obj["@type"] == "crm:E19_Physical_Object"
+    assert obj["crm:P2_has_type"] == {"@id": "ex:type/collection-object"}
+    vocabulary = next(
+        n for n in doc["@graph"] if n["@id"] == "ex:type/collection-object"
+    )
+    assert vocabulary["@type"] == "crm:E55_Type"
 
 
 def test_planned_dates_are_not_asserted_as_visit_timespan_without_evidence() -> None:
@@ -185,7 +199,7 @@ def test_occurrence_and_log_link_to_related_object_when_present() -> None:
     )
     doc = map_record_to_cidoc(record)
     object_id = next(
-        n["@id"] for n in doc["@graph"] if n["@type"] == "crm:E20_Biological_Object"
+        n["@id"] for n in doc["@graph"] if n["@type"] == "crm:E19_Physical_Object"
     )
 
     occurrence = next(n for n in doc["@graph"] if n["@id"].startswith("ex:occurrence/"))
@@ -224,7 +238,7 @@ def test_publication_information_object_links_to_related_object_when_present() -
     )
     doc = map_record_to_cidoc(record)
     object_id = next(
-        n["@id"] for n in doc["@graph"] if n["@type"] == "crm:E20_Biological_Object"
+        n["@id"] for n in doc["@graph"] if n["@type"] == "crm:E19_Physical_Object"
     )
 
     creation = next(n for n in doc["@graph"] if n["@type"] == "crm:E65_Creation")
@@ -257,7 +271,7 @@ def test_attachments_link_to_related_object_when_parent_has_one() -> None:
     )
     doc = map_record_to_cidoc(record)
     object_id = next(
-        n["@id"] for n in doc["@graph"] if n["@type"] == "crm:E20_Biological_Object"
+        n["@id"] for n in doc["@graph"] if n["@type"] == "crm:E19_Physical_Object"
     )
     attachment = next(
         n
@@ -311,7 +325,7 @@ def test_enriched_snapshot_fields_shape_cidoc_labels_and_occurrence_context() ->
 
     doc = map_record_to_cidoc(record)
 
-    obj = next(n for n in doc["@graph"] if n["@type"] == "crm:E20_Biological_Object")
+    obj = next(n for n in doc["@graph"] if n["@type"] == "crm:E19_Physical_Object")
     assert obj["rdfs:label"] == "Iberian wolf"
     assert "Mounted specimen" in obj["crm:P3_has_note"]
 
