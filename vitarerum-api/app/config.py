@@ -39,6 +39,16 @@ class Settings(BaseSettings):
     # KG-RAG museum-narrative generation (local Llama via Ollama).
     narrative_model: str = "llama3.1:8b"
     narrative_timeout_seconds: float = 60.0
+    # Scientific-return bibliographic discovery. Crossref is queried only with
+    # the minimal author/inventory/object terms stored in the project snapshot.
+    crossref_base_url: str = "https://api.crossref.org"
+    crossref_timeout_seconds: float = 20.0
+    crossref_mailto: str = ""
+    crossref_max_retries: int = 3
+    crossref_retry_base_seconds: float = 1.0
+    crossref_min_interval_seconds: float = 0.25
+    scientific_return_result_limit: int = 20
+    scientific_return_max_queries_per_run: int = 40
     # Public proposal submission (unauthenticated citizen intake, double opt-in).
     # Default is Cloudflare's always-passing test secret key; override in prod.
     turnstile_secret_key: str = "1x0000000000000000000000000000000AA"

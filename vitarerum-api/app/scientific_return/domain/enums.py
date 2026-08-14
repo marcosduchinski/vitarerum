@@ -1,0 +1,54 @@
+from enum import StrEnum
+
+
+class WatchStatus(StrEnum):
+    ACTIVE = "ACTIVE"
+    PAUSED = "PAUSED"
+    CLOSED = "CLOSED"
+
+
+class RunStatus(StrEnum):
+    RUNNING = "RUNNING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+
+
+class QueryStatus(StrEnum):
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+
+
+class QueryType(StrEnum):
+    INVENTORY = "INVENTORY"
+    AUTHOR_INVENTORY = "AUTHOR_INVENTORY"
+    INVENTORY_OBJECT = "INVENTORY_OBJECT"
+    AUTHOR_OBJECT = "AUTHOR_OBJECT"
+
+
+class CandidateStatus(StrEnum):
+    PENDING = "PENDING"
+    CONFIRMED = "CONFIRMED"
+    DISMISSED = "DISMISSED"
+    SNOOZED = "SNOOZED"
+
+
+class EvidenceType(StrEnum):
+    INVENTORY_NUMBER = "INVENTORY_NUMBER"
+    AUTHOR = "AUTHOR"
+    OBJECT_NAME = "OBJECT_NAME"
+    AUTHOR_INVENTORY = "AUTHOR_INVENTORY"
+    INVENTORY_OBJECT = "INVENTORY_OBJECT"
+    AUTHOR_OBJECT = "AUTHOR_OBJECT"
+
+
+class EvidenceStrength(StrEnum):
+    PRIMARY = "PRIMARY"
+    SUPPORTING = "SUPPORTING"
+    WEAK = "WEAK"
+
+
+class DecisionType(StrEnum):
+    CONFIRM = "CONFIRM"
+    CORRECT_AND_CONFIRM = "CORRECT_AND_CONFIRM"
+    DISMISS = "DISMISS"
+    SNOOZE = "SNOOZE"

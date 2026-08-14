@@ -1,0 +1,127 @@
+from __future__ import annotations
+
+from datetime import datetime
+
+from pydantic import BaseModel, Field
+
+from app.scientific_return.domain.enums import (
+    CandidateStatus,
+    DecisionType,
+    EvidenceStrength,
+    EvidenceType,
+    QueryStatus,
+    QueryType,
+    RunStatus,
+    WatchStatus,
+)
+
+
+class ActivateWatchRequest(BaseModel):
+    reviewIntervalDays: int = Field(default=90, ge=1, le=365)
+
+
+class ChangeWatchStatusRequest(BaseModel):
+    status: WatchStatus
+
+
+class ScientificReturnWatchResponse(BaseModel):
+    id: str
+    projectId: str
+    status: WatchStatus
+    reviewIntervalDays: int
+    createdBy: str
+    createdAt: datetime
+    lastRunAt: datetime | None
+    nextRunAt: datetime
+    projectSnapshotId: str
+
+
+class ScientificReturnQueryResponse(BaseModel):
+    id: str
+    source: str
+    queryText: str
+    queryType: QueryType
+    sentAt: datetime
+    resultCount: int
+    status: QueryStatus
+    errorMessage: str | None
+
+
+class ScientificReturnRunResponse(BaseModel):
+    id: str
+    watchId: str
+    status: RunStatus
+    startedAt: datetime
+    completedAt: datetime | None
+    sourceCount: int
+    candidateCount: int
+    errorMessage: str | None
+    queries: list[ScientificReturnQueryResponse] = Field(default_factory=list)
+
+
+class PaginatedRunsResponse(BaseModel):
+    content: list[ScientificReturnRunResponse]
+    page: int
+    size: int
+    totalElements: int
+    totalPages: int
+
+
+class CandidateEvidenceResponse(BaseModel):
+    id: str
+    type: EvidenceType
+    strength: EvidenceStrength
+    value: str
+    sourceField: str
+    explanation: str
+
+
+class CandidatePublicationResponse(BaseModel):
+    id: str
+    watchId: str
+    source: str
+    sourceRecordId: str
+    doi: str | None
+    title: str
+    authors: list[str]
+    publicationDate: str | None
+    abstract: str | None
+    url: str | None
+    status: CandidateStatus
+    snoozedUntil: datetime | None
+    confirmedPublicationEntryId: str | None
+    firstSeenAt: datetime
+    evidences: list[CandidateEvidenceResponse]
+
+
+class PaginatedCandidatesResponse(BaseModel):
+    content: list[CandidatePublicationResponse]
+    page: int
+    size: int
+    totalElements: int
+    totalPages: int
+
+
+class CandidateCorrectionRequest(BaseModel):
+    title: str | None = None
+    doi: str | None = None
+    url: str | None = None
+    authors: list[str] | None = None
+
+
+class CandidateDecisionRequest(BaseModel):
+    decision: DecisionType
+    justification: str | None = Field(default=None, max_length=2000)
+    snoozedUntil: datetime | None = None
+    correction: CandidateCorrectionRequest | None = None
+
+
+class CandidateDecisionResponse(BaseModel):
+    id: str
+    candidateId: str
+    decision: DecisionType
+    justification: str | None
+    decidedBy: str
+    decidedAt: datetime
+    evidenceSnapshot: list[dict[str, str]]
+    correction: CandidateCorrectionRequest | None

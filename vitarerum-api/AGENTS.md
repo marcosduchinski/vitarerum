@@ -22,6 +22,8 @@ Primary bounded contexts:
 - `collection_object_index`: searchable collection-object source data and snapshots.
 - `document_templates`: managed document templates and uploaded template files.
 - `museum_questions`: public museum questions and staff responses.
+- `scientific_return`: supervised bibliographic monitoring and evidence review
+  for scientific outputs from completed collection-use projects.
 - `reports.in_situ_visit`: in-situ visit report aggregation across record and narrative contexts.
 - `ai.museum_narrative`: AI-assisted (KG-RAG) museum narrative generation.
 - `ai.prompts`: versioned prompt templates used by AI-assisted contexts.

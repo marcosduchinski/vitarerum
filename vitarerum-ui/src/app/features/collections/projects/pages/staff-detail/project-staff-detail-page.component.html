@@ -134,7 +134,9 @@
         @if (originProjectLink(); as link) {
           <div class="detail-dl__row">
             <dt>Follow-up of</dt>
-            <dd><a [routerLink]="link">{{ project()!.originProjectId }}</a></dd>
+            <dd>
+              <a [routerLink]="link">{{ project()!.originProjectId }}</a>
+            </dd>
           </div>
         }
       </dl>
@@ -180,6 +182,21 @@
       >
         Todo List
       </button>
+      @if (project()!.status === 'COMPLETED') {
+        <button
+          type="button"
+          id="scientific-return-tab"
+          class="project-detail__tab"
+          [class.project-detail__tab--active]="activeTab() === 'scientific-return'"
+          role="tab"
+          aria-controls="scientific-return-panel"
+          [attr.aria-selected]="activeTab() === 'scientific-return'"
+          (click)="selectTab('scientific-return')"
+          (keydown)="onTabKeydown($event, 3)"
+        >
+          Scientific Return
+        </button>
+      }
     </nav>
 
     @switch (activeTab()) {
@@ -546,6 +563,16 @@
             <h3 id="project-todo-heading" class="detail-card__title">TODO List</h3>
             <app-project-todo-list [projectId]="id()" />
           </section>
+        </section>
+      }
+      @case ('scientific-return') {
+        <section
+          id="scientific-return-panel"
+          class="project-detail__panel"
+          role="tabpanel"
+          aria-labelledby="scientific-return-tab"
+        >
+          <app-scientific-return-panel [projectId]="id()" />
         </section>
       }
     }

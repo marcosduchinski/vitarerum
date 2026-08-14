@@ -46,6 +46,7 @@ from app.public_submission.presentation.dependencies import (
 from app.public_submission.presentation.routes import router as public_proposals_router
 from app.reference_numbers.presentation.routes import reference_policies_router
 from app.reports.in_situ_visit.presentation.routes import reports_router
+from app.scientific_return.presentation.routes import scientific_return_router
 from app.shared.exceptions import AccessDenied, InsufficientGroup
 from app.shared.field_encryption import CorruptedEncryptedField
 from app.shared.file_encryption import CorruptedEncryptedFile
@@ -182,6 +183,7 @@ app.include_router(ai_prompts_router, prefix=prefix)
 app.include_router(reference_policies_router, prefix=prefix)
 app.include_router(external_publications_router, prefix=prefix)
 app.include_router(external_public_router, prefix=prefix)
+app.include_router(scientific_return_router, prefix=prefix)
 
 
 # Composition root: bind the staff endpoint's AmendmentInvitationPort (defaulted

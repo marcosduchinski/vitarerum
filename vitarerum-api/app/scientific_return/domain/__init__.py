@@ -1,0 +1,1 @@
+"""Scientific-return domain model."""

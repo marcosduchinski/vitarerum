@@ -251,6 +251,28 @@ layers = [
 ]
 
 [[tool.importlinter.contracts]]
+name = "Scientific Return layers (presentation > infrastructure > application > domain)"
+type = "layers"
+layers = [
+    "app.scientific_return.presentation",
+    "app.scientific_return.infrastructure",
+    "app.scientific_return.application",
+    "app.scientific_return.domain",
+]
+
+[[tool.importlinter.contracts]]
+name = "Scientific Return may import workflows only via published language"
+type = "forbidden"
+source_modules = ["app.scientific_return"]
+forbidden_modules = ["app.use_of_collections", "app.identity"]
+ignore_imports = [
+    "app.scientific_return.** -> app.use_of_collections.public",
+    "app.scientific_return.** -> app.identity.public",
+    "app.shared.authorization -> app.identity.public",
+    "app.shared.dependencies -> app.identity.public",
+]
+
+[[tool.importlinter.contracts]]
 name = "External Publications may import resource contexts only via published language"
 type = "forbidden"
 source_modules = ["app.external_publications"]
@@ -377,6 +399,7 @@ layers = [
     "app.notifications.infrastructure",
     "app.notifications.application",
     "app.notifications.domain",
+    "app.scientific_return.domain",
 ]
 
 [[tool.importlinter.contracts]]
@@ -424,6 +447,7 @@ source_modules = [
     "app.museum_questions.application",
     "app.external_publications.application",
     "app.notifications.application",
+    "app.scientific_return.application",
 ]
 forbidden_modules = ["fastapi", "sqlalchemy"]
 ignore_imports = [

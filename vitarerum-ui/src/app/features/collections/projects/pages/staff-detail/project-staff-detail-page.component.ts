@@ -26,6 +26,7 @@ import { UseType } from '@shared/models/collection-use-status.model';
 
 import { ProjectTodoListComponent } from '../../components/project-todo-list/project-todo-list.component';
 import { ProjectObjectsSectionComponent } from '../../components/project-objects-section/project-objects-section.component';
+import { ScientificReturnPanelComponent } from '../../components/scientific-return-panel/scientific-return-panel.component';
 import { CreateInSituVisitReportModalComponent } from '../../../reports/components/create-in-situ-visit-report-modal/create-in-situ-visit-report-modal.component';
 import {
   CreateInSituVisitReportRequest,
@@ -81,8 +82,8 @@ function formatDateTime(iso: string): string {
 
 const START_NOTE = 'Started from staff project detail.';
 const COMPLETE_NOTE = 'Completed from staff project detail.';
-type ProjectDetailTab = 'actions' | 'objects' | 'todo';
-const PROJECT_DETAIL_TABS: readonly ProjectDetailTab[] = ['actions', 'objects', 'todo'];
+type ProjectDetailTab = 'actions' | 'objects' | 'todo' | 'scientific-return';
+const BASE_PROJECT_DETAIL_TABS: readonly ProjectDetailTab[] = ['actions', 'objects', 'todo'];
 const EMPTY_PROJECT_OBJECT_DEPENDENCIES: ProjectObjectDependencySummary = {
   accessLogEntries: 0,
   occurrenceEntries: 0,
@@ -133,6 +134,7 @@ function extractProjectObjectDependencySummary(
     CreateInSituVisitReportModalComponent,
     ProjectObjectsSectionComponent,
     ProjectTodoListComponent,
+    ScientificReturnPanelComponent,
   ],
   templateUrl: './project-staff-detail-page.component.html',
   styleUrl: './project-staff-detail-page.component.scss',
@@ -292,6 +294,11 @@ export class ProjectStaffDetailPageComponent {
   protected readonly cascadeRemoveReason = signal('');
   protected readonly cascadeRemoveError = signal<ApiError | null>(null);
   protected readonly activeTab = signal<ProjectDetailTab>('actions');
+  protected readonly availableTabs = computed<readonly ProjectDetailTab[]>(() =>
+    this.project()?.status === 'COMPLETED'
+      ? [...BASE_PROJECT_DETAIL_TABS, 'scientific-return']
+      : BASE_PROJECT_DETAIL_TABS,
+  );
   protected readonly cascadeRemoveObjectName = computed(() => {
     const objectId = this.cascadeRemoveObjectId();
     const object = this.project()?.objects?.find((item) => item.id === objectId);
@@ -322,7 +329,8 @@ export class ProjectStaffDetailPageComponent {
   }
 
   protected onTabKeydown(event: KeyboardEvent, index: number): void {
-    const lastIndex = PROJECT_DETAIL_TABS.length - 1;
+    const tabs = this.availableTabs();
+    const lastIndex = tabs.length - 1;
     let nextIndex: number | null = null;
 
     if (event.key === 'ArrowRight') {
@@ -337,7 +345,7 @@ export class ProjectStaffDetailPageComponent {
 
     if (nextIndex === null) return;
     event.preventDefault();
-    this.activeTab.set(PROJECT_DETAIL_TABS[nextIndex]);
+    this.activeTab.set(tabs[nextIndex]);
   }
 
   protected openCancelConfirm(): void {

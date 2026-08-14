@@ -1,0 +1,1 @@
+"""Scientific-return outbound adapters."""

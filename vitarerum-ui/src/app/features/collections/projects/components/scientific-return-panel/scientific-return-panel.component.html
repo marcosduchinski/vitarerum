@@ -1,0 +1,418 @@
+<section class="scientific-return" aria-labelledby="scientific-return-heading">
+  <header class="scientific-return__header">
+    <div>
+      <p class="scientific-return__eyebrow">Collection impact</p>
+      <h2 id="scientific-return-heading">Scientific return</h2>
+    </div>
+    @if (watch(); as currentWatch) {
+      <span class="watch-status" [attr.data-status]="currentWatch.status">
+        <span class="watch-status__dot" aria-hidden="true"></span>
+        {{ currentWatch.status.toLowerCase() }}
+      </span>
+    }
+  </header>
+
+  @if (loadError()) {
+    <app-error-message [apiError]="loadError()!" (retry)="watchResource.reload()" />
+  }
+  @if (actionError()) {
+    <app-error-message [apiError]="actionError()!" />
+  }
+  @if (feedback()) {
+    <app-feedback-message
+      title="Scientific return updated"
+      [message]="feedback()"
+      tone="success"
+      [dismissible]="true"
+      (dismissed)="feedback.set(null)"
+    />
+  }
+
+  @if (watchResource.isLoading()) {
+    <app-loading-state />
+  } @else if (!watch()) {
+    <div class="watch-empty">
+      <span class="pi pi-search" aria-hidden="true"></span>
+      <div>
+        <h3>No monitoring watch</h3>
+        <p>Author, inventory number, and consulted object are ready for the first search.</p>
+      </div>
+      @if (canReview()) {
+        <button
+          type="button"
+          class="button button--primary"
+          [disabled]="busyAction() === 'activate'"
+          (click)="activate()"
+        >
+          @if (busyAction() === 'activate') {
+            <span class="pi pi-spin pi-spinner" aria-hidden="true"></span>
+            Activating
+          } @else {
+            <span class="pi pi-bell" aria-hidden="true"></span>
+            Activate monitoring
+          }
+        </button>
+      }
+    </div>
+  } @else if (watch(); as currentWatch) {
+    <div class="watch-toolbar">
+      <dl class="watch-metrics">
+        <div>
+          <dt>Last search</dt>
+          <dd>
+            {{ currentWatch.lastRunAt ? (currentWatch.lastRunAt | date: 'medium') : 'Not run' }}
+          </dd>
+        </div>
+        <div>
+          <dt>Next review</dt>
+          <dd>{{ currentWatch.nextRunAt | date: 'mediumDate' }}</dd>
+        </div>
+        <div>
+          <dt>Interval</dt>
+          <dd>{{ currentWatch.reviewIntervalDays }} days</dd>
+        </div>
+      </dl>
+
+      @if (canReview()) {
+        <div class="watch-actions" aria-label="Monitoring actions">
+          @if (currentWatch.status === 'ACTIVE') {
+            <button
+              type="button"
+              class="icon-button"
+              title="Pause monitoring"
+              aria-label="Pause monitoring"
+              [disabled]="busyAction() !== null"
+              (click)="changeStatus('PAUSED')"
+            >
+              <span class="pi pi-pause" aria-hidden="true"></span>
+            </button>
+            <button
+              type="button"
+              class="button button--primary"
+              [disabled]="busyAction() !== null"
+              (click)="runSearch()"
+            >
+              @if (busyAction() === 'run') {
+                <span class="pi pi-spin pi-spinner" aria-hidden="true"></span>
+                Searching
+              } @else {
+                <span class="pi pi-search" aria-hidden="true"></span>
+                Search now
+              }
+            </button>
+          } @else if (currentWatch.status === 'PAUSED') {
+            <button
+              type="button"
+              class="button button--primary"
+              [disabled]="busyAction() !== null"
+              (click)="changeStatus('ACTIVE')"
+            >
+              <span class="pi pi-play" aria-hidden="true"></span>
+              Resume
+            </button>
+          }
+          @if (currentWatch.status !== 'CLOSED') {
+            <button
+              type="button"
+              class="icon-button icon-button--danger"
+              title="Close monitoring"
+              aria-label="Close monitoring"
+              [disabled]="busyAction() !== null"
+              (click)="changeStatus('CLOSED')"
+            >
+              <span class="pi pi-times" aria-hidden="true"></span>
+            </button>
+          }
+        </div>
+      }
+    </div>
+
+    <div class="candidate-section">
+      <div class="candidate-section__heading">
+        <div>
+          <p class="section-kicker">Review queue</p>
+          <h3>Candidates</h3>
+        </div>
+        <div class="filter-tabs" role="group" aria-label="Candidate status filter">
+          @for (option of filterOptions; track option) {
+            <button
+              type="button"
+              [class.filter-tabs__active]="filter() === option"
+              [attr.aria-pressed]="filter() === option"
+              (click)="setFilter(option)"
+            >
+              {{ option.toLowerCase() }}
+            </button>
+          }
+        </div>
+      </div>
+
+      @if (candidatesResource.isLoading()) {
+        <app-loading-state />
+      } @else if (!candidates().length) {
+        <div class="candidate-empty" role="status">
+          <span class="pi pi-inbox" aria-hidden="true"></span>
+          <p>No {{ filter().toLowerCase() }} candidates.</p>
+        </div>
+      } @else {
+        <div class="candidate-list">
+          @for (candidate of candidates(); track candidate.id) {
+            <article class="candidate" [attr.data-status]="candidate.status">
+              <div class="candidate__topline">
+                <div class="candidate__source">
+                  <span>{{ candidate.source }}</span>
+                  <span>{{ candidate.publicationDate ?? 'Date unavailable' }}</span>
+                </div>
+                <span class="candidate__status">{{ candidate.status.toLowerCase() }}</span>
+              </div>
+
+              <section class="evidence-block" [attr.aria-labelledby]="'evidence-' + candidate.id">
+                <h4 [id]="'evidence-' + candidate.id">Evidence</h4>
+                <ul>
+                  @for (evidence of candidate.evidences; track evidence.id) {
+                    <li [attr.data-strength]="evidence.strength">
+                      <span class="evidence-block__strength">{{ evidence.strength }}</span>
+                      <span class="evidence-block__type">{{ evidenceLabel(evidence.type) }}</span>
+                      <strong>{{ evidence.value }}</strong>
+                      <p>{{ evidence.explanation }}</p>
+                    </li>
+                  }
+                </ul>
+              </section>
+
+              <div class="candidate__publication">
+                <h4>{{ candidate.title }}</h4>
+                <p class="candidate__authors">{{ candidateAuthors(candidate) }}</p>
+                @if (candidate.abstract) {
+                  <p class="candidate__abstract">{{ candidate.abstract }}</p>
+                }
+                <div class="candidate__identifiers">
+                  @if (candidate.doi) {
+                    <span>DOI {{ candidate.doi }}</span>
+                  }
+                  @if (candidate.url) {
+                    <a [href]="candidate.url" target="_blank" rel="noopener noreferrer">
+                      Open source
+                      <span class="pi pi-external-link" aria-hidden="true"></span>
+                    </a>
+                  }
+                </div>
+              </div>
+
+              @if (candidate.status === 'PENDING' && canReview()) {
+                <div class="candidate__actions" aria-label="Candidate decisions">
+                  <button type="button" (click)="openDecision(candidate, 'CONFIRM')">
+                    <span class="pi pi-check" aria-hidden="true"></span>
+                    Confirm
+                  </button>
+                  <button type="button" (click)="openDecision(candidate, 'CORRECT_AND_CONFIRM')">
+                    <span class="pi pi-pencil" aria-hidden="true"></span>
+                    Correct
+                  </button>
+                  <button type="button" (click)="openDecision(candidate, 'SNOOZE')">
+                    <span class="pi pi-clock" aria-hidden="true"></span>
+                    Snooze
+                  </button>
+                  <button
+                    type="button"
+                    class="candidate__dismiss"
+                    (click)="openDecision(candidate, 'DISMISS')"
+                  >
+                    <span class="pi pi-times" aria-hidden="true"></span>
+                    Dismiss
+                  </button>
+                </div>
+              }
+
+              @if (activeCandidateId() === candidate.id) {
+                <div class="decision-panel">
+                  <header>
+                    <h4>{{ decisionLabel(decisionDraft()) }}</h4>
+                    <button
+                      type="button"
+                      class="icon-button"
+                      aria-label="Close decision"
+                      title="Close"
+                      (click)="closeDecision()"
+                    >
+                      <span class="pi pi-times" aria-hidden="true"></span>
+                    </button>
+                  </header>
+
+                  @if (decisionDraft() === 'CORRECT_AND_CONFIRM') {
+                    <div class="decision-form decision-form--grid">
+                      <label class="decision-form__wide">
+                        <span>Title</span>
+                        <input
+                          type="text"
+                          [value]="correctedTitle()"
+                          (input)="onTextInput('title', $event)"
+                        />
+                      </label>
+                      <label>
+                        <span>DOI</span>
+                        <input
+                          type="text"
+                          [value]="correctedDoi()"
+                          (input)="onTextInput('doi', $event)"
+                        />
+                      </label>
+                      <label>
+                        <span>URL</span>
+                        <input
+                          type="url"
+                          [value]="correctedUrl()"
+                          (input)="onTextInput('url', $event)"
+                        />
+                      </label>
+                      <label class="decision-form__wide">
+                        <span>Authors, separated by commas</span>
+                        <input
+                          type="text"
+                          [value]="correctedAuthors()"
+                          (input)="onTextInput('authors', $event)"
+                        />
+                      </label>
+                    </div>
+                  }
+
+                  @if (decisionDraft() === 'SNOOZE') {
+                    <label class="decision-form__single">
+                      <span>Review after</span>
+                      <input
+                        type="date"
+                        [value]="snoozedUntil()"
+                        (input)="onTextInput('snoozedUntil', $event)"
+                      />
+                    </label>
+                  }
+
+                  @if (decisionDraft() !== 'CONFIRM') {
+                    <label class="decision-form__single">
+                      <span>
+                        Note
+                        @if (decisionDraft() === 'DISMISS') {
+                          <small>required</small>
+                        }
+                      </span>
+                      <textarea
+                        rows="3"
+                        maxlength="2000"
+                        [value]="justification()"
+                        (input)="onTextInput('justification', $event)"
+                      ></textarea>
+                    </label>
+                  }
+
+                  <div class="decision-panel__footer">
+                    <button type="button" class="button" (click)="closeDecision()">Cancel</button>
+                    <button
+                      type="button"
+                      class="button button--primary"
+                      [class.button--danger]="decisionDraft() === 'DISMISS'"
+                      [disabled]="decisionInvalid() || busyAction() === candidate.id"
+                      (click)="submitDecision(candidate)"
+                    >
+                      @if (busyAction() === candidate.id) {
+                        <span class="pi pi-spin pi-spinner" aria-hidden="true"></span>
+                        Saving
+                      } @else {
+                        Save decision
+                      }
+                    </button>
+                  </div>
+                </div>
+              }
+
+              <footer class="candidate__footer">
+                <span>First seen {{ candidate.firstSeenAt | date: 'medium' }}</span>
+                <button
+                  type="button"
+                  class="text-button"
+                  [disabled]="loadingHistoryId() === candidate.id"
+                  (click)="toggleHistory(candidate.id)"
+                >
+                  <span class="pi pi-history" aria-hidden="true"></span>
+                  Decision history
+                </button>
+              </footer>
+
+              @if (decisionsByCandidate()[candidate.id]; as decisions) {
+                <div class="decision-history">
+                  @if (decisions.length) {
+                    <ol>
+                      @for (decision of decisions; track decision.id) {
+                        <li>
+                          <strong>{{ decisionLabel(decision.decision) }}</strong>
+                          <span>{{ decision.decidedAt | date: 'medium' }}</span>
+                          @if (decision.justification) {
+                            <p>{{ decision.justification }}</p>
+                          }
+                        </li>
+                      }
+                    </ol>
+                  } @else {
+                    <p>No decisions recorded.</p>
+                  }
+                </div>
+              }
+            </article>
+          }
+        </div>
+      }
+    </div>
+
+    <section class="run-history" aria-labelledby="run-history-heading">
+      <div class="run-history__heading">
+        <div>
+          <p class="section-kicker">Audit trail</p>
+          <h3 id="run-history-heading">Search history</h3>
+        </div>
+        <span>{{ runsResource.value()?.totalElements ?? 0 }} runs</span>
+      </div>
+      @if (!runs().length) {
+        <p class="run-history__empty">No searches recorded.</p>
+      } @else {
+        <ol class="run-list">
+          @for (run of runs(); track run.id) {
+            <li>
+              <button type="button" class="run-row" (click)="toggleRun(run.id)">
+                <span class="run-row__status" [attr.data-status]="run.status">
+                  <span
+                    class="pi"
+                    [class.pi-check-circle]="run.status === 'COMPLETED'"
+                    [class.pi-times-circle]="run.status === 'FAILED'"
+                    aria-hidden="true"
+                  ></span>
+                  {{ run.status.toLowerCase() }}
+                </span>
+                <span>{{ run.startedAt | date: 'medium' }}</span>
+                <strong>{{ run.candidateCount }} candidates</strong>
+                <span
+                  class="pi"
+                  [class.pi-chevron-down]="expandedRunId() !== run.id"
+                  [class.pi-chevron-up]="expandedRunId() === run.id"
+                  aria-hidden="true"
+                ></span>
+              </button>
+              @if (expandedRunId() === run.id) {
+                <div class="query-list">
+                  @for (query of run.queries; track query.id) {
+                    <div>
+                      <span>{{ query.queryType.toLowerCase().replaceAll('_', ' ') }}</span>
+                      <code>{{ query.queryText }}</code>
+                      <strong>{{ query.resultCount }} results</strong>
+                    </div>
+                  }
+                  @if (run.errorMessage) {
+                    <p role="alert">{{ run.errorMessage }}</p>
+                  }
+                </div>
+              }
+            </li>
+          }
+        </ol>
+      }
+    </section>
+  }
+</section>

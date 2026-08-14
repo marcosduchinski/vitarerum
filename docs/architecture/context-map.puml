@@ -31,6 +31,7 @@ package "In-situ reporting" {
 
 package "AI support" {
   [AI Prompts] as prompts
+  [Scientific Return] as scientific_return
 }
 
 package "Operational support" {
@@ -57,6 +58,7 @@ angular_spa --> identity : login/admin
 angular_spa --> reference_numbers : policy admin
 angular_spa --> notifications : notification center
 angular_spa --> prompts : prompt admin
+angular_spa --> scientific_return : supervised discovery
 angular_spa --> external_publications : publication admin
 
 public_submission --> uoc : materialises accepted proposals
@@ -82,6 +84,9 @@ questions --> identity : shared auth
 doc_templates --> identity : shared auth
 reference_numbers --> identity : shared auth
 notifications --> identity : actor labels
+scientific_return --> uoc : project/publication public language
+scientific_return --> identity : researcher public view
+scientific_return --> external_services : bibliographic search
 
 
 @enduml

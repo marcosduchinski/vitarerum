@@ -43,6 +43,9 @@ from app.reference_numbers.infrastructure import (
 from app.reports.in_situ_visit.infrastructure import (
     models as in_situ_visit_report_models,  # noqa: F401
 )
+from app.scientific_return.infrastructure import (
+    models as scientific_return_models,  # noqa: F401
+)
 from app.use_of_collections.infrastructure import (
     models as use_of_collections_models,  # noqa: F401
 )

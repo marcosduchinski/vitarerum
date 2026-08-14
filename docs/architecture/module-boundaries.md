@@ -56,6 +56,15 @@ notifications through `notifications.public`; the read API hydrates actor labels
 through `identity.public` and deliberately stores only small resource snapshots,
 not source-context aggregates.
 
+### `scientific_return`
+
+Owns supervised monitoring of scientific outputs after a collection-use
+project is completed. It stores immutable project snapshots, bibliographic
+search trajectories, candidates, evidence and human decisions. It reads and
+writes project information only through `use_of_collections.public`; external
+bibliographic results never become publication-log entries without a decision
+by curatorial, collections-management or direction staff.
+
 ### `reports.in_situ_visit`
 
 Owns the in-situ visit report aggregation surface. It assembles data from

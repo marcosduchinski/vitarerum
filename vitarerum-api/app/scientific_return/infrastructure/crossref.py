@@ -1,0 +1,155 @@
+from __future__ import annotations
+
+import asyncio
+import hashlib
+import html
+import json
+import re
+import time
+from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
+from typing import Any
+
+import httpx
+
+from app.scientific_return.application.ports import BibliographicRecord
+
+
+class CrossrefBibliographicSource:
+    name = "CROSSREF"
+    _TRANSIENT_STATUSES = {429, 500, 502, 503, 504}
+
+    def __init__(
+        self,
+        base_url: str,
+        timeout_seconds: float,
+        mailto: str | None = None,
+        max_retries: int = 3,
+        retry_base_seconds: float = 1.0,
+        min_interval_seconds: float = 0.25,
+        transport: httpx.AsyncBaseTransport | None = None,
+        sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+    ) -> None:
+        self._base_url = base_url.rstrip("/")
+        self._timeout = timeout_seconds
+        self._mailto = mailto
+        self._max_retries = max(0, max_retries)
+        self._retry_base_seconds = max(0.0, retry_base_seconds)
+        self._min_interval_seconds = max(0.0, min_interval_seconds)
+        self._transport = transport
+        self._sleep = sleep
+        self._request_lock = asyncio.Lock()
+        self._last_request_at: float | None = None
+
+    async def search(self, query: str, limit: int) -> list[BibliographicRecord]:
+        params: dict[str, str | int] = {
+            "query": query,
+            "rows": limit,
+        }
+        if self._mailto:
+            params["mailto"] = self._mailto
+        user_agent = "Vitarerum/0.1 (scientific-return monitoring)"
+        if self._mailto:
+            user_agent = f"Vitarerum/0.1 (mailto:{self._mailto})"
+        async with httpx.AsyncClient(
+            timeout=self._timeout,
+            headers={"User-Agent": user_agent},
+            transport=self._transport,
+        ) as client:
+            response = await self._get_with_retry(client, params)
+        payload = response.json()
+        items = payload.get("message", {}).get("items", [])
+        return [self._to_record(item) for item in items if item.get("title")]
+
+    async def _get_with_retry(
+        self, client: httpx.AsyncClient, params: dict[str, str | int]
+    ) -> httpx.Response:
+        async with self._request_lock:
+            for attempt in range(self._max_retries + 1):
+                await self._respect_minimum_interval()
+                self._last_request_at = time.monotonic()
+                response = await client.get(f"{self._base_url}/works", params=params)
+                if (
+                    response.status_code not in self._TRANSIENT_STATUSES
+                    or attempt == self._max_retries
+                ):
+                    response.raise_for_status()
+                    return response
+                await self._sleep(self._retry_delay(response, attempt))
+        raise RuntimeError("Crossref retry loop ended unexpectedly")
+
+    async def _respect_minimum_interval(self) -> None:
+        if self._last_request_at is None:
+            return
+        remaining = self._min_interval_seconds - (
+            time.monotonic() - self._last_request_at
+        )
+        if remaining > 0:
+            await self._sleep(remaining)
+
+    def _retry_delay(self, response: httpx.Response, attempt: int) -> float:
+        retry_after = response.headers.get("Retry-After", "").strip()
+        if retry_after:
+            try:
+                return max(0.0, float(retry_after))
+            except ValueError:
+                try:
+                    retry_at = parsedate_to_datetime(retry_after)
+                    if retry_at.tzinfo is None:
+                        retry_at = retry_at.replace(tzinfo=UTC)
+                    return max(0.0, (retry_at - datetime.now(tz=UTC)).total_seconds())
+                except (TypeError, ValueError, OverflowError):
+                    pass
+        return self._retry_base_seconds * float(2**attempt)
+
+    def _to_record(self, item: dict[str, Any]) -> BibliographicRecord:
+        title = self._clean_markup(str(item.get("title", [""])[0])) or ""
+        authors = tuple(
+            " ".join(
+                part
+                for part in (
+                    str(author.get("given", "")).strip(),
+                    str(author.get("family", "")).strip(),
+                )
+                if part
+            )
+            for author in item.get("author", [])
+        )
+        doi = str(item.get("DOI", "")).strip() or None
+        source_id = doi or str(item.get("URL", "")).strip() or title
+        raw_hash = hashlib.sha256(
+            json.dumps(item, sort_keys=True, default=str).encode()
+        ).hexdigest()
+        return BibliographicRecord(
+            source=self.name,
+            source_record_id=source_id,
+            title=title,
+            authors=tuple(author for author in authors if author),
+            publication_date=self._publication_date(item),
+            abstract=self._clean_abstract(item.get("abstract")),
+            url=str(item.get("URL", "")).strip() or None,
+            doi=doi,
+            raw_metadata_hash=raw_hash,
+        )
+
+    @staticmethod
+    def _publication_date(item: dict[str, Any]) -> str | None:
+        parts = item.get("published", {}).get("date-parts", [])
+        if not parts or not parts[0]:
+            return None
+        values = [str(value) for value in parts[0][:3]]
+        return "-".join(values)
+
+    @staticmethod
+    def _clean_abstract(value: object) -> str | None:
+        if not isinstance(value, str) or not value.strip():
+            return None
+        return CrossrefBibliographicSource._clean_markup(value)
+
+    @staticmethod
+    def _clean_markup(value: str) -> str | None:
+        if not value.strip():
+            return None
+        without_tags = re.sub(r"<[^>]+>", " ", value)
+        return " ".join(html.unescape(without_tags).split())

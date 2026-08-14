@@ -27,6 +27,7 @@ from app.use_of_collections.domain.enums import ProposalStatus, UseStatus, UseTy
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
+    from app.identity.public import Actor
     from app.use_of_collections.domain.models import (
         CollectionUseObject,
         RequestedObject,
@@ -70,6 +71,7 @@ class PublishedProjectView:
     begin_date: date
     end_date: date
     objects: list[PublishedObjectView] = field(default_factory=list)
+    requested_by_permission_id: str = ""
     origin_project_id: str | None = None
     proposal_id: str | None = None
 
@@ -176,6 +178,7 @@ class PublishedUseOfCollectionsReader:
             begin_date=project.begin_date,
             end_date=project.end_date,
             objects=[_project_object_view(obj) for obj in project.objects],
+            requested_by_permission_id=str(project.requested_by),
             origin_project_id=(
                 str(project.origin_project_id)
                 if project.origin_project_id is not None
@@ -247,6 +250,46 @@ def get_published_use_of_collections_reader(
     return PublishedUseOfCollectionsReader(session)
 
 
+class PublishedPublicationEntryWriter:
+    """Narrow command facade used by downstream supervised workflows."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def add(self, *, project_id: str, caller: Actor, note: str) -> str:
+        from app.reference_numbers.public import get_reference_generator
+        from app.use_of_collections.application.use_cases.publication import (
+            AddPublicationLogEntry,
+            AddPublicationLogEntryInput,
+        )
+        from app.use_of_collections.domain.models import CollectionUseProjectId
+        from app.use_of_collections.infrastructure.repositories import (
+            SqlAlchemyCollectionUseProjectRepository,
+            SqlAlchemyProposalRepository,
+            SqlAlchemyPublicationLogRepository,
+        )
+
+        entry = await AddPublicationLogEntry(
+            SqlAlchemyCollectionUseProjectRepository(self._session),
+            SqlAlchemyPublicationLogRepository(self._session),
+            SqlAlchemyProposalRepository(self._session),
+            get_reference_generator(self._session),
+        ).execute(
+            AddPublicationLogEntryInput(
+                project_id=CollectionUseProjectId(project_id),
+                caller=caller,
+                note=note,
+            )
+        )
+        return str(entry.id)
+
+
+def get_published_publication_entry_writer(
+    session: AsyncSession,
+) -> PublishedPublicationEntryWriter:
+    return PublishedPublicationEntryWriter(session)
+
+
 __all__ = [
     "ApprovalView",
     "ExportAttachmentView",
@@ -254,6 +297,7 @@ __all__ = [
     "ExportObjectView",
     "PublishedObjectView",
     "PublishedProjectView",
+    "PublishedPublicationEntryWriter",
     "PublishedProposalView",
     "PublishedUseOfCollectionsReader",
     "PublishableResourceView",
@@ -261,5 +305,6 @@ __all__ = [
     "ProjectExportView",
     "VisitExecutionEvidenceView",
     "get_published_use_of_collections_reader",
+    "get_published_publication_entry_writer",
     "get_project_export_reader",
 ]
