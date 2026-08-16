@@ -6,6 +6,7 @@ import { API_BASE_URL } from '@core/config/app-config.model';
 import { buildHttpParams } from '@core/http/http-params.util';
 
 import {
+  CandidateAgentAnalysis,
   CandidateDecisionRecord,
   CandidateDecisionRequest,
   ScientificReturnCandidate,
@@ -15,6 +16,7 @@ import {
   ScientificReturnRunsPage,
   ScientificReturnMetrics,
   ScientificReturnReviewQueuePage,
+  ScientificReturnAgentFeedback,
   ScientificReturnWatch,
   ScientificReturnWatchStatus,
 } from '../models/scientific-return.model';
@@ -90,6 +92,29 @@ export class ScientificReturnApiService {
   listDecisions(candidateId: string): Observable<readonly CandidateDecisionRecord[]> {
     return this.http.get<readonly CandidateDecisionRecord[]>(
       this.url(`/candidates/${candidateId}/decisions`),
+    );
+  }
+
+  generateAgentAnalysis(candidateId: string): Observable<CandidateAgentAnalysis> {
+    return this.http.post<CandidateAgentAnalysis>(
+      this.url(`/candidates/${candidateId}/agent-analyses`),
+      {},
+    );
+  }
+
+  listAgentAnalyses(candidateId: string): Observable<readonly CandidateAgentAnalysis[]> {
+    return this.http.get<readonly CandidateAgentAnalysis[]>(
+      this.url(`/candidates/${candidateId}/agent-analyses`),
+    );
+  }
+
+  recordAgentAnalysisFeedback(
+    analysisId: string,
+    feedback: ScientificReturnAgentFeedback,
+  ): Observable<CandidateAgentAnalysis> {
+    return this.http.post<CandidateAgentAnalysis>(
+      this.url(`/agent-analyses/${analysisId}/feedback`),
+      { feedback },
     );
   }
 

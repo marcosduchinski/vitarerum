@@ -273,6 +273,20 @@ ignore_imports = [
 ]
 
 [[tool.importlinter.contracts]]
+name = "Scientific Return may import AI prompts only via prompts.public"
+type = "forbidden"
+source_modules = ["app.scientific_return"]
+forbidden_modules = [
+    "app.ai.prompts.application",
+    "app.ai.prompts.domain",
+    "app.ai.prompts.infrastructure",
+    "app.ai.prompts.presentation",
+]
+ignore_imports = [
+    "app.scientific_return.infrastructure.prompt_acl -> app.ai.prompts.public",
+]
+
+[[tool.importlinter.contracts]]
 name = "External Publications may import resource contexts only via published language"
 type = "forbidden"
 source_modules = ["app.external_publications"]

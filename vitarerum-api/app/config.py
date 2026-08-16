@@ -61,6 +61,11 @@ class Settings(BaseSettings):
     europe_pmc_email: str = ""
     scientific_return_result_limit: int = 20
     scientific_return_max_queries_per_run: int = 40
+    # Phase 3B: advisory candidate reasoning only. The model cannot execute
+    # tools or make candidate decisions while operating in shadow mode.
+    scientific_return_llm_enabled: bool = False
+    scientific_return_llm_model: str = "llama3.1:8b"
+    scientific_return_llm_timeout_seconds: float = 60.0
     # Public proposal submission (unauthenticated citizen intake, double opt-in).
     # Default is Cloudflare's always-passing test secret key; override in prod.
     turnstile_secret_key: str = "1x0000000000000000000000000000000AA"

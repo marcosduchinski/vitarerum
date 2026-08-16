@@ -13,9 +13,11 @@ from app.notifications.public import (
     get_notification_dispatcher,
 )
 from app.scientific_return.application.ports import (
+    AgentPromptProvider,
     BibliographicSource,
     ConfirmedPublicationWriter,
     ProjectSnapshotProvider,
+    ScientificReturnReasoner,
     ScientificReturnRepository,
 )
 from app.scientific_return.infrastructure.acls import (
@@ -25,6 +27,10 @@ from app.scientific_return.infrastructure.acls import (
 from app.scientific_return.infrastructure.crossref import CrossrefBibliographicSource
 from app.scientific_return.infrastructure.europe_pmc import EuropePmcBibliographicSource
 from app.scientific_return.infrastructure.openalex import OpenAlexBibliographicSource
+from app.scientific_return.infrastructure.prompt_acl import AiPromptRegistryAdapter
+from app.scientific_return.infrastructure.reasoner_ollama import (
+    OllamaScientificReturnReasoner,
+)
 from app.scientific_return.infrastructure.repositories import (
     SqlAlchemyScientificReturnRepository,
 )
@@ -111,6 +117,23 @@ def get_max_queries() -> int:
     return settings.scientific_return_max_queries_per_run
 
 
+def get_agent_prompt_provider(session: DBSession) -> AgentPromptProvider:
+    return AiPromptRegistryAdapter(session)
+
+
+def get_agent_reasoner() -> ScientificReturnReasoner:
+    return OllamaScientificReturnReasoner(
+        base_url=settings.ollama_base_url,
+        api_key=settings.ollama_api_key,
+        model=settings.scientific_return_llm_model,
+        timeout_seconds=settings.scientific_return_llm_timeout_seconds,
+    )
+
+
+def get_agent_enabled() -> bool:
+    return settings.scientific_return_llm_enabled
+
+
 Repository = Annotated[ScientificReturnRepository, Depends(get_repository)]
 ProjectProvider = Annotated[ProjectSnapshotProvider, Depends(get_project_provider)]
 PublicationWriter = Annotated[
@@ -122,3 +145,6 @@ BibliographicSources = Annotated[
 ResultLimit = Annotated[int, Depends(get_result_limit)]
 MaxQueries = Annotated[int, Depends(get_max_queries)]
 Notifications = Annotated[NotificationDispatcher, Depends(get_notifications)]
+AgentPrompt = Annotated[AgentPromptProvider, Depends(get_agent_prompt_provider)]
+AgentReasoner = Annotated[ScientificReturnReasoner, Depends(get_agent_reasoner)]
+AgentEnabled = Annotated[bool, Depends(get_agent_enabled)]

@@ -88,4 +88,28 @@ describe('ScientificReturnApiService', () => {
     expect(request.request.method).toBe('GET');
     request.flush({ content: [], page: 1, size: 20, totalElements: 0, totalPages: 0 });
   });
+
+  it('keeps shadow analysis and staff feedback on separate endpoints', () => {
+    service.generateAgentAnalysis('candidate-1').subscribe();
+    const generate = http.expectOne(
+      'https://api.example.test/api/v1/scientific-return/candidates/candidate-1/agent-analyses',
+    );
+    expect(generate.request.method).toBe('POST');
+    generate.flush({});
+
+    service.listAgentAnalyses('candidate-1').subscribe();
+    const history = http.expectOne(
+      'https://api.example.test/api/v1/scientific-return/candidates/candidate-1/agent-analyses',
+    );
+    expect(history.request.method).toBe('GET');
+    history.flush([]);
+
+    service.recordAgentAnalysisFeedback('analysis-1', 'USEFUL').subscribe();
+    const feedback = http.expectOne(
+      'https://api.example.test/api/v1/scientific-return/agent-analyses/analysis-1/feedback',
+    );
+    expect(feedback.request.method).toBe('POST');
+    expect(feedback.request.body).toEqual({ feedback: 'USEFUL' });
+    feedback.flush({});
+  });
 });

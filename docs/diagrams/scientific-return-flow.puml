@@ -1,0 +1,286 @@
+@startuml scientific-return-flow
+title Scientific Return — Fluxo negocial implementado
+
+skinparam shadowing false
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Arial
+skinparam activity {
+  BackgroundColor #F8FAFC
+  BorderColor #334155
+  FontColor #111827
+  DiamondBackgroundColor #FEF3C7
+  DiamondBorderColor #92400E
+  StartColor #166534
+  EndColor #991B1B
+  BarColor #475569
+}
+skinparam note {
+  BackgroundColor #FFFBEB
+  BorderColor #B45309
+  FontColor #451A03
+}
+skinparam partition {
+  BorderColor #94A3B8
+  FontColor #0F172A
+}
+
+legend right
+  |= Cor |= Responsabilidade |
+  |<#DBEAFE>| Staff e decisão humana |
+  |<#DCFCE7>| Motor determinístico |
+  |<#F3E8FF>| LLM em modo sombra |
+  |<#FEF3C7>| Sistemas e fontes externas |
+
+  **Regra institucional:**
+  candidato ≠ publicação confirmada
+  recomendação do LLM ≠ ação executada
+endlegend
+
+start
+
+partition "Staff autorizado\nCuradoria · Gestão de Coleções · Direção" #DBEAFE {
+  :Abrir um projeto de uso da coleção;
+  :Solicitar ativação da vigilância\nde retorno científico;
+}
+
+partition "Scientific Return\nBounded Context" #DCFCE7 {
+  :Validar autorização e pré-condições;
+  note right
+    O projeto deve estar **concluído**.
+    Deve existir investigador identificado.
+    Cada objeto consultado deve possuir
+    número de inventário e nome do objeto.
+  end note
+
+  if (Pré-condições válidas?) then (não)
+    :Rejeitar ativação\ncom motivo de negócio;
+    stop
+  else (sim)
+    if (Já existe vigilância?) then (sim)
+      :Reutilizar a vigilância existente;
+    else (não)
+      :Criar snapshot imutável e cifrado\ndo projeto, investigador e objetos;
+      :Criar ScientificReturnWatch\n<<Aggregate Root>> em ACTIVE;
+    endif
+  endif
+}
+
+partition "Gatilho da execução" #DBEAFE {
+  if (Como a pesquisa foi iniciada?) then (manual)
+    :Staff solicita nova pesquisa;
+  else (periódica)
+    :Comando operacional seleciona\nvigilância cuja data venceu;
+  endif
+}
+
+partition "Scientific Return\nOrquestração determinística" #DCFCE7 {
+  if (Vigilância está ACTIVE?) then (não)
+    :Bloquear nova pesquisa;
+    stop
+  else (sim)
+    :Criar ScientificReturnSearchRun\ncom estado RUNNING;
+    :Planear queries para cada objeto;
+    note right
+      Estratégias exatas:
+      • inventário
+      • autor + inventário
+      • inventário + objeto
+      • autor + objeto
+
+      Orçamento global configurável:
+      até 40 queries por run.
+    end note
+  endif
+}
+
+partition "Fontes bibliográficas\nOpen Host Services" #FEF3C7 {
+  :Consultar fontes configuradas;
+  note right
+    Crossref: fonte base
+    OpenAlex: opcional com API key
+    Europe PMC: opcional; texto aberto
+    é inspecionado transitoriamente
+  end note
+}
+
+partition "Scientific Return\nOrquestração determinística" #DCFCE7 {
+  :Registar cada query, fonte, horário,\nresultado e eventual erro;
+
+  if (Fonte produziu candidato acionável?) then (não)
+    :Ampliar de nome binomial para gênero\ncom até duas queries adaptativas;
+  else (sim)
+    :Manter trajetória exata;
+  endif
+}
+
+partition "Fontes bibliográficas\nOpen Host Services" #FEF3C7 {
+  :Devolver metadados bibliográficos\ne texto indexado permitido;
+}
+
+partition "Scientific Return\nDomínio e regras de evidência" #DCFCE7 {
+  :Normalizar DOI, autor, inventário,\nnome do objeto e metadados;
+  note right
+    Inventários equivalentes na comparação:
+    MB03-001801 · MB03/001801
+    MB03001801 · MB03.001801
+
+    Também reconhece MUHNAC/MUNHAC
+    e repetição do segmento MB03.
+  end note
+
+  :Comparar cada resultado com o snapshot;
+  :Produzir CandidateEvidence\n<<Entity>> com tipo, força e origem;
+
+  if (Existe evidência acionável?) then (não)
+    :Ignorar resultado sem criar candidato;
+  else (sim)
+    :Calcular chave de deduplicação;
+    note right
+      Com DOI: DOI normalizado.
+      Sem DOI: título + data + primeiro autor.
+    end note
+
+    if (Candidato já é conhecido?) then (sim)
+      :Reutilizar candidato existente;
+      if (SNOOZED e prazo expirou?) then (sim)
+        :Retornar candidato a PENDING;
+      else (não)
+        :Preservar estado e memória anteriores;
+      endif
+    else (não)
+      :Criar CandidatePublication\n<<Aggregate Root>> em PENDING;
+      :Associar evidências ao candidato\ne aos objetos consultados;
+    endif
+  endif
+
+  :Finalizar run;
+  if (Todas as queries falharam?) then (sim)
+    :Marcar run como FAILED;
+  else (não)
+    :Marcar run como COMPLETED\ne calcular próxima execução;
+  endif
+
+  if (Execução periódica criou\nnovos candidatos?) then (sim)
+    :Solicitar notificação ao responsável;
+  else (não)
+    :Não emitir notificação de descoberta;
+  endif
+}
+
+partition "Staff autorizado" #DBEAFE {
+  :Abrir fila de candidatos;
+  :Ler primeiro metadados e\nevidências determinísticas;
+
+  if (Solicitar análise por IA?) then (não)
+    :Prosseguir diretamente\npara decisão humana;
+  else (sim)
+    :Executar análise opcional\ndo candidato;
+  endif
+}
+
+partition "Scientific Return\nCaso de uso de análise" #DCFCE7 {
+  if (Análise por IA foi solicitada?) then (não)
+    :Manter somente evidências verificadas;
+  else (sim)
+    :Montar contexto mínimo e delimitado;
+    note right
+      Inclui snapshot mínimo, candidato,
+      evidências e trajetória de queries.
+      Texto externo é tratado como dado
+      não confiável, nunca como instrução.
+    end note
+    :Obter versão publicada do prompt\nvia Published Language / ACL;
+    :Criar CandidateAgentAnalysis\n<<Entity>> em RUNNING;
+  endif
+}
+
+partition "LLM — modo sombra\nScientificReturnReasoner" #F3E8FF {
+  if (Análise por IA foi solicitada?) then (não)
+    :Nenhuma chamada ao LLM;
+  else (sim)
+    :Sintetizar evidências, contradições\ne lacunas;
+    :Recomendar exatamente uma ação tipada\ne, opcionalmente, queries;
+    note right
+      O LLM não possui ferramenta para:
+      • pesquisar
+      • confirmar ou descartar
+      • corrigir metadados
+      • escrever no PublicationLog
+    end note
+  endif
+}
+
+partition "Scientific Return\nValidação e auditoria" #DCFCE7 {
+  if (Análise por IA foi solicitada?) then (não)
+    :Não criar histórico de IA;
+  else (sim)
+    :Validar JSON, campos, listas,\nação e confiança permitidas;
+    if (Resposta válida?) then (não)
+      :Marcar análise como FAILED;
+      :Registar modelo, prompt, hashes,\nlatência e erro;
+      note right
+        A falha do LLM não altera o candidato
+        e não interrompe a revisão humana.
+      end note
+    else (sim)
+      :Marcar análise como COMPLETED;
+      :Cifrar entrada e resultado e registar\nmodelo, prompt, hashes e latência;
+      :Exibir recomendação separada\ndas evidências verificadas;
+    endif
+  endif
+}
+
+partition "Staff autorizado\nDecisão institucional HITL" #DBEAFE {
+  if (Existe análise de IA concluída?) then (sim)
+    :Classificar utilidade uma única vez como\nUSEFUL, PARTIALLY_USEFUL ou NOT_USEFUL;
+  else (não)
+    :Decidir apenas com os dados disponíveis;
+  endif
+
+  :Escolher decisão sobre o candidato;
+
+  if (CONFIRM?) then (sim)
+    :Confirmar metadados como apresentados;
+  else (não)
+    if (CORRECT_AND_CONFIRM?) then (sim)
+      :Corrigir título, DOI, URL ou autores;
+    else (não)
+      if (DISMISS?) then (sim)
+        :Informar justificativa obrigatória;
+        partition "Scientific Return\nDomínio" #DCFCE7 {
+          :Marcar candidato como DISMISSED;
+          :Guardar decisão e snapshot\ndas evidências vistas;
+        }
+        stop
+      else (SNOOZE)
+        :Informar uma data futura;
+        partition "Scientific Return\nDomínio" #DCFCE7 {
+          :Marcar candidato como SNOOZED;
+          :Guardar decisão e snapshot\ndas evidências vistas;
+        }
+        stop
+      endif
+    endif
+  endif
+}
+
+partition "Use of Collections\nPublished Language" #FEF3C7 {
+  :Criar PublicationLogEntry\nna mesma transação da confirmação;
+}
+
+partition "Scientific Return\nDomínio" #DCFCE7 {
+  :Marcar candidato como CONFIRMED;
+  :Guardar decisão, correções e snapshot\ndas evidências vistas;
+  note right
+    Somente este caminho materializa
+    uma publicação no projeto.
+  end note
+}
+
+partition "Staff autorizado" #DBEAFE {
+  :Consultar histórico de runs, queries,\nevidências, IA, feedback e decisões;
+}
+
+stop
+
+@enduml

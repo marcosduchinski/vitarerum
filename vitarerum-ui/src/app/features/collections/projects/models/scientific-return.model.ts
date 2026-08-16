@@ -6,6 +6,17 @@ export type ScientificReturnQueryStatus = 'COMPLETED' | 'FAILED';
 export type ScientificReturnCandidateStatus = 'PENDING' | 'CONFIRMED' | 'DISMISSED' | 'SNOOZED';
 export type ScientificReturnDecision = 'CONFIRM' | 'CORRECT_AND_CONFIRM' | 'DISMISS' | 'SNOOZE';
 export type ScientificReturnEvidenceStrength = 'PRIMARY' | 'SUPPORTING' | 'WEAK';
+export type ScientificReturnAgentAnalysisStatus = 'RUNNING' | 'COMPLETED' | 'FAILED';
+export type ScientificReturnAgentConfidence = 'LOW' | 'MEDIUM' | 'HIGH';
+export type ScientificReturnAgentFeedback = 'USEFUL' | 'PARTIALLY_USEFUL' | 'NOT_USEFUL';
+export type ScientificReturnAgentAction =
+  | 'PRESENT_FOR_REVIEW'
+  | 'SEARCH_INVENTORY_VARIANTS'
+  | 'SEARCH_AUTHOR_VARIANTS'
+  | 'SEARCH_TAXON_VARIANTS'
+  | 'SEARCH_FULL_TEXT'
+  | 'DEPRIORITIZE'
+  | 'STOP_INSUFFICIENT_EVIDENCE';
 
 export interface ScientificReturnWatch {
   readonly id: string;
@@ -107,6 +118,40 @@ export interface CandidateDecisionRecord {
   readonly decidedAt: string;
   readonly evidenceSnapshot: readonly Record<string, string>[];
   readonly correction: CandidateCorrection | null;
+}
+
+export interface CandidateAgentAnalysisResult {
+  readonly summary: string;
+  readonly supportingEvidence: readonly string[];
+  readonly contradictions: readonly string[];
+  readonly missingEvidence: readonly string[];
+  readonly recommendedAction: ScientificReturnAgentAction;
+  readonly proposedQueries: readonly string[];
+  readonly reasoningSummary: string;
+  readonly confidence: ScientificReturnAgentConfidence;
+}
+
+export interface CandidateAgentAnalysis {
+  readonly id: string;
+  readonly candidateId: string;
+  readonly runId: string;
+  readonly status: ScientificReturnAgentAnalysisStatus;
+  readonly mode: 'SHADOW';
+  readonly model: string;
+  readonly promptVersionId: string;
+  readonly promptVersion: string;
+  readonly inputHash: string;
+  readonly responseHash: string | null;
+  readonly analysis: CandidateAgentAnalysisResult | null;
+  readonly startedAt: string;
+  readonly completedAt: string | null;
+  readonly latencyMs: number | null;
+  readonly errorMessage: string | null;
+  readonly createdBy: string;
+  readonly staffFeedback: ScientificReturnAgentFeedback | null;
+  readonly feedbackComment: string | null;
+  readonly feedbackBy: string | null;
+  readonly feedbackAt: string | null;
 }
 
 export type ScientificReturnCandidatesPage = Page<ScientificReturnCandidate>;

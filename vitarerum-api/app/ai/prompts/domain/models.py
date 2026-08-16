@@ -15,6 +15,7 @@ class PromptPurpose(StrEnum):
     IN_SITU_NARRATIVE = "in_situ_narrative"
     PROPOSAL_ASSISTANCE = "proposal_assistance"
     PROJECT_ASSISTANCE = "project_assistance"
+    SCIENTIFIC_RETURN_ANALYSIS = "scientific_return_analysis"
 
 
 class PromptStatus(StrEnum):

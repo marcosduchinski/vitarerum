@@ -18,11 +18,13 @@ import { FeedbackMessageComponent } from '@shared/components/feedback-message/fe
 import { LoadingStateComponent } from '@shared/components/loading-state/loading-state.component';
 
 import {
+  CandidateAgentAnalysis,
   CandidateDecisionRecord,
   CandidateDecisionRequest,
   ScientificReturnCandidate,
   ScientificReturnCandidateStatus,
   ScientificReturnDecision,
+  ScientificReturnAgentFeedback,
 } from '../../models/scientific-return.model';
 import { ScientificReturnApiService } from '../../services/scientific-return-api.service';
 
@@ -125,6 +127,11 @@ export class ScientificReturnPanelComponent {
     Readonly<Record<string, readonly CandidateDecisionRecord[]>>
   >({});
   protected readonly loadingHistoryId = signal<string | null>(null);
+  protected readonly analysesByCandidate = signal<
+    Readonly<Record<string, readonly CandidateAgentAnalysis[]>>
+  >({});
+  protected readonly loadingAgentAnalysisId = signal<string | null>(null);
+  protected readonly feedbackBusyAnalysisId = signal<string | null>(null);
 
   protected setFilter(filter: CandidateFilter): void {
     this.filter.set(filter);
@@ -292,6 +299,76 @@ export class ScientificReturnPanelComponent {
     }
   }
 
+  protected async generateAgentAnalysis(candidateId: string): Promise<void> {
+    if (!this.canReview() || this.loadingAgentAnalysisId()) return;
+    this.loadingAgentAnalysisId.set(candidateId);
+    this.clearMessages();
+    try {
+      const analysis = await firstValueFrom(this.api.generateAgentAnalysis(candidateId));
+      this.analysesByCandidate.update((current) => ({
+        ...current,
+        [candidateId]: [analysis, ...(current[candidateId] ?? [])],
+      }));
+      this.feedback.set(
+        analysis.status === 'COMPLETED'
+          ? 'AI shadow analysis completed. No recommended action was executed.'
+          : 'The AI analysis failed safely and was recorded in the audit trail.',
+      );
+    } catch (error) {
+      this.actionError.set(toApiError(error));
+    } finally {
+      this.loadingAgentAnalysisId.set(null);
+    }
+  }
+
+  protected async toggleAgentHistory(candidateId: string): Promise<void> {
+    if (this.analysesByCandidate()[candidateId]) {
+      this.analysesByCandidate.update((current) => {
+        const next = { ...current };
+        delete next[candidateId];
+        return next;
+      });
+      return;
+    }
+    this.loadingAgentAnalysisId.set(candidateId);
+    this.clearMessages();
+    try {
+      const analyses = await firstValueFrom(this.api.listAgentAnalyses(candidateId));
+      this.analysesByCandidate.update((current) => ({
+        ...current,
+        [candidateId]: analyses,
+      }));
+    } catch (error) {
+      this.actionError.set(toApiError(error));
+    } finally {
+      this.loadingAgentAnalysisId.set(null);
+    }
+  }
+
+  protected async recordAgentFeedback(
+    candidateId: string,
+    analysisId: string,
+    value: ScientificReturnAgentFeedback,
+  ): Promise<void> {
+    if (!this.canReview() || this.feedbackBusyAnalysisId()) return;
+    this.feedbackBusyAnalysisId.set(analysisId);
+    this.clearMessages();
+    try {
+      const updated = await firstValueFrom(this.api.recordAgentAnalysisFeedback(analysisId, value));
+      this.analysesByCandidate.update((current) => ({
+        ...current,
+        [candidateId]: (current[candidateId] ?? []).map((item) =>
+          item.id === updated.id ? updated : item,
+        ),
+      }));
+      this.feedback.set('Your assessment of the AI recommendation was recorded.');
+    } catch (error) {
+      this.actionError.set(toApiError(error));
+    } finally {
+      this.feedbackBusyAnalysisId.set(null);
+    }
+  }
+
   protected candidateAuthors(candidate: ScientificReturnCandidate): string {
     return candidate.authors.join(', ') || 'Unknown authors';
   }
@@ -302,6 +379,10 @@ export class ScientificReturnPanelComponent {
 
   protected decisionLabel(decision: ScientificReturnDecision): string {
     return decision.toLowerCase().replaceAll('_', ' ');
+  }
+
+  protected agentActionLabel(action: string): string {
+    return action.toLowerCase().replaceAll('_', ' ');
   }
 
   private clearMessages(): void {

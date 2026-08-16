@@ -17,6 +17,10 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 from app.scientific_return.domain.enums import (
+    AgentAnalysisFeedback,
+    AgentAnalysisStatus,
+    AgentConfidence,
+    AgentRecommendedAction,
     CandidateStatus,
     DecisionType,
     EvidenceStrength,
@@ -187,3 +191,53 @@ class CandidateDecisionRecord(Base):
     decided_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     evidence_snapshot: Mapped[list[dict[str, str]]] = mapped_column(JSON)
     correction: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+
+
+class CandidateAgentAnalysisRecord(Base):
+    __tablename__ = "scientific_return_agent_analyses"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    candidate_id: Mapped[str] = mapped_column(
+        ForeignKey("scientific_return_candidates.id"), index=True
+    )
+    run_id: Mapped[str] = mapped_column(
+        ForeignKey("scientific_return_runs.id"), index=True
+    )
+    status: Mapped[AgentAnalysisStatus] = mapped_column(
+        SAEnum(AgentAnalysisStatus, name="scientific_return_agent_analysis_status"),
+        index=True,
+    )
+    model: Mapped[str] = mapped_column(String(128))
+    prompt_version_id: Mapped[str] = mapped_column(String(36), index=True)
+    prompt_version: Mapped[str] = mapped_column(String(96))
+    input_payload: Mapped[str] = mapped_column(Text)
+    input_hash: Mapped[str] = mapped_column(String(64), index=True)
+    analysis_payload: Mapped[str | None] = mapped_column(Text, nullable=True)
+    recommended_action: Mapped[AgentRecommendedAction | None] = mapped_column(
+        SAEnum(
+            AgentRecommendedAction,
+            name="scientific_return_agent_recommended_action",
+        ),
+        nullable=True,
+    )
+    confidence: Mapped[AgentConfidence | None] = mapped_column(
+        SAEnum(AgentConfidence, name="scientific_return_agent_confidence"),
+        nullable=True,
+    )
+    response_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by: Mapped[str] = mapped_column(String(36), index=True)
+    staff_feedback: Mapped[AgentAnalysisFeedback | None] = mapped_column(
+        SAEnum(AgentAnalysisFeedback, name="scientific_return_agent_feedback"),
+        nullable=True,
+    )
+    feedback_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    feedback_by: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    feedback_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )

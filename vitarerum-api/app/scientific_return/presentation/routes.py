@@ -7,6 +7,15 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query, status
 
 from app.notifications.public import NotificationKind, RelatedResourceType
+from app.scientific_return.application.agent_analysis import (
+    AgentAnalysisDisabled,
+    AgentAnalysisNotFound,
+    GenerateCandidateAgentAnalysis,
+    GenerateCandidateAgentAnalysisInput,
+    ListCandidateAgentAnalyses,
+    RecordAgentAnalysisFeedback,
+    RecordAgentAnalysisFeedbackInput,
+)
 from app.scientific_return.application.use_cases import (
     ActivateScientificReturnWatch,
     ActivateWatchInput,
@@ -19,6 +28,8 @@ from app.scientific_return.application.use_cases import (
 )
 from app.scientific_return.domain.enums import CandidateStatus, EvidenceStrength
 from app.scientific_return.domain.models import (
+    CandidateAgentAnalysis,
+    CandidateAgentAnalysisId,
     CandidateCorrection,
     CandidateDecision,
     CandidatePublication,
@@ -28,6 +39,9 @@ from app.scientific_return.domain.models import (
     ScientificReturnWatchId,
 )
 from app.scientific_return.presentation.dependencies import (
+    AgentEnabled,
+    AgentPrompt,
+    AgentReasoner,
     BibliographicSources,
     DBSession,
     MaxQueries,
@@ -39,6 +53,9 @@ from app.scientific_return.presentation.dependencies import (
 )
 from app.scientific_return.presentation.schemas import (
     ActivateWatchRequest,
+    AgentAnalysisFeedbackRequest,
+    CandidateAgentAnalysisResponse,
+    CandidateAgentAnalysisResultResponse,
     CandidateCorrectionRequest,
     CandidateDecisionRequest,
     CandidateDecisionResponse,
@@ -153,6 +170,46 @@ def _candidate_response(
             )
             for evidence in evidences
         ],
+    )
+
+
+def _agent_analysis_response(
+    analysis: CandidateAgentAnalysis,
+) -> CandidateAgentAnalysisResponse:
+    result = analysis.result
+    return CandidateAgentAnalysisResponse(
+        id=analysis.id,
+        candidateId=analysis.candidate_id,
+        runId=analysis.run_id,
+        status=analysis.status,
+        model=analysis.model,
+        promptVersionId=analysis.prompt_version_id,
+        promptVersion=analysis.prompt_version,
+        inputHash=analysis.input_hash,
+        responseHash=analysis.response_hash,
+        analysis=(
+            CandidateAgentAnalysisResultResponse(
+                summary=result.summary,
+                supportingEvidence=list(result.supporting_evidence),
+                contradictions=list(result.contradictions),
+                missingEvidence=list(result.missing_evidence),
+                recommendedAction=result.recommended_action,
+                proposedQueries=list(result.proposed_queries),
+                reasoningSummary=result.reasoning_summary,
+                confidence=result.confidence,
+            )
+            if result is not None
+            else None
+        ),
+        startedAt=analysis.started_at,
+        completedAt=analysis.completed_at,
+        latencyMs=analysis.latency_ms,
+        errorMessage=analysis.error_message,
+        createdBy=analysis.created_by,
+        staffFeedback=analysis.staff_feedback,
+        feedbackComment=analysis.feedback_comment,
+        feedbackBy=analysis.feedback_by,
+        feedbackAt=analysis.feedback_at,
     )
 
 
@@ -466,3 +523,93 @@ async def list_candidate_decisions(
     require_staff(caller)
     decisions = await repository.list_decisions(CandidatePublicationId(candidate_id))
     return [_decision_response(item) for item in decisions]
+
+
+@scientific_return_router.post(
+    "/candidates/{candidate_id}/agent-analyses",
+    status_code=status.HTTP_201_CREATED,
+    response_model=CandidateAgentAnalysisResponse,
+)
+async def generate_candidate_agent_analysis(
+    candidate_id: str,
+    caller: CallerPermission,
+    repository: Repository,
+    prompt_provider: AgentPrompt,
+    reasoner: AgentReasoner,
+    enabled: AgentEnabled,
+    session: DBSession,
+) -> CandidateAgentAnalysisResponse:
+    try:
+        analysis = await GenerateCandidateAgentAnalysis(
+            repository,
+            prompt_provider,
+            reasoner,
+            enabled=enabled,
+        ).execute(
+            GenerateCandidateAgentAnalysisInput(
+                candidate_id=CandidatePublicationId(candidate_id),
+                caller=caller,
+            )
+        )
+    except CandidateNotFound as exc:
+        raise _not_found("SCIENTIFIC_RETURN_CANDIDATE_NOT_FOUND", str(exc)) from None
+    except AgentAnalysisDisabled as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"error": "SCIENTIFIC_RETURN_LLM_DISABLED", "message": str(exc)},
+        ) from None
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"error": "SCIENTIFIC_RETURN_LLM_UNAVAILABLE", "message": str(exc)},
+        ) from None
+    await session.commit()
+    return _agent_analysis_response(analysis)
+
+
+@scientific_return_router.get(
+    "/candidates/{candidate_id}/agent-analyses",
+    response_model=list[CandidateAgentAnalysisResponse],
+)
+async def list_candidate_agent_analyses(
+    candidate_id: str,
+    caller: CallerPermission,
+    repository: Repository,
+) -> list[CandidateAgentAnalysisResponse]:
+    try:
+        analyses = await ListCandidateAgentAnalyses(repository).execute(
+            CandidatePublicationId(candidate_id), caller
+        )
+    except CandidateNotFound as exc:
+        raise _not_found("SCIENTIFIC_RETURN_CANDIDATE_NOT_FOUND", str(exc)) from None
+    return [_agent_analysis_response(item) for item in analyses]
+
+
+@scientific_return_router.post(
+    "/agent-analyses/{analysis_id}/feedback",
+    response_model=CandidateAgentAnalysisResponse,
+)
+async def record_agent_analysis_feedback(
+    analysis_id: str,
+    body: AgentAnalysisFeedbackRequest,
+    caller: CallerPermission,
+    repository: Repository,
+    session: DBSession,
+) -> CandidateAgentAnalysisResponse:
+    try:
+        analysis = await RecordAgentAnalysisFeedback(repository).execute(
+            RecordAgentAnalysisFeedbackInput(
+                analysis_id=CandidateAgentAnalysisId(analysis_id),
+                feedback=body.feedback,
+                comment=body.comment,
+                caller=caller,
+            )
+        )
+    except AgentAnalysisNotFound as exc:
+        raise _not_found(
+            "SCIENTIFIC_RETURN_AGENT_ANALYSIS_NOT_FOUND", str(exc)
+        ) from None
+    except ValueError as exc:
+        raise _unprocessable(str(exc)) from None
+    await session.commit()
+    return _agent_analysis_response(analysis)

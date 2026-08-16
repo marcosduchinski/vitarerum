@@ -1,0 +1,74 @@
+from __future__ import annotations
+
+from app.scientific_return.application.ports import (
+    AgentReasonerTimeout,
+    AgentReasonerUnavailable,
+)
+
+
+def _is_ollama_response_error(exc: BaseException) -> bool:
+    exc_type = type(exc)
+    return (
+        exc_type.__name__ == "ResponseError"
+        and exc_type.__module__.split(".", maxsplit=1)[0] == "ollama"
+    )
+
+
+class OllamaScientificReturnReasoner:
+    def __init__(
+        self,
+        *,
+        base_url: str,
+        model: str,
+        timeout_seconds: float,
+        api_key: str = "",
+    ) -> None:
+        self._base_url = base_url
+        self._model = model
+        self._timeout_seconds = timeout_seconds
+        self._api_key = api_key
+
+    @property
+    def model_name(self) -> str:
+        return self._model
+
+    async def generate(
+        self, *, system_prompt: str, user_prompt: str, temperature: float
+    ) -> str:
+        import httpx
+        from langchain_core.messages import HumanMessage, SystemMessage
+        from langchain_ollama import ChatOllama
+
+        client_kwargs: dict[str, object] = {"timeout": self._timeout_seconds}
+        if self._api_key:
+            client_kwargs["headers"] = {"Authorization": f"Bearer {self._api_key}"}
+        chat = ChatOllama(
+            base_url=self._base_url,
+            model=self._model,
+            temperature=temperature,
+            format="json",
+            client_kwargs=client_kwargs,
+            async_client_kwargs=client_kwargs,
+        )
+        try:
+            response = await chat.ainvoke(
+                [
+                    SystemMessage(content=system_prompt),
+                    HumanMessage(content=user_prompt),
+                ]
+            )
+        except (httpx.TimeoutException, TimeoutError) as exc:
+            raise AgentReasonerTimeout(
+                "The scientific-return reasoner did not respond in time"
+            ) from exc
+        except (httpx.ConnectError, httpx.HTTPError, ConnectionError, OSError) as exc:
+            raise AgentReasonerUnavailable(
+                "The scientific-return reasoner is unavailable"
+            ) from exc
+        except Exception as exc:
+            if _is_ollama_response_error(exc):
+                raise AgentReasonerUnavailable(
+                    "The scientific-return reasoner is unavailable"
+                ) from exc
+            raise
+        return str(response.content)

@@ -5,6 +5,10 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 from app.scientific_return.domain.enums import (
+    AgentAnalysisFeedback,
+    AgentAnalysisStatus,
+    AgentConfidence,
+    AgentRecommendedAction,
     CandidateStatus,
     DecisionType,
     EvidenceStrength,
@@ -148,3 +152,42 @@ class CandidateDecisionResponse(BaseModel):
     decidedAt: datetime
     evidenceSnapshot: list[dict[str, str]]
     correction: CandidateCorrectionRequest | None
+
+
+class CandidateAgentAnalysisResultResponse(BaseModel):
+    summary: str
+    supportingEvidence: list[str]
+    contradictions: list[str]
+    missingEvidence: list[str]
+    recommendedAction: AgentRecommendedAction
+    proposedQueries: list[str]
+    reasoningSummary: str
+    confidence: AgentConfidence
+
+
+class CandidateAgentAnalysisResponse(BaseModel):
+    id: str
+    candidateId: str
+    runId: str
+    status: AgentAnalysisStatus
+    mode: str = "SHADOW"
+    model: str
+    promptVersionId: str
+    promptVersion: str
+    inputHash: str
+    responseHash: str | None
+    analysis: CandidateAgentAnalysisResultResponse | None
+    startedAt: datetime
+    completedAt: datetime | None
+    latencyMs: int | None
+    errorMessage: str | None
+    createdBy: str
+    staffFeedback: AgentAnalysisFeedback | None
+    feedbackComment: str | None
+    feedbackBy: str | None
+    feedbackAt: datetime | None
+
+
+class AgentAnalysisFeedbackRequest(BaseModel):
+    feedback: AgentAnalysisFeedback
+    comment: str | None = Field(default=None, max_length=2000)

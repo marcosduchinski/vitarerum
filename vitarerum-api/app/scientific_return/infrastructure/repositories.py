@@ -14,12 +14,17 @@ from app.scientific_return.application.ports import (
     ScientificReturnMetrics,
 )
 from app.scientific_return.domain.enums import (
+    AgentConfidence,
+    AgentRecommendedAction,
     CandidateStatus,
     EvidenceStrength,
     RunStatus,
     WatchStatus,
 )
 from app.scientific_return.domain.models import (
+    CandidateAgentAnalysis,
+    CandidateAgentAnalysisId,
+    CandidateAnalysisResult,
     CandidateCorrection,
     CandidateDecision,
     CandidateDecisionId,
@@ -39,6 +44,7 @@ from app.scientific_return.domain.models import (
     ScientificReturnWatchId,
 )
 from app.scientific_return.infrastructure.models import (
+    CandidateAgentAnalysisRecord,
     CandidateDecisionRecord,
     CandidateEvidenceRecord,
     CandidatePublicationRecord,
@@ -52,6 +58,8 @@ from app.shared.kernel import PermissionId
 
 _SNAPSHOT_PAYLOAD = "scientific_return_snapshots.payload"
 _QUERY_TEXT = "scientific_return_queries.query_text"
+_AGENT_INPUT = "scientific_return_agent_analyses.input_payload"
+_AGENT_ANALYSIS = "scientific_return_agent_analyses.analysis_payload"
 
 
 def _payload_to_dict(payload: ProjectSnapshotPayload) -> dict[str, object]:
@@ -182,6 +190,73 @@ def _decision_to_domain(record: CandidateDecisionRecord) -> CandidateDecision:
         decided_at=record.decided_at,
         evidence_snapshot=tuple(record.evidence_snapshot),
         correction=correction,
+    )
+
+
+def _analysis_result_to_dict(result: CandidateAnalysisResult) -> dict[str, object]:
+    return {
+        "summary": result.summary,
+        "supporting_evidence": list(result.supporting_evidence),
+        "contradictions": list(result.contradictions),
+        "missing_evidence": list(result.missing_evidence),
+        "recommended_action": result.recommended_action.value,
+        "proposed_queries": list(result.proposed_queries),
+        "reasoning_summary": result.reasoning_summary,
+        "confidence": result.confidence.value,
+    }
+
+
+def _analysis_result_to_domain(payload: dict[str, object]) -> CandidateAnalysisResult:
+    def strings(key: str) -> tuple[str, ...]:
+        value = payload.get(key, [])
+        return tuple(str(item) for item in value) if isinstance(value, list) else ()
+
+    return CandidateAnalysisResult(
+        summary=str(payload["summary"]),
+        supporting_evidence=strings("supporting_evidence"),
+        contradictions=strings("contradictions"),
+        missing_evidence=strings("missing_evidence"),
+        recommended_action=AgentRecommendedAction(
+            str(payload["recommended_action"])
+        ),
+        proposed_queries=strings("proposed_queries"),
+        reasoning_summary=str(payload["reasoning_summary"]),
+        confidence=AgentConfidence(str(payload["confidence"])),
+    )
+
+
+def _agent_analysis_to_domain(
+    record: CandidateAgentAnalysisRecord, encryptor: FieldEncryptor
+) -> CandidateAgentAnalysis:
+    raw_result = encryptor.decrypt_json(record.analysis_payload, _AGENT_ANALYSIS)
+    raw_input = encryptor.decrypt_json(record.input_payload, _AGENT_INPUT)
+    return CandidateAgentAnalysis(
+        id=CandidateAgentAnalysisId(record.id),
+        candidate_id=CandidatePublicationId(record.candidate_id),
+        run_id=ScientificReturnRunId(record.run_id),
+        status=record.status,
+        model=record.model,
+        prompt_version_id=record.prompt_version_id,
+        prompt_version=record.prompt_version,
+        input_payload=cast(dict[str, object], raw_input),
+        input_hash=record.input_hash,
+        result=(
+            _analysis_result_to_domain(cast(dict[str, object], raw_result))
+            if raw_result is not None
+            else None
+        ),
+        response_hash=record.response_hash,
+        started_at=record.started_at,
+        completed_at=record.completed_at,
+        latency_ms=record.latency_ms,
+        error_message=record.error_message,
+        created_by=PermissionId(record.created_by),
+        staff_feedback=record.staff_feedback,
+        feedback_comment=record.feedback_comment,
+        feedback_by=(
+            PermissionId(record.feedback_by) if record.feedback_by is not None else None
+        ),
+        feedback_at=record.feedback_at,
     )
 
 
@@ -611,3 +686,95 @@ class SqlAlchemyScientificReturnRepository:
                 CandidatePublicationRecord.status == CandidateStatus.DISMISSED,
             ),
         )
+
+    async def add_agent_analysis(self, analysis: CandidateAgentAnalysis) -> None:
+        self._session.add(
+            CandidateAgentAnalysisRecord(
+                id=analysis.id,
+                candidate_id=analysis.candidate_id,
+                run_id=analysis.run_id,
+                status=analysis.status,
+                model=analysis.model,
+                prompt_version_id=analysis.prompt_version_id,
+                prompt_version=analysis.prompt_version,
+                input_payload=self._encryptor.encrypt_json(
+                    analysis.input_payload, _AGENT_INPUT
+                )
+                or "",
+                input_hash=analysis.input_hash,
+                analysis_payload=(
+                    self._encryptor.encrypt_json(
+                        _analysis_result_to_dict(analysis.result), _AGENT_ANALYSIS
+                    )
+                    if analysis.result is not None
+                    else None
+                ),
+                recommended_action=(
+                    analysis.result.recommended_action if analysis.result else None
+                ),
+                confidence=analysis.result.confidence if analysis.result else None,
+                response_hash=analysis.response_hash,
+                started_at=analysis.started_at,
+                completed_at=analysis.completed_at,
+                latency_ms=analysis.latency_ms,
+                error_message=analysis.error_message,
+                created_by=analysis.created_by,
+                staff_feedback=analysis.staff_feedback,
+                feedback_comment=analysis.feedback_comment,
+                feedback_by=analysis.feedback_by,
+                feedback_at=analysis.feedback_at,
+            )
+        )
+        await self._session.flush()
+
+    async def save_agent_analysis(self, analysis: CandidateAgentAnalysis) -> None:
+        record = await self._session.get(CandidateAgentAnalysisRecord, analysis.id)
+        if record is None:
+            raise LookupError(f"Agent analysis {analysis.id} not found")
+        record.status = analysis.status
+        record.analysis_payload = (
+            self._encryptor.encrypt_json(
+                _analysis_result_to_dict(analysis.result), _AGENT_ANALYSIS
+            )
+            if analysis.result is not None
+            else None
+        )
+        record.recommended_action = (
+            analysis.result.recommended_action if analysis.result else None
+        )
+        record.confidence = analysis.result.confidence if analysis.result else None
+        record.response_hash = analysis.response_hash
+        record.completed_at = analysis.completed_at
+        record.latency_ms = analysis.latency_ms
+        record.error_message = analysis.error_message
+        record.staff_feedback = analysis.staff_feedback
+        record.feedback_comment = analysis.feedback_comment
+        record.feedback_by = analysis.feedback_by
+        record.feedback_at = analysis.feedback_at
+        await self._session.flush()
+
+    async def get_agent_analysis(
+        self, analysis_id: CandidateAgentAnalysisId
+    ) -> CandidateAgentAnalysis | None:
+        record = await self._session.get(CandidateAgentAnalysisRecord, analysis_id)
+        return (
+            _agent_analysis_to_domain(record, self._encryptor)
+            if record is not None
+            else None
+        )
+
+    async def list_agent_analyses(
+        self, candidate_id: CandidatePublicationId
+    ) -> list[CandidateAgentAnalysis]:
+        result = await self._session.execute(
+            select(CandidateAgentAnalysisRecord)
+            .where(CandidateAgentAnalysisRecord.candidate_id == candidate_id)
+            .order_by(
+                CandidateAgentAnalysisRecord.started_at.desc(),
+                CandidateAgentAnalysisRecord.id.desc(),
+            )
+        )
+        return [
+            _agent_analysis_to_domain(item, self._encryptor)
+            for item in result.scalars().all()
+        ]

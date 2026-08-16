@@ -86,7 +86,8 @@ reference_numbers --> identity : shared auth
 notifications --> identity : actor labels
 scientific_return --> uoc : project/publication public language
 scientific_return --> identity : researcher public view
-scientific_return --> external_services : bibliographic search
+scientific_return --> prompts : prompt public language
+scientific_return --> external_services : bibliographic search + LLM
 
 
 @enduml

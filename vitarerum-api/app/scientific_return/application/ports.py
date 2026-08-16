@@ -7,6 +7,8 @@ from typing import Protocol
 from app.identity.public import Actor
 from app.scientific_return.domain.enums import CandidateStatus, EvidenceStrength
 from app.scientific_return.domain.models import (
+    CandidateAgentAnalysis,
+    CandidateAgentAnalysisId,
     CandidateDecision,
     CandidatePublication,
     CandidatePublicationId,
@@ -17,6 +19,39 @@ from app.scientific_return.domain.models import (
     ScientificReturnWatch,
     ScientificReturnWatchId,
 )
+
+
+class AgentReasonerUnavailable(RuntimeError):
+    pass
+
+
+class AgentReasonerTimeout(RuntimeError):
+    pass
+
+
+class AgentPromptUnavailable(RuntimeError):
+    pass
+
+
+@dataclass(frozen=True, slots=True)
+class PublishedAgentPrompt:
+    version_id: str
+    version_label: str
+    content: str
+    temperature: float
+
+
+class ScientificReturnReasoner(Protocol):
+    @property
+    def model_name(self) -> str: ...
+
+    async def generate(
+        self, *, system_prompt: str, user_prompt: str, temperature: float
+    ) -> str: ...
+
+
+class AgentPromptProvider(Protocol):
+    async def get_published(self) -> PublishedAgentPrompt: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,3 +178,15 @@ class ScientificReturnRepository(Protocol):
     ) -> list[CandidateDecision]: ...
 
     async def get_metrics(self) -> ScientificReturnMetrics: ...
+
+    async def add_agent_analysis(self, analysis: CandidateAgentAnalysis) -> None: ...
+
+    async def save_agent_analysis(self, analysis: CandidateAgentAnalysis) -> None: ...
+
+    async def get_agent_analysis(
+        self, analysis_id: CandidateAgentAnalysisId
+    ) -> CandidateAgentAnalysis | None: ...
+
+    async def list_agent_analyses(
+        self, candidate_id: CandidatePublicationId
+    ) -> list[CandidateAgentAnalysis]: ...
