@@ -46,8 +46,11 @@ A closed watch cannot be reopened.
 A run records every planned query, source, result count, error and timestamp.
 `candidateCount` includes known candidates and `newCandidateCount` identifies
 discoveries from that run. Crossref is always enabled; OpenAlex is added when
-`OPENALEX_API_KEY` is configured. The planner sends only combinations of author,
-inventory number and object name from the immutable project snapshot.
+`OPENALEX_API_KEY` is configured. Europe PMC is added to recurring searches
+only when `EUROPE_PMC_ENABLED=true`; its open-access full text is inspected
+transiently for evidence and is not persisted. The planner sends only
+combinations of author, inventory number and object name from the immutable
+project snapshot.
 Executions are capped by `SCIENTIFIC_RETURN_MAX_QUERIES_PER_RUN` (40 by
 default). `CROSSREF_MAILTO` should identify the deployment to Crossref's polite
 pool. Calls are serialized with a configurable minimum interval. Responses
@@ -75,6 +78,12 @@ uv run python -m app.scientific_return.presentation.commands evaluate-phase0
 `run-due` uses a PostgreSQL transaction advisory lock per watch and emits one
 project notification only when the run creates new candidates. The evaluation
 command runs the five versioned known-publication cases and prints JSON.
+`--sources` selects `crossref`, `openalex` and/or `europe_pmc`; `all` is the
+default and skips OpenAlex with a warning when its key is absent. `--output`
+writes the reproducible report to a file. The report contains a review queue;
+after staff completes its human-decision fields, `--reviews` imports it and
+calculates review coverage and human precision without repeating external
+searches.
 
 ## Review candidates
 

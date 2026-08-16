@@ -30,6 +30,8 @@ class BibliographicRecord:
     url: str | None
     doi: str | None
     raw_metadata_hash: str
+    indexed_text: str | None = None
+    indexed_text_source: str | None = None
 
 
 class BibliographicSource(Protocol):

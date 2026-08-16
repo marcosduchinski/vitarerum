@@ -11,6 +11,12 @@ from app.scientific_return.application.analysis import (
     plan_adaptive_queries,
     plan_queries,
 )
+from app.scientific_return.application.evaluation import (
+    EvaluationCase,
+    evaluate_cases,
+    finalize_human_review_report,
+    parse_human_reviews,
+)
 from app.scientific_return.application.ports import (
     BibliographicRecord,
     CandidateReviewItem,
@@ -470,3 +476,74 @@ def test_snooze_requires_a_future_date() -> None:
 
     with pytest.raises(ValueError, match="future"):
         candidate.snooze(now - timedelta(days=1), now)
+
+
+@pytest.mark.asyncio
+async def test_evaluation_reports_per_source_metrics_and_review_queue() -> None:
+    case = EvaluationCase(
+        case_id="known-case",
+        author="Mariana P. Marques",
+        inventory_number="MUHNAC/MB03-001524",
+        object_name="Acontias mukwando",
+        expected_title="A new species of Acontias",
+        expected_doi="10.1000/example",
+        notes="Known evaluation case.",
+    )
+
+    report = await evaluate_cases((_Source(_record()),), cases=(case,), result_limit=10)
+
+    assert report["retrievedCount"] == 1
+    assert report["actionableCandidates"] == 1
+    assert report["knownActionableMatches"] == 1
+    source_metrics = report["sourceMetrics"]
+    assert isinstance(source_metrics, list)
+    assert source_metrics[0]["source"] == "TEST_SOURCE"
+    assert source_metrics[0]["recall"] == 1.0
+    review_queue = report["reviewQueue"]
+    assert isinstance(review_queue, list)
+    assert review_queue[0]["known_case_match"] is True
+    assert review_queue[0]["human_decision"] is None
+
+    review_queue[0].update(
+        {
+            "human_decision": "CONFIRMED",
+            "human_justification": "Inventory and taxon verified in the article.",
+            "reviewer": "curator-1",
+            "reviewed_at": "2026-08-16T12:00:00Z",
+        }
+    )
+    reviewed_report = await evaluate_cases(
+        (_Source(_record()),),
+        cases=(case,),
+        result_limit=10,
+        human_reviews=parse_human_reviews({"reviewQueue": review_queue}),
+    )
+
+    review_metrics = reviewed_report["humanReviewMetrics"]
+    assert isinstance(review_metrics, dict)
+    assert review_metrics["review_coverage"] == 1.0
+    assert review_metrics["human_precision"] == 1.0
+
+    finalized = finalize_human_review_report({**report, "reviewQueue": review_queue})
+    finalized_metrics = finalized["humanReviewMetrics"]
+    assert isinstance(finalized_metrics, dict)
+    assert finalized_metrics["review_coverage"] == 1.0
+    assert finalized_metrics["human_precision"] == 1.0
+    assert "reviewFinalizedAt" in finalized
+
+
+def test_phase_zero_review_requires_a_timezone() -> None:
+    with pytest.raises(ValueError, match="timezone"):
+        parse_human_reviews(
+            {
+                "reviews": [
+                    {
+                        "review_id": "case|doi:10.1000/example",
+                        "human_decision": "CONFIRMED",
+                        "human_justification": "Verified by staff.",
+                        "reviewer": "curator-1",
+                        "reviewed_at": "2026-08-16T12:00:00",
+                    }
+                ]
+            }
+        )

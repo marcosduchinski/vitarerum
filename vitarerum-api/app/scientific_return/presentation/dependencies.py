@@ -23,6 +23,7 @@ from app.scientific_return.infrastructure.acls import (
     UseOfCollectionsPublicationWriter,
 )
 from app.scientific_return.infrastructure.crossref import CrossrefBibliographicSource
+from app.scientific_return.infrastructure.europe_pmc import EuropePmcBibliographicSource
 from app.scientific_return.infrastructure.openalex import OpenAlexBibliographicSource
 from app.scientific_return.infrastructure.repositories import (
     SqlAlchemyScientificReturnRepository,
@@ -61,27 +62,44 @@ def get_notifications(session: DBSession) -> NotificationDispatcher:
     return get_notification_dispatcher(session)
 
 
+def get_crossref_source() -> BibliographicSource:
+    return CrossrefBibliographicSource(
+        base_url=settings.crossref_base_url,
+        timeout_seconds=settings.crossref_timeout_seconds,
+        mailto=settings.crossref_mailto or None,
+        max_retries=settings.crossref_max_retries,
+        retry_base_seconds=settings.crossref_retry_base_seconds,
+        min_interval_seconds=settings.crossref_min_interval_seconds,
+    )
+
+
+def get_openalex_source() -> BibliographicSource:
+    return OpenAlexBibliographicSource(
+        base_url=settings.openalex_base_url,
+        api_key=settings.openalex_api_key,
+        timeout_seconds=settings.openalex_timeout_seconds,
+        max_retries=settings.openalex_max_retries,
+        retry_base_seconds=settings.openalex_retry_base_seconds,
+    )
+
+
+def get_europe_pmc_source() -> BibliographicSource:
+    return EuropePmcBibliographicSource(
+        base_url=settings.europe_pmc_base_url,
+        timeout_seconds=settings.europe_pmc_timeout_seconds,
+        max_retries=settings.europe_pmc_max_retries,
+        retry_base_seconds=settings.europe_pmc_retry_base_seconds,
+        full_text_result_limit=settings.europe_pmc_full_text_result_limit,
+        email=settings.europe_pmc_email or None,
+    )
+
+
 def get_bibliographic_sources() -> tuple[BibliographicSource, ...]:
-    sources: list[BibliographicSource] = [
-        CrossrefBibliographicSource(
-            base_url=settings.crossref_base_url,
-            timeout_seconds=settings.crossref_timeout_seconds,
-            mailto=settings.crossref_mailto or None,
-            max_retries=settings.crossref_max_retries,
-            retry_base_seconds=settings.crossref_retry_base_seconds,
-            min_interval_seconds=settings.crossref_min_interval_seconds,
-        )
-    ]
+    sources: list[BibliographicSource] = [get_crossref_source()]
     if settings.openalex_api_key:
-        sources.append(
-            OpenAlexBibliographicSource(
-                base_url=settings.openalex_base_url,
-                api_key=settings.openalex_api_key,
-                timeout_seconds=settings.openalex_timeout_seconds,
-                max_retries=settings.openalex_max_retries,
-                retry_base_seconds=settings.openalex_retry_base_seconds,
-            )
-        )
+        sources.append(get_openalex_source())
+    if settings.europe_pmc_enabled:
+        sources.append(get_europe_pmc_source())
     return tuple(sources)
 
 

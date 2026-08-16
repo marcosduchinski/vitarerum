@@ -52,6 +52,13 @@ class Settings(BaseSettings):
     openalex_timeout_seconds: float = 20.0
     openalex_max_retries: int = 3
     openalex_retry_base_seconds: float = 1.0
+    europe_pmc_enabled: bool = False
+    europe_pmc_base_url: str = "https://www.ebi.ac.uk/europepmc/webservices/rest"
+    europe_pmc_timeout_seconds: float = 30.0
+    europe_pmc_max_retries: int = 3
+    europe_pmc_retry_base_seconds: float = 1.0
+    europe_pmc_full_text_result_limit: int = 10
+    europe_pmc_email: str = ""
     scientific_return_result_limit: int = 20
     scientific_return_max_queries_per_run: int = 40
     # Public proposal submission (unauthenticated citizen intake, double opt-in).

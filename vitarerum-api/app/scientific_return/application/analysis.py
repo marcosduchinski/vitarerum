@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import re
 import unicodedata
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from uuid import uuid4
@@ -94,7 +95,16 @@ def _compact_inventory(value: str) -> str:
     return re.sub(r"(MB\d{2})\1", r"\1", normalized)
 
 
-def _record_text(record: BibliographicRecord) -> str:
+def _inventory_variants(value: str) -> tuple[str, ...]:
+    compact = _compact_inventory(value)
+    collection_code = re.search(r"MB\d{2}[A-Z0-9]*", compact)
+    variants = [compact]
+    if collection_code and collection_code.group() != compact:
+        variants.append(collection_code.group())
+    return tuple(variants)
+
+
+def _metadata_text(record: BibliographicRecord) -> str:
     return " ".join(
         part
         for part in (
@@ -104,6 +114,19 @@ def _record_text(record: BibliographicRecord) -> str:
         )
         if part
     )
+
+
+def _matching_source(
+    record: BibliographicRecord,
+    value: str,
+    *,
+    normalizer: Callable[[str], str],
+) -> str | None:
+    if value in normalizer(_metadata_text(record)):
+        return "title_or_abstract"
+    if record.indexed_text and value in normalizer(record.indexed_text):
+        return record.indexed_text_source or "indexed_text"
+    return None
 
 
 def _author_matches(researcher: str, authors: tuple[str, ...]) -> bool:
@@ -119,9 +142,6 @@ def build_evidences(
     record: BibliographicRecord,
     created_at: datetime,
 ) -> list[CandidateEvidence]:
-    text = _record_text(record)
-    plain_text = _plain(text)
-    compact_text = _compact_inventory(text)
     author_match = _author_matches(snapshot.researcher, record.authors)
     evidences: list[CandidateEvidence] = []
 
@@ -157,18 +177,44 @@ def build_evidences(
         )
 
     for obj in snapshot.consulted_objects:
-        inventory_match = _compact_inventory(obj.inventory_number) in compact_text
+        inventory_source = next(
+            (
+                source
+                for variant in _inventory_variants(obj.inventory_number)
+                if (
+                    source := _matching_source(
+                        record,
+                        variant,
+                        normalizer=_compact_inventory,
+                    )
+                )
+                is not None
+            ),
+            None,
+        )
+        inventory_match = inventory_source is not None
         normalized_object = _plain(obj.object_name)
-        exact_object_match = normalized_object in plain_text
+        exact_object_source = _matching_source(
+            record,
+            normalized_object,
+            normalizer=_plain,
+        )
+        exact_object_match = exact_object_source is not None
         genus = normalized_object.split()[0] if normalized_object else ""
-        genus_match = bool(genus and " " in normalized_object and genus in plain_text)
+        genus_source = (
+            _matching_source(record, genus, normalizer=_plain)
+            if genus and " " in normalized_object
+            else None
+        )
+        genus_match = genus_source is not None
         object_match = exact_object_match or genus_match
+        object_source = exact_object_source or genus_source
         if inventory_match:
             add(
                 EvidenceType.INVENTORY_NUMBER,
                 EvidenceStrength.PRIMARY,
                 obj.inventory_number,
-                "title_or_abstract",
+                inventory_source or "indexed_text",
                 "O registo bibliografico menciona o numero de inventario consultado.",
                 obj.id,
             )
@@ -181,7 +227,7 @@ def build_evidences(
                     else EvidenceStrength.WEAK
                 ),
                 obj.object_name,
-                "title_or_abstract",
+                object_source or "indexed_text",
                 (
                     "O titulo ou resumo menciona o objeto consultado."
                     if exact_object_match
@@ -194,7 +240,7 @@ def build_evidences(
                 EvidenceType.AUTHOR_INVENTORY,
                 EvidenceStrength.PRIMARY,
                 f"{snapshot.researcher} | {obj.inventory_number}",
-                "authors+title_or_abstract",
+                f"authors+{inventory_source or 'indexed_text'}",
                 "Autor e numero de inventario coincidem no mesmo candidato.",
                 obj.id,
             )
@@ -203,7 +249,14 @@ def build_evidences(
                 EvidenceType.INVENTORY_OBJECT,
                 EvidenceStrength.PRIMARY,
                 f"{obj.inventory_number} | {obj.object_name}",
-                "title_or_abstract",
+                "+".join(
+                    dict.fromkeys(
+                        (
+                            inventory_source or "indexed_text",
+                            object_source or "indexed_text",
+                        )
+                    )
+                ),
                 "Numero de inventario e objeto coincidem no mesmo candidato.",
                 obj.id,
             )
@@ -215,7 +268,7 @@ def build_evidences(
                     f"{snapshot.researcher} | "
                     f"{obj.object_name if exact_object_match else genus}"
                 ),
-                "authors+title_or_abstract",
+                f"authors+{object_source or 'indexed_text'}",
                 (
                     "Autor e objeto coincidem no mesmo candidato."
                     if exact_object_match
