@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import logging
 from math import ceil
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, status
 
+from app.notifications.public import NotificationKind, RelatedResourceType
 from app.scientific_return.application.use_cases import (
     ActivateScientificReturnWatch,
     ActivateWatchInput,
@@ -15,7 +17,7 @@ from app.scientific_return.application.use_cases import (
     RunScientificReturnSearch,
     WatchNotFound,
 )
-from app.scientific_return.domain.enums import CandidateStatus
+from app.scientific_return.domain.enums import CandidateStatus, EvidenceStrength
 from app.scientific_return.domain.models import (
     CandidateCorrection,
     CandidateDecision,
@@ -29,6 +31,7 @@ from app.scientific_return.presentation.dependencies import (
     BibliographicSources,
     DBSession,
     MaxQueries,
+    Notifications,
     ProjectProvider,
     PublicationWriter,
     Repository,
@@ -41,9 +44,12 @@ from app.scientific_return.presentation.schemas import (
     CandidateDecisionResponse,
     CandidateEvidenceResponse,
     CandidatePublicationResponse,
+    CandidateReviewItemResponse,
     ChangeWatchStatusRequest,
+    PaginatedCandidateQueueResponse,
     PaginatedCandidatesResponse,
     PaginatedRunsResponse,
+    ScientificReturnMetricsResponse,
     ScientificReturnQueryResponse,
     ScientificReturnRunResponse,
     ScientificReturnWatchResponse,
@@ -54,6 +60,7 @@ from app.shared.dependencies import CallerPermission
 scientific_return_router = APIRouter(
     prefix="/scientific-return", tags=["scientific-return"]
 )
+logger = logging.getLogger(__name__)
 
 
 def _not_found(code: str, message: str) -> HTTPException:
@@ -96,6 +103,7 @@ async def _run_response(
         completedAt=run.completed_at,
         sourceCount=run.source_count,
         candidateCount=run.candidate_count,
+        newCandidateCount=run.new_candidate_count,
         errorMessage=run.error_message,
         queries=[
             ScientificReturnQueryResponse(
@@ -141,9 +149,29 @@ def _candidate_response(
                 value=evidence.value,
                 sourceField=evidence.source_field,
                 explanation=evidence.explanation,
+                objectId=evidence.object_id,
             )
             for evidence in evidences
         ],
+    )
+
+
+@scientific_return_router.get(
+    "/metrics", response_model=ScientificReturnMetricsResponse
+)
+async def get_metrics(
+    caller: CallerPermission,
+    repository: Repository,
+) -> ScientificReturnMetricsResponse:
+    require_staff(caller)
+    metrics = await repository.get_metrics()
+    return ScientificReturnMetricsResponse(
+        activeWatches=metrics.active_watches,
+        runs=metrics.runs,
+        failedRuns=metrics.failed_runs,
+        pendingCandidates=metrics.pending_candidates,
+        confirmedCandidates=metrics.confirmed_candidates,
+        dismissedCandidates=metrics.dismissed_candidates,
     )
 
 
@@ -256,6 +284,7 @@ async def run_watch(
     sources: BibliographicSources,
     result_limit: ResultLimit,
     max_queries: MaxQueries,
+    notifications: Notifications,
     session: DBSession,
 ) -> ScientificReturnRunResponse:
     try:
@@ -270,6 +299,25 @@ async def run_watch(
     except ValueError as exc:
         raise _unprocessable(str(exc)) from None
     await session.commit()
+    if run.new_candidate_count:
+        watch = await repository.get_watch(ScientificReturnWatchId(watch_id))
+        if watch is not None:
+            try:
+                await notifications.notify(
+                    recipient_permission_id=watch.created_by,
+                    kind=NotificationKind.SCIENTIFIC_RETURN_CANDIDATES_FOUND,
+                    triggered_by=caller.id,
+                    related_resource_type=RelatedResourceType.PROJECT,
+                    related_resource_id=watch.project_id,
+                    note=(
+                        f"Scientific return found {run.new_candidate_count} new "
+                        "candidate(s) for review."
+                    ),
+                )
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                logger.exception("Could not notify scientific-return run %s.", run.id)
     return await _run_response(run, repository)
 
 
@@ -313,6 +361,47 @@ async def list_candidates(
     )
     return PaginatedCandidatesResponse(
         content=[_candidate_response(item) for item in items],
+        page=page,
+        size=size,
+        totalElements=total,
+        totalPages=ceil(total / size) if total else 0,
+    )
+
+
+@scientific_return_router.get(
+    "/candidates", response_model=PaginatedCandidateQueueResponse
+)
+async def list_candidate_queue(
+    caller: CallerPermission,
+    repository: Repository,
+    candidate_status: Annotated[CandidateStatus | None, Query(alias="status")] = (
+        CandidateStatus.PENDING
+    ),
+    project_id: Annotated[str | None, Query(alias="projectId")] = None,
+    source: str | None = None,
+    evidence_strength: Annotated[
+        EvidenceStrength | None, Query(alias="evidenceStrength")
+    ] = None,
+    page: int = Query(0, ge=0),
+    size: int = Query(20, ge=1, le=100),
+) -> PaginatedCandidateQueueResponse:
+    require_staff(caller)
+    items, total = await repository.list_candidate_queue(
+        candidate_status,
+        project_id,
+        source,
+        evidence_strength,
+        page,
+        size,
+    )
+    return PaginatedCandidateQueueResponse(
+        content=[
+            CandidateReviewItemResponse(
+                **_candidate_response(item.candidate).model_dump(),
+                projectId=item.project_id,
+            )
+            for item in items
+        ],
         page=page,
         size=size,
         totalElements=total,

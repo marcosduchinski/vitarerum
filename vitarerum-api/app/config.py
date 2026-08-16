@@ -47,6 +47,11 @@ class Settings(BaseSettings):
     crossref_max_retries: int = 3
     crossref_retry_base_seconds: float = 1.0
     crossref_min_interval_seconds: float = 0.25
+    openalex_base_url: str = "https://api.openalex.org"
+    openalex_api_key: str = ""
+    openalex_timeout_seconds: float = 20.0
+    openalex_max_retries: int = 3
+    openalex_retry_base_seconds: float = 1.0
     scientific_return_result_limit: int = 20
     scientific_return_max_queries_per_run: int = 40
     # Public proposal submission (unauthenticated citizen intake, double opt-in).

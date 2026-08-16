@@ -1,0 +1,260 @@
+:host {
+  display: block;
+}
+
+.return-queue {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.impact-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-block: 1px solid var(--surface-border);
+  background: var(--surface-0);
+}
+
+.impact-strip div {
+  display: grid;
+  gap: 0.2rem;
+  padding: 1rem 1.25rem;
+  border-inline-end: 1px solid var(--surface-border);
+}
+
+.impact-strip div:last-child {
+  border-inline-end: 0;
+}
+
+.impact-strip strong {
+  color: var(--text-color);
+  font-size: 1.45rem;
+}
+
+.impact-strip span,
+.candidate-row__meta,
+.queue-total {
+  color: var(--text-color-secondary);
+  font-size: 0.78rem;
+}
+
+.queue-toolbar {
+  display: flex;
+  align-items: end;
+  gap: 0.75rem;
+  padding-block: 0.25rem;
+}
+
+.queue-toolbar label {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 10rem;
+  color: var(--text-color-secondary);
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+
+.queue-toolbar select {
+  min-height: 2.5rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 4px;
+  background: var(--surface-0);
+  color: var(--text-color);
+  padding: 0 2rem 0 0.7rem;
+}
+
+.queue-total {
+  margin-inline-start: auto;
+  padding-block-end: 0.65rem;
+}
+
+.candidate-list,
+.evidence-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.candidate-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.candidate-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(18rem, 1fr);
+  gap: 1rem 1.5rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 6px;
+  background: var(--surface-0);
+  padding: 1.15rem;
+}
+
+.candidate-row header {
+  min-width: 0;
+}
+
+.candidate-row h2 {
+  margin: 0.55rem 0 0.35rem;
+  font-size: 1rem;
+  line-height: 1.4;
+}
+
+.candidate-row header p,
+.evidence-list p {
+  margin: 0;
+  color: var(--text-color-secondary);
+  line-height: 1.45;
+}
+
+.candidate-row__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.source,
+.status,
+.evidence-list span {
+  font-size: 0.68rem;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.source {
+  color: #205c50;
+}
+
+.status[data-status='PENDING'] {
+  color: #8a5200;
+}
+
+.status[data-status='CONFIRMED'] {
+  color: #1f6b45;
+}
+
+.evidence-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.evidence-list li {
+  display: grid;
+  grid-template-columns: 5.5rem 8rem minmax(0, 1fr);
+  gap: 0.6rem;
+  align-items: baseline;
+  border-block-end: 1px solid var(--surface-border);
+  padding-block-end: 0.55rem;
+}
+
+.evidence-list li:last-child {
+  border-block-end: 0;
+}
+
+.evidence-list li[data-strength='PRIMARY'] span {
+  color: #1f6b45;
+}
+
+.evidence-list li[data-strength='SUPPORTING'] span {
+  color: #7a5700;
+}
+
+.evidence-list li[data-strength='WEAK'] span {
+  color: #73516d;
+}
+
+.evidence-list strong {
+  font-size: 0.76rem;
+  text-transform: capitalize;
+}
+
+.evidence-list p {
+  font-size: 0.78rem;
+}
+
+.candidate-row footer {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  justify-content: space-between;
+  border-block-start: 1px solid var(--surface-border);
+  padding-block-start: 0.8rem;
+  color: var(--text-color-secondary);
+  font-size: 0.78rem;
+}
+
+.candidate-row footer a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--primary-color);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.pagination button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.4rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 4px;
+  background: var(--surface-0);
+  color: var(--text-color);
+  padding-inline: 0.8rem;
+}
+
+.pagination button:disabled {
+  opacity: 0.45;
+}
+
+@media (max-width: 900px) {
+  .impact-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .impact-strip div:nth-child(2) {
+    border-inline-end: 0;
+  }
+
+  .candidate-row {
+    grid-template-columns: 1fr;
+  }
+
+  .candidate-row footer {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 620px) {
+  .queue-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .queue-toolbar label {
+    min-width: 0;
+  }
+
+  .queue-total {
+    margin-inline-start: 0;
+  }
+
+  .evidence-list li {
+    grid-template-columns: 1fr;
+    gap: 0.25rem;
+  }
+
+  .candidate-row footer {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+}

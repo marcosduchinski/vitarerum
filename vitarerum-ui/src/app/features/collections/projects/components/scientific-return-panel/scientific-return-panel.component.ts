@@ -171,7 +171,9 @@ export class ScientificReturnPanelComponent {
       this.feedback.set(
         run.status === 'FAILED'
           ? 'The search was recorded, but the bibliographic source failed.'
-          : `Search completed with ${run.candidateCount} candidate${run.candidateCount === 1 ? '' : 's'}.`,
+          : run.newCandidateCount
+            ? `Search completed with ${run.newCandidateCount} new candidate${run.newCandidateCount === 1 ? '' : 's'} for review.`
+            : `Search completed with no new candidates (${run.candidateCount} previously known).`,
       );
       this.watchResource.reload();
       this.candidatesResource.reload();

@@ -77,6 +77,7 @@ class ScientificReturnRunRecord(Base):
     )
     source_count: Mapped[int] = mapped_column(Integer, default=0)
     candidate_count: Mapped[int] = mapped_column(Integer, default=0)
+    new_candidate_count: Mapped[int] = mapped_column(Integer, default=0)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     queries: Mapped[list[ScientificReturnQueryRecord]] = relationship(
@@ -164,6 +165,7 @@ class CandidateEvidenceRecord(Base):
     source_field: Mapped[str] = mapped_column(String(120))
     explanation: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    object_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
 
     candidate: Mapped[CandidatePublicationRecord] = relationship(
         back_populates="evidences"

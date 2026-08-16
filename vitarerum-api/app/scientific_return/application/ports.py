@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Protocol
 
 from app.identity.public import Actor
-from app.scientific_return.domain.enums import CandidateStatus
+from app.scientific_return.domain.enums import CandidateStatus, EvidenceStrength
 from app.scientific_return.domain.models import (
     CandidateDecision,
     CandidatePublication,
@@ -37,6 +38,22 @@ class BibliographicSource(Protocol):
     async def search(self, query: str, limit: int) -> list[BibliographicRecord]: ...
 
 
+@dataclass(frozen=True, slots=True)
+class ScientificReturnMetrics:
+    active_watches: int
+    runs: int
+    failed_runs: int
+    pending_candidates: int
+    confirmed_candidates: int
+    dismissed_candidates: int
+
+
+@dataclass(frozen=True, slots=True)
+class CandidateReviewItem:
+    project_id: str
+    candidate: CandidatePublication
+
+
 class ProjectSnapshotProvider(Protocol):
     async def get_completed_project(
         self, project_id: str
@@ -64,6 +81,10 @@ class ScientificReturnRepository(Protocol):
     async def get_watch_by_project(
         self, project_id: str
     ) -> ScientificReturnWatch | None: ...
+
+    async def list_due_watches(
+        self, now: datetime, limit: int
+    ) -> list[ScientificReturnWatch]: ...
 
     async def add_snapshot(self, snapshot: ScientificReturnProjectSnapshot) -> None: ...
 
@@ -103,8 +124,20 @@ class ScientificReturnRepository(Protocol):
         size: int,
     ) -> tuple[list[CandidatePublication], int]: ...
 
+    async def list_candidate_queue(
+        self,
+        status: CandidateStatus | None,
+        project_id: str | None,
+        source: str | None,
+        evidence_strength: EvidenceStrength | None,
+        page: int,
+        size: int,
+    ) -> tuple[list[CandidateReviewItem], int]: ...
+
     async def add_decision(self, decision: CandidateDecision) -> None: ...
 
     async def list_decisions(
         self, candidate_id: CandidatePublicationId
     ) -> list[CandidateDecision]: ...
+
+    async def get_metrics(self) -> ScientificReturnMetrics: ...

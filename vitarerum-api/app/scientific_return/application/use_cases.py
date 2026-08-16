@@ -8,9 +8,11 @@ from uuid import uuid4
 
 from app.identity.public import Actor, GroupName
 from app.scientific_return.application.analysis import (
+    PlannedQuery,
     build_evidences,
     deduplication_key,
     is_actionable,
+    plan_adaptive_queries,
     plan_queries,
 )
 from app.scientific_return.application.ports import (
@@ -164,6 +166,11 @@ class RunScientificReturnSearch:
         self, watch_id: ScientificReturnWatchId, caller: Actor
     ) -> ScientificReturnSearchRun:
         require_group(caller, *_REVIEW_GROUPS)
+        return await self.execute_scheduled(watch_id)
+
+    async def execute_scheduled(
+        self, watch_id: ScientificReturnWatchId
+    ) -> ScientificReturnSearchRun:
         watch = await self._repository.get_watch(watch_id)
         if watch is None:
             raise WatchNotFound(f"Scientific-return watch {watch_id} not found")
@@ -182,11 +189,39 @@ class RunScientificReturnSearch:
         )
         await self._repository.add_run(run)
         candidate_ids: set[CandidatePublicationId] = set()
+        new_candidate_ids: set[CandidatePublicationId] = set()
         errors: list[str] = []
+        query_count = 0
+        queried_sources: set[str] = set()
 
-        planned_queries = plan_queries(snapshot.payload)[: self._max_queries]
+        planned_queries = plan_queries(snapshot.payload)
         for source in self._sources:
-            for planned in planned_queries:
+            remaining_run_budget = self._max_queries - query_count
+            if remaining_run_budget <= 0:
+                break
+            source_candidate_count = len(candidate_ids)
+            source_queries = list(planned_queries[:remaining_run_budget])
+            initial_query_count = len(source_queries)
+
+            def add_adaptive_queries(
+                index: int,
+                initial_count: int,
+                candidate_count_before: int,
+                used_query_count: int,
+                queries: list[PlannedQuery],
+            ) -> None:
+                if (
+                    index + 1 != initial_count
+                    or len(candidate_ids) != candidate_count_before
+                ):
+                    return
+                remaining = self._max_queries - used_query_count
+                if remaining > 0:
+                    queries.extend(plan_adaptive_queries(snapshot.payload)[:remaining])
+
+            for index, planned in enumerate(source_queries):
+                query_count += 1
+                queried_sources.add(source.name)
                 sent_at = _now()
                 try:
                     records = await source.search(planned.text, self._result_limit)
@@ -217,6 +252,13 @@ class RunScientificReturnSearch:
                             status=QueryStatus.FAILED,
                             error_message=message,
                         )
+                    )
+                    add_adaptive_queries(
+                        index,
+                        initial_query_count,
+                        source_candidate_count,
+                        query_count,
+                        source_queries,
                     )
                     continue
 
@@ -255,12 +297,21 @@ class RunScientificReturnSearch:
                     )
                     await self._repository.add_candidate(candidate)
                     candidate_ids.add(candidate.id)
+                    new_candidate_ids.add(candidate.id)
+
+                add_adaptive_queries(
+                    index,
+                    initial_query_count,
+                    source_candidate_count,
+                    query_count,
+                    source_queries,
+                )
 
         completed_at = _now()
         run.completed_at = completed_at
-        run.source_count = len(self._sources)
+        run.source_count = len(queried_sources)
         run.candidate_count = len(candidate_ids)
-        query_count = len(self._sources) * len(planned_queries)
+        run.new_candidate_count = len(new_candidate_ids)
         if errors and len(errors) == query_count:
             run.status = RunStatus.FAILED
             run.error_message = "; ".join(errors)[:2000]

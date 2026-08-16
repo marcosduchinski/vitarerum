@@ -155,6 +155,15 @@ describe('AppTopbarComponent role switcher', () => {
       }),
     ).toBe('Alice Curator took over VR-2026-001.');
     expect(
+      component.notificationText({
+        ...baseNotification,
+        kind: 'SCIENTIFIC_RETURN_CANDIDATES_FOUND',
+        relatedResourceType: 'PROJECT',
+        relatedResourceId: 'project-1',
+        note: 'Scientific return found 2 new candidate(s) for review.',
+      }),
+    ).toBe('Scientific return found 2 new candidate(s) for review.');
+    expect(
       component.notificationLink({
         ...baseNotification,
         kind: 'PROPOSAL_DOCUMENTS_SUBMITTED',
@@ -180,6 +189,14 @@ describe('AppTopbarComponent role switcher', () => {
         relatedResourceId: 'question-1',
       }),
     ).toBe('/p/museum-questions/question-1');
+    expect(
+      component.notificationLink({
+        ...baseNotification,
+        kind: 'SCIENTIFIC_RETURN_CANDIDATES_FOUND',
+        relatedResourceType: 'PROJECT',
+        relatedResourceId: 'project-1',
+      }),
+    ).toBe('/p/collections/projects/project-1');
   });
 
   it('clears all visible notifications from the popover state', async () => {

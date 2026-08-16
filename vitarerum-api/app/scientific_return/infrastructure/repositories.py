@@ -1,13 +1,24 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from typing import cast
+from datetime import datetime
+from typing import Any, cast
 
-from sqlalchemy import func, select
+from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from sqlalchemy.sql.elements import ColumnElement
 
-from app.scientific_return.domain.enums import CandidateStatus
+from app.scientific_return.application.ports import (
+    CandidateReviewItem,
+    ScientificReturnMetrics,
+)
+from app.scientific_return.domain.enums import (
+    CandidateStatus,
+    EvidenceStrength,
+    RunStatus,
+    WatchStatus,
+)
 from app.scientific_return.domain.models import (
     CandidateCorrection,
     CandidateDecision,
@@ -89,6 +100,7 @@ def _run_to_domain(record: ScientificReturnRunRecord) -> ScientificReturnSearchR
         completed_at=record.completed_at,
         source_count=record.source_count,
         candidate_count=record.candidate_count,
+        new_candidate_count=record.new_candidate_count,
         error_message=record.error_message,
     )
 
@@ -119,6 +131,7 @@ def _evidence_to_domain(record: CandidateEvidenceRecord) -> CandidateEvidence:
         source_field=record.source_field,
         explanation=record.explanation,
         created_at=record.created_at,
+        object_id=record.object_id,
     )
 
 
@@ -220,6 +233,20 @@ class SqlAlchemyScientificReturnRepository:
         record = result.scalar_one_or_none()
         return _watch_to_domain(record) if record is not None else None
 
+    async def list_due_watches(
+        self, now: datetime, limit: int
+    ) -> list[ScientificReturnWatch]:
+        result = await self._session.execute(
+            select(ScientificReturnWatchRecord)
+            .where(
+                ScientificReturnWatchRecord.status == WatchStatus.ACTIVE,
+                ScientificReturnWatchRecord.next_run_at <= now,
+            )
+            .order_by(ScientificReturnWatchRecord.next_run_at)
+            .limit(limit)
+        )
+        return [_watch_to_domain(item) for item in result.scalars().all()]
+
     async def add_snapshot(self, snapshot: ScientificReturnProjectSnapshot) -> None:
         self._session.add(
             ScientificReturnSnapshotRecord(
@@ -275,6 +302,7 @@ class SqlAlchemyScientificReturnRepository:
                 completed_at=run.completed_at,
                 source_count=run.source_count,
                 candidate_count=run.candidate_count,
+                new_candidate_count=run.new_candidate_count,
                 error_message=run.error_message,
             )
         )
@@ -288,6 +316,7 @@ class SqlAlchemyScientificReturnRepository:
         record.completed_at = run.completed_at
         record.source_count = run.source_count
         record.candidate_count = run.candidate_count
+        record.new_candidate_count = run.new_candidate_count
         record.error_message = run.error_message
         await self._session.flush()
 
@@ -399,6 +428,7 @@ class SqlAlchemyScientificReturnRepository:
                         source_field=evidence.source_field,
                         explanation=evidence.explanation,
                         created_at=evidence.created_at,
+                        object_id=evidence.object_id,
                     )
                     for evidence in candidate.evidences
                 ],
@@ -477,6 +507,70 @@ class SqlAlchemyScientificReturnRepository:
         )
         await self._session.flush()
 
+    async def list_candidate_queue(
+        self,
+        status: CandidateStatus | None,
+        project_id: str | None,
+        source: str | None,
+        evidence_strength: EvidenceStrength | None,
+        page: int,
+        size: int,
+    ) -> tuple[list[CandidateReviewItem], int]:
+        filters: list[ColumnElement[bool]] = []
+        if status is not None:
+            filters.append(CandidatePublicationRecord.status == status)
+        if project_id:
+            filters.append(ScientificReturnWatchRecord.project_id == project_id)
+        if source:
+            filters.append(CandidatePublicationRecord.source == source)
+        if evidence_strength is not None:
+            filters.append(
+                exists().where(
+                    CandidateEvidenceRecord.candidate_id
+                    == CandidatePublicationRecord.id,
+                    CandidateEvidenceRecord.strength == evidence_strength,
+                )
+            )
+
+        joined = (
+            select(CandidatePublicationRecord, ScientificReturnWatchRecord.project_id)
+            .join(
+                ScientificReturnWatchRecord,
+                CandidatePublicationRecord.watch_id == ScientificReturnWatchRecord.id,
+            )
+            .where(*filters)
+        )
+        total = int(
+            (
+                await self._session.execute(
+                    select(func.count()).select_from(
+                        joined.with_only_columns(
+                            CandidatePublicationRecord.id
+                        ).subquery()
+                    )
+                )
+            ).scalar_one()
+        )
+        result = await self._session.execute(
+            joined.options(selectinload(CandidatePublicationRecord.evidences))
+            .order_by(
+                CandidatePublicationRecord.created_at.desc(),
+                CandidatePublicationRecord.id.desc(),
+            )
+            .offset(page * size)
+            .limit(size)
+        )
+        return (
+            [
+                CandidateReviewItem(
+                    project_id=project_id_value,
+                    candidate=_candidate_to_domain(candidate),
+                )
+                for candidate, project_id_value in result.all()
+            ],
+            total,
+        )
+
     async def list_decisions(
         self, candidate_id: CandidatePublicationId
     ) -> list[CandidateDecision]:
@@ -486,3 +580,34 @@ class SqlAlchemyScientificReturnRepository:
             .order_by(CandidateDecisionRecord.decided_at, CandidateDecisionRecord.id)
         )
         return [_decision_to_domain(item) for item in result.scalars().all()]
+
+    async def get_metrics(self) -> ScientificReturnMetrics:
+        async def count(model: type[Any], *filters: ColumnElement[bool]) -> int:
+            statement = select(func.count()).select_from(model)
+            if filters:
+                statement = statement.where(*filters)
+            return int((await self._session.execute(statement)).scalar_one())
+
+        return ScientificReturnMetrics(
+            active_watches=await count(
+                ScientificReturnWatchRecord,
+                ScientificReturnWatchRecord.status == WatchStatus.ACTIVE,
+            ),
+            runs=await count(ScientificReturnRunRecord),
+            failed_runs=await count(
+                ScientificReturnRunRecord,
+                ScientificReturnRunRecord.status == RunStatus.FAILED,
+            ),
+            pending_candidates=await count(
+                CandidatePublicationRecord,
+                CandidatePublicationRecord.status == CandidateStatus.PENDING,
+            ),
+            confirmed_candidates=await count(
+                CandidatePublicationRecord,
+                CandidatePublicationRecord.status == CandidateStatus.CONFIRMED,
+            ),
+            dismissed_candidates=await count(
+                CandidatePublicationRecord,
+                CandidatePublicationRecord.status == CandidateStatus.DISMISSED,
+            ),
+        )

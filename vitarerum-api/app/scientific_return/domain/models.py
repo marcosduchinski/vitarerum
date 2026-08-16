@@ -85,6 +85,7 @@ class ScientificReturnSearchRun:
     completed_at: datetime | None = None
     source_count: int = 0
     candidate_count: int = 0
+    new_candidate_count: int = 0
     error_message: str | None = None
 
 
@@ -111,6 +112,7 @@ class CandidateEvidence:
     source_field: str
     explanation: str
     created_at: datetime
+    object_id: str | None = None
 
 
 @dataclass(slots=True)

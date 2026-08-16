@@ -1,0 +1,122 @@
+<main class="return-queue">
+  <app-page-header
+    eyebrow="Collections"
+    title="Scientific return"
+    description="Review publications found after collection-use projects were completed."
+  />
+
+  @if (metricsResource.value(); as metrics) {
+    <section class="impact-strip" aria-label="Scientific return metrics">
+      <div>
+        <strong>{{ metrics.activeWatches }}</strong
+        ><span>Active watches</span>
+      </div>
+      <div>
+        <strong>{{ metrics.pendingCandidates }}</strong
+        ><span>Awaiting review</span>
+      </div>
+      <div>
+        <strong>{{ metrics.confirmedCandidates }}</strong
+        ><span>Confirmed returns</span>
+      </div>
+      <div>
+        <strong>{{ metrics.failedRuns }}</strong
+        ><span>Failed runs</span>
+      </div>
+    </section>
+  }
+
+  <section class="queue-toolbar" aria-label="Candidate filters">
+    <label>
+      <span>Status</span>
+      <select [value]="status()" (change)="onStatus($event)">
+        <option value="PENDING">Pending</option>
+        <option value="SNOOZED">Snoozed</option>
+        <option value="CONFIRMED">Confirmed</option>
+        <option value="DISMISSED">Dismissed</option>
+        <option value="ALL">All statuses</option>
+      </select>
+    </label>
+    <label>
+      <span>Evidence</span>
+      <select [value]="strength()" (change)="onStrength($event)">
+        <option value="ALL">All strengths</option>
+        <option value="PRIMARY">Primary</option>
+        <option value="SUPPORTING">Supporting</option>
+        <option value="WEAK">Weak</option>
+      </select>
+    </label>
+    <label>
+      <span>Source</span>
+      <select [value]="source()" (change)="onSource($event)">
+        <option value="ALL">All sources</option>
+        <option value="CROSSREF">Crossref</option>
+        <option value="OPENALEX">OpenAlex</option>
+      </select>
+    </label>
+    <span class="queue-total">{{ total() }} candidates</span>
+  </section>
+
+  @if (queueResource.isLoading()) {
+    <app-loading-state />
+  } @else if (queueError()) {
+    <app-error-message [apiError]="queueError()!" (retry)="queueResource.reload()" />
+  } @else if (!candidates().length) {
+    <app-empty-state
+      title="No candidates in this view"
+      message="Change the filters or wait for the next scheduled search."
+    />
+  } @else {
+    <ol class="candidate-list">
+      @for (candidate of candidates(); track candidate.id) {
+        <li>
+          <article class="candidate-row">
+            <header>
+              <div class="candidate-row__meta">
+                <span class="source">{{ candidate.source }}</span>
+                <span class="status" [attr.data-status]="candidate.status">
+                  {{ candidate.status.toLowerCase() }}
+                </span>
+                <span>{{ candidate.firstSeenAt | date: 'mediumDate' }}</span>
+              </div>
+              <h2>{{ candidate.title }}</h2>
+              <p>{{ candidate.authors.join(', ') }}</p>
+            </header>
+
+            <ul class="evidence-list" aria-label="Candidate evidence">
+              @for (evidence of candidate.evidences; track evidence.id) {
+                <li [attr.data-strength]="evidence.strength">
+                  <span>{{ evidence.strength }}</span>
+                  <strong>{{ evidenceLabel(evidence) }}</strong>
+                  <p>{{ evidence.explanation }}</p>
+                </li>
+              }
+            </ul>
+
+            <footer>
+              @if (candidate.doi) {
+                <span>DOI {{ candidate.doi }}</span>
+              }
+              <a [routerLink]="detailRoute(candidate.projectId)">
+                Review in project
+                <span class="pi pi-arrow-right" aria-hidden="true"></span>
+              </a>
+            </footer>
+          </article>
+        </li>
+      }
+    </ol>
+
+    <nav class="pagination" aria-label="Candidate pages">
+      <button type="button" [disabled]="page() === 0" (click)="previousPage()">
+        <span class="pi pi-chevron-left" aria-hidden="true"></span>
+        Previous
+      </button>
+      <span>Page {{ page() + 1 }} of {{ totalPages() }}</span>
+      <button type="button" [disabled]="page() + 1 >= totalPages()" (click)="nextPage()">
+        Next
+        <span class="pi pi-chevron-right" aria-hidden="true"></span>
+      </button>
+    </nav>
+  }
+</main>

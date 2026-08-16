@@ -6,8 +6,16 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from app.identity.public import Actor, GroupName, PermissionId
-from app.scientific_return.application.analysis import build_evidences, plan_queries
-from app.scientific_return.application.ports import BibliographicRecord
+from app.scientific_return.application.analysis import (
+    build_evidences,
+    plan_adaptive_queries,
+    plan_queries,
+)
+from app.scientific_return.application.ports import (
+    BibliographicRecord,
+    CandidateReviewItem,
+    ScientificReturnMetrics,
+)
 from app.scientific_return.application.use_cases import (
     ActivateScientificReturnWatch,
     ActivateWatchInput,
@@ -18,6 +26,7 @@ from app.scientific_return.application.use_cases import (
 from app.scientific_return.domain.enums import (
     CandidateStatus,
     DecisionType,
+    EvidenceStrength,
     EvidenceType,
     QueryType,
 )
@@ -78,6 +87,12 @@ class _Source:
         return [self.record]
 
 
+class _AdaptiveSource(_Source):
+    async def search(self, query: str, limit: int) -> list[BibliographicRecord]:
+        self.queries.append(query)
+        return [self.record] if query.endswith('"Acontias"') else []
+
+
 class _PublicationWriter:
     def __init__(self) -> None:
         self.calls: list[tuple[str, CandidatePublication]] = []
@@ -123,6 +138,15 @@ class _Repository:
             ),
             None,
         )
+
+    async def list_due_watches(
+        self, now: datetime, limit: int
+    ) -> list[ScientificReturnWatch]:
+        return [
+            watch
+            for watch in self.watches.values()
+            if watch.next_run_at <= now
+        ][:limit]
 
     async def add_snapshot(self, snapshot: ScientificReturnProjectSnapshot) -> None:
         self.snapshots[str(snapshot.id)] = snapshot
@@ -194,10 +218,52 @@ class _Repository:
     async def add_decision(self, decision: CandidateDecision) -> None:
         self.decisions.append(decision)
 
+    async def list_candidate_queue(
+        self,
+        status: CandidateStatus | None,
+        project_id: str | None,
+        source: str | None,
+        evidence_strength: EvidenceStrength | None,
+        page: int,
+        size: int,
+    ) -> tuple[list[CandidateReviewItem], int]:
+        items = [
+            CandidateReviewItem(
+                project_id=self.watches[str(candidate.watch_id)].project_id,
+                candidate=candidate,
+            )
+            for candidate in self.candidates.values()
+            if (status is None or candidate.status is status)
+            and (source is None or candidate.source == source)
+            and (
+                evidence_strength is None
+                or any(
+                    evidence.strength is evidence_strength
+                    for evidence in candidate.evidences
+                )
+            )
+        ]
+        if project_id is not None:
+            items = [item for item in items if item.project_id == project_id]
+        return items[page * size : page * size + size], len(items)
+
     async def list_decisions(
         self, candidate_id: CandidatePublicationId
     ) -> list[CandidateDecision]:
         return [item for item in self.decisions if item.candidate_id == candidate_id]
+
+    async def get_metrics(self) -> ScientificReturnMetrics:
+        return ScientificReturnMetrics(
+            active_watches=len(self.watches),
+            runs=len(self.runs),
+            failed_runs=0,
+            pending_candidates=sum(
+                item.status is CandidateStatus.PENDING
+                for item in self.candidates.values()
+            ),
+            confirmed_candidates=0,
+            dismissed_candidates=0,
+        )
 
 
 def _record() -> BibliographicRecord:
@@ -227,6 +293,14 @@ def test_planner_uses_only_author_inventory_and_object() -> None:
     assert all("curator@example.test" not in query.text for query in queries)
 
 
+def test_adaptive_planner_broadens_only_binomial_object_to_genus() -> None:
+    queries = plan_adaptive_queries(_snapshot())
+
+    assert len(queries) == 2
+    assert all('"Acontias"' in query.text for query in queries)
+    assert all("mukwando" not in query.text for query in queries)
+
+
 def test_evidence_normalizes_museum_prefix_and_repeated_inventory_segments() -> None:
     evidences = build_evidences(
         CandidatePublicationId("candidate-1"),
@@ -240,6 +314,11 @@ def test_evidence_normalizes_museum_prefix_and_repeated_inventory_segments() -> 
     assert EvidenceType.OBJECT_NAME in types
     assert EvidenceType.INVENTORY_NUMBER in types
     assert EvidenceType.AUTHOR_INVENTORY in types
+    assert all(
+        evidence.object_id == "object-1"
+        for evidence in evidences
+        if evidence.type is not EvidenceType.AUTHOR
+    )
 
 
 @pytest.mark.asyncio
@@ -259,10 +338,29 @@ async def test_pipeline_deduplicates_same_record_across_query_trajectories() -> 
     )
 
     assert run.candidate_count == 1
+    assert run.new_candidate_count == 1
     assert len(repository.candidates) == 1
     assert len(repository.queries) == 4
     assert watch.last_run_at is not None
     assert watch.next_run_at > watch.last_run_at
+
+
+@pytest.mark.asyncio
+async def test_pipeline_uses_adaptive_query_after_exact_queries_fail() -> None:
+    repository = _Repository()
+    watch = await ActivateScientificReturnWatch(repository, _ProjectProvider()).execute(
+        ActivateWatchInput("project-1", 90, _caller())
+    )
+    source = _AdaptiveSource(_record())
+
+    run = await RunScientificReturnSearch(repository, (source,)).execute(
+        watch.id, _caller()
+    )
+
+    assert run.new_candidate_count == 1
+    assert len(source.queries) == 6
+    assert source.queries[-2].endswith('"Acontias"')
+    assert source.queries[-1].endswith('"Acontias"')
 
 
 @pytest.mark.asyncio
@@ -284,6 +382,28 @@ async def test_pipeline_caps_external_queries_per_run() -> None:
 
 
 @pytest.mark.asyncio
+async def test_pipeline_query_cap_is_shared_across_sources() -> None:
+    repository = _Repository()
+    watch = await ActivateScientificReturnWatch(repository, _ProjectProvider()).execute(
+        ActivateWatchInput("project-1", 90, _caller())
+    )
+    first = _Source(_record())
+    second = _Source(_record())
+    second.name = "SECOND_SOURCE"
+
+    run = await RunScientificReturnSearch(
+        repository,
+        (first, second),
+        max_queries=5,
+    ).execute(watch.id, _caller())
+
+    assert len(first.queries) == 4
+    assert len(second.queries) == 1
+    assert len(repository.queries) == 5
+    assert run.source_count == 2
+
+
+@pytest.mark.asyncio
 async def test_dismissed_candidate_is_remembered_on_later_run() -> None:
     repository = _Repository()
     watch = await ActivateScientificReturnWatch(repository, _ProjectProvider()).execute(
@@ -299,6 +419,7 @@ async def test_dismissed_candidate_is_remembered_on_later_run() -> None:
     )
 
     assert second_run.candidate_count == 1
+    assert second_run.new_candidate_count == 0
     assert len(repository.candidates) == 1
     assert candidate.status is CandidateStatus.DISMISSED
 

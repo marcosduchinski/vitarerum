@@ -387,7 +387,9 @@
                   {{ run.status.toLowerCase() }}
                 </span>
                 <span>{{ run.startedAt | date: 'medium' }}</span>
-                <strong>{{ run.candidateCount }} candidates</strong>
+                <strong>
+                  {{ run.candidateCount }} candidates, {{ run.newCandidateCount }} new
+                </strong>
                 <span
                   class="pi"
                   [class.pi-chevron-down]="expandedRunId() !== run.id"

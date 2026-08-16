@@ -70,4 +70,22 @@ describe('ScientificReturnApiService', () => {
     });
     request.flush({});
   });
+
+  it('loads the global review queue with operational filters', () => {
+    service
+      .listReviewQueue({
+        status: 'PENDING',
+        source: 'CROSSREF',
+        evidenceStrength: 'PRIMARY',
+        page: 1,
+        size: 20,
+      })
+      .subscribe();
+
+    const request = http.expectOne(
+      'https://api.example.test/api/v1/scientific-return/candidates?status=PENDING&source=CROSSREF&evidenceStrength=PRIMARY&page=1&size=20',
+    );
+    expect(request.request.method).toBe('GET');
+    request.flush({ content: [], page: 1, size: 20, totalElements: 0, totalPages: 0 });
+  });
 });

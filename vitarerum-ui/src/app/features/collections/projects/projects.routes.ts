@@ -9,6 +9,15 @@ import { projectPublicationAccessGuard } from './guards/project-publication-acce
 export const PROJECTS_ROUTES: Routes = [
   { path: '', pathMatch: 'full', redirectTo: '/p/dashboard' },
   {
+    path: 'scientific-return',
+    title: 'Scientific Return',
+    canMatch: [staffGuard],
+    loadComponent: () =>
+      import('./pages/scientific-return-queue/scientific-return-queue-page.component').then(
+        (m) => m.ScientificReturnQueuePageComponent,
+      ),
+  },
+  {
     path: 'my',
     title: 'My Projects',
     loadComponent: () =>

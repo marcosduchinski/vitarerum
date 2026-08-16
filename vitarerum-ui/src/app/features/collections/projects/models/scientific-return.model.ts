@@ -38,6 +38,7 @@ export interface ScientificReturnRun {
   readonly completedAt: string | null;
   readonly sourceCount: number;
   readonly candidateCount: number;
+  readonly newCandidateCount: number;
   readonly errorMessage: string | null;
   readonly queries: readonly ScientificReturnQuery[];
 }
@@ -49,6 +50,7 @@ export interface ScientificReturnEvidence {
   readonly value: string;
   readonly sourceField: string;
   readonly explanation: string;
+  readonly objectId: string | null;
 }
 
 export interface ScientificReturnCandidate {
@@ -67,6 +69,19 @@ export interface ScientificReturnCandidate {
   readonly confirmedPublicationEntryId: string | null;
   readonly firstSeenAt: string;
   readonly evidences: readonly ScientificReturnEvidence[];
+}
+
+export interface ScientificReturnReviewItem extends ScientificReturnCandidate {
+  readonly projectId: string;
+}
+
+export interface ScientificReturnMetrics {
+  readonly activeWatches: number;
+  readonly runs: number;
+  readonly failedRuns: number;
+  readonly pendingCandidates: number;
+  readonly confirmedCandidates: number;
+  readonly dismissedCandidates: number;
 }
 
 export interface CandidateCorrection {
@@ -96,3 +111,4 @@ export interface CandidateDecisionRecord {
 
 export type ScientificReturnCandidatesPage = Page<ScientificReturnCandidate>;
 export type ScientificReturnRunsPage = Page<ScientificReturnRun>;
+export type ScientificReturnReviewQueuePage = Page<ScientificReturnReviewItem>;

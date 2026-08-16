@@ -55,6 +55,7 @@ class ScientificReturnRunResponse(BaseModel):
     completedAt: datetime | None
     sourceCount: int
     candidateCount: int
+    newCandidateCount: int
     errorMessage: str | None
     queries: list[ScientificReturnQueryResponse] = Field(default_factory=list)
 
@@ -74,6 +75,16 @@ class CandidateEvidenceResponse(BaseModel):
     value: str
     sourceField: str
     explanation: str
+    objectId: str | None
+
+
+class ScientificReturnMetricsResponse(BaseModel):
+    activeWatches: int
+    runs: int
+    failedRuns: int
+    pendingCandidates: int
+    confirmedCandidates: int
+    dismissedCandidates: int
 
 
 class CandidatePublicationResponse(BaseModel):
@@ -96,6 +107,18 @@ class CandidatePublicationResponse(BaseModel):
 
 class PaginatedCandidatesResponse(BaseModel):
     content: list[CandidatePublicationResponse]
+    page: int
+    size: int
+    totalElements: int
+    totalPages: int
+
+
+class CandidateReviewItemResponse(CandidatePublicationResponse):
+    projectId: str
+
+
+class PaginatedCandidateQueueResponse(BaseModel):
+    content: list[CandidateReviewItemResponse]
     page: int
     size: int
     totalElements: int

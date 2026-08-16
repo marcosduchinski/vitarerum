@@ -59,6 +59,28 @@ def plan_queries(snapshot: ProjectSnapshotPayload) -> tuple[PlannedQuery, ...]:
     return tuple(dict.fromkeys(planned))
 
 
+def plan_adaptive_queries(snapshot: ProjectSnapshotPayload) -> tuple[PlannedQuery, ...]:
+    """Broaden only the object term after the exact trajectories find nothing."""
+    planned: list[PlannedQuery] = []
+    for obj in snapshot.consulted_objects:
+        genus = obj.object_name.strip().split()[0]
+        if genus.casefold() == obj.object_name.strip().casefold():
+            continue
+        planned.append(
+            PlannedQuery(
+                QueryType.INVENTORY_OBJECT,
+                f"{_query_term(obj.inventory_number)} {_query_term(genus)}",
+            )
+        )
+        planned.append(
+            PlannedQuery(
+                QueryType.AUTHOR_OBJECT,
+                f"{_query_term(snapshot.researcher)} {_query_term(genus)}",
+            )
+        )
+    return tuple(dict.fromkeys(planned))
+
+
 def _plain(value: str) -> str:
     value = unicodedata.normalize("NFKD", value)
     value = "".join(char for char in value if not unicodedata.combining(char))
@@ -109,6 +131,7 @@ def build_evidences(
         value: str,
         source_field: str,
         explanation: str,
+        object_id: str | None = None,
     ) -> None:
         evidences.append(
             CandidateEvidence(
@@ -120,6 +143,7 @@ def build_evidences(
                 source_field=source_field,
                 explanation=explanation,
                 created_at=created_at,
+                object_id=object_id,
             )
         )
 
@@ -134,7 +158,11 @@ def build_evidences(
 
     for obj in snapshot.consulted_objects:
         inventory_match = _compact_inventory(obj.inventory_number) in compact_text
-        object_match = _plain(obj.object_name) in plain_text
+        normalized_object = _plain(obj.object_name)
+        exact_object_match = normalized_object in plain_text
+        genus = normalized_object.split()[0] if normalized_object else ""
+        genus_match = bool(genus and " " in normalized_object and genus in plain_text)
+        object_match = exact_object_match or genus_match
         if inventory_match:
             add(
                 EvidenceType.INVENTORY_NUMBER,
@@ -142,14 +170,24 @@ def build_evidences(
                 obj.inventory_number,
                 "title_or_abstract",
                 "O registo bibliografico menciona o numero de inventario consultado.",
+                obj.id,
             )
         if object_match:
             add(
                 EvidenceType.OBJECT_NAME,
-                EvidenceStrength.SUPPORTING,
+                (
+                    EvidenceStrength.SUPPORTING
+                    if exact_object_match
+                    else EvidenceStrength.WEAK
+                ),
                 obj.object_name,
                 "title_or_abstract",
-                "O titulo ou resumo menciona o objeto consultado.",
+                (
+                    "O titulo ou resumo menciona o objeto consultado."
+                    if exact_object_match
+                    else "O titulo ou resumo menciona o genero do taxon consultado."
+                ),
+                obj.id,
             )
         if author_match and inventory_match:
             add(
@@ -158,6 +196,7 @@ def build_evidences(
                 f"{snapshot.researcher} | {obj.inventory_number}",
                 "authors+title_or_abstract",
                 "Autor e numero de inventario coincidem no mesmo candidato.",
+                obj.id,
             )
         if inventory_match and object_match:
             add(
@@ -166,14 +205,23 @@ def build_evidences(
                 f"{obj.inventory_number} | {obj.object_name}",
                 "title_or_abstract",
                 "Numero de inventario e objeto coincidem no mesmo candidato.",
+                obj.id,
             )
         if author_match and object_match:
             add(
                 EvidenceType.AUTHOR_OBJECT,
                 EvidenceStrength.SUPPORTING,
-                f"{snapshot.researcher} | {obj.object_name}",
+                (
+                    f"{snapshot.researcher} | "
+                    f"{obj.object_name if exact_object_match else genus}"
+                ),
                 "authors+title_or_abstract",
-                "Autor e objeto coincidem no mesmo candidato.",
+                (
+                    "Autor e objeto coincidem no mesmo candidato."
+                    if exact_object_match
+                    else "Autor e genero do taxon coincidem no mesmo candidato."
+                ),
+                obj.id,
             )
     return evidences
 

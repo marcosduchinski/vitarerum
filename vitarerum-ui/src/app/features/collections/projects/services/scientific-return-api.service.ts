@@ -13,6 +13,8 @@ import {
   ScientificReturnCandidateStatus,
   ScientificReturnRun,
   ScientificReturnRunsPage,
+  ScientificReturnMetrics,
+  ScientificReturnReviewQueuePage,
   ScientificReturnWatch,
   ScientificReturnWatchStatus,
 } from '../models/scientific-return.model';
@@ -57,6 +59,22 @@ export class ScientificReturnApiService {
       this.url(`/projects/${projectId}/candidates`),
       { params: buildHttpParams({ status, page: 0, size: 50 }) },
     );
+  }
+
+  listReviewQueue(query: {
+    status: ScientificReturnCandidateStatus | null;
+    source: string | null;
+    evidenceStrength: string | null;
+    page: number;
+    size: number;
+  }): Observable<ScientificReturnReviewQueuePage> {
+    return this.http.get<ScientificReturnReviewQueuePage>(this.url('/candidates'), {
+      params: buildHttpParams(query),
+    });
+  }
+
+  getMetrics(): Observable<ScientificReturnMetrics> {
+    return this.http.get<ScientificReturnMetrics>(this.url('/metrics'));
   }
 
   decideCandidate(

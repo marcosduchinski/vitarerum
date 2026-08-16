@@ -100,6 +100,8 @@ export class AppTopbarComponent {
         return `${actor} forwarded public inquiry ${label} to you.`;
       case 'MUSEUM_QUESTION_RESPONSE_OVERDUE':
         return `Public inquiry ${label} has been unanswered for 15 days.`;
+      case 'SCIENTIFIC_RETURN_CANDIDATES_FOUND':
+        return notification.note ?? 'New scientific-return candidates are ready for review.';
       case 'PROPOSAL_SUBMITTED':
         return `New proposal ${label} was submitted.`;
       case 'PROPOSAL_FORWARDED':
@@ -136,6 +138,9 @@ export class AppTopbarComponent {
     }
     if (notification.relatedResourceType === 'MUSEUM_QUESTION' && notification.relatedResourceId) {
       return `/p/museum-questions/${notification.relatedResourceId}`;
+    }
+    if (notification.relatedResourceType === 'PROJECT' && notification.relatedResourceId) {
+      return `/p/collections/projects/${notification.relatedResourceId}`;
     }
     return null;
   }

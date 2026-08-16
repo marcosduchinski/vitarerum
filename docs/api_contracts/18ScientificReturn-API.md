@@ -44,7 +44,9 @@ A closed watch cannot be reopened.
 - `GET /watches/{watchId}/runs?page=0&size=10`
 
 A run records every planned query, source, result count, error and timestamp.
-The first adapter is Crossref. The planner sends only combinations of author,
+`candidateCount` includes known candidates and `newCandidateCount` identifies
+discoveries from that run. Crossref is always enabled; OpenAlex is added when
+`OPENALEX_API_KEY` is configured. The planner sends only combinations of author,
 inventory number and object name from the immutable project snapshot.
 Executions are capped by `SCIENTIFIC_RETURN_MAX_QUERIES_PER_RUN` (40 by
 default). `CROSSREF_MAILTO` should identify the deployment to Crossref's polite
@@ -52,13 +54,43 @@ pool. Calls are serialized with a configurable minimum interval. Responses
 `429`, `500`, `502`, `503`, and `504` are retried with exponential backoff or
 the server-provided `Retry-After`, up to `CROSSREF_MAX_RETRIES`.
 
+When exact strategies yield no actionable candidate for a source, at most two
+additional strategies may replace a binomial object name with its genus. This
+adaptive step is recorded like every other query.
+
+## Operational metrics
+
+`GET /metrics`
+
+Returns active watches, total and failed runs, and pending, confirmed and
+dismissed candidate counts.
+
+## Scheduled execution and evaluation
+
+```bash
+uv run python -m app.scientific_return.presentation.commands run-due --limit 25
+uv run python -m app.scientific_return.presentation.commands evaluate-phase0
+```
+
+`run-due` uses a PostgreSQL transaction advisory lock per watch and emits one
+project notification only when the run creates new candidates. The evaluation
+command runs the five versioned known-publication cases and prints JSON.
+
 ## Review candidates
 
 `GET /projects/{projectId}/candidates?status=PENDING&page=0&size=20`
 
 Each candidate contains normalized bibliographic metadata and an ordered list
-of evidence. Evidence strength is `PRIMARY`, `SUPPORTING`, or `WEAK`; it is not
+of evidence. `objectId` links object-specific evidence to the consulted object
+snapshot. Evidence strength is `PRIMARY`, `SUPPORTING`, or `WEAK`; it is not
 an automated confidence decision.
+
+The global staff queue is available from:
+
+`GET /candidates?status=PENDING&source=CROSSREF&evidenceStrength=PRIMARY&page=0&size=20`
+
+Queue items add `projectId` so the interface can open the project that owns the
+watch. Filters are optional; status defaults to `PENDING`.
 
 ## Decide a candidate
 
