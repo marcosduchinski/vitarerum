@@ -118,6 +118,19 @@ class CandidateEvidence:
     explanation: str
     created_at: datetime
     object_id: str | None = None
+    # Provenance, set only when an agentic investigation added the evidence.
+    # All optional, so evidence produced by the deterministic pipeline — every
+    # row that already exists — stays valid and distinguishable.
+    investigation_id: str | None = None
+    iteration_id: str | None = None
+    tool_execution_id: str | None = None
+    query_id: str | None = None
+    source_record_id: str | None = None
+    content_hash: str | None = None
+
+    @property
+    def is_agentic(self) -> bool:
+        return self.investigation_id is not None
 
 
 @dataclass(slots=True)

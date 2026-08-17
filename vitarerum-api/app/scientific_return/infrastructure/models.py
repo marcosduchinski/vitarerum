@@ -5,6 +5,7 @@ from typing import Any
 
 from sqlalchemy import (
     JSON,
+    Boolean,
     DateTime,
     ForeignKey,
     Integer,
@@ -20,14 +21,21 @@ from app.scientific_return.domain.enums import (
     AgentAnalysisFeedback,
     AgentAnalysisStatus,
     AgentConfidence,
+    AgentProgress,
     AgentRecommendedAction,
     CandidateStatus,
     DecisionType,
     EvidenceStrength,
     EvidenceType,
+    InvestigationMode,
+    InvestigationObjective,
+    InvestigationStatus,
+    IterationStatus,
+    PolicyRejectionReason,
     QueryStatus,
     QueryType,
     RunStatus,
+    StopReason,
     WatchStatus,
 )
 
@@ -170,6 +178,16 @@ class CandidateEvidenceRecord(Base):
     explanation: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     object_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    # Provenance of evidence added by an agentic investigation. Nullable so
+    # every row written by the deterministic pipeline stays valid.
+    investigation_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, index=True
+    )
+    iteration_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    tool_execution_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    query_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    source_record_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     candidate: Mapped[CandidatePublicationRecord] = relationship(
         back_populates="evidences"
@@ -239,5 +257,174 @@ class CandidateAgentAnalysisRecord(Base):
     feedback_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
     feedback_by: Mapped[str | None] = mapped_column(String(36), nullable=True)
     feedback_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
+class ScientificReturnInvestigationRecord(Base):
+    """One agentic investigation over a watch and, optionally, a candidate.
+
+    ``candidate_id`` is nullable so a discovery investigation can exist for a
+    watch whose deterministic run produced nothing actionable.
+    """
+
+    __tablename__ = "scientific_return_agent_investigations"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    watch_id: Mapped[str] = mapped_column(
+        ForeignKey("scientific_return_watches.id"), index=True
+    )
+    candidate_id: Mapped[str | None] = mapped_column(
+        ForeignKey("scientific_return_candidates.id"), nullable=True, index=True
+    )
+    initial_run_id: Mapped[str] = mapped_column(
+        ForeignKey("scientific_return_runs.id"), index=True
+    )
+    previous_investigation_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True
+    )
+    idempotency_key: Mapped[str | None] = mapped_column(
+        String(128), nullable=True, index=True
+    )
+    objective: Mapped[InvestigationObjective] = mapped_column(
+        SAEnum(
+            InvestigationObjective,
+            name="scientific_return_investigation_objective",
+        )
+    )
+    status: Mapped[InvestigationStatus] = mapped_column(
+        SAEnum(InvestigationStatus, name="scientific_return_investigation_status"),
+        index=True,
+    )
+    mode: Mapped[InvestigationMode] = mapped_column(
+        SAEnum(InvestigationMode, name="scientific_return_investigation_mode")
+    )
+    stop_reason: Mapped[StopReason | None] = mapped_column(
+        SAEnum(StopReason, name="scientific_return_stop_reason"), nullable=True
+    )
+    current_iteration: Mapped[int] = mapped_column(Integer, default=0)
+    budget: Mapped[dict[str, Any]] = mapped_column(JSON)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    heartbeat_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_by: Mapped[str] = mapped_column(String(36), index=True)
+    contract_version: Mapped[str] = mapped_column(String(96))
+    version: Mapped[int] = mapped_column(Integer, default=0)
+
+    iterations: Mapped[list[ScientificReturnIterationRecord]] = relationship(
+        back_populates="investigation",
+        cascade="all, delete-orphan",
+        order_by="ScientificReturnIterationRecord.number",
+    )
+
+
+class ScientificReturnIterationRecord(Base):
+    __tablename__ = "scientific_return_agent_iterations"
+    __table_args__ = (
+        UniqueConstraint(
+            "investigation_id",
+            "number",
+            name="uq_scientific_return_agent_iteration_number",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    investigation_id: Mapped[str] = mapped_column(
+        ForeignKey("scientific_return_agent_investigations.id"), index=True
+    )
+    number: Mapped[int] = mapped_column(Integer)
+    status: Mapped[IterationStatus] = mapped_column(
+        SAEnum(IterationStatus, name="scientific_return_iteration_status")
+    )
+    # Observation, plan and reflection carry project data and model output and
+    # are encrypted at rest, like the snapshot payload and the query text.
+    observation_payload: Mapped[str | None] = mapped_column(Text, nullable=True)
+    plan_payload: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reflection_payload: Mapped[str | None] = mapped_column(Text, nullable=True)
+    policy_authorized: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    policy_rejection_reason: Mapped[PolicyRejectionReason | None] = mapped_column(
+        SAEnum(
+            PolicyRejectionReason,
+            name="scientific_return_policy_rejection_reason",
+        ),
+        nullable=True,
+    )
+    policy_justification: Mapped[str | None] = mapped_column(Text, nullable=True)
+    progress: Mapped[AgentProgress | None] = mapped_column(
+        SAEnum(AgentProgress, name="scientific_return_agent_progress"), nullable=True
+    )
+    tool_execution_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    evidence_before_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    evidence_after_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    evidence_delta: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    # Which model and prompt produced this iteration, and what they cost.
+    model: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    prompt_version: Mapped[str | None] = mapped_column(String(96), nullable=True)
+    plan_latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    reflection_latency_ms: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )
+    plan_response_hash: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
+    reflection_response_hash: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    investigation: Mapped[ScientificReturnInvestigationRecord] = relationship(
+        back_populates="iterations"
+    )
+
+
+class ScientificReturnToolExecutionRecord(Base):
+    """One external tool run, keyed by the idempotency key issued before it.
+
+    The key is unique, so replaying a command cannot execute the same tool
+    twice: the second attempt finds this row and reuses its result.
+    """
+
+    __tablename__ = "scientific_return_agent_tool_executions"
+    __table_args__ = (
+        UniqueConstraint(
+            "idempotency_key",
+            name="uq_scientific_return_agent_tool_idempotency",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    investigation_id: Mapped[str] = mapped_column(
+        ForeignKey("scientific_return_agent_investigations.id"), index=True
+    )
+    iteration_id: Mapped[str] = mapped_column(String(80), index=True)
+    idempotency_key: Mapped[str] = mapped_column(String(128))
+    action: Mapped[AgentRecommendedAction] = mapped_column(
+        SAEnum(
+            AgentRecommendedAction,
+            name="scientific_return_agent_recommended_action",
+        )
+    )
+    # The issued queries are project data and are encrypted, as run queries are.
+    queries_payload: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sources: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    total_results: Mapped[int] = mapped_column(Integer, default=0)
+    created_candidate_ids: Mapped[list[str] | None] = mapped_column(
+        JSON, nullable=True
+    )
+    added_evidence_ids: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    result_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    succeeded: Mapped[bool] = mapped_column(Boolean, default=False)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=1)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

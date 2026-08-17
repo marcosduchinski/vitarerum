@@ -9,17 +9,45 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.sql.elements import ColumnElement
 
+from app.scientific_return.application.agent_contracts import AGENT_CONTRACT_VERSION
 from app.scientific_return.application.ports import (
     CandidateReviewItem,
     ScientificReturnMetrics,
+    ToolExecutionRecord,
 )
 from app.scientific_return.domain.enums import (
     AgentConfidence,
+    AgentProgress,
     AgentRecommendedAction,
     CandidateStatus,
     EvidenceStrength,
+    EvidenceType,
+    InvestigationObjective,
+    InvestigationStatus,
     RunStatus,
     WatchStatus,
+)
+from app.scientific_return.domain.evidence_delta import (
+    evidence_identity as _evidence_identity,
+)
+from app.scientific_return.domain.investigation_contracts import (
+    AgentObservation,
+    AgentPlan,
+    AgentReflection,
+    EvidenceDelta,
+    ExecutionBudget,
+    ObservedCandidate,
+    ObservedObject,
+    PolicyDecision,
+    ProposedAction,
+    ReasonerTelemetry,
+)
+from app.scientific_return.domain.investigation_models import (
+    InvestigationId,
+    InvestigationIteration,
+    InvestigationIterationId,
+    ScientificReturnInvestigation,
+    ToolExecutionId,
 )
 from app.scientific_return.domain.models import (
     CandidateAgentAnalysis,
@@ -48,9 +76,12 @@ from app.scientific_return.infrastructure.models import (
     CandidateDecisionRecord,
     CandidateEvidenceRecord,
     CandidatePublicationRecord,
+    ScientificReturnInvestigationRecord,
+    ScientificReturnIterationRecord,
     ScientificReturnQueryRecord,
     ScientificReturnRunRecord,
     ScientificReturnSnapshotRecord,
+    ScientificReturnToolExecutionRecord,
     ScientificReturnWatchRecord,
 )
 from app.shared.field_encryption import FieldEncryptor
@@ -60,6 +91,17 @@ _SNAPSHOT_PAYLOAD = "scientific_return_snapshots.payload"
 _QUERY_TEXT = "scientific_return_queries.query_text"
 _AGENT_INPUT = "scientific_return_agent_analyses.input_payload"
 _AGENT_ANALYSIS = "scientific_return_agent_analyses.analysis_payload"
+_ITERATION_OBSERVATION = (
+    "scientific_return_agent_iterations.observation_payload"
+)
+_ITERATION_PLAN = "scientific_return_agent_iterations.plan_payload"
+_ITERATION_REFLECTION = "scientific_return_agent_iterations.reflection_payload"
+_TOOL_QUERIES = "scientific_return_agent_tool_executions.queries_payload"
+_TERMINAL_STATUSES = (
+    InvestigationStatus.AWAITING_HUMAN_REVIEW,
+    InvestigationStatus.STOPPED,
+    InvestigationStatus.FAILED,
+)
 
 
 def _payload_to_dict(payload: ProjectSnapshotPayload) -> dict[str, object]:
@@ -140,6 +182,419 @@ def _evidence_to_domain(record: CandidateEvidenceRecord) -> CandidateEvidence:
         explanation=record.explanation,
         created_at=record.created_at,
         object_id=record.object_id,
+        investigation_id=record.investigation_id,
+        iteration_id=record.iteration_id,
+        tool_execution_id=record.tool_execution_id,
+        query_id=record.query_id,
+        source_record_id=record.source_record_id,
+        content_hash=record.content_hash,
+    )
+
+
+def _budget_to_json(budget: ExecutionBudget) -> dict[str, Any]:
+    return {
+        "maxIterations": budget.max_iterations,
+        "maxActions": budget.max_actions,
+        "maxQueries": budget.max_queries,
+        "maxResultsPerQuery": budget.max_results_per_query,
+        "maxNewCandidates": budget.max_new_candidates,
+        "usedIterations": budget.used_iterations,
+        "usedActions": budget.used_actions,
+        "usedQueries": budget.used_queries,
+        "createdCandidates": budget.created_candidates,
+    }
+
+
+def _budget_to_domain(payload: dict[str, Any]) -> ExecutionBudget:
+    return ExecutionBudget(
+        max_iterations=int(payload["maxIterations"]),
+        max_actions=int(payload["maxActions"]),
+        max_queries=int(payload["maxQueries"]),
+        max_results_per_query=int(payload["maxResultsPerQuery"]),
+        max_new_candidates=int(payload["maxNewCandidates"]),
+        used_iterations=int(payload.get("usedIterations", 0)),
+        used_actions=int(payload.get("usedActions", 0)),
+        used_queries=int(payload.get("usedQueries", 0)),
+        created_candidates=int(payload.get("createdCandidates", 0)),
+    )
+
+
+def _delta_to_json(delta: EvidenceDelta | None) -> dict[str, Any] | None:
+    if delta is None:
+        return None
+    return {
+        "added": [item.value for item in delta.added],
+        "preserved": [item.value for item in delta.preserved],
+        "removed": [item.value for item in delta.removed],
+    }
+
+
+def _delta_to_domain(payload: dict[str, Any] | None) -> EvidenceDelta | None:
+    if payload is None:
+        return None
+    return EvidenceDelta(
+        added=tuple(EvidenceType(item) for item in payload.get("added", [])),
+        preserved=tuple(EvidenceType(item) for item in payload.get("preserved", [])),
+        removed=tuple(EvidenceType(item) for item in payload.get("removed", [])),
+    )
+
+
+def _reflection_to_json(reflection: AgentReflection | None) -> dict[str, Any] | None:
+    if reflection is None:
+        return None
+    return {
+        "progress": reflection.progress.value,
+        "evidenceDeltaSummary": reflection.evidence_delta_summary,
+        "remainingGaps": list(reflection.remaining_gaps),
+        "recommendedStop": reflection.recommended_stop,
+        "reasoningSummary": reflection.reasoning_summary,
+    }
+
+
+def _reflection_to_domain(payload: dict[str, Any] | None) -> AgentReflection | None:
+    if payload is None:
+        return None
+    return AgentReflection(
+        progress=AgentProgress(payload["progress"]),
+        evidence_delta_summary=payload["evidenceDeltaSummary"],
+        recommended_stop=bool(payload["recommendedStop"]),
+        reasoning_summary=payload["reasoningSummary"],
+        remaining_gaps=tuple(payload.get("remainingGaps", [])),
+    )
+
+
+def _observation_to_json(
+    observation: AgentObservation | None,
+) -> dict[str, Any] | None:
+    if observation is None:
+        return None
+    candidate = observation.candidate
+    return {
+        "objective": observation.objective.value,
+        "projectReference": observation.project_reference,
+        "researcher": observation.researcher,
+        "objects": [
+            {
+                "objectId": item.object_id,
+                "inventoryNumber": item.inventory_number,
+                "objectName": item.object_name,
+            }
+            for item in observation.objects
+        ],
+        "triedQueries": list(observation.tried_queries),
+        "allowedActions": [item.value for item in observation.allowed_actions],
+        "budget": _budget_to_json(observation.budget),
+        "candidate": (
+            None
+            if candidate is None
+            else {
+                "candidateId": candidate.candidate_id,
+                "title": candidate.title,
+                "doi": candidate.doi,
+                "verifiedEvidenceTypes": [
+                    item.value for item in candidate.verified_evidence_types
+                ],
+            }
+        ),
+    }
+
+
+def _observation_to_domain(
+    payload: dict[str, Any] | None,
+) -> AgentObservation | None:
+    if payload is None:
+        return None
+    candidate = payload.get("candidate")
+    return AgentObservation(
+        objective=InvestigationObjective(payload["objective"]),
+        project_reference=payload["projectReference"],
+        researcher=payload["researcher"],
+        objects=tuple(
+            ObservedObject(
+                object_id=item["objectId"],
+                inventory_number=item["inventoryNumber"],
+                object_name=item["objectName"],
+            )
+            for item in payload["objects"]
+        ),
+        tried_queries=tuple(payload.get("triedQueries", [])),
+        allowed_actions=tuple(
+            AgentRecommendedAction(item) for item in payload["allowedActions"]
+        ),
+        budget=_budget_to_domain(payload["budget"]),
+        candidate=(
+            None
+            if candidate is None
+            else ObservedCandidate(
+                candidate_id=candidate["candidateId"],
+                title=candidate["title"],
+                doi=candidate["doi"],
+                verified_evidence_types=tuple(
+                    EvidenceType(item)
+                    for item in candidate.get("verifiedEvidenceTypes", [])
+                ),
+            )
+        ),
+    )
+
+
+def _plan_to_json(plan: AgentPlan | None) -> dict[str, Any] | None:
+    if plan is None:
+        return None
+    return {
+        "objective": plan.objective,
+        "action": {
+            "type": plan.action.type.value,
+            "arguments": (
+                {"objectId": plan.action.object_id} if plan.action.object_id else {}
+            ),
+        },
+        "reasoningSummary": plan.reasoning_summary,
+        "expectedEvidence": [item.value for item in plan.expected_evidence],
+    }
+
+
+def _plan_to_domain(payload: dict[str, Any] | None) -> AgentPlan | None:
+    if payload is None:
+        return None
+    action = payload["action"]
+    return AgentPlan(
+        objective=payload["objective"],
+        action=ProposedAction(
+            type=AgentRecommendedAction(action["type"]),
+            object_id=action.get("arguments", {}).get("objectId"),
+        ),
+        reasoning_summary=payload["reasoningSummary"],
+        expected_evidence=tuple(
+            EvidenceType(item) for item in payload.get("expectedEvidence", [])
+        ),
+    )
+
+
+def _iteration_to_record(
+    iteration: InvestigationIteration, encryptor: FieldEncryptor
+) -> ScientificReturnIterationRecord:
+    decision = iteration.policy_decision
+    reflection = iteration.reflection
+    telemetry = iteration.telemetry
+    return ScientificReturnIterationRecord(
+        id=iteration.id,
+        investigation_id=iteration.investigation_id,
+        number=iteration.number,
+        status=iteration.status,
+        observation_payload=encryptor.encrypt_json(
+            _observation_to_json(iteration.observation), _ITERATION_OBSERVATION
+        ),
+        plan_payload=encryptor.encrypt_json(
+            _plan_to_json(iteration.plan), _ITERATION_PLAN
+        ),
+        reflection_payload=encryptor.encrypt_json(
+            _reflection_to_json(reflection), _ITERATION_REFLECTION
+        ),
+        policy_authorized=None if decision is None else decision.authorized,
+        policy_rejection_reason=(
+            None if decision is None else decision.rejection_reason
+        ),
+        policy_justification=None if decision is None else decision.justification,
+        progress=None if reflection is None else reflection.progress,
+        tool_execution_id=iteration.tool_execution_id,
+        evidence_before_hash=iteration.evidence_before_hash,
+        evidence_after_hash=iteration.evidence_after_hash,
+        evidence_delta=_delta_to_json(iteration.evidence_delta),
+        model=None if telemetry is None else telemetry.model,
+        prompt_version=None if telemetry is None else telemetry.prompt_version,
+        plan_latency_ms=None if telemetry is None else telemetry.plan_latency_ms,
+        reflection_latency_ms=(
+            None if telemetry is None else telemetry.reflection_latency_ms
+        ),
+        plan_response_hash=(
+            None if telemetry is None else telemetry.plan_response_hash
+        ),
+        reflection_response_hash=(
+            None if telemetry is None else telemetry.reflection_response_hash
+        ),
+        error_message=iteration.error_message,
+        started_at=iteration.started_at,
+        completed_at=iteration.completed_at,
+    )
+
+
+def _iteration_to_domain(
+    record: ScientificReturnIterationRecord, encryptor: FieldEncryptor
+) -> InvestigationIteration:
+    decision = (
+        None
+        if record.policy_authorized is None
+        else PolicyDecision(
+            authorized=record.policy_authorized,
+            justification=record.policy_justification or "-",
+            rejection_reason=record.policy_rejection_reason,
+        )
+    )
+    return InvestigationIteration(
+        id=InvestigationIterationId(record.id),
+        investigation_id=InvestigationId(record.investigation_id),
+        number=record.number,
+        started_at=record.started_at,
+        status=record.status,
+        observation=_observation_to_domain(
+            cast(
+                "dict[str, Any] | None",
+                encryptor.decrypt_json(
+                    record.observation_payload, _ITERATION_OBSERVATION
+                ),
+            )
+        ),
+        plan=_plan_to_domain(
+            cast(
+                "dict[str, Any] | None",
+                encryptor.decrypt_json(record.plan_payload, _ITERATION_PLAN),
+            )
+        ),
+        policy_decision=decision,
+        tool_execution_id=(
+            ToolExecutionId(record.tool_execution_id)
+            if record.tool_execution_id
+            else None
+        ),
+        evidence_before_hash=record.evidence_before_hash,
+        evidence_after_hash=record.evidence_after_hash,
+        evidence_delta=_delta_to_domain(record.evidence_delta),
+        reflection=_reflection_to_domain(
+            cast(
+                "dict[str, Any] | None",
+                encryptor.decrypt_json(
+                    record.reflection_payload, _ITERATION_REFLECTION
+                ),
+            )
+        ),
+        telemetry=(
+            None
+            if record.model is None
+            else ReasonerTelemetry(
+                model=record.model,
+                prompt_version=record.prompt_version or "",
+                plan_latency_ms=record.plan_latency_ms or 0,
+                reflection_latency_ms=record.reflection_latency_ms or 0,
+                plan_response_hash=record.plan_response_hash or "",
+                reflection_response_hash=record.reflection_response_hash or "",
+            )
+        ),
+        error_message=record.error_message,
+        completed_at=record.completed_at,
+    )
+
+
+def _investigation_to_record(
+    investigation: ScientificReturnInvestigation, encryptor: FieldEncryptor
+) -> ScientificReturnInvestigationRecord:
+    return ScientificReturnInvestigationRecord(
+        id=investigation.id,
+        watch_id=investigation.watch_id,
+        candidate_id=investigation.candidate_id,
+        initial_run_id=investigation.initial_run_id,
+        previous_investigation_id=investigation.previous_investigation_id,
+        idempotency_key=investigation.idempotency_key,
+        objective=investigation.objective,
+        status=investigation.status,
+        mode=investigation.mode,
+        stop_reason=investigation.stop_reason,
+        current_iteration=investigation.current_iteration,
+        budget=_budget_to_json(investigation.budget),
+        started_at=investigation.started_at,
+        completed_at=investigation.completed_at,
+        heartbeat_at=investigation.heartbeat_at,
+        created_by=investigation.created_by,
+        contract_version=AGENT_CONTRACT_VERSION,
+        version=investigation.version,
+        iterations=[
+            _iteration_to_record(item, encryptor) for item in investigation.iterations
+        ],
+    )
+
+
+def _investigation_to_domain(
+    record: ScientificReturnInvestigationRecord, encryptor: FieldEncryptor
+) -> ScientificReturnInvestigation:
+    return ScientificReturnInvestigation(
+        id=InvestigationId(record.id),
+        watch_id=ScientificReturnWatchId(record.watch_id),
+        objective=record.objective,
+        mode=record.mode,
+        initial_run_id=ScientificReturnRunId(record.initial_run_id),
+        budget=_budget_to_domain(record.budget),
+        created_by=PermissionId(record.created_by),
+        started_at=record.started_at,
+        status=record.status,
+        candidate_id=(
+            CandidatePublicationId(record.candidate_id)
+            if record.candidate_id
+            else None
+        ),
+        previous_investigation_id=(
+            InvestigationId(record.previous_investigation_id)
+            if record.previous_investigation_id
+            else None
+        ),
+        idempotency_key=record.idempotency_key,
+        current_iteration=record.current_iteration,
+        stop_reason=record.stop_reason,
+        completed_at=record.completed_at,
+        heartbeat_at=record.heartbeat_at,
+        version=record.version,
+        iterations=[
+            _iteration_to_domain(item, encryptor)
+            for item in sorted(record.iterations, key=lambda item: item.number)
+        ],
+    )
+
+
+def _tool_execution_to_record(
+    execution: ToolExecutionRecord, encryptor: FieldEncryptor
+) -> ScientificReturnToolExecutionRecord:
+    return ScientificReturnToolExecutionRecord(
+        id=execution.id,
+        investigation_id=execution.investigation_id,
+        iteration_id=execution.iteration_id,
+        idempotency_key=execution.idempotency_key,
+        action=execution.action,
+        queries_payload=encryptor.encrypt_json(
+            list(execution.queries), _TOOL_QUERIES
+        ),
+        sources=list(execution.sources),
+        total_results=execution.total_results,
+        created_candidate_ids=list(execution.created_candidate_ids),
+        added_evidence_ids=list(execution.added_evidence_ids),
+        result_hash=execution.result_hash,
+        succeeded=execution.succeeded,
+        error_message=execution.error_message,
+        attempts=execution.attempts,
+        started_at=execution.started_at,
+        completed_at=execution.completed_at,
+    )
+
+
+def _tool_execution_to_domain(
+    record: ScientificReturnToolExecutionRecord, encryptor: FieldEncryptor
+) -> ToolExecutionRecord:
+    queries = encryptor.decrypt_json(record.queries_payload, _TOOL_QUERIES) or []
+    return ToolExecutionRecord(
+        id=ToolExecutionId(record.id),
+        investigation_id=InvestigationId(record.investigation_id),
+        iteration_id=record.iteration_id,
+        idempotency_key=record.idempotency_key,
+        action=record.action,
+        started_at=record.started_at,
+        queries=tuple(cast("list[str]", queries)),
+        sources=tuple(record.sources or []),
+        total_results=record.total_results,
+        created_candidate_ids=tuple(record.created_candidate_ids or []),
+        added_evidence_ids=tuple(record.added_evidence_ids or []),
+        result_hash=record.result_hash,
+        succeeded=record.succeeded,
+        error_message=record.error_message,
+        attempts=record.attempts,
+        completed_at=record.completed_at,
     )
 
 
@@ -776,5 +1231,251 @@ class SqlAlchemyScientificReturnRepository:
         )
         return [
             _agent_analysis_to_domain(item, self._encryptor)
+            for item in result.scalars().all()
+        ]
+
+    async def list_queries_for_watch(
+        self, watch_id: ScientificReturnWatchId
+    ) -> list[ScientificReturnQuery]:
+        result = await self._session.execute(
+            select(ScientificReturnQueryRecord)
+            .join(
+                ScientificReturnRunRecord,
+                ScientificReturnRunRecord.id == ScientificReturnQueryRecord.run_id,
+            )
+            .where(ScientificReturnRunRecord.watch_id == watch_id)
+            .order_by(
+                ScientificReturnQueryRecord.sent_at,
+                ScientificReturnQueryRecord.id,
+            )
+        )
+        return [
+            _query_to_domain(item, self._encryptor) for item in result.scalars().all()
+        ]
+
+    async def append_candidate_evidences(
+        self,
+        candidate_id: CandidatePublicationId,
+        evidences: tuple[CandidateEvidence, ...],
+    ) -> tuple[CandidateEvidence, ...]:
+        if not evidences:
+            return ()
+        existing = await self._session.execute(
+            select(CandidateEvidenceRecord).where(
+                CandidateEvidenceRecord.candidate_id == candidate_id
+            )
+        )
+        # Identity ignores the row id and the timestamp, so re-running the same
+        # tool over the same records adds nothing and the original provenance is
+        # never overwritten.
+        known = {
+            _evidence_identity(_evidence_to_domain(item))
+            for item in existing.scalars().all()
+        }
+        written: list[CandidateEvidence] = []
+        for evidence in evidences:
+            if _evidence_identity(evidence) in known:
+                continue
+            known.add(_evidence_identity(evidence))
+            self._session.add(
+                CandidateEvidenceRecord(
+                    id=evidence.id,
+                    candidate_id=candidate_id,
+                    type=evidence.type,
+                    strength=evidence.strength,
+                    value=evidence.value,
+                    source_field=evidence.source_field,
+                    explanation=evidence.explanation,
+                    created_at=evidence.created_at,
+                    object_id=evidence.object_id,
+                    investigation_id=evidence.investigation_id,
+                    iteration_id=evidence.iteration_id,
+                    tool_execution_id=evidence.tool_execution_id,
+                    query_id=evidence.query_id,
+                    source_record_id=evidence.source_record_id,
+                    content_hash=evidence.content_hash,
+                )
+            )
+            written.append(evidence)
+        await self._session.flush()
+        return tuple(written)
+
+
+class SqlAlchemyInvestigationRepository:
+    """Persists the investigation aggregate, its iterations and tool executions.
+
+    Observations, plans and reflections carry project data and model output, so
+    they are encrypted at rest exactly like the snapshot payload and the query
+    text of the deterministic pipeline.
+    """
+
+    def __init__(self, session: AsyncSession, encryptor: FieldEncryptor) -> None:
+        self._session = session
+        self._encryptor = encryptor
+
+    async def add(self, investigation: ScientificReturnInvestigation) -> None:
+        self._session.add(_investigation_to_record(investigation, self._encryptor))
+        await self._session.flush()
+
+    async def save(self, investigation: ScientificReturnInvestigation) -> None:
+        # The iterations are loaded eagerly because they are read a few lines
+        # below. Under asyncio a lazy load there raises MissingGreenlet rather
+        # than quietly issuing a query, so it has to be asked for up front.
+        record = await self._session.get(
+            ScientificReturnInvestigationRecord,
+            investigation.id,
+            options=[selectinload(ScientificReturnInvestigationRecord.iterations)],
+        )
+        if record is None:
+            raise LookupError(f"Investigation {investigation.id} not found")
+        record.status = investigation.status
+        record.stop_reason = investigation.stop_reason
+        record.current_iteration = investigation.current_iteration
+        record.budget = _budget_to_json(investigation.budget)
+        record.completed_at = investigation.completed_at
+        record.heartbeat_at = investigation.heartbeat_at
+        record.version = investigation.version
+        stored = {item.id: item for item in record.iterations}
+        for iteration in investigation.iterations:
+            mapped = _iteration_to_record(iteration, self._encryptor)
+            current = stored.get(iteration.id)
+            if current is None:
+                record.iterations.append(mapped)
+                continue
+            for column in (
+                "status",
+                "observation_payload",
+                "plan_payload",
+                "reflection_payload",
+                "policy_authorized",
+                "policy_rejection_reason",
+                "policy_justification",
+                "progress",
+                "tool_execution_id",
+                "evidence_before_hash",
+                "evidence_after_hash",
+                "evidence_delta",
+                "model",
+                "prompt_version",
+                "plan_latency_ms",
+                "reflection_latency_ms",
+                "plan_response_hash",
+                "reflection_response_hash",
+                "error_message",
+                "completed_at",
+            ):
+                setattr(current, column, getattr(mapped, column))
+        await self._session.flush()
+
+    async def get(
+        self, investigation_id: InvestigationId
+    ) -> ScientificReturnInvestigation | None:
+        result = await self._session.execute(
+            select(ScientificReturnInvestigationRecord)
+            .where(ScientificReturnInvestigationRecord.id == investigation_id)
+            .options(selectinload(ScientificReturnInvestigationRecord.iterations))
+        )
+        record = result.scalar_one_or_none()
+        return (
+            _investigation_to_domain(record, self._encryptor)
+            if record is not None
+            else None
+        )
+
+    async def list_for_watch(
+        self, watch_id: ScientificReturnWatchId
+    ) -> list[ScientificReturnInvestigation]:
+        return await self._list(
+            ScientificReturnInvestigationRecord.watch_id == watch_id
+        )
+
+    async def list_for_candidate(
+        self, candidate_id: CandidatePublicationId
+    ) -> list[ScientificReturnInvestigation]:
+        return await self._list(
+            ScientificReturnInvestigationRecord.candidate_id == candidate_id
+        )
+
+    async def find_live(
+        self,
+        watch_id: ScientificReturnWatchId,
+        objective: InvestigationObjective,
+        candidate_id: CandidatePublicationId | None,
+    ) -> ScientificReturnInvestigation | None:
+        filters: list[ColumnElement[bool]] = [
+            ScientificReturnInvestigationRecord.watch_id == watch_id,
+            ScientificReturnInvestigationRecord.objective == objective,
+            ScientificReturnInvestigationRecord.status.notin_(_TERMINAL_STATUSES),
+        ]
+        filters.append(
+            ScientificReturnInvestigationRecord.candidate_id.is_(None)
+            if candidate_id is None
+            else ScientificReturnInvestigationRecord.candidate_id == candidate_id
+        )
+        found = await self._list(*filters)
+        return found[0] if found else None
+
+    async def find_by_idempotency_key(
+        self, key: str
+    ) -> ScientificReturnInvestigation | None:
+        found = await self._list(
+            ScientificReturnInvestigationRecord.idempotency_key == key
+        )
+        return found[0] if found else None
+
+    async def find_tool_execution(
+        self, idempotency_key: str
+    ) -> ToolExecutionRecord | None:
+        result = await self._session.execute(
+            select(ScientificReturnToolExecutionRecord).where(
+                ScientificReturnToolExecutionRecord.idempotency_key
+                == idempotency_key
+            )
+        )
+        record = result.scalar_one_or_none()
+        return (
+            _tool_execution_to_domain(record, self._encryptor)
+            if record is not None
+            else None
+        )
+
+    async def add_tool_execution(self, execution: ToolExecutionRecord) -> None:
+        self._session.add(_tool_execution_to_record(execution, self._encryptor))
+        await self._session.flush()
+
+    async def save_tool_execution(self, execution: ToolExecutionRecord) -> None:
+        record = await self._session.get(
+            ScientificReturnToolExecutionRecord, execution.id
+        )
+        if record is None:
+            raise LookupError(f"Tool execution {execution.id} not found")
+        record.queries_payload = self._encryptor.encrypt_json(
+            list(execution.queries), _TOOL_QUERIES
+        )
+        record.sources = list(execution.sources)
+        record.total_results = execution.total_results
+        record.created_candidate_ids = list(execution.created_candidate_ids)
+        record.added_evidence_ids = list(execution.added_evidence_ids)
+        record.result_hash = execution.result_hash
+        record.succeeded = execution.succeeded
+        record.error_message = execution.error_message
+        record.attempts = execution.attempts
+        record.completed_at = execution.completed_at
+        await self._session.flush()
+
+    async def _list(
+        self, *filters: ColumnElement[bool]
+    ) -> list[ScientificReturnInvestigation]:
+        result = await self._session.execute(
+            select(ScientificReturnInvestigationRecord)
+            .where(*filters)
+            .options(selectinload(ScientificReturnInvestigationRecord.iterations))
+            .order_by(
+                ScientificReturnInvestigationRecord.started_at.desc(),
+                ScientificReturnInvestigationRecord.id.desc(),
+            )
+        )
+        return [
+            _investigation_to_domain(item, self._encryptor)
             for item in result.scalars().all()
         ]

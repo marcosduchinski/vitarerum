@@ -6,6 +6,13 @@ export type ScientificReturnQueryStatus = 'COMPLETED' | 'FAILED';
 export type ScientificReturnCandidateStatus = 'PENDING' | 'CONFIRMED' | 'DISMISSED' | 'SNOOZED';
 export type ScientificReturnDecision = 'CONFIRM' | 'CORRECT_AND_CONFIRM' | 'DISMISS' | 'SNOOZE';
 export type ScientificReturnEvidenceStrength = 'PRIMARY' | 'SUPPORTING' | 'WEAK';
+export type ScientificReturnEvidenceType =
+  | 'INVENTORY_NUMBER'
+  | 'AUTHOR'
+  | 'OBJECT_NAME'
+  | 'AUTHOR_INVENTORY'
+  | 'INVENTORY_OBJECT'
+  | 'AUTHOR_OBJECT';
 export type ScientificReturnAgentAnalysisStatus = 'RUNNING' | 'COMPLETED' | 'FAILED';
 export type ScientificReturnAgentConfidence = 'LOW' | 'MEDIUM' | 'HIGH';
 export type ScientificReturnAgentFeedback = 'USEFUL' | 'PARTIALLY_USEFUL' | 'NOT_USEFUL';
@@ -157,3 +164,125 @@ export interface CandidateAgentAnalysis {
 export type ScientificReturnCandidatesPage = Page<ScientificReturnCandidate>;
 export type ScientificReturnRunsPage = Page<ScientificReturnRun>;
 export type ScientificReturnReviewQueuePage = Page<ScientificReturnReviewItem>;
+
+export type InvestigationObjective = 'DISCOVER_CANDIDATE' | 'ENRICH_CANDIDATE';
+
+export type InvestigationStatus =
+  | 'CREATED'
+  | 'OBSERVING'
+  | 'PLANNING'
+  | 'VALIDATING'
+  | 'EXECUTING'
+  | 'REFLECTING'
+  | 'AWAITING_HUMAN_REVIEW'
+  | 'STOPPED'
+  | 'FAILED';
+
+export type InvestigationMode = 'DISABLED' | 'SHADOW' | 'POLICY_ONLY' | 'SUPERVISED' | 'SCHEDULED';
+
+export type IterationStatus = 'RUNNING' | 'COMPLETED' | 'FAILED';
+
+export type InvestigationStopReason =
+  | 'EVIDENCE_SUFFICIENT'
+  | 'NO_RESULTS'
+  | 'NO_EVIDENCE_ADDED'
+  | 'NO_PROGRESS'
+  | 'ACTION_REJECTED'
+  | 'QUERY_REPEATED'
+  | 'BUDGET_EXHAUSTED'
+  | 'ITERATION_LIMIT_REACHED'
+  | 'CANDIDATE_LIMIT_REACHED'
+  | 'REASONER_UNAVAILABLE'
+  | 'INVALID_PLAN'
+  | 'TOOL_UNAVAILABLE'
+  | 'TOOL_FAILED'
+  | 'CANDIDATE_ALREADY_DECIDED'
+  | 'PRESENTED_FOR_REVIEW'
+  | 'INSUFFICIENT_EVIDENCE';
+
+export interface InvestigationObservation {
+  readonly researcher: string;
+  readonly projectReference: string;
+  readonly objects: readonly Record<string, string>[];
+  readonly triedQueries: readonly string[];
+  readonly allowedActions: readonly string[];
+}
+
+export interface InvestigationPlan {
+  readonly objective: string;
+  readonly actionType: ScientificReturnAgentAction;
+  readonly objectId: string | null;
+  readonly reasoningSummary: string;
+  readonly expectedEvidence: readonly ScientificReturnEvidenceType[];
+}
+
+export interface InvestigationPolicy {
+  readonly authorized: boolean;
+  readonly justification: string;
+  readonly rejectionReason: string | null;
+}
+
+export interface InvestigationTool {
+  readonly executedQueries: readonly string[];
+  readonly sources: readonly string[];
+  readonly totalResults: number;
+  readonly createdCandidateIds: readonly string[];
+  readonly addedEvidenceIds: readonly string[];
+}
+
+export interface InvestigationDelta {
+  readonly added: readonly ScientificReturnEvidenceType[];
+  readonly preserved: readonly ScientificReturnEvidenceType[];
+  readonly removed: readonly ScientificReturnEvidenceType[];
+}
+
+export interface InvestigationReflection {
+  readonly progress: string;
+  readonly evidenceDeltaSummary: string;
+  readonly remainingGaps: readonly string[];
+  readonly recommendedStop: boolean;
+  readonly reasoningSummary: string;
+}
+
+export interface InvestigationIteration {
+  readonly id: string;
+  readonly number: number;
+  readonly status: IterationStatus;
+  readonly startedAt: string;
+  readonly completedAt: string | null;
+  readonly observation: InvestigationObservation | null;
+  readonly plan: InvestigationPlan | null;
+  readonly policy: InvestigationPolicy | null;
+  readonly tool: InvestigationTool | null;
+  readonly evidenceDelta: InvestigationDelta | null;
+  readonly reflection: InvestigationReflection | null;
+  readonly evidenceBeforeHash: string | null;
+  readonly evidenceAfterHash: string | null;
+  readonly errorMessage: string | null;
+}
+
+export interface InvestigationBudget {
+  readonly maxIterations: number;
+  readonly maxQueries: number;
+  readonly maxNewCandidates: number;
+  readonly usedIterations: number;
+  readonly usedQueries: number;
+  readonly createdCandidates: number;
+}
+
+export interface ScientificReturnInvestigation {
+  readonly id: string;
+  readonly watchId: string;
+  readonly candidateId: string | null;
+  readonly objective: InvestigationObjective;
+  readonly status: InvestigationStatus;
+  readonly mode: InvestigationMode;
+  readonly stopReason: InvestigationStopReason | null;
+  readonly currentIteration: number;
+  readonly budget: InvestigationBudget;
+  readonly startedAt: string;
+  readonly completedAt: string | null;
+  readonly createdBy: string;
+  readonly previousInvestigationId: string | null;
+  readonly iterations: readonly InvestigationIteration[];
+}

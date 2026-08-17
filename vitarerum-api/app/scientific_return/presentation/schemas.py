@@ -8,14 +8,21 @@ from app.scientific_return.domain.enums import (
     AgentAnalysisFeedback,
     AgentAnalysisStatus,
     AgentConfidence,
+    AgentProgress,
     AgentRecommendedAction,
     CandidateStatus,
     DecisionType,
     EvidenceStrength,
     EvidenceType,
+    InvestigationMode,
+    InvestigationObjective,
+    InvestigationStatus,
+    IterationStatus,
+    PolicyRejectionReason,
     QueryStatus,
     QueryType,
     RunStatus,
+    StopReason,
     WatchStatus,
 )
 
@@ -191,3 +198,103 @@ class CandidateAgentAnalysisResponse(BaseModel):
 class AgentAnalysisFeedbackRequest(BaseModel):
     feedback: AgentAnalysisFeedback
     comment: str | None = Field(default=None, max_length=2000)
+
+
+class StartInvestigationRequest(BaseModel):
+    objective: InvestigationObjective
+
+
+class InvestigationObservationResponse(BaseModel):
+    researcher: str
+    projectReference: str
+    objects: list[dict[str, str]]
+    triedQueries: list[str]
+    allowedActions: list[str]
+
+
+class InvestigationPlanResponse(BaseModel):
+    objective: str
+    actionType: AgentRecommendedAction
+    objectId: str | None
+    reasoningSummary: str
+    expectedEvidence: list[EvidenceType]
+
+
+class InvestigationPolicyResponse(BaseModel):
+    authorized: bool
+    justification: str
+    rejectionReason: PolicyRejectionReason | None
+
+
+class InvestigationToolResponse(BaseModel):
+    executedQueries: list[str]
+    sources: list[str]
+    totalResults: int
+    createdCandidateIds: list[str]
+    addedEvidenceIds: list[str]
+
+
+class InvestigationDeltaResponse(BaseModel):
+    added: list[EvidenceType]
+    preserved: list[EvidenceType]
+    removed: list[EvidenceType]
+
+
+class InvestigationReflectionResponse(BaseModel):
+    progress: AgentProgress
+    evidenceDeltaSummary: str
+    remainingGaps: list[str]
+    recommendedStop: bool
+    reasoningSummary: str
+
+
+class InvestigationTelemetryResponse(BaseModel):
+    model: str
+    promptVersion: str
+    planLatencyMs: int
+    reflectionLatencyMs: int
+    totalLatencyMs: int
+
+
+class InvestigationIterationResponse(BaseModel):
+    id: str
+    number: int
+    status: IterationStatus
+    startedAt: datetime
+    completedAt: datetime | None
+    observation: InvestigationObservationResponse | None
+    plan: InvestigationPlanResponse | None
+    policy: InvestigationPolicyResponse | None
+    tool: InvestigationToolResponse | None
+    evidenceDelta: InvestigationDeltaResponse | None
+    reflection: InvestigationReflectionResponse | None
+    telemetry: InvestigationTelemetryResponse | None
+    evidenceBeforeHash: str | None
+    evidenceAfterHash: str | None
+    errorMessage: str | None
+
+
+class InvestigationBudgetResponse(BaseModel):
+    maxIterations: int
+    maxQueries: int
+    maxNewCandidates: int
+    usedIterations: int
+    usedQueries: int
+    createdCandidates: int
+
+
+class InvestigationResponse(BaseModel):
+    id: str
+    watchId: str
+    candidateId: str | None
+    objective: InvestigationObjective
+    status: InvestigationStatus
+    mode: InvestigationMode
+    stopReason: StopReason | None
+    currentIteration: int
+    budget: InvestigationBudgetResponse
+    startedAt: datetime
+    completedAt: datetime | None
+    createdBy: str
+    previousInvestigationId: str | None
+    iterations: list[InvestigationIterationResponse]

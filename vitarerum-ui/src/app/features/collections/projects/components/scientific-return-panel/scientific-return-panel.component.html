@@ -100,6 +100,20 @@
                 Search now
               }
             </button>
+            <button
+              type="button"
+              class="button"
+              [disabled]="busyAction() !== null || runningInvestigationId() !== null"
+              (click)="investigateWatch(currentWatch.id)"
+            >
+              @if (runningInvestigationId() === currentWatch.id) {
+                <span class="pi pi-spin pi-spinner" aria-hidden="true"></span>
+                Investigating
+              } @else {
+                <span class="pi pi-sparkles" aria-hidden="true"></span>
+                Investigate publications not found
+              }
+            </button>
           } @else if (currentWatch.status === 'PAUSED') {
             <button
               type="button"
@@ -224,7 +238,40 @@
                     <span class="pi pi-history" aria-hidden="true"></span>
                     AI analysis history
                   </button>
+                  <button
+                    type="button"
+                    class="button"
+                    [disabled]="runningInvestigationId() !== null"
+                    (click)="investigateCandidate(candidate.id)"
+                  >
+                    @if (runningInvestigationId() === candidate.id) {
+                      <span class="pi pi-spin pi-spinner" aria-hidden="true"></span>
+                      Investigating
+                    } @else {
+                      <span class="pi pi-search" aria-hidden="true"></span>
+                      Investigate missing evidence
+                    }
+                  </button>
+                  <button
+                    type="button"
+                    class="text-button"
+                    [disabled]="runningInvestigationId() === candidate.id"
+                    (click)="toggleInvestigations(candidate.id)"
+                  >
+                    <span class="pi pi-list" aria-hidden="true"></span>
+                    Investigation history
+                  </button>
                 </div>
+              }
+
+              @if (investigationsByCandidate()[candidate.id]; as investigations) {
+                <section class="investigations" aria-label="Assisted investigations">
+                  @for (investigation of investigations; track investigation.id) {
+                    <app-investigation-timeline [investigation]="investigation" />
+                  } @empty {
+                    <p class="agent-analysis__empty">No assisted investigation recorded.</p>
+                  }
+                </section>
               }
 
               @if (analysesByCandidate()[candidate.id]; as analyses) {

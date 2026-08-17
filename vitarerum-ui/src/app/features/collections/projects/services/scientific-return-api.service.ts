@@ -10,6 +10,7 @@ import {
   CandidateDecisionRecord,
   CandidateDecisionRequest,
   ScientificReturnCandidate,
+  ScientificReturnInvestigation,
   ScientificReturnCandidatesPage,
   ScientificReturnCandidateStatus,
   ScientificReturnRun,
@@ -115,6 +116,34 @@ export class ScientificReturnApiService {
     return this.http.post<CandidateAgentAnalysis>(
       this.url(`/agent-analyses/${analysisId}/feedback`),
       { feedback },
+    );
+  }
+
+  startWatchInvestigation(watchId: string): Observable<ScientificReturnInvestigation> {
+    return this.http.post<ScientificReturnInvestigation>(
+      this.url(`/watches/${watchId}/investigations`),
+      {},
+    );
+  }
+
+  startCandidateInvestigation(candidateId: string): Observable<ScientificReturnInvestigation> {
+    return this.http.post<ScientificReturnInvestigation>(
+      this.url(`/candidates/${candidateId}/investigations`),
+      {},
+    );
+  }
+
+  listCandidateInvestigations(
+    candidateId: string,
+  ): Observable<readonly ScientificReturnInvestigation[]> {
+    return this.http.get<readonly ScientificReturnInvestigation[]>(
+      this.url(`/candidates/${candidateId}/investigations`),
+    );
+  }
+
+  listWatchInvestigations(watchId: string): Observable<readonly ScientificReturnInvestigation[]> {
+    return this.http.get<readonly ScientificReturnInvestigation[]>(
+      this.url(`/watches/${watchId}/investigations`),
     );
   }
 

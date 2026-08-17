@@ -4,8 +4,9 @@ import logging
 from math import ceil
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Header, HTTPException, Query, status
 
+from app.identity.public import Actor
 from app.notifications.public import NotificationKind, RelatedResourceType
 from app.scientific_return.application.agent_analysis import (
     AgentAnalysisDisabled,
@@ -15,6 +16,13 @@ from app.scientific_return.application.agent_analysis import (
     ListCandidateAgentAnalyses,
     RecordAgentAnalysisFeedback,
     RecordAgentAnalysisFeedbackInput,
+)
+from app.scientific_return.application.run_investigation import (
+    InvestigationAlreadyRunning,
+    InvestigationDisabled,
+    InvestigationNotPossible,
+    RunInvestigationInput,
+    RunScientificReturnInvestigation,
 )
 from app.scientific_return.application.use_cases import (
     ActivateScientificReturnWatch,
@@ -26,7 +34,16 @@ from app.scientific_return.application.use_cases import (
     RunScientificReturnSearch,
     WatchNotFound,
 )
-from app.scientific_return.domain.enums import CandidateStatus, EvidenceStrength
+from app.scientific_return.domain.enums import (
+    CandidateStatus,
+    EvidenceStrength,
+    InvestigationObjective,
+)
+from app.scientific_return.domain.investigation_models import (
+    InvestigationId,
+    InvestigationIteration,
+    ScientificReturnInvestigation,
+)
 from app.scientific_return.domain.models import (
     CandidateAgentAnalysis,
     CandidateAgentAnalysisId,
@@ -44,6 +61,8 @@ from app.scientific_return.presentation.dependencies import (
     AgentReasoner,
     BibliographicSources,
     DBSession,
+    InvestigationRepository,
+    InvestigationRunner,
     MaxQueries,
     Notifications,
     ProjectProvider,
@@ -63,6 +82,16 @@ from app.scientific_return.presentation.schemas import (
     CandidatePublicationResponse,
     CandidateReviewItemResponse,
     ChangeWatchStatusRequest,
+    InvestigationBudgetResponse,
+    InvestigationDeltaResponse,
+    InvestigationIterationResponse,
+    InvestigationObservationResponse,
+    InvestigationPlanResponse,
+    InvestigationPolicyResponse,
+    InvestigationReflectionResponse,
+    InvestigationResponse,
+    InvestigationTelemetryResponse,
+    InvestigationToolResponse,
     PaginatedCandidateQueueResponse,
     PaginatedCandidatesResponse,
     PaginatedRunsResponse,
@@ -613,3 +642,286 @@ async def record_agent_analysis_feedback(
         raise _unprocessable(str(exc)) from None
     await session.commit()
     return _agent_analysis_response(analysis)
+
+
+def _iteration_response(
+    iteration: InvestigationIteration,
+) -> InvestigationIterationResponse:
+    observation = iteration.observation
+    plan = iteration.plan
+    decision = iteration.policy_decision
+    tool = iteration.tool_result
+    delta = iteration.evidence_delta
+    reflection = iteration.reflection
+    telemetry = iteration.telemetry
+    return InvestigationIterationResponse(
+        id=str(iteration.id),
+        number=iteration.number,
+        status=iteration.status,
+        startedAt=iteration.started_at,
+        completedAt=iteration.completed_at,
+        observation=(
+            None
+            if observation is None
+            else InvestigationObservationResponse(
+                researcher=observation.researcher,
+                projectReference=observation.project_reference,
+                objects=[
+                    {
+                        "id": item.object_id,
+                        "inventoryNumber": item.inventory_number,
+                        "objectName": item.object_name,
+                    }
+                    for item in observation.objects
+                ],
+                triedQueries=list(observation.tried_queries),
+                allowedActions=[item.value for item in observation.allowed_actions],
+            )
+        ),
+        plan=(
+            None
+            if plan is None
+            else InvestigationPlanResponse(
+                objective=plan.objective,
+                actionType=plan.action.type,
+                objectId=plan.action.object_id,
+                reasoningSummary=plan.reasoning_summary,
+                expectedEvidence=list(plan.expected_evidence),
+            )
+        ),
+        policy=(
+            None
+            if decision is None
+            else InvestigationPolicyResponse(
+                authorized=decision.authorized,
+                justification=decision.justification,
+                rejectionReason=decision.rejection_reason,
+            )
+        ),
+        tool=(
+            None
+            if tool is None
+            else InvestigationToolResponse(
+                executedQueries=list(tool.executed_queries),
+                sources=list(tool.sources),
+                totalResults=tool.total_results,
+                createdCandidateIds=list(tool.created_candidate_ids),
+                addedEvidenceIds=list(tool.added_evidence_ids),
+            )
+        ),
+        evidenceDelta=(
+            None
+            if delta is None
+            else InvestigationDeltaResponse(
+                added=list(delta.added),
+                preserved=list(delta.preserved),
+                removed=list(delta.removed),
+            )
+        ),
+        reflection=(
+            None
+            if reflection is None
+            else InvestigationReflectionResponse(
+                progress=reflection.progress,
+                evidenceDeltaSummary=reflection.evidence_delta_summary,
+                remainingGaps=list(reflection.remaining_gaps),
+                recommendedStop=reflection.recommended_stop,
+                reasoningSummary=reflection.reasoning_summary,
+            )
+        ),
+        telemetry=(
+            None
+            if telemetry is None
+            else InvestigationTelemetryResponse(
+                model=telemetry.model,
+                promptVersion=telemetry.prompt_version,
+                planLatencyMs=telemetry.plan_latency_ms,
+                reflectionLatencyMs=telemetry.reflection_latency_ms,
+                totalLatencyMs=telemetry.total_latency_ms,
+            )
+        ),
+        evidenceBeforeHash=iteration.evidence_before_hash,
+        evidenceAfterHash=iteration.evidence_after_hash,
+        errorMessage=iteration.error_message,
+    )
+
+
+def _investigation_response(
+    investigation: ScientificReturnInvestigation,
+) -> InvestigationResponse:
+    budget = investigation.budget
+    return InvestigationResponse(
+        id=str(investigation.id),
+        watchId=str(investigation.watch_id),
+        candidateId=(
+            str(investigation.candidate_id) if investigation.candidate_id else None
+        ),
+        objective=investigation.objective,
+        status=investigation.status,
+        mode=investigation.mode,
+        stopReason=investigation.stop_reason,
+        currentIteration=investigation.current_iteration,
+        budget=InvestigationBudgetResponse(
+            maxIterations=budget.max_iterations,
+            maxQueries=budget.max_queries,
+            maxNewCandidates=budget.max_new_candidates,
+            usedIterations=budget.used_iterations,
+            usedQueries=budget.used_queries,
+            createdCandidates=budget.created_candidates,
+        ),
+        startedAt=investigation.started_at,
+        completedAt=investigation.completed_at,
+        createdBy=str(investigation.created_by),
+        previousInvestigationId=(
+            str(investigation.previous_investigation_id)
+            if investigation.previous_investigation_id
+            else None
+        ),
+        iterations=[_iteration_response(item) for item in investigation.iterations],
+    )
+
+
+async def _run_investigation(
+    watch_id: ScientificReturnWatchId,
+    objective: InvestigationObjective,
+    candidate_id: CandidatePublicationId | None,
+    caller: Actor,
+    use_case: RunScientificReturnInvestigation,
+    idempotency_key: str | None = None,
+) -> InvestigationResponse:
+    try:
+        investigation = await use_case.execute(
+            RunInvestigationInput(
+                watch_id=watch_id,
+                objective=objective,
+                caller=caller,
+                candidate_id=candidate_id,
+                idempotency_key=idempotency_key,
+            )
+        )
+    except InvestigationDisabled as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"error": "SCIENTIFIC_RETURN_AGENT_DISABLED", "message": str(exc)},
+        ) from None
+    except InvestigationAlreadyRunning as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error": "SCIENTIFIC_RETURN_INVESTIGATION_RUNNING",
+                "message": str(exc),
+            },
+        ) from None
+    except InvestigationNotPossible as exc:
+        raise _unprocessable(str(exc)) from None
+    return _investigation_response(investigation)
+
+
+@scientific_return_router.post(
+    "/watches/{watch_id}/investigations",
+    status_code=status.HTTP_201_CREATED,
+    response_model=InvestigationResponse,
+)
+async def start_watch_investigation(
+    watch_id: str,
+    caller: CallerPermission,
+    use_case: InvestigationRunner,
+    session: DBSession,
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+) -> InvestigationResponse:
+    """Run a discovery investigation for a watch, synchronously.
+
+    The cycle is one iteration and one action, so the response carries the whole
+    trajectory already terminal. E3 turns this into 202 plus polling.
+    """
+    response = await _run_investigation(
+        ScientificReturnWatchId(watch_id),
+        InvestigationObjective.DISCOVER_CANDIDATE,
+        None,
+        caller,
+        use_case,
+        idempotency_key,
+    )
+    await session.commit()
+    return response
+
+
+@scientific_return_router.post(
+    "/candidates/{candidate_id}/investigations",
+    status_code=status.HTTP_201_CREATED,
+    response_model=InvestigationResponse,
+)
+async def start_candidate_investigation(
+    candidate_id: str,
+    caller: CallerPermission,
+    repository: Repository,
+    use_case: InvestigationRunner,
+    session: DBSession,
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+) -> InvestigationResponse:
+    candidate = await repository.get_candidate(CandidatePublicationId(candidate_id))
+    if candidate is None:
+        raise _not_found(
+            "SCIENTIFIC_RETURN_CANDIDATE_NOT_FOUND",
+            f"Candidate {candidate_id} not found",
+        )
+    response = await _run_investigation(
+        candidate.watch_id,
+        InvestigationObjective.ENRICH_CANDIDATE,
+        candidate.id,
+        caller,
+        use_case,
+        idempotency_key,
+    )
+    await session.commit()
+    return response
+
+
+@scientific_return_router.get(
+    "/watches/{watch_id}/investigations",
+    response_model=list[InvestigationResponse],
+)
+async def list_watch_investigations(
+    watch_id: str,
+    caller: CallerPermission,
+    investigations: InvestigationRepository,
+) -> list[InvestigationResponse]:
+    require_staff(caller)
+    found = await investigations.list_for_watch(ScientificReturnWatchId(watch_id))
+    return [_investigation_response(item) for item in found]
+
+
+@scientific_return_router.get(
+    "/candidates/{candidate_id}/investigations",
+    response_model=list[InvestigationResponse],
+)
+async def list_candidate_investigations(
+    candidate_id: str,
+    caller: CallerPermission,
+    investigations: InvestigationRepository,
+) -> list[InvestigationResponse]:
+    require_staff(caller)
+    found = await investigations.list_for_candidate(
+        CandidatePublicationId(candidate_id)
+    )
+    return [_investigation_response(item) for item in found]
+
+
+@scientific_return_router.get(
+    "/investigations/{investigation_id}",
+    response_model=InvestigationResponse,
+)
+async def get_investigation(
+    investigation_id: str,
+    caller: CallerPermission,
+    investigations: InvestigationRepository,
+) -> InvestigationResponse:
+    """Read one investigation. Never continues or re-runs the cycle."""
+    require_staff(caller)
+    found = await investigations.get(InvestigationId(investigation_id))
+    if found is None:
+        raise _not_found(
+            "SCIENTIFIC_RETURN_INVESTIGATION_NOT_FOUND",
+            f"Investigation {investigation_id} not found",
+        )
+    return _investigation_response(found)

@@ -5,11 +5,30 @@ from datetime import datetime
 from typing import Protocol
 
 from app.identity.public import Actor
-from app.scientific_return.domain.enums import CandidateStatus, EvidenceStrength
+from app.scientific_return.domain.agent_policies import AuthorizedExecution
+from app.scientific_return.domain.enums import (
+    AgentRecommendedAction,
+    CandidateStatus,
+    EvidenceStrength,
+    InvestigationMode,
+    InvestigationObjective,
+)
+from app.scientific_return.domain.investigation_contracts import (
+    AgentObservation,
+    AgentPlan,
+    AgentReflection,
+    ReflectionContext,
+)
+from app.scientific_return.domain.investigation_models import (
+    InvestigationId,
+    ScientificReturnInvestigation,
+    ToolExecutionId,
+)
 from app.scientific_return.domain.models import (
     CandidateAgentAnalysis,
     CandidateAgentAnalysisId,
     CandidateDecision,
+    CandidateEvidence,
     CandidatePublication,
     CandidatePublicationId,
     ProjectSnapshotPayload,
@@ -51,7 +70,164 @@ class ScientificReturnReasoner(Protocol):
 
 
 class AgentPromptProvider(Protocol):
-    async def get_published(self) -> PublishedAgentPrompt: ...
+    async def get_published(self, key: str) -> PublishedAgentPrompt: ...
+
+
+SHADOW_ANALYSIS_PROMPT_KEY = "candidate_shadow_analysis"
+AGENT_PLAN_PROMPT_KEY = "scientific_return_agent_plan"
+AGENT_REFLECTION_PROMPT_KEY = "scientific_return_agent_reflection"
+
+
+@dataclass(frozen=True, slots=True)
+class ReasonerCall:
+    """Telemetry of one model call, kept beside whatever it produced.
+
+    Recorded per iteration so a reviewer can see which model and which published
+    prompt produced a plan, and so cost and latency are attributable.
+    """
+
+    model: str
+    prompt_version_id: str
+    prompt_version: str
+    latency_ms: int
+    response_hash: str
+
+
+@dataclass(frozen=True, slots=True)
+class PlanResult:
+    plan: AgentPlan
+    call: ReasonerCall
+
+
+@dataclass(frozen=True, slots=True)
+class ReflectionResult:
+    reflection: AgentReflection
+    call: ReasonerCall
+
+
+@dataclass(frozen=True, slots=True)
+class ToolExecutionContext:
+    """Everything a tool needs beyond the execution the policy authorised.
+
+    The snapshot is passed rather than fetched so the tool stays pure with
+    respect to storage and can be tested against fake sources alone.
+    """
+
+    objective: InvestigationObjective
+    snapshot: ProjectSnapshotPayload
+    now: datetime
+    candidate: CandidatePublication | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ToolQueryOutcome:
+    """One query sent to one source, recorded whether it worked or not."""
+
+    query: str
+    variant_kind: str
+    source: str
+    result_count: int
+    error: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class DiscoveredRecord:
+    """A normalised bibliographic record with its evidence already computed.
+
+    The evidence comes from the same deterministic rules the scheduled pipeline
+    uses. The tool does not persist anything; it reports what the rules found so
+    the caller can decide what to write.
+    """
+
+    candidate_id: CandidatePublicationId
+    record: BibliographicRecord
+    deduplication_key: str
+    evidences: tuple[CandidateEvidence, ...]
+    is_actionable: bool
+    matches_candidate: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class AgentToolOutcome:
+    action: AgentRecommendedAction
+    queries: tuple[ToolQueryOutcome, ...]
+    records: tuple[DiscoveredRecord, ...]
+    total_results: int
+    result_hash: str
+    unavailable: bool = False
+    error: str | None = None
+
+    @property
+    def actionable_records(self) -> tuple[DiscoveredRecord, ...]:
+        return tuple(item for item in self.records if item.is_actionable)
+
+
+class AgentTool(Protocol):
+    """A capability the cycle may execute, resolved from a typed action."""
+
+    @property
+    def action(self) -> AgentRecommendedAction: ...
+
+    async def execute(
+        self, execution: AuthorizedExecution, context: ToolExecutionContext
+    ) -> AgentToolOutcome: ...
+
+
+class UnknownAgentTool(LookupError):
+    """No tool is registered for the requested action."""
+
+
+class InvestigationUnitOfWork(Protocol):
+    """Commits one step of the cycle.
+
+    The cycle persists between external calls rather than wrapping them, so no
+    transaction is ever open while a model is thinking or a source is answering.
+    The port exists because that commit belongs to the use case, and the use case
+    may not reach for a session.
+    """
+
+    async def commit(self) -> None: ...
+
+    async def rollback(self) -> None: ...
+
+
+class InvestigationLock(Protocol):
+    """Held for the whole cycle, not for one transaction.
+
+    The cycle commits between steps, so a transaction-scoped lock would be
+    released before the first external call and guard nothing.
+    """
+
+    async def acquire(self, key: str) -> None: ...
+
+    async def release(self) -> None: ...
+
+
+class Clock(Protocol):
+    def now(self) -> datetime: ...
+
+
+class AgentToolRegistry(Protocol):
+    def resolve(self, action: AgentRecommendedAction) -> AgentTool: ...
+
+
+class InvestigationReasoner(Protocol):
+    """The reasoning core of the cycle, in the cycle's own vocabulary.
+
+    Separate operations rather than one generic ``generate`` call: planning and
+    reflecting use different prompts, different schemas and different failure
+    handling. An invalid plan stops the investigation; an invalid reflection
+    falls back to the deterministic one.
+    """
+
+    @property
+    def model_name(self) -> str: ...
+
+    async def plan(
+        self, observation: AgentObservation, mode: InvestigationMode
+    ) -> PlanResult: ...
+
+    async def reflect(self, context: ReflectionContext) -> ReflectionResult: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -190,3 +366,101 @@ class ScientificReturnRepository(Protocol):
     async def list_agent_analyses(
         self, candidate_id: CandidatePublicationId
     ) -> list[CandidateAgentAnalysis]: ...
+
+    async def list_queries_for_watch(
+        self, watch_id: ScientificReturnWatchId
+    ) -> list[ScientificReturnQuery]:
+        """Every query ever issued for a watch, across all runs.
+
+        The agentic cycle refuses to repeat a query, and repetition is a
+        property of the watch rather than of one run, so per-run listing is not
+        enough.
+        """
+        ...
+
+    async def append_candidate_evidences(
+        self,
+        candidate_id: CandidatePublicationId,
+        evidences: tuple[CandidateEvidence, ...],
+    ) -> tuple[CandidateEvidence, ...]:
+        """Add verified evidence to an existing candidate, idempotently.
+
+        Returns only what was actually written. Evidence already present is left
+        alone rather than rewritten, so the provenance of the original finding
+        survives and a replayed execution cannot inflate the delta.
+        """
+        ...
+
+
+class ScientificReturnInvestigationRepository(Protocol):
+    """Persists the investigation aggregate and its tool executions."""
+
+    async def add(self, investigation: ScientificReturnInvestigation) -> None: ...
+
+    async def save(self, investigation: ScientificReturnInvestigation) -> None: ...
+
+    async def get(
+        self, investigation_id: InvestigationId
+    ) -> ScientificReturnInvestigation | None: ...
+
+    async def list_for_watch(
+        self, watch_id: ScientificReturnWatchId
+    ) -> list[ScientificReturnInvestigation]: ...
+
+    async def list_for_candidate(
+        self, candidate_id: CandidatePublicationId
+    ) -> list[ScientificReturnInvestigation]: ...
+
+    async def find_live(
+        self,
+        watch_id: ScientificReturnWatchId,
+        objective: InvestigationObjective,
+        candidate_id: CandidatePublicationId | None,
+    ) -> ScientificReturnInvestigation | None:
+        """The non-terminal investigation for this target, if one exists.
+
+        Used to refuse starting a second investigation over the same target
+        rather than relying on the database constraint to raise.
+        """
+        ...
+
+    async def find_by_idempotency_key(
+        self, key: str
+    ) -> ScientificReturnInvestigation | None:
+        """The investigation a previous call with this client key produced."""
+        ...
+
+    async def find_tool_execution(
+        self, idempotency_key: str
+    ) -> ToolExecutionRecord | None: ...
+
+    async def add_tool_execution(self, execution: ToolExecutionRecord) -> None: ...
+
+    async def save_tool_execution(self, execution: ToolExecutionRecord) -> None: ...
+
+
+@dataclass(slots=True)
+class ToolExecutionRecord:
+    """One external execution, claimed by its idempotency key before it runs.
+
+    Written before the call and updated after, so a crash in between leaves a
+    row saying an attempt was made. A replay finds that row instead of calling
+    the source again.
+    """
+
+    id: ToolExecutionId
+    investigation_id: InvestigationId
+    iteration_id: str
+    idempotency_key: str
+    action: AgentRecommendedAction
+    started_at: datetime
+    queries: tuple[str, ...] = ()
+    sources: tuple[str, ...] = ()
+    total_results: int = 0
+    created_candidate_ids: tuple[str, ...] = ()
+    added_evidence_ids: tuple[str, ...] = ()
+    result_hash: str | None = None
+    succeeded: bool = False
+    error_message: str | None = None
+    attempts: int = 1
+    completed_at: datetime | None = None

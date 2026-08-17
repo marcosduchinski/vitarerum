@@ -65,7 +65,22 @@ class Settings(BaseSettings):
     # tools or make candidate decisions while operating in shadow mode.
     scientific_return_llm_enabled: bool = False
     scientific_return_llm_model: str = "llama3.1:8b"
-    scientific_return_llm_timeout_seconds: float = 60.0
+    # Measured against llama3.1:8b on developer hardware: planning took ~40s and
+    # reflecting 100-140s, so 60s would have made the deterministic fallback the
+    # normal path rather than the exception.
+    scientific_return_llm_timeout_seconds: float = 180.0
+    # Agentic investigation (E1). SUPERVISED runs a tool only when staff start
+    # the cycle explicitly; the server limits always win over any client value.
+    scientific_return_agent_mode: str = "DISABLED"
+    scientific_return_agent_max_iterations: int = 1
+    scientific_return_agent_max_actions: int = 1
+    scientific_return_agent_max_queries: int = 4
+    scientific_return_agent_max_results: int = 10
+    scientific_return_agent_max_new_candidates: int = 5
+    scientific_return_agent_allowed_actions: str = "SEARCH_INVENTORY_VARIANTS"
+    # Only sources that answer an exact phrase are useful for an inventory
+    # lookup; see EXACT_MATCH_SOURCES in the action policy.
+    scientific_return_agent_allowed_sources: str = "EUROPE_PMC"
     # Public proposal submission (unauthenticated citizen intake, double opt-in).
     # Default is Cloudflare's always-passing test secret key; override in prod.
     turnstile_secret_key: str = "1x0000000000000000000000000000000AA"

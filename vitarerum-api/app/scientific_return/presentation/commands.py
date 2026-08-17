@@ -22,8 +22,12 @@ from app.scientific_return.application.evaluation import (
     evaluate_cases,
     finalize_human_review_report,
 )
-from app.scientific_return.application.ports import BibliographicSource
+from app.scientific_return.application.ports import (
+    BibliographicSource,
+    InvestigationReasoner,
+)
 from app.scientific_return.application.use_cases import RunScientificReturnSearch
+from app.scientific_return.domain.enums import InvestigationMode
 from app.scientific_return.presentation.dependencies import (
     get_bibliographic_sources,
     get_crossref_source,
@@ -68,6 +72,24 @@ def phase_zero_sources(selection: str) -> tuple[BibliographicSource, ...]:
                 "Skipping OpenAlex because OPENALEX_API_KEY is not configured."
             )
     return tuple(sources)
+
+
+def _evaluation_reasoner() -> InvestigationReasoner:
+    """A reasoner backed by the published prompts, read through a live session.
+
+    The evaluator needs no repository, but it does need the prompts, which live
+    in the database like every other published prompt.
+    """
+    from app.scientific_return.application.investigation_reasoner import (
+        PromptedInvestigationReasoner,
+    )
+    from app.scientific_return.infrastructure.prompt_acl import AiPromptRegistryAdapter
+    from app.scientific_return.presentation.dependencies import get_agent_reasoner
+
+    session = async_session_factory()
+    return PromptedInvestigationReasoner(
+        get_agent_reasoner(), AiPromptRegistryAdapter(session)
+    )
 
 
 async def run_due(*, limit: int) -> tuple[int, int]:
@@ -160,6 +182,17 @@ def _parser() -> argparse.ArgumentParser:
         type=Path,
         help="Write the JSON report to this path instead of stdout.",
     )
+    agentic = subcommands.add_parser(
+        "evaluate-agentic",
+        help="Measure the agentic cycle over the fixture, without persisting.",
+    )
+    agentic.add_argument(
+        "--mode",
+        default="SUPERVISED",
+        help="SHADOW, POLICY_ONLY or SUPERVISED (default: SUPERVISED).",
+    )
+    agentic.add_argument("--sources", default="europe_pmc")
+    agentic.add_argument("--output", type=Path)
     evaluation.add_argument(
         "--reviews",
         type=Path,
@@ -177,6 +210,29 @@ async def _amain() -> int:
     if args.command == "run-due":
         _, failed = await run_due(limit=max(1, args.limit))
         return 1 if failed else 0
+    if args.command == "evaluate-agentic":
+        from app.scientific_return.application.agentic_evaluation import (
+            evaluate_agentic_cases,
+        )
+        from app.scientific_return.presentation.dependencies import (
+            get_agent_configuration,
+        )
+
+        configuration = get_agent_configuration()
+        mode = InvestigationMode(args.mode.upper())
+        report = await evaluate_agentic_cases(
+            phase_zero_sources(args.sources),
+            _evaluation_reasoner(),
+            mode=mode,
+            budget=configuration.budget,
+            allowed_sources=configuration.allowed_sources,
+        )
+        payload = json.dumps(report, ensure_ascii=True, indent=2) + "\n"
+        if args.output:
+            args.output.write_text(payload, encoding="utf-8")
+        else:
+            print(payload, end="")
+        return 0
     if args.command == "evaluate-phase0":
         if args.reviews:
             report = finalize_human_review_report(

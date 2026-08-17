@@ -17,6 +17,8 @@ import { ErrorMessageComponent } from '@shared/components/error-message/error-me
 import { FeedbackMessageComponent } from '@shared/components/feedback-message/feedback-message.component';
 import { LoadingStateComponent } from '@shared/components/loading-state/loading-state.component';
 
+import { InvestigationTimelineComponent } from '../investigation-timeline/investigation-timeline.component';
+
 import {
   CandidateAgentAnalysis,
   CandidateDecisionRecord,
@@ -25,6 +27,7 @@ import {
   ScientificReturnCandidateStatus,
   ScientificReturnDecision,
   ScientificReturnAgentFeedback,
+  ScientificReturnInvestigation,
 } from '../../models/scientific-return.model';
 import { ScientificReturnApiService } from '../../services/scientific-return-api.service';
 
@@ -38,7 +41,13 @@ function isNotFound(error: unknown): boolean {
 @Component({
   selector: 'app-scientific-return-panel',
   standalone: true,
-  imports: [DatePipe, ErrorMessageComponent, FeedbackMessageComponent, LoadingStateComponent],
+  imports: [
+    DatePipe,
+    ErrorMessageComponent,
+    FeedbackMessageComponent,
+    InvestigationTimelineComponent,
+    LoadingStateComponent,
+  ],
   templateUrl: './scientific-return-panel.component.html',
   styleUrl: './scientific-return-panel.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -127,6 +136,12 @@ export class ScientificReturnPanelComponent {
     Readonly<Record<string, readonly CandidateDecisionRecord[]>>
   >({});
   protected readonly loadingHistoryId = signal<string | null>(null);
+  protected readonly investigationsByCandidate = signal<
+    Record<string, readonly ScientificReturnInvestigation[]>
+  >({});
+  protected readonly runningInvestigationId = signal<string | null>(null);
+  protected readonly watchInvestigations = signal<readonly ScientificReturnInvestigation[]>([]);
+
   protected readonly analysesByCandidate = signal<
     Readonly<Record<string, readonly CandidateAgentAnalysis[]>>
   >({});
@@ -332,6 +347,75 @@ export class ScientificReturnPanelComponent {
       this.actionError.set(toApiError(error));
     } finally {
       this.loadingAgentAnalysisId.set(null);
+    }
+  }
+
+  protected async investigateWatch(watchId: string): Promise<void> {
+    if (!this.canReview() || this.runningInvestigationId()) return;
+    this.runningInvestigationId.set(watchId);
+    this.clearMessages();
+    try {
+      const investigation = await firstValueFrom(this.api.startWatchInvestigation(watchId));
+      this.watchInvestigations.update((current) => [investigation, ...current]);
+      // Discovery may legitimately end without a candidate; that is a result,
+      // not a failure, so the message says which happened.
+      this.feedback.set(
+        investigation.status === 'AWAITING_HUMAN_REVIEW'
+          ? 'The investigation found a candidate. It still needs your decision.'
+          : `The investigation ended without a candidate: ${investigation.stopReason ?? 'no reason recorded'}.`,
+      );
+      this.candidatesResource.reload();
+    } catch (error) {
+      this.actionError.set(toApiError(error));
+    } finally {
+      this.runningInvestigationId.set(null);
+    }
+  }
+
+  protected async investigateCandidate(candidateId: string): Promise<void> {
+    if (!this.canReview() || this.runningInvestigationId()) return;
+    this.runningInvestigationId.set(candidateId);
+    this.clearMessages();
+    try {
+      const investigation = await firstValueFrom(this.api.startCandidateInvestigation(candidateId));
+      this.investigationsByCandidate.update((current) => ({
+        ...current,
+        [candidateId]: [investigation, ...(current[candidateId] ?? [])],
+      }));
+      // The candidate stays pending whatever the cycle found: only a human
+      // decision records scientific return.
+      this.feedback.set(
+        investigation.status === 'AWAITING_HUMAN_REVIEW'
+          ? 'The investigation found something reviewable. The candidate still needs your decision.'
+          : `The investigation ended: ${investigation.stopReason ?? 'no reason recorded'}.`,
+      );
+      this.candidatesResource.reload();
+    } catch (error) {
+      this.actionError.set(toApiError(error));
+    } finally {
+      this.runningInvestigationId.set(null);
+    }
+  }
+
+  protected async toggleInvestigations(candidateId: string): Promise<void> {
+    if (this.investigationsByCandidate()[candidateId]) {
+      this.investigationsByCandidate.update((current) => {
+        const next = { ...current };
+        delete next[candidateId];
+        return next;
+      });
+      return;
+    }
+    try {
+      const investigations = await firstValueFrom(
+        this.api.listCandidateInvestigations(candidateId),
+      );
+      this.investigationsByCandidate.update((current) => ({
+        ...current,
+        [candidateId]: investigations,
+      }));
+    } catch (error) {
+      this.actionError.set(toApiError(error));
     }
   }
 

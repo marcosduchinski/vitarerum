@@ -12,27 +12,51 @@ from app.notifications.public import (
     NotificationDispatcher,
     get_notification_dispatcher,
 )
+from app.scientific_return.application.agent_tools import build_default_registry
+from app.scientific_return.application.investigation_reasoner import (
+    PromptedInvestigationReasoner,
+)
 from app.scientific_return.application.ports import (
     AgentPromptProvider,
+    AgentToolRegistry,
     BibliographicSource,
     ConfirmedPublicationWriter,
+    InvestigationReasoner,
     ProjectSnapshotProvider,
+    ScientificReturnInvestigationRepository,
     ScientificReturnReasoner,
     ScientificReturnRepository,
 )
+from app.scientific_return.application.run_investigation import (
+    AgentConfiguration,
+    RunScientificReturnInvestigation,
+)
+from app.scientific_return.domain.enums import (
+    AgentRecommendedAction,
+    InvestigationMode,
+)
+from app.scientific_return.domain.investigation_contracts import ExecutionBudget
 from app.scientific_return.infrastructure.acls import (
     UseOfCollectionsProjectSnapshotProvider,
     UseOfCollectionsPublicationWriter,
 )
 from app.scientific_return.infrastructure.crossref import CrossrefBibliographicSource
 from app.scientific_return.infrastructure.europe_pmc import EuropePmcBibliographicSource
+from app.scientific_return.infrastructure.investigation_lock import (
+    PostgresInvestigationLock,
+)
 from app.scientific_return.infrastructure.openalex import OpenAlexBibliographicSource
 from app.scientific_return.infrastructure.prompt_acl import AiPromptRegistryAdapter
 from app.scientific_return.infrastructure.reasoner_ollama import (
     OllamaScientificReturnReasoner,
 )
 from app.scientific_return.infrastructure.repositories import (
+    SqlAlchemyInvestigationRepository,
     SqlAlchemyScientificReturnRepository,
+)
+from app.scientific_return.infrastructure.unit_of_work import (
+    SqlAlchemyInvestigationUnitOfWork,
+    SystemClock,
 )
 from app.shared.field_encryption import FieldEncryptor
 from app.use_of_collections.public import (
@@ -134,6 +158,22 @@ def get_agent_enabled() -> bool:
     return settings.scientific_return_llm_enabled
 
 
+def get_investigation_repository(
+    session: DBSession,
+) -> ScientificReturnInvestigationRepository:
+    return SqlAlchemyInvestigationRepository(session, _field_encryptor())
+
+
+def get_agent_tool_registry() -> AgentToolRegistry:
+    return build_default_registry(get_bibliographic_sources())
+
+
+def get_investigation_reasoner(session: DBSession) -> InvestigationReasoner:
+    return PromptedInvestigationReasoner(
+        get_agent_reasoner(), get_agent_prompt_provider(session)
+    )
+
+
 Repository = Annotated[ScientificReturnRepository, Depends(get_repository)]
 ProjectProvider = Annotated[ProjectSnapshotProvider, Depends(get_project_provider)]
 PublicationWriter = Annotated[
@@ -148,3 +188,54 @@ Notifications = Annotated[NotificationDispatcher, Depends(get_notifications)]
 AgentPrompt = Annotated[AgentPromptProvider, Depends(get_agent_prompt_provider)]
 AgentReasoner = Annotated[ScientificReturnReasoner, Depends(get_agent_reasoner)]
 AgentEnabled = Annotated[bool, Depends(get_agent_enabled)]
+InvestigationReasonerDep = Annotated[
+    InvestigationReasoner, Depends(get_investigation_reasoner)
+]
+AgentTools = Annotated[AgentToolRegistry, Depends(get_agent_tool_registry)]
+InvestigationRepository = Annotated[
+    ScientificReturnInvestigationRepository, Depends(get_investigation_repository)
+]
+
+
+def get_agent_configuration() -> AgentConfiguration:
+    """Read the server-side limits. No client or model value ever widens these."""
+    actions = frozenset(
+        AgentRecommendedAction(item.strip().upper())
+        for item in settings.scientific_return_agent_allowed_actions.split(",")
+        if item.strip()
+    )
+    sources = tuple(
+        item.strip().upper()
+        for item in settings.scientific_return_agent_allowed_sources.split(",")
+        if item.strip()
+    )
+    return AgentConfiguration(
+        mode=InvestigationMode(settings.scientific_return_agent_mode.upper()),
+        allowed_actions=actions,
+        allowed_sources=sources,
+        budget=ExecutionBudget(
+            max_iterations=settings.scientific_return_agent_max_iterations,
+            max_actions=settings.scientific_return_agent_max_actions,
+            max_queries=settings.scientific_return_agent_max_queries,
+            max_results_per_query=settings.scientific_return_agent_max_results,
+            max_new_candidates=settings.scientific_return_agent_max_new_candidates,
+        ),
+    )
+
+
+def get_investigation_runner(session: DBSession) -> RunScientificReturnInvestigation:
+    return RunScientificReturnInvestigation(
+        get_repository(session),
+        get_investigation_repository(session),
+        get_investigation_reasoner(session),
+        get_agent_tool_registry(),
+        SqlAlchemyInvestigationUnitOfWork(session),
+        SystemClock(),
+        get_agent_configuration(),
+        PostgresInvestigationLock(session),
+    )
+
+
+InvestigationRunner = Annotated[
+    RunScientificReturnInvestigation, Depends(get_investigation_runner)
+]

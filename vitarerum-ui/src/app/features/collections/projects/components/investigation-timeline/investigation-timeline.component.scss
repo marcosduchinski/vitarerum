@@ -1,0 +1,180 @@
+:host {
+  display: block;
+}
+
+.investigation {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem 1.15rem 1.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.75rem;
+  background: var(--color-surface);
+}
+
+.investigation__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.investigation__eyebrow {
+  margin: 0;
+  color: var(--color-accent);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.investigation__title {
+  margin: 0.15rem 0 0;
+  color: var(--color-text);
+  font-size: 1rem;
+}
+
+.investigation__status {
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.investigation__status[data-status='AWAITING_HUMAN_REVIEW'] {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.investigation__status[data-status='FAILED'] {
+  border-color: var(--color-danger, #b3261e);
+  color: var(--color-danger, #b3261e);
+}
+
+.investigation__meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.75rem 1.25rem;
+  margin: 0;
+}
+
+.investigation__meta dt {
+  color: var(--color-text-muted, #6b6b6b);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.investigation__meta dd {
+  margin: 0.2rem 0 0;
+  color: var(--color-text);
+  font-size: 0.85rem;
+}
+
+.investigation__notice {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border-left: 3px solid var(--color-accent);
+  border-radius: 0.35rem;
+  background: var(--color-surface-muted, rgb(0 0 0 / 4%));
+  font-size: 0.85rem;
+}
+
+.investigation__notice--warning {
+  border-left-color: var(--color-danger, #b3261e);
+}
+
+.trajectory {
+  display: grid;
+  gap: 0.85rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.trajectory__step {
+  display: grid;
+  grid-template-columns: 0.75rem 1fr;
+  gap: 0.75rem;
+  align-items: start;
+}
+
+/*
+ * The four origins are colour- and label-differentiated. Colour alone would
+ * fail anyone who cannot distinguish it, so every step also carries its origin
+ * as text.
+ */
+.trajectory__marker {
+  width: 0.6rem;
+  height: 0.6rem;
+  margin-top: 0.35rem;
+  border: 2px solid var(--color-border);
+  border-radius: 50%;
+  background: var(--color-surface);
+}
+
+.trajectory__step[data-origin='verified'] .trajectory__marker {
+  border-color: var(--color-success, #1e7d32);
+  background: var(--color-success, #1e7d32);
+}
+
+.trajectory__step[data-origin='proposal'] .trajectory__marker {
+  border-color: var(--color-accent);
+  background: var(--color-surface);
+  border-style: dashed;
+}
+
+.trajectory__step[data-origin='policy'] .trajectory__marker {
+  border-color: var(--color-text);
+  background: var(--color-text);
+}
+
+.trajectory__step[data-origin='human'] .trajectory__marker {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+}
+
+.trajectory__label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  color: var(--color-text);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.trajectory__origin {
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-text-muted, #6b6b6b);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.trajectory__summary {
+  margin: 0.2rem 0 0;
+  color: var(--color-text);
+  font-size: 0.85rem;
+}
+
+.trajectory__details {
+  margin: 0.35rem 0 0;
+  padding-left: 1.1rem;
+  color: var(--color-text-muted, #6b6b6b);
+  font-size: 0.78rem;
+}
+
+.trajectory__details li {
+  overflow-wrap: anywhere;
+}
+
+.trajectory__step--empty .trajectory__body {
+  grid-column: 1 / -1;
+}

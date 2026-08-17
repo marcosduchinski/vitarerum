@@ -175,6 +175,156 @@ Decision history is available from:
 
 The history includes the evidence snapshot seen at decision time.
 
+## Assisted investigation
+
+An investigation is a bounded agentic cycle over one watch and, optionally, one
+candidate. It runs synchronously: the response carries the whole trajectory,
+already terminal.
+
+The model never executes anything. It proposes one typed action and, at most,
+which consulted object it concerns; a deterministic policy authorises the action
+and derives the queries, the sources and the result limit. Evidence is always
+recomputed by the same deterministic rules the scheduled pipeline uses, and the
+candidate still requires a human decision.
+
+The cycle is disabled by default. `SCIENTIFIC_RETURN_AGENT_MODE` must be
+`SUPERVISED` for a tool to run; `SHADOW` and `POLICY_ONLY` stop before execution
+and `DISABLED` refuses the request.
+
+### Start a discovery investigation
+
+```http
+POST /api/v1/scientific-return/watches/{watch_id}/investigations
+Idempotency-Key: <uuid>
+```
+
+Looks for a publication the deterministic pipeline did not turn into an
+actionable candidate. Ending without a candidate is a valid result, not a
+failure.
+
+### Start an enrichment investigation
+
+```http
+POST /api/v1/scientific-return/candidates/{candidate_id}/investigations
+Idempotency-Key: <uuid>
+```
+
+Looks for additional verified evidence for a `PENDING` candidate. It never
+changes the candidate's title, authors, DOI, URL or status: correcting those
+remains a human act.
+
+`Idempotency-Key` is optional but recommended. Repeating a request with the same
+key returns the investigation that key already produced, without contacting any
+source again. Omitting it means the caller did not ask for idempotency, and each
+request starts a new investigation.
+
+Both return `201 Created`:
+
+```json
+{
+  "id": "b7f1...",
+  "watchId": "6f2c...",
+  "candidateId": null,
+  "objective": "DISCOVER_CANDIDATE",
+  "status": "AWAITING_HUMAN_REVIEW",
+  "mode": "SUPERVISED",
+  "stopReason": "EVIDENCE_SUFFICIENT",
+  "currentIteration": 1,
+  "budget": {
+    "maxIterations": 1,
+    "maxQueries": 4,
+    "maxNewCandidates": 5,
+    "usedIterations": 1,
+    "usedQueries": 4,
+    "createdCandidates": 1
+  },
+  "startedAt": "2026-08-17T21:04:11Z",
+  "completedAt": "2026-08-17T21:05:52Z",
+  "createdBy": "perm-1",
+  "previousInvestigationId": null,
+  "iterations": [
+    {
+      "id": "b7f1...:1",
+      "number": 1,
+      "status": "COMPLETED",
+      "startedAt": "2026-08-17T21:04:12Z",
+      "completedAt": "2026-08-17T21:05:52Z",
+      "observation": {
+        "researcher": "Rita P. Eusebio",
+        "projectReference": "PRJ-0001",
+        "objects": [
+          {
+            "id": "object-1",
+            "inventoryNumber": "MUHNAC/MB11-001283",
+            "objectName": "Trichoniscoides machadoi"
+          }
+        ],
+        "triedQueries": ["\"MUHNAC/MB11-001283\""],
+        "allowedActions": ["SEARCH_INVENTORY_VARIANTS", "PRESENT_FOR_REVIEW"]
+      },
+      "plan": {
+        "objective": "Locate missing inventory evidence.",
+        "actionType": "SEARCH_INVENTORY_VARIANTS",
+        "objectId": "object-1",
+        "reasoningSummary": "The candidate has taxon support but no inventory evidence.",
+        "expectedEvidence": ["INVENTORY_NUMBER"]
+      },
+      "policy": {
+        "authorized": true,
+        "justification": "3 untried inventory variant(s) over 1 source(s).",
+        "rejectionReason": null
+      },
+      "tool": {
+        "executedQueries": ["\"MB11-001283\"", "\"MNHNC:MB11:001283\""],
+        "sources": ["EUROPE_PMC"],
+        "totalResults": 4,
+        "createdCandidateIds": ["c91a..."],
+        "addedEvidenceIds": []
+      },
+      "evidenceDelta": {
+        "added": ["INVENTORY_NUMBER"],
+        "preserved": [],
+        "removed": []
+      },
+      "reflection": {
+        "progress": "EVIDENCE_ADDED",
+        "evidenceDeltaSummary": "A primary inventory-number evidence was added.",
+        "remainingGaps": [],
+        "recommendedStop": true,
+        "reasoningSummary": "The objective of the iteration was achieved."
+      },
+      "telemetry": {
+        "model": "llama3.1:8b",
+        "promptVersion": "scientific-return-agent-plan-v1",
+        "planLatencyMs": 40413,
+        "reflectionLatencyMs": 59116,
+        "totalLatencyMs": 99529
+      },
+      "evidenceBeforeHash": "e3b0...",
+      "evidenceAfterHash": "9f86...",
+      "errorMessage": null
+    }
+  ]
+}
+```
+
+`stopReason` is always present on a terminal investigation. `EVIDENCE_SUFFICIENT`
+is the only happy-path reason; the others record why the cycle ended without
+adding anything, and none of them blocks the human review queue.
+
+`telemetry` is null for an investigation recorded before telemetry existed, and
+whenever the model was never reached.
+
+### Read investigations
+
+```http
+GET /api/v1/scientific-return/watches/{watch_id}/investigations
+GET /api/v1/scientific-return/candidates/{candidate_id}/investigations
+GET /api/v1/scientific-return/investigations/{investigation_id}
+```
+
+Read-only. These never continue, retry or re-run a cycle.
+
 ## Error codes
 
 - `SCIENTIFIC_RETURN_WATCH_NOT_FOUND`: watch does not exist.
@@ -185,3 +335,8 @@ The history includes the evidence snapshot seen at decision time.
 - `SCIENTIFIC_RETURN_LLM_UNAVAILABLE`: no published prompt or reasoner is
   available.
 - `SCIENTIFIC_RETURN_AGENT_ANALYSIS_NOT_FOUND`: analysis does not exist.
+- `SCIENTIFIC_RETURN_AGENT_DISABLED`: the operating mode does not run
+  investigations (`503`).
+- `SCIENTIFIC_RETURN_INVESTIGATION_RUNNING`: a non-terminal investigation
+  already covers this watch, objective and candidate (`409`).
+- `SCIENTIFIC_RETURN_INVESTIGATION_NOT_FOUND`: investigation does not exist.

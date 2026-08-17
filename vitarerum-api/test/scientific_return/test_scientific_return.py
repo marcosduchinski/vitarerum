@@ -49,10 +49,12 @@ from app.scientific_return.domain.enums import (
     EvidenceType,
     QueryType,
 )
+from app.scientific_return.domain.evidence_delta import evidence_identity
 from app.scientific_return.domain.models import (
     CandidateAgentAnalysis,
     CandidateAgentAnalysisId,
     CandidateDecision,
+    CandidateEvidence,
     CandidatePublication,
     CandidatePublicationId,
     ConsultedObjectSnapshot,
@@ -129,7 +131,11 @@ class _PublicationWriter:
 
 
 class _PromptProvider:
-    async def get_published(self) -> PublishedAgentPrompt:
+    def __init__(self) -> None:
+        self.requested_keys: list[str] = []
+
+    async def get_published(self, key: str) -> PublishedAgentPrompt:
+        self.requested_keys.append(key)
         return PublishedAgentPrompt(
             version_id="prompt-version-1",
             version_label="v1",
@@ -317,6 +323,30 @@ class _Repository:
             for item in self.agent_analyses.values()
             if item.candidate_id == candidate_id
         ]
+
+    async def list_queries_for_watch(
+        self, watch_id: ScientificReturnWatchId
+    ) -> list[ScientificReturnQuery]:
+        runs = {
+            str(run.id) for run in self.runs.values() if run.watch_id == watch_id
+        }
+        return [item for item in self.queries if str(item.run_id) in runs]
+
+    async def append_candidate_evidences(
+        self,
+        candidate_id: CandidatePublicationId,
+        evidences: tuple[CandidateEvidence, ...],
+    ) -> tuple[CandidateEvidence, ...]:
+        candidate = self.candidates[str(candidate_id)]
+        known = {evidence_identity(item) for item in candidate.evidences}
+        written: list[CandidateEvidence] = []
+        for evidence in evidences:
+            if evidence_identity(evidence) in known:
+                continue
+            known.add(evidence_identity(evidence))
+            candidate.evidences.append(evidence)
+            written.append(evidence)
+        return tuple(written)
 
     async def get_metrics(self) -> ScientificReturnMetrics:
         return ScientificReturnMetrics(

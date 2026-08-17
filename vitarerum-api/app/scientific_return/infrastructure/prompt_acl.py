@@ -7,14 +7,19 @@ from app.scientific_return.application.ports import (
     PublishedAgentPrompt,
 )
 
-_PROMPT_KEY = "candidate_shadow_analysis"
-
 
 class AiPromptRegistryAdapter:
+    """Reads published prompts by key under the scientific-return purpose.
+
+    The cycle uses several prompts — shadow analysis, planning, reflection — that
+    share one purpose and differ by key, so no new ``PromptPurpose`` is needed
+    and prompt administration stays as it is.
+    """
+
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def get_published(self) -> PublishedAgentPrompt:
+    async def get_published(self, key: str) -> PublishedAgentPrompt:
         from app.ai.prompts.public import (
             ActivePromptNotFound,
             PromptPurpose,
@@ -25,11 +30,11 @@ class AiPromptRegistryAdapter:
             prompt = await get_published_prompt(
                 self._session,
                 PromptPurpose.SCIENTIFIC_RETURN_ANALYSIS,
-                _PROMPT_KEY,
+                key,
             )
         except ActivePromptNotFound as exc:
             raise AgentPromptUnavailable(
-                "No published prompt is available for scientific-return analysis"
+                f"No published prompt is available for '{key}'"
             ) from exc
         return PublishedAgentPrompt(
             version_id=prompt.id,

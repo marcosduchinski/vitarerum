@@ -1,0 +1,263 @@
+{
+  "version": "scientific-return-eval-fixture-v3",
+  "notes": [
+    "baselineStatus, baselineInventoryEvidence and expectedGap are measurements,",
+    "not predictions: they were written from the baseline run recorded under",
+    "baselineRun. The evaluator recomputes all three on every run and reports any",
+    "case whose declaration no longer matches, so a stale fixture cannot pass a",
+    "promotion gate unnoticed.",
+    "RESOLVED means the expected publication becomes an actionable candidate and",
+    "so reaches a human. A publication that is retrieved but rejected by the",
+    "actionable gate is a GAP, because for scientific-return purposes it was",
+    "never found.",
+    "baselineInventoryEvidence records whether that candidate carries primary",
+    "inventory evidence. RESOLVED with false is an ENRICH_CANDIDATE target; GAP",
+    "is a DISCOVER_CANDIDATE target.",
+    "expectedGap is the cause, and UNKNOWN means the article itself has not been",
+    "inspected. citedInventoryForms are the literal strings printed in the",
+    "article and are the evidence behind the declared cause."
+  ],
+  "cases": [
+    {
+      "caseId": "rhoptropus-2025",
+      "author": "Diogo Parrinha",
+      "inventoryNumber": "MUHNAC/MB03-1707",
+      "objectName": "Rhoptropus nivimontanus",
+      "expectedTitle": "A new species of Namib day gecko from Serra da Neve",
+      "expectedDoi": "10.11646/zootaxa.5569.3.2",
+      "baselineStatus": "RESOLVED",
+      "baselineInventoryEvidence": false,
+      "expectedGap": "UNKNOWN",
+      "citedInventoryForms": [],
+      "notes": "Reaches the queue on author and taxon alone; the recorded inventory number never matches, so the candidate carries no primary inventory evidence. The article was not inspected, so the cause of the missing inventory evidence is not established."
+    },
+    {
+      "caseId": "acontias-2023",
+      "author": "Mariana P. Marques",
+      "inventoryNumber": "MUHNAC/MB03-001522",
+      "objectName": "Acontias mukwando",
+      "expectedTitle": "A new species of African legless skink, genus Acontias",
+      "expectedDoi": "10.1080/21564574.2023.2246487",
+      "baselineStatus": "RESOLVED",
+      "baselineInventoryEvidence": false,
+      "expectedGap": "UNKNOWN",
+      "citedInventoryForms": [],
+      "notes": "Reaches the queue on author and taxon alone. Enrichment target: no inventory evidence despite the MUHNAC/MUNHAC variants being present in the literature. The article was not inspected, so the cause of the missing inventory evidence is not established."
+    },
+    {
+      "caseId": "pachydactylus-2025",
+      "author": "Diogo Parrinha",
+      "inventoryNumber": "MUHNAC/MB03-001801",
+      "objectName": "Pachydactylus namibensis",
+      "expectedTitle": "Two new species of Pachydactylus from the Kaokoveld",
+      "expectedDoi": "10.1643/h2024108",
+      "baselineStatus": "RESOLVED",
+      "baselineInventoryEvidence": false,
+      "expectedGap": "UNKNOWN",
+      "citedInventoryForms": [],
+      "notes": "Reaches the queue on author and taxon, alongside ten other actionable candidates. No inventory evidence. The article was not inspected, so the cause of the missing inventory evidence is not established."
+    },
+    {
+      "caseId": "serra-da-neve-checklist-2024",
+      "author": "Mariana P. Marques",
+      "inventoryNumber": "MUNHAC/MB03-001552",
+      "objectName": "Afroedura praedicta",
+      "expectedTitle": "An island in a sea of sand",
+      "expectedDoi": "10.3897/zookeys.1201.120750",
+      "baselineStatus": "RESOLVED",
+      "baselineInventoryEvidence": true,
+      "expectedGap": "NONE",
+      "citedInventoryForms": [
+        "MUNHAC/ MB03-001552"
+      ],
+      "notes": "Tests specimen evidence in the full text of a broad checklist. The published text inserts a space after the slash."
+    },
+    {
+      "caseId": "sao-tome-barcode-2023",
+      "author": "Luis M. P. Ceríaco",
+      "inventoryNumber": "MUHNAC/MB04-000792",
+      "objectName": "Leptopelis palmatus",
+      "expectedTitle": "Illustrated keys and a DNA barcode reference library",
+      "expectedDoi": "10.3897/zookeys.1168.101334",
+      "baselineStatus": "RESOLVED",
+      "baselineInventoryEvidence": true,
+      "expectedGap": "NONE",
+      "citedInventoryForms": [],
+      "notes": "Tests specimen evidence located in an extensive full-text table."
+    },
+    {
+      "caseId": "cynoscion-regalis-2017",
+      "author": "Pedro Gomes",
+      "inventoryNumber": "MUHNAC/MB06-005747",
+      "objectName": "Cynoscion regalis",
+      "expectedTitle": "First record of Cynoscion regalis (Pisces, Sciaenidae) in Portuguese continental waters",
+      "expectedDoi": "10.1111/jfb.13318",
+      "baselineStatus": "GAP",
+      "baselineInventoryEvidence": false,
+      "expectedGap": "INVENTORY_FORMAT",
+      "citedInventoryForms": [
+        "MB06-005747",
+        "MB06-005748",
+        "MB06-005752"
+      ],
+      "notes": "Retrieved at rank 9 but rejected by the actionable gate, so it never reaches a human. The specimen table cites the bare collection code, which the exact query cannot reach."
+    },
+    {
+      "caseId": "sao-tome-fishes-2019",
+      "author": "Armando J. Almeida",
+      "inventoryNumber": "MUHNAC/MB06-004594",
+      "objectName": "Albula goreensis",
+      "expectedTitle": "Fishes of São Tomé - Results of the expeditions of Fernando Frade (1954) and Fernando Correia da Costa (1955)",
+      "expectedDoi": "10.26028/cybium/2019-433-007",
+      "baselineStatus": "GAP",
+      "baselineInventoryEvidence": false,
+      "expectedGap": "NOT_INDEXED",
+      "citedInventoryForms": [
+        "MB06-004594",
+        "MB06-005759",
+        "MB06-004270"
+      ],
+      "notes": "Not retrieved by any query. Cybium is not indexed by the configured sources under these terms; roughly forty bare collection codes are cited in the species accounts."
+    },
+    {
+      "caseId": "ophichthus-rufus-2020",
+      "author": "Pedro Gomes",
+      "inventoryNumber": "MUHNAC/MB06-005900",
+      "objectName": "Ophichthus rufus",
+      "expectedTitle": "First record of Ophichthus rufus (Actinopterygii: Anguilliformes: Ophichthidae) off the western Iberian coast: the northernmost occurrence in the eastern Atlantic",
+      "expectedDoi": "10.3750/AIEP/02782",
+      "baselineStatus": "RESOLVED",
+      "baselineInventoryEvidence": false,
+      "expectedGap": "INVENTORY_FORMAT",
+      "citedInventoryForms": [
+        "MB06-005900",
+        "MB85-017365",
+        "MB85-017366"
+      ],
+      "notes": "Reaches the queue on author and taxon. The specimen and tissue codes are cited bare, so no inventory evidence is extracted."
+    },
+    {
+      "caseId": "lipogenys-2024",
+      "author": "Pedro Gomes",
+      "inventoryNumber": "MUHNAC/MB06-005861",
+      "objectName": "Lipogenys hyalinumvelum",
+      "expectedTitle": "Hidden in the depths, discovery of a new spiny sucker eel of the genus Lipogenys Goode and Bean 1895 (Teleostei, Notacanthiformes, Notacanthidae) in the eastern North Atlantic Ocean",
+      "expectedDoi": "10.1111/jfb.15769",
+      "baselineStatus": "RESOLVED",
+      "baselineInventoryEvidence": false,
+      "expectedGap": "INVENTORY_FORMAT",
+      "citedInventoryForms": [
+        "MB06-005861",
+        "MB06-005862",
+        "MB85-019243"
+      ],
+      "notes": "Reaches the queue on author and taxon. The holotype designation spells the institution out in prose and puts the bare code in parentheses."
+    },
+    {
+      "caseId": "xenopus-petersii-2024",
+      "author": "Mariana P. Marques",
+      "inventoryNumber": "MUHNAC/MB04-001066",
+      "objectName": "Xenopus petersii",
+      "expectedTitle": "An island in a sea of sand",
+      "expectedDoi": "10.3897/zookeys.1201.120750",
+      "baselineStatus": "RESOLVED",
+      "baselineInventoryEvidence": true,
+      "expectedGap": "NONE",
+      "citedInventoryForms": [
+        "MUNHAC/MB04-001066",
+        "MUHNAC/MB04-000999"
+      ],
+      "notes": "Fully resolved: the full text carries the MUNHAC form and the comparison normaliser already bridges it to the recorded number."
+    },
+    {
+      "caseId": "nembrotha-cristata-2026",
+      "author": "Marta Pola",
+      "inventoryNumber": "MUHNAC/MB28-005003",
+      "objectName": "Nembrotha cristata",
+      "expectedTitle": "The most wanted! Gorgeous, delicate and surprising: description of three new polycerid species (Mollusca, Heterobranchia) from East Timor",
+      "expectedDoi": "10.11646/zootaxa.5793.1.9",
+      "baselineStatus": "GAP",
+      "baselineInventoryEvidence": false,
+      "expectedGap": "INVENTORY_FORMAT",
+      "citedInventoryForms": [
+        "MB28-005003",
+        "MB28-005004",
+        "MNHNC:Mb28:009193"
+      ],
+      "notes": "Retrieved but rejected by the actionable gate. The voucher table mixes the bare hyphenated code with a colon-composed MNHNC form, and neither matches the recorded number as a query."
+    },
+    {
+      "caseId": "trichoniscoides-machadoi-2025",
+      "author": "Rita P. Eusébio",
+      "inventoryNumber": "MUHNAC/MB11-001283",
+      "objectName": "Trichoniscoides machadoi",
+      "expectedTitle": "Terrestrial isopods (Crustacea, Isopoda, Oniscidea) from Mesovoid Shallow Substratum habitats of Portugal",
+      "expectedDoi": "10.3897/subtbiol.53.163632",
+      "baselineStatus": "GAP",
+      "baselineInventoryEvidence": false,
+      "expectedGap": "INSTITUTIONAL_ACRONYM",
+      "citedInventoryForms": [
+        "MNHNC:MB11:001283",
+        "MNHNC:MB11:001285"
+      ],
+      "notes": "Not retrieved. Every material-examined entry uses the colon-composed MNHNC form, which no deterministic query asks for."
+    }
+  ],
+  "unmappedPapers": [
+    {
+      "reference": "2026_Baptista_etal_BiodiversityDataJournal",
+      "expectedDoi": "10.3897/BDJ.14.e188597",
+      "citedInventoryForms": [
+        "MNHNCENT0062867",
+        "MNHNCENT0062868",
+        "MNHNCENT0000872"
+      ],
+      "reason": "The entomology collection numbers specimens as MNHNC + ENT + digits, with no separators and no MB collection code. The recorded museum-side form is unknown and the E1 variant generator does not parse this series."
+    },
+    {
+      "reference": "2025_Saleiro&Tschopp_PapersPalaeontology",
+      "expectedDoi": "10.1002/spp2.70001",
+      "citedInventoryForms": [
+        "MNHNUL.P.AND304"
+      ],
+      "reason": "Palaeontology series cited under the MNHNUL acronym with a dotted compound code. The recorded museum-side form is unknown."
+    },
+    {
+      "reference": "2026_Ceriaco et al_Rinelepis",
+      "expectedDoi": "10.1643/i2025093",
+      "citedInventoryForms": [],
+      "reason": "Historical study of a holotype held elsewhere; it cites archival manuscript references, not MUHNAC inventory numbers."
+    },
+    {
+      "reference": "2025_Malafaia_etal_PalaeontologiaElectronicaa",
+      "expectedDoi": "10.26879/1504",
+      "citedInventoryForms": [],
+      "reason": "MUHNAC appears only as an author affiliation; no MUHNAC inventory number is cited in the text."
+    },
+    {
+      "reference": "2026_Herraiz_etal_BiologyLetters",
+      "expectedDoi": "10.1098/rsbl.2025.0640",
+      "citedInventoryForms": [],
+      "reason": "No MUHNAC inventory number is cited in the text."
+    },
+    {
+      "reference": "2020_Gomes_etal_ActaIchthyologicaPiscatoria (MB85 series)",
+      "expectedDoi": "10.3750/AIEP/02782",
+      "citedInventoryForms": [
+        "MB85-017365",
+        "MB85-017366",
+        "MB85-017367"
+      ],
+      "reason": "Tissue-sample series held as a separate collection. Covered as a case through the MB06 specimen code instead."
+    }
+  ],
+  "baselineRun": {
+    "measuredAt": "2026-08-17",
+    "sources": [
+      "CROSSREF",
+      "EUROPE_PMC"
+    ],
+    "resultLimit": 20,
+    "note": "OpenAlex was not exercised: no API key is configured."
+  }
+}

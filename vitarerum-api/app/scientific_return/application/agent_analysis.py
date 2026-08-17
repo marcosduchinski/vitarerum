@@ -1,14 +1,27 @@
 from __future__ import annotations
 
-import hashlib
-import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
 from uuid import uuid4
 
 from app.identity.public import Actor, GroupName
+from app.scientific_return.application.llm_json import (
+    canonical_json as _canonical_json,
+)
+from app.scientific_return.application.llm_json import (
+    parse_json_object,
+)
+from app.scientific_return.application.llm_json import (
+    required_string as _required_string,
+)
+from app.scientific_return.application.llm_json import (
+    sha256_text as _sha256,
+)
+from app.scientific_return.application.llm_json import (
+    string_list as _string_list,
+)
 from app.scientific_return.application.ports import (
+    SHADOW_ANALYSIS_PROMPT_KEY,
     AgentPromptProvider,
     ScientificReturnReasoner,
     ScientificReturnRepository,
@@ -60,63 +73,8 @@ def _now() -> datetime:
     return datetime.now(tz=UTC)
 
 
-def _sha256(value: str) -> str:
-    return hashlib.sha256(value.encode("utf-8")).hexdigest()
-
-
-def _canonical_json(value: object) -> str:
-    return json.dumps(
-        value,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    )
-
-
-def _strip_json_fence(value: str) -> str:
-    text = value.strip()
-    if text.startswith("```"):
-        lines = text.splitlines()
-        if lines and lines[0].strip().casefold() in {"```", "```json"}:
-            lines = lines[1:]
-        if lines and lines[-1].strip() == "```":
-            lines = lines[:-1]
-        text = "\n".join(lines).strip()
-    return text
-
-
-def _required_string(payload: dict[str, Any], key: str) -> str:
-    value = payload.get(key)
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError(f"LLM response field '{key}' must be a non-empty string")
-    return value.strip()
-
-
-def _string_list(payload: dict[str, Any], key: str) -> tuple[str, ...]:
-    value = payload.get(key)
-    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
-        raise ValueError(f"LLM response field '{key}' must be an array of strings")
-    if len(value) > 20:
-        raise ValueError(f"LLM response field '{key}' has too many items")
-    normalized = tuple(item.strip() for item in value if item.strip())
-    if any(len(item) > 1000 for item in normalized):
-        raise ValueError(f"LLM response field '{key}' contains an oversized item")
-    return normalized
-
-
 def parse_analysis_result(raw: str) -> CandidateAnalysisResult:
-    try:
-        payload = json.loads(_strip_json_fence(raw))
-    except json.JSONDecodeError as exc:
-        raise ValueError("LLM response is not valid JSON") from exc
-    if not isinstance(payload, dict):
-        raise ValueError("LLM response must be a JSON object")
-    unexpected = set(payload) - _ANALYSIS_FIELDS
-    if unexpected:
-        raise ValueError(
-            "LLM response contains unexpected fields: "
-            + ", ".join(sorted(unexpected))
-        )
+    payload = parse_json_object(raw, allowed_fields=_ANALYSIS_FIELDS)
     try:
         action = AgentRecommendedAction(_required_string(payload, "recommendedAction"))
         confidence = AgentConfidence(_required_string(payload, "confidence"))
@@ -240,7 +198,9 @@ class GenerateCandidateAgentAnalysis:
         if snapshot is None:
             raise RuntimeError("Scientific-return snapshot is missing")
         queries = await self._repository.list_queries(str(candidate.first_seen_run_id))
-        prompt = await self._prompt_provider.get_published()
+        prompt = await self._prompt_provider.get_published(
+            SHADOW_ANALYSIS_PROMPT_KEY
+        )
         context = _analysis_context(
             candidate=candidate,
             snapshot=snapshot,
