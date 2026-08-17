@@ -279,6 +279,20 @@ export class ScientificReturnPanelComponent {
     this.expandedRunId.update((current) => (current === runId ? null : runId));
   }
 
+  protected sourceSearchUrl(source: string, query: string): string | null {
+    const encodedQuery = encodeURIComponent(query);
+    if (source === 'CROSSREF') {
+      return `https://api.crossref.org/works?query=${encodedQuery}&rows=20`;
+    }
+    if (source === 'OPENALEX') {
+      return `https://openalex.org/works?page=1&filter=${encodeURIComponent(`default.search:${query}`)}`;
+    }
+    if (source === 'EUROPE_PMC') {
+      return `https://europepmc.org/search?query=${encodedQuery}`;
+    }
+    return null;
+  }
+
   protected async toggleHistory(candidateId: string): Promise<void> {
     if (this.decisionsByCandidate()[candidateId]) {
       this.decisionsByCandidate.update((current) => {

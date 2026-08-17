@@ -816,10 +816,59 @@ li[data-strength='SUPPORTING'] .evidence-block__strength {
 
 .query-list > div {
   display: grid;
-  grid-template-columns: minmax(8rem, auto) minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(8rem, auto) minmax(0, 1fr) auto;
   gap: 0.75rem;
   align-items: center;
   font-size: 0.75rem;
+}
+
+.query-list__source {
+  --source-color: var(--color-subtle);
+
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  width: max-content;
+  padding: 0.2rem 0.45rem;
+  border: 1px solid color-mix(in srgb, var(--source-color) 38%, var(--color-line));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--source-color) 9%, var(--color-panel));
+  color: color-mix(in srgb, var(--source-color) 80%, var(--color-text));
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1.2;
+  text-decoration: none;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+a.query-list__source {
+  transition:
+    border-color 120ms ease,
+    background 120ms ease,
+    transform 120ms ease;
+}
+
+a.query-list__source:hover {
+  border-color: var(--source-color);
+  background: color-mix(in srgb, var(--source-color) 15%, var(--color-panel));
+  transform: translateY(-1px);
+}
+
+.query-list__source[data-source='CROSSREF'] {
+  --source-color: #315f9e;
+}
+
+.query-list__source[data-source='OPENALEX'] {
+  --source-color: #a14f1f;
+}
+
+.query-list__source[data-source='EUROPE_PMC'] {
+  --source-color: #16735c;
+}
+
+.query-list__source .pi {
+  font-size: 0.6rem;
 }
 
 .query-list code {

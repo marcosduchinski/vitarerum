@@ -571,6 +571,25 @@
                 <div class="query-list">
                   @for (query of run.queries; track query.id) {
                     <div>
+                      @if (sourceSearchUrl(query.source, query.queryText); as sourceUrl) {
+                        <a
+                          class="query-list__source"
+                          [attr.data-source]="query.source"
+                          [href]="sourceUrl"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          [attr.aria-label]="
+                            'Review this query manually in ' +
+                            query.source +
+                            ' (opens in a new tab)'
+                          "
+                        >
+                          {{ query.source }}
+                          <span class="pi pi-external-link" aria-hidden="true"></span>
+                        </a>
+                      } @else {
+                        <strong class="query-list__source">{{ query.source }}</strong>
+                      }
                       <span>{{ query.queryType.toLowerCase().replaceAll('_', ' ') }}</span>
                       <code>{{ query.queryText }}</code>
                       <strong>{{ query.resultCount }} results</strong>
