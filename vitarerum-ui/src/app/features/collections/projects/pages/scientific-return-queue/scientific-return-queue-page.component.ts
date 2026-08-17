@@ -20,13 +20,15 @@ import { PageHeaderComponent } from '@shared/components/page-header/page-header.
 import {
   ScientificReturnCandidateStatus,
   ScientificReturnEvidence,
+  ScientificReturnEvidenceStrength,
+  ScientificReturnReviewItem,
 } from '../../models/scientific-return.model';
 import { ScientificReturnApiService } from '../../services/scientific-return-api.service';
 import { projectDetailRouteForGroup } from '../../utils/project-detail-route.util';
 
 type StatusFilter = ScientificReturnCandidateStatus | 'ALL';
 type StrengthFilter = 'ALL' | 'PRIMARY' | 'SUPPORTING' | 'WEAK';
-type SourceFilter = 'ALL' | 'CROSSREF' | 'OPENALEX';
+type SourceFilter = 'ALL' | 'CROSSREF' | 'OPENALEX' | 'EUROPE_PMC';
 
 @Component({
   selector: 'app-scientific-return-queue-page',
@@ -77,9 +79,32 @@ export class ScientificReturnQueuePageComponent {
       ),
   });
 
-  protected readonly candidates = computed(() => this.queueResource.value()?.content ?? []);
-  protected readonly total = computed(() => this.queueResource.value()?.totalElements ?? 0);
-  protected readonly totalPages = computed(() => this.queueResource.value()?.totalPages ?? 0);
+  protected readonly metrics = computed(() =>
+    this.metricsResource.hasValue() ? this.metricsResource.value() : null,
+  );
+  protected readonly queuePage = computed(() =>
+    this.queueResource.hasValue() ? this.queueResource.value() : null,
+  );
+  protected readonly candidates = computed(() => this.queuePage()?.content ?? []);
+  protected readonly total = computed(() => this.queuePage()?.totalElements ?? 0);
+  protected readonly isRefreshing = computed(
+    () => this.metricsResource.isLoading() || this.queueResource.isLoading(),
+  );
+  protected readonly totalPages = computed(() => this.queuePage()?.totalPages ?? 0);
+  protected readonly activeFilterCount = computed(
+    () =>
+      Number(this.status() !== 'ALL') +
+      Number(this.strength() !== 'ALL') +
+      Number(this.source() !== 'ALL'),
+  );
+  protected readonly candidateCountLabel = computed(() => {
+    const total = this.total();
+    return `${total} ${total === 1 ? 'candidate' : 'candidates'}`;
+  });
+  protected readonly metricsError = computed<ApiError | null>(() => {
+    const error = this.metricsResource.error();
+    return error ? toApiError(error) : null;
+  });
   protected readonly queueError = computed<ApiError | null>(() => {
     const error = this.queueResource.error();
     return error ? toApiError(error) : null;
@@ -91,6 +116,46 @@ export class ScientificReturnQueuePageComponent {
 
   protected evidenceLabel(evidence: ScientificReturnEvidence): string {
     return evidence.type.toLowerCase().replaceAll('_', ' ');
+  }
+
+  protected evidenceSourceLabel(sourceField: string): string {
+    const label = sourceField.replaceAll('_', ' ').replaceAll('+', ' + ');
+    return label.charAt(0).toUpperCase() + label.slice(1);
+  }
+
+  protected filterLabel(value: string): string {
+    const label = value.toLowerCase().replaceAll('_', ' ');
+    return label.charAt(0).toUpperCase() + label.slice(1);
+  }
+
+  protected sourceLabel(source: string): string {
+    if (source === 'EUROPE_PMC') return 'Europe PMC';
+    if (source === 'OPENALEX') return 'OpenAlex';
+    return this.filterLabel(source);
+  }
+
+  protected doiUrl(doi: string): string {
+    return `https://doi.org/${doi.replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, '')}`;
+  }
+
+  protected evidenceCount(
+    candidate: ScientificReturnReviewItem,
+    strength: ScientificReturnEvidenceStrength,
+  ): number {
+    return candidate.evidences.filter((evidence) => evidence.strength === strength).length;
+  }
+
+  protected refreshAll(): void {
+    if (this.isRefreshing()) return;
+    this.metricsResource.reload();
+    this.queueResource.reload();
+  }
+
+  protected clearFilters(): void {
+    this.status.set('ALL');
+    this.strength.set('ALL');
+    this.source.set('ALL');
+    this.page.set(0);
   }
 
   protected onStatus(event: Event): void {
