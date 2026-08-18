@@ -70,9 +70,21 @@ object name. Calling this endpoint again returns the existing watch.
 ## Read and control a watch
 
 - `GET /projects/{projectId}/watch`
-- `PATCH /watches/{watchId}` with `{ "status": "ACTIVE|PAUSED|CLOSED" }`
+- `PATCH /watches/{watchId}` with `status`, `reviewIntervalDays`, or both
 
-A closed watch cannot be reopened.
+Both body fields are optional and a body with neither is `422`. Examples:
+
+```json
+{ "status": "PAUSED" }
+{ "reviewIntervalDays": 30 }
+```
+
+A closed watch cannot be reopened, nor re-cadenced. `reviewIntervalDays` stays
+within 1..365 and moves `nextRunAt` with it: the new date is measured from the
+last search (`lastRunAt + interval`), never from now, so shortening the cadence
+can make a watch due immediately and lengthening it cannot grant a fresh full
+period. A watch that has never run stays due at its activation date, because
+re-cadencing is not a way to postpone a review that is already owed.
 
 ## Execute and inspect searches
 
@@ -107,9 +119,17 @@ dismissed candidate counts.
 ## Scheduled execution and evaluation
 
 ```bash
-uv run python -m app.scientific_return.presentation.commands run-due --limit 25
-uv run python -m app.scientific_return.presentation.commands evaluate-phase0
+uv run python -m app.jobs.scientific_return run-due --limit 25
+uv run python -m app.jobs.scientific_return evaluate-phase0
 ```
+
+`app.jobs.scientific_return` is a composition-root wrapper: it registers every
+ORM mapper and delegates to the commands themselves. Invoking
+`app.scientific_return.presentation.commands` directly fails as soon as it
+touches the database, because the candidate table's foreign key into
+`use_of_collections` cannot resolve — the context is forbidden from importing
+that context, so registration is the entry point's job. The API never hits this
+because `app.main` imports every router.
 
 `run-due` uses a PostgreSQL transaction advisory lock per watch and emits one
 project notification only when the run creates new candidates. The evaluation
@@ -120,6 +140,41 @@ writes the reproducible report to a file. The report contains a review queue;
 after staff completes its human-decision fields, `--reviews` imports it and
 calculates review coverage and human precision without repeating external
 searches.
+
+In production the sweep runs as a Cloud Run job triggered by Cloud Scheduler.
+`cloudbuild.yaml` refreshes the job image on every deploy; the job itself and
+its trigger are created once:
+
+```bash
+# One-time: the job. --command overrides the image ENTRYPOINT so a scheduled
+# sweep does not re-run alembic; migrations stay the migrate job's business.
+gcloud run jobs create vitarerum-scientific-return \
+  --image us-east1-docker.pkg.dev/PROJECT_ID/vitarerum/vitarerum:latest \
+  --region us-east1 \
+  --command python \
+  --args -m,app.jobs.scientific_return,run-due,--limit,25 \
+  --set-secrets DATABASE_URL=vitarerum-database-url:latest \
+  --max-retries 1 \
+  --task-timeout 30m
+
+# One-time: the cadence. Daily at 03:00 UTC; watches only run when their own
+# nextRunAt is due, so the schedule is a floor, not the review interval.
+gcloud scheduler jobs create http vitarerum-scientific-return-daily \
+  --location us-east1 \
+  --schedule '0 3 * * *' \
+  --uri 'https://us-east1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/PROJECT_ID/jobs/vitarerum-scientific-return:run' \
+  --http-method POST \
+  --oauth-service-account-email SCHEDULER_SA@PROJECT_ID.iam.gserviceaccount.com
+```
+
+The scheduler's service account needs `roles/run.invoker` on the job. Set the
+job's secrets and environment to match the API service — it opens its own
+database session and reads the same settings.
+
+Two cadences are in play and they are not the same thing. The Cloud Scheduler
+cron decides how often the sweep *looks*; each watch's `reviewIntervalDays`
+decides whether it is due when the sweep arrives. A daily sweep with 90-day
+watches contacts no source on 89 of every 90 days.
 
 ## Review candidates
 

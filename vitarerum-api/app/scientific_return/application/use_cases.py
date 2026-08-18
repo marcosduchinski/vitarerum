@@ -149,6 +149,27 @@ class ChangeWatchStatus:
         return watch
 
 
+class ChangeWatchReviewInterval:
+    """Re-cadence an existing watch. The aggregate owns what the new date is."""
+
+    def __init__(self, repository: ScientificReturnRepository) -> None:
+        self._repository = repository
+
+    async def execute(
+        self,
+        watch_id: ScientificReturnWatchId,
+        review_interval_days: int,
+        caller: Actor,
+    ) -> ScientificReturnWatch:
+        require_group(caller, *_REVIEW_GROUPS)
+        watch = await self._repository.get_watch(watch_id)
+        if watch is None:
+            raise WatchNotFound(f"Scientific-return watch {watch_id} not found")
+        watch.change_review_interval(review_interval_days)
+        await self._repository.save_watch(watch)
+        return watch
+
+
 class RunScientificReturnSearch:
     def __init__(
         self,

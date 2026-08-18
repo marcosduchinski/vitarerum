@@ -3,6 +3,8 @@ substitutions:
   _SERVICE: vitarerum
   _REPOSITORY: vitarerum
   _IMAGE: vitarerum
+  _SCIENTIFIC_RETURN_JOB: vitarerum-scientific-return
+  _SCIENTIFIC_RETURN_LIMIT: '25'
 
 steps:
   - name: gcr.io/cloud-builders/docker
@@ -41,6 +43,25 @@ steps:
       - --region
       - ${_REGION}
       - --wait
+
+  # Scheduled scientific-return sweep. Only the image is refreshed here; the
+  # cadence lives in Cloud Scheduler, which executes this job. The entrypoint is
+  # overridden so a scheduled sweep never re-runs migrations.
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - jobs
+      - update
+      - ${_SCIENTIFIC_RETURN_JOB}
+      - --image
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$BUILD_ID
+      - --region
+      - ${_REGION}
+      - --command
+      - python
+      - --args
+      - -m,app.jobs.scientific_return,run-due,--limit,${_SCIENTIFIC_RETURN_LIMIT}
 
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud

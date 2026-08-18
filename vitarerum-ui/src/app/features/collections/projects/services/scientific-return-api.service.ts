@@ -44,6 +44,15 @@ export class ScientificReturnApiService {
     return this.http.patch<ScientificReturnWatch>(this.url(`/watches/${watchId}`), { status });
   }
 
+  updateWatchInterval(
+    watchId: string,
+    reviewIntervalDays: number,
+  ): Observable<ScientificReturnWatch> {
+    return this.http.patch<ScientificReturnWatch>(this.url(`/watches/${watchId}`), {
+      reviewIntervalDays,
+    });
+  }
+
   runWatch(watchId: string): Observable<ScientificReturnRun> {
     return this.http.post<ScientificReturnRun>(this.url(`/watches/${watchId}/runs`), {});
   }

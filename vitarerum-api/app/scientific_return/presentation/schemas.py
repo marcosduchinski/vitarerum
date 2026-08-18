@@ -31,8 +31,11 @@ class ActivateWatchRequest(BaseModel):
     reviewIntervalDays: int = Field(default=90, ge=1, le=365)
 
 
-class ChangeWatchStatusRequest(BaseModel):
-    status: WatchStatus
+class UpdateWatchRequest(BaseModel):
+    """Partial update. Both fields are optional; at least one must be present."""
+
+    status: WatchStatus | None = None
+    reviewIntervalDays: int | None = Field(default=None, ge=1, le=365)
 
 
 class ScientificReturnWatchResponse(BaseModel):

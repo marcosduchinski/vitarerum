@@ -13,6 +13,7 @@ import { firstValueFrom } from 'rxjs';
 
 import { IDENTITY_SERVICE } from '@core/auth/identity.service';
 import { ApiError, toApiError } from '@core/http/api-error.model';
+import { ConfirmModalComponent } from '@shared/components/confirm-modal/confirm-modal.component';
 import { ErrorMessageComponent } from '@shared/components/error-message/error-message.component';
 import { FeedbackMessageComponent } from '@shared/components/feedback-message/feedback-message.component';
 import { LoadingStateComponent } from '@shared/components/loading-state/loading-state.component';
@@ -42,6 +43,7 @@ function isNotFound(error: unknown): boolean {
   selector: 'app-scientific-return-panel',
   standalone: true,
   imports: [
+    ConfirmModalComponent,
     DatePipe,
     ErrorMessageComponent,
     FeedbackMessageComponent,
@@ -116,11 +118,15 @@ export class ScientificReturnPanelComponent {
       this.watchResource.error() ??
       this.candidatesResource.error() ??
       this.runsResource.error() ??
+      this.watchInvestigationsResource.error() ??
       null;
     return error ? toApiError(error) : null;
   });
 
   protected readonly busyAction = signal<string | null>(null);
+  protected readonly closeConfirmOpen = signal(false);
+  protected readonly intervalEditing = signal(false);
+  protected readonly intervalDraft = signal('');
   protected readonly actionError = signal<ApiError | null>(null);
   protected readonly feedback = signal<string | null>(null);
   protected readonly activeCandidateId = signal<string | null>(null);
@@ -140,7 +146,23 @@ export class ScientificReturnPanelComponent {
     Record<string, readonly ScientificReturnInvestigation[]>
   >({});
   protected readonly runningInvestigationId = signal<string | null>(null);
-  protected readonly watchInvestigations = signal<readonly ScientificReturnInvestigation[]>([]);
+  protected readonly watchInvestigationsResource = resource({
+    params: () => this.watch()?.id ?? null,
+    loader: ({ params }) => {
+      if (!params) return Promise.resolve([] as readonly ScientificReturnInvestigation[]);
+      return firstValueFrom(this.api.listWatchInvestigations(params));
+    },
+  });
+  /**
+   * Discovery only. Enrichment investigations share the watch but belong to a
+   * candidate, and are already shown there; listing them twice would read as
+   * two separate investigations.
+   */
+  protected readonly discoveryInvestigations = computed(() =>
+    (this.watchInvestigationsResource.value() ?? []).filter(
+      (investigation) => investigation.candidateId === null,
+    ),
+  );
 
   protected readonly analysesByCandidate = signal<
     Readonly<Record<string, readonly CandidateAgentAnalysis[]>>
@@ -166,6 +188,68 @@ export class ScientificReturnPanelComponent {
     } finally {
       this.busyAction.set(null);
     }
+  }
+
+  protected startIntervalEdit(): void {
+    const watch = this.watch();
+    if (!watch || !this.canReview() || this.busyAction() || watch.status === 'CLOSED') return;
+    this.intervalDraft.set(String(watch.reviewIntervalDays));
+    this.clearMessages();
+    this.intervalEditing.set(true);
+  }
+
+  protected cancelIntervalEdit(): void {
+    this.intervalEditing.set(false);
+  }
+
+  protected onIntervalInput(event: Event): void {
+    this.intervalDraft.set((event.target as HTMLInputElement).value);
+  }
+
+  /** Mirrors the server range so the form refuses what the domain would reject. */
+  protected intervalInvalid(): boolean {
+    const days = Number(this.intervalDraft());
+    return !Number.isInteger(days) || days < 1 || days > 365;
+  }
+
+  protected async saveInterval(event: SubmitEvent): Promise<void> {
+    event.preventDefault();
+    const watch = this.watch();
+    if (!watch || !this.canReview() || this.busyAction() || this.intervalInvalid()) return;
+    const days = Number(this.intervalDraft());
+    if (days === watch.reviewIntervalDays) {
+      this.intervalEditing.set(false);
+      return;
+    }
+    this.busyAction.set('interval');
+    this.clearMessages();
+    try {
+      const updated = await firstValueFrom(this.api.updateWatchInterval(watch.id, days));
+      this.watchResource.set(updated);
+      this.intervalEditing.set(false);
+      this.feedback.set(
+        `Review interval is now ${updated.reviewIntervalDays} days; the next review moved accordingly.`,
+      );
+    } catch (error) {
+      this.actionError.set(toApiError(error));
+    } finally {
+      this.busyAction.set(null);
+    }
+  }
+
+  protected openCloseConfirm(): void {
+    if (!this.canReview() || this.busyAction()) return;
+    this.closeConfirmOpen.set(true);
+  }
+
+  protected cancelCloseConfirm(): void {
+    this.closeConfirmOpen.set(false);
+  }
+
+  /** Closing is terminal: a closed watch cannot be reopened, so it is confirmed first. */
+  protected async confirmClose(): Promise<void> {
+    await this.changeStatus('CLOSED');
+    this.closeConfirmOpen.set(false);
   }
 
   protected async changeStatus(status: 'ACTIVE' | 'PAUSED' | 'CLOSED'): Promise<void> {
@@ -356,7 +440,7 @@ export class ScientificReturnPanelComponent {
     this.clearMessages();
     try {
       const investigation = await firstValueFrom(this.api.startWatchInvestigation(watchId));
-      this.watchInvestigations.update((current) => [investigation, ...current]);
+      this.watchInvestigationsResource.reload();
       // Discovery may legitimately end without a candidate; that is a result,
       // not a failure, so the message says which happened.
       this.feedback.set(

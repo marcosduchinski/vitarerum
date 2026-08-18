@@ -205,6 +205,20 @@ async def _run_cycle(
         reserved_queries=3,
     )
     await repository.save(investigation)
+    await repository.add_tool_execution(
+        ToolExecutionRecord(
+            id=ToolExecutionId("tool-1"),
+            investigation_id=investigation.id,
+            iteration_id="inv-1:1",
+            idempotency_key="cycle-key-1",
+            action=AgentRecommendedAction.SEARCH_INVENTORY_VARIANTS,
+            started_at=_NOW + timedelta(seconds=4),
+            queries=('"MB11-001283"',),
+            sources=("EUROPE_PMC",),
+            succeeded=True,
+            total_results=2,
+        )
+    )
     investigation.record_tool_result(
         ToolResultSummary(
             executed_queries=('"MB11-001283"',),
@@ -271,6 +285,12 @@ async def test_the_whole_trajectory_survives_the_database(
     assert iteration.telemetry.model == "llama3.1:8b"
     assert iteration.evidence_delta is not None
     assert iteration.evidence_delta.has_primary_inventory_evidence
+    # The outcome lives on the execution row, not on the iteration. Without it
+    # a reloaded trajectory says a search was planned and never what it sent.
+    assert iteration.tool_result is not None
+    assert iteration.tool_result.executed_queries == ('"MB11-001283"',)
+    assert iteration.tool_result.sources == ("EUROPE_PMC",)
+    assert iteration.tool_result.total_results == 2
     assert reloaded.budget.used_queries == 3
 
 

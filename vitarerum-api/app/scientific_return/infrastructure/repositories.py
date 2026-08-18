@@ -41,6 +41,7 @@ from app.scientific_return.domain.investigation_contracts import (
     PolicyDecision,
     ProposedAction,
     ReasonerTelemetry,
+    ToolResultSummary,
 )
 from app.scientific_return.domain.investigation_models import (
     InvestigationId,
@@ -1376,11 +1377,45 @@ class SqlAlchemyInvestigationRepository:
             .options(selectinload(ScientificReturnInvestigationRecord.iterations))
         )
         record = result.scalar_one_or_none()
-        return (
-            _investigation_to_domain(record, self._encryptor)
-            if record is not None
-            else None
+        if record is None:
+            return None
+        investigation = _investigation_to_domain(record, self._encryptor)
+        await self._attach_tool_results([investigation])
+        return investigation
+
+    async def _attach_tool_results(
+        self, investigations: list[ScientificReturnInvestigation]
+    ) -> None:
+        """Rebuild each iteration's tool result from its execution row.
+
+        The iteration table stores only a pointer to the execution; the outcome
+        itself lives on the execution row, which is what makes a retry safe. A
+        trajectory read back without this step would report that the cycle
+        planned a search and never say what it searched for.
+        """
+        wanted = {
+            str(iteration.tool_execution_id): iteration
+            for investigation in investigations
+            for iteration in investigation.iterations
+            if iteration.tool_execution_id is not None
+        }
+        if not wanted:
+            return
+        result = await self._session.execute(
+            select(ScientificReturnToolExecutionRecord).where(
+                ScientificReturnToolExecutionRecord.id.in_(wanted)
+            )
         )
+        for record in result.scalars().all():
+            execution = _tool_execution_to_domain(record, self._encryptor)
+            wanted[str(execution.id)].tool_result = ToolResultSummary(
+                executed_queries=execution.queries,
+                sources=execution.sources,
+                total_results=execution.total_results,
+                created_candidate_ids=execution.created_candidate_ids,
+                added_evidence_ids=execution.added_evidence_ids,
+                result_hash=execution.result_hash or "",
+            )
 
     async def list_for_watch(
         self, watch_id: ScientificReturnWatchId
@@ -1475,7 +1510,9 @@ class SqlAlchemyInvestigationRepository:
                 ScientificReturnInvestigationRecord.id.desc(),
             )
         )
-        return [
+        investigations = [
             _investigation_to_domain(item, self._encryptor)
             for item in result.scalars().all()
         ]
+        await self._attach_tool_results(investigations)
+        return investigations

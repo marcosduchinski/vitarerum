@@ -384,6 +384,26 @@ class RunScientificReturnInvestigation:
             )
             return
 
+        executed_queries = tuple(item.query for item in result.queries if item.query)
+        if not executed_queries:
+            # The tool contacted nothing: an authorised source has no adapter
+            # wired, so no query was ever issued. There is no execution to
+            # summarise, and closing here keeps the deployment mismatch visible
+            # as TOOL_UNAVAILABLE instead of failing on an empty summary.
+            message = result.error or "The tool issued no query"
+            await self._finish_tool(record, error=message)
+            investigation.record_tool_failure(message, self._clock.now())
+            await self._close_after_tool(
+                investigation,
+                candidate,
+                EvidenceDelta(),
+                None,
+                message,
+                True,
+                execution.action,
+            )
+            return
+
         created, added = await self._persist_findings(
             investigation, result.records, candidate
         )
@@ -391,7 +411,7 @@ class RunScientificReturnInvestigation:
         delta = calculate_evidence_delta(before, after)
 
         summary = ToolResultSummary(
-            executed_queries=tuple(item.query for item in result.queries if item.query),
+            executed_queries=executed_queries,
             sources=execution.sources,
             total_results=result.total_results,
             created_candidate_ids=created,

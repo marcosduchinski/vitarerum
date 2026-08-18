@@ -344,16 +344,18 @@ def _use_case(
     *,
     reasoner: _Reasoner | None = None,
     source: _Source | None = None,
+    sources: tuple[_Source, ...] | None = None,
     configuration: AgentConfiguration | None = None,
     investigations: _Investigations | None = None,
     uow: _UnitOfWork | None = None,
     lock: _Lock | None = None,
 ) -> RunScientificReturnInvestigation:
+    wired = sources if sources is not None else (source or _Source([_record()]),)
     return RunScientificReturnInvestigation(
         repository,
         investigations or _Investigations(),
         reasoner or _Reasoner(),
-        build_default_registry((source or _Source([_record()]),)),
+        build_default_registry(wired),
         uow or _UnitOfWork(),
         _Clock(),
         configuration or _configuration(),
@@ -553,6 +555,27 @@ async def test_an_unavailable_source_is_audited_without_blocking_review() -> Non
         StopReason.TOOL_UNAVAILABLE,
         StopReason.NO_RESULTS,
     }
+
+
+async def test_an_authorised_source_without_an_adapter_stops_as_unavailable() -> None:
+    """A deployment mismatch must stay readable instead of crashing the cycle.
+
+    The policy authorises a source by name from configuration; when no adapter
+    answers to that name the tool issues no query at all. The trajectory has to
+    say so, which it cannot do through a result summary that has no query to
+    report.
+    """
+    repository = _Repository()
+    await _seed(repository)
+
+    investigation = await _use_case(repository, sources=()).execute(_discover())
+
+    assert investigation.status is InvestigationStatus.STOPPED
+    assert investigation.stop_reason is StopReason.TOOL_UNAVAILABLE
+    assert not repository.candidates
+    iteration = investigation.iterations[-1]
+    assert iteration.error_message is not None
+    assert "no adapter is configured" in iteration.error_message
 
 
 async def test_an_unavailable_reflection_falls_back_to_the_delta() -> None:

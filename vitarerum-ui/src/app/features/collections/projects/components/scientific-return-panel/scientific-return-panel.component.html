@@ -69,7 +69,56 @@
         </div>
         <div>
           <dt>Interval</dt>
-          <dd>{{ currentWatch.reviewIntervalDays }} days</dd>
+          <dd>
+            @if (intervalEditing()) {
+              <form class="interval-edit" (submit)="saveInterval($event)">
+                <input
+                  type="number"
+                  aria-label="Review interval in days"
+                  min="1"
+                  max="365"
+                  step="1"
+                  [value]="intervalDraft()"
+                  [disabled]="busyAction() === 'interval'"
+                  (input)="onIntervalInput($event)"
+                />
+                <span>days</span>
+                <button
+                  type="submit"
+                  class="icon-button"
+                  title="Save interval"
+                  aria-label="Save interval"
+                  [disabled]="intervalInvalid() || busyAction() === 'interval'"
+                >
+                  <span class="pi pi-check" aria-hidden="true"></span>
+                </button>
+                <button
+                  type="button"
+                  class="icon-button"
+                  title="Cancel"
+                  aria-label="Cancel interval edit"
+                  [disabled]="busyAction() === 'interval'"
+                  (click)="cancelIntervalEdit()"
+                >
+                  <span class="pi pi-times" aria-hidden="true"></span>
+                </button>
+              </form>
+            } @else {
+              {{ currentWatch.reviewIntervalDays }} days
+              @if (canReview() && currentWatch.status !== 'CLOSED') {
+                <button
+                  type="button"
+                  class="text-button"
+                  title="Edit review interval"
+                  aria-label="Edit review interval"
+                  [disabled]="busyAction() !== null"
+                  (click)="startIntervalEdit()"
+                >
+                  <span class="pi pi-pencil" aria-hidden="true"></span>
+                </button>
+              }
+            }
+          </dd>
         </div>
       </dl>
 
@@ -132,7 +181,7 @@
               title="Close monitoring"
               aria-label="Close monitoring"
               [disabled]="busyAction() !== null"
-              (click)="changeStatus('CLOSED')"
+              (click)="openCloseConfirm()"
             >
               <span class="pi pi-times" aria-hidden="true"></span>
             </button>
@@ -140,6 +189,36 @@
         </div>
       }
     </div>
+
+    <app-confirm-modal
+      [open]="closeConfirmOpen()"
+      title="Close monitoring?"
+      message="Closing is permanent: this project can never be monitored again, and Search now stops being available. Pause instead if you may resume later."
+      confirmLabel="Close monitoring"
+      cancelLabel="Keep monitoring"
+      tone="danger"
+      [pending]="busyAction() === 'status'"
+      (confirmed)="confirmClose()"
+      (cancelled)="cancelCloseConfirm()"
+    />
+
+    <section class="watch-investigations" aria-labelledby="watch-investigations-heading">
+      <div class="run-history__heading">
+        <div>
+          <p class="section-kicker">Audit trail</p>
+          <h3 id="watch-investigations-heading">Discovery investigations</h3>
+        </div>
+        <span>{{ discoveryInvestigations().length }} recorded</span>
+      </div>
+      @for (investigation of discoveryInvestigations(); track investigation.id) {
+        <app-investigation-timeline [investigation]="investigation" />
+      } @empty {
+        <p class="run-history__empty">
+          No discovery investigation recorded. Investigate searches the inventory number in the
+          alternative spellings used by the literature.
+        </p>
+      }
+    </section>
 
     <div class="candidate-section">
       <div class="candidate-section__heading">

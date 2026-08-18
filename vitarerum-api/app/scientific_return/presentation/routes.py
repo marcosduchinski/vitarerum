@@ -28,6 +28,7 @@ from app.scientific_return.application.use_cases import (
     ActivateScientificReturnWatch,
     ActivateWatchInput,
     CandidateNotFound,
+    ChangeWatchReviewInterval,
     ChangeWatchStatus,
     DecideCandidate,
     DecideCandidateInput,
@@ -81,7 +82,6 @@ from app.scientific_return.presentation.schemas import (
     CandidateEvidenceResponse,
     CandidatePublicationResponse,
     CandidateReviewItemResponse,
-    ChangeWatchStatusRequest,
     InvestigationBudgetResponse,
     InvestigationDeltaResponse,
     InvestigationIterationResponse,
@@ -99,6 +99,7 @@ from app.scientific_return.presentation.schemas import (
     ScientificReturnQueryResponse,
     ScientificReturnRunResponse,
     ScientificReturnWatchResponse,
+    UpdateWatchRequest,
 )
 from app.shared.authorization import require_staff
 from app.shared.dependencies import CallerPermission
@@ -339,21 +340,36 @@ async def get_watch(
 @scientific_return_router.patch(
     "/watches/{watch_id}", response_model=ScientificReturnWatchResponse
 )
-async def change_watch_status(
+async def update_watch(
     watch_id: str,
-    body: ChangeWatchStatusRequest,
+    body: UpdateWatchRequest,
     caller: CallerPermission,
     repository: Repository,
     session: DBSession,
 ) -> ScientificReturnWatchResponse:
+    """Change the status, the review cadence, or both.
+
+    Applied in this order on purpose: re-cadencing a watch that is being closed
+    in the same request would compute a next review nobody will ever act on.
+    """
+    if body.status is None and body.reviewIntervalDays is None:
+        raise _unprocessable("Provide status or reviewIntervalDays")
+    watch_key = ScientificReturnWatchId(watch_id)
+    watch: ScientificReturnWatch | None = None
     try:
-        watch = await ChangeWatchStatus(repository).execute(
-            ScientificReturnWatchId(watch_id), body.status, caller
-        )
+        if body.reviewIntervalDays is not None:
+            watch = await ChangeWatchReviewInterval(repository).execute(
+                watch_key, body.reviewIntervalDays, caller
+            )
+        if body.status is not None:
+            watch = await ChangeWatchStatus(repository).execute(
+                watch_key, body.status, caller
+            )
     except WatchNotFound as exc:
         raise _not_found("SCIENTIFIC_RETURN_WATCH_NOT_FOUND", str(exc)) from None
     except ValueError as exc:
         raise _unprocessable(str(exc)) from None
+    assert watch is not None  # one of the two branches always runs
     await session.commit()
     return _watch_response(watch)
 

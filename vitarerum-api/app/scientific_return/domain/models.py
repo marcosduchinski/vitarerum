@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import NewType
 
 from app.scientific_return.domain.enums import (
@@ -75,6 +75,23 @@ class ScientificReturnWatch:
         if self.status is WatchStatus.CLOSED and status is not WatchStatus.CLOSED:
             raise ValueError("A closed watch cannot be reopened")
         self.status = status
+
+    def change_review_interval(self, days: int) -> None:
+        """Re-cadence the watch and move the next review with it.
+
+        The next review is measured from the last search, never from now: the
+        interval answers "how long after a search until the next one", so
+        editing it must not silently grant a fresh full period. A watch that
+        has never run stays due, because changing the cadence is not a reason
+        to postpone a review that is already owed.
+        """
+        if self.status is WatchStatus.CLOSED:
+            raise ValueError("A closed watch cannot be rescheduled")
+        if not 1 <= days <= 365:
+            raise ValueError("reviewIntervalDays must be between 1 and 365")
+        self.review_interval_days = days
+        if self.last_run_at is not None:
+            self.next_run_at = self.last_run_at + timedelta(days=days)
 
     def record_run(self, occurred_at: datetime, next_run_at: datetime) -> None:
         self.last_run_at = occurred_at

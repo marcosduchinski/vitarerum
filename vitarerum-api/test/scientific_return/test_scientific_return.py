@@ -34,6 +34,8 @@ from app.scientific_return.application.ports import (
 from app.scientific_return.application.use_cases import (
     ActivateScientificReturnWatch,
     ActivateWatchInput,
+    ChangeWatchReviewInterval,
+    ChangeWatchStatus,
     DecideCandidate,
     DecideCandidateInput,
     RunScientificReturnSearch,
@@ -48,6 +50,7 @@ from app.scientific_return.domain.enums import (
     EvidenceStrength,
     EvidenceType,
     QueryType,
+    WatchStatus,
 )
 from app.scientific_return.domain.evidence_delta import evidence_identity
 from app.scientific_return.domain.models import (
@@ -443,6 +446,71 @@ def test_evidence_normalizes_museum_prefix_and_repeated_inventory_segments() -> 
         for evidence in evidences
         if evidence.type is not EvidenceType.AUTHOR
     )
+
+
+@pytest.mark.asyncio
+async def test_a_new_interval_moves_the_next_review_from_the_last_search() -> None:
+    """The cadence answers "how long after a search", so the clock is not reset."""
+    repository = _Repository()
+    watch = await ActivateScientificReturnWatch(repository, _ProjectProvider()).execute(
+        ActivateWatchInput("project-1", 90, _caller())
+    )
+    await RunScientificReturnSearch(repository, (_Source(_record()),)).execute(
+        watch.id, _caller()
+    )
+    last_run_at = watch.last_run_at
+    assert last_run_at is not None
+
+    updated = await ChangeWatchReviewInterval(repository).execute(
+        watch.id, 30, _caller()
+    )
+
+    assert updated.review_interval_days == 30
+    assert updated.next_run_at == last_run_at + timedelta(days=30)
+
+
+@pytest.mark.asyncio
+async def test_a_new_interval_leaves_a_never_run_watch_due() -> None:
+    """Re-cadencing is not a way to postpone a review that is already owed."""
+    repository = _Repository()
+    watch = await ActivateScientificReturnWatch(repository, _ProjectProvider()).execute(
+        ActivateWatchInput("project-1", 90, _caller())
+    )
+    due_at = watch.next_run_at
+
+    updated = await ChangeWatchReviewInterval(repository).execute(
+        watch.id, 365, _caller()
+    )
+
+    assert updated.review_interval_days == 365
+    assert updated.next_run_at == due_at
+    assert updated.last_run_at is None
+
+
+@pytest.mark.asyncio
+async def test_a_closed_watch_cannot_be_rescheduled() -> None:
+    repository = _Repository()
+    watch = await ActivateScientificReturnWatch(repository, _ProjectProvider()).execute(
+        ActivateWatchInput("project-1", 90, _caller())
+    )
+    await ChangeWatchStatus(repository).execute(watch.id, WatchStatus.CLOSED, _caller())
+
+    with pytest.raises(ValueError, match="closed watch cannot be rescheduled"):
+        await ChangeWatchReviewInterval(repository).execute(watch.id, 30, _caller())
+
+
+@pytest.mark.asyncio
+async def test_an_interval_outside_the_allowed_range_is_refused() -> None:
+    repository = _Repository()
+    watch = await ActivateScientificReturnWatch(repository, _ProjectProvider()).execute(
+        ActivateWatchInput("project-1", 90, _caller())
+    )
+
+    for days in (0, 366):
+        with pytest.raises(ValueError, match="between 1 and 365"):
+            await ChangeWatchReviewInterval(repository).execute(
+                watch.id, days, _caller()
+            )
 
 
 @pytest.mark.asyncio

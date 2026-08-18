@@ -112,11 +112,12 @@
   font-size: 0.84rem;
 }
 
+/* Metrics on their own row: the actions used to share the row and squeezed the
+   Last search / Next review / Interval labels as soon as the panel narrowed. */
 .watch-toolbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 1rem;
-  align-items: center;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.9rem;
   padding-block: 1rem;
   border-block: 1px solid var(--color-line);
 }
@@ -145,6 +146,46 @@
   color: var(--color-text);
   font-size: 0.88rem;
   font-weight: 700;
+}
+
+/* Inline cadence editor: sized to sit inside the metric row, not to match the
+   toolbar buttons on the row below. */
+.interval-edit {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.interval-edit input {
+  width: 4.5rem;
+  min-height: 2rem;
+  padding: 0.25rem 0.45rem;
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-panel);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.interval-edit span {
+  color: var(--color-subtle);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.interval-edit .icon-button {
+  width: 2rem;
+  height: 2rem;
+}
+
+.watch-metrics dd .text-button {
+  min-height: auto;
+  margin-left: 0.35rem;
+  padding: 0.1rem 0.3rem;
+  color: var(--color-subtle);
+  font-size: 0.7rem;
 }
 
 .watch-actions,
@@ -220,7 +261,8 @@ a:focus-visible {
 }
 
 .candidate-section,
-.run-history {
+.run-history,
+.watch-investigations {
   display: grid;
   gap: 1rem;
 }
@@ -748,7 +790,8 @@ li[data-strength='SUPPORTING'] .evidence-block__strength {
   margin: 0.2rem 0 0;
 }
 
-.run-history {
+.run-history,
+.watch-investigations {
   padding-top: 1rem;
   border-top: 1px solid var(--color-line);
 }
@@ -884,7 +927,6 @@ a.query-list__source:hover {
 }
 
 @media (max-width: 760px) {
-  .watch-toolbar,
   .watch-empty {
     grid-template-columns: 1fr;
   }

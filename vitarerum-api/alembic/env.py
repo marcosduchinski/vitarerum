@@ -4,51 +4,10 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
+import app.orm_registry  # noqa: F401  (registers every mapper)
 from alembic import context
-from app.ai.museum_narrative.infrastructure import (
-    models as museum_narrative_models,  # noqa: F401
-)
-from app.ai.museum_question_triage.infrastructure import (
-    models as museum_question_triage_models,  # noqa: F401
-)
-from app.ai.prompts.infrastructure import (
-    models as ai_prompts_models,  # noqa: F401
-)
-from app.cidoc_crm.in_situ_visit_mapping.infrastructure import (
-    models as in_situ_visit_models,  # noqa: F401
-)
-from app.collection_object_index.infrastructure import (
-    models as collection_object_index_models,  # noqa: F401
-)
 from app.config import settings
 from app.database import Base
-from app.document_templates.infrastructure import (
-    models as document_templates_models,  # noqa: F401
-)
-from app.identity.infrastructure import (
-    models as identity_models,  # noqa: F401
-)
-from app.museum_questions.infrastructure import (
-    models as museum_questions_models,  # noqa: F401
-)
-from app.notifications.infrastructure import (
-    models as notifications_models,  # noqa: F401
-)
-from app.public_submission.infrastructure import (
-    models as public_submission_models,  # noqa: F401
-)
-from app.reference_numbers.infrastructure import (
-    models as reference_numbers_models,  # noqa: F401
-)
-from app.reports.in_situ_visit.infrastructure import (
-    models as in_situ_visit_report_models,  # noqa: F401
-)
-from app.scientific_return.infrastructure import (
-    models as scientific_return_models,  # noqa: F401
-)
-from app.use_of_collections.infrastructure import (
-    models as use_of_collections_models,  # noqa: F401
-)
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.database_url)

@@ -6,7 +6,6 @@ from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, Stri
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-import app.identity.infrastructure.models  # noqa: F401
 from app.database import Base
 from app.use_of_collections.domain.enums import (
     MediaType,
