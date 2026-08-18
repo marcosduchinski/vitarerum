@@ -189,7 +189,10 @@ describe('ScientificReturnPanelComponent', () => {
   const investigationSection = () =>
     (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('.watch-investigations');
 
-  it('shows a discovery trajectory that was recorded before this session', async () => {
+  const investigationRows = () =>
+    investigationSection()!.querySelectorAll<HTMLButtonElement>('.run-row');
+
+  it('lists a discovery recorded before this session, collapsed', async () => {
     // The panel was built before the fixture had investigations; rebuild it so
     // the resource loads them the way a page reload would.
     api.investigations = [makeInvestigation('inv-discovery', null)];
@@ -199,7 +202,31 @@ describe('ScientificReturnPanelComponent', () => {
 
     const section = investigationSection()!;
     expect(section.textContent).toContain('1 recorded');
-    expect(section.querySelectorAll('.investigation')).toHaveLength(1);
+    expect(investigationRows()).toHaveLength(1);
+    // The row summarises; the trajectory itself stays closed until asked for.
+    expect(section.textContent).toContain('No results');
+    expect(section.querySelectorAll('.trajectory')).toHaveLength(0);
+  });
+
+  it('expands one trajectory at a time', async () => {
+    api.investigations = [makeInvestigation('inv-a', null), makeInvestigation('inv-b', null)];
+    fixture = TestBed.createComponent(ScientificReturnPanelComponent);
+    fixture.componentRef.setInput('projectId', 'project-1');
+    await settle();
+
+    investigationRows()[0].click();
+    await settle();
+    expect(investigationSection()!.querySelectorAll('.trajectory')).toHaveLength(1);
+    expect(investigationRows()[0].getAttribute('aria-expanded')).toBe('true');
+
+    investigationRows()[1].click();
+    await settle();
+    expect(investigationSection()!.querySelectorAll('.trajectory')).toHaveLength(1);
+    expect(investigationRows()[0].getAttribute('aria-expanded')).toBe('false');
+
+    investigationRows()[1].click();
+    await settle();
+    expect(investigationSection()!.querySelectorAll('.trajectory')).toHaveLength(0);
   });
 
   it('leaves enrichment investigations to their candidate', async () => {
@@ -210,7 +237,7 @@ describe('ScientificReturnPanelComponent', () => {
 
     const section = investigationSection()!;
     expect(section.textContent).toContain('0 recorded');
-    expect(section.querySelectorAll('.investigation')).toHaveLength(0);
+    expect(section.querySelectorAll('.run-row')).toHaveLength(0);
   });
 
   it('shows the trajectory of an investigation started from the panel', async () => {
@@ -223,7 +250,7 @@ describe('ScientificReturnPanelComponent', () => {
     await settle();
 
     expect(api.startedWatchInvestigations).toEqual(['watch-1']);
-    expect(investigationSection()!.querySelectorAll('.investigation')).toHaveLength(1);
+    expect(investigationRows()).toHaveLength(1);
   });
 
   it('saves a new interval and shows the next review the server returned', async () => {

@@ -18,18 +18,12 @@ import { LoadingStateComponent } from '@shared/components/loading-state/loading-
 import { PageHeaderComponent } from '@shared/components/page-header/page-header.component';
 
 import {
-  AiPromptPurpose,
+  aiPromptPurposeLabel,
   AiPromptStatus,
   AiPromptTemplate,
   AiPromptVersion,
 } from '../../models/ai-prompt.model';
 import { AI_PROMPT_MANAGEMENT_SERVICE } from '../../services/ai-prompt-management.service';
-
-const PURPOSE_OPTIONS: readonly { readonly value: AiPromptPurpose; readonly label: string }[] = [
-  { value: 'in_situ_narrative', label: 'Narrative' },
-  { value: 'proposal_assistance', label: 'Proposal assistance' },
-  { value: 'project_assistance', label: 'Project assistance' },
-];
 
 const STATUS_OPTIONS: readonly { readonly value: AiPromptStatus; readonly label: string }[] = [
   { value: 'published', label: 'Published' },
@@ -109,9 +103,7 @@ export class AiPromptViewPageComponent {
     return STATUS_OPTIONS.find((option) => option.value === status)?.label ?? 'No versions';
   }
 
-  protected purposeLabel(purpose: AiPromptPurpose): string {
-    return PURPOSE_OPTIONS.find((option) => option.value === purpose)?.label ?? purpose;
-  }
+  protected readonly purposeLabel = aiPromptPurposeLabel;
 
   protected editLink(template: AiPromptTemplate): readonly string[] {
     return ['/p/ai/prompts', template.id, 'edit'];

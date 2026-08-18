@@ -12,18 +12,14 @@ import { PageHeaderComponent } from '@shared/components/page-header/page-header.
 import { RowActionsComponent } from '@shared/components/row-actions/row-actions.component';
 
 import {
+  AI_PROMPT_PURPOSE_OPTIONS,
+  aiPromptPurposeLabel,
   AiPromptPurpose,
   AiPromptStatus,
   AiPromptTemplate,
   AiPromptVersion,
 } from '../../models/ai-prompt.model';
 import { AI_PROMPT_MANAGEMENT_SERVICE } from '../../services/ai-prompt-management.service';
-
-const PURPOSE_OPTIONS: readonly { readonly value: AiPromptPurpose; readonly label: string }[] = [
-  { value: 'in_situ_narrative', label: 'Narrative' },
-  { value: 'proposal_assistance', label: 'Proposal assistance' },
-  { value: 'project_assistance', label: 'Project assistance' },
-];
 
 const STATUS_OPTIONS: readonly { readonly value: AiPromptStatus; readonly label: string }[] = [
   { value: 'published', label: 'Published' },
@@ -51,7 +47,7 @@ export class AiPromptsPageComponent {
   private readonly service = inject(AI_PROMPT_MANAGEMENT_SERVICE);
   private readonly router = inject(Router);
 
-  protected readonly purposeOptions = PURPOSE_OPTIONS;
+  protected readonly purposeOptions = AI_PROMPT_PURPOSE_OPTIONS;
   protected readonly statusOptions = STATUS_OPTIONS;
   protected readonly purposeFilter = signal<AiPromptPurpose | null>(null);
   protected readonly statusFilter = signal<AiPromptStatus | null>(null);
@@ -82,9 +78,7 @@ export class AiPromptsPageComponent {
     return STATUS_OPTIONS.find((option) => option.value === status)?.label ?? 'No versions';
   }
 
-  protected purposeLabel(purpose: AiPromptPurpose): string {
-    return PURPOSE_OPTIONS.find((option) => option.value === purpose)?.label ?? purpose;
-  }
+  protected readonly purposeLabel = aiPromptPurposeLabel;
 
   protected currentStatus(template: AiPromptTemplate): AiPromptStatus | null {
     const active = this.activeVersionFor(template);

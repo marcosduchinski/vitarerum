@@ -1,4 +1,28 @@
-export type AiPromptPurpose = 'in_situ_narrative' | 'proposal_assistance' | 'project_assistance';
+export type AiPromptPurpose =
+  | 'in_situ_narrative'
+  | 'proposal_assistance'
+  | 'project_assistance'
+  | 'scientific_return_analysis';
+
+/**
+ * Purposes offered in the interface, in display order.
+ *
+ * Narrower than the type on purpose: `proposal_assistance` and
+ * `project_assistance` exist in the backend enum but no prompt has ever used
+ * them. The type still carries them so a template that arrives with one is
+ * typed honestly and falls back to its raw value in the label.
+ */
+export const AI_PROMPT_PURPOSE_OPTIONS: readonly {
+  readonly value: AiPromptPurpose;
+  readonly label: string;
+}[] = [
+  { value: 'in_situ_narrative', label: 'Narrative' },
+  { value: 'scientific_return_analysis', label: 'Scientific Return' },
+];
+
+export function aiPromptPurposeLabel(purpose: AiPromptPurpose): string {
+  return AI_PROMPT_PURPOSE_OPTIONS.find((option) => option.value === purpose)?.label ?? purpose;
+}
 
 export type AiPromptStatus = 'draft' | 'published' | 'archived';
 

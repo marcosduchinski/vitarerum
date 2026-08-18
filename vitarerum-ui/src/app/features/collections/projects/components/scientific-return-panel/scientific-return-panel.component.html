@@ -202,23 +202,6 @@
       (cancelled)="cancelCloseConfirm()"
     />
 
-    <section class="watch-investigations" aria-labelledby="watch-investigations-heading">
-      <div class="run-history__heading">
-        <div>
-          <p class="section-kicker">Audit trail</p>
-          <h3 id="watch-investigations-heading">Discovery investigations</h3>
-        </div>
-        <span>{{ discoveryInvestigations().length }} recorded</span>
-      </div>
-      @for (investigation of discoveryInvestigations(); track investigation.id) {
-        <app-investigation-timeline [investigation]="investigation" />
-      } @empty {
-        <p class="run-history__empty">
-          No discovery investigation recorded. Investigate searches the inventory number in the
-          alternative spellings used by the literature.
-        </p>
-      }
-    </section>
 
     <div class="candidate-section">
       <div class="candidate-section__heading">
@@ -724,6 +707,60 @@
                   @if (run.errorMessage) {
                     <p role="alert">{{ run.errorMessage }}</p>
                   }
+                </div>
+              }
+            </li>
+          }
+        </ol>
+      }
+    </section>
+
+    <section class="watch-investigations" aria-labelledby="watch-investigations-heading">
+      <div class="run-history__heading">
+        <div>
+          <p class="section-kicker">Audit trail</p>
+          <h3 id="watch-investigations-heading">Discovery investigations</h3>
+        </div>
+        <span>{{ discoveryInvestigations().length }} recorded</span>
+      </div>
+      @if (!discoveryInvestigations().length) {
+        <p class="run-history__empty">
+          No discovery investigation recorded. Investigate searches the inventory number in the
+          alternative spellings used by the literature.
+        </p>
+      } @else {
+        <ol class="run-list">
+          @for (investigation of discoveryInvestigations(); track investigation.id) {
+            <li>
+              <button
+                type="button"
+                class="run-row"
+                [attr.aria-expanded]="expandedInvestigationId() === investigation.id"
+                (click)="toggleInvestigation(investigation.id)"
+              >
+                <span class="run-row__status" [attr.data-status]="investigation.status">
+                  <span
+                    class="pi"
+                    [class.pi-check-circle]="investigation.status === 'AWAITING_HUMAN_REVIEW'"
+                    [class.pi-minus-circle]="investigation.status === 'STOPPED'"
+                    [class.pi-times-circle]="investigation.status === 'FAILED'"
+                    aria-hidden="true"
+                  ></span>
+                  {{ investigation.status.replaceAll('_', ' ').toLowerCase() }}
+                </span>
+                <span>{{ investigation.startedAt | date: 'medium' }}</span>
+                <strong>{{ investigationOutcome(investigation) }}</strong>
+                <span class="run-row__budget">{{ investigationBudget(investigation) }}</span>
+                <span
+                  class="pi"
+                  [class.pi-chevron-down]="expandedInvestigationId() !== investigation.id"
+                  [class.pi-chevron-up]="expandedInvestigationId() === investigation.id"
+                  aria-hidden="true"
+                ></span>
+              </button>
+              @if (expandedInvestigationId() === investigation.id) {
+                <div class="investigation-detail">
+                  <app-investigation-timeline [investigation]="investigation" [compact]="true" />
                 </div>
               }
             </li>

@@ -818,7 +818,9 @@ li[data-strength='SUPPORTING'] .evidence-block__strength {
 
 .run-row {
   display: grid;
-  grid-template-columns: minmax(7rem, auto) minmax(10rem, 1fr) auto auto;
+  grid-template-columns:
+    minmax(7rem, auto) minmax(9rem, auto) minmax(8rem, 1fr)
+    auto auto;
   gap: 0.75rem;
   align-items: center;
   width: 100%;
@@ -847,6 +849,26 @@ li[data-strength='SUPPORTING'] .evidence-block__strength {
 
 .run-row__status[data-status='FAILED'] {
   color: var(--color-danger, #b42318);
+}
+
+/* Investigation outcomes: reviewable needs attention, stopped is a legitimate
+   result and must not read as an error. */
+.run-row__status[data-status='AWAITING_HUMAN_REVIEW'] {
+  color: #b56a08;
+}
+
+.run-row__status[data-status='STOPPED'] {
+  color: var(--color-subtle);
+}
+
+.run-row__budget {
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.investigation-detail {
+  padding: 0.75rem;
+  border-top: 1px solid var(--color-line);
 }
 
 .query-list {

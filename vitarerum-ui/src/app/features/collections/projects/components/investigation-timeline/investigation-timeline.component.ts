@@ -43,6 +43,16 @@ const STOP_REASON_LABELS: Readonly<Record<string, string>> = {
   INSUFFICIENT_EVIDENCE: 'Model stopped for insufficient evidence',
 };
 
+export function stopReasonLabel(investigation: ScientificReturnInvestigation): string {
+  const reason = investigation.stopReason;
+  return reason ? (STOP_REASON_LABELS[reason] ?? reason) : 'Not finished';
+}
+
+export function budgetLabel(investigation: ScientificReturnInvestigation): string {
+  const budget = investigation.budget;
+  return `${budget.usedQueries}/${budget.maxQueries} queries · ${budget.createdCandidates}/${budget.maxNewCandidates} candidates`;
+}
+
 @Component({
   selector: 'app-investigation-timeline',
   standalone: true,
@@ -54,19 +64,16 @@ const STOP_REASON_LABELS: Readonly<Record<string, string>> = {
 export class InvestigationTimelineComponent {
   readonly investigation = input.required<ScientificReturnInvestigation>();
 
-  readonly stopReasonLabel = computed(() => {
-    const reason = this.investigation().stopReason;
-    return reason ? (STOP_REASON_LABELS[reason] ?? reason) : 'Not finished';
-  });
+  /** Hides the header and meta: an expandable row already carries them. */
+  readonly compact = input(false);
+
+  readonly stopReasonLabel = computed(() => stopReasonLabel(this.investigation()));
 
   readonly awaitingReview = computed(() => this.investigation().status === 'AWAITING_HUMAN_REVIEW');
 
   readonly failed = computed(() => this.investigation().status === 'FAILED');
 
-  readonly budgetLabel = computed(() => {
-    const budget = this.investigation().budget;
-    return `${budget.usedQueries}/${budget.maxQueries} queries · ${budget.createdCandidates}/${budget.maxNewCandidates} candidates`;
-  });
+  readonly budgetLabel = computed(() => budgetLabel(this.investigation()));
 
   /** One flat, ordered list so the reader follows the cycle as it happened. */
   readonly steps = computed<readonly TimelineStep[]>(() =>

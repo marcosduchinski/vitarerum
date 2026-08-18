@@ -18,7 +18,11 @@ import { ErrorMessageComponent } from '@shared/components/error-message/error-me
 import { FeedbackMessageComponent } from '@shared/components/feedback-message/feedback-message.component';
 import { LoadingStateComponent } from '@shared/components/loading-state/loading-state.component';
 
-import { InvestigationTimelineComponent } from '../investigation-timeline/investigation-timeline.component';
+import {
+  budgetLabel,
+  InvestigationTimelineComponent,
+  stopReasonLabel,
+} from '../investigation-timeline/investigation-timeline.component';
 
 import {
   CandidateAgentAnalysis,
@@ -138,6 +142,7 @@ export class ScientificReturnPanelComponent {
   protected readonly correctedUrl = signal('');
   protected readonly correctedAuthors = signal('');
   protected readonly expandedRunId = signal<string | null>(null);
+  protected readonly expandedInvestigationId = signal<string | null>(null);
   protected readonly decisionsByCandidate = signal<
     Readonly<Record<string, readonly CandidateDecisionRecord[]>>
   >({});
@@ -377,6 +382,17 @@ export class ScientificReturnPanelComponent {
   protected toggleRun(runId: string): void {
     this.expandedRunId.update((current) => (current === runId ? null : runId));
   }
+
+  protected toggleInvestigation(investigationId: string): void {
+    this.expandedInvestigationId.update((current) =>
+      current === investigationId ? null : investigationId,
+    );
+  }
+
+  // Shared with the timeline so the collapsed row and the expanded trajectory
+  // never disagree about the outcome.
+  protected readonly investigationOutcome = stopReasonLabel;
+  protected readonly investigationBudget = budgetLabel;
 
   protected sourceSearchUrl(source: string, query: string): string | null {
     const encodedQuery = encodeURIComponent(query);

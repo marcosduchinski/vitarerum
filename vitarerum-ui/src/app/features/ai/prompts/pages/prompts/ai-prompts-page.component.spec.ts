@@ -308,6 +308,24 @@ describe('AiPromptsPageComponent', () => {
     expect(editLink?.getAttribute('href')).toBe('/p/ai/prompts/ptpl-insitu-institutional/edit');
   });
 
+  it('offers only the purposes prompts are actually written for', async () => {
+    paramMap.next(convertToParamMap({}));
+
+    fixture = TestBed.createComponent(AiPromptsPageComponent);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const root = fixture.nativeElement as HTMLElement;
+    const purposeSelect = root.querySelector('select');
+    if (!(purposeSelect instanceof HTMLSelectElement)) throw new Error('Purpose select not found');
+
+    expect(Array.from(purposeSelect.options).map((option) => option.text)).toEqual([
+      'All purposes',
+      'Narrative',
+      'Scientific Return',
+    ]);
+  });
+
   it('labels a template with only draft versions as draft', async () => {
     paramMap.next(convertToParamMap({}));
 
