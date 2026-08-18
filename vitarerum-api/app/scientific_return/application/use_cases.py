@@ -245,7 +245,9 @@ class RunScientificReturnSearch:
                 queried_sources.add(source.name)
                 sent_at = _now()
                 try:
-                    records = await source.search(planned.text, self._result_limit)
+                    records = await source.search(
+                        planned.text, self._result_limit, author=planned.author
+                    )
                     await self._repository.add_query(
                         ScientificReturnQuery(
                             id=ScientificReturnQueryId(_new_id()),

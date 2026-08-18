@@ -108,13 +108,17 @@ class _Source:
         self.record = record
         self.queries: list[str] = []
 
-    async def search(self, query: str, limit: int) -> list[BibliographicRecord]:
+    async def search(
+        self, query: str, limit: int, *, author: str | None = None
+    ) -> list[BibliographicRecord]:
         self.queries.append(query)
         return [self.record]
 
 
 class _AdaptiveSource(_Source):
-    async def search(self, query: str, limit: int) -> list[BibliographicRecord]:
+    async def search(
+        self, query: str, limit: int, *, author: str | None = None
+    ) -> list[BibliographicRecord]:
         self.queries.append(query)
         return [self.record] if query.endswith('"Acontias"') else []
 

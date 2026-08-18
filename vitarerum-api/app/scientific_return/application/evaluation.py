@@ -407,7 +407,9 @@ async def evaluate_cases(
             for index, planned in enumerate(queries):
                 source_query_count += 1
                 try:
-                    records = await source.search(planned.text, result_limit)
+                    records = await source.search(
+                        planned.text, result_limit, author=planned.author
+                    )
                 except Exception as exc:
                     source_error_count += 1
                     trajectories.append(

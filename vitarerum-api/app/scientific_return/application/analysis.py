@@ -26,6 +26,14 @@ from app.scientific_return.domain.models import (
 class PlannedQuery:
     query_type: QueryType
     text: str
+    author: str | None = None
+    """The researcher, when this strategy includes them.
+
+    ``text`` already contains the name and stays the audited query. This field
+    repeats it so a source that indexes authors outside its free-text index can
+    route it correctly, without any adapter having to guess which quoted phrase
+    is a person.
+    """
 
 
 def _query_term(value: str) -> str:
@@ -43,6 +51,7 @@ def plan_queries(snapshot: ProjectSnapshotPayload) -> tuple[PlannedQuery, ...]:
             PlannedQuery(
                 QueryType.AUTHOR_INVENTORY,
                 f"{_query_term(researcher)} {_query_term(inventory)}",
+                author=researcher,
             )
         )
         planned.append(
@@ -55,6 +64,7 @@ def plan_queries(snapshot: ProjectSnapshotPayload) -> tuple[PlannedQuery, ...]:
             PlannedQuery(
                 QueryType.AUTHOR_OBJECT,
                 f"{_query_term(researcher)} {_query_term(object_name)}",
+                author=researcher,
             )
         )
     return tuple(dict.fromkeys(planned))
@@ -77,6 +87,7 @@ def plan_adaptive_queries(snapshot: ProjectSnapshotPayload) -> tuple[PlannedQuer
             PlannedQuery(
                 QueryType.AUTHOR_OBJECT,
                 f"{_query_term(snapshot.researcher)} {_query_term(genus)}",
+                author=snapshot.researcher,
             )
         )
     return tuple(dict.fromkeys(planned))

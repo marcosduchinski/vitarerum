@@ -248,7 +248,20 @@ class BibliographicRecord:
 class BibliographicSource(Protocol):
     name: str
 
-    async def search(self, query: str, limit: int) -> list[BibliographicRecord]: ...
+    async def search(
+        self, query: str, limit: int, *, author: str | None = None
+    ) -> list[BibliographicRecord]:
+        """Search the source.
+
+        ``query`` is the audited query text, sent verbatim by sources whose
+        free-text index covers author names. ``author`` repeats the researcher
+        for sources that index authors in a separate field and therefore cannot
+        match the name through free text: measured against the live OpenAlex
+        API, ``search="Diogo Parrinha" "Rhoptropus nivimontanus"`` returns
+        nothing while the taxon alone returns the expected work, because
+        ``search`` covers title, abstract and full text but not authorship.
+        """
+        ...
 
 
 @dataclass(frozen=True, slots=True)

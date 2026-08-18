@@ -241,7 +241,9 @@ class _Source:
         self._error = error
         self.queries: list[str] = []
 
-    async def search(self, query: str, limit: int) -> list[BibliographicRecord]:
+    async def search(
+        self, query: str, limit: int, *, author: str | None = None
+    ) -> list[BibliographicRecord]:
         self.queries.append(query)
         if self._error is not None:
             raise self._error

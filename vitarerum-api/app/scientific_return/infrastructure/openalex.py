@@ -11,6 +11,18 @@ import httpx
 from app.scientific_return.application.ports import BibliographicRecord
 
 
+def _without_author(query: str, author: str | None) -> str:
+    """Drop the author phrase from the free-text terms.
+
+    Exact removal of the phrase the planner put there, never a guess about
+    which quoted fragment is a person.
+    """
+    if not author:
+        return query.strip()
+    remaining = query.replace(f'"{author}"', " ").replace(author, " ")
+    return " ".join(remaining.split())
+
+
 class OpenAlexBibliographicSource:
     """OpenAlex discovery adapter, enabled only when an API key is configured."""
 
@@ -37,12 +49,26 @@ class OpenAlexBibliographicSource:
         self._transport = transport
         self._sleep = sleep
 
-    async def search(self, query: str, limit: int) -> list[BibliographicRecord]:
+    async def search(
+        self, query: str, limit: int, *, author: str | None = None
+    ) -> list[BibliographicRecord]:
+        """Search OpenAlex, routing the author to the field that indexes it.
+
+        ``search`` covers title, abstract and full text, never authorship, so a
+        name left inside it matches nothing and drags the whole conjunction to
+        zero results. Measured against the live API: the taxon alone returns the
+        expected work, the taxon with the author returns none, and the taxon
+        with the author moved to ``raw_author_name.search`` returns it again.
+        """
+        terms = _without_author(query, author)
         params: dict[str, str | int] = {
-            "search": query,
             "per-page": limit,
             "api_key": self._api_key,
         }
+        if terms:
+            params["search"] = terms
+        if author:
+            params["filter"] = f"raw_author_name.search:{author}"
         async with httpx.AsyncClient(
             timeout=self._timeout,
             headers={"User-Agent": "Vitarerum/0.1 (scientific-return monitoring)"},

@@ -45,7 +45,15 @@ class EuropePmcBibliographicSource:
         self._sleep = sleep
         self._full_text_cache: dict[str, str | None] = {}
 
-    async def search(self, query: str, limit: int) -> list[BibliographicRecord]:
+    async def search(
+        self, query: str, limit: int, *, author: str | None = None
+    ) -> list[BibliographicRecord]:
+        """Accepts ``author`` for protocol compatibility and ignores it.
+
+        This source's free-text index covers author names, so the name stays
+        inside ``query`` where the planner put it, and the audited text is
+        exactly what is sent.
+        """
         params: dict[str, str | int] = {
             "query": query,
             "resultType": "core",
