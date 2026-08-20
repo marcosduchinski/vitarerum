@@ -29,5 +29,7 @@ docs/temp/
 docs/agentic/
 docs/tutorials
 docs/implementation
+docs/specs
+docs/evaluation
 
 vitarerum-api/static/
