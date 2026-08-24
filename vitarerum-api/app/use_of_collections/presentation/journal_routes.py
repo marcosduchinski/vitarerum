@@ -12,11 +12,13 @@ from typing import Annotated
 from fastapi import (
     File,
     Form,
+    HTTPException,
     Query,
     Response,
     UploadFile,
     status,
 )
+from sqlalchemy.exc import IntegrityError
 
 from app.shared.dependencies import CallerPermission
 from app.shared.uploads import content_disposition_attachment
@@ -33,6 +35,8 @@ from app.use_of_collections.application.use_cases import (
     AddPublicationEntryAttachmentInput,
     AddPublicationLogEntry,
     AddPublicationLogEntryInput,
+    DeletePublicationLogEntry,
+    DeletePublicationLogEntryInput,
     EditObjectLogEntry,
     EditObjectLogEntryInput,
     EditObjectOccurrenceEntry,
@@ -898,6 +902,55 @@ async def edit_publication_entry(
         else None
     )
     return await _build_publication_entry(entry, session, collection_use_object)
+
+
+@projects_router.delete(
+    "/{project_id}/publication-entries/{entry_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_publication_entry(
+    project_id: str,
+    entry_id: str,
+    caller: CallerPermission,
+    project_repo: ProjectRepo,
+    proposal_repo: ProposalRepo,
+    publication_log_repo: PublicationLogRepo,
+    file_storage: FileStorage,
+    session: DBSession,
+) -> Response:
+    await _assert_existing_project_access(
+        project_id, caller, project_repo, proposal_repo
+    )
+    try:
+        attachments = await DeletePublicationLogEntry(
+            project_repo, publication_log_repo
+        ).execute(
+            DeletePublicationLogEntryInput(
+                project_id=CollectionUseProjectId(project_id),
+                entry_id=PublicationLogEntryId(entry_id),
+                caller=caller,
+            )
+        )
+        await session.commit()
+    except LookupError as exc:
+        raise _not_found("entry", entry_id) from exc
+    except IntegrityError as exc:
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error": "PUBLICATION_ENTRY_IN_USE",
+                "message": (
+                    "This publication entry records a confirmed scientific return "
+                    "and cannot be deleted."
+                ),
+            },
+        ) from exc
+    except Exception as exc:
+        _handle_domain_errors(exc)
+    for attachment in attachments:
+        await file_storage.delete(attachment.file_reference)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @projects_router.get(

@@ -585,6 +585,16 @@ describe('ProjectApiService', () => {
     });
   });
 
+  it('deletes a publication entry', () => {
+    service.deletePublicationEntry('project-1', 'pub-entry-1').subscribe();
+
+    const request = http.expectOne(
+      'https://api.example.test/collection-use-projects/project-1/publication-entries/pub-entry-1',
+    );
+    expect(request.request.method).toBe('DELETE');
+    request.flush(null, { status: 204, statusText: 'No Content' });
+  });
+
   it('uploads a publication entry attachment with a required description', () => {
     const file = new File(['pdf'], 'paper.pdf', { type: 'application/pdf' });
 

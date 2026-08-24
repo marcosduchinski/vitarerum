@@ -433,6 +433,12 @@ export class ProjectApiService {
     );
   }
 
+  deletePublicationEntry(projectId: string, entryId: string): Observable<void> {
+    return this.http.delete<void>(
+      this.url(`/collection-use-projects/${projectId}/publication-entries/${entryId}`),
+    );
+  }
+
   getPublicationLog(projectId: string): Observable<PublicationLog> {
     return this.http.get<PublicationLog>(
       this.url(`/collection-use-projects/${projectId}/publication-log`),

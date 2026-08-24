@@ -167,9 +167,20 @@
                   <button
                     type="button"
                     class="publication-entry__edit-btn"
+                    [disabled]="deleteSubmitting()"
                     (click)="openEdit(entry)"
                   >
                     Edit
+                  </button>
+                  <button
+                    type="button"
+                    class="publication-entry__delete-btn"
+                    [disabled]="deleteSubmitting()"
+                    [attr.aria-label]="'Delete publication entry by ' + entry.addedBy.user.name"
+                    (click)="openDelete(entry)"
+                  >
+                    <span class="pi pi-trash" aria-hidden="true"></span>
+                    Delete
                   </button>
                 }
               </div>
@@ -296,4 +307,20 @@
       }
     </div>
   </section>
+
+  <app-confirm-modal
+    [open]="deleteCandidate() !== null"
+    title="Delete publication entry?"
+    message="This permanently removes the publication note and all attached files. This action cannot be undone."
+    confirmLabel="Delete entry"
+    cancelLabel="Keep entry"
+    tone="danger"
+    [pending]="deleteSubmitting()"
+    (confirmed)="confirmDelete()"
+    (cancelled)="closeDelete()"
+  >
+    @if (deleteError()) {
+      <app-error-message [apiError]="deleteError()!" />
+    }
+  </app-confirm-modal>
 </div>

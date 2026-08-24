@@ -16,6 +16,7 @@ import { ApiError, toApiError } from '@core/http/api-error.model';
 import { EmptyStateComponent } from '@shared/components/empty-state/empty-state.component';
 import { ErrorMessageComponent } from '@shared/components/error-message/error-message.component';
 import { LoadingStateComponent } from '@shared/components/loading-state/loading-state.component';
+import { ConfirmModalComponent } from '@shared/components/confirm-modal/confirm-modal.component';
 
 import { Attachment, PublicationLogEntry } from '../../models/project.model';
 import { PROJECT_API_SERVICE } from '../../services/project-api.service';
@@ -28,7 +29,12 @@ type InitialAttachmentDescriptions = Record<number, string>;
   selector: 'app-project-publication-log-panel',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [LoadingStateComponent, ErrorMessageComponent, EmptyStateComponent],
+  imports: [
+    LoadingStateComponent,
+    ErrorMessageComponent,
+    EmptyStateComponent,
+    ConfirmModalComponent,
+  ],
   templateUrl: './project-publication-log-panel.component.html',
   styleUrl: './project-publication-log-panel.component.scss',
 })
@@ -109,6 +115,11 @@ export class ProjectPublicationLogPanelComponent {
   protected readonly editSubmitting = signal(false);
   protected readonly editError = signal<ApiError | null>(null);
   protected readonly editFormValid = computed(() => this.editNote().trim().length > 0);
+
+  // Destructive entry deletion is always mediated by the shared confirmation dialog.
+  protected readonly deleteCandidate = signal<PublicationLogEntry | null>(null);
+  protected readonly deleteSubmitting = signal(false);
+  protected readonly deleteError = signal<ApiError | null>(null);
 
   // Attachment state, keyed by entry id (uploads) or fileReference (downloads).
   protected readonly expandedEntryId = signal<string | null>(null);
@@ -218,6 +229,37 @@ export class ProjectPublicationLogPanelComponent {
       this.editError.set(toApiError(err));
     } finally {
       this.editSubmitting.set(false);
+    }
+  }
+
+  protected openDelete(entry: PublicationLogEntry): void {
+    if (!this.canWriteEntries() || this.deleteSubmitting()) return;
+    this.deleteCandidate.set(entry);
+    this.deleteError.set(null);
+  }
+
+  protected closeDelete(): void {
+    if (this.deleteSubmitting()) return;
+    this.deleteCandidate.set(null);
+    this.deleteError.set(null);
+  }
+
+  protected async confirmDelete(): Promise<void> {
+    const entry = this.deleteCandidate();
+    if (!entry || this.deleteSubmitting() || !this.canWriteEntries()) return;
+
+    this.deleteSubmitting.set(true);
+    this.deleteError.set(null);
+    try {
+      await firstValueFrom(this.projectService.deletePublicationEntry(this.projectId(), entry.id));
+      if (this.editingEntryId() === entry.id) this.editingEntryId.set(null);
+      if (this.expandedEntryId() === entry.id) this.expandedEntryId.set(null);
+      this.deleteCandidate.set(null);
+      this.publicationResource.reload();
+    } catch (err) {
+      this.deleteError.set(toApiError(err));
+    } finally {
+      this.deleteSubmitting.set(false);
     }
   }
 

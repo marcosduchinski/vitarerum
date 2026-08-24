@@ -921,6 +921,26 @@ export class ProjectApiServiceMock {
     return of(updated);
   }
 
+  deletePublicationEntry(projectId: string, entryId: string): Observable<void> {
+    const project = this.state.projects.get(projectId);
+    if (!project) return throwError(() => ({ status: 404, error: 'NOT_FOUND' }));
+    const gate = this.publicationWriteError(project.status);
+    if (gate) return throwError(() => gate);
+    const entries = this.state.publicationEntries.get(projectId) ?? [];
+    if (!entries.some((entry) => entry.id === entryId)) {
+      return throwError(() => ({
+        status: 404,
+        error: 'ENTRY_NOT_FOUND',
+        message: `No entry found with id ${entryId}`,
+      }));
+    }
+    this.state.publicationEntries.set(
+      projectId,
+      entries.filter((entry) => entry.id !== entryId),
+    );
+    return of(void 0);
+  }
+
   listPublicationEntries(
     projectId: string,
     query: PublicationEntriesQuery = {},

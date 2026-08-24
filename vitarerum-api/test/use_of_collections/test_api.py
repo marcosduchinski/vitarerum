@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 from docx import Document as DocxDocument
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy.exc import IntegrityError
 
 from app.config import settings
 from app.database import get_async_session
@@ -471,6 +472,7 @@ class InMemoryPublicationLogRepository:
     def __init__(self) -> None:
         self.items: dict[str, PublicationLog] = {}
         self.entries: dict[str, PublicationLogEntry] = {}
+        self.entries_in_use: set[str] = set()
 
     async def add(self, publication_log: PublicationLog) -> None:
         self.items[publication_log.id] = publication_log
@@ -507,6 +509,8 @@ class InMemoryPublicationLogRepository:
         ]
 
     async def remove_entries(self, entry_ids):
+        if any(entry_id in self.entries_in_use for entry_id in entry_ids):
+            raise IntegrityError("DELETE publication_log_entries", {}, Exception())
         for entry_id in entry_ids:
             self.entries.pop(entry_id, None)
 
@@ -562,6 +566,9 @@ class CommitOnlySession:
         self._permission_records = permission_records or {}
 
     async def commit(self) -> None:
+        return None
+
+    async def rollback(self) -> None:
         return None
 
     def begin_nested(self):
@@ -5246,6 +5253,99 @@ async def test_edit_publication_entry_updates_note() -> None:
     assert body["id"] == entry_id
     assert body["note"] == "corrected"
     assert body["addedBy"]["permissionId"] == "permission-1"
+
+
+async def test_delete_publication_entry_removes_entry_and_attachments() -> None:
+    storage = InMemoryFileStorage()
+    async with client_with_repos(caller=_CALLER, file_storage=storage) as (
+        client,
+        project_repo,
+        proposal_repo,
+        _,
+    ):
+        await project_repo.add(_project("project-1", status=UseStatus.IN_PROGRESS))
+        await proposal_repo.add(_project_proposal())
+        created = await client.post(
+            "/api/v1/collection-use-projects/project-1/publication-entries",
+            json={"note": "entry to delete"},
+            headers={"X-Permission-Id": "permission-1"},
+        )
+        entry_id = created.json()["id"]
+        uploaded = await client.post(
+            f"/api/v1/collection-use-projects/project-1/publication-entries/{entry_id}/attachments",
+            files={"file": ("paper.pdf", b"%PDF-1.4 paper", "application/pdf")},
+            data={
+                "mediaType": "DOCUMENT",
+                "attachmentDescription": "Publication document",
+            },
+            headers={"X-Permission-Id": "permission-1"},
+        )
+        file_reference = uploaded.json()["fileReference"]
+
+        deleted = await client.delete(
+            f"/api/v1/collection-use-projects/project-1/publication-entries/{entry_id}",
+            headers={"X-Permission-Id": "permission-1"},
+        )
+        listing = await client.get(
+            "/api/v1/collection-use-projects/project-1/publication-entries",
+            headers={"X-Permission-Id": "permission-1"},
+        )
+
+    assert deleted.status_code == 204
+    assert listing.status_code == 200
+    assert listing.json()["content"] == []
+    assert file_reference not in storage.files
+
+
+async def test_delete_publication_entry_returns_404_for_another_project() -> None:
+    async with client_with_repos(caller=_STAFF_CALLER) as (
+        client,
+        project_repo,
+        _,
+        _,
+    ):
+        await project_repo.add(_project("project-1", status=UseStatus.COMPLETED))
+        await project_repo.add(_project("project-2", status=UseStatus.COMPLETED))
+        created = await client.post(
+            "/api/v1/collection-use-projects/project-1/publication-entries",
+            json={"note": "belongs to project one"},
+            headers={"X-Permission-Id": "permission-staff"},
+        )
+
+        deleted = await client.delete(
+            "/api/v1/collection-use-projects/project-2/publication-entries/"
+            f"{created.json()['id']}",
+            headers={"X-Permission-Id": "permission-staff"},
+        )
+
+    assert deleted.status_code == 404
+    assert deleted.json()["error"] == "ENTRY_NOT_FOUND"
+
+
+async def test_delete_confirmed_scientific_return_entry_is_blocked() -> None:
+    async with client_with_repos(caller=_STAFF_CALLER) as (
+        client,
+        project_repo,
+        _,
+        _,
+    ):
+        await project_repo.add(_project("project-1", status=UseStatus.COMPLETED))
+        created = await client.post(
+            "/api/v1/collection-use-projects/project-1/publication-entries",
+            json={"note": "confirmed scientific return"},
+            headers={"X-Permission-Id": "permission-staff"},
+        )
+        entry_id = created.json()["id"]
+        publication_repo = app.dependency_overrides[get_publication_log_repo]()
+        publication_repo.entries_in_use.add(entry_id)
+
+        deleted = await client.delete(
+            f"/api/v1/collection-use-projects/project-1/publication-entries/{entry_id}",
+            headers={"X-Permission-Id": "permission-staff"},
+        )
+
+    assert deleted.status_code == 409
+    assert deleted.json()["error"] == "PUBLICATION_ENTRY_IN_USE"
 
 
 async def test_publication_entry_attachment_upload_and_download() -> None:

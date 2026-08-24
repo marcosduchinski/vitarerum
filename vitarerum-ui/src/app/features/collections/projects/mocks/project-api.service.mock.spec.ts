@@ -804,6 +804,18 @@ describe('ProjectApiServiceMock', () => {
     expect(afterDelete.content.find((e) => e.id === entry.id)?.attachments).toHaveLength(0);
   });
 
+  it('deletes a publication entry after confirmation by the caller', async () => {
+    await firstValueFrom(service.startProject('proj-4', { note: 'Starting.' }));
+    const entry = await firstValueFrom(
+      service.createPublicationEntry('proj-4', { note: 'Temporary publication.' }),
+    );
+
+    await firstValueFrom(service.deletePublicationEntry('proj-4', entry.id));
+
+    const page = await firstValueFrom(service.listPublicationEntries('proj-4'));
+    expect(page.content.some((item) => item.id === entry.id)).toBe(false);
+  });
+
   it('rejects publication log lookup before the first entry', async () => {
     await expect(firstValueFrom(service.getPublicationLog('proj-4'))).rejects.toMatchObject({
       status: 404,

@@ -332,9 +332,9 @@ attachmentDescription : String (required)
 
 ---
 
-### `POST /collection-use-projects/{project_id}/publication-entries` · `PATCH …/{entry_id}` · `…/{entry_id}/attachments`
+### `POST /collection-use-projects/{project_id}/publication-entries` · `PATCH/DELETE …/{entry_id}` · `…/{entry_id}/attachments`
 
-**Description** — Staff add, edit, and attach files to **publication log entries** (a `note` recording a publication/output derived from the project, plus optional attachments). Request/response shapes are defined in the researcher group (file 04). The publication log carries an informational `curator` (the staff member related to the project) and is **not concluded**.
+**Description** — Staff add, edit, delete, and attach files to **publication log entries** (a `note` recording a publication/output derived from the project, plus optional attachments). Deletion also removes attached files, but is refused with `409 PUBLICATION_ENTRY_IN_USE` when the entry records a confirmed scientific-return candidate. Request/response shapes are defined in the researcher group (file 04). The publication log carries an informational `curator` (the staff member related to the project) and is **not concluded**.
 
 **Phase/role gate differs from the other journals.** A publication entry may be written only by:
 

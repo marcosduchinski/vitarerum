@@ -887,6 +887,54 @@ describe('project log pages', () => {
       state.publicationEntries.get('proj-3')?.some((e) => e.note === 'Catalogued the output.'),
     ).toBe(true);
   });
+
+  it('warns before deleting a publication entry and removes it only after confirmation', async () => {
+    const state = TestBed.inject(MockProjectState);
+    const projectService = TestBed.inject(PROJECT_API_SERVICE);
+    const project = state.projects.get('proj-3')!;
+    state.projects.set('proj-3', { ...project, status: 'COMPLETED' });
+    const entry = await firstValueFrom(
+      projectService.createPublicationEntry('proj-3', { note: 'Publication to remove.' }),
+    );
+
+    const fixture = TestBed.createComponent(ProjectPublicationLogPanelComponent);
+    fixture.componentRef.setInput('projectId', 'proj-3');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const root = fixture.nativeElement as HTMLElement;
+    const deleteCreatedEntry = (): void => {
+      const entryElement = Array.from(
+        root.querySelectorAll<HTMLElement>('.publication-entry'),
+      ).find((element) => element.textContent?.includes('Publication to remove.'));
+      entryElement!.querySelector<HTMLButtonElement>('.publication-entry__delete-btn')!.click();
+    };
+    deleteCreatedEntry();
+    fixture.detectChanges();
+
+    expect(root.textContent).toContain('Delete publication entry?');
+    expect(root.textContent).toContain('This action cannot be undone.');
+    root.querySelector<HTMLButtonElement>('.confirm-modal__button--secondary')!.click();
+    fixture.detectChanges();
+    expect(state.publicationEntries.get('proj-3')?.some((item) => item.id === entry.id)).toBe(true);
+
+    deleteCreatedEntry();
+    fixture.detectChanges();
+    await (
+      fixture.componentInstance as unknown as {
+        confirmDelete(): Promise<void>;
+      }
+    ).confirmDelete();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(state.publicationEntries.get('proj-3')?.some((item) => item.id === entry.id)).toBe(
+      false,
+    );
+    expect(root.textContent).not.toContain('Publication to remove.');
+  });
 });
 
 function render<T extends { readonly id: () => string }>(

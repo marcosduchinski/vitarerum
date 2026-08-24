@@ -289,7 +289,8 @@
 }
 
 .publication-entry__toggle,
-.publication-entry__edit-btn {
+.publication-entry__edit-btn,
+.publication-entry__delete-btn {
   display: inline-flex;
   gap: 0.4rem;
   align-items: center;
@@ -312,6 +313,22 @@
   &:focus-visible {
     outline: none;
     box-shadow: var(--focus-ring);
+  }
+}
+
+.publication-entry__delete-btn {
+  margin-left: auto;
+  color: var(--color-cta);
+
+  &:hover:not(:disabled) {
+    border-color: var(--color-cta);
+    background: color-mix(in srgb, var(--color-cta) 10%, var(--color-bg));
+    color: var(--color-cta);
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
   }
 }
 

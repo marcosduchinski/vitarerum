@@ -786,6 +786,29 @@ entry_id   : UUID (required)
 
 ---
 
+### `DELETE /collection-use-projects/{project_id}/publication-entries/{entry_id}`
+
+**Description** — Permanently deletes a publication log entry and all of its
+attachments. Subject to the same phase/role gate as adding and editing entries.
+The publication log header remains available when its last entry is deleted.
+
+**Response `204 No Content`** — the entry and its attachment files were deleted.
+
+**Response `404 Not Found`** — the entry does not exist or belongs to another
+project (`ENTRY_NOT_FOUND`).
+
+**Response `409 Conflict`** — the entry is the institutional record of a
+confirmed scientific-return candidate and therefore cannot be deleted:
+
+```json
+{
+  "error": "PUBLICATION_ENTRY_IN_USE",
+  "message": "This publication entry records a confirmed scientific return and cannot be deleted."
+}
+```
+
+---
+
 ### `GET /collection-use-projects/{project_id}/publication-entries`
 
 **Description** — List all publication log entries for a project, ordered chronologically. Includes the `publicationLog` header (`null` if no entry has been added yet) and `attachments` per entry.

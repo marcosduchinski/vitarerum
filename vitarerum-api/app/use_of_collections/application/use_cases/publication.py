@@ -182,6 +182,45 @@ class EditPublicationLogEntry:
 
 
 @dataclass(slots=True)
+class DeletePublicationLogEntryInput:
+    project_id: CollectionUseProjectId
+    entry_id: PublicationLogEntryId
+    caller: Actor
+
+
+class DeletePublicationLogEntry:
+    """Delete one entry and return its attachments for post-commit cleanup."""
+
+    def __init__(
+        self,
+        project_repository: CollectionUseProjectRepository,
+        publication_log_repository: PublicationLogRepository,
+    ) -> None:
+        self._project_repo = project_repository
+        self._repo = publication_log_repository
+
+    async def execute(
+        self, data: DeletePublicationLogEntryInput
+    ) -> tuple[Attachment, ...]:
+        project = await self._project_repo.get_by_id(data.project_id)
+        if project is None:
+            raise LookupError(f"No project found with id {data.project_id}")
+        _check_publication_entry_allowed(project, data.caller)
+        entry = await self._repo.get_entry_by_id(data.entry_id)
+        if entry is None:
+            raise LookupError(f"No entry found with id {data.entry_id}")
+        publication_log = await self._repo.get_by_id(entry.publication_log_id)
+        if (
+            publication_log is None
+            or publication_log.collection_use_project_id != data.project_id
+        ):
+            raise LookupError(f"No entry found with id {data.entry_id}")
+        attachments = tuple(entry.attachments)
+        await self._repo.remove_entries([entry.id])
+        return attachments
+
+
+@dataclass(slots=True)
 class GetPublicationLogInput:
     project_id: CollectionUseProjectId
 
