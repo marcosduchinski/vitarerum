@@ -14,6 +14,7 @@ caller's job, which keeps a tool testable against fake sources alone.
 from __future__ import annotations
 
 import hashlib
+import json
 from uuid import uuid4
 
 from app.scientific_return.application.analysis import (
@@ -64,6 +65,19 @@ def tool_idempotency_key(
             ",".join(execution.sources),
         )
     )
+    return hashlib.sha256(basis.encode("utf-8")).hexdigest()
+
+
+def normalized_tool_idempotency_key(
+    investigation_id: str,
+    sequence: int,
+    invocation: dict[str, object],
+) -> str:
+    """Stable key for new tool contracts without changing legacy keys."""
+    normalized = json.dumps(
+        invocation, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    )
+    basis = f"{investigation_id}|{sequence}|{normalized}"
     return hashlib.sha256(basis.encode("utf-8")).hexdigest()
 
 

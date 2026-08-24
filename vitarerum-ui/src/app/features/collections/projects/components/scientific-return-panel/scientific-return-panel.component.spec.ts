@@ -6,7 +6,9 @@ import { IDENTITY_SERVICE } from '@core/auth/identity.service';
 import { IdentitySession } from '@core/auth/models/identity-session.model';
 
 import {
+  FullAgenticInvestigation,
   ScientificReturnInvestigation,
+  ScientificReturnKnowledgeItem,
   ScientificReturnWatch,
   ScientificReturnWatchStatus,
 } from '../../models/scientific-return.model';
@@ -82,6 +84,9 @@ class ApiStub {
   watch = makeWatch();
   statusCalls: { watchId: string; status: ScientificReturnWatchStatus }[] = [];
   intervalCalls: { watchId: string; reviewIntervalDays: number }[] = [];
+  fullAgentic: FullAgenticInvestigation[] = [];
+  startedFullAgentic: string[] = [];
+  knowledge: ScientificReturnKnowledgeItem[] = [];
 
   getWatch(): Observable<ScientificReturnWatch> {
     return of(this.watch);
@@ -93,6 +98,63 @@ class ApiStub {
 
   listRuns(): Observable<typeof EMPTY_PAGE> {
     return of(EMPTY_PAGE);
+  }
+
+  listKnowledgeItems(): Observable<readonly ScientificReturnKnowledgeItem[]> {
+    return of(this.knowledge);
+  }
+
+  listFullAgenticInvestigations(): Observable<readonly FullAgenticInvestigation[]> {
+    return of(this.fullAgentic);
+  }
+
+  startFullAgenticInvestigation(watchId: string): Observable<FullAgenticInvestigation> {
+    this.startedFullAgentic.push(watchId);
+    const item: FullAgenticInvestigation = {
+      id: 'full-agentic-1',
+      watchId,
+      objective: 'DISCOVER_CANDIDATE',
+      candidateId: null,
+      searchRunId: null,
+      status: 'QUEUED',
+      budget: {},
+      usage: { queries: 0, candidates: 0 },
+      createdBy: 'perm-bob-curatorial',
+      createdAt: '2026-08-21T10:00:00Z',
+      startedAt: null,
+      completedAt: null,
+      heartbeatAt: null,
+      failureReason: null,
+    };
+    this.fullAgentic = [item];
+    return of(item);
+  }
+
+  createInventoryExample(input: {
+    registeredNumber: string;
+    observedForm: string;
+    content: string;
+  }): Observable<ScientificReturnKnowledgeItem> {
+    const item: ScientificReturnKnowledgeItem = {
+      id: 'knowledge-1',
+      institutionId: null,
+      kind: 'INVENTORY_VARIATION_EXAMPLE',
+      status: 'ACTIVE',
+      content: input.content,
+      registeredNumber: input.registeredNumber,
+      observedForm: input.observedForm,
+      supersedesId: null,
+      sourceCandidateId: null,
+      sourceDecisionId: null,
+      createdBy: 'perm-bob-curatorial',
+      createdAt: '2026-08-21T10:00:00Z',
+      validatedBy: 'perm-bob-curatorial',
+      validatedAt: '2026-08-21T10:00:00Z',
+      retiredBy: null,
+      retiredAt: null,
+    };
+    this.knowledge = [item];
+    return of(item);
   }
 
   investigations: ScientificReturnInvestigation[] = [];
@@ -251,6 +313,39 @@ describe('ScientificReturnPanelComponent', () => {
 
     expect(api.startedWatchInvestigations).toEqual(['watch-1']);
     expect(investigationRows()).toHaveLength(1);
+  });
+
+  it('queues the autonomous flow explicitly', async () => {
+    const button = [...(fixture.nativeElement as HTMLElement).querySelectorAll('button')].find(
+      (item) => item.textContent?.includes('Start autonomous search'),
+    )!;
+    button.click();
+    await settle();
+
+    expect(api.startedFullAgentic).toEqual(['watch-1']);
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('queued');
+  });
+
+  it('turns curator prose into an active inventory example', async () => {
+    const root = fixture.nativeElement as HTMLElement;
+    const values = [
+      ['MUHNAC/MB06-005747', 'MUHNAC/MB06-005747'],
+      ['MB06-5747', 'MB06-5747'],
+      ['The publication omitted zeroes.', 'Explain the variation in your own words.'],
+    ] as const;
+    for (const [value, placeholder] of values) {
+      const field = root.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+        `[placeholder="${placeholder}"]`,
+      )!;
+      field.value = value;
+      field.dispatchEvent(new Event('input'));
+    }
+    await settle();
+    root.querySelector<HTMLFormElement>('.decision-form')!.dispatchEvent(new SubmitEvent('submit'));
+    await settle();
+
+    expect(api.knowledge[0].registeredNumber).toBe('MUHNAC/MB06-005747');
+    expect(root.textContent).toContain('MB06-5747');
   });
 
   it('saves a new interval and shows the next review the server returned', async () => {

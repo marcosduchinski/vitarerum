@@ -81,6 +81,22 @@ class Settings(BaseSettings):
     # Only sources that answer an exact phrase are useful for an inventory
     # lookup; see EXACT_MATCH_SOURCES in the action policy.
     scientific_return_agent_allowed_sources: str = "EUROPE_PMC"
+    # Independent, real agentic flow. Its switch and budgets intentionally do
+    # not reuse the legacy shadow/policy agent configuration above.
+    scientific_return_full_agentic_enabled: bool = False
+    scientific_return_full_agentic_sources: str = "CROSSREF"
+    scientific_return_full_agentic_max_iterations: int = 4
+    scientific_return_full_agentic_max_queries: int = 12
+    scientific_return_full_agentic_max_results: int = 40
+    scientific_return_full_agentic_max_candidates: int = 5
+    scientific_return_full_agentic_max_llm_calls: int = 20
+    scientific_return_full_agentic_circuit_min_decisions: int = 0
+    scientific_return_full_agentic_circuit_min_precision: float = 0.0
+    scientific_return_full_agentic_dispatcher: str = "DATABASE"
+    scientific_return_cloud_tasks_queue_url: str = ""
+    scientific_return_cloud_tasks_worker_url: str = ""
+    scientific_return_cloud_tasks_service_account: str = ""
+    scientific_return_full_agentic_worker_token: str = ""
     # Public proposal submission (unauthenticated citizen intake, double opt-in).
     # Default is Cloudflare's always-passing test secret key; override in prod.
     turnstile_secret_key: str = "1x0000000000000000000000000000000AA"

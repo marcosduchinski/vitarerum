@@ -34,6 +34,7 @@ from app.scientific_return.domain.models import (
     ProjectSnapshotPayload,
     ScientificReturnProjectSnapshot,
     ScientificReturnQuery,
+    ScientificReturnRunId,
     ScientificReturnSearchRun,
     ScientificReturnWatch,
     ScientificReturnWatchId,
@@ -272,6 +273,11 @@ class ScientificReturnMetrics:
     pending_candidates: int
     confirmed_candidates: int
     dismissed_candidates: int
+    full_agentic_runs: int = 0
+    full_agentic_failed_runs: int = 0
+    full_agentic_pending_candidates: int = 0
+    full_agentic_confirmed_candidates: int = 0
+    full_agentic_dismissed_candidates: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -321,6 +327,10 @@ class ScientificReturnRepository(Protocol):
     async def add_run(self, run: ScientificReturnSearchRun) -> None: ...
 
     async def save_run(self, run: ScientificReturnSearchRun) -> None: ...
+
+    async def get_run(
+        self, run_id: ScientificReturnRunId
+    ) -> ScientificReturnSearchRun | None: ...
 
     async def list_runs(
         self, watch_id: ScientificReturnWatchId, page: int, size: int

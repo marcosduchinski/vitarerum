@@ -152,6 +152,20 @@
             <button
               type="button"
               class="button"
+              [disabled]="busyAction() !== null || fullAgenticBusy()"
+              (click)="startFullAgentic(currentWatch.id)"
+            >
+              @if (fullAgenticBusy()) {
+                <span class="pi pi-spin pi-spinner" aria-hidden="true"></span>
+                Queuing agent
+              } @else {
+                <span class="pi pi-bolt" aria-hidden="true"></span>
+                Start autonomous search
+              }
+            </button>
+            <button
+              type="button"
+              class="button"
               [disabled]="busyAction() !== null || runningInvestigationId() !== null"
               (click)="investigateWatch(currentWatch.id)"
             >
@@ -202,6 +216,163 @@
       (cancelled)="cancelCloseConfirm()"
     />
 
+    <section class="run-history" aria-labelledby="agentic-workspace-heading">
+      <div class="run-history__heading">
+        <div>
+          <p class="section-kicker">Autonomous workflow</p>
+          <h3 id="agentic-workspace-heading">Agentic investigations</h3>
+        </div>
+        <button type="button" class="text-button" (click)="fullAgenticResource.reload()">
+          <span class="pi pi-refresh" aria-hidden="true"></span>
+          Refresh
+        </button>
+      </div>
+      <p>
+        The agent creates its own queries, chooses enabled sources and reads the context. Results
+        remain candidates until a curator decides.
+      </p>
+      @if (!fullAgenticInvestigations().length) {
+        <p class="run-history__empty">No autonomous investigation recorded.</p>
+      } @else {
+        <ol class="run-list">
+          @for (investigation of fullAgenticInvestigations(); track investigation.id) {
+            <li>
+              <button
+                type="button"
+                class="run-row"
+                [attr.aria-expanded]="expandedFullAgenticId() === investigation.id"
+                (click)="toggleFullAgentic(investigation.id)"
+              >
+                <span class="run-row__status" [attr.data-status]="investigation.status">
+                  {{ investigation.status.replaceAll('_', ' ').toLowerCase() }}
+                </span>
+                <span>{{ investigation.createdAt | date: 'medium' }}</span>
+                <strong>
+                  {{ investigation.usage['queries'] }} queries ·
+                  {{ investigation.usage['candidates'] }} candidates
+                </strong>
+                <span
+                  class="pi"
+                  [class.pi-chevron-down]="expandedFullAgenticId() !== investigation.id"
+                  [class.pi-chevron-up]="expandedFullAgenticId() === investigation.id"
+                  aria-hidden="true"
+                ></span>
+              </button>
+              @if (investigation.status === 'QUEUED' || investigation.status === 'RUNNING') {
+                <div class="investigation-detail">
+                  <button
+                    type="button"
+                    class="text-button text-button--danger"
+                    [disabled]="fullAgenticBusy()"
+                    (click)="cancelFullAgentic(investigation.id)"
+                  >
+                    Cancel investigation
+                  </button>
+                </div>
+              }
+              @if (expandedFullAgenticId() === investigation.id) {
+                <div class="investigation-detail">
+                  @for (
+                    event of fullAgenticTrajectory()[investigation.id] ?? [];
+                    track event.sequence
+                  ) {
+                    <p>
+                      <strong>#{{ event.sequence }} {{ event.kind.replaceAll('_', ' ') }}</strong>
+                      · {{ event.occurredAt | date: 'medium' }}
+                    </p>
+                  } @empty {
+                    <p>Trajectory is being recorded.</p>
+                  }
+                </div>
+              }
+              @if (investigation.failureReason) {
+                <div class="investigation-detail" role="alert">
+                  {{ investigation.failureReason }}
+                </div>
+              }
+            </li>
+          }
+        </ol>
+      }
+    </section>
+
+    <section class="run-history" aria-labelledby="knowledge-workspace-heading">
+      <div class="run-history__heading">
+        <div>
+          <p class="section-kicker">Museum memory</p>
+          <h3 id="knowledge-workspace-heading">Inventory citation examples</h3>
+        </div>
+        <span>{{ knowledgeItems().length }} examples and lessons</span>
+      </div>
+      <p>
+        Describe what you observed; no masks, regular expressions or programming rules are needed.
+      </p>
+      @if (canReview()) {
+        <form class="decision-form decision-form--grid" (submit)="saveInventoryExample($event)">
+          <label>
+            Registered number
+            <input
+              type="text"
+              placeholder="MUHNAC/MB06-005747"
+              [formField]="knowledgeForm.registeredNumber"
+            />
+          </label>
+          <label>
+            Form found in the publication
+            <input type="text" placeholder="MB06-5747" [formField]="knowledgeForm.observedForm" />
+          </label>
+          <label class="decision-form__wide">
+            Curator explanation
+            <textarea
+              rows="2"
+              placeholder="Explain the variation in your own words."
+              [formField]="knowledgeForm.content"
+            ></textarea>
+          </label>
+          <button
+            type="submit"
+            class="button button--primary"
+            [disabled]="knowledgeDraftInvalid() || knowledgeBusyId() !== null"
+          >
+            Save example
+          </button>
+        </form>
+      }
+      @if (knowledgeItems().length) {
+        <ol class="run-list">
+          @for (item of knowledgeItems(); track item.id) {
+            <li [attr.data-status]="item.status">
+              <div class="run-row">
+                <span class="run-row__status">{{ item.status.toLowerCase() }}</span>
+                @if (item.registeredNumber && item.observedForm) {
+                  <code>{{ item.registeredNumber }} → {{ item.observedForm }}</code>
+                }
+                <p>{{ item.content }}</p>
+                @if (canReview() && item.status === 'PROPOSED') {
+                  <button
+                    type="button"
+                    class="button button--primary"
+                    [disabled]="knowledgeBusyId() !== null"
+                    (click)="activateKnowledge(item)"
+                  >
+                    Validate and activate
+                  </button>
+                } @else if (canReview() && item.status === 'ACTIVE') {
+                  <button
+                    type="button"
+                    class="text-button text-button--danger"
+                    [disabled]="knowledgeBusyId() !== null"
+                    (click)="retireKnowledge(item)"
+                  >
+                    Retire
+                  </button>
+                }
+              </div>
+            </li>
+          }
+        </ol>
+      }
+    </section>
 
     <div class="candidate-section">
       <div class="candidate-section__heading">
@@ -238,6 +409,11 @@
                 <div class="candidate__source">
                   <span>{{ candidate.source }}</span>
                   <span>{{ candidate.publicationDate ?? 'Date unavailable' }}</span>
+                  @if (candidate.agenticCreated) {
+                    <span>Agent found</span>
+                  } @else if (candidate.agenticRediscovered) {
+                    <span>Agent enriched</span>
+                  }
                 </div>
                 <span class="candidate__status">{{ candidate.status.toLowerCase() }}</span>
               </div>

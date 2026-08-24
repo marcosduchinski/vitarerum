@@ -24,11 +24,16 @@ from app.scientific_return.domain.enums import (
     EvidenceType,
     InvestigationObjective,
     InvestigationStatus,
+    RunKind,
     RunStatus,
     WatchStatus,
 )
 from app.scientific_return.domain.evidence_delta import (
     evidence_identity as _evidence_identity,
+)
+from app.scientific_return.domain.full_agentic_models import (
+    CandidateDecisionContext,
+    KnowledgeItemId,
 )
 from app.scientific_return.domain.investigation_contracts import (
     AgentObservation,
@@ -73,6 +78,7 @@ from app.scientific_return.domain.models import (
     ScientificReturnWatchId,
 )
 from app.scientific_return.infrastructure.models import (
+    AgenticInvestigationCandidateRecord,
     CandidateAgentAnalysisRecord,
     CandidateDecisionRecord,
     CandidateEvidenceRecord,
@@ -92,6 +98,7 @@ _SNAPSHOT_PAYLOAD = "scientific_return_snapshots.payload"
 _QUERY_TEXT = "scientific_return_queries.query_text"
 _AGENT_INPUT = "scientific_return_agent_analyses.input_payload"
 _AGENT_ANALYSIS = "scientific_return_agent_analyses.analysis_payload"
+_DECISION_CONTEXT = "scientific_return_decisions.decision_context"
 _ITERATION_OBSERVATION = (
     "scientific_return_agent_iterations.observation_payload"
 )
@@ -153,6 +160,7 @@ def _run_to_domain(record: ScientificReturnRunRecord) -> ScientificReturnSearchR
         candidate_count=record.candidate_count,
         new_candidate_count=record.new_candidate_count,
         error_message=record.error_message,
+        run_kind=record.run_kind,
     )
 
 
@@ -600,6 +608,7 @@ def _tool_execution_to_domain(
 
 
 def _candidate_to_domain(record: CandidatePublicationRecord) -> CandidatePublication:
+    relation_kinds = {item.relation_kind.value for item in record.agentic_links}
     return CandidatePublication(
         id=CandidatePublicationId(record.id),
         watch_id=ScientificReturnWatchId(record.watch_id),
@@ -619,10 +628,15 @@ def _candidate_to_domain(record: CandidatePublicationRecord) -> CandidatePublica
         confirmed_publication_entry_id=record.confirmed_publication_entry_id,
         created_at=record.created_at,
         evidences=[_evidence_to_domain(item) for item in record.evidences],
+        first_seen_kind=record.first_seen_run.run_kind,
+        agentic_created="CREATED" in relation_kinds,
+        agentic_rediscovered="REDISCOVERED" in relation_kinds,
     )
 
 
-def _decision_to_domain(record: CandidateDecisionRecord) -> CandidateDecision:
+def _decision_to_domain(
+    record: CandidateDecisionRecord, encryptor: FieldEncryptor
+) -> CandidateDecision:
     correction = (
         CandidateCorrection(
             title=record.correction.get("title"),
@@ -637,6 +651,17 @@ def _decision_to_domain(record: CandidateDecisionRecord) -> CandidateDecision:
         if record.correction is not None
         else None
     )
+    raw_context = encryptor.decrypt_json(
+        record.decision_context_encrypted, _DECISION_CONTEXT
+    )
+    context = cast(dict[str, object] | None, raw_context)
+
+    def context_strings(key: str) -> tuple[str, ...]:
+        if context is None:
+            return ()
+        value = context.get(key, [])
+        return tuple(str(item) for item in value) if isinstance(value, list) else ()
+
     return CandidateDecision(
         id=CandidateDecisionId(record.id),
         candidate_id=CandidatePublicationId(record.candidate_id),
@@ -646,6 +671,24 @@ def _decision_to_domain(record: CandidateDecisionRecord) -> CandidateDecision:
         decided_at=record.decided_at,
         evidence_snapshot=tuple(record.evidence_snapshot),
         correction=correction,
+        decision_context=(
+            CandidateDecisionContext(
+                version=int(str(context["version"])),
+                passages=context_strings("passages"),
+                inventory_forms=context_strings("inventory_forms"),
+                queries=context_strings("queries"),
+                sources=context_strings("sources"),
+                explanation=str(context["explanation"]),
+                confidence=AgentConfidence(str(context["confidence"])),
+                contradictions=context_strings("contradictions"),
+                knowledge_item_ids=tuple(
+                    KnowledgeItemId(value)
+                    for value in context_strings("knowledge_item_ids")
+                ),
+            )
+            if context is not None
+            else None
+        ),
     )
 
 
@@ -835,6 +878,7 @@ class SqlAlchemyScientificReturnRepository:
                 candidate_count=run.candidate_count,
                 new_candidate_count=run.new_candidate_count,
                 error_message=run.error_message,
+                run_kind=run.run_kind,
             )
         )
         await self._session.flush()
@@ -850,6 +894,12 @@ class SqlAlchemyScientificReturnRepository:
         record.new_candidate_count = run.new_candidate_count
         record.error_message = run.error_message
         await self._session.flush()
+
+    async def get_run(
+        self, run_id: ScientificReturnRunId
+    ) -> ScientificReturnSearchRun | None:
+        record = await self._session.get(ScientificReturnRunRecord, run_id)
+        return _run_to_domain(record) if record is not None else None
 
     async def list_runs(
         self, watch_id: ScientificReturnWatchId, page: int, size: int
@@ -910,7 +960,11 @@ class SqlAlchemyScientificReturnRepository:
         result = await self._session.execute(
             select(CandidatePublicationRecord)
             .where(CandidatePublicationRecord.id == candidate_id)
-            .options(selectinload(CandidatePublicationRecord.evidences))
+            .options(
+                selectinload(CandidatePublicationRecord.evidences),
+                selectinload(CandidatePublicationRecord.first_seen_run),
+                selectinload(CandidatePublicationRecord.agentic_links),
+            )
         )
         record = result.scalar_one_or_none()
         return _candidate_to_domain(record) if record is not None else None
@@ -924,7 +978,11 @@ class SqlAlchemyScientificReturnRepository:
                 CandidatePublicationRecord.watch_id == watch_id,
                 CandidatePublicationRecord.deduplication_key == key,
             )
-            .options(selectinload(CandidatePublicationRecord.evidences))
+            .options(
+                selectinload(CandidatePublicationRecord.evidences),
+                selectinload(CandidatePublicationRecord.first_seen_run),
+                selectinload(CandidatePublicationRecord.agentic_links),
+            )
         )
         record = result.scalar_one_or_none()
         return _candidate_to_domain(record) if record is not None else None
@@ -1011,7 +1069,11 @@ class SqlAlchemyScientificReturnRepository:
                 CandidatePublicationRecord.watch_id == ScientificReturnWatchRecord.id,
             )
             .where(*filters)
-            .options(selectinload(CandidatePublicationRecord.evidences))
+            .options(
+                selectinload(CandidatePublicationRecord.evidences),
+                selectinload(CandidatePublicationRecord.first_seen_run),
+                selectinload(CandidatePublicationRecord.agentic_links),
+            )
             .order_by(
                 CandidatePublicationRecord.created_at.desc(),
                 CandidatePublicationRecord.id.desc(),
@@ -1033,6 +1095,14 @@ class SqlAlchemyScientificReturnRepository:
                 evidence_snapshot=list(decision.evidence_snapshot),
                 correction=(
                     asdict(decision.correction) if decision.correction else None
+                ),
+                decision_context_encrypted=self._encryptor.encrypt_json(
+                    (
+                        asdict(decision.decision_context)
+                        if decision.decision_context is not None
+                        else None
+                    ),
+                    _DECISION_CONTEXT,
                 ),
             )
         )
@@ -1083,7 +1153,11 @@ class SqlAlchemyScientificReturnRepository:
             ).scalar_one()
         )
         result = await self._session.execute(
-            joined.options(selectinload(CandidatePublicationRecord.evidences))
+            joined.options(
+                selectinload(CandidatePublicationRecord.evidences),
+                selectinload(CandidatePublicationRecord.first_seen_run),
+                selectinload(CandidatePublicationRecord.agentic_links),
+            )
             .order_by(
                 CandidatePublicationRecord.created_at.desc(),
                 CandidatePublicationRecord.id.desc(),
@@ -1110,7 +1184,10 @@ class SqlAlchemyScientificReturnRepository:
             .where(CandidateDecisionRecord.candidate_id == candidate_id)
             .order_by(CandidateDecisionRecord.decided_at, CandidateDecisionRecord.id)
         )
-        return [_decision_to_domain(item) for item in result.scalars().all()]
+        return [
+            _decision_to_domain(item, self._encryptor)
+            for item in result.scalars().all()
+        ]
 
     async def get_metrics(self) -> ScientificReturnMetrics:
         async def count(model: type[Any], *filters: ColumnElement[bool]) -> int:
@@ -1119,27 +1196,77 @@ class SqlAlchemyScientificReturnRepository:
                 statement = statement.where(*filters)
             return int((await self._session.execute(statement)).scalar_one())
 
+        async def count_candidates_for_run_kind(
+            run_kind: RunKind, status: CandidateStatus
+        ) -> int:
+            statement = (
+                select(func.count(func.distinct(CandidatePublicationRecord.id)))
+                .select_from(CandidatePublicationRecord)
+                .join(
+                    ScientificReturnRunRecord,
+                    CandidatePublicationRecord.first_seen_run_id
+                    == ScientificReturnRunRecord.id,
+                )
+                .where(
+                    ScientificReturnRunRecord.run_kind == run_kind,
+                    CandidatePublicationRecord.status == status,
+                )
+            )
+            return int((await self._session.execute(statement)).scalar_one())
+
+        async def count_agentic_linked(status: CandidateStatus) -> int:
+            statement = (
+                select(func.count(func.distinct(CandidatePublicationRecord.id)))
+                .select_from(CandidatePublicationRecord)
+                .join(
+                    AgenticInvestigationCandidateRecord,
+                    AgenticInvestigationCandidateRecord.candidate_id
+                    == CandidatePublicationRecord.id,
+                )
+                .where(CandidatePublicationRecord.status == status)
+            )
+            return int((await self._session.execute(statement)).scalar_one())
+
         return ScientificReturnMetrics(
             active_watches=await count(
                 ScientificReturnWatchRecord,
                 ScientificReturnWatchRecord.status == WatchStatus.ACTIVE,
             ),
-            runs=await count(ScientificReturnRunRecord),
+            runs=await count(
+                ScientificReturnRunRecord,
+                ScientificReturnRunRecord.run_kind == RunKind.DETERMINISTIC,
+            ),
             failed_runs=await count(
                 ScientificReturnRunRecord,
                 ScientificReturnRunRecord.status == RunStatus.FAILED,
+                ScientificReturnRunRecord.run_kind == RunKind.DETERMINISTIC,
             ),
-            pending_candidates=await count(
-                CandidatePublicationRecord,
-                CandidatePublicationRecord.status == CandidateStatus.PENDING,
+            pending_candidates=await count_candidates_for_run_kind(
+                RunKind.DETERMINISTIC, CandidateStatus.PENDING
             ),
-            confirmed_candidates=await count(
-                CandidatePublicationRecord,
-                CandidatePublicationRecord.status == CandidateStatus.CONFIRMED,
+            confirmed_candidates=await count_candidates_for_run_kind(
+                RunKind.DETERMINISTIC, CandidateStatus.CONFIRMED
             ),
-            dismissed_candidates=await count(
-                CandidatePublicationRecord,
-                CandidatePublicationRecord.status == CandidateStatus.DISMISSED,
+            dismissed_candidates=await count_candidates_for_run_kind(
+                RunKind.DETERMINISTIC, CandidateStatus.DISMISSED
+            ),
+            full_agentic_runs=await count(
+                ScientificReturnRunRecord,
+                ScientificReturnRunRecord.run_kind == RunKind.FULL_AGENTIC,
+            ),
+            full_agentic_failed_runs=await count(
+                ScientificReturnRunRecord,
+                ScientificReturnRunRecord.run_kind == RunKind.FULL_AGENTIC,
+                ScientificReturnRunRecord.status == RunStatus.FAILED,
+            ),
+            full_agentic_pending_candidates=await count_agentic_linked(
+                CandidateStatus.PENDING
+            ),
+            full_agentic_confirmed_candidates=await count_agentic_linked(
+                CandidateStatus.CONFIRMED
+            ),
+            full_agentic_dismissed_candidates=await count_agentic_linked(
+                CandidateStatus.DISMISSED
             ),
         )
 

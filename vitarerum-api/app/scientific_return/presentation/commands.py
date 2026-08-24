@@ -22,16 +22,21 @@ from app.scientific_return.application.evaluation import (
     evaluate_cases,
     finalize_human_review_report,
 )
+from app.scientific_return.application.full_agentic import ExecuteFullAgenticInput
 from app.scientific_return.application.ports import (
     BibliographicSource,
     InvestigationReasoner,
 )
 from app.scientific_return.application.use_cases import RunScientificReturnSearch
 from app.scientific_return.domain.enums import InvestigationMode
+from app.scientific_return.domain.full_agentic_models import (
+    FullAgenticInvestigationId,
+)
 from app.scientific_return.presentation.dependencies import (
     get_bibliographic_sources,
     get_crossref_source,
     get_europe_pmc_source,
+    get_full_agentic_executor,
     get_max_queries,
     get_openalex_source,
     get_repository,
@@ -44,9 +49,7 @@ logger = logging.getLogger(__name__)
 def phase_zero_sources(selection: str) -> tuple[BibliographicSource, ...]:
     requested = tuple(
         dict.fromkeys(
-            item.strip().casefold()
-            for item in selection.split(",")
-            if item.strip()
+            item.strip().casefold() for item in selection.split(",") if item.strip()
         )
     )
     if not requested or requested == ("all",):
@@ -161,6 +164,78 @@ async def run_due(*, limit: int) -> tuple[int, int]:
     return completed, failed
 
 
+async def run_full_agentic_queue(*, limit: int, worker_id: str) -> tuple[int, int]:
+    """Claim and execute durable DB-queued investigations without overlap."""
+    completed = 0
+    failed = 0
+    for _ in range(limit):
+        async with async_session_factory() as session:
+            investigation_id = (
+                await session.execute(
+                    text(
+                        "SELECT id FROM sr_full_agentic_investigations "
+                        "WHERE status = 'QUEUED' "
+                        "OR (status IN ('RUNNING','CANCEL_REQUESTED') AND "
+                        "(lease_expires_at IS NULL OR lease_expires_at < now())) "
+                        "ORDER BY created_at "
+                        "FOR UPDATE SKIP LOCKED LIMIT 1"
+                    )
+                )
+            ).scalar_one_or_none()
+            if investigation_id is None:
+                await session.rollback()
+                break
+            try:
+                item = await get_full_agentic_executor(session).execute(
+                    ExecuteFullAgenticInput(
+                        investigation_id=FullAgenticInvestigationId(investigation_id),
+                        worker_id=worker_id,
+                    )
+                )
+                if item.status.value == "FAILED":
+                    failed += 1
+                else:
+                    completed += 1
+                if item.search_run_id is not None:
+                    repository = get_repository(session)
+                    run = await repository.get_run(item.search_run_id)
+                    watch = await repository.get_watch(item.watch_id)
+                    if run and watch and run.new_candidate_count:
+                        try:
+                            await get_notification_dispatcher(session).notify(
+                                recipient_permission_id=watch.created_by,
+                                kind=(
+                                    NotificationKind.SCIENTIFIC_RETURN_CANDIDATES_FOUND
+                                ),
+                                triggered_by=None,
+                                related_resource_type=RelatedResourceType.PROJECT,
+                                related_resource_id=watch.project_id,
+                                note=(
+                                    "Autonomous scientific-return search found "
+                                    f"{run.new_candidate_count} new candidate(s) "
+                                    "for review."
+                                ),
+                            )
+                            await session.commit()
+                        except Exception:
+                            await session.rollback()
+                            logger.exception(
+                                "Could not notify full-agentic investigation %s.",
+                                item.id,
+                            )
+            except Exception:
+                failed += 1
+                await session.rollback()
+                logger.exception(
+                    "Could not execute full-agentic investigation %s.",
+                    investigation_id,
+                )
+    logger.info(
+        "Processed %s full-agentic investigations; %s failed.", completed, failed
+    )
+    return completed, failed
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="scientific-return")
     subcommands = parser.add_subparsers(dest="command", required=True)
@@ -168,6 +243,12 @@ def _parser() -> argparse.ArgumentParser:
         "run-due", help="Run active scientific-return watches whose date is due."
     )
     due.add_argument("--limit", type=int, default=25)
+    queued = subcommands.add_parser(
+        "run-agentic-queue",
+        help="Claim and execute queued or abandoned full-agentic investigations.",
+    )
+    queued.add_argument("--limit", type=int, default=10)
+    queued.add_argument("--worker-id", default="scientific-return-cli-worker")
     evaluation = subcommands.add_parser(
         "evaluate-phase0", help="Run the five-case empirical baseline."
     )
@@ -209,6 +290,11 @@ async def _amain() -> int:
     logging.basicConfig(level=logging.INFO)
     if args.command == "run-due":
         _, failed = await run_due(limit=max(1, args.limit))
+        return 1 if failed else 0
+    if args.command == "run-agentic-queue":
+        _, failed = await run_full_agentic_queue(
+            limit=max(1, args.limit), worker_id=args.worker_id
+        )
         return 1 if failed else 0
     if args.command == "evaluate-agentic":
         from app.scientific_return.application.agentic_evaluation import (

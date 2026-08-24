@@ -112,4 +112,47 @@ describe('ScientificReturnApiService', () => {
     expect(feedback.request.body).toEqual({ feedback: 'USEFUL' });
     feedback.flush({});
   });
+
+  it('starts the full agent with an idempotency key and lists its runs', () => {
+    service.startFullAgenticInvestigation('watch-1').subscribe();
+    const start = http.expectOne(
+      'https://api.example.test/api/v1/scientific-return/watches/watch-1/full-agentic-investigations',
+    );
+    expect(start.request.method).toBe('POST');
+    expect(start.request.headers.get('Idempotency-Key')).toBeTruthy();
+    expect(start.request.body).toEqual({ objective: 'DISCOVER_CANDIDATE' });
+    start.flush({});
+
+    service.listFullAgenticInvestigations('watch-1').subscribe();
+    const history = http.expectOne(
+      'https://api.example.test/api/v1/scientific-return/watches/watch-1/full-agentic-investigations',
+    );
+    expect(history.request.method).toBe('GET');
+    history.flush([]);
+  });
+
+  it('stores curator examples and proposes learning from a decision', () => {
+    service
+      .createInventoryExample({
+        registeredNumber: 'MUHNAC/MB06-005747',
+        observedForm: 'MB06-5747',
+        content: 'The citation omitted internal zeroes.',
+      })
+      .subscribe();
+    const create = http.expectOne(
+      'https://api.example.test/api/v1/scientific-return/knowledge-items',
+    );
+    expect(create.request.body.kind).toBe('INVENTORY_VARIATION_EXAMPLE');
+    create.flush({});
+
+    service.proposeKnowledge('candidate-1', 'This acronym belongs to archaeology.').subscribe();
+    const proposal = http.expectOne(
+      'https://api.example.test/api/v1/scientific-return/candidates/candidate-1/knowledge-proposals',
+    );
+    expect(proposal.request.method).toBe('POST');
+    expect(proposal.request.body).toEqual({
+      explanation: 'This acronym belongs to archaeology.',
+    });
+    proposal.flush({});
+  });
 });

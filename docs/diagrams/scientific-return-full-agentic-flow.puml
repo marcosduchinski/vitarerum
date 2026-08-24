@@ -1,0 +1,157 @@
+@startuml scientific-return-full-agentic-flow
+title Scientific Return — fluxo exclusivamente full-agentic
+
+skinparam shadowing false
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Arial
+skinparam activity {
+  BackgroundColor #F8FAFC
+  BorderColor #334155
+  DiamondBackgroundColor #FEF3C7
+  DiamondBorderColor #92400E
+  StartColor #166534
+  EndColor #991B1B
+}
+skinparam partition {
+  BorderColor #94A3B8
+  FontColor #0F172A
+}
+
+start
+
+partition "Equipe do museu" #DBEAFE {
+  :Iniciar descoberta autônoma para uma vigilância;
+  note right
+    Objetivo implementado:
+    DISCOVER_CANDIDATE
+  end note
+}
+
+partition "Aplicação Scientific Return" #DCFCE7 {
+  :Validar autorização, feature flag,
+  circuit breaker e Idempotency-Key;
+  if (Já existe ciclo para a mesma chave?) then (sim)
+    :Devolver a investigação existente;
+    stop
+  endif
+  if (Há ciclo vivo para o mesmo alvo?) then (sim)
+    :Recusar início concorrente;
+    stop
+  endif
+  :Criar FullAgenticInvestigation QUEUED;
+  :Persistir orçamento e envelope durável;
+  :Despachar para Cloud Tasks ou fila no banco;
+}
+
+partition "Worker full-agentic" #F3E8FF {
+  :Adquirir lease atômica com worker_id único;
+  if (Lease pertence a outro worker?) then (sim)
+    :Encerrar entrega duplicada sem executar ferramentas;
+    stop
+  endif
+  if (Cancelamento já solicitado?) then (sim)
+    :Marcar investigação CANCELLED;
+    stop
+  endif
+
+  :Carregar snapshot imutável da vigilância;
+  :Recuperar memória curatorial ACTIVE
+  com limite global e ranking estrutural;
+  :Criar run-envelope FULL_AGENTIC
+  sem alterar o agendamento determinístico;
+
+  repeat
+    :Renovar lease;
+    :Planejador LLM recebe snapshot,
+    exemplos curatoriais e histórico;
+    :Propor variações, queries e fontes;
+    :Persistir plano na trajetória cifrada;
+
+    partition "Ferramentas bibliográficas" #FEF3C7 {
+      :Executar Crossref, Europe PMC ou OpenAlex
+      sem filtro implícito de autor;
+      :Aplicar rate limit global por fonte;
+      :Persistir query e contagem retornada;
+      :Cachear metadados e hash para replay;
+      note right
+        Texto integral é transitório.
+        Não entra no cache de replay.
+      end note
+    }
+
+    while (Há registro ainda não avaliado?) is (sim)
+      :Leitor LLM recebe contexto confiável
+      e publicação como dado não confiável;
+      if (Resposta válida?) then (sim)
+        :Persistir avaliação, confiança,
+        contradições e trechos curtos;
+        if (Semanticamente relevante?) then (sim)
+          :Deduplicar publicação por chave/DOI;
+          :Criar ou reutilizar CandidatePublication;
+          :Vincular candidato com upsert idempotente;
+          :Registrar análise e proveniência agentic;
+        endif
+      else (não)
+        :Registrar ERROR para o artigo;
+        :Continuar com o próximo registro;
+      endif
+    endwhile (não)
+
+    :Atualizar uso de orçamento e resumo da iteração;
+  repeat while (Agente quer continuar,
+  não houve cancelamento e há orçamento?) is (sim)
+  ->não;
+
+  if (Cancelamento solicitado?) then (sim)
+    :Finalizar investigação CANCELLED;
+  else (não)
+    :Concluir run-envelope e investigação COMPLETED;
+  endif
+  :Notificar responsável se houver novo candidato;
+  if (Algum candidato foi apresentado?) then (não)
+    :Encerrar sem alterar a fila de curadoria;
+    stop
+  endif
+}
+
+partition "Curadoria humana" #DBEAFE {
+  :Exibir candidato, fonte, query, trecho,
+  confiança, contradições e memória usada;
+  if (Decisão do especialista?) then (confirmar / corrigir)
+    partition "Use of Collections" #FEF3C7 {
+      :Criar PublicationLogEntry;
+    }
+  else (rejeitar / adiar)
+    :Registrar decisão e justificativa;
+  endif
+  :Persistir decision context cifrado;
+
+  if (Feedback deve ensinar o agente?) then (sim)
+    partition "Aprendiz LLM" #F3E8FF {
+      :Converter explicação livre em lição PROPOSED;
+    }
+    :Curador revisa, edita ou ativa a proposta;
+    partition "Memória curatorial" #DCFCE7 {
+      :Persistir item ACTIVE imutável;
+      :Disponibilizar exemplo para ciclos futuros;
+    }
+  endif
+}
+
+stop
+
+legend right
+  |= Cor |= Responsabilidade |
+  |<#DBEAFE>| Autoridade e validação humana |
+  |<#DCFCE7>| Aplicação, domínio e persistência |
+  |<#F3E8FF>| Planejamento e leitura por LLM |
+  |<#FEF3C7>| Integrações externas / published language |
+
+  **Fronteiras do domínio**
+  FullAgenticInvestigation = Aggregate Root
+  candidato ≠ retorno científico confirmado
+  hipótese do LLM ≠ alias institucional
+  memória PROPOSED ≠ memória ACTIVE
+endlegend
+
+@enduml

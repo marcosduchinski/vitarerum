@@ -13,6 +13,11 @@ class RunStatus(StrEnum):
     FAILED = "FAILED"
 
 
+class RunKind(StrEnum):
+    DETERMINISTIC = "DETERMINISTIC"
+    FULL_AGENTIC = "FULL_AGENTIC"
+
+
 class QueryStatus(StrEnum):
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
@@ -23,6 +28,58 @@ class QueryType(StrEnum):
     AUTHOR_INVENTORY = "AUTHOR_INVENTORY"
     INVENTORY_OBJECT = "INVENTORY_OBJECT"
     AUTHOR_OBJECT = "AUTHOR_OBJECT"
+    AGENTIC = "AGENTIC"
+
+
+class KnowledgeKind(StrEnum):
+    INVENTORY_VARIATION_EXAMPLE = "INVENTORY_VARIATION_EXAMPLE"
+    CURATORIAL_LESSON = "CURATORIAL_LESSON"
+
+
+class KnowledgeStatus(StrEnum):
+    PROPOSED = "PROPOSED"
+    ACTIVE = "ACTIVE"
+    RETIRED = "RETIRED"
+
+
+class FullAgenticInvestigationStatus(StrEnum):
+    QUEUED = "QUEUED"
+    RUNNING = "RUNNING"
+    CANCEL_REQUESTED = "CANCEL_REQUESTED"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
+
+    @property
+    def is_terminal(self) -> bool:
+        return self in {
+            FullAgenticInvestigationStatus.COMPLETED,
+            FullAgenticInvestigationStatus.FAILED,
+            FullAgenticInvestigationStatus.CANCELLED,
+        }
+
+
+class AgenticTrajectoryEventKind(StrEnum):
+    MEMORY_RETRIEVED = "MEMORY_RETRIEVED"
+    PLAN_CREATED = "PLAN_CREATED"
+    TOOL_STARTED = "TOOL_STARTED"
+    TOOL_COMPLETED = "TOOL_COMPLETED"
+    ARTICLE_ASSESSED = "ARTICLE_ASSESSED"
+    CANDIDATE_LINKED = "CANDIDATE_LINKED"
+    LEARNING_PROPOSED = "LEARNING_PROPOSED"
+    STOPPED = "STOPPED"
+    ERROR = "ERROR"
+
+
+class AgenticCandidateRelationKind(StrEnum):
+    CREATED = "CREATED"
+    REDISCOVERED = "REDISCOVERED"
+
+
+class AgenticToolExecutionStatus(StrEnum):
+    RUNNING = "RUNNING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
 
 
 class CandidateStatus(StrEnum):

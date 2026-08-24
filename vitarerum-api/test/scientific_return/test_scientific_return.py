@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -201,11 +202,9 @@ class _Repository:
     async def list_due_watches(
         self, now: datetime, limit: int
     ) -> list[ScientificReturnWatch]:
-        return [
-            watch
-            for watch in self.watches.values()
-            if watch.next_run_at <= now
-        ][:limit]
+        return [watch for watch in self.watches.values() if watch.next_run_at <= now][
+            :limit
+        ]
 
     async def add_snapshot(self, snapshot: ScientificReturnProjectSnapshot) -> None:
         self.snapshots[str(snapshot.id)] = snapshot
@@ -221,6 +220,11 @@ class _Repository:
 
     async def save_run(self, run: ScientificReturnSearchRun) -> None:
         self.runs[str(run.id)] = run
+
+    async def get_run(
+        self, run_id: ScientificReturnRunId
+    ) -> ScientificReturnSearchRun | None:
+        return self.runs.get(str(run_id))
 
     async def list_runs(
         self, watch_id: ScientificReturnWatchId, page: int, size: int
@@ -334,9 +338,7 @@ class _Repository:
     async def list_queries_for_watch(
         self, watch_id: ScientificReturnWatchId
     ) -> list[ScientificReturnQuery]:
-        runs = {
-            str(run.id) for run in self.runs.values() if run.watch_id == watch_id
-        }
+        runs = {str(run.id) for run in self.runs.values() if run.watch_id == watch_id}
         return [item for item in self.queries if str(item.run_id) in runs]
 
     async def append_candidate_evidences(
@@ -646,6 +648,128 @@ async def test_confirm_materializes_publication_and_audits_evidence() -> None:
     assert repository.decisions[0].evidence_snapshot
 
 
+@pytest.mark.asyncio
+async def test_decision_context_uses_latest_full_agentic_reader_only() -> None:
+    repository, candidate = await _repository_with_candidate()
+
+    def completed_analysis(
+        analysis_id: str,
+        prompt_id: str,
+        query: str,
+        explanation: str,
+    ) -> CandidateAgentAnalysis:
+        analysis = CandidateAgentAnalysis(
+            id=CandidateAgentAnalysisId(analysis_id),
+            candidate_id=candidate.id,
+            run_id=candidate.first_seen_run_id,
+            status=AgentAnalysisStatus.RUNNING,
+            model="test-model",
+            prompt_version_id=prompt_id,
+            prompt_version="v1",
+            input_payload={
+                "query": query,
+                "source": "OPENALEX",
+                "passages": [f"passage {query}"],
+                "inventoryForms": ["MB06-5747"],
+                "knowledgeItemIds": [],
+            },
+            input_hash=analysis_id,
+            started_at=datetime.now(tz=UTC),
+            created_by=PermissionId("permission-1"),
+        )
+        analysis.complete(
+            parse_analysis_result(
+                json.dumps(
+                    {
+                        "summary": explanation,
+                        "supportingEvidence": [],
+                        "contradictions": [],
+                        "missingEvidence": [],
+                        "recommendedAction": "PRESENT_FOR_REVIEW",
+                        "proposedQueries": [],
+                        "reasoningSummary": explanation,
+                        "confidence": "HIGH",
+                    }
+                )
+            ),
+            "response-hash",
+            datetime.now(tz=UTC),
+        )
+        return analysis
+
+    shadow = completed_analysis(
+        "shadow", "scientific_return_shadow_analysis", "shadow query", "shadow"
+    )
+    newest = completed_analysis(
+        "newest",
+        "scientific_return_full_agentic_reader",
+        "new query",
+        "new explanation",
+    )
+    oldest = completed_analysis(
+        "oldest",
+        "scientific_return_full_agentic_reader",
+        "old query",
+        "old explanation",
+    )
+    repository.agent_analyses = {
+        str(shadow.id): shadow,
+        str(newest.id): newest,
+        str(oldest.id): oldest,
+    }
+
+    context = await DecideCandidate(repository, _PublicationWriter())._decision_context(
+        candidate.id
+    )
+
+    assert context is not None
+    assert context.queries == ("new query",)
+    assert context.explanation == "new explanation"
+
+
+@pytest.mark.asyncio
+async def test_shadow_analysis_does_not_create_agentic_decision_context() -> None:
+    repository, candidate = await _repository_with_candidate()
+    analysis = CandidateAgentAnalysis(
+        id=CandidateAgentAnalysisId("shadow-only"),
+        candidate_id=candidate.id,
+        run_id=candidate.first_seen_run_id,
+        status=AgentAnalysisStatus.RUNNING,
+        model="test-model",
+        prompt_version_id="scientific_return_shadow_analysis",
+        prompt_version="v1",
+        input_payload={"query": "not an agentic trajectory"},
+        input_hash="shadow-only",
+        started_at=datetime.now(tz=UTC),
+        created_by=PermissionId("permission-1"),
+    )
+    analysis.complete(
+        parse_analysis_result(
+            json.dumps(
+                {
+                    "summary": "shadow",
+                    "supportingEvidence": [],
+                    "contradictions": [],
+                    "missingEvidence": [],
+                    "recommendedAction": "PRESENT_FOR_REVIEW",
+                    "proposedQueries": [],
+                    "reasoningSummary": "shadow",
+                    "confidence": "LOW",
+                }
+            )
+        ),
+        "response-hash",
+        datetime.now(tz=UTC),
+    )
+    await repository.add_agent_analysis(analysis)
+
+    context = await DecideCandidate(repository, _PublicationWriter())._decision_context(
+        candidate.id
+    )
+
+    assert context is None
+
+
 def test_snooze_requires_a_future_date() -> None:
     candidate = CandidatePublication(
         id=CandidatePublicationId("candidate-1"),
@@ -766,8 +890,7 @@ async def test_shadow_analysis_is_audited_without_changing_candidate() -> None:
     assert analysis.status is AgentAnalysisStatus.COMPLETED
     assert analysis.result is not None
     assert (
-        analysis.result.recommended_action
-        is AgentRecommendedAction.PRESENT_FOR_REVIEW
+        analysis.result.recommended_action is AgentRecommendedAction.PRESENT_FOR_REVIEW
     )
     assert analysis.result.confidence is AgentConfidence.HIGH
     assert analysis.input_payload["mode"] == "SHADOW"

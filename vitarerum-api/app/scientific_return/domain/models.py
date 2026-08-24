@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import NewType
+from typing import TYPE_CHECKING, NewType
+
+if TYPE_CHECKING:
+    from app.scientific_return.domain.full_agentic_models import (
+        CandidateDecisionContext,
+    )
 
 from app.scientific_return.domain.enums import (
     AgentAnalysisFeedback,
@@ -15,6 +20,7 @@ from app.scientific_return.domain.enums import (
     EvidenceType,
     QueryStatus,
     QueryType,
+    RunKind,
     RunStatus,
     WatchStatus,
 )
@@ -109,6 +115,7 @@ class ScientificReturnSearchRun:
     candidate_count: int = 0
     new_candidate_count: int = 0
     error_message: str | None = None
+    run_kind: RunKind = RunKind.DETERMINISTIC
 
 
 @dataclass(slots=True)
@@ -170,6 +177,9 @@ class CandidatePublication:
     snoozed_until: datetime | None = None
     confirmed_publication_entry_id: str | None = None
     evidences: list[CandidateEvidence] = field(default_factory=list)
+    first_seen_kind: RunKind = RunKind.DETERMINISTIC
+    agentic_created: bool = False
+    agentic_rediscovered: bool = False
 
     def dismiss(self) -> None:
         self.status = CandidateStatus.DISMISSED
@@ -214,6 +224,7 @@ class CandidateDecision:
     decided_at: datetime
     evidence_snapshot: tuple[dict[str, str], ...]
     correction: CandidateCorrection | None = None
+    decision_context: CandidateDecisionContext | None = None
 
 
 @dataclass(frozen=True, slots=True)

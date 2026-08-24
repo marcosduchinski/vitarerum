@@ -28,6 +28,10 @@ from app.scientific_return.domain.enums import (
     RunStatus,
     WatchStatus,
 )
+from app.scientific_return.domain.full_agentic_models import (
+    CandidateDecisionContext,
+    KnowledgeItemId,
+)
 from app.scientific_return.domain.models import (
     CandidateCorrection,
     CandidateDecision,
@@ -437,10 +441,49 @@ class DecideCandidate:
                 for evidence in candidate.evidences
             ),
             correction=correction,
+            decision_context=await self._decision_context(candidate.id),
         )
         await self._repository.save_candidate(candidate)
         await self._repository.add_decision(decision)
         return candidate
+
+    async def _decision_context(
+        self, candidate_id: CandidatePublicationId
+    ) -> CandidateDecisionContext | None:
+        analyses = await self._repository.list_agent_analyses(candidate_id)
+        completed = [
+            item
+            for item in analyses
+            if item.result is not None
+            and item.prompt_version_id == "scientific_return_full_agentic_reader"
+        ]
+        if not completed:
+            return None
+        # The repository contract returns analyses newest first.
+        analysis = completed[0]
+        assert analysis.result is not None
+
+        def strings(key: str) -> tuple[str, ...]:
+            value = analysis.input_payload.get(key, [])
+            if not isinstance(value, list):
+                return ()
+            return tuple(str(item) for item in value)
+
+        query = analysis.input_payload.get("query")
+        source = analysis.input_payload.get("source")
+        return CandidateDecisionContext(
+            version=1,
+            passages=strings("passages"),
+            inventory_forms=strings("inventoryForms"),
+            queries=(str(query),) if query else (),
+            sources=(str(source),) if source else (),
+            explanation=analysis.result.reasoning_summary,
+            confidence=analysis.result.confidence,
+            contradictions=analysis.result.contradictions,
+            knowledge_item_ids=tuple(
+                KnowledgeItemId(value) for value in strings("knowledgeItemIds")
+            ),
+        )
 
     async def _project_id(self, candidate: CandidatePublication) -> str:
         watch = await self._repository.get_watch(candidate.watch_id)

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import logging
+import secrets
 from math import ceil
 from typing import Annotated
+from uuid import uuid4
 
 from fastapi import APIRouter, Header, HTTPException, Query, status
 
@@ -16,6 +18,25 @@ from app.scientific_return.application.agent_analysis import (
     ListCandidateAgentAnalyses,
     RecordAgentAnalysisFeedback,
     RecordAgentAnalysisFeedbackInput,
+)
+from app.scientific_return.application.full_agentic import (
+    CancelFullAgenticInvestigation,
+    ExecuteFullAgenticInput,
+    FullAgenticAlreadyRunning,
+    FullAgenticCircuitOpen,
+    FullAgenticDisabled,
+    GetFullAgenticInvestigation,
+    StartFullAgenticInput,
+)
+from app.scientific_return.application.knowledge import (
+    ActivateCuratorialKnowledge,
+    CreateCuratorialKnowledge,
+    CreateKnowledgeInput,
+    ListCuratorialKnowledge,
+    ProposeKnowledgeFromDecision,
+    ReplaceCuratorialKnowledge,
+    ReplaceKnowledgeInput,
+    RetireCuratorialKnowledge,
 )
 from app.scientific_return.application.run_investigation import (
     InvestigationAlreadyRunning,
@@ -38,7 +59,14 @@ from app.scientific_return.application.use_cases import (
 from app.scientific_return.domain.enums import (
     CandidateStatus,
     EvidenceStrength,
+    FullAgenticInvestigationStatus,
     InvestigationObjective,
+)
+from app.scientific_return.domain.full_agentic_models import (
+    FullAgenticInvestigation,
+    FullAgenticInvestigationId,
+    KnowledgeItemId,
+    ScientificReturnKnowledgeItem,
 )
 from app.scientific_return.domain.investigation_models import (
     InvestigationId,
@@ -56,12 +84,20 @@ from app.scientific_return.domain.models import (
     ScientificReturnWatch,
     ScientificReturnWatchId,
 )
+from app.scientific_return.infrastructure.unit_of_work import (
+    SqlAlchemyInvestigationUnitOfWork,
+    SystemClock,
+)
 from app.scientific_return.presentation.dependencies import (
     AgentEnabled,
     AgentPrompt,
     AgentReasoner,
     BibliographicSources,
     DBSession,
+    FullAgenticExecutor,
+    FullAgenticReasonerDep,
+    FullAgenticRepositoryDep,
+    FullAgenticStarter,
     InvestigationRepository,
     InvestigationRunner,
     MaxQueries,
@@ -74,14 +110,20 @@ from app.scientific_return.presentation.dependencies import (
 from app.scientific_return.presentation.schemas import (
     ActivateWatchRequest,
     AgentAnalysisFeedbackRequest,
+    AgenticTrajectoryEventResponse,
     CandidateAgentAnalysisResponse,
     CandidateAgentAnalysisResultResponse,
     CandidateCorrectionRequest,
+    CandidateDecisionContextResponse,
     CandidateDecisionRequest,
     CandidateDecisionResponse,
     CandidateEvidenceResponse,
     CandidatePublicationResponse,
     CandidateReviewItemResponse,
+    CreateKnowledgeRequest,
+    ExecuteFullAgenticRequest,
+    FullAgenticInvestigationResponse,
+    FullAgenticMetricsResponse,
     InvestigationBudgetResponse,
     InvestigationDeltaResponse,
     InvestigationIterationResponse,
@@ -92,13 +134,17 @@ from app.scientific_return.presentation.schemas import (
     InvestigationResponse,
     InvestigationTelemetryResponse,
     InvestigationToolResponse,
+    KnowledgeItemResponse,
     PaginatedCandidateQueueResponse,
     PaginatedCandidatesResponse,
     PaginatedRunsResponse,
+    ProposeKnowledgeRequest,
+    ReplaceKnowledgeRequest,
     ScientificReturnMetricsResponse,
     ScientificReturnQueryResponse,
     ScientificReturnRunResponse,
     ScientificReturnWatchResponse,
+    StartFullAgenticRequest,
     UpdateWatchRequest,
 )
 from app.shared.authorization import require_staff
@@ -108,6 +154,388 @@ scientific_return_router = APIRouter(
     prefix="/scientific-return", tags=["scientific-return"]
 )
 logger = logging.getLogger(__name__)
+
+
+def _full_agentic_response(
+    item: FullAgenticInvestigation,
+) -> FullAgenticInvestigationResponse:
+    return FullAgenticInvestigationResponse(
+        id=item.id,
+        watchId=item.watch_id,
+        objective=item.objective,
+        candidateId=item.candidate_id,
+        searchRunId=item.search_run_id,
+        status=item.status,
+        budget={
+            "maxIterations": item.budget.max_iterations,
+            "maxQueries": item.budget.max_queries,
+            "maxResults": item.budget.max_results,
+            "maxCandidates": item.budget.max_candidates,
+            "maxLlmCalls": item.budget.max_llm_calls,
+        },
+        usage={
+            "iterations": item.usage.iterations,
+            "queries": item.usage.queries,
+            "results": item.usage.results,
+            "candidates": item.usage.candidates,
+            "llmCalls": item.usage.llm_calls,
+        },
+        createdBy=item.created_by,
+        createdAt=item.created_at,
+        startedAt=item.started_at,
+        completedAt=item.completed_at,
+        heartbeatAt=item.heartbeat_at,
+        failureReason=item.failure_reason,
+    )
+
+
+@scientific_return_router.post(
+    "/watches/{watch_id}/full-agentic-investigations",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=FullAgenticInvestigationResponse,
+)
+async def start_full_agentic_investigation(
+    watch_id: str,
+    body: StartFullAgenticRequest,
+    caller: CallerPermission,
+    starter: FullAgenticStarter,
+    idempotency_key: Annotated[str, Header(alias="Idempotency-Key")],
+) -> FullAgenticInvestigationResponse:
+    try:
+        item = await starter.execute(
+            StartFullAgenticInput(
+                watch_id=ScientificReturnWatchId(watch_id),
+                objective=body.objective,
+                candidate_id=(
+                    CandidatePublicationId(body.candidateId)
+                    if body.candidateId
+                    else None
+                ),
+                idempotency_key=idempotency_key,
+                caller=caller,
+            )
+        )
+    except FullAgenticDisabled as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"error": "FULL_AGENTIC_DISABLED", "message": str(exc)},
+        ) from None
+    except FullAgenticAlreadyRunning as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"error": "FULL_AGENTIC_ALREADY_RUNNING", "message": str(exc)},
+        ) from None
+    except FullAgenticCircuitOpen as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "error": "FULL_AGENTIC_CIRCUIT_OPEN",
+                "message": str(exc),
+            },
+        ) from None
+    except LookupError as exc:
+        raise _not_found("SCIENTIFIC_RETURN_WATCH_NOT_FOUND", str(exc)) from None
+    except ValueError as exc:
+        raise _unprocessable(str(exc)) from None
+    return _full_agentic_response(item)
+
+
+@scientific_return_router.get(
+    "/full-agentic-investigations/{investigation_id}",
+    response_model=FullAgenticInvestigationResponse,
+)
+async def get_full_agentic_investigation(
+    investigation_id: str,
+    caller: CallerPermission,
+    repository: FullAgenticRepositoryDep,
+) -> FullAgenticInvestigationResponse:
+    try:
+        item = await GetFullAgenticInvestigation(repository).execute(
+            FullAgenticInvestigationId(investigation_id), caller
+        )
+    except LookupError as exc:
+        raise _not_found("FULL_AGENTIC_INVESTIGATION_NOT_FOUND", str(exc)) from None
+    return _full_agentic_response(item)
+
+
+@scientific_return_router.get(
+    "/watches/{watch_id}/full-agentic-investigations",
+    response_model=list[FullAgenticInvestigationResponse],
+)
+async def list_full_agentic_investigations(
+    watch_id: str,
+    caller: CallerPermission,
+    repository: FullAgenticRepositoryDep,
+    limit: int = Query(default=20, ge=1, le=100),
+) -> list[FullAgenticInvestigationResponse]:
+    require_staff(caller)
+    items = await repository.list_investigations(watch_id, limit)
+    return [_full_agentic_response(item) for item in items]
+
+
+@scientific_return_router.get(
+    "/full-agentic-investigations/{investigation_id}/trajectory",
+    response_model=list[AgenticTrajectoryEventResponse],
+)
+async def get_full_agentic_trajectory(
+    investigation_id: str,
+    caller: CallerPermission,
+    repository: FullAgenticRepositoryDep,
+) -> list[AgenticTrajectoryEventResponse]:
+    require_staff(caller)
+    events = await repository.list_events(FullAgenticInvestigationId(investigation_id))
+    return [
+        AgenticTrajectoryEventResponse(
+            id=event.id,
+            sequence=event.sequence,
+            kind=event.kind,
+            payload=event.payload,
+            occurredAt=event.occurred_at,
+        )
+        for event in events
+    ]
+
+
+@scientific_return_router.post(
+    "/full-agentic-investigations/{investigation_id}/cancel",
+    response_model=FullAgenticInvestigationResponse,
+)
+async def cancel_full_agentic_investigation(
+    investigation_id: str,
+    caller: CallerPermission,
+    repository: FullAgenticRepositoryDep,
+    session: DBSession,
+) -> FullAgenticInvestigationResponse:
+    try:
+        item = await CancelFullAgenticInvestigation(
+            repository,
+            SqlAlchemyInvestigationUnitOfWork(session),
+            SystemClock(),
+        ).execute(FullAgenticInvestigationId(investigation_id), caller)
+    except LookupError as exc:
+        raise _not_found("FULL_AGENTIC_INVESTIGATION_NOT_FOUND", str(exc)) from None
+    except ValueError as exc:
+        raise _unprocessable(str(exc)) from None
+    return _full_agentic_response(item)
+
+
+@scientific_return_router.post(
+    "/internal/full-agentic/execute",
+    response_model=FullAgenticInvestigationResponse,
+    include_in_schema=False,
+)
+async def execute_full_agentic_worker(
+    body: ExecuteFullAgenticRequest,
+    executor: FullAgenticExecutor,
+    repository: Repository,
+    full_repository: FullAgenticRepositoryDep,
+    notifications: Notifications,
+    session: DBSession,
+    worker_token: Annotated[str, Header(alias="X-Worker-Token")],
+) -> FullAgenticInvestigationResponse:
+    from app.config import settings
+
+    configured = settings.scientific_return_full_agentic_worker_token
+    if not configured or not secrets.compare_digest(worker_token, configured):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    investigation_id = FullAgenticInvestigationId(body.investigationId)
+    before = await full_repository.get_investigation(investigation_id)
+    try:
+        item = await executor.execute(
+            ExecuteFullAgenticInput(
+                investigation_id=investigation_id,
+                worker_id=f"http-worker:{uuid4()}",
+            )
+        )
+    except LookupError as exc:
+        raise _not_found("FULL_AGENTIC_INVESTIGATION_NOT_FOUND", str(exc)) from None
+    if (
+        before is not None
+        and not before.status.is_terminal
+        and item.status is FullAgenticInvestigationStatus.COMPLETED
+        and item.search_run_id is not None
+    ):
+        run = await repository.get_run(item.search_run_id)
+        watch = await repository.get_watch(item.watch_id)
+        if run and watch and run.new_candidate_count:
+            try:
+                await notifications.notify(
+                    recipient_permission_id=watch.created_by,
+                    kind=NotificationKind.SCIENTIFIC_RETURN_CANDIDATES_FOUND,
+                    triggered_by=None,
+                    related_resource_type=RelatedResourceType.PROJECT,
+                    related_resource_id=watch.project_id,
+                    note=(
+                        "Autonomous scientific-return search found "
+                        f"{run.new_candidate_count} new candidate(s) for review."
+                    ),
+                )
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                logger.exception(
+                    "Could not notify full-agentic investigation %s.", item.id
+                )
+    return _full_agentic_response(item)
+
+
+def _knowledge_response(item: ScientificReturnKnowledgeItem) -> KnowledgeItemResponse:
+    return KnowledgeItemResponse(
+        id=item.id,
+        institutionId=item.institution_id,
+        kind=item.kind,
+        status=item.status,
+        content=item.content,
+        registeredNumber=item.registered_number,
+        observedForm=item.observed_form,
+        supersedesId=item.supersedes_id,
+        sourceCandidateId=item.source_candidate_id,
+        sourceDecisionId=item.source_decision_id,
+        createdBy=item.created_by,
+        createdAt=item.created_at,
+        validatedBy=item.validated_by,
+        validatedAt=item.validated_at,
+        retiredBy=item.retired_by,
+        retiredAt=item.retired_at,
+    )
+
+
+@scientific_return_router.post(
+    "/knowledge-items",
+    status_code=status.HTTP_201_CREATED,
+    response_model=KnowledgeItemResponse,
+)
+async def create_knowledge_item(
+    body: CreateKnowledgeRequest,
+    caller: CallerPermission,
+    repository: FullAgenticRepositoryDep,
+    session: DBSession,
+) -> KnowledgeItemResponse:
+    try:
+        item = await CreateCuratorialKnowledge(repository).execute(
+            CreateKnowledgeInput(
+                caller=caller,
+                kind=body.kind,
+                content=body.content,
+                registered_number=body.registeredNumber,
+                observed_form=body.observedForm,
+                institution_id=body.institutionId,
+            )
+        )
+    except ValueError as exc:
+        raise _unprocessable(str(exc)) from None
+    await session.commit()
+    return _knowledge_response(item)
+
+
+@scientific_return_router.get(
+    "/knowledge-items", response_model=list[KnowledgeItemResponse]
+)
+async def list_knowledge_items(
+    caller: CallerPermission,
+    repository: FullAgenticRepositoryDep,
+    active_only: bool = Query(default=False, alias="activeOnly"),
+    limit: int = Query(default=100, ge=1, le=500),
+) -> list[KnowledgeItemResponse]:
+    items = await ListCuratorialKnowledge(repository).execute(
+        caller, active_only=active_only, limit=limit
+    )
+    return [_knowledge_response(item) for item in items]
+
+
+@scientific_return_router.put(
+    "/knowledge-items/{item_id}", response_model=KnowledgeItemResponse
+)
+async def replace_knowledge_item(
+    item_id: str,
+    body: ReplaceKnowledgeRequest,
+    caller: CallerPermission,
+    repository: FullAgenticRepositoryDep,
+    session: DBSession,
+) -> KnowledgeItemResponse:
+    try:
+        item = await ReplaceCuratorialKnowledge(repository).execute(
+            KnowledgeItemId(item_id),
+            ReplaceKnowledgeInput(
+                caller=caller,
+                content=body.content,
+                registered_number=body.registeredNumber,
+                observed_form=body.observedForm,
+            ),
+        )
+    except LookupError as exc:
+        raise _not_found("SCIENTIFIC_RETURN_KNOWLEDGE_NOT_FOUND", str(exc)) from None
+    except ValueError as exc:
+        raise _unprocessable(str(exc)) from None
+    await session.commit()
+    return _knowledge_response(item)
+
+
+@scientific_return_router.delete(
+    "/knowledge-items/{item_id}", response_model=KnowledgeItemResponse
+)
+async def retire_knowledge_item(
+    item_id: str,
+    caller: CallerPermission,
+    repository: FullAgenticRepositoryDep,
+    session: DBSession,
+) -> KnowledgeItemResponse:
+    try:
+        item = await RetireCuratorialKnowledge(repository).execute(
+            KnowledgeItemId(item_id), caller
+        )
+    except LookupError as exc:
+        raise _not_found("SCIENTIFIC_RETURN_KNOWLEDGE_NOT_FOUND", str(exc)) from None
+    await session.commit()
+    return _knowledge_response(item)
+
+
+@scientific_return_router.post(
+    "/knowledge-items/{item_id}/activate", response_model=KnowledgeItemResponse
+)
+async def activate_knowledge_item(
+    item_id: str,
+    caller: CallerPermission,
+    repository: FullAgenticRepositoryDep,
+    session: DBSession,
+) -> KnowledgeItemResponse:
+    try:
+        item = await ActivateCuratorialKnowledge(repository).execute(
+            KnowledgeItemId(item_id), caller
+        )
+    except LookupError as exc:
+        raise _not_found("SCIENTIFIC_RETURN_KNOWLEDGE_NOT_FOUND", str(exc)) from None
+    except ValueError as exc:
+        raise _unprocessable(str(exc)) from None
+    await session.commit()
+    return _knowledge_response(item)
+
+
+@scientific_return_router.post(
+    "/candidates/{candidate_id}/knowledge-proposals",
+    status_code=status.HTTP_201_CREATED,
+    response_model=KnowledgeItemResponse,
+)
+async def propose_knowledge_from_decision(
+    candidate_id: str,
+    body: ProposeKnowledgeRequest,
+    caller: CallerPermission,
+    repository: Repository,
+    knowledge_repository: FullAgenticRepositoryDep,
+    reasoner: FullAgenticReasonerDep,
+    session: DBSession,
+) -> KnowledgeItemResponse:
+    decisions = await repository.list_decisions(CandidatePublicationId(candidate_id))
+    if not decisions:
+        raise _not_found(
+            "SCIENTIFIC_RETURN_DECISION_NOT_FOUND",
+            f"Candidate {candidate_id} has no curator decision",
+        )
+    item = await ProposeKnowledgeFromDecision(knowledge_repository, reasoner).execute(
+        decisions[-1], body.explanation, caller
+    )
+    await session.commit()
+    return _knowledge_response(item)
 
 
 def _not_found(code: str, message: str) -> HTTPException:
@@ -152,6 +580,7 @@ async def _run_response(
         candidateCount=run.candidate_count,
         newCandidateCount=run.new_candidate_count,
         errorMessage=run.error_message,
+        runKind=run.run_kind,
         queries=[
             ScientificReturnQueryResponse(
                 id=query.id,
@@ -200,6 +629,9 @@ def _candidate_response(
             )
             for evidence in evidences
         ],
+        firstSeenKind=candidate.first_seen_kind,
+        agenticCreated=candidate.agentic_created,
+        agenticRediscovered=candidate.agentic_rediscovered,
     )
 
 
@@ -259,6 +691,13 @@ async def get_metrics(
         pendingCandidates=metrics.pending_candidates,
         confirmedCandidates=metrics.confirmed_candidates,
         dismissedCandidates=metrics.dismissed_candidates,
+        fullAgentic=FullAgenticMetricsResponse(
+            runs=metrics.full_agentic_runs,
+            failedRuns=metrics.full_agentic_failed_runs,
+            pendingCandidates=metrics.full_agentic_pending_candidates,
+            confirmedCandidates=metrics.full_agentic_confirmed_candidates,
+            dismissedCandidates=metrics.full_agentic_dismissed_candidates,
+        ),
     )
 
 
@@ -276,6 +715,7 @@ def _correction_response(
 
 
 def _decision_response(decision: CandidateDecision) -> CandidateDecisionResponse:
+    context = decision.decision_context
     return CandidateDecisionResponse(
         id=decision.id,
         candidateId=decision.candidate_id,
@@ -285,6 +725,21 @@ def _decision_response(decision: CandidateDecision) -> CandidateDecisionResponse
         decidedAt=decision.decided_at,
         evidenceSnapshot=list(decision.evidence_snapshot),
         correction=_correction_response(decision.correction),
+        decisionContext=(
+            CandidateDecisionContextResponse(
+                version=context.version,
+                passages=list(context.passages),
+                inventoryForms=list(context.inventory_forms),
+                queries=list(context.queries),
+                sources=list(context.sources),
+                explanation=context.explanation,
+                confidence=context.confidence,
+                contradictions=list(context.contradictions),
+                knowledgeItemIds=list(context.knowledge_item_ids),
+            )
+            if context is not None
+            else None
+        ),
     )
 
 

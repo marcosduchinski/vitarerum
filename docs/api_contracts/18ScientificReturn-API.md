@@ -7,9 +7,10 @@ accept staff groups. Mutations are restricted to `CURATORIAL`,
 `COLLECTIONS_MANAGEMENT`, and `DIRECTION`; `SYS_ADMIN` has diagnostic read
 access but cannot make curatorial decisions.
 
-The feature is advisory and human-in-the-loop. Bibliographic results are
+Every discovery regime is human-in-the-loop. Bibliographic results are
 candidates until a staff member confirms them. Only confirmation creates a
-project publication-log entry.
+project publication-log entry. The deterministic, assisted and full-agentic
+flows coexist and are identified independently in runs, candidates and metrics.
 
 The immutable project snapshot and the exact external query text are encrypted
 at rest with the application's configured database field-encryption key. This
@@ -52,6 +53,114 @@ Shadow analysis never invokes a bibliographic source, changes candidate state,
 creates a decision or writes to `PublicationLog`. A proposed action is displayed
 for review only; execution belongs to Phase 3C and requires a separate,
 deterministic authorization policy.
+
+## Full-agentic search and curatorial memory
+
+The full-agentic flow is a separate, asynchronous implementation. It does not
+replace the deterministic search or the assisted investigation described below.
+Its planner may compose inventory variants and arbitrary search strategies,
+choose among enabled bibliographic sources, inspect the structured result of a
+tool-free semantic reader and iterate within server-side budgets. It can place a
+semantically plausible publication in the normal review queue without passing
+the deterministic evidence matcher. The curator remains the only authority that
+can confirm, correct, dismiss or snooze it.
+
+The feature is disabled by default. A minimal database-queue configuration is:
+
+```dotenv
+SCIENTIFIC_RETURN_FULL_AGENTIC_ENABLED=true
+SCIENTIFIC_RETURN_FULL_AGENTIC_SOURCES=CROSSREF,EUROPE_PMC
+SCIENTIFIC_RETURN_FULL_AGENTIC_DISPATCHER=DATABASE
+SCIENTIFIC_RETURN_FULL_AGENTIC_MAX_ITERATIONS=4
+SCIENTIFIC_RETURN_FULL_AGENTIC_MAX_QUERIES=12
+SCIENTIFIC_RETURN_FULL_AGENTIC_MAX_RESULTS=40
+SCIENTIFIC_RETURN_FULL_AGENTIC_MAX_CANDIDATES=5
+SCIENTIFIC_RETURN_FULL_AGENTIC_MAX_LLM_CALLS=20
+SCIENTIFIC_RETURN_FULL_AGENTIC_CIRCUIT_MIN_DECISIONS=0
+SCIENTIFIC_RETURN_FULL_AGENTIC_CIRCUIT_MIN_PRECISION=0.0
+```
+
+`EUROPE_PMC_ENABLED=true` and `OPENALEX_API_KEY` still control whether those
+adaptors are technically available. `SCIENTIFIC_RETURN_FULL_AGENTIC_SOURCES`
+only narrows that available set. Production may set the dispatcher to
+`CLOUD_TASKS` and provide its queue URL, worker URL, service-account email and a
+worker token. With `DATABASE`, a worker claims durable rows with:
+
+```bash
+uv run python -m app.jobs.scientific_return run-agentic-queue \
+  --limit 10 --worker-id worker-1
+```
+
+The queue worker uses row locking and recoverable leases. Completed external
+tool executions are replayed from encrypted persisted results instead of being
+issued again. Replay data contains bibliographic metadata and a hash of any
+inspected full text, never the full publication body; only the short passages
+selected for curatorial review are persisted. A shared PostgreSQL throttle
+serializes each configured source across deterministic and full-agentic workers.
+
+The two circuit settings are disabled when the minimum sample is zero. With a
+positive sample, new cycles return `503 FULL_AGENTIC_CIRCUIT_OPEN` when the
+human-confirmed precision of full-agentic candidates falls below the configured
+threshold. Existing candidates remain reviewable; enough later confirmations
+close the circuit automatically. This signal never changes an individual
+candidate decision.
+
+### Curatorial knowledge
+
+- `GET /knowledge-items?activeOnly=false&limit=100`
+- `POST /knowledge-items`
+- `PUT /knowledge-items/{knowledgeItemId}` creates a successor and retires the
+  old item; knowledge content is never overwritten.
+- `POST /knowledge-items/{knowledgeItemId}/activate`
+- `DELETE /knowledge-items/{knowledgeItemId}` retires an item.
+- `POST /candidates/{candidateId}/knowledge-proposals` transforms a curator's
+  free-text decision explanation into a `PROPOSED` lesson.
+
+An inventory example contains `registeredNumber`, `observedForm` and a free
+`content` explanation. Curators do not define regexes, masks or algorithms.
+Only `ACTIVE` items enter future prompts. Content and inventory forms are
+encrypted; keyed lookup hashes support exact coarse selection, followed by a
+bounded in-memory relevance ranking. An LLM-created proposal has no effect until
+an authorised curator activates it.
+
+### Investigations
+
+```http
+POST /watches/{watchId}/full-agentic-investigations
+Idempotency-Key: <unique-client-key>
+Content-Type: application/json
+
+{"objective":"DISCOVER_CANDIDATE","candidateId":null}
+```
+
+The response is `202 Accepted` with a durable investigation in `QUEUED` state.
+This increment implements `DISCOVER_CANDIDATE` only; `ENRICH_CANDIDATE` is
+rejected until it has target-specific execution semantics. Repeating the same
+idempotency key for the same target returns the same investigation; reusing it
+for a different target is invalid. A unique live target prevents two
+simultaneous cycles for the same watch and objective.
+
+- `GET /watches/{watchId}/full-agentic-investigations`
+- `GET /full-agentic-investigations/{investigationId}`
+- `GET /full-agentic-investigations/{investigationId}/trajectory`
+- `POST /full-agentic-investigations/{investigationId}/cancel`
+
+The operational states are `QUEUED`, `RUNNING`, `CANCEL_REQUESTED`, `COMPLETED`,
+`FAILED` and `CANCELLED`. Cancellation is immediate while queued and cooperative
+while running. The encrypted trajectory exposes, through authorised reads,
+memory selected, plans, queries, source calls, semantic assessments, linked
+candidates, errors and stop reason.
+
+Publication text is untrusted data. Only the tool-free reader receives raw
+external text and emits a validated assessment. The planner receives that
+structured assessment, never the publication body, so an indirect prompt
+injection cannot directly select a tool or query.
+
+Candidate responses expose `firstSeenKind`, `agenticCreated` and
+`agenticRediscovered`. The decision history includes an encrypted, versioned
+`decisionContext` containing the passages, forms, queries, sources, confidence,
+contradictions and knowledge identifiers shown to the curator. The legacy
+`evidenceSnapshot` keeps its existing deterministic shape.
 
 ## Activate a watch
 
@@ -113,8 +222,10 @@ adaptive step is recorded like every other query.
 
 `GET /metrics`
 
-Returns active watches, total and failed runs, and pending, confirmed and
-dismissed candidate counts.
+Returns active watches and deterministic run/candidate counts under the legacy
+fields. A separate `fullAgentic` object contains full-agentic runs, failures and
+pending, confirmed and dismissed linked candidates, so the two regimes are not
+silently mixed.
 
 ## Scheduled execution and evaluation
 

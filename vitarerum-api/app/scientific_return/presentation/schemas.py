@@ -8,19 +8,24 @@ from app.scientific_return.domain.enums import (
     AgentAnalysisFeedback,
     AgentAnalysisStatus,
     AgentConfidence,
+    AgenticTrajectoryEventKind,
     AgentProgress,
     AgentRecommendedAction,
     CandidateStatus,
     DecisionType,
     EvidenceStrength,
     EvidenceType,
+    FullAgenticInvestigationStatus,
     InvestigationMode,
     InvestigationObjective,
     InvestigationStatus,
     IterationStatus,
+    KnowledgeKind,
+    KnowledgeStatus,
     PolicyRejectionReason,
     QueryStatus,
     QueryType,
+    RunKind,
     RunStatus,
     StopReason,
     WatchStatus,
@@ -72,6 +77,7 @@ class ScientificReturnRunResponse(BaseModel):
     newCandidateCount: int
     errorMessage: str | None
     queries: list[ScientificReturnQueryResponse] = Field(default_factory=list)
+    runKind: RunKind = RunKind.DETERMINISTIC
 
 
 class PaginatedRunsResponse(BaseModel):
@@ -92,6 +98,14 @@ class CandidateEvidenceResponse(BaseModel):
     objectId: str | None
 
 
+class FullAgenticMetricsResponse(BaseModel):
+    runs: int
+    failedRuns: int
+    pendingCandidates: int
+    confirmedCandidates: int
+    dismissedCandidates: int
+
+
 class ScientificReturnMetricsResponse(BaseModel):
     activeWatches: int
     runs: int
@@ -99,6 +113,7 @@ class ScientificReturnMetricsResponse(BaseModel):
     pendingCandidates: int
     confirmedCandidates: int
     dismissedCandidates: int
+    fullAgentic: FullAgenticMetricsResponse | None = None
 
 
 class CandidatePublicationResponse(BaseModel):
@@ -117,6 +132,9 @@ class CandidatePublicationResponse(BaseModel):
     confirmedPublicationEntryId: str | None
     firstSeenAt: datetime
     evidences: list[CandidateEvidenceResponse]
+    firstSeenKind: RunKind = RunKind.DETERMINISTIC
+    agenticCreated: bool = False
+    agenticRediscovered: bool = False
 
 
 class PaginatedCandidatesResponse(BaseModel):
@@ -153,6 +171,18 @@ class CandidateDecisionRequest(BaseModel):
     correction: CandidateCorrectionRequest | None = None
 
 
+class CandidateDecisionContextResponse(BaseModel):
+    version: int
+    passages: list[str]
+    inventoryForms: list[str]
+    queries: list[str]
+    sources: list[str]
+    explanation: str
+    confidence: AgentConfidence
+    contradictions: list[str]
+    knowledgeItemIds: list[str]
+
+
 class CandidateDecisionResponse(BaseModel):
     id: str
     candidateId: str
@@ -162,6 +192,7 @@ class CandidateDecisionResponse(BaseModel):
     decidedAt: datetime
     evidenceSnapshot: list[dict[str, str]]
     correction: CandidateCorrectionRequest | None
+    decisionContext: CandidateDecisionContextResponse | None = None
 
 
 class CandidateAgentAnalysisResultResponse(BaseModel):
@@ -301,3 +332,74 @@ class InvestigationResponse(BaseModel):
     createdBy: str
     previousInvestigationId: str | None
     iterations: list[InvestigationIterationResponse]
+
+
+class CreateKnowledgeRequest(BaseModel):
+    kind: KnowledgeKind
+    content: str = Field(min_length=1, max_length=4000)
+    registeredNumber: str | None = Field(default=None, max_length=255)
+    observedForm: str | None = Field(default=None, max_length=255)
+    institutionId: str | None = None
+
+
+class ReplaceKnowledgeRequest(BaseModel):
+    content: str = Field(min_length=1, max_length=4000)
+    registeredNumber: str | None = Field(default=None, max_length=255)
+    observedForm: str | None = Field(default=None, max_length=255)
+
+
+class ProposeKnowledgeRequest(BaseModel):
+    explanation: str = Field(min_length=1, max_length=2000)
+
+
+class KnowledgeItemResponse(BaseModel):
+    id: str
+    institutionId: str | None
+    kind: KnowledgeKind
+    status: KnowledgeStatus
+    content: str
+    registeredNumber: str | None
+    observedForm: str | None
+    supersedesId: str | None
+    sourceCandidateId: str | None
+    sourceDecisionId: str | None
+    createdBy: str
+    createdAt: datetime
+    validatedBy: str | None
+    validatedAt: datetime | None
+    retiredBy: str | None
+    retiredAt: datetime | None
+
+
+class StartFullAgenticRequest(BaseModel):
+    objective: InvestigationObjective = InvestigationObjective.DISCOVER_CANDIDATE
+    candidateId: str | None = None
+
+
+class AgenticTrajectoryEventResponse(BaseModel):
+    id: str
+    sequence: int
+    kind: AgenticTrajectoryEventKind
+    payload: dict[str, object]
+    occurredAt: datetime
+
+
+class FullAgenticInvestigationResponse(BaseModel):
+    id: str
+    watchId: str
+    objective: InvestigationObjective
+    candidateId: str | None
+    searchRunId: str | None
+    status: FullAgenticInvestigationStatus
+    budget: dict[str, int]
+    usage: dict[str, int]
+    createdBy: str
+    createdAt: datetime
+    startedAt: datetime | None
+    completedAt: datetime | None
+    heartbeatAt: datetime | None
+    failureReason: str | None
+
+
+class ExecuteFullAgenticRequest(BaseModel):
+    investigationId: str

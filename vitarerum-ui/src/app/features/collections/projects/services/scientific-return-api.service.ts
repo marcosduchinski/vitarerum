@@ -20,6 +20,9 @@ import {
   ScientificReturnAgentFeedback,
   ScientificReturnWatch,
   ScientificReturnWatchStatus,
+  FullAgenticInvestigation,
+  AgenticTrajectoryEvent,
+  ScientificReturnKnowledgeItem,
 } from '../models/scientific-return.model';
 
 @Injectable({ providedIn: 'root' })
@@ -153,6 +156,69 @@ export class ScientificReturnApiService {
   listWatchInvestigations(watchId: string): Observable<readonly ScientificReturnInvestigation[]> {
     return this.http.get<readonly ScientificReturnInvestigation[]>(
       this.url(`/watches/${watchId}/investigations`),
+    );
+  }
+
+  startFullAgenticInvestigation(watchId: string): Observable<FullAgenticInvestigation> {
+    return this.http.post<FullAgenticInvestigation>(
+      this.url(`/watches/${watchId}/full-agentic-investigations`),
+      { objective: 'DISCOVER_CANDIDATE' },
+      { headers: { 'Idempotency-Key': crypto.randomUUID() } },
+    );
+  }
+
+  listFullAgenticInvestigations(watchId: string): Observable<readonly FullAgenticInvestigation[]> {
+    return this.http.get<readonly FullAgenticInvestigation[]>(
+      this.url(`/watches/${watchId}/full-agentic-investigations`),
+    );
+  }
+
+  getFullAgenticTrajectory(investigationId: string): Observable<readonly AgenticTrajectoryEvent[]> {
+    return this.http.get<readonly AgenticTrajectoryEvent[]>(
+      this.url(`/full-agentic-investigations/${investigationId}/trajectory`),
+    );
+  }
+
+  cancelFullAgenticInvestigation(investigationId: string): Observable<FullAgenticInvestigation> {
+    return this.http.post<FullAgenticInvestigation>(
+      this.url(`/full-agentic-investigations/${investigationId}/cancel`),
+      {},
+    );
+  }
+
+  listKnowledgeItems(): Observable<readonly ScientificReturnKnowledgeItem[]> {
+    return this.http.get<readonly ScientificReturnKnowledgeItem[]>(this.url('/knowledge-items'));
+  }
+
+  createInventoryExample(input: {
+    content: string;
+    registeredNumber: string;
+    observedForm: string;
+  }): Observable<ScientificReturnKnowledgeItem> {
+    return this.http.post<ScientificReturnKnowledgeItem>(this.url('/knowledge-items'), {
+      kind: 'INVENTORY_VARIATION_EXAMPLE',
+      ...input,
+    });
+  }
+
+  activateKnowledgeItem(itemId: string): Observable<ScientificReturnKnowledgeItem> {
+    return this.http.post<ScientificReturnKnowledgeItem>(
+      this.url(`/knowledge-items/${itemId}/activate`),
+      {},
+    );
+  }
+
+  retireKnowledgeItem(itemId: string): Observable<ScientificReturnKnowledgeItem> {
+    return this.http.delete<ScientificReturnKnowledgeItem>(this.url(`/knowledge-items/${itemId}`));
+  }
+
+  proposeKnowledge(
+    candidateId: string,
+    explanation: string,
+  ): Observable<ScientificReturnKnowledgeItem> {
+    return this.http.post<ScientificReturnKnowledgeItem>(
+      this.url(`/candidates/${candidateId}/knowledge-proposals`),
+      { explanation },
     );
   }
 

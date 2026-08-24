@@ -41,7 +41,12 @@ export interface ScientificReturnQuery {
   readonly id: string;
   readonly source: string;
   readonly queryText: string;
-  readonly queryType: 'INVENTORY' | 'AUTHOR_INVENTORY' | 'INVENTORY_OBJECT' | 'AUTHOR_OBJECT';
+  readonly queryType:
+    | 'INVENTORY'
+    | 'AUTHOR_INVENTORY'
+    | 'INVENTORY_OBJECT'
+    | 'AUTHOR_OBJECT'
+    | 'AGENTIC';
   readonly sentAt: string;
   readonly resultCount: number;
   readonly status: ScientificReturnQueryStatus;
@@ -59,6 +64,7 @@ export interface ScientificReturnRun {
   readonly newCandidateCount: number;
   readonly errorMessage: string | null;
   readonly queries: readonly ScientificReturnQuery[];
+  readonly runKind?: 'DETERMINISTIC' | 'FULL_AGENTIC';
 }
 
 export interface ScientificReturnEvidence {
@@ -87,6 +93,9 @@ export interface ScientificReturnCandidate {
   readonly confirmedPublicationEntryId: string | null;
   readonly firstSeenAt: string;
   readonly evidences: readonly ScientificReturnEvidence[];
+  readonly firstSeenKind?: 'DETERMINISTIC' | 'FULL_AGENTIC';
+  readonly agenticCreated?: boolean;
+  readonly agenticRediscovered?: boolean;
 }
 
 export interface ScientificReturnReviewItem extends ScientificReturnCandidate {
@@ -100,6 +109,13 @@ export interface ScientificReturnMetrics {
   readonly pendingCandidates: number;
   readonly confirmedCandidates: number;
   readonly dismissedCandidates: number;
+  readonly fullAgentic?: {
+    readonly runs: number;
+    readonly failedRuns: number;
+    readonly pendingCandidates: number;
+    readonly confirmedCandidates: number;
+    readonly dismissedCandidates: number;
+  } | null;
 }
 
 export interface CandidateCorrection {
@@ -125,6 +141,19 @@ export interface CandidateDecisionRecord {
   readonly decidedAt: string;
   readonly evidenceSnapshot: readonly Record<string, string>[];
   readonly correction: CandidateCorrection | null;
+  readonly decisionContext?: CandidateDecisionContext | null;
+}
+
+export interface CandidateDecisionContext {
+  readonly version: number;
+  readonly passages: readonly string[];
+  readonly inventoryForms: readonly string[];
+  readonly queries: readonly string[];
+  readonly sources: readonly string[];
+  readonly explanation: string;
+  readonly confidence: ScientificReturnAgentConfidence;
+  readonly contradictions: readonly string[];
+  readonly knowledgeItemIds: readonly string[];
 }
 
 export interface CandidateAgentAnalysisResult {
@@ -285,4 +314,59 @@ export interface ScientificReturnInvestigation {
   readonly createdBy: string;
   readonly previousInvestigationId: string | null;
   readonly iterations: readonly InvestigationIteration[];
+}
+
+export type FullAgenticStatus =
+  | 'QUEUED'
+  | 'RUNNING'
+  | 'CANCEL_REQUESTED'
+  | 'COMPLETED'
+  | 'FAILED'
+  | 'CANCELLED';
+
+export interface FullAgenticInvestigation {
+  readonly id: string;
+  readonly watchId: string;
+  readonly objective: InvestigationObjective;
+  readonly candidateId: string | null;
+  readonly searchRunId: string | null;
+  readonly status: FullAgenticStatus;
+  readonly budget: Readonly<Record<string, number>>;
+  readonly usage: Readonly<Record<string, number>>;
+  readonly createdBy: string;
+  readonly createdAt: string;
+  readonly startedAt: string | null;
+  readonly completedAt: string | null;
+  readonly heartbeatAt: string | null;
+  readonly failureReason: string | null;
+}
+
+export interface AgenticTrajectoryEvent {
+  readonly id: string;
+  readonly sequence: number;
+  readonly kind: string;
+  readonly payload: Readonly<Record<string, unknown>>;
+  readonly occurredAt: string;
+}
+
+export type ScientificReturnKnowledgeKind = 'INVENTORY_VARIATION_EXAMPLE' | 'CURATORIAL_LESSON';
+export type ScientificReturnKnowledgeStatus = 'PROPOSED' | 'ACTIVE' | 'RETIRED';
+
+export interface ScientificReturnKnowledgeItem {
+  readonly id: string;
+  readonly institutionId: string | null;
+  readonly kind: ScientificReturnKnowledgeKind;
+  readonly status: ScientificReturnKnowledgeStatus;
+  readonly content: string;
+  readonly registeredNumber: string | null;
+  readonly observedForm: string | null;
+  readonly supersedesId: string | null;
+  readonly sourceCandidateId: string | null;
+  readonly sourceDecisionId: string | null;
+  readonly createdBy: string;
+  readonly createdAt: string;
+  readonly validatedBy: string | null;
+  readonly validatedAt: string | null;
+  readonly retiredBy: string | null;
+  readonly retiredAt: string | null;
 }

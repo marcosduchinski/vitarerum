@@ -58,12 +58,17 @@ not source-context aggregates.
 
 ### `scientific_return`
 
-Owns supervised monitoring of scientific outputs after a collection-use
-project is completed. It stores immutable project snapshots, bibliographic
-search trajectories, candidates, evidence and human decisions. It reads and
-writes project information only through `use_of_collections.public`; external
-bibliographic results never become publication-log entries without a decision
-by curatorial, collections-management or direction staff.
+Owns monitoring of scientific outputs after a collection-use project is
+completed. It stores immutable project snapshots, bibliographic search
+trajectories, candidates, evidence, human decisions and curator-validated
+textual knowledge about citation variants. Alongside the deterministic and
+policy-assisted regimes it owns a separate `FullAgenticInvestigation` aggregate:
+an asynchronous LLM planner executes iterative searches, while a tool-free
+reader isolates untrusted publication text and human review remains the final
+institutional gate. It reads and writes project information only through
+`use_of_collections.public`; external bibliographic results never become
+publication-log entries without a decision by curatorial,
+collections-management or direction staff.
 
 ### `reports.in_situ_visit`
 

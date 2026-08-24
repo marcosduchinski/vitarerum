@@ -21,19 +21,26 @@ from app.scientific_return.domain.enums import (
     AgentAnalysisFeedback,
     AgentAnalysisStatus,
     AgentConfidence,
+    AgenticCandidateRelationKind,
+    AgenticToolExecutionStatus,
+    AgenticTrajectoryEventKind,
     AgentProgress,
     AgentRecommendedAction,
     CandidateStatus,
     DecisionType,
     EvidenceStrength,
     EvidenceType,
+    FullAgenticInvestigationStatus,
     InvestigationMode,
     InvestigationObjective,
     InvestigationStatus,
     IterationStatus,
+    KnowledgeKind,
+    KnowledgeStatus,
     PolicyRejectionReason,
     QueryStatus,
     QueryType,
+    RunKind,
     RunStatus,
     StopReason,
     WatchStatus,
@@ -91,6 +98,11 @@ class ScientificReturnRunRecord(Base):
     candidate_count: Mapped[int] = mapped_column(Integer, default=0)
     new_candidate_count: Mapped[int] = mapped_column(Integer, default=0)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    run_kind: Mapped[RunKind] = mapped_column(
+        SAEnum(RunKind, name="scientific_return_run_kind", native_enum=False),
+        default=RunKind.DETERMINISTIC,
+        index=True,
+    )
 
     queries: Mapped[list[ScientificReturnQueryRecord]] = relationship(
         back_populates="run", cascade="all, delete-orphan"
@@ -158,6 +170,8 @@ class CandidatePublicationRecord(Base):
     evidences: Mapped[list[CandidateEvidenceRecord]] = relationship(
         back_populates="candidate", cascade="all, delete-orphan"
     )
+    first_seen_run: Mapped[ScientificReturnRunRecord] = relationship()
+    agentic_links: Mapped[list[AgenticInvestigationCandidateRecord]] = relationship()
 
 
 class CandidateEvidenceRecord(Base):
@@ -209,6 +223,168 @@ class CandidateDecisionRecord(Base):
     decided_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     evidence_snapshot: Mapped[list[dict[str, str]]] = mapped_column(JSON)
     correction: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    decision_context_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class ScientificReturnKnowledgeRecord(Base):
+    __tablename__ = "sr_knowledge_items"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    institution_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    kind: Mapped[KnowledgeKind] = mapped_column(
+        SAEnum(KnowledgeKind, native_enum=False, length=64)
+    )
+    status: Mapped[KnowledgeStatus] = mapped_column(
+        SAEnum(KnowledgeStatus, native_enum=False, length=16), index=True
+    )
+    content_encrypted: Mapped[str] = mapped_column(Text)
+    registered_number_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    registered_number_hash: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
+    observed_form_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    observed_form_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    source_candidate_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    source_decision_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    supersedes_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    proposed_by_model: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    prompt_version: Mapped[str | None] = mapped_column(String(96), nullable=True)
+    created_by: Mapped[str] = mapped_column(String(36), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    validated_by: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    validated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    retired_by: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    retired_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
+class FullAgenticInvestigationRecord(Base):
+    __tablename__ = "sr_full_agentic_investigations"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    watch_id: Mapped[str] = mapped_column(
+        ForeignKey("scientific_return_watches.id"), index=True
+    )
+    objective: Mapped[InvestigationObjective] = mapped_column(
+        SAEnum(InvestigationObjective, native_enum=False, length=32)
+    )
+    candidate_id: Mapped[str | None] = mapped_column(
+        ForeignKey("scientific_return_candidates.id"), nullable=True, index=True
+    )
+    search_run_id: Mapped[str | None] = mapped_column(
+        ForeignKey("scientific_return_runs.id"), nullable=True, unique=True
+    )
+    status: Mapped[FullAgenticInvestigationStatus] = mapped_column(
+        SAEnum(FullAgenticInvestigationStatus, native_enum=False, length=32), index=True
+    )
+    idempotency_key: Mapped[str] = mapped_column(String(128), unique=True)
+    budget: Mapped[dict[str, Any]] = mapped_column(JSON)
+    usage: Mapped[dict[str, Any]] = mapped_column(JSON)
+    created_by: Mapped[str] = mapped_column(String(36), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    heartbeat_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    cancel_requested_by: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    lease_owner: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    version: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class AgenticTrajectoryEventRecord(Base):
+    __tablename__ = "sr_agentic_trajectory_events"
+    __table_args__ = (
+        UniqueConstraint(
+            "investigation_id", "sequence", name="uq_sr_agentic_event_sequence"
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    investigation_id: Mapped[str] = mapped_column(
+        ForeignKey("sr_full_agentic_investigations.id"), index=True
+    )
+    sequence: Mapped[int] = mapped_column(Integer)
+    kind: Mapped[AgenticTrajectoryEventKind] = mapped_column(
+        SAEnum(AgenticTrajectoryEventKind, native_enum=False, length=32)
+    )
+    payload_encrypted: Mapped[str] = mapped_column(Text)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class AgenticKnowledgeUsageRecord(Base):
+    __tablename__ = "sr_agentic_knowledge_usage"
+    __table_args__ = (
+        UniqueConstraint(
+            "investigation_id",
+            "knowledge_item_id",
+            "prompt_step",
+            name="uq_sr_agentic_knowledge_usage",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    investigation_id: Mapped[str] = mapped_column(
+        ForeignKey("sr_full_agentic_investigations.id"), index=True
+    )
+    knowledge_item_id: Mapped[str] = mapped_column(
+        ForeignKey("sr_knowledge_items.id"), index=True
+    )
+    prompt_step: Mapped[str] = mapped_column(String(64))
+    used_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class AgenticInvestigationCandidateRecord(Base):
+    __tablename__ = "sr_agentic_investigation_candidates"
+
+    investigation_id: Mapped[str] = mapped_column(
+        ForeignKey("sr_full_agentic_investigations.id"), primary_key=True
+    )
+    candidate_id: Mapped[str] = mapped_column(
+        ForeignKey("scientific_return_candidates.id"), primary_key=True
+    )
+    relation_kind: Mapped[AgenticCandidateRelationKind] = mapped_column(
+        SAEnum(AgenticCandidateRelationKind, native_enum=False, length=16)
+    )
+    rank: Mapped[int] = mapped_column(Integer)
+    linked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class FullAgenticToolExecutionRecord(Base):
+    __tablename__ = "sr_agentic_tool_executions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    investigation_id: Mapped[str] = mapped_column(
+        ForeignKey("sr_full_agentic_investigations.id"), index=True
+    )
+    trajectory_sequence: Mapped[int] = mapped_column(Integer)
+    idempotency_key: Mapped[str] = mapped_column(String(128), unique=True)
+    status: Mapped[AgenticToolExecutionStatus] = mapped_column(
+        SAEnum(AgenticToolExecutionStatus, native_enum=False, length=16), index=True
+    )
+    invocation_encrypted: Mapped[str] = mapped_column(Text)
+    result_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    result_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=1)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class CandidateAgentAnalysisRecord(Base):
@@ -365,12 +541,8 @@ class ScientificReturnIterationRecord(Base):
     model: Mapped[str | None] = mapped_column(String(128), nullable=True)
     prompt_version: Mapped[str | None] = mapped_column(String(96), nullable=True)
     plan_latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    reflection_latency_ms: Mapped[int | None] = mapped_column(
-        Integer, nullable=True
-    )
-    plan_response_hash: Mapped[str | None] = mapped_column(
-        String(64), nullable=True
-    )
+    reflection_latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    plan_response_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     reflection_response_hash: Mapped[str | None] = mapped_column(
         String(64), nullable=True
     )
@@ -416,9 +588,7 @@ class ScientificReturnToolExecutionRecord(Base):
     queries_payload: Mapped[str | None] = mapped_column(Text, nullable=True)
     sources: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
     total_results: Mapped[int] = mapped_column(Integer, default=0)
-    created_candidate_ids: Mapped[list[str] | None] = mapped_column(
-        JSON, nullable=True
-    )
+    created_candidate_ids: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
     added_evidence_ids: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
     result_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     succeeded: Mapped[bool] = mapped_column(Boolean, default=False)
