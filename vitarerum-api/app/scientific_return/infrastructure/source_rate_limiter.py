@@ -23,12 +23,22 @@ class PostgresBibliographicSourceRateLimiter:
         now = datetime.now(tz=UTC)
         async with self._sessions() as session:
             result = await session.execute(
+                # Every parameter is cast explicitly. asyncpg does not declare
+                # parameter types in its Parse message, so PostgreSQL sees
+                # ``unknown + unknown`` and cannot choose among the candidate
+                # ``+`` operators. The casts pin the types at parse time; a
+                # client-side ``bindparams(type_=...)`` would not, because the
+                # ambiguity is resolved by the server from the SQL text alone.
                 text(
                     "INSERT INTO sr_source_throttles(source, next_allowed_at) "
-                    "VALUES (:source, :now + :interval) "
+                    "VALUES (:source, CAST(:now AS timestamptz)"
+                    " + CAST(:interval AS interval)) "
                     "ON CONFLICT (source) DO UPDATE SET next_allowed_at = "
-                    "GREATEST(sr_source_throttles.next_allowed_at, :now) + :interval "
-                    "RETURNING next_allowed_at - :interval AS reserved_at"
+                    "GREATEST(sr_source_throttles.next_allowed_at,"
+                    " CAST(:now AS timestamptz))"
+                    " + CAST(:interval AS interval) "
+                    "RETURNING next_allowed_at"
+                    " - CAST(:interval AS interval) AS reserved_at"
                 ),
                 {"source": source.upper(), "now": now, "interval": interval},
             )
