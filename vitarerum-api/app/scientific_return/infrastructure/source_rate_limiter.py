@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.scientific_return.application.ports import (
     BibliographicRecord,
     BibliographicSource,
+    BibliographicSourceCapabilities,
 )
 
 
@@ -60,6 +61,10 @@ class RateLimitedBibliographicSource:
         self._limiter = limiter
         self._interval = interval_seconds
         self.name = source.name
+
+    @property
+    def capabilities(self) -> BibliographicSourceCapabilities:
+        return self._source.capabilities
 
     async def search(
         self, query: str, limit: int, *, author: str | None = None

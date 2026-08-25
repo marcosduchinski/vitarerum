@@ -134,6 +134,8 @@ class InventoryVariantSearchTool:
         by_key: dict[str, BibliographicRecord] = {}
         total_results = 0
         errors: list[str] = []
+        seen_attempts: set[tuple[str, str]] = set()
+        duplicates_avoided = 0
 
         for source_name in execution.sources:
             source = self._sources.get(source_name.upper())
@@ -154,6 +156,11 @@ class InventoryVariantSearchTool:
             for variant in execution.queries:
                 # The audited query is the one actually sent, quoting included.
                 sent = as_phrase_query(variant.text)
+                identity = (source_name.upper(), " ".join(sent.casefold().split()))
+                if identity in seen_attempts:
+                    duplicates_avoided += 1
+                    continue
+                seen_attempts.add(identity)
                 try:
                     records = await source.search(sent, execution.result_limit)
                 except Exception as exc:
@@ -192,6 +199,7 @@ class InventoryVariantSearchTool:
             result_hash=_result_hash(discovered),
             unavailable=unavailable or not attempted,
             error="; ".join(errors)[:2000] or None,
+            duplicates_avoided=duplicates_avoided,
         )
 
     @staticmethod

@@ -1,39 +1,52 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
 
 from app.identity.public import Actor, GroupName
+from app.scientific_return.application.agent_tools import (
+    normalized_tool_idempotency_key,
+)
 from app.scientific_return.application.full_agentic import (
     ExecuteFullAgenticInput,
     ExecuteFullAgenticScientificReturn,
     FullAgenticCircuitOpen,
     FullAgenticConfiguration,
+    FullAgenticSourceConfigurationInvalid,
     StartFullAgenticInput,
     StartFullAgenticScientificReturn,
 )
 from app.scientific_return.application.full_agentic_ports import (
     AgenticPlan,
+    AssessmentResult,
     LearningProposal,
 )
 from app.scientific_return.application.ports import (
     BibliographicRecord,
+    BibliographicSourceCapabilities,
     ScientificReturnMetrics,
 )
 from app.scientific_return.domain.enums import (
     AgentConfidence,
     AgenticToolExecutionStatus,
+    AgenticTrajectoryEventKind,
     FullAgenticInvestigationStatus,
     InvestigationObjective,
     RunKind,
+    SearchIntent,
+    SearchStrategy,
     WatchStatus,
 )
 from app.scientific_return.domain.full_agentic_models import (
     AgenticBudget,
     AgenticCandidateLink,
+    AgenticSearchSpec,
     AgenticToolExecution,
+    AgenticToolExecutionId,
     AgenticTrajectoryEvent,
+    AgenticTrajectoryEventId,
     AgenticUsage,
     ArticleAssessment,
     FullAgenticInvestigation,
@@ -266,19 +279,32 @@ class Reasoner:
     async def plan(self, **kwargs: object) -> AgenticPlan:
         self.plans += 1
         if self.plans > 1:
-            return AgenticPlan((), (), "Enough evidence", True)
+            return AgenticPlan((), "Enough evidence", True)
         return AgenticPlan(
-            ("MB06-5747 Cynoscion regalis",), ("TEST",), "Apply curator example"
+            (
+                AgenticSearchSpec(
+                    source="TEST",
+                    query="MB06-5747 Cynoscion regalis",
+                    intent=SearchIntent.INVENTORY_EVIDENCE,
+                    strategy=SearchStrategy.INVENTORY_QUERY,
+                    object_id="object-1",
+                ),
+            ),
+            "Apply curator example",
         )
 
-    async def assess(self, **kwargs: object) -> ArticleAssessment:
-        return ArticleAssessment(
-            relevant=True,
-            confidence=AgentConfidence.HIGH,
-            explanation="The passage connects the inventory form to the specimen.",
-            passages=("Specimen MB06-5747 was examined.",),
-            inventory_forms=("MB06-5747",),
-            contradictions=(),
+    async def assess(self, **kwargs: object) -> AssessmentResult:
+        return AssessmentResult(
+            assessment=ArticleAssessment(
+                relevant=True,
+                confidence=AgentConfidence.HIGH,
+                explanation="The passage connects the inventory form to the specimen.",
+                passages=("Specimen MB06-5747 was examined.",),
+                inventory_forms=("MB06-5747",),
+                contradictions=(),
+            ),
+            prompt_version_id="pver-sr-full-reader-v2",
+            prompt_version="scientific-return-full-agentic-reader-v2",
         )
 
     async def learn(self, **kwargs: object) -> LearningProposal:
@@ -287,6 +313,14 @@ class Reasoner:
 
 class Source:
     name = "TEST"
+    capabilities = BibliographicSourceCapabilities(
+        name="TEST",
+        searches_metadata=True,
+        searches_indexed_full_text=True,
+        returns_abstract=True,
+        returns_inspectable_full_text=True,
+        supports_structured_author=True,
+    )
 
     async def search(
         self, query: str, limit: int, *, author: str | None = None
@@ -310,8 +344,19 @@ class MultiSourceReasoner(Reasoner):
     async def plan(self, **kwargs: object) -> AgenticPlan:
         self.plans += 1
         if self.plans > 1:
-            return AgenticPlan((), (), "Enough evidence", True)
-        return AgenticPlan(("MB06-5747",), ("CROSSREF", "OPENALEX"), "Search both")
+            return AgenticPlan((), "Enough evidence", True)
+        return AgenticPlan(
+            tuple(
+                AgenticSearchSpec(
+                    source=source,
+                    query="MB06-5747",
+                    intent=SearchIntent.DISCOVERY,
+                    strategy=SearchStrategy.OBJECT_QUERY,
+                )
+                for source in ("CROSSREF", "OPENALEX")
+            ),
+            "Search both",
+        )
 
 
 class NamedSource(Source):
@@ -326,6 +371,7 @@ class NamedSource(Source):
         self.record_id = record_id
         self.indexed_text = indexed_text
         self.authors: list[str | None] = []
+        self.capabilities = replace(Source.capabilities, name=name)
 
     async def search(
         self, query: str, limit: int, *, author: str | None = None
@@ -351,7 +397,7 @@ class NamedSource(Source):
 
 
 class MalformedThenValidReasoner(Reasoner):
-    async def assess(self, **kwargs: object) -> ArticleAssessment:
+    async def assess(self, **kwargs: object) -> AssessmentResult:
         record = kwargs["record"]
         assert isinstance(record, BibliographicRecord)
         if record.source_record_id == "malformed":
@@ -379,7 +425,42 @@ class TwoRecordSource(Source):
         ]
 
 
-def setup_scientific_repository() -> tuple[_Repository, ScientificReturnWatch]:
+class FailingPlannerReasoner(Reasoner):
+    async def plan(self, **kwargs: object) -> AgenticPlan:
+        self.plans += 1
+        raise ValueError("invalid planner contract")
+
+
+class RepeatingReasoner(Reasoner):
+    async def plan(self, **kwargs: object) -> AgenticPlan:
+        self.plans += 1
+        return AgenticPlan(
+            (
+                AgenticSearchSpec(
+                    source="TEST",
+                    query="repeat me",
+                    intent=SearchIntent.DISCOVERY,
+                    strategy=SearchStrategy.OBJECT_QUERY,
+                ),
+            ),
+            "Repeat to prove application deduplication",
+        )
+
+
+class CountingSource(Source):
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str | None]] = []
+
+    async def search(
+        self, query: str, limit: int, *, author: str | None = None
+    ) -> list[BibliographicRecord]:
+        self.calls.append((query, author))
+        return await super().search(query, limit, author=author)
+
+
+def setup_scientific_repository(
+    object_count: int = 1,
+) -> tuple[_Repository, ScientificReturnWatch]:
     repository = _Repository()
     snapshot = ScientificReturnProjectSnapshot(
         id=ScientificReturnSnapshotId("snapshot-1"),
@@ -388,12 +469,15 @@ def setup_scientific_repository() -> tuple[_Repository, ScientificReturnWatch]:
             project_id="project-1",
             project_reference="PRJ-1",
             researcher="Researcher",
-            consulted_objects=(
+            consulted_objects=tuple(
                 ConsultedObjectSnapshot(
-                    id="object-1",
-                    inventory_number="MUHNAC/MB06-005747",
-                    object_name="Cynoscion regalis",
-                ),
+                    id=f"object-{index}",
+                    inventory_number=f"MUHNAC/MB06-00574{index}",
+                    object_name=(
+                        "Cynoscion regalis" if index == 1 else f"Taxon {index}"
+                    ),
+                )
+                for index in range(1, object_count + 1)
             ),
         ),
         payload_hash="snapshot-hash",
@@ -461,6 +545,37 @@ async def test_circuit_breaker_uses_only_full_agentic_human_outcomes() -> None:
 
 
 @pytest.mark.asyncio
+async def test_invalid_operational_source_configuration_fails_before_enqueue() -> None:
+    scientific, watch = setup_scientific_repository()
+    dispatcher = Dispatcher()
+    config = FullAgenticConfiguration(
+        enabled=True,
+        allowed_sources=("EUROPE_PMC",),
+        budget=AgenticBudget(1, 1, 1, 1, 2),
+        operational_sources=("CROSSREF",),
+        evidence_sources=(),
+    )
+
+    with pytest.raises(FullAgenticSourceConfigurationInvalid):
+        await StartFullAgenticScientificReturn(
+            scientific, FullRepository(), dispatcher, Uow(), Clock(), config
+        ).execute(
+            StartFullAgenticInput(
+                watch.id,
+                InvestigationObjective.DISCOVER_CANDIDATE,
+                None,
+                "invalid-sources",
+                Actor(PermissionId("permission-1"), GroupName.CURATORIAL),
+            )
+        )
+
+    assert dispatcher.ids == []
+    diagnostics = config.source_diagnostics()
+    assert diagnostics["configurationValid"] is False
+    assert diagnostics["unavailableSources"] == ["EUROPE_PMC"]
+
+
+@pytest.mark.asyncio
 async def test_agent_presents_without_deterministic_gate() -> None:
     scientific, watch = setup_scientific_repository()
     repository = FullRepository()
@@ -505,8 +620,13 @@ async def test_agent_presents_without_deterministic_gate() -> None:
     assert len(scientific.candidates) == 1
     assert next(iter(scientific.candidates.values())).evidences == []
     assert next(iter(scientific.runs.values())).run_kind is RunKind.FULL_AGENTIC
-    assert scientific.queries[0].query_text == "MB06-5747 Cynoscion regalis"
+    assert scientific.queries[0].query_text == '"Cynoscion regalis"'
     assert repository.links[0].relation_kind.value == "CREATED"
+    analysis = next(iter(scientific.agent_analyses.values()))
+    assert analysis.prompt_version_id == "pver-sr-full-reader-v2"
+    assert analysis.prompt_version == "scientific-return-full-agentic-reader-v2"
+    # The claimed form is literally in the abstract the reader received.
+    assert analysis.input_payload["inventoryEvidenceStatus"] == "VERIFIED"
     assert watch.next_run_at == original_next_run
     assert (
         next(iter(repository.tools.values())).status
@@ -551,10 +671,394 @@ async def test_same_doi_from_multiple_sources_is_linked_only_once() -> None:
     assert len(scientific.candidates) == 1
     assert len(repository.links) == 1
     assert completed.usage.candidates == 1
+    # Two floor attempts (author+object and the bare inventory code) plus the
+    # two the planner asked for.
+    assert completed.usage.queries == 4
 
 
 @pytest.mark.asyncio
-async def test_search_omits_implicit_author_and_full_text_cache() -> None:
+async def test_repeated_search_is_deduplicated_between_iterations() -> None:
+    scientific, watch = setup_scientific_repository()
+    repository = FullRepository()
+    source = CountingSource()
+    config = FullAgenticConfiguration(
+        enabled=True,
+        allowed_sources=("TEST",),
+        budget=AgenticBudget(4, 6, 10, 3, 10),
+    )
+    investigation = FullAgenticInvestigation(
+        id=FullAgenticInvestigationId("investigation-dedup"),
+        watch_id=watch.id,
+        objective=InvestigationObjective.DISCOVER_CANDIDATE,
+        status=FullAgenticInvestigationStatus.QUEUED,
+        idempotency_key="dedup",
+        budget=config.budget,
+        usage=AgenticUsage(),
+        created_by=PermissionId("permission-1"),
+        created_at=_NOW,
+    )
+    await repository.add_investigation(investigation)
+
+    completed = await ExecuteFullAgenticScientificReturn(
+        scientific,
+        repository,
+        RepeatingReasoner(),
+        (source,),
+        Uow(),
+        Clock(),
+        config,
+    ).execute(ExecuteFullAgenticInput(investigation.id, "worker-1"))
+
+    # Both floor attempts plus the single execution of the repeated query.
+    assert completed.usage.queries == 3
+    assert [query for query, _ in source.calls].count("repeat me") == 1
+    assert any(
+        event.kind.value == "SEARCH_SKIPPED_DUPLICATE"
+        for event in repository.events
+    )
+
+
+@pytest.mark.asyncio
+async def test_started_but_incomplete_search_is_resumed() -> None:
+    scientific, watch = setup_scientific_repository()
+    repository = FullRepository()
+    source = CountingSource()
+    config = FullAgenticConfiguration(
+        enabled=True,
+        allowed_sources=("TEST",),
+        budget=AgenticBudget(1, 1, 5, 2, 3),
+    )
+    investigation = FullAgenticInvestigation(
+        id=FullAgenticInvestigationId("investigation-resume-search"),
+        watch_id=watch.id,
+        objective=InvestigationObjective.DISCOVER_CANDIDATE,
+        status=FullAgenticInvestigationStatus.QUEUED,
+        idempotency_key="resume-search",
+        budget=config.budget,
+        usage=AgenticUsage(),
+        created_by=PermissionId("permission-1"),
+        created_at=_NOW,
+    )
+    await repository.add_investigation(investigation)
+    invocation: dict[str, object] = {
+        "contractVersion": "structured-search-v3",
+        "source": "TEST",
+        "query": '"Cynoscion regalis"',
+        "author": "Researcher",
+        "objectId": "object-1",
+        "intent": "DISCOVERY",
+        "strategy": "AUTHOR_OBJECT",
+    }
+    key = normalized_tool_idempotency_key(str(investigation.id), 0, invocation)
+    await repository.add_tool_execution(
+        AgenticToolExecution(
+            id=AgenticToolExecutionId("tool-interrupted"),
+            investigation_id=investigation.id,
+            trajectory_sequence=1,
+            idempotency_key=key,
+            status=AgenticToolExecutionStatus.RUNNING,
+            invocation=invocation,
+            started_at=_NOW,
+        )
+    )
+    await repository.append_event(
+        AgenticTrajectoryEvent(
+            id=AgenticTrajectoryEventId("event-started"),
+            investigation_id=investigation.id,
+            sequence=1,
+            kind=AgenticTrajectoryEventKind.TOOL_STARTED,
+            payload={
+                key: value
+                for key, value in invocation.items()
+                if key != "contractVersion"
+            },
+            occurred_at=_NOW,
+        )
+    )
+
+    completed = await ExecuteFullAgenticScientificReturn(
+        scientific,
+        repository,
+        Reasoner(),
+        (source,),
+        Uow(),
+        Clock(),
+        config,
+    ).execute(ExecuteFullAgenticInput(investigation.id, "worker-1"))
+
+    assert completed.status is FullAgenticInvestigationStatus.COMPLETED
+    assert source.calls == [('"Cynoscion regalis"', "Researcher")]
+    assert repository.tools[key].attempts == 2
+
+
+class MetadataOnlySource(Source):
+    """An adapter that indexes bodies but returns none, like OpenAlex."""
+
+    name = "OPENALEX"
+    capabilities = BibliographicSourceCapabilities(
+        name="OPENALEX",
+        searches_metadata=True,
+        searches_indexed_full_text=True,
+        returns_abstract=True,
+        returns_inspectable_full_text=False,
+        supports_structured_author=True,
+    )
+
+    async def search(
+        self, query: str, limit: int, *, author: str | None = None
+    ) -> list[BibliographicRecord]:
+        return [
+            BibliographicRecord(
+                source=self.name,
+                source_record_id="record-metadata",
+                title="Cynoscion study",
+                authors=("Researcher",),
+                publication_date="2025",
+                abstract="A revision without any catalogue number.",
+                url="https://example.test/article",
+                doi="10.1/metadata",
+                raw_metadata_hash="hash",
+            )
+        ]
+
+
+class NoFormReasoner(Reasoner):
+    async def assess(self, **kwargs: object) -> AssessmentResult:
+        return AssessmentResult(
+            assessment=ArticleAssessment(
+                relevant=True,
+                confidence=AgentConfidence.MEDIUM,
+                explanation="The taxon and the author match the project.",
+                passages=("A revision without any catalogue number.",),
+                inventory_forms=(),
+                contradictions=(),
+            ),
+            prompt_version_id="pver-sr-full-reader-v2",
+            prompt_version="scientific-return-full-agentic-reader-v2",
+        )
+
+
+@pytest.mark.asyncio
+async def test_a_metadata_only_source_never_reports_inventory_as_not_observed() -> None:
+    scientific, watch = setup_scientific_repository()
+    repository = FullRepository()
+    config = FullAgenticConfiguration(
+        enabled=True,
+        allowed_sources=("OPENALEX",),
+        budget=AgenticBudget(1, 1, 5, 2, 3),
+    )
+    investigation = FullAgenticInvestigation(
+        id=FullAgenticInvestigationId("investigation-metadata-only"),
+        watch_id=watch.id,
+        objective=InvestigationObjective.DISCOVER_CANDIDATE,
+        status=FullAgenticInvestigationStatus.QUEUED,
+        idempotency_key="metadata-only",
+        budget=config.budget,
+        usage=AgenticUsage(),
+        created_by=PermissionId("permission-1"),
+        created_at=_NOW,
+    )
+    await repository.add_investigation(investigation)
+
+    await ExecuteFullAgenticScientificReturn(
+        scientific,
+        repository,
+        NoFormReasoner(),
+        (MetadataOnlySource(),),
+        Uow(),
+        Clock(),
+        config,
+    ).execute(ExecuteFullAgenticInput(investigation.id, "worker-1"))
+
+    analysis = next(iter(scientific.agent_analyses.values()))
+    assert analysis.input_payload["inventoryEvidenceStatus"] == "UNAVAILABLE"
+    assert analysis.input_payload["discoveryBasis"] == "AUTHOR_OBJECT"
+    assert len(scientific.candidates) == 1
+
+
+class LimitRecordingSource(Source):
+    """Records the per-query limit the executor asked this source for."""
+
+    def __init__(self, name: str, *, searches_indexed_full_text: bool) -> None:
+        self.name = name
+        self.limits: list[int] = []
+        self.capabilities = replace(
+            Source.capabilities,
+            name=name,
+            searches_indexed_full_text=searches_indexed_full_text,
+            returns_inspectable_full_text=searches_indexed_full_text,
+        )
+
+    async def search(
+        self, query: str, limit: int, *, author: str | None = None
+    ) -> list[BibliographicRecord]:
+        self.limits.append(limit)
+        return []
+
+
+@pytest.mark.asyncio
+async def test_a_healthy_investigation_is_never_marked_degraded() -> None:
+    scientific, watch = setup_scientific_repository()
+    repository = FullRepository()
+    config = FullAgenticConfiguration(
+        enabled=True,
+        allowed_sources=("TEST",),
+        budget=AgenticBudget(3, 4, 10, 3, 8),
+    )
+    investigation = FullAgenticInvestigation(
+        id=FullAgenticInvestigationId("investigation-healthy"),
+        watch_id=watch.id,
+        objective=InvestigationObjective.DISCOVER_CANDIDATE,
+        status=FullAgenticInvestigationStatus.QUEUED,
+        idempotency_key="healthy",
+        budget=config.budget,
+        usage=AgenticUsage(),
+        created_by=PermissionId("permission-1"),
+        created_at=_NOW,
+    )
+    await repository.add_investigation(investigation)
+
+    completed = await ExecuteFullAgenticScientificReturn(
+        scientific,
+        repository,
+        Reasoner(),
+        (Source(),),
+        Uow(),
+        Clock(),
+        config,
+    ).execute(ExecuteFullAgenticInput(investigation.id, "worker-1"))
+
+    assert completed.status is FullAgenticInvestigationStatus.COMPLETED
+    assert completed.degraded_reason is None
+
+
+@pytest.mark.asyncio
+async def test_a_metadata_only_source_is_given_fewer_results_to_spend() -> None:
+    scientific, watch = setup_scientific_repository()
+    repository = FullRepository()
+    metadata_only = LimitRecordingSource("TEST", searches_indexed_full_text=False)
+    config = FullAgenticConfiguration(
+        enabled=True,
+        allowed_sources=("TEST",),
+        budget=AgenticBudget(1, 2, 40, 2, 3),
+    )
+    investigation = FullAgenticInvestigation(
+        id=FullAgenticInvestigationId("investigation-result-limit"),
+        watch_id=watch.id,
+        objective=InvestigationObjective.DISCOVER_CANDIDATE,
+        status=FullAgenticInvestigationStatus.QUEUED,
+        idempotency_key="result-limit",
+        budget=config.budget,
+        usage=AgenticUsage(),
+        created_by=PermissionId("permission-1"),
+        created_at=_NOW,
+    )
+    await repository.add_investigation(investigation)
+
+    await ExecuteFullAgenticScientificReturn(
+        scientific,
+        repository,
+        Reasoner(),
+        (metadata_only,),
+        Uow(),
+        Clock(),
+        config,
+    ).execute(ExecuteFullAgenticInput(investigation.id, "worker-1"))
+
+    # Without the capability rule every query would have asked for 20.
+    assert metadata_only.limits
+    assert set(metadata_only.limits) == {10}
+
+
+@pytest.mark.asyncio
+async def test_discovery_floor_never_spends_the_whole_query_budget() -> None:
+    scientific, watch = setup_scientific_repository(object_count=6)
+    repository = FullRepository()
+    source = CountingSource()
+    reasoner = Reasoner()
+    config = FullAgenticConfiguration(
+        enabled=True,
+        allowed_sources=("TEST",),
+        budget=AgenticBudget(3, 4, 20, 3, 8),
+    )
+    investigation = FullAgenticInvestigation(
+        id=FullAgenticInvestigationId("investigation-floor-budget"),
+        watch_id=watch.id,
+        objective=InvestigationObjective.DISCOVER_CANDIDATE,
+        status=FullAgenticInvestigationStatus.QUEUED,
+        idempotency_key="floor-budget",
+        budget=config.budget,
+        usage=AgenticUsage(),
+        created_by=PermissionId("permission-1"),
+        created_at=_NOW,
+    )
+    await repository.add_investigation(investigation)
+
+    completed = await ExecuteFullAgenticScientificReturn(
+        scientific,
+        repository,
+        reasoner,
+        (source,),
+        Uow(),
+        Clock(),
+        config,
+    ).execute(ExecuteFullAgenticInput(investigation.id, "worker-1"))
+
+    # max_queries=4 reserves 2 for the floor, so six consulted objects cannot
+    # starve the planner, and both strategies stay represented.
+    author_calls = [query for query, author in source.calls if author == "Researcher"]
+    # The bare code of the first object, without the institution prefix.
+    inventory_calls = [
+        query for query, _ in source.calls if query == '"MB06-005741"'
+    ]
+    assert len(author_calls) == 1
+    assert len(inventory_calls) == 1
+    assert reasoner.plans >= 1
+    assert completed.usage.queries <= config.budget.max_queries
+
+
+@pytest.mark.asyncio
+async def test_planner_failure_degrades_after_discovery_floor() -> None:
+    scientific, watch = setup_scientific_repository()
+    repository = FullRepository()
+    config = FullAgenticConfiguration(
+        enabled=True,
+        allowed_sources=("TEST",),
+        budget=AgenticBudget(2, 2, 5, 2, 4),
+    )
+    investigation = FullAgenticInvestigation(
+        id=FullAgenticInvestigationId("investigation-planner-failure"),
+        watch_id=watch.id,
+        objective=InvestigationObjective.DISCOVER_CANDIDATE,
+        status=FullAgenticInvestigationStatus.QUEUED,
+        idempotency_key="planner-failure",
+        budget=config.budget,
+        usage=AgenticUsage(),
+        created_by=PermissionId("permission-1"),
+        created_at=_NOW,
+    )
+    await repository.add_investigation(investigation)
+
+    completed = await ExecuteFullAgenticScientificReturn(
+        scientific,
+        repository,
+        FailingPlannerReasoner(),
+        (Source(),),
+        Uow(),
+        Clock(),
+        config,
+    ).execute(ExecuteFullAgenticInput(investigation.id, "worker-1"))
+
+    assert completed.status is FullAgenticInvestigationStatus.COMPLETED
+    assert any(event.kind.value == "PLANNER_ERROR" for event in repository.events)
+    assert any(event.kind.value == "PLANNER_FALLBACK" for event in repository.events)
+    # COMPLETED alone would read as "searched fully and found nothing".
+    assert completed.degraded_reason is not None
+    assert "deterministic floor" in completed.degraded_reason
+
+
+@pytest.mark.asyncio
+async def test_search_routes_floor_author_and_encrypts_bounded_replay_text() -> None:
     scientific, watch = setup_scientific_repository()
     repository = FullRepository()
     source = NamedSource("OPENALEX", "W1", indexed_text="full text must stay transient")
@@ -586,16 +1090,29 @@ async def test_search_omits_implicit_author_and_full_text_cache() -> None:
         config,
     ).execute(ExecuteFullAgenticInput(investigation.id, "worker-1"))
 
-    assert source.authors == [None]
+    assert source.authors == ["Researcher"]
     assert next(iter(scientific.runs.values())).source_count == 1
     tool_execution = next(iter(repository.tools.values()))
-    assert tool_execution.invocation["contractVersion"] == "authorless-search-v2"
+    assert tool_execution.invocation["contractVersion"] == "structured-search-v3"
     cached = tool_execution.result
     assert cached is not None
     records = cached["records"]
     assert isinstance(records, list)
-    assert "indexed_text" not in records[0]
+    assert records[0]["indexed_text"] == "full text must stay transient"
     assert records[0]["indexed_text_hash"]
+
+    search = AgenticSearchSpec(
+        source="OPENALEX",
+        query='"Cynoscion regalis"',
+        author="Researcher",
+        object_id="object-1",
+        intent=SearchIntent.DISCOVERY,
+        strategy=SearchStrategy.AUTHOR_OBJECT,
+    )
+    replayed = ExecuteFullAgenticScientificReturn._records_from_result(
+        cached, search
+    )
+    assert replayed[0][0].indexed_text == "full text must stay transient"
 
 
 @pytest.mark.asyncio

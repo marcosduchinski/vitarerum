@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 import httpx
 import pytest
 
@@ -135,3 +137,22 @@ def test_openalex_requires_api_key() -> None:
             api_key="",
             timeout_seconds=1,
         )
+
+
+def test_openalex_api_key_is_redacted_from_httpx_logs(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    OpenAlexBibliographicSource(
+        base_url="https://api.openalex.test",
+        api_key="secret-openalex-key",
+        timeout_seconds=1,
+    )
+
+    with caplog.at_level(logging.INFO, logger="httpx"):
+        logging.getLogger("httpx").info(
+            "HTTP Request: %s",
+            "https://api.openalex.test/works?api_key=secret-openalex-key",
+        )
+
+    assert "secret-openalex-key" not in caplog.text
+    assert "[REDACTED]" in caplog.text

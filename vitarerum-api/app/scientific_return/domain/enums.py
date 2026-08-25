@@ -69,6 +69,9 @@ class AgenticTrajectoryEventKind(StrEnum):
     LEARNING_PROPOSED = "LEARNING_PROPOSED"
     STOPPED = "STOPPED"
     ERROR = "ERROR"
+    PLANNER_ERROR = "PLANNER_ERROR"
+    PLANNER_FALLBACK = "PLANNER_FALLBACK"
+    SEARCH_SKIPPED_DUPLICATE = "SEARCH_SKIPPED_DUPLICATE"
 
 
 class AgenticCandidateRelationKind(StrEnum):
@@ -80,6 +83,44 @@ class AgenticToolExecutionStatus(StrEnum):
     RUNNING = "RUNNING"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
+
+
+class SearchIntent(StrEnum):
+    DISCOVERY = "DISCOVERY"
+    INVENTORY_EVIDENCE = "INVENTORY_EVIDENCE"
+
+
+class SearchStrategy(StrEnum):
+    AUTHOR_OBJECT = "AUTHOR_OBJECT"
+    INVENTORY_QUERY = "INVENTORY_QUERY"
+    OBJECT_QUERY = "OBJECT_QUERY"
+
+
+class InventoryEvidenceStatus(StrEnum):
+    VERIFIED = "VERIFIED"
+    NOT_OBSERVED = "NOT_OBSERVED"
+    UNAVAILABLE = "UNAVAILABLE"
+
+
+class EvidenceSourceField(StrEnum):
+    TITLE = "TITLE"
+    ABSTRACT = "ABSTRACT"
+    INDEXED_TEXT = "INDEXED_TEXT"
+
+
+class GroundedClaimKind(StrEnum):
+    """Which kind of reader claim the grounding validator judged."""
+
+    PASSAGE = "PASSAGE"
+    INVENTORY_FORM = "INVENTORY_FORM"
+
+
+class GroundingRejectionReason(StrEnum):
+    """Why a claim was discarded before reaching a curator."""
+
+    EMPTY_CLAIM = "EMPTY_CLAIM"
+    DUPLICATE_CLAIM = "DUPLICATE_CLAIM"
+    NOT_IN_DELIVERED_FIELDS = "NOT_IN_DELIVERED_FIELDS"
 
 
 class CandidateStatus(StrEnum):

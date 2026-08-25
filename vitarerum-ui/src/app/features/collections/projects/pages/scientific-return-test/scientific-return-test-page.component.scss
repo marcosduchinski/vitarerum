@@ -1,0 +1,252 @@
+:host {
+  display: block;
+}
+.test-bench {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 1.5rem;
+  color: var(--text-color);
+}
+.bench-card {
+  margin-top: 1rem;
+  padding: 1.25rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 1rem;
+  background: var(--surface-card);
+  box-shadow: 0 8px 24px rgb(15 23 42 / 5%);
+}
+.section-heading {
+  display: flex;
+  gap: 0.85rem;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+.section-heading > span {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  color: white;
+  background: #275c56;
+  font-weight: 700;
+}
+.section-heading h2,
+.section-heading p {
+  margin: 0;
+}
+.section-heading p {
+  margin-top: 0.2rem;
+  color: var(--text-color-secondary);
+}
+.section-heading--actions {
+  align-items: center;
+}
+.section-heading--actions div {
+  flex: 1;
+}
+.source-layout {
+  display: grid;
+  grid-template-columns: minmax(18rem, 0.8fr) minmax(24rem, 1.2fr);
+  gap: 1.25rem;
+}
+.editor,
+.item-editor,
+.create-batch {
+  display: grid;
+  gap: 0.8rem;
+}
+.item-editor {
+  grid-template-columns: repeat(3, 1fr) auto;
+  align-items: end;
+}
+label {
+  display: grid;
+  gap: 0.3rem;
+  font-weight: 600;
+}
+label span,
+small {
+  display: block;
+  color: var(--text-color-secondary);
+  font-weight: 400;
+}
+input,
+select,
+textarea {
+  width: 100%;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 0.55rem;
+  color: inherit;
+  background: var(--surface-ground);
+  font: inherit;
+}
+textarea {
+  resize: vertical;
+}
+.source-list {
+  display: grid;
+  align-content: start;
+  gap: 0.6rem;
+}
+.source-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.8rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 0.7rem;
+}
+.source-row label {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.source-row input {
+  width: auto;
+}
+.source-row--retired {
+  opacity: 0.65;
+}
+.actions,
+.row-actions,
+.batch-title {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.batch-title {
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+.button,
+button {
+  min-height: 2.35rem;
+  padding: 0.5rem 0.85rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 0.55rem;
+  color: inherit;
+  background: var(--surface-card);
+  cursor: pointer;
+}
+.button--primary {
+  color: white;
+  border-color: #275c56;
+  background: #275c56;
+}
+.button--danger {
+  color: #9f1239;
+  border-color: #fda4af;
+  background: #fff1f2;
+}
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.notice {
+  margin: 1rem 0;
+  padding: 0.8rem 1rem;
+  border-radius: 0.65rem;
+}
+.notice--error {
+  color: #991b1b;
+  background: #fef2f2;
+}
+.notice--warning {
+  color: #854d0e;
+  background: #fefce8;
+}
+.table-wrap {
+  margin-top: 1rem;
+  overflow-x: auto;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+th,
+td {
+  padding: 0.7rem;
+  border-bottom: 1px solid var(--surface-border);
+  text-align: left;
+  vertical-align: top;
+}
+th {
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.status {
+  display: inline-flex;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  background: var(--surface-100);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.status--completed {
+  color: #166534;
+  background: #dcfce7;
+}
+.status--error {
+  color: #991b1b;
+  background: #fee2e2;
+}
+.status--running {
+  color: #1e40af;
+  background: #dbeafe;
+}
+.progress {
+  height: 0.65rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-200);
+}
+.progress span {
+  display: block;
+  height: 100%;
+  background: #2f766e;
+  transition: width 0.2s ease;
+}
+.progress-copy,
+.empty {
+  color: var(--text-color-secondary);
+}
+.result-filters {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.result-filters label {
+  min-width: 13rem;
+}
+blockquote {
+  margin: 0.6rem 0 0;
+  padding-left: 0.8rem;
+  border-left: 3px solid #2f766e;
+  white-space: pre-wrap;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+@media (max-width: 900px) {
+  .source-layout,
+  .item-editor {
+    grid-template-columns: 1fr;
+  }
+  .test-bench {
+    padding: 0.75rem;
+  }
+}

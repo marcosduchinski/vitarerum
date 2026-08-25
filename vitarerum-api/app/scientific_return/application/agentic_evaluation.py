@@ -81,6 +81,12 @@ class AgenticCaseResult:
     target_actionable: bool = False
     gap_closed: bool = False
     tool_error: str | None = None
+    indexability_ceiling: str = "DISCOVERABLE"
+    retrieved_sources: tuple[str, ...] = field(default_factory=tuple)
+    actionable_sources: tuple[str, ...] = field(default_factory=tuple)
+    external_queries: tuple[dict[str, object], ...] = field(default_factory=tuple)
+    duplicates_avoided: int = 0
+    non_target_actionable_by_source: dict[str, int] = field(default_factory=dict)
 
 
 def _observation(case: EvaluationCase, budget: ExecutionBudget) -> AgentObservation:
@@ -168,6 +174,11 @@ async def evaluate_agentic_cases(
         retrieved = False
         target_actionable = False
         tool_error: str | None = None
+        retrieved_sources: set[str] = set()
+        actionable_sources: set[str] = set()
+        external_queries: tuple[dict[str, object], ...] = ()
+        duplicates_avoided = 0
+        non_target_by_source: dict[str, int] = {}
         if execution is not None and mode.may_execute_tools:
             outcome_tool = await tool.execute(
                 execution,
@@ -179,15 +190,34 @@ async def evaluate_agentic_cases(
             )
             queries = tuple(item.query for item in outcome_tool.queries if item.query)
             used_sources = execution.sources
+            external_queries = tuple(
+                {
+                    "source": item.source,
+                    "query": item.query,
+                    "iteration": 1,
+                    "resultCount": item.result_count,
+                    "error": item.error,
+                }
+                for item in outcome_tool.queries
+            )
+            duplicates_avoided = outcome_tool.duplicates_avoided
             total_results = outcome_tool.total_results
             actionable = len(outcome_tool.actionable_records)
             tool_error = outcome_tool.error
             expected = _normalized_doi(case.expected_doi)
             for found in outcome_tool.records:
+                source_name = found.record.source.upper()
                 if _normalized_doi(found.record.doi) != expected:
+                    if found.is_actionable:
+                        non_target_by_source[source_name] = (
+                            non_target_by_source.get(source_name, 0) + 1
+                        )
                     continue
                 retrieved = True
+                retrieved_sources.add(source_name)
                 target_actionable = target_actionable or found.is_actionable
+                if found.is_actionable:
+                    actionable_sources.add(source_name)
 
         reflection_valid, reflection_error = await _reflect(reasoner, plan, budget)
         results.append(
@@ -215,6 +245,24 @@ async def evaluate_agentic_cases(
                     case.baseline_status is BaselineStatus.GAP and target_actionable
                 ),
                 tool_error=tool_error,
+                # The ceiling is a property of the corpus, declared by the
+                # fixture, never of what this run happened to reach: deriving
+                # it from the run would label every query the agent did not
+                # think of as "not indexed" and hide its own recall failures.
+                indexability_ceiling=(
+                    "NOT_INDEXED_IN_ENABLED_SOURCES"
+                    if case.expected_gap is ExpectedGap.NOT_INDEXED
+                    else (
+                        "EVIDENCE_REACHABLE"
+                        if case.cited_inventory_forms
+                        else "DISCOVERABLE"
+                    )
+                ),
+                retrieved_sources=tuple(sorted(retrieved_sources)),
+                actionable_sources=tuple(sorted(actionable_sources)),
+                external_queries=external_queries,
+                duplicates_avoided=duplicates_avoided,
+                non_target_actionable_by_source=non_target_by_source,
             )
         )
 
@@ -263,6 +311,9 @@ def _report(
         if item.expected_gap
         in {ExpectedGap.INVENTORY_FORMAT, ExpectedGap.INSTITUTIONAL_ACRONYM}
     ]
+    evidence_reachable = [
+        item for item in results if item.expected_gap != ExpectedGap.NOT_INDEXED
+    ]
     rejections: dict[str, int] = {}
     for item in results:
         if item.rejection_reason:
@@ -296,5 +347,63 @@ def _report(
         "gapsClosedCaseIds": [item.case_id for item in results if item.gap_closed],
         "closableGapCaseCount": len(closable),
         "queriesIssued": sum(len(item.queries) for item in results),
+        "discoveryRecall": (
+            sum(item.target_retrieved for item in results) / total if total else 0.0
+        ),
+        "inventoryEvidenceRecall": (
+            sum(item.target_actionable for item in evidence_reachable)
+            / len(evidence_reachable)
+            if evidence_reachable
+            else 0.0
+        ),
+        "reviewableCandidateRecall": (
+            sum(item.target_actionable for item in results) / total if total else 0.0
+        ),
+        "discoveredWithoutPrimaryInventoryEvidence": sum(
+            item.target_retrieved and not item.target_actionable for item in results
+        ),
+        "nonTargetActionableCandidates": sum(
+            max(0, item.actionable_records - int(item.target_actionable))
+            for item in results
+        ),
+        "duplicatesAvoided": sum(item.duplicates_avoided for item in results),
+        "externalQueries": [
+            {"caseId": item.case_id, **attempt}
+            for item in results
+            for attempt in item.external_queries
+        ],
+        "falsePositivesBySourceAndStrategy": {
+            f"{source}|{_SEARCH.value}": sum(
+                item.non_target_actionable_by_source.get(source, 0) for item in results
+            )
+            for source in sorted(
+                {
+                    source
+                    for item in results
+                    for source in item.non_target_actionable_by_source
+                }
+            )
+        },
+        "indexabilityCeiling": {
+            item.case_id: item.indexability_ceiling for item in results
+        },
+        # What this run actually reached, per source. Deliberately named apart
+        # from the ceiling: not reaching a case here is an agent or budget
+        # result, not proof that the source does not index it.
+        "reachedBySource": {
+            item.case_id: {
+                source: (
+                    "EVIDENCE_REACHED"
+                    if source in item.actionable_sources
+                    else (
+                        "DISCOVERED"
+                        if source in item.retrieved_sources
+                        else "NOT_REACHED"
+                    )
+                )
+                for source in allowed_sources
+            }
+            for item in results
+        },
         "cases": [asdict(item) for item in results],
     }

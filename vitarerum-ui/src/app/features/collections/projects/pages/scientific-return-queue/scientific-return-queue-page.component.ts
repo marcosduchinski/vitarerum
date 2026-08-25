@@ -22,6 +22,7 @@ import {
   ScientificReturnEvidence,
   ScientificReturnEvidenceStrength,
   ScientificReturnReviewItem,
+  InventoryEvidenceStatus,
 } from '../../models/scientific-return.model';
 import { ScientificReturnApiService } from '../../services/scientific-return-api.service';
 import { projectDetailRouteForGroup } from '../../utils/project-detail-route.util';
@@ -143,6 +144,21 @@ export class ScientificReturnQueuePageComponent {
     strength: ScientificReturnEvidenceStrength,
   ): number {
     return candidate.evidences.filter((evidence) => evidence.strength === strength).length;
+  }
+
+  protected inventoryEvidenceTitle(status: InventoryEvidenceStatus): string {
+    switch (status) {
+      case 'VERIFIED':
+        return 'Inventory number observed in publication';
+      case 'NOT_OBSERVED':
+        return 'Publication text inspected; inventory number not found';
+      case 'UNAVAILABLE':
+        return 'Source did not provide inspectable inventory text';
+    }
+  }
+
+  protected discoveryLabel(candidate: ScientificReturnReviewItem): string {
+    return this.filterLabel(candidate.searchStrategy ?? candidate.discoveryBasis ?? 'Agentic search');
   }
 
   protected refreshAll(): void {

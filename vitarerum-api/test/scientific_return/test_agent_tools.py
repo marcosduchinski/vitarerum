@@ -121,6 +121,28 @@ def _context(**overrides: object) -> ToolExecutionContext:
     return ToolExecutionContext(**values)  # type: ignore[arg-type]
 
 
+@pytest.mark.asyncio
+async def test_inventory_tool_skips_duplicate_source_query_attempts() -> None:
+    source = _Source("EUROPE_PMC")
+    duplicate = InventoryQueryVariant(
+        "MB11-001283", InventoryVariantKind.WITHOUT_INSTITUTION
+    )
+    execution = AuthorizedExecution(
+        action=_SEARCH,
+        object_id="object-1",
+        queries=(duplicate, duplicate),
+        sources=("EUROPE_PMC",),
+        result_limit=10,
+    )
+
+    outcome = await InventoryVariantSearchTool((source,)).execute(
+        execution, _context()
+    )
+
+    assert source.queries == [('"MB11-001283"', 10)]
+    assert outcome.duplicates_avoided == 1
+
+
 def _candidate(
     *, dedup: str = "doi:10.3897/subtbiol.53.163632", doi: str | None = None
 ) -> CandidatePublication:

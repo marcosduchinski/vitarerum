@@ -78,6 +78,26 @@ def required_bool(payload: dict[str, Any], key: str) -> bool:
     return value
 
 
+def optional_bool(payload: dict[str, Any], key: str, *, default: bool) -> bool:
+    """Absence falls back to ``default``; a present wrong type still fails.
+
+    Small models routinely omit a field they consider unnecessary rather than
+    state it. Rejecting the whole response for a missing flag throws away work
+    the model got right, while accepting ``"false"`` as a boolean would give up
+    the guarantee that a stated value means what it says.
+    """
+    if key not in payload or payload[key] is None:
+        return default
+    return required_bool(payload, key)
+
+
+def optional_string(payload: dict[str, Any], key: str, *, default: str) -> str:
+    """Absence falls back to ``default``; a present malformed value still fails."""
+    if key not in payload or payload[key] is None:
+        return default
+    return required_string(payload, key)
+
+
 def string_list(payload: dict[str, Any], key: str) -> tuple[str, ...]:
     value = payload.get(key, [])
     if not isinstance(value, list) or any(not isinstance(item, str) for item in value):

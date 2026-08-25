@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import secrets
+from collections.abc import Mapping, Sequence
 from math import ceil
 from typing import Annotated
 from uuid import uuid4
@@ -25,6 +26,7 @@ from app.scientific_return.application.full_agentic import (
     FullAgenticAlreadyRunning,
     FullAgenticCircuitOpen,
     FullAgenticDisabled,
+    FullAgenticSourceConfigurationInvalid,
     GetFullAgenticInvestigation,
     StartFullAgenticInput,
 )
@@ -60,11 +62,13 @@ from app.scientific_return.domain.enums import (
     CandidateStatus,
     EvidenceStrength,
     FullAgenticInvestigationStatus,
+    InventoryEvidenceStatus,
     InvestigationObjective,
 )
 from app.scientific_return.domain.full_agentic_models import (
     FullAgenticInvestigation,
     FullAgenticInvestigationId,
+    GroundedInventoryForm,
     KnowledgeItemId,
     ScientificReturnKnowledgeItem,
 )
@@ -94,6 +98,7 @@ from app.scientific_return.presentation.dependencies import (
     AgentReasoner,
     BibliographicSources,
     DBSession,
+    FullAgenticConfigDep,
     FullAgenticExecutor,
     FullAgenticReasonerDep,
     FullAgenticRepositoryDep,
@@ -124,6 +129,8 @@ from app.scientific_return.presentation.schemas import (
     ExecuteFullAgenticRequest,
     FullAgenticInvestigationResponse,
     FullAgenticMetricsResponse,
+    FullAgenticReadinessResponse,
+    GroundedInventoryFormResponse,
     InvestigationBudgetResponse,
     InvestigationDeltaResponse,
     InvestigationIterationResponse,
@@ -186,7 +193,19 @@ def _full_agentic_response(
         completedAt=item.completed_at,
         heartbeatAt=item.heartbeat_at,
         failureReason=item.failure_reason,
+        degradedReason=item.degraded_reason,
     )
+
+
+@scientific_return_router.get(
+    "/full-agentic-readiness", response_model=FullAgenticReadinessResponse
+)
+async def get_full_agentic_readiness(
+    caller: CallerPermission, configuration: FullAgenticConfigDep
+) -> FullAgenticReadinessResponse:
+    """Report which requested sources are operational, without credentials."""
+    require_staff(caller)
+    return FullAgenticReadinessResponse(**configuration.source_diagnostics())
 
 
 @scientific_return_router.post(
@@ -230,6 +249,14 @@ async def start_full_agentic_investigation(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail={
                 "error": "FULL_AGENTIC_CIRCUIT_OPEN",
+                "message": str(exc),
+            },
+        ) from None
+    except FullAgenticSourceConfigurationInvalid as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "error": "FULL_AGENTIC_SOURCE_CONFIGURATION_INVALID",
                 "message": str(exc),
             },
         ) from None
@@ -714,6 +741,35 @@ def _correction_response(
     )
 
 
+def _grounded_form_responses(
+    forms: Sequence[GroundedInventoryForm] | Sequence[Mapping[str, str | None]],
+) -> list[GroundedInventoryFormResponse]:
+    """Project grounded forms from either the decision VO or the queue row."""
+    responses: list[GroundedInventoryFormResponse] = []
+    for form in forms:
+        if isinstance(form, GroundedInventoryForm):
+            responses.append(
+                GroundedInventoryFormResponse(
+                    observedForm=form.observed_form,
+                    sourceField=form.source_field.value,
+                    sourceLocator=form.source_locator,
+                )
+            )
+            continue
+        observed = form.get("observedForm") or form.get("observed_form")
+        field = form.get("sourceField") or form.get("source_field")
+        if not observed or not field:
+            continue
+        responses.append(
+            GroundedInventoryFormResponse(
+                observedForm=str(observed),
+                sourceField=str(field),
+                sourceLocator=form.get("sourceLocator") or form.get("source_locator"),
+            )
+        )
+    return responses
+
+
 def _decision_response(decision: CandidateDecision) -> CandidateDecisionResponse:
     context = decision.decision_context
     return CandidateDecisionResponse(
@@ -736,6 +792,13 @@ def _decision_response(decision: CandidateDecision) -> CandidateDecisionResponse
                 confidence=context.confidence,
                 contradictions=list(context.contradictions),
                 knowledgeItemIds=list(context.knowledge_item_ids),
+                discoveryBasis=context.discovery_basis,
+                searchIntent=context.search_intent,
+                searchStrategy=context.search_strategy,
+                inventoryEvidenceStatus=context.inventory_evidence_status,
+                groundedInventoryForms=_grounded_form_responses(
+                    context.grounded_inventory_forms
+                ),
             )
             if context is not None
             else None
@@ -956,6 +1019,20 @@ async def list_candidate_queue(
             CandidateReviewItemResponse(
                 **_candidate_response(item.candidate).model_dump(),
                 projectId=item.project_id,
+                discoveryBasis=item.discovery_basis,
+                searchIntent=item.search_intent,
+                searchStrategy=item.search_strategy,
+                inventoryEvidenceStatus=(
+                    InventoryEvidenceStatus(item.inventory_evidence_status)
+                    if item.inventory_evidence_status
+                    else None
+                ),
+                groundedInventoryForms=_grounded_form_responses(
+                    item.grounded_inventory_forms
+                ),
+                groundedPassages=list(item.grounded_passages),
+                rejectedPassageCount=item.rejected_passage_count,
+                rejectedInventoryFormCount=item.rejected_inventory_form_count,
             )
             for item in items
         ],

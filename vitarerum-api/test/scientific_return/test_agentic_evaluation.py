@@ -9,6 +9,8 @@ from __future__ import annotations
 import hashlib
 
 from app.scientific_return.application.agentic_evaluation import (
+    AgenticCaseResult,
+    _report,
     evaluate_agentic_cases,
 )
 from app.scientific_return.application.evaluation import load_evaluation_cases
@@ -161,6 +163,55 @@ async def test_the_report_records_what_it_was_run_with() -> None:
     assert report["mode"] == "SUPERVISED"
     assert report["allowedSources"] == ["EUROPE_PMC"]
     assert report["caseCount"] == len(_CASES)
+    assert "discoveryRecall" in report
+    assert "inventoryEvidenceRecall" in report
+    assert "reviewableCandidateRecall" in report
+    assert "indexabilityCeiling" in report
+    assert "reachedBySource" in report
+    assert "externalQueries" in report
+    assert "falsePositivesBySourceAndStrategy" in report
+
+
+def test_report_aggregates_measured_duplicates_and_false_positives() -> None:
+    result = AgenticCaseResult(
+        case_id="case-1",
+        declared_status="GAP",
+        expected_gap="INVENTORY_FORMAT",
+        plan_valid=True,
+        plan_action=AgentRecommendedAction.SEARCH_INVENTORY_VARIANTS.value,
+        plan_error=None,
+        reflection_valid=True,
+        reflection_error=None,
+        authorized=True,
+        rejection_reason=None,
+        retrieved_sources=("EUROPE_PMC",),
+        actionable_sources=("EUROPE_PMC",),
+        external_queries=(
+            {
+                "source": "EUROPE_PMC",
+                "query": "MB11-001283",
+                "iteration": 1,
+                "resultCount": 2,
+                "error": None,
+            },
+        ),
+        duplicates_avoided=2,
+        non_target_actionable_by_source={"EUROPE_PMC": 3},
+    )
+
+    report = _report(
+        [result],
+        InvestigationMode.SUPERVISED,
+        _BUDGET,
+        ("EUROPE_PMC",),
+        "fixture-test",
+    )
+
+    assert report["duplicatesAvoided"] == 2
+    assert report["falsePositivesBySourceAndStrategy"] == {
+        "EUROPE_PMC|SEARCH_INVENTORY_VARIANTS": 3
+    }
+    assert report["reachedBySource"] == {"case-1": {"EUROPE_PMC": "EVIDENCE_REACHED"}}
 
 
 async def test_the_cycle_starts_from_what_the_pipeline_already_tried() -> None:
@@ -215,4 +266,23 @@ async def test_the_plan_action_is_reported_for_auditing() -> None:
     assert all(
         item["plan_action"] == AgentRecommendedAction.SEARCH_INVENTORY_VARIANTS.value
         for item in cases
+    )
+
+
+async def test_the_ceiling_does_not_absorb_the_agents_own_recall_failure() -> None:
+    """A case the run missed must not be reported as absent from the corpus."""
+    report = await _run(InvestigationMode.SUPERVISED, _Source([]))
+
+    ceilings = report["indexabilityCeiling"]
+    assert isinstance(ceilings, dict)
+    assert report["discoveryRecall"] == 0.0
+    # Both fixture cases declare an indexed publication, so no retrieval
+    # failure of the cycle may be charged to indexability.
+    assert set(ceilings.values()) == {"EVIDENCE_REACHABLE"}
+    reached = report["reachedBySource"]
+    assert isinstance(reached, dict)
+    assert all(
+        state == "NOT_REACHED"
+        for per_source in reached.values()
+        for state in per_source.values()
     )

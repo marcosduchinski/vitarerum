@@ -13,11 +13,23 @@ from typing import Any
 
 import httpx
 
-from app.scientific_return.application.ports import BibliographicRecord
+from app.scientific_return.application.ports import (
+    BibliographicRecord,
+    BibliographicSourceCapabilities,
+)
 
 
 class CrossrefBibliographicSource:
     name = "CROSSREF"
+    capabilities = BibliographicSourceCapabilities(
+        name=name,
+        searches_metadata=True,
+        searches_indexed_full_text=False,
+        returns_abstract=True,
+        returns_inspectable_full_text=False,
+        supports_structured_author=False,
+        normalizes_inventory_separators=True,
+    )
     _TRANSIENT_STATUSES = {429, 500, 502, 503, 504}
 
     def __init__(

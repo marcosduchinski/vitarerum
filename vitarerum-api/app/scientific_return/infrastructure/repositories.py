@@ -11,17 +11,21 @@ from sqlalchemy.sql.elements import ColumnElement
 
 from app.scientific_return.application.agent_contracts import AGENT_CONTRACT_VERSION
 from app.scientific_return.application.ports import (
+    FULL_AGENTIC_READER_PROMPT_ID_PREFIX,
     CandidateReviewItem,
     ScientificReturnMetrics,
     ToolExecutionRecord,
 )
 from app.scientific_return.domain.enums import (
+    AgentAnalysisStatus,
     AgentConfidence,
     AgentProgress,
     AgentRecommendedAction,
     CandidateStatus,
+    EvidenceSourceField,
     EvidenceStrength,
     EvidenceType,
+    InventoryEvidenceStatus,
     InvestigationObjective,
     InvestigationStatus,
     RunKind,
@@ -33,6 +37,7 @@ from app.scientific_return.domain.evidence_delta import (
 )
 from app.scientific_return.domain.full_agentic_models import (
     CandidateDecisionContext,
+    GroundedInventoryForm,
     KnowledgeItemId,
 )
 from app.scientific_return.domain.investigation_contracts import (
@@ -99,9 +104,7 @@ _QUERY_TEXT = "scientific_return_queries.query_text"
 _AGENT_INPUT = "scientific_return_agent_analyses.input_payload"
 _AGENT_ANALYSIS = "scientific_return_agent_analyses.analysis_payload"
 _DECISION_CONTEXT = "scientific_return_decisions.decision_context"
-_ITERATION_OBSERVATION = (
-    "scientific_return_agent_iterations.observation_payload"
-)
+_ITERATION_OBSERVATION = "scientific_return_agent_iterations.observation_payload"
 _ITERATION_PLAN = "scientific_return_agent_iterations.plan_payload"
 _ITERATION_REFLECTION = "scientific_return_agent_iterations.reflection_payload"
 _TOOL_QUERIES = "scientific_return_agent_tool_executions.queries_payload"
@@ -536,9 +539,7 @@ def _investigation_to_domain(
         started_at=record.started_at,
         status=record.status,
         candidate_id=(
-            CandidatePublicationId(record.candidate_id)
-            if record.candidate_id
-            else None
+            CandidatePublicationId(record.candidate_id) if record.candidate_id else None
         ),
         previous_investigation_id=(
             InvestigationId(record.previous_investigation_id)
@@ -567,9 +568,7 @@ def _tool_execution_to_record(
         iteration_id=execution.iteration_id,
         idempotency_key=execution.idempotency_key,
         action=execution.action,
-        queries_payload=encryptor.encrypt_json(
-            list(execution.queries), _TOOL_QUERIES
-        ),
+        queries_payload=encryptor.encrypt_json(list(execution.queries), _TOOL_QUERIES),
         sources=list(execution.sources),
         total_results=execution.total_results,
         created_candidate_ids=list(execution.created_candidate_ids),
@@ -662,6 +661,37 @@ def _decision_to_domain(
         value = context.get(key, [])
         return tuple(str(item) for item in value) if isinstance(value, list) else ()
 
+    def context_optional_string(key: str) -> str | None:
+        if context is None or context.get(key) is None:
+            return None
+        return str(context[key])
+
+    def context_grounded_forms() -> tuple[GroundedInventoryForm, ...]:
+        if context is None:
+            return ()
+        raw_forms = context.get("grounded_inventory_forms")
+        if not isinstance(raw_forms, list):
+            return ()
+        forms: list[GroundedInventoryForm] = []
+        for item in raw_forms:
+            if not isinstance(item, dict):
+                continue
+            try:
+                forms.append(
+                    GroundedInventoryForm(
+                        observed_form=str(item["observed_form"]),
+                        source_field=EvidenceSourceField(str(item["source_field"])),
+                        source_locator=(
+                            str(item["source_locator"])
+                            if item.get("source_locator")
+                            else None
+                        ),
+                    )
+                )
+            except (KeyError, ValueError):
+                continue
+        return tuple(forms)
+
     return CandidateDecision(
         id=CandidateDecisionId(record.id),
         candidate_id=CandidatePublicationId(record.candidate_id),
@@ -685,6 +715,15 @@ def _decision_to_domain(
                     KnowledgeItemId(value)
                     for value in context_strings("knowledge_item_ids")
                 ),
+                discovery_basis=context_optional_string("discovery_basis"),
+                search_intent=context_optional_string("search_intent"),
+                search_strategy=context_optional_string("search_strategy"),
+                inventory_evidence_status=(
+                    InventoryEvidenceStatus(str(context["inventory_evidence_status"]))
+                    if context.get("inventory_evidence_status")
+                    else None
+                ),
+                grounded_inventory_forms=context_grounded_forms(),
             )
             if context is not None
             else None
@@ -715,9 +754,7 @@ def _analysis_result_to_domain(payload: dict[str, object]) -> CandidateAnalysisR
         supporting_evidence=strings("supporting_evidence"),
         contradictions=strings("contradictions"),
         missing_evidence=strings("missing_evidence"),
-        recommended_action=AgentRecommendedAction(
-            str(payload["recommended_action"])
-        ),
+        recommended_action=AgentRecommendedAction(str(payload["recommended_action"])),
         proposed_queries=strings("proposed_queries"),
         reasoning_summary=str(payload["reasoning_summary"]),
         confidence=AgentConfidence(str(payload["confidence"])),
@@ -1165,13 +1202,108 @@ class SqlAlchemyScientificReturnRepository:
             .offset(page * size)
             .limit(size)
         )
+        rows = result.all()
+        candidate_ids = [candidate.id for candidate, _ in rows]
+        latest_payloads: dict[str, dict[str, object]] = {}
+        if candidate_ids:
+            analysis_result = await self._session.execute(
+                select(CandidateAgentAnalysisRecord)
+                .where(
+                    CandidateAgentAnalysisRecord.candidate_id.in_(candidate_ids),
+                    CandidateAgentAnalysisRecord.prompt_version_id.like(
+                        f"{FULL_AGENTIC_READER_PROMPT_ID_PREFIX}%"
+                    ),
+                    CandidateAgentAnalysisRecord.status
+                    == AgentAnalysisStatus.COMPLETED,
+                )
+                .order_by(
+                    CandidateAgentAnalysisRecord.candidate_id,
+                    CandidateAgentAnalysisRecord.started_at.desc(),
+                    CandidateAgentAnalysisRecord.id.desc(),
+                )
+            )
+            for record in analysis_result.scalars():
+                if record.candidate_id in latest_payloads:
+                    continue
+                payload = self._encryptor.decrypt_json(
+                    record.input_payload, _AGENT_INPUT
+                )
+                if isinstance(payload, dict):
+                    latest_payloads[record.candidate_id] = cast(
+                        dict[str, object], payload
+                    )
+
+        def optional_string(payload: dict[str, object], key: str) -> str | None:
+            value = payload.get(key)
+            return str(value) if value is not None else None
+
+        def grounded_forms(
+            payload: dict[str, object],
+        ) -> tuple[dict[str, str | None], ...]:
+            value = payload.get("groundedInventoryForms")
+            if not isinstance(value, list):
+                return ()
+            forms: list[dict[str, str | None]] = []
+            for item in value:
+                if not isinstance(item, dict):
+                    continue
+                observed = optional_string(item, "observedForm")
+                source_field = optional_string(item, "sourceField")
+                if observed is None or source_field is None:
+                    continue
+                forms.append(
+                    {
+                        "observedForm": observed,
+                        "sourceField": source_field,
+                        "sourceLocator": optional_string(item, "sourceLocator"),
+                    }
+                )
+            return tuple(forms)
+
+        def grounded_passages(payload: dict[str, object]) -> tuple[str, ...]:
+            value = payload.get("passages")
+            if not isinstance(value, list):
+                return ()
+            return tuple(item for item in value if isinstance(item, str) and item)
+
+        def nonnegative_int(payload: dict[str, object], key: str) -> int:
+            value = payload.get(key)
+            return value if isinstance(value, int) and value >= 0 else 0
+
         return (
             [
                 CandidateReviewItem(
                     project_id=project_id_value,
                     candidate=_candidate_to_domain(candidate),
+                    discovery_basis=optional_string(
+                        latest_payloads.get(candidate.id, {}), "discoveryBasis"
+                    ),
+                    search_intent=optional_string(
+                        latest_payloads.get(candidate.id, {}), "searchIntent"
+                    ),
+                    search_strategy=optional_string(
+                        latest_payloads.get(candidate.id, {}), "searchStrategy"
+                    ),
+                    inventory_evidence_status=optional_string(
+                        latest_payloads.get(candidate.id, {}),
+                        "inventoryEvidenceStatus",
+                    ),
+                    grounded_inventory_forms=grounded_forms(
+                        latest_payloads.get(candidate.id, {})
+                    ),
+                    grounded_passages=grounded_passages(
+                        latest_payloads.get(candidate.id, {})
+                    ),
+                    rejected_passage_count=nonnegative_int(
+                        latest_payloads.get(candidate.id, {}),
+                        "rejectedPassageCount",
+                    ),
+                    rejected_inventory_form_count=nonnegative_int(
+                        latest_payloads.get(candidate.id, {}),
+                        "rejectedInventoryFormCount",
+                    ),
                 )
-                for candidate, project_id_value in result.all()
+                for candidate, project_id_value in rows
             ],
             total,
         )
@@ -1590,8 +1722,7 @@ class SqlAlchemyInvestigationRepository:
     ) -> ToolExecutionRecord | None:
         result = await self._session.execute(
             select(ScientificReturnToolExecutionRecord).where(
-                ScientificReturnToolExecutionRecord.idempotency_key
-                == idempotency_key
+                ScientificReturnToolExecutionRecord.idempotency_key == idempotency_key
             )
         )
         record = result.scalar_one_or_none()

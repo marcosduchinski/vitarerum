@@ -9,10 +9,16 @@ from app.scientific_return.domain.enums import (
     AgenticCandidateRelationKind,
     AgenticToolExecutionStatus,
     AgenticTrajectoryEventKind,
+    EvidenceSourceField,
     FullAgenticInvestigationStatus,
+    GroundedClaimKind,
+    GroundingRejectionReason,
+    InventoryEvidenceStatus,
     InvestigationObjective,
     KnowledgeKind,
     KnowledgeStatus,
+    SearchIntent,
+    SearchStrategy,
 )
 from app.scientific_return.domain.models import (
     CandidateDecisionId,
@@ -26,6 +32,63 @@ KnowledgeItemId = NewType("KnowledgeItemId", str)
 FullAgenticInvestigationId = NewType("FullAgenticInvestigationId", str)
 AgenticTrajectoryEventId = NewType("AgenticTrajectoryEventId", str)
 AgenticToolExecutionId = NewType("AgenticToolExecutionId", str)
+
+
+@dataclass(frozen=True, slots=True)
+class AgenticSearchSpec:
+    """One concrete, auditable external search attempt."""
+
+    source: str
+    query: str
+    intent: SearchIntent
+    strategy: SearchStrategy
+    author: str | None = None
+    object_id: str | None = None
+
+    def __post_init__(self) -> None:
+        source = self.source.strip().upper()
+        query = self.query.strip()
+        author = self.author.strip() if self.author else None
+        object_id = self.object_id.strip() if self.object_id else None
+        if not source:
+            raise ValueError("Search source is required")
+        if not query:
+            raise ValueError("Search query is required")
+        if self.strategy is SearchStrategy.AUTHOR_OBJECT and not author:
+            raise ValueError("AUTHOR_OBJECT requires an author hypothesis")
+        object.__setattr__(self, "source", source)
+        object.__setattr__(self, "query", query)
+        object.__setattr__(self, "author", author)
+        object.__setattr__(self, "object_id", object_id)
+
+    @property
+    def identity(self) -> tuple[str, str, str]:
+        return (
+            self.source,
+            " ".join(self.query.casefold().split()),
+            " ".join((self.author or "").casefold().split()),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class GroundedInventoryForm:
+    observed_form: str
+    source_field: EvidenceSourceField
+    source_locator: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class GroundingRejection:
+    """One reader claim the validator refused, kept for auditing.
+
+    ``excerpt`` is the truncated claim the model produced, never publication
+    text: a rejected claim is by definition absent from what the source
+    delivered.
+    """
+
+    claim_kind: GroundedClaimKind
+    reason: GroundingRejectionReason
+    excerpt: str
 
 
 @dataclass(slots=True)
@@ -153,6 +216,11 @@ class FullAgenticInvestigation:
     started_at: datetime | None = None
     completed_at: datetime | None = None
     failure_reason: str | None = None
+    # A completed investigation that could not run its full plan. Kept apart
+    # from status because the run did finish and may carry candidates: what a
+    # curator needs to know is that absence of results here is not evidence of
+    # absence.
+    degraded_reason: str | None = None
     cancel_requested_by: PermissionId | None = None
     lease_owner: str | None = None
     lease_expires_at: datetime | None = None
@@ -205,6 +273,15 @@ class FullAgenticInvestigation:
         self.status = FullAgenticInvestigationStatus.COMPLETED
         self.completed_at = occurred_at
 
+    def degrade(self, reason: str) -> None:
+        """Record that part of the plan could not be produced.
+
+        The first reason is kept: it is the one that explains what the run
+        stopped being able to do.
+        """
+        if self.degraded_reason is None:
+            self.degraded_reason = reason[:500]
+
     def fail(self, reason: str, occurred_at: datetime) -> None:
         if self.status.is_terminal:
             raise ValueError("A terminal investigation cannot fail again")
@@ -224,6 +301,17 @@ class ArticleAssessment:
 
 
 @dataclass(frozen=True, slots=True)
+class GroundedArticleAssessment:
+    assessment: ArticleAssessment
+    passages: tuple[str, ...]
+    inventory_forms: tuple[GroundedInventoryForm, ...]
+    inventory_evidence_status: InventoryEvidenceStatus
+    rejected_passages: int
+    rejected_inventory_forms: int
+    rejections: tuple[GroundingRejection, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class CandidateDecisionContext:
     version: int
     passages: tuple[str, ...]
@@ -234,6 +322,11 @@ class CandidateDecisionContext:
     confidence: AgentConfidence
     contradictions: tuple[str, ...]
     knowledge_item_ids: tuple[KnowledgeItemId, ...]
+    discovery_basis: str | None = None
+    search_intent: str | None = None
+    search_strategy: str | None = None
+    inventory_evidence_status: InventoryEvidenceStatus | None = None
+    grounded_inventory_forms: tuple[GroundedInventoryForm, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

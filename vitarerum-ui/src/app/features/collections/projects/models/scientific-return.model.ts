@@ -16,6 +16,13 @@ export type ScientificReturnEvidenceType =
 export type ScientificReturnAgentAnalysisStatus = 'RUNNING' | 'COMPLETED' | 'FAILED';
 export type ScientificReturnAgentConfidence = 'LOW' | 'MEDIUM' | 'HIGH';
 export type ScientificReturnAgentFeedback = 'USEFUL' | 'PARTIALLY_USEFUL' | 'NOT_USEFUL';
+export type InventoryEvidenceStatus = 'VERIFIED' | 'NOT_OBSERVED' | 'UNAVAILABLE';
+
+export interface GroundedInventoryForm {
+  readonly observedForm: string;
+  readonly sourceField: 'TITLE' | 'ABSTRACT' | 'INDEXED_TEXT';
+  readonly sourceLocator: string | null;
+}
 export type ScientificReturnAgentAction =
   | 'PRESENT_FOR_REVIEW'
   | 'SEARCH_INVENTORY_VARIANTS'
@@ -100,6 +107,14 @@ export interface ScientificReturnCandidate {
 
 export interface ScientificReturnReviewItem extends ScientificReturnCandidate {
   readonly projectId: string;
+  readonly discoveryBasis?: string | null;
+  readonly searchIntent?: string | null;
+  readonly searchStrategy?: string | null;
+  readonly inventoryEvidenceStatus?: InventoryEvidenceStatus | null;
+  readonly groundedInventoryForms?: readonly GroundedInventoryForm[];
+  readonly groundedPassages: readonly string[];
+  readonly rejectedPassageCount: number;
+  readonly rejectedInventoryFormCount: number;
 }
 
 export interface ScientificReturnMetrics {
@@ -154,6 +169,11 @@ export interface CandidateDecisionContext {
   readonly confidence: ScientificReturnAgentConfidence;
   readonly contradictions: readonly string[];
   readonly knowledgeItemIds: readonly string[];
+  readonly discoveryBasis?: string | null;
+  readonly searchIntent?: string | null;
+  readonly searchStrategy?: string | null;
+  readonly inventoryEvidenceStatus?: InventoryEvidenceStatus | null;
+  readonly groundedInventoryForms?: readonly GroundedInventoryForm[];
 }
 
 export interface CandidateAgentAnalysisResult {
@@ -339,6 +359,7 @@ export interface FullAgenticInvestigation {
   readonly completedAt: string | null;
   readonly heartbeatAt: string | null;
   readonly failureReason: string | null;
+  readonly degradedReason?: string | null;
 }
 
 export interface AgenticTrajectoryEvent {

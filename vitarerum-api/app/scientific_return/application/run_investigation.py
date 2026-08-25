@@ -158,9 +158,7 @@ class RunScientificReturnInvestigation:
                 data.idempotency_key
             )
             if replayed is not None:
-                logger.info(
-                    "Returning investigation %s for repeated key", replayed.id
-                )
+                logger.info("Returning investigation %s for repeated key", replayed.id)
                 return replayed
         existing = await self._investigations.find_live(
             data.watch_id, data.objective, data.candidate_id
@@ -312,9 +310,7 @@ class RunScientificReturnInvestigation:
     ) -> None:
         iteration = investigation.current
         assert iteration is not None
-        key = tool_idempotency_key(
-            str(investigation.id), iteration.number, execution
-        )
+        key = tool_idempotency_key(str(investigation.id), iteration.number, execution)
         before = tuple(candidate.evidences) if candidate is not None else ()
         # Claimed before the call: a replay finds this row instead of searching
         # again, which is what makes repeating the command safe.
@@ -692,9 +688,7 @@ class RunScientificReturnInvestigation:
         await self._investigations.save(investigation)
         await self._uow.commit()
 
-    async def _finish_tool(
-        self, record: ToolExecutionRecord, *, error: str
-    ) -> None:
+    async def _finish_tool(self, record: ToolExecutionRecord, *, error: str) -> None:
         record.succeeded = False
         record.error_message = error[:2000]
         record.completed_at = self._clock.now()
@@ -740,9 +734,7 @@ class RunScientificReturnInvestigation:
         snapshot: ProjectSnapshotPayload,
         candidate: CandidatePublication | None,
     ) -> AgentObservation:
-        queries = await self._repository.list_queries_for_watch(
-            investigation.watch_id
-        )
+        queries = await self._repository.list_queries_for_watch(investigation.watch_id)
         objects = tuple(
             ObservedObject(
                 object_id=item.id,

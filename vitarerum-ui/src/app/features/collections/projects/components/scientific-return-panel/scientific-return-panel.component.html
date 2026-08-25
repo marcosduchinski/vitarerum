@@ -258,6 +258,15 @@
                   aria-hidden="true"
                 ></span>
               </button>
+              @if (investigation.degradedReason) {
+                <p class="investigation-degraded">
+                  <span class="pi pi-exclamation-triangle" aria-hidden="true"></span>
+                  <span>
+                    Finished without its full plan, so no results here does not
+                    mean there are none: {{ investigation.degradedReason }}.
+                  </span>
+                </p>
+              }
               @if (investigation.status === 'QUEUED' || investigation.status === 'RUNNING') {
                 <div class="investigation-detail">
                   <button

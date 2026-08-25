@@ -128,6 +128,7 @@ def permission_to_view(record: PermissionRecord) -> PermissionView:
             ),
         ),
         group=record.group.name if record.group else GroupName.EXTERNAL,
+        institution_id=record.group.institution_id if record.group else None,
     )
 
 
@@ -135,9 +136,7 @@ class SqlAlchemyPermissionReader:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def get_detail(
-        self, permission_id: PermissionId
-    ) -> PermissionView | None:
+    async def get_detail(self, permission_id: PermissionId) -> PermissionView | None:
         record = await self._session.get(
             PermissionRecord,
             permission_id,
@@ -237,9 +236,7 @@ class SqlAlchemyGroupRepository:
         return [group_to_domain(r) for r in result.scalars().all()]
 
     async def count_by_institution(self, institution_id: InstitutionId) -> int:
-        stmt = select(func.count()).where(
-            GroupRecord.institution_id == institution_id
-        )
+        stmt = select(func.count()).where(GroupRecord.institution_id == institution_id)
         result = await self._session.execute(stmt)
         return result.scalar_one()
 
@@ -252,9 +249,7 @@ class SqlAlchemyInstitutionRepository:
         self._session.add(institution_to_record(institution))
         await self._session.flush()
 
-    async def get_by_id(
-        self, institution_id: InstitutionId
-    ) -> Institution | None:
+    async def get_by_id(self, institution_id: InstitutionId) -> Institution | None:
         record = await self._session.get(InstitutionRecord, institution_id)
         return institution_to_domain(record) if record else None
 
@@ -264,18 +259,14 @@ class SqlAlchemyInstitutionRepository:
         record = result.scalar_one_or_none()
         return institution_to_domain(record) if record else None
 
-    async def list(
-        self, page: int, size: int
-    ) -> tuple[list[Institution], int]:
+    async def list(self, page: int, size: int) -> tuple[list[Institution], int]:
         base_stmt = select(InstitutionRecord)
         count_stmt = select(func.count()).select_from(base_stmt.subquery())
         total_result = await self._session.execute(count_stmt)
         total = total_result.scalar_one()
 
         data_stmt = (
-            base_stmt.order_by(InstitutionRecord.name)
-            .offset(page * size)
-            .limit(size)
+            base_stmt.order_by(InstitutionRecord.name).offset(page * size).limit(size)
         )
         data_result = await self._session.execute(data_stmt)
         records = data_result.scalars().all()
@@ -341,9 +332,7 @@ class SqlAlchemyPermissionRepository:
         total = total_result.scalar_one()
 
         data_stmt = (
-            base_stmt.options(*_PERMISSION_EAGER)
-            .offset(page * size)
-            .limit(size)
+            base_stmt.options(*_PERMISSION_EAGER).offset(page * size).limit(size)
         )
         data_result = await self._session.execute(data_stmt)
         records = data_result.scalars().all()

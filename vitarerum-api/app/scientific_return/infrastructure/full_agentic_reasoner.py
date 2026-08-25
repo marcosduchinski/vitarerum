@@ -4,9 +4,12 @@ import json
 
 from app.scientific_return.application.full_agentic_ports import (
     AgenticPlan,
+    AssessmentResult,
     LearningProposal,
 )
 from app.scientific_return.application.llm_json import (
+    optional_bool,
+    optional_string,
     parse_json_object,
     required_bool,
     required_string,
@@ -17,8 +20,15 @@ from app.scientific_return.application.ports import (
     BibliographicRecord,
     ScientificReturnReasoner,
 )
-from app.scientific_return.domain.enums import AgentConfidence
-from app.scientific_return.domain.full_agentic_models import ArticleAssessment
+from app.scientific_return.domain.enums import (
+    AgentConfidence,
+    SearchIntent,
+    SearchStrategy,
+)
+from app.scientific_return.domain.full_agentic_models import (
+    AgenticSearchSpec,
+    ArticleAssessment,
+)
 
 _PLAN_KEY = "scientific_return_full_agentic_plan"
 _READER_KEY = "scientific_return_full_agentic_reader"
@@ -46,7 +56,7 @@ class PromptedFullAgenticReasoner:
         observation: dict[str, object],
         memory: tuple[str, ...],
         history: tuple[dict[str, object], ...],
-        allowed_sources: tuple[str, ...],
+        source_capabilities: tuple[dict[str, object], ...],
         remaining_queries: int,
     ) -> AgenticPlan:
         prompt = await self._prompts.get_published(_PLAN_KEY)
@@ -57,7 +67,10 @@ class PromptedFullAgenticReasoner:
                     "observation": observation,
                     "curatorialMemory": memory,
                     "history": history,
-                    "allowedSources": allowed_sources,
+                    "sourceCapabilities": source_capabilities,
+                    "allowedSources": [
+                        item.get("name") for item in source_capabilities
+                    ],
                     "remainingQueries": remaining_queries,
                 },
                 ensure_ascii=False,
@@ -66,21 +79,68 @@ class PromptedFullAgenticReasoner:
         )
         payload = parse_json_object(
             raw,
-            allowed_fields={"queries", "sources", "reasoning", "shouldStop"},
+            allowed_fields={"searches", "reasoning", "shouldStop"},
         )
-        queries = string_list(payload, "queries")[:remaining_queries]
-        requested_sources = string_list(payload, "sources")
-        allowed = {source.upper() for source in allowed_sources}
-        sources = tuple(
-            source.upper() for source in requested_sources if source.upper() in allowed
-        )
-        should_stop = required_bool(payload, "shouldStop")
-        if not should_stop and (not queries or not sources):
-            raise ValueError("An active plan requires queries and allowed sources")
+        raw_searches = payload.get("searches")
+        if not isinstance(raw_searches, list):
+            raise ValueError("searches must be an array")
+        allowed = {
+            str(item.get("name", "")).upper()
+            for item in source_capabilities
+            if isinstance(item, dict)
+        }
+        searches: list[AgenticSearchSpec] = []
+        for raw_search in raw_searches[:remaining_queries]:
+            if not isinstance(raw_search, dict):
+                raise ValueError("Every search must be an object")
+            unknown = set(raw_search) - {
+                "source",
+                "query",
+                "intent",
+                "strategy",
+                "author",
+                "objectId",
+            }
+            if unknown:
+                raise ValueError(f"Unknown search fields: {sorted(unknown)}")
+            source = required_string(raw_search, "source").upper()
+            if source not in allowed:
+                continue
+            author_value = raw_search.get("author")
+            object_value = raw_search.get("objectId")
+            searches.append(
+                AgenticSearchSpec(
+                    source=source,
+                    query=required_string(raw_search, "query"),
+                    intent=SearchIntent(required_string(raw_search, "intent").upper()),
+                    strategy=SearchStrategy(
+                        required_string(raw_search, "strategy").upper()
+                    ),
+                    author=(
+                        author_value.strip()
+                        if isinstance(author_value, str) and author_value.strip()
+                        else None
+                    ),
+                    object_id=(
+                        object_value.strip()
+                        if isinstance(object_value, str) and object_value.strip()
+                        else None
+                    ),
+                )
+            )
+        # Measured against gemma4:12b: the model returns well-formed JSON with
+        # correct searches and simply omits both flags. Deriving the stop signal
+        # from the searches keeps the loop safe — no searches means stop, so an
+        # empty answer cannot spin the planner — while a stated value that is
+        # not a boolean is still a contract violation.
+        should_stop = optional_bool(payload, "shouldStop", default=not searches)
+        if not should_stop and not searches:
+            raise ValueError("An active plan requires allowed searches")
         return AgenticPlan(
-            queries=queries,
-            sources=sources,
-            reasoning=required_string(payload, "reasoning"),
+            searches=tuple(searches),
+            reasoning=optional_string(
+                payload, "reasoning", default="The planner stated no reason"
+            ),
             should_stop=should_stop,
         )
 
@@ -89,7 +149,7 @@ class PromptedFullAgenticReasoner:
         *,
         record: BibliographicRecord,
         trusted_context: dict[str, object],
-    ) -> ArticleAssessment:
+    ) -> AssessmentResult:
         prompt = await self._prompts.get_published(_READER_KEY)
         # Raw publication text is present only in this tool-free reader call.
         raw = await self._reasoner.generate(
@@ -122,13 +182,19 @@ class PromptedFullAgenticReasoner:
             },
         )
         passages = tuple(item[:1200] for item in string_list(payload, "passages")[:5])
-        return ArticleAssessment(
-            relevant=required_bool(payload, "relevant"),
-            confidence=AgentConfidence(required_string(payload, "confidence").upper()),
-            explanation=required_string(payload, "explanation"),
-            passages=passages,
-            inventory_forms=string_list(payload, "inventoryForms"),
-            contradictions=string_list(payload, "contradictions"),
+        return AssessmentResult(
+            assessment=ArticleAssessment(
+                relevant=required_bool(payload, "relevant"),
+                confidence=AgentConfidence(
+                    required_string(payload, "confidence").upper()
+                ),
+                explanation=required_string(payload, "explanation"),
+                passages=passages,
+                inventory_forms=string_list(payload, "inventoryForms"),
+                contradictions=string_list(payload, "contradictions"),
+            ),
+            prompt_version_id=prompt.version_id,
+            prompt_version=prompt.version_label,
         )
 
     async def learn(

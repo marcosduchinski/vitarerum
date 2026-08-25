@@ -47,6 +47,20 @@ const CANDIDATE: ScientificReturnReviewItem = {
   snoozedUntil: null,
   confirmedPublicationEntryId: null,
   firstSeenAt: '2026-08-17T08:00:00Z',
+  discoveryBasis: 'AUTHOR_OBJECT',
+  searchIntent: 'DISCOVERY',
+  searchStrategy: 'AUTHOR_OBJECT',
+  inventoryEvidenceStatus: 'VERIFIED',
+  groundedInventoryForms: [
+    {
+      observedForm: 'MUHNAC/MB03-001801',
+      sourceField: 'ABSTRACT',
+      sourceLocator: null,
+    },
+  ],
+  groundedPassages: ['The examined material includes specimen MUHNAC/MB03-001801 from Lisbon.'],
+  rejectedPassageCount: 0,
+  rejectedInventoryFormCount: 0,
   evidences: [
     {
       id: 'evidence-1',
@@ -77,6 +91,7 @@ class ScientificReturnApiServiceStub {
   queueFail = false;
   empty = false;
   totalPages = 1;
+  candidates: readonly ScientificReturnReviewItem[] = [CANDIDATE];
 
   getMetrics(): Observable<ScientificReturnMetrics> {
     this.metricsCalls += 1;
@@ -104,7 +119,7 @@ class ScientificReturnApiServiceStub {
           }),
       );
     }
-    const content = this.empty ? [] : [CANDIDATE];
+    const content = this.empty ? [] : this.candidates;
     return of({
       content,
       page: query.page,
@@ -157,7 +172,14 @@ describe('ScientificReturnQueuePageComponent', () => {
     expect(text).toContain('MUHNAC/MB03-001801');
     expect(text).toContain('Found in Title or abstract');
     expect(text).toContain('Linked to consulted object');
-    expect(text).toContain('2 verified signals');
+    expect(text).toContain('Inventory number observed in publication');
+    expect(text).toContain('Discovery strategy: Author object');
+    expect(text).toContain('Observed in Abstract');
+    expect(text).toContain('2 structured matches');
+    expect(text).toContain('1 grounded passage');
+    expect(text).toContain(
+      'The examined material includes specimen MUHNAC/MB03-001801 from Lisbon.',
+    );
     expect(text).toContain('1 primary');
     expect(text).toContain('1 supporting');
     expect(compiled.querySelector('.candidate-dossier[data-status="PENDING"]')).not.toBeNull();
@@ -177,6 +199,68 @@ describe('ScientificReturnQueuePageComponent', () => {
     expect(text).toContain('12');
     expect(text).toContain('Publications attributed to projects');
     expect(text).toContain('Search executions needing attention');
+  });
+
+  it('distinguishes unobserved and unavailable evidence without hiding review', async () => {
+    api.candidates = [
+      {
+        ...CANDIDATE,
+        id: 'candidate-not-observed',
+        title: 'Discovered by researcher and taxon',
+        inventoryEvidenceStatus: 'NOT_OBSERVED',
+        groundedInventoryForms: [],
+        groundedPassages: [],
+        rejectedPassageCount: 1,
+        rejectedInventoryFormCount: 2,
+        evidences: [],
+      },
+      {
+        ...CANDIDATE,
+        id: 'candidate-unavailable',
+        title: 'Metadata-only source record',
+        inventoryEvidenceStatus: 'UNAVAILABLE',
+        groundedInventoryForms: [],
+        groundedPassages: [],
+        rejectedPassageCount: 0,
+        rejectedInventoryFormCount: 0,
+        evidences: [],
+      },
+    ];
+
+    const fixture = await render();
+    const compiled = fixture.nativeElement as HTMLElement;
+    const text = compiled.textContent ?? '';
+
+    expect(text).toContain('Publication text inspected; inventory number not found');
+    expect(text).toContain('Source did not provide inspectable inventory text');
+    expect(text).not.toContain('MUHNAC/MB03-001801');
+    expect(text).toContain('No verifiable evidence was extracted');
+    expect(text).toContain('1 passage claim and 2 inventory claims were rejected');
+    expect(compiled.querySelectorAll('a.review-action')).toHaveLength(2);
+    expect(compiled.querySelectorAll('[data-evidence-status="VERIFIED"]')).toHaveLength(0);
+  });
+
+  it('shows agent-grounded passages independently from structured matches', async () => {
+    api.candidates = [
+      {
+        ...CANDIDATE,
+        id: 'candidate-agentic-only',
+        evidences: [],
+        groundedPassages: ['Material examined includes specimen MB04-001066.'],
+      },
+    ];
+
+    const fixture = await render();
+    const compiled = fixture.nativeElement as HTMLElement;
+    const text = compiled.textContent ?? '';
+
+    expect(text).toContain('0 structured matches');
+    expect(text).toContain('1 grounded passage');
+    expect(text).toContain('Material examined includes specimen MB04-001066.');
+    expect(text).not.toContain('0 verified signals');
+    expect(
+      compiled.querySelector('[aria-label="Agent-grounded publication passages"]'),
+    ).not.toBeNull();
   });
 
   it('filters the queue by Europe PMC and resets all filters', async () => {

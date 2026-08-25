@@ -3,12 +3,38 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
 import httpx
 
-from app.scientific_return.application.ports import BibliographicRecord
+from app.scientific_return.application.ports import (
+    BibliographicRecord,
+    BibliographicSourceCapabilities,
+)
+
+
+class _HttpxSecretFilter(logging.Filter):
+    def __init__(self, secret: str) -> None:
+        super().__init__()
+        self._secret = secret
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        def redact(value: object) -> object:
+            rendered = str(value)
+            return (
+                rendered.replace(self._secret, "[REDACTED]")
+                if self._secret in rendered
+                else value
+            )
+
+        record.msg = redact(record.msg)
+        if isinstance(record.args, tuple):
+            record.args = tuple(redact(item) for item in record.args)
+        elif isinstance(record.args, dict):
+            record.args = {key: redact(value) for key, value in record.args.items()}
+        return True
 
 
 def _without_author(query: str, author: str | None) -> str:
@@ -27,6 +53,15 @@ class OpenAlexBibliographicSource:
     """OpenAlex discovery adapter, enabled only when an API key is configured."""
 
     name = "OPENALEX"
+    capabilities = BibliographicSourceCapabilities(
+        name=name,
+        searches_metadata=True,
+        searches_indexed_full_text=True,
+        returns_abstract=True,
+        returns_inspectable_full_text=False,
+        supports_structured_author=True,
+        normalizes_inventory_separators=True,
+    )
     _TRANSIENT_STATUSES = {429, 500, 502, 503, 504}
 
     def __init__(
@@ -43,6 +78,7 @@ class OpenAlexBibliographicSource:
             raise ValueError("OpenAlex requires a non-empty API key")
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
+        logging.getLogger("httpx").addFilter(_HttpxSecretFilter(api_key))
         self._timeout = timeout_seconds
         self._max_retries = max(0, max_retries)
         self._retry_base_seconds = max(0.0, retry_base_seconds)

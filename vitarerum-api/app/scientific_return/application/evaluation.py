@@ -274,9 +274,7 @@ def _required_text(payload: dict[str, Any], key: str, where: str) -> str:
 
 def _text_tuple(payload: dict[str, Any], key: str, where: str) -> tuple[str, ...]:
     value = payload.get(key, [])
-    if not isinstance(value, list) or any(
-        not isinstance(item, str) for item in value
-    ):
+    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
         raise ValueError(f"{where}: '{key}' must be an array of strings")
     return tuple(item.strip() for item in value if item.strip())
 
@@ -616,9 +614,7 @@ def _baseline_declaration_metrics(
         declared_resolved=sum(
             case.baseline_status is BaselineStatus.RESOLVED for case in cases
         ),
-        declared_gap=sum(
-            case.baseline_status is BaselineStatus.GAP for case in cases
-        ),
+        declared_gap=sum(case.baseline_status is BaselineStatus.GAP for case in cases),
         declared_unverified=sum(
             case.baseline_status is BaselineStatus.UNVERIFIED for case in cases
         ),
@@ -627,8 +623,7 @@ def _baseline_declaration_metrics(
             for result in results
         ),
         observed_gap=sum(
-            result.observed_baseline_status == BaselineStatus.GAP
-            for result in results
+            result.observed_baseline_status == BaselineStatus.GAP for result in results
         ),
         mismatched_case_ids=tuple(
             result.case_id for result in results if not result.declaration_matches
@@ -675,9 +670,7 @@ def parse_human_reviews(payload: object) -> dict[str, PhaseZeroHumanReview]:
         if not decision:
             continue
         if decision not in allowed:
-            raise ValueError(
-                "human_decision must be CONFIRMED, DISMISSED or UNCERTAIN"
-            )
+            raise ValueError("human_decision must be CONFIRMED, DISMISSED or UNCERTAIN")
         review_id = str(item.get("review_id") or "").strip()
         justification = str(item.get("human_justification") or "").strip()
         reviewer = str(item.get("reviewer") or "").strip()

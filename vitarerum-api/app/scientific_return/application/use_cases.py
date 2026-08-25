@@ -16,6 +16,7 @@ from app.scientific_return.application.analysis import (
     plan_queries,
 )
 from app.scientific_return.application.ports import (
+    FULL_AGENTIC_READER_PROMPT_ID_PREFIX,
     BibliographicSource,
     ConfirmedPublicationWriter,
     ProjectSnapshotProvider,
@@ -24,12 +25,15 @@ from app.scientific_return.application.ports import (
 from app.scientific_return.domain.enums import (
     CandidateStatus,
     DecisionType,
+    EvidenceSourceField,
+    InventoryEvidenceStatus,
     QueryStatus,
     RunStatus,
     WatchStatus,
 )
 from app.scientific_return.domain.full_agentic_models import (
     CandidateDecisionContext,
+    GroundedInventoryForm,
     KnowledgeItemId,
 )
 from app.scientific_return.domain.models import (
@@ -455,7 +459,7 @@ class DecideCandidate:
             item
             for item in analyses
             if item.result is not None
-            and item.prompt_version_id == "scientific_return_full_agentic_reader"
+            and item.prompt_version_id.startswith(FULL_AGENTIC_READER_PROMPT_ID_PREFIX)
         ]
         if not completed:
             return None
@@ -471,8 +475,39 @@ class DecideCandidate:
 
         query = analysis.input_payload.get("query")
         source = analysis.input_payload.get("source")
+        raw_grounded_forms = analysis.input_payload.get("groundedInventoryForms")
+        grounded_forms: list[GroundedInventoryForm] = []
+        if isinstance(raw_grounded_forms, list):
+            for item in raw_grounded_forms:
+                if not isinstance(item, dict):
+                    continue
+                observed = item.get("observedForm")
+                source_field = item.get("sourceField")
+                if not isinstance(observed, str) or not isinstance(source_field, str):
+                    continue
+                try:
+                    grounded_forms.append(
+                        GroundedInventoryForm(
+                            observed_form=observed,
+                            source_field=EvidenceSourceField(source_field),
+                            source_locator=(
+                                str(item["sourceLocator"])
+                                if item.get("sourceLocator")
+                                else None
+                            ),
+                        )
+                    )
+                except ValueError:
+                    continue
+        raw_evidence_status = analysis.input_payload.get("inventoryEvidenceStatus")
+        evidence_status = None
+        if isinstance(raw_evidence_status, str):
+            try:
+                evidence_status = InventoryEvidenceStatus(raw_evidence_status)
+            except ValueError:
+                pass
         return CandidateDecisionContext(
-            version=1,
+            version=2,
             passages=strings("passages"),
             inventory_forms=strings("inventoryForms"),
             queries=(str(query),) if query else (),
@@ -483,6 +518,23 @@ class DecideCandidate:
             knowledge_item_ids=tuple(
                 KnowledgeItemId(value) for value in strings("knowledgeItemIds")
             ),
+            discovery_basis=(
+                str(analysis.input_payload["discoveryBasis"])
+                if analysis.input_payload.get("discoveryBasis")
+                else None
+            ),
+            search_intent=(
+                str(analysis.input_payload["searchIntent"])
+                if analysis.input_payload.get("searchIntent")
+                else None
+            ),
+            search_strategy=(
+                str(analysis.input_payload["searchStrategy"])
+                if analysis.input_payload.get("searchStrategy")
+                else None
+            ),
+            inventory_evidence_status=evidence_status,
+            grounded_inventory_forms=tuple(grounded_forms),
         )
 
     async def _project_id(self, candidate: CandidatePublication) -> str:

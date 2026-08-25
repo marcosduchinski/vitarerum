@@ -69,7 +69,7 @@ The feature is disabled by default. A minimal database-queue configuration is:
 
 ```dotenv
 SCIENTIFIC_RETURN_FULL_AGENTIC_ENABLED=true
-SCIENTIFIC_RETURN_FULL_AGENTIC_SOURCES=CROSSREF,EUROPE_PMC
+SCIENTIFIC_RETURN_FULL_AGENTIC_SOURCES=CROSSREF,EUROPE_PMC,OPENALEX
 SCIENTIFIC_RETURN_FULL_AGENTIC_DISPATCHER=DATABASE
 SCIENTIFIC_RETURN_FULL_AGENTIC_MAX_ITERATIONS=4
 SCIENTIFIC_RETURN_FULL_AGENTIC_MAX_QUERIES=12
@@ -80,9 +80,19 @@ SCIENTIFIC_RETURN_FULL_AGENTIC_CIRCUIT_MIN_DECISIONS=0
 SCIENTIFIC_RETURN_FULL_AGENTIC_CIRCUIT_MIN_PRECISION=0.0
 ```
 
+OpenAlex is the only source that indexes authorship in a dedicated field, so
+the author-and-object floor is routed there when it is allowed; the inventory
+floor stays on Europe PMC, the only source that returns inspectable text. On
+the 12-case fixture that pairing raised deterministic floor recall from 50% to
+75% at the same query cost, without losing any case
+(`docs/evaluation/scientific-return-allowlist-openalex-2026-08-25.md`).
+
 `EUROPE_PMC_ENABLED=true` and `OPENALEX_API_KEY` still control whether those
 adaptors are technically available. `SCIENTIFIC_RETURN_FULL_AGENTIC_SOURCES`
-only narrows that available set. Production may set the dispatcher to
+only narrows that available set. Starting an investigation returns
+`503 FULL_AGENTIC_SOURCE_CONFIGURATION_INVALID` before enqueue when the
+allowlist has no operational adapter or no enabled source can provide
+inspectable inventory text. Production may set the dispatcher to
 `CLOUD_TASKS` and provide its queue URL, worker URL, service-account email and a
 worker token. With `DATABASE`, a worker claims durable rows with:
 
@@ -93,9 +103,11 @@ uv run python -m app.jobs.scientific_return run-agentic-queue \
 
 The queue worker uses row locking and recoverable leases. Completed external
 tool executions are replayed from encrypted persisted results instead of being
-issued again. Replay data contains bibliographic metadata and a hash of any
-inspected full text, never the full publication body; only the short passages
-selected for curatorial review are persisted. A shared PostgreSQL throttle
+issued again. Replay data contains bibliographic metadata, a hash and at most
+the same 16,000-character indexed-text excerpt delivered to the reader. This
+bounded text is encrypted, is never copied to the trajectory or API, and exists
+only to preserve grounding across recovery; only grounded short passages are
+shown to curators. A shared PostgreSQL throttle
 serializes each configured source across deterministic and full-agentic workers.
 
 The two circuit settings are disabled when the minimum sample is zero. With a
@@ -104,6 +116,24 @@ human-confirmed precision of full-agentic candidates falls below the configured
 threshold. Existing candidates remain reviewable; enough later confirmations
 close the circuit automatically. This signal never changes an individual
 candidate decision.
+
+Operational rollout starts with one worker, conservative query/candidate limits
+and the feature flag enabled only for the intended environment. Stop promotion
+if source errors, grounded-evidence safety, query budgets or curator precision
+breach their gates. Roll back by disabling
+`SCIENTIFIC_RETURN_FULL_AGENTIC_ENABLED`; queued rows remain durable and no new
+investigation is accepted. If the regression is prompt-specific, republish the
+archived v1 planner/reader in the prompt registry. Database migrations are
+downgraded only after workers are stopped and queued investigations are drained;
+historical trajectories and decisions are never rewritten.
+
+Prompt v2 was published by `system` on 2026-08-24 through migration
+`0070_harden_full_agentic_prompts`. Its purpose is to remove positive/source
+anchoring, constrain planning to operational capabilities and require literal
+reader claims. The 12-case comparison retained 91.7% combined retrieval recall
+and a 36.4% known-case precision proxy with zero terminal source errors. The
+persisted analysis records the registry's actual version id and label, never the
+template key.
 
 ### Curatorial knowledge
 
@@ -141,6 +171,8 @@ for a different target is invalid. A unique live target prevents two
 simultaneous cycles for the same watch and objective.
 
 - `GET /watches/{watchId}/full-agentic-investigations`
+- `GET /full-agentic-readiness` reports requested, operational, unavailable and
+  inspectable-evidence sources without exposing credentials.
 - `GET /full-agentic-investigations/{investigationId}`
 - `GET /full-agentic-investigations/{investigationId}/trajectory`
 - `POST /full-agentic-investigations/{investigationId}/cancel`
@@ -149,17 +181,54 @@ The operational states are `QUEUED`, `RUNNING`, `CANCEL_REQUESTED`, `COMPLETED`,
 `FAILED` and `CANCELLED`. Cancellation is immediate while queued and cooperative
 while running. The encrypted trajectory exposes, through authorised reads,
 memory selected, plans, queries, source calls, semantic assessments, linked
-candidates, errors and stop reason.
+candidates, errors and stop reason. Plans contain concrete `searches[]`; each
+item names exactly one source, query, author hypothesis, intent and strategy,
+so one planned search consumes one external-query budget unit. The same
+normalized source/query/author attempt is not repeated in later iterations.
+
+Before the first LLM plan, the worker attempts the bounded author-surname plus
+object discovery floor. Inventory variants are prepared locally as optional
+planner context and do not consume an external query or pretend to be evidence.
+Planner contract failures are retried once and then finish in a degraded,
+audited state after the floor instead of aborting the entire investigation.
+Such a run reports `COMPLETED` — it did finish, and may carry candidates — with
+`degradedReason` naming what it could not do. The distinction matters to a
+curator: without it, a degraded run with no candidates is indistinguishable
+from one that searched with its full plan and found nothing.
 
 Publication text is untrusted data. Only the tool-free reader receives raw
 external text and emits a validated assessment. The planner receives that
 structured assessment, never the publication body, so an indirect prompt
 injection cannot directly select a tool or query.
 
+The reader still decides semantic relevance. A separate application validator
+retains a claimed passage or inventory form only when it occurs in the exact
+title, abstract or indexed text delivered to that reader. Lack of a grounded
+inventory form never changes `relevant` to false. Discarded claims are audited
+in the trajectory by kind, reason (`EMPTY_CLAIM`, `DUPLICATE_CLAIM` or
+`NOT_IN_DELIVERED_FIELDS`) and a truncated excerpt of what the model claimed,
+never of the publication.
+
+`VERIFIED` means a form was found literally in a delivered field. `NOT_OBSERVED`
+is reserved for records whose inspectable body was actually read and did not
+contain it, which requires a source that returns inspectable full text. Every
+other case reports `UNAVAILABLE`, because a source that returned only metadata
+can neither prove nor disprove the claim: absence there is not evidence of
+absence, and OpenAlex results are therefore never presented as a negative.
+
 Candidate responses expose `firstSeenKind`, `agenticCreated` and
-`agenticRediscovered`. The decision history includes an encrypted, versioned
+`agenticRediscovered`. Queue responses additionally expose `discoveryBasis`,
+`searchIntent`, `searchStrategy`, `inventoryEvidenceStatus` (`VERIFIED`,
+`NOT_OBSERVED` or `UNAVAILABLE`), `groundedInventoryForms`, `groundedPassages`,
+`rejectedPassageCount` and `rejectedInventoryFormCount`. `evidences` remains the
+list of structured deterministic matches; it is not a count of agent-grounded
+passages. The two collections are deliberately presented separately so that a
+new full-agentic candidate is not described as having no evidence merely
+because it has no deterministic match rows. The decision
+history includes an encrypted, versioned
 `decisionContext` containing the passages, forms, queries, sources, confidence,
-contradictions and knowledge identifiers shown to the curator. The legacy
+contradictions, provenance, grounded forms and knowledge identifiers shown to
+the curator. The legacy
 `evidenceSnapshot` keeps its existing deterministic shape.
 
 ## Activate a watch
@@ -301,7 +370,9 @@ The global staff queue is available from:
 `GET /candidates?status=PENDING&source=CROSSREF&evidenceStrength=PRIMARY&page=0&size=20`
 
 Queue items add `projectId` so the interface can open the project that owns the
-watch. Filters are optional; status defaults to `PENDING`.
+watch. Full-agentic items also distinguish discovery by author/object from an
+inventory form literally observed in the publication fields. Filters are
+optional; status defaults to `PENDING`.
 
 ## Decide a candidate
 
@@ -506,3 +577,77 @@ Read-only. These never continue, retry or re-run a cycle.
 - `SCIENTIFIC_RETURN_INVESTIGATION_RUNNING`: a non-terminal investigation
   already covers this watch, objective and candidate (`409`).
 - `SCIENTIFIC_RETURN_INVESTIGATION_NOT_FOUND`: investigation does not exist.
+
+## Scientific Return Test
+
+The test bench runs the same `ExecuteFullAgenticScientificReturn` autonomous
+planner, query execution, semantic assessment, grounding, deduplication and
+candidate-ranking path as production for every item in a batch. The only
+replaced boundary is the source adapter: it searches the immutable,
+institution-scoped corpus entered by staff instead of external indexes.
+Operational persistence is isolated, so a test never creates production
+watches, runs, candidates, notifications or learning records. The autonomous
+budgets are the same `SCIENTIFIC_RETURN_FULL_AGENTIC_*` values used in
+production. All endpoints below require a staff permission; the institution is
+derived from `X-Permission-Id` and is never accepted from a request body.
+
+### Readiness and sources
+
+```http
+GET    /api/v1/scientific-return/test-readiness
+GET    /api/v1/scientific-return/test-sources?status=ACTIVE
+POST   /api/v1/scientific-return/test-sources
+GET    /api/v1/scientific-return/test-sources/{sourceId}
+PUT    /api/v1/scientific-return/test-sources/{sourceId}
+DELETE /api/v1/scientific-return/test-sources/{sourceId}
+POST   /api/v1/scientific-return/test-sources/{sourceId}/activate
+```
+
+Create and replace accept `name`, `kind` (`TEXT_DOCUMENT` or
+`BIBLIOGRAPHIC_REFERENCE`), `content`, optional `locator`, and `authors`.
+Replace always creates an immutable revision. Delete retires a source; it does
+not remove revisions referenced by existing batches. List responses contain
+metadata only; the detail response includes revision bodies.
+
+### Batches
+
+```http
+GET    /api/v1/scientific-return/test-batches
+POST   /api/v1/scientific-return/test-batches
+GET    /api/v1/scientific-return/test-batches/{batchId}
+PUT    /api/v1/scientific-return/test-batches/{batchId}
+POST   /api/v1/scientific-return/test-batches/{batchId}/items
+DELETE /api/v1/scientific-return/test-batches/{batchId}/items/{itemId}
+POST   /api/v1/scientific-return/test-batches/{batchId}/start
+POST   /api/v1/scientific-return/test-batches/{batchId}/cancel
+POST   /api/v1/scientific-return/test-batches/{batchId}/items/{itemId}/retry
+GET    /api/v1/scientific-return/test-batches/{batchId}/candidates
+GET    /api/v1/scientific-return/test-batches/{batchId}/export.csv
+```
+
+`PUT` selects the shared corpus with `{ "sourceIds": ["uuid"] }`. Item input
+is `{ "items": [{ "author", "objectName", "inventoryNumber" }] }`. Start
+requires an `Idempotency-Key` of at most 128 characters and returns `202`.
+Execution is per item; one failure does not stop its siblings. Batch states are
+`DRAFT`, `QUEUED`, `RUNNING`, `CANCELLING`, `COMPLETED`,
+`COMPLETED_WITH_ERRORS`, `FAILED`, and `CANCELLED`.
+
+The expanded CSV header is:
+
+```csv
+item_id,tentativa,autor,nome_objeto,num_inventario,rank,score,score_version,fonte_id,fonte_nome,fonte_revisao,fonte_localizador,query,discovery_basis,inventory_evidence_status,evidencia
+```
+
+It is UTF-8/RFC 4180, ordered by item and rank, and spreadsheet formula prefixes
+are neutralized. `inventory_evidence_status` is `VERIFIED`, `NOT_OBSERVED`, or
+`UNAVAILABLE`; an empty evidence field never implies a verified match.
+
+The internal worker endpoint is
+`POST /api/v1/scientific-return/internal/test-items/{itemId}/execute` and
+requires `X-Worker-Token` matching `SCIENTIFIC_RETURN_TEST_WORKER_TOKEN`.
+Missing or invalid worker authentication returns `403`.
+
+Additional error codes: `TEST_BENCH_DISABLED` (`503`),
+`TEST_INSTITUTION_REQUIRED` (`403`), `TEST_BATCH_NOT_DRAFT` (`409`),
+`TEST_BATCH_EMPTY` (`422`), `TEST_SOURCE_SELECTION_EMPTY` (`422`), and
+`TEST_RESOURCE_NOT_FOUND` (`404`).

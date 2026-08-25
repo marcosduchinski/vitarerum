@@ -200,9 +200,7 @@ class ScientificReturnInvestigation:
         self.iterations.append(iteration)
         return iteration
 
-    def record_observation(
-        self, observation: AgentObservation, now: datetime
-    ) -> None:
+    def record_observation(self, observation: AgentObservation, now: datetime) -> None:
         iteration = self._require_open_iteration()
         self._transition(InvestigationStatus.PLANNING, now)
         iteration.observation = observation

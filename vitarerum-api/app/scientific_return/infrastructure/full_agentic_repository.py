@@ -129,6 +129,7 @@ def _investigation_to_domain(
         started_at=record.started_at,
         completed_at=record.completed_at,
         failure_reason=record.failure_reason,
+        degraded_reason=record.degraded_reason,
         cancel_requested_by=PermissionId(record.cancel_requested_by)
         if record.cancel_requested_by
         else None,
@@ -281,6 +282,7 @@ class SqlAlchemyFullAgenticRepository:
                     started_at=investigation.started_at,
                     completed_at=investigation.completed_at,
                     failure_reason=investigation.failure_reason,
+                    degraded_reason=investigation.degraded_reason,
                     cancel_requested_by=investigation.cancel_requested_by,
                     lease_owner=investigation.lease_owner,
                     lease_expires_at=investigation.lease_expires_at,

@@ -186,9 +186,7 @@ class ObservedCandidate:
     candidate_id: str
     title: str
     doi: str | None
-    verified_evidence_types: tuple[EvidenceType, ...] = field(
-        default_factory=tuple
-    )
+    verified_evidence_types: tuple[EvidenceType, ...] = field(default_factory=tuple)
 
 
 @dataclass(frozen=True, slots=True)
@@ -364,9 +362,7 @@ class ReasonerTelemetry:
     plan_response_hash: str = ""
     reflection_response_hash: str = ""
 
-    def with_reflection(
-        self, latency_ms: int, response_hash: str
-    ) -> ReasonerTelemetry:
+    def with_reflection(self, latency_ms: int, response_hash: str) -> ReasonerTelemetry:
         return ReasonerTelemetry(
             model=self.model,
             prompt_version=self.prompt_version,

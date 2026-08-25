@@ -33,6 +33,7 @@ from app.scientific_return.domain.full_agentic_models import (
     FullAgenticInvestigationId,
 )
 from app.scientific_return.presentation.dependencies import (
+    get_bench_repository,
     get_bibliographic_sources,
     get_crossref_source,
     get_europe_pmc_source,
@@ -236,6 +237,47 @@ async def run_full_agentic_queue(*, limit: int, worker_id: str) -> tuple[int, in
     return completed, failed
 
 
+async def run_test_bench_queue(*, limit: int, worker_id: str) -> tuple[int, int]:
+    """Recover pending or lease-expired test items from the durable DB queue."""
+    completed = 0
+    failed = 0
+    for _ in range(limit):
+        async with async_session_factory() as session:
+            item_id = (
+                await session.execute(
+                    text(
+                        "SELECT id FROM sr_test_items "
+                        "WHERE status = 'PENDING' OR "
+                        "(status = 'RUNNING' AND lease_expires_at < now()) "
+                        "ORDER BY batch_id, ordinal "
+                        "FOR UPDATE SKIP LOCKED LIMIT 1"
+                    )
+                )
+            ).scalar_one_or_none()
+            if item_id is None:
+                await session.rollback()
+                break
+            try:
+                await get_bench_repository(session).claim_and_execute(
+                    item_id, worker_id
+                )
+                await session.commit()
+                item_status = (
+                    await session.execute(
+                        text("SELECT status FROM sr_test_items WHERE id = :item_id"),
+                        {"item_id": item_id},
+                    )
+                ).scalar_one()
+                failed += item_status == "ERROR"
+                completed += item_status == "COMPLETED"
+            except Exception:
+                failed += 1
+                await session.rollback()
+                logger.exception("Could not execute test-bench item %s.", item_id)
+    logger.info("Processed %s test-bench items; %s failed.", completed, failed)
+    return completed, failed
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="scientific-return")
     subcommands = parser.add_subparsers(dest="command", required=True)
@@ -249,6 +291,12 @@ def _parser() -> argparse.ArgumentParser:
     )
     queued.add_argument("--limit", type=int, default=10)
     queued.add_argument("--worker-id", default="scientific-return-cli-worker")
+    test_queued = subcommands.add_parser(
+        "run-test-queue",
+        help="Claim and execute pending or abandoned Scientific Return Test items.",
+    )
+    test_queued.add_argument("--limit", type=int, default=25)
+    test_queued.add_argument("--worker-id", default="scientific-return-test-cli")
     evaluation = subcommands.add_parser(
         "evaluate-phase0", help="Run the five-case empirical baseline."
     )
@@ -293,6 +341,11 @@ async def _amain() -> int:
         return 1 if failed else 0
     if args.command == "run-agentic-queue":
         _, failed = await run_full_agentic_queue(
+            limit=max(1, args.limit), worker_id=args.worker_id
+        )
+        return 1 if failed else 0
+    if args.command == "run-test-queue":
+        _, failed = await run_test_bench_queue(
             limit=max(1, args.limit), worker_id=args.worker_id
         )
         return 1 if failed else 0

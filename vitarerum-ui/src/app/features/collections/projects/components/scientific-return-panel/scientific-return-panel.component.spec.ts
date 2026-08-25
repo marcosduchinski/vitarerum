@@ -326,6 +326,41 @@ describe('ScientificReturnPanelComponent', () => {
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('queued');
   });
 
+  it('warns that a degraded investigation did not run its full plan', async () => {
+    // The resource loads on creation, so the stub is primed before the panel
+    // is built rather than reloaded afterwards.
+    api.fullAgentic = [
+      {
+        id: 'full-agentic-degraded',
+        watchId: 'watch-1',
+        objective: 'DISCOVER_CANDIDATE',
+        candidateId: null,
+        searchRunId: null,
+        status: 'COMPLETED',
+        budget: {},
+        usage: { queries: 2, candidates: 0 },
+        createdBy: 'perm-bob-curatorial',
+        createdAt: '2026-08-25T10:00:00Z',
+        startedAt: '2026-08-25T10:00:01Z',
+        completedAt: '2026-08-25T10:05:00Z',
+        heartbeatAt: null,
+        failureReason: null,
+        degradedReason: 'The planner contract stayed invalid after a retry',
+      },
+    ];
+    fixture = TestBed.createComponent(ScientificReturnPanelComponent);
+    fixture.componentRef.setInput('projectId', 'project-1');
+    await settle();
+
+    const text = ((fixture.nativeElement as HTMLElement).textContent ?? '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    // COMPLETED with zero candidates must not read as "there is nothing".
+    expect(text).toContain('Finished without its full plan');
+    expect(text).toContain('no results here does not mean there are none');
+    expect(text).toContain('The planner contract stayed invalid after a retry');
+  });
+
   it('turns curator prose into an active inventory example', async () => {
     const root = fixture.nativeElement as HTMLElement;
     const values = [

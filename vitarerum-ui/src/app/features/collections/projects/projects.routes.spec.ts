@@ -77,6 +77,7 @@ describe('PROJECTS_ROUTES', () => {
       'completed',
       'cancelled',
       'scientific-return',
+      'scientific-return-test',
       ':id/follow-up/new',
       'collections/:id',
       'curatorial/:id',

@@ -7,6 +7,7 @@ from typing import Protocol
 from app.scientific_return.application.ports import BibliographicRecord
 from app.scientific_return.domain.full_agentic_models import (
     AgenticCandidateLink,
+    AgenticSearchSpec,
     AgenticToolExecution,
     AgenticTrajectoryEvent,
     ArticleAssessment,
@@ -23,10 +24,16 @@ class InvestigationConcurrencyConflict(RuntimeError):
 
 @dataclass(frozen=True, slots=True)
 class AgenticPlan:
-    queries: tuple[str, ...]
-    sources: tuple[str, ...]
+    searches: tuple[AgenticSearchSpec, ...]
     reasoning: str
     should_stop: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class AssessmentResult:
+    assessment: ArticleAssessment
+    prompt_version_id: str
+    prompt_version: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,7 +53,7 @@ class FullAgenticReasoner(Protocol):
         observation: dict[str, object],
         memory: tuple[str, ...],
         history: tuple[dict[str, object], ...],
-        allowed_sources: tuple[str, ...],
+        source_capabilities: tuple[dict[str, object], ...],
         remaining_queries: int,
     ) -> AgenticPlan: ...
 
@@ -55,7 +62,7 @@ class FullAgenticReasoner(Protocol):
         *,
         record: BibliographicRecord,
         trusted_context: dict[str, object],
-    ) -> ArticleAssessment: ...
+    ) -> AssessmentResult: ...
 
     async def learn(
         self,

@@ -27,6 +27,7 @@ class PermissionView:
     permission_id: str
     user: UserView
     group: GroupName
+    institution_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,3 +42,4 @@ class Actor:
     id: PermissionId
     group: GroupName | None = None
     email: str = ""
+    institution_id: str | None = None

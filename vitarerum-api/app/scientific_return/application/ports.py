@@ -78,6 +78,12 @@ SHADOW_ANALYSIS_PROMPT_KEY = "candidate_shadow_analysis"
 AGENT_PLAN_PROMPT_KEY = "scientific_return_agent_plan"
 AGENT_REFLECTION_PROMPT_KEY = "scientific_return_agent_reflection"
 
+# Registry identifier prefix of every published full-agentic reader version.
+# Analyses are discriminated by it instead of by a version label: the label
+# spelling changed between v1 and v2, so a label match would silently lose the
+# archived v1 rows if that version were ever republished as a rollback.
+FULL_AGENTIC_READER_PROMPT_ID_PREFIX = "pver-sr-full-reader"
+
 
 @dataclass(frozen=True, slots=True)
 class ReasonerCall:
@@ -157,6 +163,7 @@ class AgentToolOutcome:
     result_hash: str
     unavailable: bool = False
     error: str | None = None
+    duplicates_avoided: int = 0
 
     @property
     def actionable_records(self) -> tuple[DiscoveredRecord, ...]:
@@ -246,8 +253,38 @@ class BibliographicRecord:
     indexed_text_source: str | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class BibliographicSourceCapabilities:
+    name: str
+    searches_metadata: bool
+    searches_indexed_full_text: bool
+    returns_abstract: bool
+    returns_inspectable_full_text: bool
+    supports_structured_author: bool
+    normalizes_inventory_separators: bool = False
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "name", self.name.strip().upper())
+        if not self.name:
+            raise ValueError("Bibliographic source name is required")
+
+    def as_prompt_payload(self) -> dict[str, object]:
+        return {
+            "name": self.name,
+            "searchesMetadata": self.searches_metadata,
+            "searchesIndexedFullText": self.searches_indexed_full_text,
+            "returnsAbstract": self.returns_abstract,
+            "returnsInspectableFullText": self.returns_inspectable_full_text,
+            "supportsStructuredAuthor": self.supports_structured_author,
+            "normalizesInventorySeparators": self.normalizes_inventory_separators,
+        }
+
+
 class BibliographicSource(Protocol):
     name: str
+
+    @property
+    def capabilities(self) -> BibliographicSourceCapabilities: ...
 
     async def search(
         self, query: str, limit: int, *, author: str | None = None
@@ -284,6 +321,14 @@ class ScientificReturnMetrics:
 class CandidateReviewItem:
     project_id: str
     candidate: CandidatePublication
+    discovery_basis: str | None = None
+    search_intent: str | None = None
+    search_strategy: str | None = None
+    inventory_evidence_status: str | None = None
+    grounded_inventory_forms: tuple[dict[str, str | None], ...] = ()
+    grounded_passages: tuple[str, ...] = ()
+    rejected_passage_count: int = 0
+    rejected_inventory_form_count: int = 0
 
 
 class ProjectSnapshotProvider(Protocol):

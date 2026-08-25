@@ -701,17 +701,19 @@ async def test_decision_context_uses_latest_full_agentic_reader_only() -> None:
         "shadow", "scientific_return_shadow_analysis", "shadow query", "shadow"
     )
     newest = completed_analysis(
-        "newest",
-        "scientific_return_full_agentic_reader",
+        "newest", "pver-sr-full-reader-v2",
         "new query",
         "new explanation",
     )
+    newest.prompt_version = "scientific-return-full-agentic-reader-v2"
+    # The registry labelled the archived v1 with underscores, so a rollback to
+    # it must still be recognised as a full-agentic reader analysis.
     oldest = completed_analysis(
-        "oldest",
-        "scientific_return_full_agentic_reader",
+        "oldest", "pver-sr-full-reader-v1",
         "old query",
         "old explanation",
     )
+    oldest.prompt_version = "scientific_return_full_agentic_reader-v1"
     repository.agent_analyses = {
         str(shadow.id): shadow,
         str(newest.id): newest,
@@ -725,6 +727,56 @@ async def test_decision_context_uses_latest_full_agentic_reader_only() -> None:
     assert context is not None
     assert context.queries == ("new query",)
     assert context.explanation == "new explanation"
+
+
+@pytest.mark.asyncio
+async def test_a_rolled_back_reader_version_still_yields_a_decision_context() -> None:
+    repository, candidate = await _repository_with_candidate()
+    analysis = CandidateAgentAnalysis(
+        id=CandidateAgentAnalysisId("v1-only"),
+        candidate_id=candidate.id,
+        run_id=candidate.first_seen_run_id,
+        status=AgentAnalysisStatus.RUNNING,
+        model="test-model",
+        prompt_version_id="pver-sr-full-reader-v1",
+        prompt_version="scientific_return_full_agentic_reader-v1",
+        input_payload={
+            "query": "rolled back query",
+            "source": "EUROPE_PMC",
+            "passages": ["Specimen MB06-5747 was examined."],
+            "inventoryForms": ["MB06-5747"],
+            "knowledgeItemIds": [],
+        },
+        input_hash="v1-only",
+        started_at=datetime.now(tz=UTC),
+        created_by=PermissionId("permission-1"),
+    )
+    analysis.complete(
+        parse_analysis_result(
+            json.dumps(
+                {
+                    "summary": "rolled back explanation",
+                    "supportingEvidence": [],
+                    "contradictions": [],
+                    "missingEvidence": [],
+                    "recommendedAction": "PRESENT_FOR_REVIEW",
+                    "proposedQueries": [],
+                    "reasoningSummary": "rolled back explanation",
+                    "confidence": "HIGH",
+                }
+            )
+        ),
+        "response-hash",
+        datetime.now(tz=UTC),
+    )
+    repository.agent_analyses = {str(analysis.id): analysis}
+
+    context = await DecideCandidate(repository, _PublicationWriter())._decision_context(
+        candidate.id
+    )
+
+    assert context is not None
+    assert context.queries == ("rolled back query",)
 
 
 @pytest.mark.asyncio

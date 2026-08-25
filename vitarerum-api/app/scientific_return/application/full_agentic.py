@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from dataclasses import dataclass, replace
 from datetime import timedelta
 from uuid import uuid4
@@ -10,19 +11,31 @@ from app.scientific_return.application.agent_tools import (
     normalized_tool_idempotency_key,
 )
 from app.scientific_return.application.analysis import deduplication_key
+from app.scientific_return.application.full_agentic_grounding import (
+    ground_article_assessment,
+)
 from app.scientific_return.application.full_agentic_ports import (
     AgenticInvestigationDispatcher,
     AgenticPlan,
+    AssessmentResult,
     FullAgenticClock,
     FullAgenticReasoner,
     FullAgenticRepository,
     FullAgenticUnitOfWork,
     InvestigationConcurrencyConflict,
 )
+from app.scientific_return.application.full_agentic_strategy import (
+    bibliographic_surname_hypotheses,
+    deterministic_floor,
+    search_is_supported,
+    source_result_limit,
+    suggested_inventory_variants,
+)
 from app.scientific_return.application.knowledge import retrieve_relevant_knowledge
 from app.scientific_return.application.ports import (
     BibliographicRecord,
     BibliographicSource,
+    BibliographicSourceCapabilities,
     ScientificReturnRepository,
 )
 from app.scientific_return.domain.enums import (
@@ -38,10 +51,13 @@ from app.scientific_return.domain.enums import (
     QueryType,
     RunKind,
     RunStatus,
+    SearchIntent,
+    SearchStrategy,
 )
 from app.scientific_return.domain.full_agentic_models import (
     AgenticBudget,
     AgenticCandidateLink,
+    AgenticSearchSpec,
     AgenticToolExecution,
     AgenticToolExecutionId,
     AgenticTrajectoryEvent,
@@ -88,6 +104,10 @@ class FullAgenticCircuitOpen(RuntimeError):
     pass
 
 
+class FullAgenticSourceConfigurationInvalid(RuntimeError):
+    pass
+
+
 class _InvestigationLeaseLost(RuntimeError):
     pass
 
@@ -102,6 +122,8 @@ class FullAgenticConfiguration:
     investigation_lease_seconds: int = 900
     circuit_min_decisions: int = 0
     circuit_min_precision: float = 0.0
+    operational_sources: tuple[str, ...] | None = None
+    evidence_sources: tuple[str, ...] | None = None
 
     def __post_init__(self) -> None:
         if self.circuit_min_decisions < 0:
@@ -110,6 +132,52 @@ class FullAgenticConfiguration:
             raise ValueError("Circuit-breaker precision must be between zero and one")
         if self.investigation_lease_seconds < 60:
             raise ValueError("Investigation lease must be at least 60 seconds")
+
+    def validate_operational_sources(self) -> None:
+        if not self.allowed_sources:
+            raise FullAgenticSourceConfigurationInvalid(
+                "No bibliographic source is allowed"
+            )
+        if self.operational_sources is None:
+            return
+        operational = {item.upper() for item in self.operational_sources}
+        requested = {item.upper() for item in self.allowed_sources}
+        available = requested & operational
+        if not available:
+            unavailable = ", ".join(sorted(requested - operational)) or "none"
+            raise FullAgenticSourceConfigurationInvalid(
+                "No requested bibliographic source is operational; unavailable: "
+                f"{unavailable}"
+            )
+        evidence = {item.upper() for item in (self.evidence_sources or ())}
+        if not (available & evidence):
+            raise FullAgenticSourceConfigurationInvalid(
+                "No operational source can return inspectable inventory text"
+            )
+
+    def source_diagnostics(self) -> dict[str, object]:
+        requested = {item.upper() for item in self.allowed_sources}
+        operational = {
+            item.upper() for item in (self.operational_sources or self.allowed_sources)
+        }
+        evidence = {item.upper() for item in (self.evidence_sources or ())}
+        available = requested & operational
+        message: str | None = None
+        valid = True
+        try:
+            self.validate_operational_sources()
+        except FullAgenticSourceConfigurationInvalid as exc:
+            valid = False
+            message = str(exc)
+        return {
+            "enabled": self.enabled,
+            "requestedSources": sorted(requested),
+            "operationalSources": sorted(available),
+            "unavailableSources": sorted(requested - operational),
+            "inspectableEvidenceSources": sorted(available & evidence),
+            "configurationValid": valid,
+            "message": message,
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -160,6 +228,7 @@ class StartFullAgenticScientificReturn:
             )
         if not self._configuration.enabled:
             raise FullAgenticDisabled("The full-agentic flow is disabled")
+        self._configuration.validate_operational_sources()
         minimum = self._configuration.circuit_min_decisions
         if minimum:
             metrics = await self._scientific_repository.get_metrics()
@@ -239,6 +308,10 @@ class ExecuteFullAgenticScientificReturn:
         self._repository = repository
         self._reasoner = reasoner
         self._sources = {source.name.upper(): source for source in sources}
+        self._capabilities = {
+            name: self._source_capabilities(source)
+            for name, source in self._sources.items()
+        }
         self._uow = unit_of_work
         self._clock = clock
         self._configuration = configuration
@@ -368,6 +441,9 @@ class ExecuteFullAgenticScientificReturn:
         observation: dict[str, object] = {
             "projectReference": snapshot.payload.project_reference,
             "researcher": snapshot.payload.researcher,
+            "suggestedAuthorHypotheses": list(
+                bibliographic_surname_hypotheses(snapshot.payload.researcher)
+            ),
             "objects": [
                 {
                     "id": item.id,
@@ -375,6 +451,12 @@ class ExecuteFullAgenticScientificReturn:
                     "objectName": item.object_name,
                 }
                 for item in snapshot.payload.consulted_objects
+            ],
+            "suggestedInventoryVariants": suggested_inventory_variants(
+                snapshot.payload
+            ),
+            "sourceCapabilities": [
+                item.as_prompt_payload() for item in self._capabilities.values()
             ],
         }
         seen_records: set[str] = {
@@ -387,12 +469,43 @@ class ExecuteFullAgenticScientificReturn:
             )
         }
         executed_sources: set[str] = set()
+        executed_attempts: set[tuple[str, str, str]] = set()
+        for event in existing_events:
+            if event.kind is not AgenticTrajectoryEventKind.TOOL_COMPLETED:
+                continue
+            executed_attempts.add(
+                self._attempt_identity(
+                    source=str(event.payload.get("source", "")),
+                    query=str(event.payload.get("query", "")),
+                    author=(
+                        str(event.payload["author"])
+                        if event.payload.get("author")
+                        else None
+                    ),
+                    intent=(
+                        SearchIntent(str(event.payload["intent"]))
+                        if event.payload.get("intent")
+                        else SearchIntent.DISCOVERY
+                    ),
+                )
+            )
         new_candidate_count = sum(
             1
             for event in existing_events
             if event.kind is AgenticTrajectoryEventKind.CANDIDATE_LINKED
             and event.payload.get("relationKind")
             == AgenticCandidateRelationKind.CREATED.value
+        )
+        # The floor is a bounded reservation, never the whole budget: a project
+        # with many consulted objects must still leave the planner queries to
+        # spend, so it takes at most half the global ceiling. It covers both
+        # author+object and the bare inventory code, because a planner contract
+        # failure must not cost the highest-yield strategy of this domain.
+        floor_reservation = max(1, investigation.budget.max_queries // 2)
+        floor_searches = deterministic_floor(
+            snapshot.payload,
+            tuple(self._capabilities.values()),
+            floor_reservation,
         )
 
         for iteration in range(1, investigation.budget.max_iterations + 1):
@@ -424,32 +537,44 @@ class ExecuteFullAgenticScientificReturn:
             if persisted_plan is not None:
                 persisted_payload = persisted_plan.payload
                 plan = AgenticPlan(
-                    queries=_string_tuple(persisted_payload, "queries"),
-                    sources=_string_tuple(persisted_payload, "sources"),
+                    searches=self._searches_from_payload(persisted_payload),
                     reasoning=str(persisted_payload.get("reasoning", "")),
                     should_stop=bool(persisted_payload.get("shouldStop", False)),
                 )
             else:
-                await self._renew_lease(investigation)
-                plan = await self._reasoner.plan(
-                    observation=observation,
-                    memory=tuple(item.as_prompt_example() for item in memory),
-                    history=tuple(history),
-                    allowed_sources=tuple(self._sources),
-                    remaining_queries=remaining_queries,
-                )
-                investigation.usage = replace(
-                    investigation.usage,
-                    iterations=iteration,
-                    llm_calls=investigation.usage.llm_calls + 1,
-                )
+                if iteration == 1 and floor_searches:
+                    plan = AgenticPlan(
+                        searches=floor_searches[:remaining_queries],
+                        reasoning=(
+                            "Deterministic floor: bare inventory code and "
+                            "author plus object; reserved "
+                            f"{floor_reservation} of "
+                            f"{investigation.budget.max_queries} queries"
+                        ),
+                    )
+                    investigation.usage = replace(
+                        investigation.usage,
+                        iterations=iteration,
+                    )
+                else:
+                    await self._renew_lease(investigation)
+                    plan = await self._plan_with_retry(
+                        investigation,
+                        observation=observation,
+                        memory=tuple(item.as_prompt_example() for item in memory),
+                        history=tuple(history),
+                        remaining_queries=remaining_queries,
+                        iteration=iteration,
+                    )
                 await self._append_event(
                     investigation,
                     AgenticTrajectoryEventKind.PLAN_CREATED,
                     {
                         "iteration": iteration,
-                        "queries": list(plan.queries),
-                        "sources": list(plan.sources),
+                        "contractVersion": "structured-search-v3",
+                        "searches": [
+                            self._search_payload(search) for search in plan.searches
+                        ],
                         "reasoning": plan.reasoning,
                         "shouldStop": plan.should_stop,
                     },
@@ -460,12 +585,12 @@ class ExecuteFullAgenticScientificReturn:
                 investigation,
                 run,
                 iteration,
-                plan.queries,
-                plan.sources,
+                plan.searches,
                 executed_sources,
+                executed_attempts,
             )
             relevant_count = 0
-            for record, query in records:
+            for record, search in records:
                 key = f"{record.source}|{record.source_record_id}"
                 if key in seen_records:
                     continue
@@ -478,11 +603,13 @@ class ExecuteFullAgenticScientificReturn:
                     llm_calls=investigation.usage.llm_calls + 1,
                 )
                 try:
-                    assessment = await self._reasoner.assess(
+                    assessment_result = await self._reasoner.assess(
                         record=record,
                         trusted_context={
                             **observation,
-                            "query": query,
+                            "query": search.query,
+                            "searchIntent": search.intent.value,
+                            "searchStrategy": search.strategy.value,
                             "curatorialMemory": [
                                 item.as_prompt_example() for item in memory
                             ],
@@ -502,6 +629,12 @@ class ExecuteFullAgenticScientificReturn:
                     await self._repository.save_investigation(investigation)
                     await self._uow.commit()
                     continue
+                grounded = ground_article_assessment(
+                    assessment_result.assessment,
+                    record,
+                    self._capabilities.get(record.source.upper()),
+                )
+                assessment = grounded.assessment
                 await self._append_event(
                     investigation,
                     AgenticTrajectoryEventKind.ARTICLE_ASSESSED,
@@ -514,7 +647,35 @@ class ExecuteFullAgenticScientificReturn:
                         "passages": list(assessment.passages),
                         "inventoryForms": list(assessment.inventory_forms),
                         "contradictions": list(assessment.contradictions),
-                        "query": query,
+                        "query": search.query,
+                        "author": search.author,
+                        "objectId": search.object_id,
+                        "searchIntent": search.intent.value,
+                        "searchStrategy": search.strategy.value,
+                        "discoveryBasis": search.strategy.value,
+                        "inventoryEvidenceStatus": (
+                            grounded.inventory_evidence_status.value
+                        ),
+                        "groundedInventoryForms": [
+                            {
+                                "observedForm": item.observed_form,
+                                "sourceField": item.source_field.value,
+                                "sourceLocator": item.source_locator,
+                            }
+                            for item in grounded.inventory_forms
+                        ],
+                        "rejectedPassageCount": grounded.rejected_passages,
+                        "rejectedInventoryFormCount": (
+                            grounded.rejected_inventory_forms
+                        ),
+                        "groundingRejections": [
+                            {
+                                "claimKind": item.claim_kind.value,
+                                "reason": item.reason.value,
+                                "excerpt": item.excerpt,
+                            }
+                            for item in grounded.rejections
+                        ],
                     },
                 )
                 if assessment.relevant:
@@ -523,9 +684,10 @@ class ExecuteFullAgenticScientificReturn:
                         investigation,
                         run,
                         record,
-                        assessment,
-                        query,
+                        search,
+                        grounded,
                         tuple(str(item.id) for item in memory),
+                        assessment_result,
                     )
                     new_candidate_count += int(created)
                 if (
@@ -536,8 +698,9 @@ class ExecuteFullAgenticScientificReturn:
             history.append(
                 {
                     "iteration": iteration,
-                    "queries": list(plan.queries),
-                    "sources": list(plan.sources),
+                    "searches": [
+                        self._search_payload(search) for search in plan.searches
+                    ],
                     "resultCount": len(records),
                     "relevantCount": relevant_count,
                 }
@@ -577,109 +740,133 @@ class ExecuteFullAgenticScientificReturn:
         investigation: FullAgenticInvestigation,
         run: ScientificReturnSearchRun,
         iteration: int,
-        queries: tuple[str, ...],
-        sources: tuple[str, ...],
+        searches: tuple[AgenticSearchSpec, ...],
         executed_sources: set[str],
-    ) -> list[tuple[BibliographicRecord, str]]:
-        invocation: dict[str, object] = {
-            "contractVersion": "authorless-search-v2",
-            "queries": list(queries),
-            "sources": list(sources),
-        }
-        sequence = iteration
-        key = normalized_tool_idempotency_key(
-            str(investigation.id), sequence, invocation
-        )
-        prior = await self._repository.get_tool_execution(key)
-        if prior and prior.status is AgenticToolExecutionStatus.COMPLETED:
-            replayed = self._records_from_result(prior.result or {})
-            executed_sources.update(record.source.upper() for record, _ in replayed)
-            return replayed
-        if prior is not None:
-            execution = prior
-            execution.status = AgenticToolExecutionStatus.RUNNING
-            execution.attempts += 1
-            execution.lease_expires_at = self._clock.now() + timedelta(
-                seconds=self._configuration.tool_lease_seconds
+        executed_attempts: set[tuple[str, str, str]],
+    ) -> list[tuple[BibliographicRecord, AgenticSearchSpec]]:
+        found: list[tuple[BibliographicRecord, AgenticSearchSpec]] = []
+        for search in searches:
+            if investigation.usage.queries >= investigation.budget.max_queries:
+                break
+            attempt_identity = self._attempt_identity(
+                search.source, search.query, search.author, search.intent
             )
-            await self._repository.save_tool_execution(execution)
-        else:
-            execution = AgenticToolExecution(
-                id=AgenticToolExecutionId(str(uuid4())),
-                investigation_id=investigation.id,
-                trajectory_sequence=sequence,
-                idempotency_key=key,
-                status=AgenticToolExecutionStatus.RUNNING,
-                invocation=invocation,
-                started_at=self._clock.now(),
-                lease_expires_at=self._clock.now()
-                + timedelta(seconds=self._configuration.tool_lease_seconds),
-            )
-            await self._repository.add_tool_execution(execution)
-        await self._uow.commit()
-        found: list[tuple[BibliographicRecord, str]] = []
-        for source_name in sources:
-            source = self._sources.get(source_name.upper())
-            if source is None:
+            if attempt_identity in executed_attempts:
+                await self._append_event(
+                    investigation,
+                    AgenticTrajectoryEventKind.SEARCH_SKIPPED_DUPLICATE,
+                    self._search_payload(search),
+                )
                 continue
-            executed_sources.add(source.name.upper())
-            for query in queries:
-                if investigation.usage.queries >= investigation.budget.max_queries:
-                    break
-                sent_at = self._clock.now()
-                error: str | None = None
-                try:
-                    await self._renew_lease(investigation)
-                    records = await source.search(
-                        query,
-                        min(20, investigation.budget.max_results),
-                        author=None,
-                    )
-                except _InvestigationLeaseLost:
-                    raise
-                except Exception as exc:
-                    records = []
-                    error = f"{type(exc).__name__}: {exc}"[:500]
-                await self._scientific_repository.add_query(
-                    ScientificReturnQuery(
-                        id=ScientificReturnQueryId(str(uuid4())),
-                        run_id=run.id,
-                        source=source_name,
-                        query_text=query,
-                        query_type=QueryType.AGENTIC,
-                        sent_at=sent_at,
-                        result_count=len(records),
-                        status=QueryStatus.FAILED if error else QueryStatus.COMPLETED,
-                        error_message=error,
-                    )
+            source = self._sources.get(search.source)
+            capabilities = self._capabilities.get(search.source)
+            if (
+                source is None
+                or capabilities is None
+                or not search_is_supported(search, capabilities)
+            ):
+                continue
+            invocation = {
+                "contractVersion": "structured-search-v3",
+                **self._search_payload(search),
+            }
+            key = normalized_tool_idempotency_key(str(investigation.id), 0, invocation)
+            prior = await self._repository.get_tool_execution(key)
+            if prior and prior.status is AgenticToolExecutionStatus.COMPLETED:
+                replayed = self._records_from_result(prior.result or {}, search)
+                found.extend(replayed)
+                executed_sources.add(search.source)
+                executed_attempts.add(attempt_identity)
+                continue
+            if prior is not None:
+                execution = prior
+                execution.status = AgenticToolExecutionStatus.RUNNING
+                execution.attempts += 1
+                execution.lease_expires_at = self._clock.now() + timedelta(
+                    seconds=self._configuration.tool_lease_seconds
                 )
-                remaining = (
-                    investigation.budget.max_results - investigation.usage.results
+                await self._repository.save_tool_execution(execution)
+            else:
+                execution = AgenticToolExecution(
+                    id=AgenticToolExecutionId(str(uuid4())),
+                    investigation_id=investigation.id,
+                    trajectory_sequence=iteration,
+                    idempotency_key=key,
+                    status=AgenticToolExecutionStatus.RUNNING,
+                    invocation=invocation,
+                    started_at=self._clock.now(),
+                    lease_expires_at=self._clock.now()
+                    + timedelta(seconds=self._configuration.tool_lease_seconds),
                 )
-                accepted = records[: max(0, remaining)]
-                found.extend((record, query) for record in accepted)
-                investigation.usage = replace(
-                    investigation.usage,
-                    queries=investigation.usage.queries + 1,
-                    results=investigation.usage.results + len(accepted),
+                await self._repository.add_tool_execution(execution)
+            await self._append_event(
+                investigation,
+                AgenticTrajectoryEventKind.TOOL_STARTED,
+                self._search_payload(search),
+            )
+            await self._uow.commit()
+            executed_attempts.add(attempt_identity)
+            executed_sources.add(search.source)
+            sent_at = self._clock.now()
+            error: str | None = None
+            try:
+                await self._renew_lease(investigation)
+                records = await source.search(
+                    search.query,
+                    source_result_limit(
+                        capabilities, investigation.budget.max_results
+                    ),
+                    author=search.author,
                 )
-                await self._uow.commit()
-                if investigation.usage.results >= investigation.budget.max_results:
-                    break
-        result: dict[str, object] = {
-            "records": [self._record_payload(record, query) for record, query in found]
-        }
-        execution.status = AgenticToolExecutionStatus.COMPLETED
-        execution.result = result
-        execution.result_hash = hashlib.sha256(repr(result).encode()).hexdigest()
-        execution.completed_at = self._clock.now()
-        await self._repository.save_tool_execution(execution)
-        await self._append_event(
-            investigation,
-            AgenticTrajectoryEventKind.TOOL_COMPLETED,
-            {"resultCount": len(found), "toolExecutionId": str(execution.id)},
-        )
-        await self._uow.commit()
+            except _InvestigationLeaseLost:
+                raise
+            except Exception as exc:
+                records = []
+                error = f"{type(exc).__name__}: {exc}"[:500]
+            await self._scientific_repository.add_query(
+                ScientificReturnQuery(
+                    id=ScientificReturnQueryId(str(uuid4())),
+                    run_id=run.id,
+                    source=search.source,
+                    query_text=search.query,
+                    query_type=QueryType.AGENTIC,
+                    sent_at=sent_at,
+                    result_count=len(records),
+                    status=QueryStatus.FAILED if error else QueryStatus.COMPLETED,
+                    error_message=error,
+                )
+            )
+            remaining = investigation.budget.max_results - investigation.usage.results
+            accepted = records[: max(0, remaining)]
+            current = [(record, search) for record in accepted]
+            found.extend(current)
+            investigation.usage = replace(
+                investigation.usage,
+                queries=investigation.usage.queries + 1,
+                results=investigation.usage.results + len(accepted),
+            )
+            result: dict[str, object] = {
+                "records": [
+                    self._record_payload(record, search.query) for record in accepted
+                ]
+            }
+            execution.status = AgenticToolExecutionStatus.COMPLETED
+            execution.result = result
+            execution.result_hash = hashlib.sha256(repr(result).encode()).hexdigest()
+            execution.completed_at = self._clock.now()
+            await self._repository.save_tool_execution(execution)
+            await self._append_event(
+                investigation,
+                AgenticTrajectoryEventKind.TOOL_COMPLETED,
+                {
+                    "resultCount": len(accepted),
+                    "toolExecutionId": str(execution.id),
+                    **self._search_payload(search),
+                },
+            )
+            await self._uow.commit()
+            if investigation.usage.results >= investigation.budget.max_results:
+                break
         return found
 
     async def _present_candidate(
@@ -687,13 +874,17 @@ class ExecuteFullAgenticScientificReturn:
         investigation: FullAgenticInvestigation,
         run: ScientificReturnSearchRun,
         record: BibliographicRecord,
-        assessment: object,
-        query: str,
+        search: AgenticSearchSpec,
+        grounded: object,
         knowledge_ids: tuple[str, ...],
+        assessment_result: AssessmentResult,
     ) -> bool:
-        from app.scientific_return.domain.full_agentic_models import ArticleAssessment
+        from app.scientific_return.domain.full_agentic_models import (
+            GroundedArticleAssessment,
+        )
 
-        assert isinstance(assessment, ArticleAssessment)
+        assert isinstance(grounded, GroundedArticleAssessment)
+        assessment = grounded.assessment
         key = deduplication_key(record)
         candidate = await self._scientific_repository.get_candidate_by_key(
             investigation.watch_id, key
@@ -734,17 +925,31 @@ class ExecuteFullAgenticScientificReturn:
             run_id=run.id,
             status=AgentAnalysisStatus.RUNNING,
             model=self._reasoner.model_name,
-            prompt_version_id="scientific_return_full_agentic_reader",
-            prompt_version="scientific-return-full-agentic-reader-v1",
+            prompt_version_id=assessment_result.prompt_version_id,
+            prompt_version=assessment_result.prompt_version,
             input_payload={
-                "query": query,
+                "query": search.query,
                 "source": record.source,
                 "passages": list(assessment.passages),
                 "inventoryForms": list(assessment.inventory_forms),
                 "knowledgeItemIds": list(knowledge_ids),
+                "discoveryBasis": search.strategy.value,
+                "searchIntent": search.intent.value,
+                "searchStrategy": search.strategy.value,
+                "inventoryEvidenceStatus": (grounded.inventory_evidence_status.value),
+                "groundedInventoryForms": [
+                    {
+                        "observedForm": item.observed_form,
+                        "sourceField": item.source_field.value,
+                        "sourceLocator": item.source_locator,
+                    }
+                    for item in grounded.inventory_forms
+                ],
+                "rejectedPassageCount": grounded.rejected_passages,
+                "rejectedInventoryFormCount": grounded.rejected_inventory_forms,
             },
             input_hash=hashlib.sha256(
-                f"{record.source}|{record.source_record_id}|{query}".encode()
+                f"{record.source}|{record.source_record_id}|{search.query}".encode()
             ).hexdigest(),
             started_at=self._clock.now(),
             created_by=investigation.created_by,
@@ -816,6 +1021,147 @@ class ExecuteFullAgenticScientificReturn:
             )
         )
 
+    async def _plan_with_retry(
+        self,
+        investigation: FullAgenticInvestigation,
+        *,
+        observation: dict[str, object],
+        memory: tuple[str, ...],
+        history: tuple[dict[str, object], ...],
+        remaining_queries: int,
+        iteration: int,
+    ) -> AgenticPlan:
+        last_error: Exception | None = None
+        for attempt in range(1, 3):
+            if investigation.usage.llm_calls >= investigation.budget.max_llm_calls:
+                break
+            investigation.usage = replace(
+                investigation.usage,
+                iterations=iteration,
+                llm_calls=investigation.usage.llm_calls + 1,
+            )
+            retry_observation = dict(observation)
+            if last_error is not None:
+                retry_observation["previousPlannerContractError"] = (
+                    f"{type(last_error).__name__}: {last_error}"[:500]
+                )
+            try:
+                return await self._reasoner.plan(
+                    observation=retry_observation,
+                    memory=memory,
+                    history=history,
+                    source_capabilities=tuple(
+                        item.as_prompt_payload() for item in self._capabilities.values()
+                    ),
+                    remaining_queries=remaining_queries,
+                )
+            except Exception as exc:
+                last_error = exc
+                await self._append_event(
+                    investigation,
+                    AgenticTrajectoryEventKind.PLANNER_ERROR,
+                    {
+                        "iteration": iteration,
+                        "attempt": attempt,
+                        "message": f"{type(exc).__name__}: {exc}"[:500],
+                    },
+                )
+                await self._repository.save_investigation(investigation)
+                await self._uow.commit()
+        investigation.degrade(
+            "The planner contract stayed invalid after a retry, so the "
+            "investigation finished on its deterministic floor alone"
+        )
+        await self._append_event(
+            investigation,
+            AgenticTrajectoryEventKind.PLANNER_FALLBACK,
+            {
+                "iteration": iteration,
+                "reason": "planner contract remained invalid after retry",
+                "degraded": True,
+            },
+        )
+        return AgenticPlan((), "Planner unavailable; finish with completed floor", True)
+
+    @staticmethod
+    def _source_capabilities(
+        source: BibliographicSource,
+    ) -> BibliographicSourceCapabilities:
+        capabilities = getattr(source, "capabilities", None)
+        if isinstance(capabilities, BibliographicSourceCapabilities):
+            return capabilities
+        # An adapter that does not describe itself stays searchable, but is
+        # never credited with returning an inspectable body: absence of an
+        # inventory form in what it sent back must not read as "not observed".
+        return BibliographicSourceCapabilities(
+            name=source.name,
+            searches_metadata=True,
+            searches_indexed_full_text=True,
+            returns_abstract=True,
+            returns_inspectable_full_text=False,
+            supports_structured_author=True,
+        )
+
+    def _attempt_identity(
+        self,
+        source: str,
+        query: str,
+        author: str | None,
+        intent: SearchIntent,
+    ) -> tuple[str, str, str]:
+        normalized_query = " ".join(query.casefold().split())
+        capabilities = self._capabilities.get(source.upper())
+        if (
+            intent is SearchIntent.INVENTORY_EVIDENCE
+            and capabilities is not None
+            and capabilities.normalizes_inventory_separators
+        ):
+            normalized_query = re.sub(r"[-:/.\s]", "", normalized_query)
+        return (
+            source.upper(),
+            normalized_query,
+            " ".join((author or "").casefold().split()),
+        )
+
+    @staticmethod
+    def _search_payload(search: AgenticSearchSpec) -> dict[str, object]:
+        return {
+            "source": search.source,
+            "query": search.query,
+            "author": search.author,
+            "objectId": search.object_id,
+            "intent": search.intent.value,
+            "strategy": search.strategy.value,
+        }
+
+    @staticmethod
+    def _searches_from_payload(
+        payload: dict[str, object],
+    ) -> tuple[AgenticSearchSpec, ...]:
+        raw_searches = payload.get("searches")
+        if not isinstance(raw_searches, list):
+            return ()
+        searches: list[AgenticSearchSpec] = []
+        for item in raw_searches:
+            if not isinstance(item, dict):
+                continue
+            try:
+                searches.append(
+                    AgenticSearchSpec(
+                        source=str(item["source"]),
+                        query=str(item["query"]),
+                        author=str(item["author"]) if item.get("author") else None,
+                        object_id=(
+                            str(item["objectId"]) if item.get("objectId") else None
+                        ),
+                        intent=SearchIntent(str(item["intent"])),
+                        strategy=SearchStrategy(str(item["strategy"])),
+                    )
+                )
+            except (KeyError, ValueError):
+                continue
+        return tuple(searches)
+
     @staticmethod
     def _record_payload(record: BibliographicRecord, query: str) -> dict[str, object]:
         return {
@@ -834,17 +1180,23 @@ class ExecuteFullAgenticScientificReturn:
                 if record.indexed_text
                 else None
             ),
+            # Tool results are encrypted by the repository. Persist exactly the
+            # bounded text exposed to the reader so a COMPLETED attempt can be
+            # replayed without either re-querying the source or losing grounding.
+            "indexed_text": record.indexed_text[:16000]
+            if record.indexed_text
+            else None,
             "indexed_text_source": record.indexed_text_source,
         }
 
     @staticmethod
     def _records_from_result(
-        result: dict[str, object],
-    ) -> list[tuple[BibliographicRecord, str]]:
+        result: dict[str, object], search: AgenticSearchSpec
+    ) -> list[tuple[BibliographicRecord, AgenticSearchSpec]]:
         raw = result.get("records")
         if not isinstance(raw, list):
             return []
-        output: list[tuple[BibliographicRecord, str]] = []
+        output: list[tuple[BibliographicRecord, AgenticSearchSpec]] = []
         for item in raw:
             if not isinstance(item, dict):
                 continue
@@ -864,12 +1216,14 @@ class ExecuteFullAgenticScientificReturn:
                         url=str(item["url"]) if item.get("url") else None,
                         doi=str(item["doi"]) if item.get("doi") else None,
                         raw_metadata_hash=str(item["raw_metadata_hash"]),
-                        indexed_text=None,
+                        indexed_text=str(item["indexed_text"])
+                        if item.get("indexed_text")
+                        else None,
                         indexed_text_source=str(item["indexed_text_source"])
                         if item.get("indexed_text_source")
                         else None,
                     ),
-                    str(item["query"]),
+                    search,
                 )
             )
         return output

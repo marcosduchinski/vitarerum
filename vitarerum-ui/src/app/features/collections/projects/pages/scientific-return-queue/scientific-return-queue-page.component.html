@@ -232,11 +232,46 @@
               </div>
             </header>
 
+            @if (candidate.inventoryEvidenceStatus; as evidenceStatus) {
+              <section
+                class="agentic-provenance"
+                [attr.data-evidence-status]="evidenceStatus"
+                aria-label="Agentic discovery provenance"
+              >
+                <div class="agentic-provenance__status">
+                  <span
+                    class="pi"
+                    [class.pi-verified]="evidenceStatus === 'VERIFIED'"
+                    [class.pi-info-circle]="evidenceStatus !== 'VERIFIED'"
+                    aria-hidden="true"
+                  ></span>
+                  <div>
+                    <strong>{{ inventoryEvidenceTitle(evidenceStatus) }}</strong>
+                    <span>Discovery strategy: {{ discoveryLabel(candidate) }}</span>
+                  </div>
+                </div>
+                @if (candidate.groundedInventoryForms?.length) {
+                  <ul aria-label="Inventory forms observed in publication">
+                    @for (form of candidate.groundedInventoryForms; track form.observedForm) {
+                      <li>
+                        <code>{{ form.observedForm }}</code>
+                        <span>Observed in {{ filterLabel(form.sourceField) }}</span>
+                      </li>
+                    }
+                  </ul>
+                }
+              </section>
+            }
+
             <section class="evidence-panel" aria-label="Candidate evidence">
               <header class="evidence-panel__header">
                 <div>
                   <span class="evidence-panel__eyebrow">Evidence trail</span>
-                  <strong>{{ candidate.evidences.length }} verified signals</strong>
+                  <strong>{{ candidate.evidences.length }} structured matches</strong>
+                  <span class="evidence-panel__agentic-count">
+                    {{ candidate.groundedPassages.length }} grounded
+                    {{ candidate.groundedPassages.length === 1 ? 'passage' : 'passages' }}
+                  </span>
                 </div>
                 <div class="evidence-summary" aria-label="Evidence strength summary">
                   @if (evidenceCount(candidate, 'PRIMARY'); as primaryCount) {
@@ -251,26 +286,68 @@
                 </div>
               </header>
 
-              <ul class="evidence-list">
-                @for (evidence of candidate.evidences; track evidence.id) {
-                  <li [attr.data-strength]="evidence.strength">
-                    <div class="evidence-list__heading">
-                      <span>{{ evidence.strength }}</span>
-                      <strong>{{ evidenceLabel(evidence) }}</strong>
-                    </div>
-                    <code>{{ evidence.value }}</code>
-                    <p>{{ evidence.explanation }}</p>
-                    <div class="evidence-list__provenance">
-                      <span class="pi pi-search" aria-hidden="true"></span>
-                      Found in {{ evidenceSourceLabel(evidence.sourceField) }}
-                      @if (evidence.objectId) {
-                        <span aria-hidden="true">·</span>
-                        Linked to consulted object
-                      }
-                    </div>
-                  </li>
-                }
-              </ul>
+              @if (candidate.groundedPassages.length) {
+                <ul
+                  class="evidence-list grounded-passage-list"
+                  aria-label="Agent-grounded publication passages"
+                >
+                  @for (passage of candidate.groundedPassages; track $index) {
+                    <li>
+                      <span class="pi pi-quote-left" aria-hidden="true"></span>
+                      <blockquote>{{ passage }}</blockquote>
+                    </li>
+                  }
+                </ul>
+              }
+
+              @if (candidate.rejectedPassageCount || candidate.rejectedInventoryFormCount) {
+                <div class="grounding-audit" role="note">
+                  <span class="pi pi-shield" aria-hidden="true"></span>
+                  <span>
+                    {{ candidate.rejectedPassageCount }} passage
+                    {{ candidate.rejectedPassageCount === 1 ? 'claim' : 'claims' }} and
+                    {{ candidate.rejectedInventoryFormCount }} inventory
+                    {{ candidate.rejectedInventoryFormCount === 1 ? 'claim' : 'claims' }} were
+                    rejected because they could not be verified in the delivered source fields.
+                  </span>
+                </div>
+              }
+
+              @if (candidate.evidences.length) {
+                <ul class="evidence-list" aria-label="Structured candidate matches">
+                  @for (evidence of candidate.evidences; track evidence.id) {
+                    <li [attr.data-strength]="evidence.strength">
+                      <div class="evidence-list__heading">
+                        <span>{{ evidence.strength }}</span>
+                        <strong>{{ evidenceLabel(evidence) }}</strong>
+                      </div>
+                      <code>{{ evidence.value }}</code>
+                      <p>{{ evidence.explanation }}</p>
+                      <div class="evidence-list__provenance">
+                        <span class="pi pi-search" aria-hidden="true"></span>
+                        Found in {{ evidenceSourceLabel(evidence.sourceField) }}
+                        @if (evidence.objectId) {
+                          <span aria-hidden="true">·</span>
+                          Linked to consulted object
+                        }
+                      </div>
+                    </li>
+                  }
+                </ul>
+              }
+
+              @if (!candidate.evidences.length && !candidate.groundedPassages.length) {
+                <div class="evidence-empty" role="note">
+                  <span class="pi pi-info-circle" aria-hidden="true"></span>
+                  <div>
+                    <strong>No verifiable evidence was extracted</strong>
+                    <span>
+                      The agent considered this record relevant, but it still requires source
+                      inspection by staff.
+                    </span>
+                  </div>
+                </div>
+              }
             </section>
 
             <footer class="candidate-dossier__decision">

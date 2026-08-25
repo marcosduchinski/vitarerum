@@ -12,7 +12,10 @@ from xml.etree import ElementTree
 
 import httpx
 
-from app.scientific_return.application.ports import BibliographicRecord
+from app.scientific_return.application.ports import (
+    BibliographicRecord,
+    BibliographicSourceCapabilities,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +24,15 @@ class EuropePmcBibliographicSource:
     """Europe PMC adapter with transient, open-access full-text enrichment."""
 
     name = "EUROPE_PMC"
+    capabilities = BibliographicSourceCapabilities(
+        name=name,
+        searches_metadata=True,
+        searches_indexed_full_text=True,
+        returns_abstract=True,
+        returns_inspectable_full_text=True,
+        supports_structured_author=False,
+        normalizes_inventory_separators=True,
+    )
     _TRANSIENT_STATUSES = {429, 500, 502, 503, 504}
     _MAX_FULL_TEXT_BYTES = 15 * 1024 * 1024
 
@@ -80,9 +92,7 @@ class EuropePmcBibliographicSource:
                 records.append(self._to_record(item, indexed_text))
         return records
 
-    async def _get_full_text(
-        self, client: httpx.AsyncClient, pmcid: str
-    ) -> str | None:
+    async def _get_full_text(self, client: httpx.AsyncClient, pmcid: str) -> str | None:
         if pmcid in self._full_text_cache:
             return self._full_text_cache[pmcid]
         try:
@@ -178,9 +188,7 @@ class EuropePmcBibliographicSource:
                 if any(names):
                     return tuple(name for name in names if name)
         author_string = str(item.get("authorString", "")).strip().rstrip(".")
-        return tuple(
-            name.strip() for name in author_string.split(",") if name.strip()
-        )
+        return tuple(name.strip() for name in author_string.split(",") if name.strip())
 
     @staticmethod
     def _url(

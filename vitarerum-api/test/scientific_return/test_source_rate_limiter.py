@@ -25,6 +25,7 @@ from app.scientific_return.infrastructure.source_rate_limiter import (
 )
 
 _SOURCE = "TEST_THROTTLE_SOURCE"
+pytestmark = pytest.mark.postgres
 
 
 @pytest.fixture

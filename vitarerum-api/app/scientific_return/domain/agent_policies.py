@@ -77,12 +77,8 @@ _DECIDED_CANDIDATE_STATUSES = frozenset(
 _REJECTION_TO_STOP: dict[PolicyRejectionReason, StopReason] = {
     PolicyRejectionReason.NO_NEW_QUERY_VARIANT: StopReason.QUERY_REPEATED,
     PolicyRejectionReason.BUDGET_EXHAUSTED: StopReason.BUDGET_EXHAUSTED,
-    PolicyRejectionReason.ITERATION_LIMIT_REACHED: (
-        StopReason.ITERATION_LIMIT_REACHED
-    ),
-    PolicyRejectionReason.CANDIDATE_LIMIT_REACHED: (
-        StopReason.CANDIDATE_LIMIT_REACHED
-    ),
+    PolicyRejectionReason.ITERATION_LIMIT_REACHED: (StopReason.ITERATION_LIMIT_REACHED),
+    PolicyRejectionReason.CANDIDATE_LIMIT_REACHED: (StopReason.CANDIDATE_LIMIT_REACHED),
     PolicyRejectionReason.CANDIDATE_ALREADY_DECIDED: (
         StopReason.CANDIDATE_ALREADY_DECIDED
     ),
@@ -313,10 +309,7 @@ class AgentStopPolicy:
 
         if context.proposed_action is AgentRecommendedAction.PRESENT_FOR_REVIEW:
             return StopReason.PRESENTED_FOR_REVIEW
-        if (
-            context.proposed_action
-            is AgentRecommendedAction.STOP_INSUFFICIENT_EVIDENCE
-        ):
+        if context.proposed_action is AgentRecommendedAction.STOP_INSUFFICIENT_EVIDENCE:
             return StopReason.INSUFFICIENT_EVIDENCE
 
         result = context.tool_result
