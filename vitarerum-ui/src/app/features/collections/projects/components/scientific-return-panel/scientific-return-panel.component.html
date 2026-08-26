@@ -68,6 +68,54 @@
           <dd>{{ currentWatch.nextRunAt | date: 'mediumDate' }}</dd>
         </div>
         <div>
+          <dt>Reviews start from</dt>
+          <dd>
+            @if (anchorEditing()) {
+              <form class="interval-edit" (submit)="saveAnchor($event)">
+                <input
+                  type="date"
+                  aria-label="Date reviews are measured from"
+                  [value]="anchorDraft()"
+                  (input)="onAnchorInput($event)"
+                />
+                <button
+                  type="submit"
+                  class="icon-button"
+                  title="Save start date"
+                  aria-label="Save start date"
+                  [disabled]="anchorInvalid() || busyAction() === 'anchor'"
+                >
+                  <span class="pi pi-check" aria-hidden="true"></span>
+                </button>
+                <button
+                  type="button"
+                  class="icon-button"
+                  title="Cancel"
+                  aria-label="Cancel start date edit"
+                  [disabled]="busyAction() === 'anchor'"
+                  (click)="cancelAnchorEdit()"
+                >
+                  <span class="pi pi-times" aria-hidden="true"></span>
+                </button>
+              </form>
+            } @else {
+              {{ currentWatch.scheduleAnchorAt | date: 'mediumDate' }}
+              @if (canReview() && currentWatch.status !== 'CLOSED') {
+                <button
+                  type="button"
+                  class="text-button"
+                  title="Edit the date reviews are measured from"
+                  aria-label="Edit the date reviews are measured from"
+                  [disabled]="busyAction() !== null"
+                  (click)="startAnchorEdit()"
+                >
+                  <span class="pi pi-pencil" aria-hidden="true"></span>
+                </button>
+              }
+            }
+          </dd>
+        </div>
+        <div>
           <dt>Interval</dt>
           <dd>
             @if (intervalEditing()) {

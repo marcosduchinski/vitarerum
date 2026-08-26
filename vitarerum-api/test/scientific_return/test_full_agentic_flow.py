@@ -493,6 +493,7 @@ def setup_scientific_repository(
         created_by=PermissionId("permission-1"),
         created_at=_NOW,
         next_run_at=_NOW,
+        schedule_anchor_at=_NOW,
         project_snapshot_id=snapshot.id,
     )
     repository.snapshots[str(snapshot.id)] = snapshot

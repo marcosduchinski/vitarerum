@@ -13,6 +13,7 @@ from app.scientific_return.application.agent_contracts import AGENT_CONTRACT_VER
 from app.scientific_return.application.ports import (
     FULL_AGENTIC_READER_PROMPT_ID_PREFIX,
     CandidateReviewItem,
+    InvestigationConcurrencyConflict,
     ScientificReturnMetrics,
     ToolExecutionRecord,
 )
@@ -148,6 +149,7 @@ def _watch_to_domain(record: ScientificReturnWatchRecord) -> ScientificReturnWat
         created_at=record.created_at,
         last_run_at=record.last_run_at,
         next_run_at=record.next_run_at,
+        schedule_anchor_at=record.schedule_anchor_at,
         project_snapshot_id=ScientificReturnSnapshotId(record.project_snapshot_id),
     )
 
@@ -811,6 +813,7 @@ class SqlAlchemyScientificReturnRepository:
                 created_at=watch.created_at,
                 last_run_at=watch.last_run_at,
                 next_run_at=watch.next_run_at,
+                schedule_anchor_at=watch.schedule_anchor_at,
                 project_snapshot_id=watch.project_snapshot_id,
             )
         )
@@ -824,6 +827,7 @@ class SqlAlchemyScientificReturnRepository:
         record.review_interval_days = watch.review_interval_days
         record.last_run_at = watch.last_run_at
         record.next_run_at = watch.next_run_at
+        record.schedule_anchor_at = watch.schedule_anchor_at
         await self._session.flush()
 
     async def get_watch(
@@ -1141,6 +1145,41 @@ class SqlAlchemyScientificReturnRepository:
             )
         )
         await self._session.flush()
+
+    async def list_candidates_needing_inventory_proof(
+        self, watch_id: ScientificReturnWatchId, limit: int
+    ) -> list[CandidatePublication]:
+        # Any inventory-bearing evidence type counts as proof, not just the bare
+        # number: a candidate matched on author+inventory is already tied to the
+        # specimen, and re-querying it would spend budget to learn nothing.
+        proven = exists().where(
+            CandidateEvidenceRecord.candidate_id == CandidatePublicationRecord.id,
+            CandidateEvidenceRecord.type.in_(
+                (
+                    EvidenceType.INVENTORY_NUMBER,
+                    EvidenceType.AUTHOR_INVENTORY,
+                    EvidenceType.INVENTORY_OBJECT,
+                )
+            ),
+        )
+        result = await self._session.execute(
+            select(CandidatePublicationRecord)
+            .where(
+                CandidatePublicationRecord.watch_id == str(watch_id),
+                CandidatePublicationRecord.status == CandidateStatus.PENDING,
+                ~proven,
+            )
+            .options(
+                selectinload(CandidatePublicationRecord.evidences),
+                selectinload(CandidatePublicationRecord.first_seen_run),
+                selectinload(CandidatePublicationRecord.agentic_links),
+            )
+            .order_by(CandidatePublicationRecord.created_at)
+            .limit(limit)
+        )
+        return [
+            _candidate_to_domain(record) for record in result.scalars().unique().all()
+        ]
 
     async def list_candidate_queue(
         self,
@@ -1569,10 +1608,16 @@ class SqlAlchemyInvestigationRepository:
     def __init__(self, session: AsyncSession, encryptor: FieldEncryptor) -> None:
         self._session = session
         self._encryptor = encryptor
+        # The version this repository last knew the stored row to hold. The
+        # aggregate bumps its own version several times between saves, so
+        # "current minus one" is not the baseline; what a save must check is
+        # that nobody else wrote since we last read or wrote.
+        self._persisted_versions: dict[str, int] = {}
 
     async def add(self, investigation: ScientificReturnInvestigation) -> None:
         self._session.add(_investigation_to_record(investigation, self._encryptor))
         await self._session.flush()
+        self._persisted_versions[str(investigation.id)] = investigation.version
 
     async def save(self, investigation: ScientificReturnInvestigation) -> None:
         # The iterations are loaded eagerly because they are read a few lines
@@ -1585,6 +1630,16 @@ class SqlAlchemyInvestigationRepository:
         )
         if record is None:
             raise LookupError(f"Investigation {investigation.id} not found")
+        # Anything other than the version we last saw means another writer — the
+        # sweep's reaper closing what it judged abandoned — moved the row while
+        # this cycle was inside an external call. Overwriting would silently
+        # resurrect a terminated investigation.
+        baseline = self._persisted_versions.get(str(investigation.id))
+        if baseline is not None and record.version != baseline:
+            raise InvestigationConcurrencyConflict(
+                f"Investigation {investigation.id} was modified concurrently: "
+                f"stored version {record.version}, expected {baseline}"
+            )
         record.status = investigation.status
         record.stop_reason = investigation.stop_reason
         record.current_iteration = investigation.current_iteration
@@ -1592,6 +1647,7 @@ class SqlAlchemyInvestigationRepository:
         record.completed_at = investigation.completed_at
         record.heartbeat_at = investigation.heartbeat_at
         record.version = investigation.version
+        self._persisted_versions[str(investigation.id)] = investigation.version
         stored = {item.id: item for item in record.iterations}
         for iteration in investigation.iterations:
             mapped = _iteration_to_record(iteration, self._encryptor)
@@ -1636,6 +1692,7 @@ class SqlAlchemyInvestigationRepository:
         if record is None:
             return None
         investigation = _investigation_to_domain(record, self._encryptor)
+        self._persisted_versions[str(investigation.id)] = investigation.version
         await self._attach_tool_results([investigation])
         return investigation
 
@@ -1686,6 +1743,33 @@ class SqlAlchemyInvestigationRepository:
         return await self._list(
             ScientificReturnInvestigationRecord.candidate_id == candidate_id
         )
+
+    async def list_abandoned(
+        self, stale_before: datetime, limit: int
+    ) -> list[ScientificReturnInvestigation]:
+        result = await self._session.execute(
+            select(ScientificReturnInvestigationRecord)
+            .where(
+                ScientificReturnInvestigationRecord.status.notin_(_TERMINAL_STATUSES),
+                # started_at is the fallback for a row written before the first
+                # transition ever refreshed the heartbeat.
+                func.coalesce(
+                    ScientificReturnInvestigationRecord.heartbeat_at,
+                    ScientificReturnInvestigationRecord.started_at,
+                )
+                < stale_before,
+            )
+            .options(selectinload(ScientificReturnInvestigationRecord.iterations))
+            .order_by(ScientificReturnInvestigationRecord.started_at)
+            .limit(limit)
+        )
+        investigations = [
+            _investigation_to_domain(record, self._encryptor)
+            for record in result.scalars().unique().all()
+        ]
+        for investigation in investigations:
+            self._persisted_versions[str(investigation.id)] = investigation.version
+        return investigations
 
     async def find_live(
         self,

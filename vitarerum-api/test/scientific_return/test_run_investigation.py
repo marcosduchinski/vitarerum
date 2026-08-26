@@ -26,6 +26,7 @@ from app.scientific_return.application.ports import (
 )
 from app.scientific_return.application.run_investigation import (
     AgentConfiguration,
+    CloseAbandonedInvestigations,
     InvestigationAlreadyRunning,
     InvestigationDisabled,
     InvestigationNotPossible,
@@ -113,6 +114,16 @@ class _Lock:
         self.released += 1
 
 
+class _FixedClock:
+    """The reaper reads the clock once; a fixed value keeps the assertion exact."""
+
+    def __init__(self, moment: datetime) -> None:
+        self._moment = moment
+
+    def now(self) -> datetime:
+        return self._moment
+
+
 class _UnitOfWork:
     def __init__(self) -> None:
         self.commits = 0
@@ -135,6 +146,16 @@ class _Investigations:
 
     async def save(self, investigation: ScientificReturnInvestigation) -> None:
         self.saved[str(investigation.id)] = investigation
+
+    async def list_abandoned(
+        self, stale_before: datetime, limit: int
+    ) -> list[ScientificReturnInvestigation]:
+        return [
+            item
+            for item in self.saved.values()
+            if not item.status.is_terminal
+            and (item.heartbeat_at or item.started_at) < stale_before
+        ][:limit]
 
     async def get(
         self, investigation_id: InvestigationId
@@ -307,6 +328,7 @@ async def _seed(repository: _Repository, *, candidate: bool = False) -> None:
             created_by=PermissionId("perm-1"),
             created_at=_NOW,
             next_run_at=_NOW,
+            schedule_anchor_at=_NOW,
             project_snapshot_id=snapshot.id,
         )
     )
@@ -850,3 +872,76 @@ async def test_enrichment_locks_a_different_target_than_discovery() -> None:
     assert lock.acquired == [
         f"scientific-return:{_WATCH}:ENRICH_CANDIDATE:cand-1"
     ]
+
+
+@pytest.mark.asyncio
+async def test_an_abandoned_cycle_is_closed_with_a_typed_reason() -> None:
+    """A dead cycle must reach a terminal state or it blocks its target for good.
+
+    The supervised engine is synchronous, so nothing resumes an interrupted
+    cycle. Closing it is the whole job: what matters is that the row stops
+    being live, and that it says why.
+    """
+    investigations = _Investigations()
+    stranded = ScientificReturnInvestigation(
+        id=InvestigationId("inv-stranded"),
+        watch_id=_WATCH,
+        objective=InvestigationObjective.ENRICH_CANDIDATE,
+        mode=InvestigationMode.SUPERVISED,
+        initial_run_id=ScientificReturnRunId("run-1"),
+        budget=ExecutionBudget(
+            max_iterations=1,
+            max_actions=1,
+            max_queries=4,
+            max_results_per_query=10,
+            max_new_candidates=5,
+        ),
+        created_by=PermissionId("perm-1"),
+        started_at=_NOW - timedelta(hours=3),
+        candidate_id=CandidatePublicationId("candidate-1"),
+    )
+    stranded.begin_observation(_NOW - timedelta(hours=3))
+    await investigations.add(stranded)
+
+    closed = await CloseAbandonedInvestigations(
+        investigations,
+        _UnitOfWork(),
+        _FixedClock(_NOW),
+        timedelta(minutes=30),
+    ).execute(limit=10)
+
+    assert closed == 1
+    assert stranded.status.is_terminal
+    assert stranded.stop_reason is StopReason.ABANDONED
+    assert stranded.completed_at == _NOW
+
+
+@pytest.mark.asyncio
+async def test_a_live_cycle_is_never_closed_by_the_sweep() -> None:
+    """A slow cycle keeps refreshing its heartbeat, so it must survive the reaper."""
+    investigations = _Investigations()
+    live = ScientificReturnInvestigation(
+        id=InvestigationId("inv-live"),
+        watch_id=_WATCH,
+        objective=InvestigationObjective.DISCOVER_CANDIDATE,
+        mode=InvestigationMode.SUPERVISED,
+        initial_run_id=ScientificReturnRunId("run-1"),
+        budget=ExecutionBudget(
+            max_iterations=1,
+            max_actions=1,
+            max_queries=4,
+            max_results_per_query=10,
+            max_new_candidates=5,
+        ),
+        created_by=PermissionId("perm-1"),
+        started_at=_NOW - timedelta(hours=3),
+    )
+    live.begin_observation(_NOW - timedelta(minutes=2))
+    await investigations.add(live)
+
+    closed = await CloseAbandonedInvestigations(
+        investigations, _UnitOfWork(), _FixedClock(_NOW), timedelta(minutes=30)
+    ).execute(limit=10)
+
+    assert closed == 0
+    assert not live.status.is_terminal

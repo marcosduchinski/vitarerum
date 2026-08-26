@@ -21,7 +21,10 @@ import app.use_of_collections.infrastructure.models  # noqa: F401
 from app.config import settings
 from app.database import Base
 from app.identity.public import PermissionId
-from app.scientific_return.application.ports import ToolExecutionRecord
+from app.scientific_return.application.ports import (
+    InvestigationConcurrencyConflict,
+    ToolExecutionRecord,
+)
 from app.scientific_return.domain.enums import (
     AgentProgress,
     AgentRecommendedAction,
@@ -129,6 +132,7 @@ async def _seed(session: AsyncSession) -> None:
             created_by=PermissionId("perm-1"),
             created_at=_NOW,
             next_run_at=_NOW,
+            schedule_anchor_at=_NOW,
             project_snapshot_id=snapshot.id,
         )
     )
@@ -522,3 +526,38 @@ async def test_a_rejected_decision_keeps_its_reason_through_the_database(
     decision = reloaded.iterations[0].policy_decision
     assert decision is not None
     assert decision.rejection_reason is PolicyRejectionReason.NO_NEW_QUERY_VARIANT
+
+
+async def test_a_save_is_refused_after_another_writer_moved_the_row(
+    session: AsyncSession,
+) -> None:
+    """The race the version check exists for.
+
+    The sweep's reaper judges a cycle abandoned and closes it; the cycle turns
+    out to be alive and saves moments later. Without the check the live cycle
+    would overwrite the terminal row and quietly resurrect an investigation the
+    sweep had already ended.
+    """
+    await _seed(session)
+    cycle = SqlAlchemyInvestigationRepository(session, _encryptor())
+    investigation = _investigation()
+    await cycle.add(investigation)
+    await session.commit()
+
+    # A second repository, as the reaper would have: its own baseline, taken
+    # when it read the row.
+    reaper = SqlAlchemyInvestigationRepository(session, _encryptor())
+    stranded = await reaper.get(InvestigationId("inv-1"))
+    assert stranded is not None
+    stranded.abandon(datetime.now(tz=UTC))
+    await reaper.save(stranded)
+    await session.commit()
+
+    # The original cycle now writes against a baseline that no longer holds.
+    investigation.begin_observation(datetime.now(tz=UTC))
+    with pytest.raises(InvestigationConcurrencyConflict):
+        await cycle.save(investigation)
+
+    survivor = await reaper.get(InvestigationId("inv-1"))
+    assert survivor is not None
+    assert survivor.stop_reason is StopReason.ABANDONED

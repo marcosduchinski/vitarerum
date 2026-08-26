@@ -48,6 +48,7 @@ function makeWatch(status: ScientificReturnWatchStatus = 'ACTIVE'): ScientificRe
     createdAt: '2026-08-18T10:00:00Z',
     lastRunAt: null,
     nextRunAt: '2026-11-16T10:00:00Z',
+    scheduleAnchorAt: '2026-08-18T10:00:00Z',
     projectSnapshotId: 'snap-1',
   };
 }

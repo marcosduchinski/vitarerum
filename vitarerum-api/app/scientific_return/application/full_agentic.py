@@ -208,6 +208,21 @@ class StartFullAgenticScientificReturn:
 
     async def execute(self, data: StartFullAgenticInput) -> FullAgenticInvestigation:
         require_group(data.caller, *_MUTATION_GROUPS)
+        return await self._start(data)
+
+    async def execute_scheduled(
+        self, data: StartFullAgenticInput
+    ) -> FullAgenticInvestigation:
+        """Queue an investigation from the scheduled sweep, with no human caller.
+
+        The authorisation check is the only thing skipped. Every other guard —
+        the feature switch, the operational-source check, the circuit breaker
+        and the live-target check — still applies, because those are what keep
+        an unattended sweep from spending a budget it should not.
+        """
+        return await self._start(data)
+
+    async def _start(self, data: StartFullAgenticInput) -> FullAgenticInvestigation:
         existing = await self._repository.get_by_idempotency_key(data.idempotency_key)
         if existing is not None:
             if (

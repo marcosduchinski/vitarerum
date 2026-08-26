@@ -75,6 +75,7 @@ class ScientificReturnWatchRecord(Base):
         DateTime(timezone=True), nullable=True
     )
     next_run_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    schedule_anchor_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     project_snapshot_id: Mapped[str] = mapped_column(
         ForeignKey("scientific_return_snapshots.id"), unique=True
     )

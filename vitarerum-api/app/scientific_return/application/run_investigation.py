@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from datetime import timedelta
 from uuid import uuid4
 
 from app.identity.public import Actor, GroupName
@@ -24,6 +25,7 @@ from app.scientific_return.application.ports import (
     AgentToolRegistry,
     Clock,
     DiscoveredRecord,
+    InvestigationConcurrencyConflict,
     InvestigationLock,
     InvestigationReasoner,
     InvestigationUnitOfWork,
@@ -118,6 +120,64 @@ class RunInvestigationInput:
     idempotency_key: str | None = None
 
 
+class CloseAbandonedInvestigations:
+    """Terminate cycles whose process died before they could close themselves.
+
+    Not a lease: a supervised cycle is one synchronous pass, so there is nothing
+    for a second runner to take over and nothing to resume. What matters is that
+    an abandoned row reaches a terminal state, because while it stays live it
+    blocks every future investigation of the same target.
+
+    The threshold is generous on purpose. A cycle is bounded to one iteration
+    and one action, and its longest legitimate silence is a single reasoner call,
+    so anything quiet for far longer than that is gone rather than slow.
+    """
+
+    def __init__(
+        self,
+        investigations: ScientificReturnInvestigationRepository,
+        unit_of_work: InvestigationUnitOfWork,
+        clock: Clock,
+        stale_after: timedelta,
+    ) -> None:
+        self._investigations = investigations
+        self._uow = unit_of_work
+        self._clock = clock
+        self._stale_after = stale_after
+
+    async def execute(self, *, limit: int) -> int:
+        now = self._clock.now()
+        abandoned = await self._investigations.list_abandoned(
+            now - self._stale_after, limit
+        )
+        closed = 0
+        for investigation in abandoned:
+            try:
+                investigation.abandon(now)
+                await self._investigations.save(investigation)
+                await self._uow.commit()
+                closed += 1
+                logger.info(
+                    "Closed abandoned investigation %s, last seen %s.",
+                    investigation.id,
+                    investigation.heartbeat_at or investigation.started_at,
+                )
+            except InvestigationConcurrencyConflict:
+                # The cycle was alive after all and wrote while we judged it
+                # dead. It owns the outcome; leaving it alone is correct.
+                await self._uow.rollback()
+                logger.info(
+                    "Investigation %s moved while being closed; left alone.",
+                    investigation.id,
+                )
+            except Exception:
+                await self._uow.rollback()
+                logger.exception(
+                    "Could not close abandoned investigation %s.", investigation.id
+                )
+        return closed
+
+
 class RunScientificReturnInvestigation:
     """Runs one bounded investigation and returns it already terminal."""
 
@@ -147,6 +207,23 @@ class RunScientificReturnInvestigation:
         self, data: RunInvestigationInput
     ) -> ScientificReturnInvestigation:
         require_group(data.caller, *_REVIEW_GROUPS)
+        return await self._run_cycle(data)
+
+    async def execute_scheduled(
+        self, data: RunInvestigationInput
+    ) -> ScientificReturnInvestigation:
+        """Run one cycle from the scheduled sweep, with no human caller.
+
+        Only the authorisation check is skipped. The mode still has to permit
+        tool execution, the policy still derives every query, and the budget
+        still bounds the cycle, so an unattended run can do nothing a staff-run
+        one could not.
+        """
+        return await self._run_cycle(data)
+
+    async def _run_cycle(
+        self, data: RunInvestigationInput
+    ) -> ScientificReturnInvestigation:
         if self._config.mode is InvestigationMode.DISABLED:
             raise InvestigationDisabled("Agentic investigation is disabled")
 
@@ -180,26 +257,31 @@ class RunScientificReturnInvestigation:
             f"scientific-return:{data.watch_id}:{data.objective.value}:"
             f"{data.candidate_id or '-'}"
         )
-        investigation = ScientificReturnInvestigation(
-            id=InvestigationId(str(uuid4())),
-            watch_id=data.watch_id,
-            objective=data.objective,
-            mode=self._config.mode,
-            initial_run_id=runs[0].id,
-            budget=self._config.budget,
-            created_by=data.caller.id,
-            started_at=self._clock.now(),
-            candidate_id=data.candidate_id,
-            idempotency_key=data.idempotency_key,
-        )
-        await self._investigations.add(investigation)
-        await self._uow.commit()
-
+        # Everything after the acquire is inside the try, including creating the
+        # row. The lock is session-scoped, so it outlives the request that took
+        # it: a failure between acquiring and entering the cycle would otherwise
+        # strand it on a pooled connection and block this target until the
+        # process restarts.
         try:
-            await self._run(investigation, snapshot.payload, candidate)
-        except Exception as exc:
-            logger.exception("Investigation %s failed", investigation.id)
-            await self._fail(investigation, StopReason.TOOL_FAILED, str(exc))
+            investigation = ScientificReturnInvestigation(
+                id=InvestigationId(str(uuid4())),
+                watch_id=data.watch_id,
+                objective=data.objective,
+                mode=self._config.mode,
+                initial_run_id=runs[0].id,
+                budget=self._config.budget,
+                created_by=data.caller.id,
+                started_at=self._clock.now(),
+                candidate_id=data.candidate_id,
+                idempotency_key=data.idempotency_key,
+            )
+            await self._investigations.add(investigation)
+            await self._uow.commit()
+            try:
+                await self._run(investigation, snapshot.payload, candidate)
+            except Exception as exc:
+                logger.exception("Investigation %s failed", investigation.id)
+                await self._fail(investigation, StopReason.TOOL_FAILED, str(exc))
         finally:
             await self._lock.release()
         return investigation

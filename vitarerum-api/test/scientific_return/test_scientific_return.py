@@ -32,6 +32,7 @@ from app.scientific_return.application.use_cases import (
     ActivateScientificReturnWatch,
     ActivateWatchInput,
     ChangeWatchReviewInterval,
+    ChangeWatchScheduleAnchor,
     ChangeWatchStatus,
     DecideCandidate,
     DecideCandidateInput,
@@ -56,6 +57,7 @@ from app.scientific_return.domain.models import (
     CandidateAnalysisResult,
     CandidateDecision,
     CandidateEvidence,
+    CandidateEvidenceId,
     CandidatePublication,
     CandidatePublicationId,
     ConsultedObjectSnapshot,
@@ -266,6 +268,22 @@ class _Repository:
     async def add_decision(self, decision: CandidateDecision) -> None:
         self.decisions.append(decision)
 
+    async def list_candidates_needing_inventory_proof(
+        self, watch_id: ScientificReturnWatchId, limit: int
+    ) -> list[CandidatePublication]:
+        proof = {
+            EvidenceType.INVENTORY_NUMBER,
+            EvidenceType.AUTHOR_INVENTORY,
+            EvidenceType.INVENTORY_OBJECT,
+        }
+        return [
+            candidate
+            for candidate in self.candidates.values()
+            if candidate.watch_id == watch_id
+            and candidate.status is CandidateStatus.PENDING
+            and not proof & {item.type for item in candidate.evidences}
+        ][:limit]
+
     async def list_candidate_queue(
         self,
         status: CandidateStatus | None,
@@ -423,24 +441,72 @@ def test_evidence_normalizes_museum_prefix_and_repeated_inventory_segments() -> 
 
 
 @pytest.mark.asyncio
-async def test_a_new_interval_moves_the_next_review_from_the_last_search() -> None:
-    """The cadence answers "how long after a search", so the clock is not reset."""
+async def test_a_new_interval_is_re_derived_from_the_anchor_not_from_now() -> None:
+    """Re-cadencing keeps the curator's anchor and never grants a fresh period."""
     repository = _Repository()
     watch = await ActivateScientificReturnWatch(repository, _ProjectProvider()).execute(
         ActivateWatchInput("project-1", 90, _caller())
     )
+    anchor = watch.schedule_anchor_at
     await RunScientificReturnSearch(repository, (_Source(_record()),)).execute(
         watch.id, _caller()
     )
-    last_run_at = watch.last_run_at
-    assert last_run_at is not None
+    assert watch.last_run_at is not None
 
     updated = await ChangeWatchReviewInterval(repository).execute(
         watch.id, 30, _caller()
     )
 
     assert updated.review_interval_days == 30
-    assert updated.next_run_at == last_run_at + timedelta(days=30)
+    assert updated.schedule_anchor_at == anchor
+    assert updated.next_run_at == anchor + timedelta(days=30)
+
+
+@pytest.mark.asyncio
+async def test_a_late_search_does_not_push_the_series_later() -> None:
+    """The grid is measured from the anchor, so a late run does not shift it.
+
+    This is the whole point of the anchor: "every 90 days from 1 March" has to
+    keep meaning that even when a sweep starts hours or days behind schedule.
+    """
+    repository = _Repository()
+    watch = await ActivateScientificReturnWatch(repository, _ProjectProvider()).execute(
+        ActivateWatchInput("project-1", 90, _caller())
+    )
+    anchor = watch.schedule_anchor_at
+
+    watch.record_run(anchor + timedelta(days=3))
+
+    assert watch.next_run_at == anchor + timedelta(days=90)
+
+
+@pytest.mark.asyncio
+async def test_a_long_outage_resumes_at_the_next_future_slot() -> None:
+    """A review exists to be current, so missed slots are skipped, not replayed."""
+    repository = _Repository()
+    watch = await ActivateScientificReturnWatch(repository, _ProjectProvider()).execute(
+        ActivateWatchInput("project-1", 30, _caller())
+    )
+    anchor = watch.schedule_anchor_at
+
+    watch.record_run(anchor + timedelta(days=95))
+
+    assert watch.next_run_at == anchor + timedelta(days=120)
+
+
+@pytest.mark.asyncio
+async def test_a_future_anchor_postpones_the_first_review() -> None:
+    repository = _Repository()
+    watch = await ActivateScientificReturnWatch(repository, _ProjectProvider()).execute(
+        ActivateWatchInput("project-1", 90, _caller())
+    )
+    future = watch.created_at + timedelta(days=200)
+
+    updated = await ChangeWatchScheduleAnchor(repository).execute(
+        watch.id, future, _caller()
+    )
+
+    assert updated.next_run_at == future
 
 
 @pytest.mark.asyncio
@@ -903,3 +969,78 @@ async def test_analysis_history_and_feedback_exclude_non_reader_records() -> Non
                 caller=_caller(),
             )
         )
+
+
+def _unproven_candidate(
+    candidate_id: str,
+    watch_id: ScientificReturnWatchId,
+    evidences: list[CandidateEvidence],
+) -> CandidatePublication:
+    return CandidatePublication(
+        id=CandidatePublicationId(candidate_id),
+        watch_id=watch_id,
+        first_seen_run_id=ScientificReturnRunId("run-1"),
+        source="OPENALEX",
+        source_record_id="record-1",
+        deduplication_key=f"key-{candidate_id}",
+        title="First record of Cynoscion regalis",
+        authors=("Gomes",),
+        publication_date=None,
+        abstract=None,
+        url=None,
+        raw_metadata_hash="hash",
+        created_at=datetime.now(tz=UTC),
+        evidences=evidences,
+    )
+
+
+def _evidence(kind: EvidenceType) -> CandidateEvidence:
+    return CandidateEvidence(
+        id=CandidateEvidenceId("evidence-1"),
+        candidate_id=CandidatePublicationId("candidate-x"),
+        type=kind,
+        strength=EvidenceStrength.PRIMARY,
+        value="MB06-005747",
+        source_field="indexed_text",
+        explanation="",
+        created_at=datetime.now(tz=UTC),
+    )
+
+
+@pytest.mark.asyncio
+async def test_only_candidates_without_inventory_proof_are_selected() -> None:
+    """The enrichment chain must skip candidates already tied to a specimen.
+
+    Re-querying a proven candidate spends exact-phrase budget to learn nothing,
+    and the whole point of the third rung is the unproven remainder the semantic
+    search leaves behind.
+    """
+    repository = _Repository()
+    watch_id = ScientificReturnWatchId("watch-1")
+    unproven = _unproven_candidate("no-evidence", watch_id, [])
+    by_object = _unproven_candidate(
+        "object-only", watch_id, [_evidence(EvidenceType.OBJECT_NAME)]
+    )
+    proven = _unproven_candidate(
+        "inventory", watch_id, [_evidence(EvidenceType.INVENTORY_NUMBER)]
+    )
+    pair = _unproven_candidate(
+        "author-inventory", watch_id, [_evidence(EvidenceType.AUTHOR_INVENTORY)]
+    )
+    for candidate in (unproven, by_object, proven, pair):
+        repository.candidates[str(candidate.id)] = candidate
+
+    selected = await repository.list_candidates_needing_inventory_proof(watch_id, 10)
+
+    assert {str(item.id) for item in selected} == {str(unproven.id), str(by_object.id)}
+
+
+@pytest.mark.asyncio
+async def test_decided_candidates_are_never_re_proven() -> None:
+    repository = _Repository()
+    watch_id = ScientificReturnWatchId("watch-1")
+    dismissed = _unproven_candidate("dismissed", watch_id, [])
+    dismissed.dismiss()
+    repository.candidates[str(dismissed.id)] = dismissed
+
+    assert await repository.list_candidates_needing_inventory_proof(watch_id, 10) == []

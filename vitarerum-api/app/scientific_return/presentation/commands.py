@@ -6,13 +6,15 @@ import argparse
 import asyncio
 import json
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import async_session_factory
+from app.identity.public import Actor, GroupName, PermissionId
 from app.notifications.public import (
     NotificationKind,
     RelatedResourceType,
@@ -22,21 +24,50 @@ from app.scientific_return.application.evaluation import (
     evaluate_cases,
     finalize_human_review_report,
 )
-from app.scientific_return.application.full_agentic import ExecuteFullAgenticInput
+from app.scientific_return.application.full_agentic import (
+    ExecuteFullAgenticInput,
+    FullAgenticAlreadyRunning,
+    FullAgenticCircuitOpen,
+    FullAgenticDisabled,
+    FullAgenticSourceConfigurationInvalid,
+    StartFullAgenticInput,
+)
 from app.scientific_return.application.ports import (
     BibliographicSource,
     InvestigationReasoner,
 )
+from app.scientific_return.application.run_investigation import (
+    CloseAbandonedInvestigations,
+    InvestigationAlreadyRunning,
+    InvestigationDisabled,
+    InvestigationNotPossible,
+    RunInvestigationInput,
+)
 from app.scientific_return.application.use_cases import RunScientificReturnSearch
-from app.scientific_return.domain.enums import InvestigationMode
+from app.scientific_return.domain.enums import (
+    FullAgenticInvestigationStatus,
+    InvestigationMode,
+    InvestigationObjective,
+)
 from app.scientific_return.domain.full_agentic_models import (
     FullAgenticInvestigationId,
+)
+from app.scientific_return.domain.models import (
+    CandidatePublicationId,
+    ScientificReturnWatchId,
+)
+from app.scientific_return.infrastructure.unit_of_work import (
+    SqlAlchemyInvestigationUnitOfWork,
+    SystemClock,
 )
 from app.scientific_return.presentation.dependencies import (
     get_bibliographic_sources,
     get_crossref_source,
     get_europe_pmc_source,
     get_full_agentic_executor,
+    get_full_agentic_starter,
+    get_investigation_repository,
+    get_investigation_runner,
     get_max_queries,
     get_openalex_source,
     get_repository,
@@ -44,6 +75,26 @@ from app.scientific_return.presentation.dependencies import (
 )
 
 logger = logging.getLogger(__name__)
+
+# How many unproven candidates one watch may spend an enrichment cycle on per
+# sweep. Each cycle is a handful of exact-phrase queries, but a watch with a
+# large pending queue would otherwise turn one sweep into a long tail of them.
+_PROOF_LIMIT_PER_WATCH = 5
+
+# A supervised cycle is one iteration and one action, and its longest
+# legitimate silence is a single reasoner call. Thirty minutes is far beyond
+# any live cycle, so anything quieter than this is gone rather than slow.
+_ABANDONED_AFTER = timedelta(minutes=30)
+
+# Unattended work is attributed to the scheduler, never to the curator who
+# happens to own the watch: "who started this?" must answer truthfully, and a
+# person who was not there did not start it. The scheduled entry points skip
+# authorisation, so this identity is a provenance label and grants nothing.
+_SCHEDULER = Actor(
+    id=PermissionId("system-scientific-return-scheduler"),
+    group=GroupName.CURATORIAL,
+    email="",
+)
 
 
 def phase_zero_sources(selection: str) -> tuple[BibliographicSource, ...]:
@@ -93,6 +144,48 @@ def _evaluation_reasoner() -> InvestigationReasoner:
     return PromptedInvestigationReasoner(
         get_agent_reasoner(), AiPromptRegistryAdapter(session)
     )
+
+
+async def _queue_autonomous_search(
+    session: AsyncSession, watch_id: ScientificReturnWatchId, run_id: str
+) -> None:
+    """Chain the autonomous agent onto a completed scheduled sweep.
+
+    The deterministic run is the cheap first pass; the agent is what finds the
+    publications no rule can match. Queuing is best-effort: a disabled feature,
+    an open circuit breaker or an investigation already live for this watch are
+    all normal outcomes of an unattended sweep, not failures of the sweep.
+
+    The key is derived from the run, so replaying a sweep never buys a second
+    investigation for work that was already paid for.
+    """
+    try:
+        investigation = await get_full_agentic_starter(session).execute_scheduled(
+            StartFullAgenticInput(
+                watch_id=watch_id,
+                objective=InvestigationObjective.DISCOVER_CANDIDATE,
+                candidate_id=None,
+                idempotency_key=f"scheduled-sweep:{run_id}",
+                caller=_SCHEDULER,
+            )
+        )
+        logger.info(
+            "Queued autonomous investigation %s for watch %s.",
+            investigation.id,
+            watch_id,
+        )
+    except (
+        FullAgenticDisabled,
+        FullAgenticCircuitOpen,
+        FullAgenticAlreadyRunning,
+        FullAgenticSourceConfigurationInvalid,
+    ) as exc:
+        logger.info("No autonomous investigation for watch %s: %s", watch_id, exc)
+    except Exception:
+        await session.rollback()
+        logger.exception(
+            "Could not queue an autonomous investigation for watch %s.", watch_id
+        )
 
 
 async def run_due(*, limit: int) -> tuple[int, int]:
@@ -153,6 +246,8 @@ async def run_due(*, limit: int) -> tuple[int, int]:
                         logger.exception(
                             "Could not notify scientific-return run %s.", run.id
                         )
+
+                await _queue_autonomous_search(session, watch.id, run.id)
             except Exception:
                 failed += 1
                 await session.rollback()
@@ -162,6 +257,58 @@ async def run_due(*, limit: int) -> tuple[int, int]:
         "Processed %s due scientific-return watches; %s failed.", completed, failed
     )
     return completed, failed
+
+
+async def _prove_pending_candidates(
+    session: AsyncSession, watch_id: ScientificReturnWatchId, limit: int
+) -> int:
+    """Try to tie unproven pending candidates to a consulted specimen.
+
+    The autonomous agent finds publications by taxon and author, so it can leave
+    a candidate that is plausible but carries no inventory evidence. This runs
+    the enrichment cycle over exactly those, spending inventory variants the
+    agent has not already used. It never decides anything: a candidate that
+    stays unproven simply stays pending for a curator.
+    """
+    proved = 0
+    candidates = await get_repository(session).list_candidates_needing_inventory_proof(
+        watch_id, limit
+    )
+    for candidate in candidates:
+        try:
+            investigation = await get_investigation_runner(session).execute_scheduled(
+                RunInvestigationInput(
+                    watch_id=watch_id,
+                    objective=InvestigationObjective.ENRICH_CANDIDATE,
+                    caller=_SCHEDULER,
+                    candidate_id=CandidatePublicationId(str(candidate.id)),
+                    idempotency_key=f"scheduled-proof:{candidate.id}",
+                )
+            )
+            await session.commit()
+            proved += 1
+            logger.info(
+                "Enrichment %s for candidate %s ended with %s.",
+                investigation.id,
+                candidate.id,
+                investigation.stop_reason.value if investigation.stop_reason else "-",
+            )
+        except (
+            InvestigationDisabled,
+            InvestigationAlreadyRunning,
+            InvestigationNotPossible,
+        ) as exc:
+            # Normal outcomes of an unattended sweep, exactly as for the rung
+            # above: the mode forbids execution, another cycle already covers
+            # this candidate, or the objective's preconditions are not met.
+            # None of them is a fault of the sweep, so none is logged as one.
+            logger.info("No enrichment for candidate %s: %s", candidate.id, exc)
+        except Exception:
+            await session.rollback()
+            logger.exception(
+                "Could not run enrichment for candidate %s.", candidate.id
+            )
+    return proved
 
 
 async def run_full_agentic_queue(*, limit: int, worker_id: str) -> tuple[int, int]:
@@ -223,6 +370,13 @@ async def run_full_agentic_queue(*, limit: int, worker_id: str) -> tuple[int, in
                                 "Could not notify full-agentic investigation %s.",
                                 item.id,
                             )
+                if item.status is FullAgenticInvestigationStatus.COMPLETED:
+                    # Third rung of the scheduled chain: the agent has just added
+                    # whatever it could find, so this is the moment the unproven
+                    # candidates of this watch are known and worth one cycle each.
+                    await _prove_pending_candidates(
+                        session, item.watch_id, _PROOF_LIMIT_PER_WATCH
+                    )
             except Exception:
                 failed += 1
                 await session.rollback()
@@ -234,6 +388,38 @@ async def run_full_agentic_queue(*, limit: int, worker_id: str) -> tuple[int, in
         "Processed %s full-agentic investigations; %s failed.", completed, failed
     )
     return completed, failed
+
+
+async def run_sweep(*, limit: int, agent_limit: int, worker_id: str) -> tuple[int, int]:
+    """One scheduled pass over the whole chain, in order.
+
+    The deterministic sweep queues the autonomous investigations, so draining
+    the queue in the same run is what turns "queued" into "done" on a single
+    schedule. Running the drain even when no watch was due is deliberate: an
+    investigation left behind by an earlier pass, or abandoned by a worker that
+    died holding a lease, is picked up here rather than waiting for a watch to
+    come due again.
+    """
+    # First, so a cycle stranded by an earlier pass stops blocking its target
+    # before this pass tries to investigate it again. Housekeeping never decides
+    # whether the real work runs: one unreadable row must not cost a whole sweep.
+    try:
+        async with async_session_factory() as session:
+            closed = await CloseAbandonedInvestigations(
+                get_investigation_repository(session),
+                SqlAlchemyInvestigationUnitOfWork(session),
+                SystemClock(),
+                _ABANDONED_AFTER,
+            ).execute(limit=limit)
+        if closed:
+            logger.info("Closed %s abandoned investigation(s).", closed)
+    except Exception:
+        logger.exception("Could not close abandoned investigations; sweeping anyway.")
+    completed, failed = await run_due(limit=limit)
+    agent_completed, agent_failed = await run_full_agentic_queue(
+        limit=agent_limit, worker_id=worker_id
+    )
+    return completed + agent_completed, failed + agent_failed
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -249,6 +435,13 @@ def _parser() -> argparse.ArgumentParser:
     )
     queued.add_argument("--limit", type=int, default=10)
     queued.add_argument("--worker-id", default="scientific-return-cli-worker")
+    sweep = subcommands.add_parser(
+        "run-sweep",
+        help="Run due watches and then drain the agentic queue, in one pass.",
+    )
+    sweep.add_argument("--limit", type=int, default=25)
+    sweep.add_argument("--agent-limit", type=int, default=10)
+    sweep.add_argument("--worker-id", default="scientific-return-cli-worker")
     evaluation = subcommands.add_parser(
         "evaluate-phase0", help="Run the five-case empirical baseline."
     )
@@ -290,6 +483,13 @@ async def _amain() -> int:
     logging.basicConfig(level=logging.INFO)
     if args.command == "run-due":
         _, failed = await run_due(limit=max(1, args.limit))
+        return 1 if failed else 0
+    if args.command == "run-sweep":
+        _, failed = await run_sweep(
+            limit=max(1, args.limit),
+            agent_limit=max(1, args.agent_limit),
+            worker_id=args.worker_id,
+        )
         return 1 if failed else 0
     if args.command == "run-agentic-queue":
         _, failed = await run_full_agentic_queue(

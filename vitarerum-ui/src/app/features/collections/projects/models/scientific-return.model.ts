@@ -41,6 +41,7 @@ export interface ScientificReturnWatch {
   readonly createdAt: string;
   readonly lastRunAt: string | null;
   readonly nextRunAt: string;
+  readonly scheduleAnchorAt: string;
   readonly projectSnapshotId: string;
 }
 

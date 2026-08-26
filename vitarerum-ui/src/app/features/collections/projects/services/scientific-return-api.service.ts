@@ -56,6 +56,15 @@ export class ScientificReturnApiService {
     });
   }
 
+  updateWatchScheduleAnchor(
+    watchId: string,
+    scheduleAnchorAt: string,
+  ): Observable<ScientificReturnWatch> {
+    return this.http.patch<ScientificReturnWatch>(this.url(`/watches/${watchId}`), {
+      scheduleAnchorAt,
+    });
+  }
+
   runWatch(watchId: string): Observable<ScientificReturnRun> {
     return this.http.post<ScientificReturnRun>(this.url(`/watches/${watchId}/runs`), {});
   }

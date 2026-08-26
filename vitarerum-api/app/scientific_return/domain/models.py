@@ -71,6 +71,7 @@ class ScientificReturnWatch:
     created_at: datetime
     next_run_at: datetime
     project_snapshot_id: ScientificReturnSnapshotId
+    schedule_anchor_at: datetime
     last_run_at: datetime | None = None
 
     def __post_init__(self) -> None:
@@ -82,26 +83,59 @@ class ScientificReturnWatch:
             raise ValueError("A closed watch cannot be reopened")
         self.status = status
 
-    def change_review_interval(self, days: int) -> None:
-        """Re-cadence the watch and move the next review with it.
+    def _slot_after(self, moment: datetime) -> datetime:
+        """The first scheduled review strictly after ``moment``.
 
-        The next review is measured from the last search, never from now: the
-        interval answers "how long after a search until the next one", so
-        editing it must not silently grant a fresh full period. A watch that
-        has never run stays due, because changing the cadence is not a reason
-        to postpone a review that is already owed.
+        Reviews sit on a fixed grid measured from the anchor the curator chose,
+        not from whenever the last search happened to run. A search that starts
+        late therefore does not push the whole series later, which is what makes
+        "every 90 days from 1 March" mean what it says.
+
+        A grid that is already far behind — a worker down for a week on a daily
+        cadence — resumes at the next future slot instead of replaying every
+        missed one. The point of a review is to be current, not to be repeated.
+        """
+        if self.schedule_anchor_at > moment:
+            return self.schedule_anchor_at
+        period = timedelta(days=self.review_interval_days)
+        elapsed_periods = (moment - self.schedule_anchor_at) // period
+        return self.schedule_anchor_at + (elapsed_periods + 1) * period
+
+    def change_review_interval(self, days: int) -> None:
+        """Re-cadence the watch, keeping the anchor the curator chose.
+
+        The grid is re-derived from the same anchor, so editing the interval
+        never silently grants a fresh full period. A watch that is already
+        overdue stays overdue: changing the cadence is not a reason to postpone
+        a review that is already owed.
         """
         if self.status is WatchStatus.CLOSED:
             raise ValueError("A closed watch cannot be rescheduled")
         if not 1 <= days <= 365:
             raise ValueError("reviewIntervalDays must be between 1 and 365")
         self.review_interval_days = days
-        if self.last_run_at is not None:
-            self.next_run_at = self.last_run_at + timedelta(days=days)
+        self._reschedule()
 
-    def record_run(self, occurred_at: datetime, next_run_at: datetime) -> None:
+    def change_schedule_anchor(self, anchor_at: datetime) -> None:
+        """Move the date the review series is measured from."""
+        if self.status is WatchStatus.CLOSED:
+            raise ValueError("A closed watch cannot be rescheduled")
+        self.schedule_anchor_at = anchor_at
+        self._reschedule()
+
+    def _reschedule(self) -> None:
+        # Measured from the last search when there has been one, so a watch
+        # already searched today does not become due again immediately; from
+        # just before the anchor otherwise, so a first review still falls on
+        # the anchor itself rather than one period after it.
+        reference = self.last_run_at or (
+            self.schedule_anchor_at - timedelta(microseconds=1)
+        )
+        self.next_run_at = self._slot_after(reference)
+
+    def record_run(self, occurred_at: datetime) -> None:
         self.last_run_at = occurred_at
-        self.next_run_at = next_run_at
+        self.next_run_at = self._slot_after(occurred_at)
 
 
 @dataclass(slots=True)

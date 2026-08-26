@@ -5,6 +5,7 @@ substitutions:
   _IMAGE: vitarerum
   _SCIENTIFIC_RETURN_JOB: vitarerum-scientific-return
   _SCIENTIFIC_RETURN_LIMIT: '25'
+  _SCIENTIFIC_RETURN_AGENT_LIMIT: '10'
 
 steps:
   - name: gcr.io/cloud-builders/docker
@@ -44,9 +45,11 @@ steps:
       - ${_REGION}
       - --wait
 
-  # Scheduled scientific-return sweep. Only the image is refreshed here; the
-  # cadence lives in Cloud Scheduler, which executes this job. The entrypoint is
-  # overridden so a scheduled sweep never re-runs migrations.
+  # Scheduled scientific-return sweep: deterministic search for every due watch,
+  # then the autonomous investigations it queued, in one pass on one schedule.
+  # Only the image is refreshed here; the cadence lives in Cloud Scheduler, which
+  # executes this job. The entrypoint is overridden so a sweep never re-runs
+  # migrations.
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud
     args:
@@ -61,7 +64,8 @@ steps:
       - --command
       - python
       - --args
-      - -m,app.jobs.scientific_return,run-due,--limit,${_SCIENTIFIC_RETURN_LIMIT}
+      - >-
+        -m,app.jobs.scientific_return,run-sweep,--limit,${_SCIENTIFIC_RETURN_LIMIT},--agent-limit,${_SCIENTIFIC_RETURN_AGENT_LIMIT}
 
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud

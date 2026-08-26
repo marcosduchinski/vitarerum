@@ -4,7 +4,10 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
-from app.scientific_return.application.ports import BibliographicRecord
+from app.scientific_return.application.ports import (
+    BibliographicRecord,
+    InvestigationConcurrencyConflict,
+)
 from app.scientific_return.domain.full_agentic_models import (
     AgenticCandidateLink,
     AgenticSearchSpec,
@@ -16,10 +19,6 @@ from app.scientific_return.domain.full_agentic_models import (
     KnowledgeItemId,
     ScientificReturnKnowledgeItem,
 )
-
-
-class InvestigationConcurrencyConflict(RuntimeError):
-    """A worker attempted to mutate an investigation after losing ownership."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -149,3 +148,6 @@ class FullAgenticUnitOfWork(Protocol):
 
 class FullAgenticClock(Protocol):
     def now(self) -> datetime: ...
+
+
+__all__ = ["InvestigationConcurrencyConflict"]  # noqa: F822 re-export

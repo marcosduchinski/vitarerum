@@ -41,6 +41,15 @@ from app.scientific_return.domain.models import (
 )
 
 
+class InvestigationConcurrencyConflict(RuntimeError):
+    """Another writer moved the investigation while this one held it.
+
+    Shared by both engines: each keeps a version on the aggregate, and a stored
+    version that is not the expected one means the row was changed underneath —
+    typically by the sweep's reaper closing what it judged abandoned.
+    """
+
+
 class AgentReasonerUnavailable(RuntimeError):
     pass
 
@@ -404,6 +413,17 @@ class ScientificReturnRepository(Protocol):
         size: int,
     ) -> tuple[list[CandidatePublication], int]: ...
 
+    async def list_candidates_needing_inventory_proof(
+        self, watch_id: ScientificReturnWatchId, limit: int
+    ) -> list[CandidatePublication]:
+        """Pending candidates with no evidence tying them to an inventory number.
+
+        These are the ones a semantic search can produce and a deterministic
+        rule cannot support: plausible by taxon and author, unproven against the
+        specimen. They are exactly what an enrichment cycle exists to settle.
+        """
+        ...
+
     async def list_candidate_queue(
         self,
         status: CandidateStatus | None,
@@ -477,6 +497,17 @@ class ScientificReturnInvestigationRepository(Protocol):
     async def list_for_candidate(
         self, candidate_id: CandidatePublicationId
     ) -> list[ScientificReturnInvestigation]: ...
+
+    async def list_abandoned(
+        self, stale_before: datetime, limit: int
+    ) -> list[ScientificReturnInvestigation]:
+        """Non-terminal investigations that stopped reporting progress.
+
+        A supervised cycle is synchronous and bounded, so one that has not moved
+        since ``stale_before`` is not slow, it is gone: its process died before
+        it could close itself.
+        """
+        ...
 
     async def find_live(
         self,

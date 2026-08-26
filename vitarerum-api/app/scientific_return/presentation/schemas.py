@@ -35,6 +35,9 @@ from app.scientific_return.domain.enums import (
 
 class ActivateWatchRequest(BaseModel):
     reviewIntervalDays: int = Field(default=90, ge=1, le=365)
+    # The date the review series is measured from. Omitted means "now", which
+    # keeps the first review owed immediately.
+    scheduleAnchorAt: datetime | None = None
 
 
 class UpdateWatchRequest(BaseModel):
@@ -42,6 +45,7 @@ class UpdateWatchRequest(BaseModel):
 
     status: WatchStatus | None = None
     reviewIntervalDays: int | None = Field(default=None, ge=1, le=365)
+    scheduleAnchorAt: datetime | None = None
 
 
 class ScientificReturnWatchResponse(BaseModel):
@@ -53,6 +57,7 @@ class ScientificReturnWatchResponse(BaseModel):
     createdAt: datetime
     lastRunAt: datetime | None
     nextRunAt: datetime
+    scheduleAnchorAt: datetime
     projectSnapshotId: str
 
 

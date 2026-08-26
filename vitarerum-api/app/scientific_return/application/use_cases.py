@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import asdict, dataclass, replace
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from app.identity.public import Actor, GroupName
@@ -88,6 +88,7 @@ class ActivateWatchInput:
     project_id: str
     review_interval_days: int
     caller: Actor
+    schedule_anchor_at: datetime | None = None
 
 
 class ActivateScientificReturnWatch:
@@ -118,6 +119,9 @@ class ActivateScientificReturnWatch:
                 )
 
         now = _now()
+        # An anchor the curator did not choose is simply now, which reproduces
+        # the previous behaviour: the first review is owed immediately.
+        anchor = data.schedule_anchor_at or now
         snapshot = ScientificReturnProjectSnapshot(
             id=ScientificReturnSnapshotId(_new_id()),
             project_id=data.project_id,
@@ -133,8 +137,9 @@ class ActivateScientificReturnWatch:
             review_interval_days=data.review_interval_days,
             created_by=data.caller.id,
             created_at=now,
-            next_run_at=now,
+            next_run_at=anchor,
             project_snapshot_id=snapshot.id,
+            schedule_anchor_at=anchor,
         )
         await self._repository.add_snapshot(snapshot)
         await self._repository.add_watch(watch)
@@ -174,6 +179,27 @@ class ChangeWatchReviewInterval:
         if watch is None:
             raise WatchNotFound(f"Scientific-return watch {watch_id} not found")
         watch.change_review_interval(review_interval_days)
+        await self._repository.save_watch(watch)
+        return watch
+
+
+class ChangeWatchScheduleAnchor:
+    """Move the date the review series is measured from. The aggregate owns it."""
+
+    def __init__(self, repository: ScientificReturnRepository) -> None:
+        self._repository = repository
+
+    async def execute(
+        self,
+        watch_id: ScientificReturnWatchId,
+        schedule_anchor_at: datetime,
+        caller: Actor,
+    ) -> ScientificReturnWatch:
+        require_group(caller, *_REVIEW_GROUPS)
+        watch = await self._repository.get_watch(watch_id)
+        if watch is None:
+            raise WatchNotFound(f"Scientific-return watch {watch_id} not found")
+        watch.change_schedule_anchor(schedule_anchor_at)
         await self._repository.save_watch(watch)
         return watch
 
@@ -347,10 +373,7 @@ class RunScientificReturnSearch:
         else:
             run.status = RunStatus.COMPLETED
             run.error_message = "; ".join(errors)[:2000] or None
-        watch.record_run(
-            completed_at,
-            completed_at + timedelta(days=watch.review_interval_days),
-        )
+        watch.record_run(completed_at)
         await self._repository.save_run(run)
         await self._repository.save_watch(watch)
         return run

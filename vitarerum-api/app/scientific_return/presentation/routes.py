@@ -49,6 +49,7 @@ from app.scientific_return.application.use_cases import (
     ActivateWatchInput,
     CandidateNotFound,
     ChangeWatchReviewInterval,
+    ChangeWatchScheduleAnchor,
     ChangeWatchStatus,
     DecideCandidate,
     DecideCandidateInput,
@@ -583,6 +584,7 @@ def _watch_response(watch: ScientificReturnWatch) -> ScientificReturnWatchRespon
         createdAt=watch.created_at,
         lastRunAt=watch.last_run_at,
         nextRunAt=watch.next_run_at,
+        scheduleAnchorAt=watch.schedule_anchor_at,
         projectSnapshotId=watch.project_snapshot_id,
     )
 
@@ -819,6 +821,7 @@ async def activate_watch(
             ActivateWatchInput(
                 project_id=project_id,
                 review_interval_days=body.reviewIntervalDays,
+                schedule_anchor_at=body.scheduleAnchorAt,
                 caller=caller,
             )
         )
@@ -858,16 +861,28 @@ async def update_watch(
     repository: Repository,
     session: DBSession,
 ) -> ScientificReturnWatchResponse:
-    """Change the status, the review cadence, or both.
+    """Change the status, the review anchor, the cadence, or any combination.
 
-    Applied in this order on purpose: re-cadencing a watch that is being closed
+    Status is applied last on purpose: re-cadencing a watch that is being closed
     in the same request would compute a next review nobody will ever act on.
+    The anchor is applied before the interval so a request that moves both lands
+    on one grid rather than deriving the interval from the old anchor first.
     """
-    if body.status is None and body.reviewIntervalDays is None:
-        raise _unprocessable("Provide status or reviewIntervalDays")
+    if (
+        body.status is None
+        and body.reviewIntervalDays is None
+        and body.scheduleAnchorAt is None
+    ):
+        raise _unprocessable(
+            "Provide status, reviewIntervalDays or scheduleAnchorAt"
+        )
     watch_key = ScientificReturnWatchId(watch_id)
     watch: ScientificReturnWatch | None = None
     try:
+        if body.scheduleAnchorAt is not None:
+            watch = await ChangeWatchScheduleAnchor(repository).execute(
+                watch_key, body.scheduleAnchorAt, caller
+            )
         if body.reviewIntervalDays is not None:
             watch = await ChangeWatchReviewInterval(repository).execute(
                 watch_key, body.reviewIntervalDays, caller

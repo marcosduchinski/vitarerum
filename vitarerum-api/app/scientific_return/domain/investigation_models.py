@@ -295,6 +295,21 @@ class ScientificReturnInvestigation:
     def stop(self, reason: StopReason, now: datetime) -> None:
         self._finish(InvestigationStatus.STOPPED, reason, now)
 
+    def abandon(self, now: datetime) -> None:
+        """Close a cycle whose process died before it could end itself.
+
+        The work is not resumed: a supervised cycle is one synchronous pass, so
+        there is nothing for a second runner to take over. What matters is that
+        the investigation reaches a terminal state with a typed reason, because
+        a row that lingers non-terminal blocks every future investigation of the
+        same target for good.
+        """
+        self.fail(
+            StopReason.ABANDONED,
+            "The cycle stopped reporting progress and was closed by the sweep",
+            now,
+        )
+
     def fail(self, reason: StopReason, message: str, now: datetime) -> None:
         """End on an unrecoverable error, from any non-terminal state.
 

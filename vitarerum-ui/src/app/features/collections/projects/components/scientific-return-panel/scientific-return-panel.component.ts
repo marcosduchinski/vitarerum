@@ -157,6 +157,8 @@ export class ScientificReturnPanelComponent {
   protected readonly closeConfirmOpen = signal(false);
   protected readonly intervalEditing = signal(false);
   protected readonly intervalDraft = signal('');
+  protected readonly anchorEditing = signal(false);
+  protected readonly anchorDraft = signal('');
   protected readonly actionError = signal<ApiError | null>(null);
   protected readonly feedback = signal<string | null>(null);
   protected readonly activeCandidateId = signal<string | null>(null);
@@ -235,6 +237,50 @@ export class ScientificReturnPanelComponent {
       const watch = await firstValueFrom(this.api.activateWatch(this.projectId()));
       this.watchResource.set(watch);
       this.feedback.set('Scientific-return monitoring is active.');
+    } catch (error) {
+      this.actionError.set(toApiError(error));
+    } finally {
+      this.busyAction.set(null);
+    }
+  }
+
+  protected startAnchorEdit(): void {
+    const watch = this.watch();
+    if (!watch || !this.canReview() || this.busyAction() || watch.status === 'CLOSED') return;
+    // The input is a plain date, so it needs the YYYY-MM-DD prefix of the ISO value.
+    this.anchorDraft.set(watch.scheduleAnchorAt.slice(0, 10));
+    this.clearMessages();
+    this.anchorEditing.set(true);
+  }
+
+  protected cancelAnchorEdit(): void {
+    this.anchorEditing.set(false);
+  }
+
+  protected onAnchorInput(event: Event): void {
+    this.anchorDraft.set((event.target as HTMLInputElement).value);
+  }
+
+  protected anchorInvalid(): boolean {
+    return !this.anchorDraft() || Number.isNaN(Date.parse(this.anchorDraft()));
+  }
+
+  protected async saveAnchor(event: SubmitEvent): Promise<void> {
+    event.preventDefault();
+    const watch = this.watch();
+    if (!watch || !this.canReview() || this.busyAction() || this.anchorInvalid()) return;
+    this.busyAction.set('anchor');
+    this.clearMessages();
+    try {
+      const updated = await firstValueFrom(
+        this.api.updateWatchScheduleAnchor(
+          watch.id,
+          new Date(`${this.anchorDraft()}T00:00:00Z`).toISOString(),
+        ),
+      );
+      this.watchResource.set(updated);
+      this.anchorEditing.set(false);
+      this.feedback.set('Reviews are now measured from the new start date.');
     } catch (error) {
       this.actionError.set(toApiError(error));
     } finally {

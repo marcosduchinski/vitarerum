@@ -40,6 +40,41 @@ POST /api/v1/scientific-return/agent-analyses/{analysisId}/feedback
 The GET returns full-agentic reader records only. Feedback is `USEFUL`,
 `PARTIALLY_USEFUL`, or `NOT_USEFUL` and never changes candidate state.
 
+### Scheduled chain
+
+One command, `run-sweep`, runs the whole chain on a single schedule, so an
+unattended watch gets the coverage a curator would get by pressing every button:
+
+1. the deterministic search runs for every due watch;
+2. each completed run queues an autonomous investigation for its watch, keyed on
+   the run so replaying a sweep never buys the same investigation twice;
+3. the queue is drained in the same pass, and each investigation that completes
+   is followed by one enrichment cycle over that watch's pending candidates
+   carrying no inventory evidence, capped per sweep.
+
+The drain runs even when no watch was due, so an investigation left behind by an
+earlier pass, or abandoned by a worker that died holding a lease, is picked up
+here. Escalation is best effort — a disabled feature, an open circuit breaker or
+an investigation already live for the target end the chain quietly and never
+fail the sweep. Unattended work is attributed to the scheduler, not to the
+curator who owns the watch.
+
+### Review schedule
+
+A watch carries `reviewIntervalDays` and `scheduleAnchorAt`. Reviews fall on a
+fixed grid of `anchor + n x interval`, not on "interval days after the last
+search", so a sweep that starts late does not push the whole series later.
+
+- `scheduleAnchorAt` is optional on activation and defaults to now, which keeps
+  the first review owed immediately.
+- `PATCH /watches/{watchId}` accepts `scheduleAnchorAt`, `reviewIntervalDays`,
+  `status`, or any combination. The anchor is applied before the interval, and
+  status last.
+- Changing either re-derives the grid from the same anchor: a watch that is
+  already overdue stays overdue, and re-cadencing never grants a fresh period.
+- A grid far behind — a worker down for a week on a daily cadence — resumes at
+  the next future slot instead of replaying every missed one.
+
 The feature is disabled by default. A minimal database-queue configuration is:
 
 ```dotenv
