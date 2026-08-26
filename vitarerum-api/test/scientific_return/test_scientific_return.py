@@ -751,28 +751,6 @@ async def test_non_reader_analysis_does_not_create_agentic_decision_context() ->
     assert context is None
 
 
-def test_snooze_requires_a_future_date() -> None:
-    candidate = CandidatePublication(
-        id=CandidatePublicationId("candidate-1"),
-        watch_id=ScientificReturnWatchId("watch-1"),
-        first_seen_run_id=ScientificReturnRunId("run-1"),
-        source="TEST",
-        source_record_id="record-1",
-        deduplication_key="key-1",
-        title="Title",
-        authors=(),
-        publication_date=None,
-        abstract=None,
-        url=None,
-        raw_metadata_hash="hash",
-        created_at=datetime.now(tz=UTC),
-    )
-    now = datetime.now(tz=UTC)
-
-    with pytest.raises(ValueError, match="future"):
-        candidate.snooze(now - timedelta(days=1), now)
-
-
 @pytest.mark.asyncio
 async def test_evaluation_reports_per_source_metrics_and_review_queue() -> None:
     case = EvaluationCase(

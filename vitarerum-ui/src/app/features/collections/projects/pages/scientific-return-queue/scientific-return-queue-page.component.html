@@ -94,7 +94,6 @@
           (change)="onStatus($event)"
         >
           <option value="PENDING">Pending</option>
-          <option value="SNOOZED">Snoozed</option>
           <option value="CONFIRMED">Confirmed</option>
           <option value="DISMISSED">Dismissed</option>
           <option value="ALL">All statuses</option>
@@ -360,19 +359,6 @@
                       <span>Evidence is advisory until a person records a decision.</span>
                     </div>
                   }
-                  @case ('SNOOZED') {
-                    <span class="pi pi-clock" aria-hidden="true"></span>
-                    <div>
-                      <strong>Review has been deferred</strong>
-                      <span>
-                        @if (candidate.snoozedUntil) {
-                          Scheduled after {{ candidate.snoozedUntil | date: 'mediumDate' }}.
-                        } @else {
-                          Open the project to inspect the deferral.
-                        }
-                      </span>
-                    </div>
-                  }
                   @case ('CONFIRMED') {
                     <span class="pi pi-check-circle" aria-hidden="true"></span>
                     <div>
@@ -391,9 +377,7 @@
               </div>
               <a class="review-action" [routerLink]="detailRoute(candidate.projectId)">
                 {{
-                  candidate.status === 'PENDING' || candidate.status === 'SNOOZED'
-                    ? 'Review candidate'
-                    : 'Open project record'
+                  candidate.status === 'PENDING' ? 'Review candidate' : 'Open project record'
                 }}
                 <span class="pi pi-arrow-right" aria-hidden="true"></span>
               </a>

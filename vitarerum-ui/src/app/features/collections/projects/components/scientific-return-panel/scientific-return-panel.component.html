@@ -659,10 +659,6 @@
                     <span class="pi pi-pencil" aria-hidden="true"></span>
                     Correct
                   </button>
-                  <button type="button" (click)="openDecision(candidate, 'SNOOZE')">
-                    <span class="pi pi-clock" aria-hidden="true"></span>
-                    Snooze
-                  </button>
                   <button
                     type="button"
                     class="candidate__dismiss"
@@ -724,17 +720,6 @@
                         />
                       </label>
                     </div>
-                  }
-
-                  @if (decisionDraft() === 'SNOOZE') {
-                    <label class="decision-form__single">
-                      <span>Review after</span>
-                      <input
-                        type="date"
-                        [value]="snoozedUntil()"
-                        (input)="onTextInput('snoozedUntil', $event)"
-                      />
-                    </label>
                   }
 
                   @if (decisionDraft() !== 'CONFIRM') {

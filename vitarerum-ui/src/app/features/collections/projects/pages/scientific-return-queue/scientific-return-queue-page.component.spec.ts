@@ -44,7 +44,6 @@ const CANDIDATE: ScientificReturnReviewItem = {
   abstract: 'The study documents material examined from the museum collection.',
   url: 'https://europepmc.org/article/PMC/1234',
   status: 'PENDING',
-  snoozedUntil: null,
   confirmedPublicationEntryId: null,
   firstSeenAt: '2026-08-17T08:00:00Z',
   discoveryBasis: 'AUTHOR_OBJECT',

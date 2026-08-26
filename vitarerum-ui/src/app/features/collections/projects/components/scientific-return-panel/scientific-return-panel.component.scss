@@ -344,10 +344,6 @@ a:focus-visible {
   border-left-color: #a83b32;
 }
 
-.candidate[data-status='SNOOZED'] {
-  border-left-color: #b56a08;
-}
-
 .candidate__topline {
   display: flex;
   align-items: center;

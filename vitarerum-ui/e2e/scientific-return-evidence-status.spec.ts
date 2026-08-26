@@ -11,7 +11,6 @@ const BASE_CANDIDATE = {
   abstract: null,
   url: null,
   status: 'PENDING',
-  snoozedUntil: null,
   confirmedPublicationEntryId: null,
   firstSeenAt: '2026-08-25T10:00:00Z',
   firstSeenKind: 'FULL_AGENTIC',

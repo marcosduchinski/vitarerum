@@ -299,8 +299,6 @@ class RunScientificReturnSearch:
                         watch.id, key
                     )
                     if existing is not None:
-                        existing.make_pending_if_snooze_expired(started_at)
-                        await self._repository.save_candidate(existing)
                         candidate_ids.add(existing.id)
                         continue
                     candidate_id = CandidatePublicationId(_new_id())
@@ -364,7 +362,6 @@ class DecideCandidateInput:
     decision: DecisionType
     caller: Actor
     justification: str | None = None
-    snoozed_until: datetime | None = None
     correction: CandidateCorrection | None = None
 
 
@@ -395,10 +392,6 @@ class DecideCandidate:
                     "justification is required when dismissing a candidate"
                 )
             candidate.dismiss()
-        elif data.decision is DecisionType.SNOOZE:
-            if data.snoozed_until is None:
-                raise ValueError("snoozedUntil is required when snoozing a candidate")
-            candidate.snooze(data.snoozed_until, now)
         elif data.decision is DecisionType.CORRECT_AND_CONFIRM:
             if correction is None:
                 raise ValueError("correction is required when correcting a candidate")

@@ -127,7 +127,6 @@ class CandidateStatus(StrEnum):
     PENDING = "PENDING"
     CONFIRMED = "CONFIRMED"
     DISMISSED = "DISMISSED"
-    SNOOZED = "SNOOZED"
 
 
 class EvidenceType(StrEnum):
@@ -149,7 +148,6 @@ class DecisionType(StrEnum):
     CONFIRM = "CONFIRM"
     CORRECT_AND_CONFIRM = "CORRECT_AND_CONFIRM"
     DISMISS = "DISMISS"
-    SNOOZE = "SNOOZE"
 
 
 class AgentAnalysisStatus(StrEnum):

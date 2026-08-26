@@ -11,9 +11,10 @@ from app.scientific_return.application.ports import (
 class AiPromptRegistryAdapter:
     """Reads published prompts by key under the scientific-return purpose.
 
-    The cycle uses several prompts — shadow analysis, planning, reflection — that
-    share one purpose and differ by key, so no new ``PromptPurpose`` is needed
-    and prompt administration stays as it is.
+    Several prompts — the full-agentic planner, reader and learner, plus the
+    supervised cycle's planner and reflector — share one purpose and differ by
+    key, so no new ``PromptPurpose`` is needed and prompt administration stays
+    as it is.
     """
 
     def __init__(self, session: AsyncSession) -> None:

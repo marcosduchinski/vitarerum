@@ -139,7 +139,6 @@ class CandidatePublicationResponse(BaseModel):
     abstract: str | None
     url: str | None
     status: CandidateStatus
-    snoozedUntil: datetime | None
     confirmedPublicationEntryId: str | None
     firstSeenAt: datetime
     evidences: list[CandidateEvidenceResponse]
@@ -194,7 +193,6 @@ class CandidateCorrectionRequest(BaseModel):
 class CandidateDecisionRequest(BaseModel):
     decision: DecisionType
     justification: str | None = Field(default=None, max_length=2000)
-    snoozedUntil: datetime | None = None
     correction: CandidateCorrectionRequest | None = None
 
 

@@ -159,9 +159,6 @@ class CandidatePublicationRecord(Base):
     status: Mapped[CandidateStatus] = mapped_column(
         SAEnum(CandidateStatus, name="scientific_return_candidate_status"), index=True
     )
-    snoozed_until: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
     confirmed_publication_entry_id: Mapped[str | None] = mapped_column(
         ForeignKey("publication_log_entries.id"), nullable=True
     )

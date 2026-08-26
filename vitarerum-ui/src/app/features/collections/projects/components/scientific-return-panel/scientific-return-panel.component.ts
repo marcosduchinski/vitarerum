@@ -76,7 +76,6 @@ export class ScientificReturnPanelComponent {
   readonly projectId = input.required<string>();
   protected readonly filterOptions: readonly CandidateFilter[] = [
     'PENDING',
-    'SNOOZED',
     'CONFIRMED',
     'DISMISSED',
     'ALL',
@@ -163,7 +162,6 @@ export class ScientificReturnPanelComponent {
   protected readonly activeCandidateId = signal<string | null>(null);
   protected readonly decisionDraft = signal<DecisionDraft>('CONFIRM');
   protected readonly justification = signal('');
-  protected readonly snoozedUntil = signal('');
   protected readonly correctedTitle = signal('');
   protected readonly correctedDoi = signal('');
   protected readonly correctedUrl = signal('');
@@ -349,7 +347,6 @@ export class ScientificReturnPanelComponent {
     this.activeCandidateId.set(candidate.id);
     this.decisionDraft.set(decision);
     this.justification.set('');
-    this.snoozedUntil.set('');
     this.correctedTitle.set(candidate.title);
     this.correctedDoi.set(candidate.doi ?? '');
     this.correctedUrl.set(candidate.url ?? '');
@@ -360,11 +357,10 @@ export class ScientificReturnPanelComponent {
   protected closeDecision(): void {
     this.activeCandidateId.set(null);
     this.justification.set('');
-    this.snoozedUntil.set('');
   }
 
   protected onTextInput(
-    field: 'justification' | 'title' | 'doi' | 'url' | 'authors' | 'snoozedUntil',
+    field: 'justification' | 'title' | 'doi' | 'url' | 'authors',
     event: Event,
   ): void {
     const value = (event.target as HTMLInputElement | HTMLTextAreaElement).value;
@@ -374,7 +370,6 @@ export class ScientificReturnPanelComponent {
       doi: this.correctedDoi,
       url: this.correctedUrl,
       authors: this.correctedAuthors,
-      snoozedUntil: this.snoozedUntil,
     }[field];
     target.set(value);
   }
@@ -382,7 +377,6 @@ export class ScientificReturnPanelComponent {
   protected decisionInvalid(): boolean {
     const decision = this.decisionDraft();
     if (decision === 'DISMISS') return !this.justification().trim();
-    if (decision === 'SNOOZE') return !this.snoozedUntil();
     if (decision === 'CORRECT_AND_CONFIRM') return !this.correctedTitle().trim();
     return false;
   }
@@ -400,7 +394,6 @@ export class ScientificReturnPanelComponent {
     const request: CandidateDecisionRequest = {
       decision,
       justification: this.justification().trim() || null,
-      snoozedUntil: decision === 'SNOOZE' ? new Date(this.snoozedUntil()).toISOString() : null,
       correction:
         decision === 'CORRECT_AND_CONFIRM'
           ? {
@@ -741,6 +734,6 @@ export class ScientificReturnPanelComponent {
     if (decision === 'CONFIRM' || decision === 'CORRECT_AND_CONFIRM') {
       return 'Candidate confirmed and added to the publication log.';
     }
-    return decision === 'DISMISS' ? 'Candidate dismissed.' : 'Candidate snoozed.';
+    return 'Candidate dismissed.';
   }
 }

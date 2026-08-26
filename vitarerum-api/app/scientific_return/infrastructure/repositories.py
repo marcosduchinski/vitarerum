@@ -623,7 +623,6 @@ def _candidate_to_domain(record: CandidatePublicationRecord) -> CandidatePublica
         url=record.url,
         raw_metadata_hash=record.raw_metadata_hash,
         status=record.status,
-        snoozed_until=record.snoozed_until,
         confirmed_publication_entry_id=record.confirmed_publication_entry_id,
         created_at=record.created_at,
         evidences=[_evidence_to_domain(item) for item in record.evidences],
@@ -1041,7 +1040,6 @@ class SqlAlchemyScientificReturnRepository:
                 url=candidate.url,
                 raw_metadata_hash=candidate.raw_metadata_hash,
                 status=candidate.status,
-                snoozed_until=candidate.snoozed_until,
                 confirmed_publication_entry_id=candidate.confirmed_publication_entry_id,
                 created_at=candidate.created_at,
                 evidences=[
@@ -1071,7 +1069,6 @@ class SqlAlchemyScientificReturnRepository:
         record.doi = candidate.doi
         record.url = candidate.url
         record.status = candidate.status
-        record.snoozed_until = candidate.snoozed_until
         record.confirmed_publication_entry_id = candidate.confirmed_publication_entry_id
         await self._session.flush()
 

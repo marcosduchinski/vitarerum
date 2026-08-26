@@ -406,11 +406,6 @@
   inset-inline-start: 0;
 }
 
-.candidate-dossier[data-status='SNOOZED'] {
-  --candidate-tone-bg: var(--status-pending-bg);
-  --candidate-tone-text: var(--status-pending-text);
-}
-
 .candidate-dossier[data-status='CONFIRMED'] {
   --candidate-tone-bg: var(--status-approved-bg);
   --candidate-tone-text: var(--status-approved-text);

@@ -174,7 +174,6 @@ class CandidatePublication:
     created_at: datetime
     doi: str | None = None
     status: CandidateStatus = CandidateStatus.PENDING
-    snoozed_until: datetime | None = None
     confirmed_publication_entry_id: str | None = None
     evidences: list[CandidateEvidence] = field(default_factory=list)
     first_seen_kind: RunKind = RunKind.DETERMINISTIC
@@ -183,27 +182,10 @@ class CandidatePublication:
 
     def dismiss(self) -> None:
         self.status = CandidateStatus.DISMISSED
-        self.snoozed_until = None
-
-    def snooze(self, until: datetime, now: datetime) -> None:
-        if until <= now:
-            raise ValueError("snoozedUntil must be in the future")
-        self.status = CandidateStatus.SNOOZED
-        self.snoozed_until = until
 
     def confirm(self, publication_entry_id: str) -> None:
         self.status = CandidateStatus.CONFIRMED
-        self.snoozed_until = None
         self.confirmed_publication_entry_id = publication_entry_id
-
-    def make_pending_if_snooze_expired(self, now: datetime) -> None:
-        if (
-            self.status is CandidateStatus.SNOOZED
-            and self.snoozed_until is not None
-            and self.snoozed_until <= now
-        ):
-            self.status = CandidateStatus.PENDING
-            self.snoozed_until = None
 
 
 @dataclass(frozen=True, slots=True)

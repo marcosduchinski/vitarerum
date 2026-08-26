@@ -635,7 +635,6 @@ def _candidate_response(
         abstract=candidate.abstract,
         url=candidate.url,
         status=candidate.status,
-        snoozedUntil=candidate.snoozed_until,
         confirmedPublicationEntryId=candidate.confirmed_publication_entry_id,
         firstSeenAt=candidate.created_at,
         evidences=[
@@ -1070,7 +1069,6 @@ async def decide_candidate(
                 decision=body.decision,
                 caller=caller,
                 justification=body.justification,
-                snoozed_until=body.snoozedUntil,
                 correction=correction,
             )
         )

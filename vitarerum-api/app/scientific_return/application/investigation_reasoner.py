@@ -1,9 +1,9 @@
 """Turns the generic text-in/text-out reasoner into the cycle's two operations.
 
-The low-level ``ScientificReturnReasoner`` stays exactly as the shadow mode uses
-it. This composes it with the published prompts and the schema parsers so the
-rest of the cycle deals in ``AgentPlan`` and ``AgentReflection`` and never sees
-a raw string.
+The low-level ``ScientificReturnReasoner`` stays a generic text-in/text-out
+port, shared with the full-agentic flow. This composes it with the published
+prompts and the schema parsers so the rest of the cycle deals in ``AgentPlan``
+and ``AgentReflection`` and never sees a raw string.
 
 Failure handling differs by operation, on purpose:
 

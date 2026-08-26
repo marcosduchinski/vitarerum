@@ -61,8 +61,9 @@ class Settings(BaseSettings):
     europe_pmc_email: str = ""
     scientific_return_result_limit: int = 20
     scientific_return_max_queries_per_run: int = 40
-    # Phase 3B: advisory candidate reasoning only. The model cannot execute
-    # tools or make candidate decisions while operating in shadow mode.
+    # Ollama model shared by every scientific-return reasoner: the
+    # full-agentic planner and reader, the supervised cycle's planner and
+    # reflector, and the offline evaluation runs.
     scientific_return_llm_model: str = "llama3.1:8b"
     # Measured against llama3.1:8b on developer hardware: planning took ~40s and
     # reflecting 100-140s, so 60s would have made the deterministic fallback the
@@ -81,7 +82,7 @@ class Settings(BaseSettings):
     # lookup; see EXACT_MATCH_SOURCES in the action policy.
     scientific_return_agent_allowed_sources: str = "EUROPE_PMC"
     # Independent, real agentic flow. Its switch and budgets intentionally do
-    # not reuse the legacy shadow/policy agent configuration above.
+    # not reuse the legacy policy agent configuration above.
     scientific_return_full_agentic_enabled: bool = False
     scientific_return_full_agentic_sources: str = "CROSSREF,EUROPE_PMC,OPENALEX"
     scientific_return_full_agentic_max_iterations: int = 4

@@ -3,8 +3,8 @@ import { Page } from '@shared/models/page.model';
 export type ScientificReturnWatchStatus = 'ACTIVE' | 'PAUSED' | 'CLOSED';
 export type ScientificReturnRunStatus = 'RUNNING' | 'COMPLETED' | 'FAILED';
 export type ScientificReturnQueryStatus = 'COMPLETED' | 'FAILED';
-export type ScientificReturnCandidateStatus = 'PENDING' | 'CONFIRMED' | 'DISMISSED' | 'SNOOZED';
-export type ScientificReturnDecision = 'CONFIRM' | 'CORRECT_AND_CONFIRM' | 'DISMISS' | 'SNOOZE';
+export type ScientificReturnCandidateStatus = 'PENDING' | 'CONFIRMED' | 'DISMISSED';
+export type ScientificReturnDecision = 'CONFIRM' | 'CORRECT_AND_CONFIRM' | 'DISMISS';
 export type ScientificReturnEvidenceStrength = 'PRIMARY' | 'SUPPORTING' | 'WEAK';
 export type ScientificReturnEvidenceType =
   | 'INVENTORY_NUMBER'
@@ -96,7 +96,6 @@ export interface ScientificReturnCandidate {
   readonly abstract: string | null;
   readonly url: string | null;
   readonly status: ScientificReturnCandidateStatus;
-  readonly snoozedUntil: string | null;
   readonly confirmedPublicationEntryId: string | null;
   readonly firstSeenAt: string;
   readonly evidences: readonly ScientificReturnEvidence[];
@@ -143,7 +142,6 @@ export interface CandidateCorrection {
 export interface CandidateDecisionRequest {
   readonly decision: ScientificReturnDecision;
   readonly justification?: string | null;
-  readonly snoozedUntil?: string | null;
   readonly correction?: CandidateCorrection | null;
 }
 

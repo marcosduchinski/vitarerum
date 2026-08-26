@@ -27,7 +27,7 @@ choose among enabled bibliographic sources, inspect the structured result of a
 tool-free semantic reader and iterate within server-side budgets. It can place a
 semantically plausible publication in the normal review queue without passing
 the deterministic evidence matcher. The curator remains the only authority that
-can confirm, correct, dismiss or snooze it.
+can confirm, correct or dismiss it.
 
 The reader assessment and its grounded provenance are persisted with the
 candidate. Staff can inspect and assess those records through:
@@ -376,8 +376,7 @@ Correct and confirm:
 }
 ```
 
-Dismissal requires a justification. Snoozing requires a future
-`snoozedUntil`. Confirmation and correction-confirmation create the
+Dismissal requires a justification. Confirmation and correction-confirmation create the
 `PublicationLogEntry` in the same database transaction and return its ID in
 `confirmedPublicationEntryId`.
 
