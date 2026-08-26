@@ -97,12 +97,6 @@ class Settings(BaseSettings):
     scientific_return_cloud_tasks_worker_url: str = ""
     scientific_return_cloud_tasks_service_account: str = ""
     scientific_return_full_agentic_worker_token: str = ""
-    scientific_return_test_enabled: bool = False
-    scientific_return_test_worker_token: str = ""
-    scientific_return_test_max_sources: int = 50
-    scientific_return_test_max_snapshot_characters: int = 2_000_000
-    scientific_return_test_max_source_characters: int = 100_000
-    scientific_return_test_max_items: int = 100
     # Public proposal submission (unauthenticated citizen intake, double opt-in).
     # Default is Cloudflare's always-passing test secret key; override in prod.
     turnstile_secret_key: str = "1x0000000000000000000000000000000AA"

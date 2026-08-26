@@ -30,6 +30,11 @@ describe('PROJECTS_ROUTES', () => {
     expect(route?.loadComponent).toBeDefined();
   });
 
+  it('keeps scientific return and removes the retired test bench route', () => {
+    expect(PROJECTS_ROUTES.some((route) => route.path === 'scientific-return')).toBe(true);
+    expect(PROJECTS_ROUTES.some((route) => route.path === 'scientific-return-test')).toBe(false);
+  });
+
   it('keeps project log routes before the generic detail route', () => {
     const paths = PROJECTS_ROUTES.map((route) => route.path);
     const detailIndex = paths.indexOf(':id');
@@ -77,7 +82,6 @@ describe('PROJECTS_ROUTES', () => {
       'completed',
       'cancelled',
       'scientific-return',
-      'scientific-return-test',
       ':id/follow-up/new',
       'collections/:id',
       'curatorial/:id',

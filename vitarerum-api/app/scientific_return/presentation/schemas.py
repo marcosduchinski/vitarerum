@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime
-from decimal import Decimal
 
 from pydantic import BaseModel, Field
 
-from app.scientific_return.domain.bench_models import TestSourceKind, TestSourceStatus
 from app.scientific_return.domain.enums import (
     AgentAnalysisFeedback,
     AgentAnalysisStatus,
@@ -37,132 +35,6 @@ from app.scientific_return.domain.enums import (
 
 class ActivateWatchRequest(BaseModel):
     reviewIntervalDays: int = Field(default=90, ge=1, le=365)
-
-
-class TestSourceWriteRequest(BaseModel):
-    name: str = Field(min_length=1, max_length=255)
-    kind: TestSourceKind = TestSourceKind.TEXT_DOCUMENT
-    content: str = Field(min_length=1, max_length=100_000)
-    locator: str | None = Field(default=None, max_length=2048)
-    authors: list[str] = Field(default_factory=list, max_length=100)
-
-
-class TestBatchCreateRequest(BaseModel):
-    name: str | None = Field(default=None, max_length=255)
-    description: str | None = Field(default=None, max_length=2000)
-
-
-class TestBatchUpdateRequest(BaseModel):
-    sourceIds: list[str] = Field(default_factory=list, max_length=50)
-
-
-class TestItemWriteRequest(BaseModel):
-    author: str = Field(min_length=1, max_length=500)
-    objectName: str = Field(min_length=1, max_length=500)
-    inventoryNumber: str = Field(min_length=1, max_length=255)
-
-
-class TestItemsCreateRequest(BaseModel):
-    items: list[TestItemWriteRequest] = Field(min_length=1, max_length=100)
-
-
-class TestReadinessResponse(BaseModel):
-    enabled: bool
-    configurationValid: bool
-    message: str | None = None
-
-
-class TestSourceRevisionResponse(BaseModel):
-    id: str
-    revision: int
-    locator: str | None
-    authors: list[str]
-    content: str
-    contentHash: str
-    createdAt: datetime
-
-
-class TestSourceResponse(BaseModel):
-    id: str
-    name: str
-    kind: TestSourceKind
-    status: TestSourceStatus
-    currentRevision: int
-    contentHash: str
-    createdAt: datetime
-    updatedAt: datetime
-    revisions: list[TestSourceRevisionResponse] | None = None
-
-
-class TestItemResponse(BaseModel):
-    id: str
-    ordinal: int
-    author: str
-    objectName: str
-    inventoryNumber: str
-    status: str
-    attemptNumber: int
-    errorCode: str | None
-    errorMessage: str | None
-    startedAt: datetime | None
-    completedAt: datetime | None
-
-
-class TestBatchProgressResponse(BaseModel):
-    total: int
-    pending: int
-    running: int
-    completed: int
-    error: int
-    cancelled: int
-    percentage: int
-
-
-class TestBatchSourceResponse(BaseModel):
-    sourceId: str
-    revisionId: str
-    name: str
-    revision: int
-    locator: str | None
-    contentHash: str
-
-
-class TestBatchResponse(BaseModel):
-    id: str
-    name: str | None
-    description: str | None
-    status: str
-    createdAt: datetime
-    startedAt: datetime | None
-    completedAt: datetime | None
-    progress: TestBatchProgressResponse
-    sourceIds: list[str]
-    sources: list[TestBatchSourceResponse]
-    items: list[TestItemResponse]
-
-
-class TestCandidateResponse(BaseModel):
-    id: str
-    itemId: str
-    attemptNumber: int
-    author: str
-    objectName: str
-    inventoryNumber: str
-    rank: int
-    score: Decimal
-    scoreVersion: str
-    sourceId: str
-    sourceName: str
-    sourceRevision: int
-    sourceLocator: str | None
-    query: str
-    discoveryBasis: str
-    inventoryEvidenceStatus: str
-    evidence: str | None
-
-
-class TestSourceStatusQuery(BaseModel):
-    status: TestSourceStatus | None = None
 
 
 class UpdateWatchRequest(BaseModel):

@@ -145,6 +145,20 @@ describe('AppMenuComponent', () => {
     expect(promptsLink.getAttribute('href')).toBe('/p/ai/prompts');
   });
 
+  it('keeps the operational scientific return entry without the retired test bench', () => {
+    activeSession.set(sessionForGroup('COLLECTIONS_MANAGEMENT'));
+    const fixture = TestBed.createComponent(AppMenuComponent);
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    buttonByText(compiled, 'Projects').click();
+    fixture.detectChanges();
+    expect(linkByText(compiled, 'Scientific return').getAttribute('href')).toBe(
+      '/p/collections/projects/scientific-return',
+    );
+    expect(compiled.textContent).not.toContain('Scientific Return Test');
+  });
+
   it('shows reference masks only to system administrators', () => {
     activeSession.set(sessionForGroup('SYS_ADMIN'));
     const fixture = TestBed.createComponent(AppMenuComponent);

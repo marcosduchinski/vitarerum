@@ -60,12 +60,6 @@ const COLLECTION_PROJECTS_EXTERNAL: MenuNode = {
   ],
 };
 
-const SCIENTIFIC_RETURN_TEST_ITEM: MenuNode = {
-  label: 'Scientific Return Test',
-  icon: 'pi pi-search',
-  routerLink: '/p/collections/projects/scientific-return-test',
-};
-
 const COLLECTION_PROJECTS_STAFF: MenuNode = {
   label: 'Projects',
   icon: 'pi pi-briefcase',
@@ -86,7 +80,6 @@ const COLLECTION_PROJECTS_STAFF: MenuNode = {
       icon: 'pi pi-sparkles',
       routerLink: '/p/collections/projects/scientific-return',
     },
-    SCIENTIFIC_RETURN_TEST_ITEM,
     {
       label: 'Cancelled',
       icon: 'pi pi-times-circle',
@@ -201,7 +194,6 @@ const SYS_ADMIN_MENU: MenuNode = {
       routerLink: '/p/admin/external-publications',
     },
     COLLECTION_DATA_SOURCES_ITEM,
-    SCIENTIFIC_RETURN_TEST_ITEM,
   ],
 };
 

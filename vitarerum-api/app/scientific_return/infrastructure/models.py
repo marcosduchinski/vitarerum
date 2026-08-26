@@ -1,17 +1,14 @@
 from __future__ import annotations
 
 from datetime import datetime
-from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import (
     JSON,
     Boolean,
-    CheckConstraint,
     DateTime,
     ForeignKey,
     Integer,
-    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -20,14 +17,6 @@ from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
-from app.scientific_return.domain.bench_models import (
-    TestAttemptStatus,
-    TestBatchStatus,
-    TestInventoryEvidenceStatus,
-    TestItemStatus,
-    TestSourceKind,
-    TestSourceStatus,
-)
 from app.scientific_return.domain.enums import (
     AgentAnalysisFeedback,
     AgentAnalysisStatus,
@@ -612,188 +601,3 @@ class ScientificReturnToolExecutionRecord(Base):
     completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-
-
-class ScientificReturnTestSourceRecord(Base):
-    __tablename__ = "sr_test_sources"
-    __table_args__ = (
-        UniqueConstraint(
-            "institution_id", "content_hash", name="uq_sr_test_source_content"
-        ),
-    )
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    institution_id: Mapped[str] = mapped_column(String(36), index=True)
-    name: Mapped[str] = mapped_column(String(255))
-    kind: Mapped[TestSourceKind] = mapped_column(
-        SAEnum(TestSourceKind, name="sr_test_source_kind", native_enum=False)
-    )
-    status: Mapped[TestSourceStatus] = mapped_column(
-        SAEnum(TestSourceStatus, name="sr_test_source_status", native_enum=False),
-        index=True,
-    )
-    current_revision: Mapped[int] = mapped_column(Integer)
-    content_hash: Mapped[str] = mapped_column(String(64))
-    created_by: Mapped[str] = mapped_column(String(36))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-
-
-class ScientificReturnTestSourceRevisionRecord(Base):
-    __tablename__ = "sr_test_source_revisions"
-    __table_args__ = (
-        UniqueConstraint("source_id", "revision", name="uq_sr_test_source_revision"),
-    )
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    source_id: Mapped[str] = mapped_column(
-        ForeignKey("sr_test_sources.id", ondelete="RESTRICT"), index=True
-    )
-    revision: Mapped[int] = mapped_column(Integer)
-    locator: Mapped[str | None] = mapped_column(String(2048), nullable=True)
-    authors_payload: Mapped[str | None] = mapped_column(Text, nullable=True)
-    content_payload: Mapped[str] = mapped_column(Text)
-    content_hash: Mapped[str] = mapped_column(String(64), index=True)
-    created_by: Mapped[str] = mapped_column(String(36))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-
-
-class ScientificReturnTestBatchRecord(Base):
-    __tablename__ = "sr_test_batches"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    institution_id: Mapped[str] = mapped_column(String(36), index=True)
-    name: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    status: Mapped[TestBatchStatus] = mapped_column(
-        SAEnum(TestBatchStatus, name="sr_test_batch_status", native_enum=False),
-        index=True,
-    )
-    idempotency_key: Mapped[str | None] = mapped_column(
-        String(128), nullable=True, unique=True
-    )
-    cancellation_requested: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_by: Mapped[str] = mapped_column(String(36), index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    version: Mapped[int] = mapped_column(Integer, default=0)
-
-
-class ScientificReturnTestBatchSourceRecord(Base):
-    __tablename__ = "sr_test_batch_sources"
-    __table_args__ = (
-        UniqueConstraint(
-            "batch_id", "revision_id", name="uq_sr_test_batch_source_revision"
-        ),
-    )
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    batch_id: Mapped[str] = mapped_column(
-        ForeignKey("sr_test_batches.id", ondelete="RESTRICT"), index=True
-    )
-    source_id: Mapped[str] = mapped_column(
-        ForeignKey("sr_test_sources.id", ondelete="RESTRICT")
-    )
-    revision_id: Mapped[str] = mapped_column(
-        ForeignKey("sr_test_source_revisions.id", ondelete="RESTRICT")
-    )
-    source_name: Mapped[str] = mapped_column(String(255))
-    source_revision: Mapped[int] = mapped_column(Integer)
-    locator: Mapped[str | None] = mapped_column(String(2048), nullable=True)
-    content_hash: Mapped[str] = mapped_column(String(64))
-
-
-class ScientificReturnTestItemRecord(Base):
-    __tablename__ = "sr_test_items"
-    __table_args__ = (
-        UniqueConstraint("batch_id", "ordinal", name="uq_sr_test_item_ordinal"),
-    )
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    batch_id: Mapped[str] = mapped_column(
-        ForeignKey("sr_test_batches.id", ondelete="RESTRICT"), index=True
-    )
-    ordinal: Mapped[int] = mapped_column(Integer)
-    author_payload: Mapped[str] = mapped_column(Text)
-    object_name_payload: Mapped[str] = mapped_column(Text)
-    inventory_number_payload: Mapped[str] = mapped_column(Text)
-    subject_hash: Mapped[str] = mapped_column(String(64))
-    status: Mapped[TestItemStatus] = mapped_column(
-        SAEnum(TestItemStatus, name="sr_test_item_status", native_enum=False),
-        index=True,
-    )
-    attempt_number: Mapped[int] = mapped_column(Integer, default=1)
-    lease_owner: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    lease_expires_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True, index=True
-    )
-    heartbeat_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    error_code: Mapped[str | None] = mapped_column(String(96), nullable=True)
-    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
-    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    version: Mapped[int] = mapped_column(Integer, default=0)
-
-
-class ScientificReturnTestSearchAttemptRecord(Base):
-    __tablename__ = "sr_test_search_attempts"
-    __table_args__ = (
-        UniqueConstraint(
-            "item_id",
-            "item_attempt_number",
-            "source_revision_id",
-            "query_hash",
-            name="uq_sr_test_search_attempt",
-        ),
-    )
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    item_id: Mapped[str] = mapped_column(
-        ForeignKey("sr_test_items.id", ondelete="RESTRICT"), index=True
-    )
-    item_attempt_number: Mapped[int] = mapped_column(Integer)
-    source_revision_id: Mapped[str] = mapped_column(
-        ForeignKey("sr_test_source_revisions.id", ondelete="RESTRICT")
-    )
-    query_payload: Mapped[str] = mapped_column(Text)
-    query_hash: Mapped[str] = mapped_column(String(64))
-    status: Mapped[TestAttemptStatus] = mapped_column(
-        SAEnum(TestAttemptStatus, name="sr_test_attempt_status", native_enum=False)
-    )
-    result_count: Mapped[int] = mapped_column(Integer, default=0)
-    model: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    prompt_version_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
-    prompt_version: Mapped[str | None] = mapped_column(String(96), nullable=True)
-    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-
-
-class ScientificReturnTestCandidateRecord(Base):
-    __tablename__ = "sr_test_candidates"
-    __table_args__ = (
-        UniqueConstraint("attempt_id", "rank", name="uq_sr_test_candidate_rank"),
-        CheckConstraint("score >= 0 AND score <= 1", name="ck_sr_test_score_range"),
-    )
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    attempt_id: Mapped[str] = mapped_column(
-        ForeignKey("sr_test_search_attempts.id", ondelete="RESTRICT"), index=True
-    )
-    rank: Mapped[int] = mapped_column(Integer)
-    score: Mapped[Decimal] = mapped_column(Numeric(6, 5))
-    score_version: Mapped[str] = mapped_column(String(96))
-    discovery_basis: Mapped[str] = mapped_column(String(96))
-    inventory_evidence_status: Mapped[TestInventoryEvidenceStatus] = mapped_column(
-        SAEnum(
-            TestInventoryEvidenceStatus,
-            name="sr_test_inventory_evidence_status",
-            native_enum=False,
-        )
-    )
-    evidence_payload: Mapped[str | None] = mapped_column(Text, nullable=True)
-    evidence_start: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    evidence_end: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    source_field: Mapped[str | None] = mapped_column(String(120), nullable=True)

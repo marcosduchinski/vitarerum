@@ -1,3 +1,5 @@
+import pytest
+
 from app.scientific_return.application.full_agentic_grounding import (
     ground_article_assessment,
 )
@@ -81,6 +83,31 @@ def test_grounding_accepts_literal_form_in_title_without_full_text() -> None:
     assert grounded.inventory_forms[0].source_field is EvidenceSourceField.TITLE
     assert grounded.rejected_inventory_forms == 0
     assert grounded.rejections == ()
+
+
+@pytest.mark.parametrize(
+    "observed_form",
+    (
+        "MB03-001524",
+        "MB03 001524",
+        "MB03-1524",
+        "MNHNC:MB03:001524",
+    ),
+)
+def test_grounding_preserves_the_inventory_form_actually_delivered(
+    observed_form: str,
+) -> None:
+    grounded = ground_article_assessment(
+        _assessment(
+            passages=(f"Material examined: {observed_form}",),
+            forms=(observed_form,),
+        ),
+        _record(title="A revision", indexed_text=f"Material examined: {observed_form}"),
+        _FULL_TEXT_SOURCE,
+    )
+
+    assert grounded.inventory_evidence_status is InventoryEvidenceStatus.VERIFIED
+    assert [item.observed_form for item in grounded.inventory_forms] == [observed_form]
 
 
 def test_grounding_rejects_hallucinated_claims_without_changing_relevance() -> None:

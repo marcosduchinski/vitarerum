@@ -32,6 +32,7 @@ from app.scientific_return.domain.enums import (
     AgentConfidence,
     AgenticToolExecutionStatus,
     AgenticTrajectoryEventKind,
+    CandidateStatus,
     FullAgenticInvestigationStatus,
     InvestigationObjective,
     RunKind,
@@ -618,7 +619,11 @@ async def test_agent_presents_without_deterministic_gate() -> None:
 
     assert completed.status is FullAgenticInvestigationStatus.COMPLETED
     assert len(scientific.candidates) == 1
-    assert next(iter(scientific.candidates.values())).evidences == []
+    candidate = next(iter(scientific.candidates.values()))
+    assert candidate.status is CandidateStatus.PENDING
+    assert candidate.confirmed_publication_entry_id is None
+    assert scientific.decisions == []
+    assert candidate.evidences == []
     assert next(iter(scientific.runs.values())).run_kind is RunKind.FULL_AGENTIC
     assert scientific.queries[0].query_text == '"Cynoscion regalis"'
     assert repository.links[0].relation_kind.value == "CREATED"
@@ -632,6 +637,14 @@ async def test_agent_presents_without_deterministic_gate() -> None:
         next(iter(repository.tools.values())).status
         is AgenticToolExecutionStatus.COMPLETED
     )
+    event_kinds = [event.kind for event in repository.events]
+    for expected in (
+        AgenticTrajectoryEventKind.PLAN_CREATED,
+        AgenticTrajectoryEventKind.TOOL_STARTED,
+        AgenticTrajectoryEventKind.ARTICLE_ASSESSED,
+        AgenticTrajectoryEventKind.CANDIDATE_LINKED,
+    ):
+        assert expected in event_kinds
 
 
 @pytest.mark.asyncio

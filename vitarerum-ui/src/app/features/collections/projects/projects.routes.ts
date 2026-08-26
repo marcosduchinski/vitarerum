@@ -18,15 +18,6 @@ export const PROJECTS_ROUTES: Routes = [
       ),
   },
   {
-    path: 'scientific-return-test',
-    title: 'Scientific Return Test',
-    canMatch: [staffGuard],
-    loadComponent: () =>
-      import('./pages/scientific-return-test/scientific-return-test-page.component').then(
-        (m) => m.ScientificReturnTestPageComponent,
-      ),
-  },
-  {
     path: 'my',
     title: 'My Projects',
     loadComponent: () =>

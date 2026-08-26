@@ -51,9 +51,6 @@ from app.scientific_return.infrastructure.acls import (
     UseOfCollectionsProjectSnapshotProvider,
     UseOfCollectionsPublicationWriter,
 )
-from app.scientific_return.infrastructure.bench_repository import (
-    SqlAlchemyBenchRepository,
-)
 from app.scientific_return.infrastructure.crossref import CrossrefBibliographicSource
 from app.scientific_return.infrastructure.europe_pmc import EuropePmcBibliographicSource
 from app.scientific_return.infrastructure.full_agentic_dispatcher import (
@@ -105,18 +102,6 @@ def get_repository(session: DBSession) -> ScientificReturnRepository:
 
 def get_full_agentic_repository(session: DBSession) -> FullAgenticRepository:
     return SqlAlchemyFullAgenticRepository(session, _field_encryptor())
-
-
-def get_bench_repository(session: DBSession) -> SqlAlchemyBenchRepository:
-    full_agentic = get_full_agentic_configuration()
-    return SqlAlchemyBenchRepository(
-        session,
-        _field_encryptor(),
-        reasoner=get_full_agentic_reasoner(session),
-        # A test item must have the same autonomous-search budget as production;
-        # only orchestration and source adapters differ.
-        budget=full_agentic.budget,
-    )
 
 
 def get_full_agentic_configuration() -> FullAgenticConfiguration:
