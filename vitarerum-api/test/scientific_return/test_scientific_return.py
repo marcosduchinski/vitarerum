@@ -1,19 +1,16 @@
 from __future__ import annotations
 
 import hashlib
-import json
 from datetime import UTC, datetime, timedelta
 
 import pytest
 
 from app.identity.public import Actor, GroupName, PermissionId
 from app.scientific_return.application.agent_analysis import (
-    AgentAnalysisDisabled,
-    GenerateCandidateAgentAnalysis,
-    GenerateCandidateAgentAnalysisInput,
+    AgentAnalysisNotFound,
+    ListCandidateAgentAnalyses,
     RecordAgentAnalysisFeedback,
     RecordAgentAnalysisFeedbackInput,
-    parse_analysis_result,
 )
 from app.scientific_return.application.analysis import (
     build_evidences,
@@ -29,7 +26,6 @@ from app.scientific_return.application.evaluation import (
 from app.scientific_return.application.ports import (
     BibliographicRecord,
     CandidateReviewItem,
-    PublishedAgentPrompt,
     ScientificReturnMetrics,
 )
 from app.scientific_return.application.use_cases import (
@@ -57,6 +53,7 @@ from app.scientific_return.domain.evidence_delta import evidence_identity
 from app.scientific_return.domain.models import (
     CandidateAgentAnalysis,
     CandidateAgentAnalysisId,
+    CandidateAnalysisResult,
     CandidateDecision,
     CandidateEvidence,
     CandidatePublication,
@@ -77,6 +74,22 @@ def _caller(group: GroupName = GroupName.CURATORIAL) -> Actor:
         id=PermissionId("permission-1"),
         group=group,
         email="curator@example.test",
+    )
+
+
+def _analysis_result(
+    summary: str,
+    confidence: AgentConfidence = AgentConfidence.HIGH,
+) -> CandidateAnalysisResult:
+    return CandidateAnalysisResult(
+        summary=summary,
+        supporting_evidence=(),
+        contradictions=(),
+        missing_evidence=(),
+        recommended_action=AgentRecommendedAction.PRESENT_FOR_REVIEW,
+        proposed_queries=(),
+        reasoning_summary=summary,
+        confidence=confidence,
     )
 
 
@@ -136,34 +149,6 @@ class _PublicationWriter:
     ) -> str:
         self.calls.append((project_id, candidate))
         return "publication-entry-1"
-
-
-class _PromptProvider:
-    def __init__(self) -> None:
-        self.requested_keys: list[str] = []
-
-    async def get_published(self, key: str) -> PublishedAgentPrompt:
-        self.requested_keys.append(key)
-        return PublishedAgentPrompt(
-            version_id="prompt-version-1",
-            version_label="v1",
-            content="Return the requested scientific-return analysis as JSON.",
-            temperature=0.0,
-        )
-
-
-class _Reasoner:
-    model_name = "test-shadow-model"
-
-    def __init__(self, response: str) -> None:
-        self.response = response
-        self.calls: list[tuple[str, str, float]] = []
-
-    async def generate(
-        self, *, system_prompt: str, user_prompt: str, temperature: float
-    ) -> str:
-        self.calls.append((system_prompt, user_prompt, temperature))
-        return self.response
 
 
 class _Repository:
@@ -407,23 +392,6 @@ def test_planner_uses_only_author_inventory_and_object() -> None:
     ]
     assert all("PRJ-0001" not in query.text for query in queries)
     assert all("curator@example.test" not in query.text for query in queries)
-
-
-def test_llm_analysis_parser_rejects_fields_outside_the_contract() -> None:
-    with pytest.raises(ValueError, match="unexpected fields"):
-        parse_analysis_result(
-            """{
-              "summary": "Candidate.",
-              "supportingEvidence": [],
-              "contradictions": [],
-              "missingEvidence": [],
-              "recommendedAction": "PRESENT_FOR_REVIEW",
-              "proposedQueries": [],
-              "reasoningSummary": "Evidence checked.",
-              "confidence": "LOW",
-              "executeNow": true
-            }"""
-        )
 
 
 def test_adaptive_planner_broadens_only_binomial_object_to_genus() -> None:
@@ -678,27 +646,14 @@ async def test_decision_context_uses_latest_full_agentic_reader_only() -> None:
             created_by=PermissionId("permission-1"),
         )
         analysis.complete(
-            parse_analysis_result(
-                json.dumps(
-                    {
-                        "summary": explanation,
-                        "supportingEvidence": [],
-                        "contradictions": [],
-                        "missingEvidence": [],
-                        "recommendedAction": "PRESENT_FOR_REVIEW",
-                        "proposedQueries": [],
-                        "reasoningSummary": explanation,
-                        "confidence": "HIGH",
-                    }
-                )
-            ),
+            _analysis_result(explanation),
             "response-hash",
             datetime.now(tz=UTC),
         )
         return analysis
 
-    shadow = completed_analysis(
-        "shadow", "scientific_return_shadow_analysis", "shadow query", "shadow"
+    unrelated = completed_analysis(
+        "unrelated", "pver-other-analysis", "unrelated query", "unrelated"
     )
     newest = completed_analysis(
         "newest", "pver-sr-full-reader-v2",
@@ -715,7 +670,7 @@ async def test_decision_context_uses_latest_full_agentic_reader_only() -> None:
     )
     oldest.prompt_version = "scientific_return_full_agentic_reader-v1"
     repository.agent_analyses = {
-        str(shadow.id): shadow,
+        str(unrelated.id): unrelated,
         str(newest.id): newest,
         str(oldest.id): oldest,
     }
@@ -752,20 +707,7 @@ async def test_a_rolled_back_reader_version_still_yields_a_decision_context() ->
         created_by=PermissionId("permission-1"),
     )
     analysis.complete(
-        parse_analysis_result(
-            json.dumps(
-                {
-                    "summary": "rolled back explanation",
-                    "supportingEvidence": [],
-                    "contradictions": [],
-                    "missingEvidence": [],
-                    "recommendedAction": "PRESENT_FOR_REVIEW",
-                    "proposedQueries": [],
-                    "reasoningSummary": "rolled back explanation",
-                    "confidence": "HIGH",
-                }
-            )
-        ),
+        _analysis_result("rolled back explanation"),
         "response-hash",
         datetime.now(tz=UTC),
     )
@@ -780,36 +722,23 @@ async def test_a_rolled_back_reader_version_still_yields_a_decision_context() ->
 
 
 @pytest.mark.asyncio
-async def test_shadow_analysis_does_not_create_agentic_decision_context() -> None:
+async def test_non_reader_analysis_does_not_create_agentic_decision_context() -> None:
     repository, candidate = await _repository_with_candidate()
     analysis = CandidateAgentAnalysis(
-        id=CandidateAgentAnalysisId("shadow-only"),
+        id=CandidateAgentAnalysisId("non-reader"),
         candidate_id=candidate.id,
         run_id=candidate.first_seen_run_id,
         status=AgentAnalysisStatus.RUNNING,
         model="test-model",
-        prompt_version_id="scientific_return_shadow_analysis",
+        prompt_version_id="pver-other-analysis",
         prompt_version="v1",
         input_payload={"query": "not an agentic trajectory"},
-        input_hash="shadow-only",
+        input_hash="non-reader",
         started_at=datetime.now(tz=UTC),
         created_by=PermissionId("permission-1"),
     )
     analysis.complete(
-        parse_analysis_result(
-            json.dumps(
-                {
-                    "summary": "shadow",
-                    "supportingEvidence": [],
-                    "contradictions": [],
-                    "missingEvidence": [],
-                    "recommendedAction": "PRESENT_FOR_REVIEW",
-                    "proposedQueries": [],
-                    "reasoningSummary": "shadow",
-                    "confidence": "LOW",
-                }
-            )
-        ),
+        _analysis_result("unrelated", AgentConfidence.LOW),
         "response-hash",
         datetime.now(tz=UTC),
     )
@@ -916,103 +845,27 @@ def test_phase_zero_review_requires_a_timezone() -> None:
 
 
 @pytest.mark.asyncio
-async def test_shadow_analysis_is_audited_without_changing_candidate() -> None:
-    repository, candidate = await _repository_with_candidate()
-    reasoner = _Reasoner(
-        """{
-          "summary": "The publication is strongly related to the consulted object.",
-          "supportingEvidence": ["Inventory number and author match."],
-          "contradictions": [],
-          "missingEvidence": ["Full-text page verification."],
-          "recommendedAction": "PRESENT_FOR_REVIEW",
-          "proposedQueries": ["MB03-001524 full text"],
-          "reasoningSummary": "Verified evidence supports curatorial review.",
-          "confidence": "HIGH"
-        }"""
-    )
-    original_status = candidate.status
-
-    analysis = await GenerateCandidateAgentAnalysis(
-        repository,
-        _PromptProvider(),
-        reasoner,
-        enabled=True,
-    ).execute(GenerateCandidateAgentAnalysisInput(candidate.id, _caller()))
-
-    assert analysis.status is AgentAnalysisStatus.COMPLETED
-    assert analysis.result is not None
-    assert (
-        analysis.result.recommended_action is AgentRecommendedAction.PRESENT_FOR_REVIEW
-    )
-    assert analysis.result.confidence is AgentConfidence.HIGH
-    assert analysis.input_payload["mode"] == "SHADOW"
-    constraints = analysis.input_payload["constraints"]
-    assert isinstance(constraints, dict)
-    assert constraints["mayExecuteActions"] is False
-    assert analysis.input_hash
-    assert analysis.response_hash
-    assert analysis.prompt_version_id == "prompt-version-1"
-    assert candidate.status is original_status
-    assert candidate.confirmed_publication_entry_id is None
-    assert not repository.decisions
-    assert len(reasoner.calls) == 1
-
-
-@pytest.mark.asyncio
-async def test_invalid_llm_response_is_persisted_as_failed_analysis() -> None:
-    repository, candidate = await _repository_with_candidate()
-
-    analysis = await GenerateCandidateAgentAnalysis(
-        repository,
-        _PromptProvider(),
-        _Reasoner("not-json"),
-        enabled=True,
-    ).execute(GenerateCandidateAgentAnalysisInput(candidate.id, _caller()))
-
-    assert analysis.status is AgentAnalysisStatus.FAILED
-    assert analysis.result is None
-    assert analysis.error_message is not None
-    assert "valid JSON" in analysis.error_message
-    assert repository.agent_analyses[str(analysis.id)] is analysis
-
-
-@pytest.mark.asyncio
-async def test_shadow_analysis_feature_flag_prevents_llm_call() -> None:
-    repository, candidate = await _repository_with_candidate()
-    reasoner = _Reasoner("{}")
-
-    with pytest.raises(AgentAnalysisDisabled):
-        await GenerateCandidateAgentAnalysis(
-            repository,
-            _PromptProvider(),
-            reasoner,
-            enabled=False,
-        ).execute(GenerateCandidateAgentAnalysisInput(candidate.id, _caller()))
-
-    assert not reasoner.calls
-    assert not repository.agent_analyses
-
-
-@pytest.mark.asyncio
 async def test_curator_can_record_feedback_once_on_completed_analysis() -> None:
     repository, candidate = await _repository_with_candidate()
-    analysis = await GenerateCandidateAgentAnalysis(
-        repository,
-        _PromptProvider(),
-        _Reasoner(
-            """{
-              "summary": "Candidate ready for review.",
-              "supportingEvidence": [],
-              "contradictions": [],
-              "missingEvidence": [],
-              "recommendedAction": "PRESENT_FOR_REVIEW",
-              "proposedQueries": [],
-              "reasoningSummary": "Evidence is sufficient for human review.",
-              "confidence": "MEDIUM"
-            }"""
-        ),
-        enabled=True,
-    ).execute(GenerateCandidateAgentAnalysisInput(candidate.id, _caller()))
+    analysis = CandidateAgentAnalysis(
+        id=CandidateAgentAnalysisId("reader-analysis"),
+        candidate_id=candidate.id,
+        run_id=candidate.first_seen_run_id,
+        status=AgentAnalysisStatus.RUNNING,
+        model="reader-model",
+        prompt_version_id="pver-sr-full-reader-v2",
+        prompt_version="scientific-return-full-agentic-reader-v2",
+        input_payload={"query": "reader query"},
+        input_hash="reader-analysis",
+        started_at=datetime.now(tz=UTC),
+        created_by=PermissionId("permission-1"),
+    )
+    analysis.complete(
+        _analysis_result("Evidence is sufficient for human review."),
+        "response-hash",
+        datetime.now(tz=UTC),
+    )
+    await repository.add_agent_analysis(analysis)
 
     reviewed = await RecordAgentAnalysisFeedback(repository).execute(
         RecordAgentAnalysisFeedbackInput(
@@ -1030,6 +883,44 @@ async def test_curator_can_record_feedback_once_on_completed_analysis() -> None:
             RecordAgentAnalysisFeedbackInput(
                 analysis_id=analysis.id,
                 feedback=AgentAnalysisFeedback.NOT_USEFUL,
+                comment=None,
+                caller=_caller(),
+            )
+        )
+
+
+@pytest.mark.asyncio
+async def test_analysis_history_and_feedback_exclude_non_reader_records() -> None:
+    repository, candidate = await _repository_with_candidate()
+    non_reader = CandidateAgentAnalysis(
+        id=CandidateAgentAnalysisId("non-reader-feedback"),
+        candidate_id=candidate.id,
+        run_id=candidate.first_seen_run_id,
+        status=AgentAnalysisStatus.RUNNING,
+        model="unrelated-model",
+        prompt_version_id="pver-other-analysis",
+        prompt_version="other-v1",
+        input_payload={},
+        input_hash="non-reader-feedback",
+        started_at=datetime.now(tz=UTC),
+        created_by=PermissionId("permission-1"),
+    )
+    non_reader.complete(
+        _analysis_result("Unrelated analysis."),
+        "response-hash",
+        datetime.now(tz=UTC),
+    )
+    await repository.add_agent_analysis(non_reader)
+
+    assert (
+        await ListCandidateAgentAnalyses(repository).execute(candidate.id, _caller())
+        == []
+    )
+    with pytest.raises(AgentAnalysisNotFound):
+        await RecordAgentAnalysisFeedback(repository).execute(
+            RecordAgentAnalysisFeedbackInput(
+                analysis_id=non_reader.id,
+                feedback=AgentAnalysisFeedback.USEFUL,
                 comment=None,
                 caller=_caller(),
             )

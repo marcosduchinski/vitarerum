@@ -63,7 +63,6 @@ class Settings(BaseSettings):
     scientific_return_max_queries_per_run: int = 40
     # Phase 3B: advisory candidate reasoning only. The model cannot execute
     # tools or make candidate decisions while operating in shadow mode.
-    scientific_return_llm_enabled: bool = False
     scientific_return_llm_model: str = "llama3.1:8b"
     # Measured against llama3.1:8b on developer hardware: planning took ~40s and
     # reflecting 100-140s, so 60s would have made the deterministic fallback the

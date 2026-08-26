@@ -89,14 +89,7 @@ describe('ScientificReturnApiService', () => {
     request.flush({ content: [], page: 1, size: 20, totalElements: 0, totalPages: 0 });
   });
 
-  it('keeps shadow analysis and staff feedback on separate endpoints', () => {
-    service.generateAgentAnalysis('candidate-1').subscribe();
-    const generate = http.expectOne(
-      'https://api.example.test/api/v1/scientific-return/candidates/candidate-1/agent-analyses',
-    );
-    expect(generate.request.method).toBe('POST');
-    generate.flush({});
-
+  it('keeps full-agentic reader history and staff feedback on separate endpoints', () => {
     service.listAgentAnalyses('candidate-1').subscribe();
     const history = http.expectOne(
       'https://api.example.test/api/v1/scientific-return/candidates/candidate-1/agent-analyses',

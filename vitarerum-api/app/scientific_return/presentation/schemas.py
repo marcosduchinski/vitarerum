@@ -245,7 +245,6 @@ class CandidateAgentAnalysisResponse(BaseModel):
     candidateId: str
     runId: str
     status: AgentAnalysisStatus
-    mode: str = "SHADOW"
     model: str
     promptVersionId: str
     promptVersion: str

@@ -18,42 +18,6 @@ protects the internal association between researcher, project and consulted
 objects while retaining hashes and public bibliographic metadata for audit and
 deduplication.
 
-## LLM shadow analysis
-
-Phase 3B adds an optional advisory analysis after the deterministic pipeline has
-created a candidate and its evidence. It is disabled by default and requires:
-
-```dotenv
-SCIENTIFIC_RETURN_LLM_ENABLED=true
-SCIENTIFIC_RETURN_LLM_MODEL=llama3.1:8b
-SCIENTIFIC_RETURN_LLM_TIMEOUT_SECONDS=60
-OLLAMA_BASE_URL=https://ollama.com
-OLLAMA_API_KEY=<secret>
-```
-
-`OLLAMA_API_KEY` is only required by providers that authenticate requests. The
-model receives the minimum project snapshot, normalized candidate metadata,
-verified evidence and the recorded query trajectory. Publication text is
-explicitly treated as untrusted data.
-
-- `POST /candidates/{candidateId}/agent-analyses` generates and persists one
-  shadow analysis.
-- `GET /candidates/{candidateId}/agent-analyses` returns its audit history.
-- `POST /agent-analyses/{analysisId}/feedback` records `USEFUL`,
-  `PARTIALLY_USEFUL`, or `NOT_USEFUL` once per completed analysis.
-
-The structured result separates supporting evidence, contradictions, missing
-evidence, one typed recommended action, proposed queries, a short reasoning
-summary and advisory confidence. The record retains model and published-prompt
-versions, encrypted input and output, hashes, latency, errors and staff
-feedback. Invalid output, timeout or provider failure produces a `FAILED`
-analysis and does not interrupt the deterministic candidate pipeline.
-
-Shadow analysis never invokes a bibliographic source, changes candidate state,
-creates a decision or writes to `PublicationLog`. A proposed action is displayed
-for review only; execution belongs to Phase 3C and requires a separate,
-deterministic authorization policy.
-
 ## Full-agentic search and curatorial memory
 
 The full-agentic flow is a separate, asynchronous implementation. It does not
@@ -64,6 +28,17 @@ tool-free semantic reader and iterate within server-side budgets. It can place a
 semantically plausible publication in the normal review queue without passing
 the deterministic evidence matcher. The curator remains the only authority that
 can confirm, correct, dismiss or snooze it.
+
+The reader assessment and its grounded provenance are persisted with the
+candidate. Staff can inspect and assess those records through:
+
+```http
+GET  /api/v1/scientific-return/candidates/{candidateId}/agent-analyses
+POST /api/v1/scientific-return/agent-analyses/{analysisId}/feedback
+```
+
+The GET returns full-agentic reader records only. Feedback is `USEFUL`,
+`PARTIALLY_USEFUL`, or `NOT_USEFUL` and never changes candidate state.
 
 The feature is disabled by default. A minimal database-queue configuration is:
 
@@ -568,9 +543,6 @@ Read-only. These never continue, retry or re-run a cycle.
 - `SCIENTIFIC_RETURN_CANDIDATE_NOT_FOUND`: candidate does not exist.
 - `COMPLETED_PROJECT_NOT_FOUND`: project does not exist or is not completed.
 - `SCIENTIFIC_RETURN_INVALID`: domain validation failed.
-- `SCIENTIFIC_RETURN_LLM_DISABLED`: shadow analysis is disabled by feature flag.
-- `SCIENTIFIC_RETURN_LLM_UNAVAILABLE`: no published prompt or reasoner is
-  available.
 - `SCIENTIFIC_RETURN_AGENT_ANALYSIS_NOT_FOUND`: analysis does not exist.
 - `SCIENTIFIC_RETURN_AGENT_DISABLED`: the operating mode does not run
   investigations (`503`).

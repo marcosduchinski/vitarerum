@@ -31,10 +31,16 @@ from app.ai.museum_narrative.presentation.dependencies import (
     get_narrative_repository,
     get_prompt_port,
 )
+from app.config import settings
 from app.database import get_async_session
 from app.identity.public import Actor, GroupName, PermissionId
 from app.main import app
 from app.shared.dependencies import get_caller_permission
+
+# The route reads the model name from settings, so a developer .env pointing at
+# another model would otherwise decide what this test asserts. The client pins
+# it for the duration of the request instead.
+_TEST_MODEL = "llama3.1:8b"
 
 _STAFF = Actor(
     id=PermissionId("perm-staff"), group=GroupName.CURATORIAL, email="s@museum.pt"
@@ -189,10 +195,17 @@ async def _client(
     app.dependency_overrides[get_model_port] = lambda: model or _FakeModel()
     app.dependency_overrides[get_narrative_repository] = lambda: repo or _FakeRepo()
     app.dependency_overrides[get_async_session] = lambda: _FakeSession()
+    configured_model = settings.narrative_model
+    settings.narrative_model = _TEST_MODEL
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        yield client
-    app.dependency_overrides.clear()
+    try:
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            yield client
+    finally:
+        # Restored even when a test fails, so one failure cannot leak the pinned
+        # model or the overrides into whatever runs next.
+        settings.narrative_model = configured_model
+        app.dependency_overrides.clear()
 
 
 _URL = "/api/v1/cidoc-mapping/in-situ-visit/r1/narrative"
@@ -310,7 +323,7 @@ async def test_preview_returns_draft_metadata_without_persisting() -> None:
     assert body["meta"]["prompt_version"] == "museum-narrative-institutional-draft"
     assert body["meta"]["prompt_status"] == "draft"
     assert body["meta"]["prompt_source"] == "version"
-    assert body["meta"]["llm_model"] == "llama3.1:8b"
+    assert body["meta"]["llm_model"] == _TEST_MODEL
     assert body["meta"]["creativity_temperature"] == 0.3
     assert body["meta"]["model_response_hash"]
     assert prompts.seen_versions == ["pver-draft-1"]

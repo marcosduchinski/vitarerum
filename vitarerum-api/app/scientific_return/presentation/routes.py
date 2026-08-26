@@ -12,10 +12,7 @@ from fastapi import APIRouter, Header, HTTPException, Query, status
 from app.identity.public import Actor
 from app.notifications.public import NotificationKind, RelatedResourceType
 from app.scientific_return.application.agent_analysis import (
-    AgentAnalysisDisabled,
     AgentAnalysisNotFound,
-    GenerateCandidateAgentAnalysis,
-    GenerateCandidateAgentAnalysisInput,
     ListCandidateAgentAnalyses,
     RecordAgentAnalysisFeedback,
     RecordAgentAnalysisFeedbackInput,
@@ -93,9 +90,6 @@ from app.scientific_return.infrastructure.unit_of_work import (
     SystemClock,
 )
 from app.scientific_return.presentation.dependencies import (
-    AgentEnabled,
-    AgentPrompt,
-    AgentReasoner,
     BibliographicSources,
     DBSession,
     FullAgenticConfigDep,
@@ -1100,48 +1094,6 @@ async def list_candidate_decisions(
     require_staff(caller)
     decisions = await repository.list_decisions(CandidatePublicationId(candidate_id))
     return [_decision_response(item) for item in decisions]
-
-
-@scientific_return_router.post(
-    "/candidates/{candidate_id}/agent-analyses",
-    status_code=status.HTTP_201_CREATED,
-    response_model=CandidateAgentAnalysisResponse,
-)
-async def generate_candidate_agent_analysis(
-    candidate_id: str,
-    caller: CallerPermission,
-    repository: Repository,
-    prompt_provider: AgentPrompt,
-    reasoner: AgentReasoner,
-    enabled: AgentEnabled,
-    session: DBSession,
-) -> CandidateAgentAnalysisResponse:
-    try:
-        analysis = await GenerateCandidateAgentAnalysis(
-            repository,
-            prompt_provider,
-            reasoner,
-            enabled=enabled,
-        ).execute(
-            GenerateCandidateAgentAnalysisInput(
-                candidate_id=CandidatePublicationId(candidate_id),
-                caller=caller,
-            )
-        )
-    except CandidateNotFound as exc:
-        raise _not_found("SCIENTIFIC_RETURN_CANDIDATE_NOT_FOUND", str(exc)) from None
-    except AgentAnalysisDisabled as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={"error": "SCIENTIFIC_RETURN_LLM_DISABLED", "message": str(exc)},
-        ) from None
-    except RuntimeError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={"error": "SCIENTIFIC_RETURN_LLM_UNAVAILABLE", "message": str(exc)},
-        ) from None
-    await session.commit()
-    return _agent_analysis_response(analysis)
 
 
 @scientific_return_router.get(

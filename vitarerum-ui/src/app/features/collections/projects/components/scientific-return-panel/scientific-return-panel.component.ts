@@ -491,28 +491,6 @@ export class ScientificReturnPanelComponent {
     }
   }
 
-  protected async generateAgentAnalysis(candidateId: string): Promise<void> {
-    if (!this.canReview() || this.loadingAgentAnalysisId()) return;
-    this.loadingAgentAnalysisId.set(candidateId);
-    this.clearMessages();
-    try {
-      const analysis = await firstValueFrom(this.api.generateAgentAnalysis(candidateId));
-      this.analysesByCandidate.update((current) => ({
-        ...current,
-        [candidateId]: [analysis, ...(current[candidateId] ?? [])],
-      }));
-      this.feedback.set(
-        analysis.status === 'COMPLETED'
-          ? 'AI shadow analysis completed. No recommended action was executed.'
-          : 'The AI analysis failed safely and was recorded in the audit trail.',
-      );
-    } catch (error) {
-      this.actionError.set(toApiError(error));
-    } finally {
-      this.loadingAgentAnalysisId.set(null);
-    }
-  }
-
   protected async investigateWatch(watchId: string): Promise<void> {
     if (!this.canReview() || this.runningInvestigationId()) return;
     this.runningInvestigationId.set(watchId);
@@ -730,7 +708,7 @@ export class ScientificReturnPanelComponent {
           item.id === updated.id ? updated : item,
         ),
       }));
-      this.feedback.set('Your assessment of the AI recommendation was recorded.');
+      this.feedback.set('Your assessment of the full-agentic reader was recorded.');
     } catch (error) {
       this.actionError.set(toApiError(error));
     } finally {

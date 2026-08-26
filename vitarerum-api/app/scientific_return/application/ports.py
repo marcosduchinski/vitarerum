@@ -74,7 +74,6 @@ class AgentPromptProvider(Protocol):
     async def get_published(self, key: str) -> PublishedAgentPrompt: ...
 
 
-SHADOW_ANALYSIS_PROMPT_KEY = "candidate_shadow_analysis"
 AGENT_PLAN_PROMPT_KEY = "scientific_return_agent_plan"
 AGENT_REFLECTION_PROMPT_KEY = "scientific_return_agent_reflection"
 

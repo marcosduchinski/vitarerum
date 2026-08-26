@@ -108,13 +108,6 @@ export class ScientificReturnApiService {
     );
   }
 
-  generateAgentAnalysis(candidateId: string): Observable<CandidateAgentAnalysis> {
-    return this.http.post<CandidateAgentAnalysis>(
-      this.url(`/candidates/${candidateId}/agent-analyses`),
-      {},
-    );
-  }
-
   listAgentAnalyses(candidateId: string): Observable<readonly CandidateAgentAnalysis[]> {
     return this.http.get<readonly CandidateAgentAnalysis[]>(
       this.url(`/candidates/${candidateId}/agent-analyses`),

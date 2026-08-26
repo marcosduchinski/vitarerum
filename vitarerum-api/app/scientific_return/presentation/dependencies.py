@@ -277,10 +277,6 @@ def get_agent_reasoner() -> ScientificReturnReasoner:
     )
 
 
-def get_agent_enabled() -> bool:
-    return settings.scientific_return_llm_enabled
-
-
 def get_investigation_repository(
     session: DBSession,
 ) -> ScientificReturnInvestigationRepository:
@@ -308,9 +304,6 @@ BibliographicSources = Annotated[
 ResultLimit = Annotated[int, Depends(get_result_limit)]
 MaxQueries = Annotated[int, Depends(get_max_queries)]
 Notifications = Annotated[NotificationDispatcher, Depends(get_notifications)]
-AgentPrompt = Annotated[AgentPromptProvider, Depends(get_agent_prompt_provider)]
-AgentReasoner = Annotated[ScientificReturnReasoner, Depends(get_agent_reasoner)]
-AgentEnabled = Annotated[bool, Depends(get_agent_enabled)]
 InvestigationReasonerDep = Annotated[
     InvestigationReasoner, Depends(get_investigation_reasoner)
 ]

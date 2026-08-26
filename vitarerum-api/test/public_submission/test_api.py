@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import pytest
 from httpx import ASGITransport, AsyncClient, Response
 
+from app.config import settings
 from app.database import get_async_session
 from app.main import app
 from app.public_submission.application.use_cases import (
@@ -583,7 +584,10 @@ async def test_confirm_public_proposal_notifies_staff_once() -> None:
             "recipient_name": "Bob Santos",
             "proposal_reference": "VRP-20260626-0007",
             "submitted_by_name": "Pedro Silva",
-            "link": "http://localhost:4200/p/collections/proposals/proposal-public-1",
+            "link": (
+                f"{settings.public_origin}/p/collections/proposals/"
+                "proposal-public-1"
+            ),
         },
     ]
 
@@ -684,7 +688,7 @@ async def test_submit_amendment_notifies_assigned_staff() -> None:
             "proposal_reference": "VRP-20260626-0007",
             "submitted_by_name": "Requester User",
             "link": (
-                "http://localhost:4200/p/collections/proposals/"
+                f"{settings.public_origin}/p/collections/proposals/"
                 "my-assignments/prop-1?tab=documents"
             ),
         }

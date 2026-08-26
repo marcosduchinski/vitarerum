@@ -12,6 +12,7 @@ from fastapi import HTTPException
 from httpx import ASGITransport, AsyncClient
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
+from app.config import settings
 from app.database import get_async_session
 from app.identity.public import (
     Actor,
@@ -449,12 +450,12 @@ async def test_submit_notifies_access_groups_and_emails_curators_and_managers() 
         (
             "curator@example.org",
             "Curator",
-            f"http://localhost:4200/p/museum-questions/{question_id}",
+            f"{settings.public_origin}/p/museum-questions/{question_id}",
         ),
         (
             "collections@example.org",
             "Collections Manager",
-            f"http://localhost:4200/p/museum-questions/{question_id}",
+            f"{settings.public_origin}/p/museum-questions/{question_id}",
         ),
     ]
 

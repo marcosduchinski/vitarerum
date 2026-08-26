@@ -1832,7 +1832,7 @@ async def test_reject_proposal_creates_message_to_requester() -> None:
             "proposal_reference": "VRP-20260601-0001",
             "rejected_by_name": "staff@example.org",
             "reason": "The request is outside the collection policy.",
-            "link": "http://localhost:4200/p/collections/proposals/prop-1",
+            "link": f"{settings.public_origin}/p/collections/proposals/prop-1",
         }
     ]
 

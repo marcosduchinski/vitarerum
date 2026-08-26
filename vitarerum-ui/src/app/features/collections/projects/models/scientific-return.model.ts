@@ -192,7 +192,6 @@ export interface CandidateAgentAnalysis {
   readonly candidateId: string;
   readonly runId: string;
   readonly status: ScientificReturnAgentAnalysisStatus;
-  readonly mode: 'SHADOW';
   readonly model: string;
   readonly promptVersionId: string;
   readonly promptVersion: string;

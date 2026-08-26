@@ -9,6 +9,19 @@ VALID_FILE_ENCRYPTION_KEY = base64.b64encode(b"a" * 32).decode("ascii")
 VALID_DB_FIELD_ENCRYPTION_KEY = base64.b64encode(b"b" * 32).decode("ascii")
 
 
+@pytest.fixture(autouse=True)
+def _settings_read_no_ambient_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Build every Settings in this module from in-code defaults alone.
+
+    ``_env_file=None`` keeps the repo's .env out, but a real environment
+    variable outranks a dotenv file in pydantic-settings, so an exported
+    ``INSTITUTION_NAME`` would still decide what these assertions see. Every
+    field name is cleared, so a field added later is covered without an edit.
+    """
+    for field in Settings.model_fields:
+        monkeypatch.delenv(field.upper(), raising=False)
+
+
 def test_local_settings_allow_development_defaults() -> None:
     # _env_file=None isolates the assertion from the repo's dev .env, which
     # overrides jwt_secret/cors_origins; this test checks the in-code defaults.

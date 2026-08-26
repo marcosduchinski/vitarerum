@@ -461,21 +461,7 @@
               </div>
 
               @if (canReview()) {
-                <div class="agent-analysis-actions" aria-label="AI shadow analysis actions">
-                  <button
-                    type="button"
-                    class="button"
-                    [disabled]="loadingAgentAnalysisId() !== null"
-                    (click)="generateAgentAnalysis(candidate.id)"
-                  >
-                    @if (loadingAgentAnalysisId() === candidate.id) {
-                      <span class="pi pi-spin pi-spinner" aria-hidden="true"></span>
-                      Analysing
-                    } @else {
-                      <span class="pi pi-sparkles" aria-hidden="true"></span>
-                      Run AI shadow analysis
-                    }
-                  </button>
+                <div class="agent-analysis-actions" aria-label="Agentic analysis actions">
                   <button
                     type="button"
                     class="text-button"
@@ -483,7 +469,7 @@
                     (click)="toggleAgentHistory(candidate.id)"
                   >
                     <span class="pi pi-history" aria-hidden="true"></span>
-                    AI analysis history
+                    Full-agentic reader history
                   </button>
                   <button
                     type="button"
@@ -528,14 +514,14 @@
                 >
                   <header>
                     <div>
-                      <p class="section-kicker">Advisory AI · shadow mode</p>
-                      <h4 [id]="'agent-analysis-' + candidate.id">Candidate analysis</h4>
+                      <p class="section-kicker">Full-agentic · grounded reader</p>
+                      <h4 [id]="'agent-analysis-' + candidate.id">Reader analysis</h4>
                     </div>
-                    <span>No action executed</span>
+                    <span>Human decision required</span>
                   </header>
 
                   @if (!analyses.length) {
-                    <p class="agent-analysis__empty">No AI analyses recorded.</p>
+                    <p class="agent-analysis__empty">No full-agentic reader analyses recorded.</p>
                   } @else {
                     <ol class="agent-analysis__history">
                       @for (agentRun of analyses; track agentRun.id) {
