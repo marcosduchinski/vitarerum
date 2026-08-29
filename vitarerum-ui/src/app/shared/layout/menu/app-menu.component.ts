@@ -81,6 +81,11 @@ const COLLECTION_PROJECTS_STAFF: MenuNode = {
       routerLink: '/p/collections/projects/scientific-return',
     },
     {
+      label: 'Watchers',
+      icon: 'pi pi-bell',
+      routerLink: '/p/collections/projects/watchers',
+    },
+    {
       label: 'Cancelled',
       icon: 'pi pi-times-circle',
       routerLink: '/p/collections/projects/cancelled',

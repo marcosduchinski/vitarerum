@@ -18,6 +18,15 @@ export const PROJECTS_ROUTES: Routes = [
       ),
   },
   {
+    path: 'watchers',
+    title: 'Watchers',
+    canMatch: [staffGuard],
+    loadComponent: () =>
+      import('./pages/watchers/project-watchers-page.component').then(
+        (m) => m.ProjectWatchersPageComponent,
+      ),
+  },
+  {
     path: 'my',
     title: 'My Projects',
     loadComponent: () =>

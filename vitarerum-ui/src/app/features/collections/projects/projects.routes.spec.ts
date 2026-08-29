@@ -35,6 +35,13 @@ describe('PROJECTS_ROUTES', () => {
     expect(PROJECTS_ROUTES.some((route) => route.path === 'scientific-return-test')).toBe(false);
   });
 
+  it('lazy-loads the staff-only watchers page', () => {
+    const route = PROJECTS_ROUTES.find((candidate) => candidate.path === 'watchers');
+
+    expect(route?.loadComponent).toBeDefined();
+    expect(route?.canMatch).toContain(staffGuard);
+  });
+
   it('keeps project log routes before the generic detail route', () => {
     const paths = PROJECTS_ROUTES.map((route) => route.path);
     const detailIndex = paths.indexOf(':id');
@@ -82,6 +89,7 @@ describe('PROJECTS_ROUTES', () => {
       'completed',
       'cancelled',
       'scientific-return',
+      'watchers',
       ':id/follow-up/new',
       'collections/:id',
       'curatorial/:id',

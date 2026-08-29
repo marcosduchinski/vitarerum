@@ -78,6 +78,34 @@ class ScientificReturnWatch:
         if not 1 <= self.review_interval_days <= 365:
             raise ValueError("reviewIntervalDays must be between 1 and 365")
 
+    @classmethod
+    def create(
+        cls,
+        *,
+        id: ScientificReturnWatchId,
+        project_id: str,
+        status: WatchStatus,
+        review_interval_days: int,
+        created_by: PermissionId,
+        created_at: datetime,
+        project_snapshot_id: ScientificReturnSnapshotId,
+        schedule_anchor_at: datetime,
+    ) -> ScientificReturnWatch:
+        """Create a new aggregate without constraining persistence rehydration."""
+        if status not in {WatchStatus.ACTIVE, WatchStatus.PAUSED}:
+            raise ValueError("A watch must be created as ACTIVE or PAUSED")
+        return cls(
+            id=id,
+            project_id=project_id,
+            status=status,
+            review_interval_days=review_interval_days,
+            created_by=created_by,
+            created_at=created_at,
+            next_run_at=schedule_anchor_at,
+            project_snapshot_id=project_snapshot_id,
+            schedule_anchor_at=schedule_anchor_at,
+        )
+
     def change_status(self, status: WatchStatus) -> None:
         if self.status is WatchStatus.CLOSED and status is not WatchStatus.CLOSED:
             raise ValueError("A closed watch cannot be reopened")

@@ -1,0 +1,283 @@
+<div class="watchers-page">
+  <app-page-header
+    eyebrow="Scientific return"
+    title="Watchers"
+    description="Configure monitoring for completed collection-use projects. Pausing suspends the deterministic and agentic scheduled chain."
+  />
+
+  @if (watchersResource.isLoading()) {
+    <app-loading-state />
+  } @else if (loadError()) {
+    <app-error-message [apiError]="loadError()!" (retry)="watchersResource.reload()" />
+  } @else {
+    <section class="watchers-panel" aria-label="Scientific return watchers">
+      <div class="watchers-toolbar">
+        <label class="watchers-search" for="watchers-search">
+          <span class="pi pi-search" aria-hidden="true"></span>
+          <input
+            id="watchers-search"
+            type="search"
+            [value]="searchDraft()"
+            (input)="onSearchInput($event)"
+            (keydown.enter)="applySearch()"
+            placeholder="Search reference or title"
+          />
+        </label>
+        <button type="button" class="action-btn action-btn--primary" (click)="applySearch()">
+          Search
+        </button>
+        <label class="watchers-filter"
+          >State
+          <select [value]="watchFilter()" (change)="changeFilter($event)">
+            <option value="ALL">All</option>
+            <option value="NONE">Not created</option>
+            <option value="ACTIVE">Active</option>
+            <option value="PAUSED">Paused</option>
+            <option value="CLOSED">Closed</option>
+            <option value="INELIGIBLE">Not eligible</option>
+          </select>
+        </label>
+      </div>
+
+      @if (canManage() && (selectedCount() > 0 || bulkFeedback())) {
+        <div class="bulk-bar" aria-label="Bulk watcher configuration">
+          <strong>{{ selectedCount() }} selected</strong>
+          <button
+            type="button"
+            class="action-btn"
+            [disabled]="!originProjectId() || selectedCount() === 0 || bulkBusy()"
+            (click)="replicateConfiguration()"
+          >
+            Replicate configuration
+          </button>
+          <button
+            type="button"
+            class="action-btn action-btn--primary"
+            [disabled]="selectedCount() === 0 || bulkBusy()"
+            (click)="applySelected()"
+          >
+            @if (bulkBusy()) {
+              <span class="pi pi-spin pi-spinner" aria-hidden="true"></span>
+              Applying…
+            } @else {
+              Apply selected
+            }
+          </button>
+          <button
+            type="button"
+            class="action-btn"
+            [disabled]="bulkBusy()"
+            (click)="clearSelection()"
+          >
+            Clear
+          </button>
+          @if (bulkFeedback()) {
+            <span aria-live="polite">{{ bulkFeedback() }}</span>
+          } @else if (selectedCount() >= maxBulkSelection) {
+            <span aria-live="polite">
+              Selection limit reached ({{ maxBulkSelection }} projects).
+            </span>
+          }
+        </div>
+      }
+
+      @if (!rows().length) {
+        <app-empty-state
+          title="No watcher projects"
+          message="No completed projects match the current filters."
+        />
+      } @else {
+        <div class="watchers-table-shell">
+          <table class="watchers-table">
+            <thead>
+              <tr>
+                <th scope="col"><span class="visually-hidden">Select</span></th>
+                <th scope="col">Project</th>
+                <th scope="col">Researcher</th>
+                <th scope="col">Start date</th>
+                <th scope="col">Interval</th>
+                <th scope="col">State</th>
+                <th scope="col">Next execution</th>
+                <th scope="col">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of rows(); track row.project.id) {
+                <tr [class.row--disabled]="!row.state.watch && !row.state.eligible">
+                  <td>
+                    <input
+                      type="checkbox"
+                      [checked]="row.state.selected"
+                      [disabled]="
+                        !canSelect(row.state) ||
+                        bulkBusy() ||
+                        (!row.state.selected && selectedCount() >= maxBulkSelection)
+                      "
+                      [attr.title]="
+                        !row.state.selected && selectedCount() >= maxBulkSelection
+                          ? 'A maximum of ' + maxBulkSelection + ' projects can be selected.'
+                          : null
+                      "
+                      [attr.aria-label]="'Select ' + row.project.referenceNumber"
+                      (change)="onSelectionInput(row.project.id, $event)"
+                    />
+                  </td>
+                  <td>
+                    <a [routerLink]="['..', row.project.id]">{{ row.project.referenceNumber }}</a
+                    ><small>{{ row.project.title }}</small>
+                    <button
+                      type="button"
+                      class="origin-button"
+                      [class.origin-button--active]="originProjectId() === row.project.id"
+                      (click)="setOrigin(row.project.id)"
+                      [disabled]="!canManage() || (!row.state.watch && !row.state.eligible)"
+                    >
+                      Use as source
+                    </button>
+                  </td>
+                  <td>{{ requesterLabel(row.project) }}</td>
+                  <td>
+                    <input
+                      type="date"
+                      [value]="row.state.anchorDraft"
+                      [disabled]="
+                        !canManage() ||
+                        row.state.busy !== null ||
+                        row.state.watch?.status === 'CLOSED' ||
+                        (!row.state.watch && !row.state.eligible)
+                      "
+                      [attr.aria-label]="'Watcher start date for ' + row.project.referenceNumber"
+                      (input)="onAnchorInput(row.project.id, $event)"
+                      (change)="saveConfiguration(row.project.id)"
+                    />
+                  </td>
+                  <td>
+                    <label class="interval-input"
+                      ><input
+                        type="number"
+                        min="1"
+                        max="365"
+                        [value]="row.state.intervalDraft"
+                        [disabled]="
+                          !canManage() ||
+                          row.state.busy !== null ||
+                          row.state.watch?.status === 'CLOSED' ||
+                          (!row.state.watch && !row.state.eligible)
+                        "
+                        [attr.aria-label]="'Watcher interval for ' + row.project.referenceNumber"
+                        (input)="onIntervalInput(row.project.id, $event)"
+                        (change)="saveConfiguration(row.project.id)"
+                      /><span>days</span></label
+                    >
+                  </td>
+                  <td>
+                    <span
+                      class="status"
+                      [attr.data-status]="
+                        row.state.watch?.status ?? (row.state.eligible ? 'NONE' : 'INELIGIBLE')
+                      "
+                    >
+                      {{
+                        row.state.watch?.status ??
+                          (row.state.eligible ? 'Not created' : 'Not eligible')
+                      }}</span
+                    >
+                    @if (!row.state.watch && row.state.ineligibilityReason; as reason) {
+                      <small class="reason">{{ ineligibilityLabels[reason] }}</small>
+                    } @else if (row.state.watch?.status === 'CLOSED') {
+                      <small class="reason">Closing is permanent.</small>
+                    }
+                  </td>
+                  <td>
+                    {{ row.state.watch ? (row.state.watch.nextRunAt | date: 'mediumDate') : '—' }}
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      class="action-btn action-btn--primary"
+                      [disabled]="
+                        !canManage() ||
+                        row.state.busy !== null ||
+                        row.state.watch?.status === 'CLOSED' ||
+                        (!row.state.watch &&
+                          (!row.state.eligible || configurationInvalid(row.state)))
+                      "
+                      (click)="lifecycleAction(row.project.id)"
+                    >
+                      @if (row.state.busy) {
+                        <span class="pi pi-spin pi-spinner" aria-hidden="true"></span>
+                      }
+                      {{
+                        !row.state.watch
+                          ? 'Create'
+                          : row.state.watch.status === 'ACTIVE'
+                            ? 'Pause'
+                            : row.state.watch.status === 'PAUSED'
+                              ? 'Start'
+                              : 'Closed'
+                      }}
+                    </button>
+                  </td>
+                </tr>
+                @if (row.state.error || row.state.feedback) {
+                  <tr class="message-row">
+                    <td colspan="8" [class.message-row--error]="row.state.error" aria-live="polite">
+                      {{ row.state.error ?? row.state.feedback }}
+                    </td>
+                  </tr>
+                }
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+
+      @if (totalProjects() > 0) {
+        <nav class="watchers-pagination" aria-label="Watchers pagination">
+          <span>{{ rangeStart() }}-{{ rangeEnd() }} of {{ totalProjects() }} projects</span>
+          <label
+            >Rows
+            <select [value]="pageSize()" (change)="changePageSize($event)">
+              @for (size of pageSizeOptions; track size) {
+                <option [value]="size">{{ size }}</option>
+              }
+            </select></label
+          >
+          <button
+            class="action-btn"
+            type="button"
+            [disabled]="currentPage() === 0"
+            (click)="firstPage()"
+          >
+            First
+          </button>
+          <button
+            class="action-btn"
+            type="button"
+            [disabled]="currentPage() === 0"
+            (click)="previousPage()"
+          >
+            Previous
+          </button>
+          <span>Page {{ currentPage() + 1 }} of {{ totalPages() }}</span>
+          <button
+            class="action-btn"
+            type="button"
+            [disabled]="currentPage() >= totalPages() - 1"
+            (click)="nextPage()"
+          >
+            Next
+          </button>
+          <button
+            class="action-btn"
+            type="button"
+            [disabled]="currentPage() >= totalPages() - 1"
+            (click)="lastPage()"
+          >
+            Last
+          </button>
+        </nav>
+      }
+    </section>
+  }
+</div>

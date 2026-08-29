@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from app.identity.public import Actor
     from app.use_of_collections.domain.models import (
         CollectionUseObject,
+        CollectionUseProject,
         RequestedObject,
     )
 
@@ -118,6 +119,27 @@ def _project_object_view(obj: CollectionUseObject) -> PublishedObjectView:
     )
 
 
+def _project_view(project: CollectionUseProject) -> PublishedProjectView:
+    return PublishedProjectView(
+        id=str(project.id),
+        reference_number=project.reference_number.value,
+        title=project.title,
+        purpose=project.purpose,
+        intended_use=project.intended_use,
+        status=project.status,
+        begin_date=project.begin_date,
+        end_date=project.end_date,
+        objects=[_project_object_view(obj) for obj in project.objects],
+        requested_by_permission_id=str(project.requested_by),
+        origin_project_id=(
+            str(project.origin_project_id)
+            if project.origin_project_id is not None
+            else None
+        ),
+        proposal_id=str(project.proposal_id) if project.proposal_id else None,
+    )
+
+
 class PublishedUseOfCollectionsReader:
     def __init__(self, session: AsyncSession) -> None:
         from app.use_of_collections.infrastructure.repositories import (
@@ -168,24 +190,28 @@ class PublishedUseOfCollectionsReader:
             UseStatus.COMPLETED,
         }:
             return None
-        return PublishedProjectView(
-            id=str(project.id),
-            reference_number=project.reference_number.value,
-            title=project.title,
-            purpose=project.purpose,
-            intended_use=project.intended_use,
-            status=project.status,
-            begin_date=project.begin_date,
-            end_date=project.end_date,
-            objects=[_project_object_view(obj) for obj in project.objects],
-            requested_by_permission_id=str(project.requested_by),
-            origin_project_id=(
-                str(project.origin_project_id)
-                if project.origin_project_id is not None
-                else None
-            ),
-            proposal_id=str(project.proposal_id) if project.proposal_id else None,
+        return _project_view(project)
+
+    async def get_projects(
+        self, project_ids: tuple[str, ...]
+    ) -> list[PublishedProjectView]:
+        from app.use_of_collections.domain.models import CollectionUseProjectId
+
+        unique_ids = tuple(
+            CollectionUseProjectId(project_id)
+            for project_id in dict.fromkeys(project_ids)
         )
+        projects = await self._project_repo.get_by_ids(unique_ids)
+        by_id = {
+            str(project.id): project
+            for project in projects
+            if project.status in {UseStatus.IN_PROGRESS, UseStatus.COMPLETED}
+        }
+        return [
+            _project_view(by_id[project_id])
+            for project_id in project_ids
+            if project_id in by_id
+        ]
 
     async def list_publishable_proposals(
         self, q: str | None, page: int, size: int

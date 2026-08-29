@@ -11,6 +11,7 @@ import {
   ScientificReturnKnowledgeItem,
   ScientificReturnWatch,
   ScientificReturnWatchStatus,
+  UpdateScientificReturnWatchRequest,
 } from '../../models/scientific-return.model';
 import { ScientificReturnApiService } from '../../services/scientific-return-api.service';
 import { ScientificReturnPanelComponent } from './scientific-return-panel.component';
@@ -172,13 +173,18 @@ class ApiStub {
     return of(investigation);
   }
 
-  updateWatchInterval(
+  updateWatch(
     watchId: string,
-    reviewIntervalDays: number,
+    request: UpdateScientificReturnWatchRequest,
   ): Observable<ScientificReturnWatch> {
-    this.intervalCalls.push({ watchId, reviewIntervalDays });
-    // The server recomputes the next review; the stub mirrors that contract.
-    this.watch = { ...this.watch, reviewIntervalDays, nextRunAt: '2026-09-17T10:00:00Z' };
+    if (request.reviewIntervalDays !== undefined) {
+      this.intervalCalls.push({ watchId, reviewIntervalDays: request.reviewIntervalDays });
+    }
+    this.watch = {
+      ...this.watch,
+      ...request,
+      nextRunAt: '2026-09-17T10:00:00Z',
+    };
     return of(this.watch);
   }
 

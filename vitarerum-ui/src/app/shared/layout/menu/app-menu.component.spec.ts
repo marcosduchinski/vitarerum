@@ -156,6 +156,9 @@ describe('AppMenuComponent', () => {
     expect(linkByText(compiled, 'Scientific return').getAttribute('href')).toBe(
       '/p/collections/projects/scientific-return',
     );
+    expect(linkByText(compiled, 'Watchers').getAttribute('href')).toBe(
+      '/p/collections/projects/watchers',
+    );
     expect(compiled.textContent).not.toContain('Scientific Return Test');
   });
 

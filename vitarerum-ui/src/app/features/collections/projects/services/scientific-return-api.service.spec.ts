@@ -36,6 +36,51 @@ describe('ScientificReturnApiService', () => {
     request.flush({});
   });
 
+  it('looks up watches and creates a configured paused watch', () => {
+    service.lookupWatches(['project-1', 'project-2']).subscribe();
+    const lookup = http.expectOne(
+      'https://api.example.test/api/v1/scientific-return/watches/lookup',
+    );
+    expect(lookup.request.method).toBe('POST');
+    expect(lookup.request.body).toEqual({ projectIds: ['project-1', 'project-2'] });
+    lookup.flush({ items: [] });
+
+    service
+      .createWatch('project-1', {
+        reviewIntervalDays: 30,
+        scheduleAnchorAt: '2026-09-01T00:00:00.000Z',
+        startImmediately: false,
+      })
+      .subscribe();
+    const create = http.expectOne(
+      'https://api.example.test/api/v1/scientific-return/projects/project-1/watch',
+    );
+    expect(create.request.body).toEqual({
+      reviewIntervalDays: 30,
+      scheduleAnchorAt: '2026-09-01T00:00:00.000Z',
+      startImmediately: false,
+    });
+    create.flush({});
+  });
+
+  it('updates watch configuration in a single patch', () => {
+    service
+      .updateWatch('watch-1', {
+        scheduleAnchorAt: '2026-09-01T00:00:00.000Z',
+        reviewIntervalDays: 60,
+      })
+      .subscribe();
+    const request = http.expectOne(
+      'https://api.example.test/api/v1/scientific-return/watches/watch-1',
+    );
+    expect(request.request.method).toBe('PATCH');
+    expect(request.request.body).toEqual({
+      scheduleAnchorAt: '2026-09-01T00:00:00.000Z',
+      reviewIntervalDays: 60,
+    });
+    request.flush({});
+  });
+
   it('runs a watch and lists its auditable trajectories', () => {
     service.runWatch('watch-1').subscribe();
     const run = http.expectOne(

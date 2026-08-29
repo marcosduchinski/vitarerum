@@ -79,6 +79,10 @@ class CollectionUseProjectRepository(Protocol):
         self, project_id: CollectionUseProjectId
     ) -> CollectionUseProject | None: ...
 
+    async def get_by_ids(
+        self, project_ids: tuple[CollectionUseProjectId, ...]
+    ) -> list[CollectionUseProject]: ...
+
     async def get_by_reference(
         self, reference_number: ReferenceNumber
     ) -> CollectionUseProject | None: ...

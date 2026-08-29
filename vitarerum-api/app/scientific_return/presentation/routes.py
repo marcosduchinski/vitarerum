@@ -8,6 +8,7 @@ from typing import Annotated
 from uuid import uuid4
 
 from fastapi import APIRouter, Header, HTTPException, Query, status
+from sqlalchemy.exc import IntegrityError
 
 from app.identity.public import Actor
 from app.notifications.public import NotificationKind, RelatedResourceType
@@ -53,7 +54,9 @@ from app.scientific_return.application.use_cases import (
     ChangeWatchStatus,
     DecideCandidate,
     DecideCandidateInput,
+    LookupScientificReturnWatches,
     RunScientificReturnSearch,
+    WatchIneligible,
     WatchNotFound,
 )
 from app.scientific_return.domain.enums import (
@@ -62,6 +65,7 @@ from app.scientific_return.domain.enums import (
     FullAgenticInvestigationStatus,
     InventoryEvidenceStatus,
     InvestigationObjective,
+    WatchIneligibilityReason,
 )
 from app.scientific_return.domain.full_agentic_models import (
     FullAgenticInvestigation,
@@ -148,6 +152,9 @@ from app.scientific_return.presentation.schemas import (
     ScientificReturnWatchResponse,
     StartFullAgenticRequest,
     UpdateWatchRequest,
+    WatchLookupItemResponse,
+    WatchLookupRequest,
+    WatchLookupResponse,
 )
 from app.shared.authorization import require_staff
 from app.shared.dependencies import CallerPermission
@@ -567,10 +574,12 @@ def _not_found(code: str, message: str) -> HTTPException:
     )
 
 
-def _unprocessable(message: str) -> HTTPException:
+def _unprocessable(
+    message: str, error: str = "SCIENTIFIC_RETURN_INVALID"
+) -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-        detail={"error": "SCIENTIFIC_RETURN_INVALID", "message": message},
+        detail={"error": error, "message": message},
     )
 
 
@@ -822,15 +831,57 @@ async def activate_watch(
                 project_id=project_id,
                 review_interval_days=body.reviewIntervalDays,
                 schedule_anchor_at=body.scheduleAnchorAt,
+                start_immediately=body.startImmediately,
                 caller=caller,
             )
         )
+    except WatchIneligible as exc:
+        if exc.reason in {
+            WatchIneligibilityReason.PROJECT_NOT_COMPLETED,
+            WatchIneligibilityReason.REQUESTER_NOT_FOUND,
+        }:
+            raise _not_found(exc.reason.value, str(exc)) from None
+        raise _unprocessable(str(exc), exc.reason.value) from None
     except LookupError as exc:
         raise _not_found("COMPLETED_PROJECT_NOT_FOUND", str(exc)) from None
     except ValueError as exc:
         raise _unprocessable(str(exc)) from None
+    except IntegrityError:
+        # Two curators may create the unique project watch concurrently. Roll
+        # back the losing snapshot/watch pair and return the winner, preserving
+        # the endpoint's existing idempotent contract.
+        await session.rollback()
+        existing = await repository.get_watch_by_project(project_id)
+        if existing is None:
+            raise
+        return _watch_response(existing)
     await session.commit()
     return _watch_response(watch)
+
+
+@scientific_return_router.post(
+    "/watches/lookup", response_model=WatchLookupResponse
+)
+async def lookup_watches(
+    body: WatchLookupRequest,
+    caller: CallerPermission,
+    repository: Repository,
+    project_provider: ProjectProvider,
+) -> WatchLookupResponse:
+    items = await LookupScientificReturnWatches(
+        repository, project_provider
+    ).execute(tuple(body.projectIds), caller)
+    return WatchLookupResponse(
+        items=[
+            WatchLookupItemResponse(
+                projectId=item.project_id,
+                watch=_watch_response(item.watch) if item.watch is not None else None,
+                eligible=item.eligible,
+                ineligibilityReason=item.ineligibility_reason,
+            )
+            for item in items
+        ]
+    )
 
 
 @scientific_return_router.get(

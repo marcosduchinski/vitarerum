@@ -273,10 +273,9 @@ export class ScientificReturnPanelComponent {
     this.clearMessages();
     try {
       const updated = await firstValueFrom(
-        this.api.updateWatchScheduleAnchor(
-          watch.id,
-          new Date(`${this.anchorDraft()}T00:00:00Z`).toISOString(),
-        ),
+        this.api.updateWatch(watch.id, {
+          scheduleAnchorAt: new Date(`${this.anchorDraft()}T00:00:00Z`).toISOString(),
+        }),
       );
       this.watchResource.set(updated);
       this.anchorEditing.set(false);
@@ -322,7 +321,9 @@ export class ScientificReturnPanelComponent {
     this.busyAction.set('interval');
     this.clearMessages();
     try {
-      const updated = await firstValueFrom(this.api.updateWatchInterval(watch.id, days));
+      const updated = await firstValueFrom(
+        this.api.updateWatch(watch.id, { reviewIntervalDays: days }),
+      );
       this.watchResource.set(updated);
       this.intervalEditing.set(false);
       this.feedback.set(

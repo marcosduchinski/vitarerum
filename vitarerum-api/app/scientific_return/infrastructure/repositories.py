@@ -847,6 +847,18 @@ class SqlAlchemyScientificReturnRepository:
         record = result.scalar_one_or_none()
         return _watch_to_domain(record) if record is not None else None
 
+    async def list_watches_by_project_ids(
+        self, project_ids: tuple[str, ...]
+    ) -> list[ScientificReturnWatch]:
+        if not project_ids:
+            return []
+        result = await self._session.execute(
+            select(ScientificReturnWatchRecord).where(
+                ScientificReturnWatchRecord.project_id.in_(project_ids)
+            )
+        )
+        return [_watch_to_domain(item) for item in result.scalars().all()]
+
     async def list_due_watches(
         self, now: datetime, limit: int
     ) -> list[ScientificReturnWatch]:

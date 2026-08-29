@@ -19,6 +19,9 @@ import {
   ScientificReturnReviewQueuePage,
   ScientificReturnAgentFeedback,
   ScientificReturnWatch,
+  CreateScientificReturnWatchRequest,
+  UpdateScientificReturnWatchRequest,
+  ScientificReturnWatchLookupResponse,
   ScientificReturnWatchStatus,
   FullAgenticInvestigation,
   AgenticTrajectoryEvent,
@@ -35,8 +38,19 @@ export class ScientificReturnApiService {
   }
 
   activateWatch(projectId: string, reviewIntervalDays = 90): Observable<ScientificReturnWatch> {
-    return this.http.post<ScientificReturnWatch>(this.url(`/projects/${projectId}/watch`), {
-      reviewIntervalDays,
+    return this.createWatch(projectId, { reviewIntervalDays });
+  }
+
+  createWatch(
+    projectId: string,
+    request: CreateScientificReturnWatchRequest,
+  ): Observable<ScientificReturnWatch> {
+    return this.http.post<ScientificReturnWatch>(this.url(`/projects/${projectId}/watch`), request);
+  }
+
+  lookupWatches(projectIds: readonly string[]): Observable<ScientificReturnWatchLookupResponse> {
+    return this.http.post<ScientificReturnWatchLookupResponse>(this.url('/watches/lookup'), {
+      projectIds,
     });
   }
 
@@ -47,22 +61,11 @@ export class ScientificReturnApiService {
     return this.http.patch<ScientificReturnWatch>(this.url(`/watches/${watchId}`), { status });
   }
 
-  updateWatchInterval(
+  updateWatch(
     watchId: string,
-    reviewIntervalDays: number,
+    request: UpdateScientificReturnWatchRequest,
   ): Observable<ScientificReturnWatch> {
-    return this.http.patch<ScientificReturnWatch>(this.url(`/watches/${watchId}`), {
-      reviewIntervalDays,
-    });
-  }
-
-  updateWatchScheduleAnchor(
-    watchId: string,
-    scheduleAnchorAt: string,
-  ): Observable<ScientificReturnWatch> {
-    return this.http.patch<ScientificReturnWatch>(this.url(`/watches/${watchId}`), {
-      scheduleAnchorAt,
-    });
+    return this.http.patch<ScientificReturnWatch>(this.url(`/watches/${watchId}`), request);
   }
 
   runWatch(watchId: string): Observable<ScientificReturnRun> {

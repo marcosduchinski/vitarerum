@@ -75,7 +75,11 @@ async def test_list_by_group_returns_only_that_group_sorted_by_name() -> None:
 
         reader = SqlAlchemyPermissionReader(session)
         candidates = await reader.list_by_group(GroupName.CURATORIAL)
+        details = await reader.get_details(
+            (PermissionId("p-carl"), PermissionId("p-ana"), PermissionId("missing"))
+        )
 
     assert [c.user.name for c in candidates] == ["Ana", "Bea"]
     assert all(c.group == GroupName.CURATORIAL for c in candidates)
     assert {c.user.email for c in candidates} == {"ana@example.org", "bea@example.org"}
+    assert {detail.permission_id for detail in details} == {"p-ana", "p-carl"}

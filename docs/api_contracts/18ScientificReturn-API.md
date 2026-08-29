@@ -45,6 +45,11 @@ The GET returns full-agentic reader records only. Feedback is `USEFUL`,
 One command, `run-sweep`, runs the whole chain on a single schedule, so an
 unattended watch gets the coverage a curator would get by pressing every button:
 
+Only `ACTIVE` watches enter this scheduled chain. Pausing a watch suspends the
+deterministic search and therefore also the autonomous investigation and
+evidence-proof work normally enqueued after it. Manual actions in the project
+detail remain available.
+
 1. the deterministic search runs for every due watch;
 2. each completed run queues an autonomous investigation for its watch, keyed on
    the run so replaying a sweep never buys the same investigation twice;
@@ -67,6 +72,9 @@ search", so a sweep that starts late does not push the whole series later.
 
 - `scheduleAnchorAt` is optional on activation and defaults to now, which keeps
   the first review owed immediately.
+- `startImmediately` is optional on activation and defaults to `true`. When it
+  is `false`, the watch is created as `PAUSED` and no engine runs until staff
+  starts it.
 - `PATCH /watches/{watchId}` accepts `scheduleAnchorAt`, `reviewIntervalDays`,
   `status`, or any combination. The anchor is applied before the interval, and
   status last.
@@ -247,7 +255,9 @@ the curator. The legacy
 
 ```json
 {
-  "reviewIntervalDays": 90
+  "reviewIntervalDays": 90,
+  "scheduleAnchorAt": "2026-03-01T00:00:00Z",
+  "startImmediately": true
 }
 ```
 
@@ -255,10 +265,35 @@ Returns `201` with the watch. The project must be `COMPLETED`, have a resolved
 requester name, and every consulted object must have an inventory number and
 object name. Calling this endpoint again returns the existing watch.
 
+An ineligible creation returns both a stable error code and a human-readable
+message. Project/requester failures return `404`; invalid object data returns
+`422`.
+
+`startImmediately` defaults to `true` for backwards compatibility. The
+Watchers administration page sends `false`, creating a configured `PAUSED`
+watch that must be started explicitly.
+
+## Lookup watches for completed projects
+
+`POST /watches/lookup` accepts between 1 and 100 project ids:
+
+```json
+{"projectIds":["project-1","project-2"]}
+```
+
+The response preserves first-occurrence order and contains one item per unique
+id. `watch` is the complete watch response or `null`. For projects without a
+watch, `eligible` says whether creation can succeed and
+`ineligibilityReason` is one of `NO_CONSULTED_OBJECTS`,
+`MISSING_INVENTORY_NUMBER`, `MISSING_OBJECT_NAME`, `REQUESTER_NOT_FOUND`, or
+`PROJECT_NOT_COMPLETED`. A project with an existing watch is always reported as
+eligible because the eligibility flag only governs creation.
+
 ## Read and control a watch
 
 - `GET /projects/{projectId}/watch`
-- `PATCH /watches/{watchId}` with `status`, `reviewIntervalDays`, or both
+- `PATCH /watches/{watchId}` with `status`, `scheduleAnchorAt`,
+  `reviewIntervalDays`, or any combination
 
 Both body fields are optional and a body with neither is `422`. Examples:
 
@@ -575,7 +610,12 @@ Read-only. These never continue, retry or re-run a cycle.
 
 - `SCIENTIFIC_RETURN_WATCH_NOT_FOUND`: watch does not exist.
 - `SCIENTIFIC_RETURN_CANDIDATE_NOT_FOUND`: candidate does not exist.
-- `COMPLETED_PROJECT_NOT_FOUND`: project does not exist or is not completed.
+- `PROJECT_NOT_COMPLETED`: project does not exist or is not completed (`404`).
+- `REQUESTER_NOT_FOUND`: the project requester cannot be resolved (`404`).
+- `NO_CONSULTED_OBJECTS`: the project has no consulted objects (`422`).
+- `MISSING_INVENTORY_NUMBER`: a consulted object has no inventory number
+  (`422`).
+- `MISSING_OBJECT_NAME`: a consulted object has no object name (`422`).
 - `SCIENTIFIC_RETURN_INVALID`: domain validation failed.
 - `SCIENTIFIC_RETURN_AGENT_ANALYSIS_NOT_FOUND`: analysis does not exist.
 - `SCIENTIFIC_RETURN_AGENT_DISABLED`: the operating mode does not run

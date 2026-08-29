@@ -103,11 +103,22 @@ async def test_project_list_filters_requested_by_before_pagination() -> None:
             page=0,
             size=1,
         )
+        projects_by_id = await project_repo.get_by_ids(
+            (
+                CollectionUseProjectId("project-own"),
+                CollectionUseProjectId("project-foreign"),
+                CollectionUseProjectId("missing"),
+            )
+        )
 
     await engine.dispose()
 
     assert total == 1
     assert [project.id for project in projects] == ["project-own"]
+    assert {project.id for project in projects_by_id} == {
+        "project-own",
+        "project-foreign",
+    }
 
 
 async def test_proposal_list_searches_proposal_title_without_project() -> None:

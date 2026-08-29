@@ -20,6 +20,8 @@ def test_openapi_excludes_bench_and_keeps_operational_scientific_return() -> Non
     for fragment in required_fragments:
         assert any(fragment in path for path in paths), fragment
 
+    assert "/api/v1/scientific-return/watches/lookup" in paths
+
 
 def test_openapi_removes_shadow_generation_but_keeps_reader_provenance() -> None:
     paths = app.openapi()["paths"]

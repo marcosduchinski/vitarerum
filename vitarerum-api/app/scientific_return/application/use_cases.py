@@ -19,6 +19,7 @@ from app.scientific_return.application.ports import (
     FULL_AGENTIC_READER_PROMPT_ID_PREFIX,
     BibliographicSource,
     ConfirmedPublicationWriter,
+    ProjectSnapshotAssessment,
     ProjectSnapshotProvider,
     ScientificReturnRepository,
 )
@@ -29,6 +30,7 @@ from app.scientific_return.domain.enums import (
     InventoryEvidenceStatus,
     QueryStatus,
     RunStatus,
+    WatchIneligibilityReason,
     WatchStatus,
 )
 from app.scientific_return.domain.full_agentic_models import (
@@ -52,7 +54,7 @@ from app.scientific_return.domain.models import (
     ScientificReturnWatch,
     ScientificReturnWatchId,
 )
-from app.shared.authorization import require_group
+from app.shared.authorization import require_group, require_staff
 
 _REVIEW_GROUPS = (
     GroupName.CURATORIAL,
@@ -64,6 +66,29 @@ _SNAPSHOT_BUILDER_VERSION = "scientific-return-snapshot-v1"
 
 class WatchNotFound(LookupError):
     pass
+
+
+_WATCH_INELIGIBILITY_MESSAGES = {
+    WatchIneligibilityReason.PROJECT_NOT_COMPLETED: "The project must be completed.",
+    WatchIneligibilityReason.REQUESTER_NOT_FOUND: (
+        "The project requester could not be resolved."
+    ),
+    WatchIneligibilityReason.NO_CONSULTED_OBJECTS: (
+        "The project must contain at least one consulted object."
+    ),
+    WatchIneligibilityReason.MISSING_INVENTORY_NUMBER: (
+        "Every consulted object must have an inventory number."
+    ),
+    WatchIneligibilityReason.MISSING_OBJECT_NAME: (
+        "Every consulted object must have an object name."
+    ),
+}
+
+
+class WatchIneligible(ValueError):
+    def __init__(self, reason: WatchIneligibilityReason) -> None:
+        self.reason = reason
+        super().__init__(_WATCH_INELIGIBILITY_MESSAGES[reason])
 
 
 class CandidateNotFound(LookupError):
@@ -89,6 +114,92 @@ class ActivateWatchInput:
     review_interval_days: int
     caller: Actor
     schedule_anchor_at: datetime | None = None
+    start_immediately: bool = True
+
+
+@dataclass(frozen=True, slots=True)
+class CreateWatchInput:
+    project_id: str
+    review_interval_days: int
+    initial_status: WatchStatus
+    caller: Actor
+    schedule_anchor_at: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class WatchLookupItem:
+    project_id: str
+    watch: ScientificReturnWatch | None
+    eligible: bool
+    ineligibility_reason: WatchIneligibilityReason | None = None
+
+
+def _validated_payload(
+    assessment: ProjectSnapshotAssessment,
+) -> tuple[ProjectSnapshotPayload | None, WatchIneligibilityReason | None]:
+    payload = assessment.payload
+    if payload is None:
+        return None, (
+            assessment.ineligibility_reason
+            or WatchIneligibilityReason.PROJECT_NOT_COMPLETED
+        )
+    if not payload.researcher.strip():
+        return None, WatchIneligibilityReason.REQUESTER_NOT_FOUND
+    if not payload.consulted_objects:
+        return None, WatchIneligibilityReason.NO_CONSULTED_OBJECTS
+    if any(not obj.inventory_number.strip() for obj in payload.consulted_objects):
+        return None, WatchIneligibilityReason.MISSING_INVENTORY_NUMBER
+    if any(not obj.object_name.strip() for obj in payload.consulted_objects):
+        return None, WatchIneligibilityReason.MISSING_OBJECT_NAME
+    return payload, None
+
+
+class CreateScientificReturnWatch:
+    def __init__(
+        self,
+        repository: ScientificReturnRepository,
+        project_provider: ProjectSnapshotProvider,
+    ) -> None:
+        self._repository = repository
+        self._project_provider = project_provider
+
+    async def execute(self, data: CreateWatchInput) -> ScientificReturnWatch:
+        require_group(data.caller, *_REVIEW_GROUPS)
+        existing = await self._repository.get_watch_by_project(data.project_id)
+        if existing is not None:
+            return existing
+        assessment = await self._project_provider.assess_completed_project(
+            data.project_id
+        )
+        payload, reason = _validated_payload(assessment)
+        if payload is None:
+            raise WatchIneligible(
+                reason or WatchIneligibilityReason.PROJECT_NOT_COMPLETED
+            )
+
+        now = _now()
+        anchor = data.schedule_anchor_at or now
+        snapshot = ScientificReturnProjectSnapshot(
+            id=ScientificReturnSnapshotId(_new_id()),
+            project_id=data.project_id,
+            payload=payload,
+            payload_hash=_snapshot_hash(payload),
+            builder_version=_SNAPSHOT_BUILDER_VERSION,
+            created_at=now,
+        )
+        watch = ScientificReturnWatch.create(
+            id=ScientificReturnWatchId(_new_id()),
+            project_id=data.project_id,
+            status=data.initial_status,
+            review_interval_days=data.review_interval_days,
+            created_by=data.caller.id,
+            created_at=now,
+            project_snapshot_id=snapshot.id,
+            schedule_anchor_at=anchor,
+        )
+        await self._repository.add_snapshot(snapshot)
+        await self._repository.add_watch(watch)
+        return watch
 
 
 class ActivateScientificReturnWatch:
@@ -101,49 +212,60 @@ class ActivateScientificReturnWatch:
         self._project_provider = project_provider
 
     async def execute(self, data: ActivateWatchInput) -> ScientificReturnWatch:
-        require_group(data.caller, *_REVIEW_GROUPS)
-        existing = await self._repository.get_watch_by_project(data.project_id)
-        if existing is not None:
-            return existing
-        payload = await self._project_provider.get_completed_project(data.project_id)
-        if payload is None:
-            raise LookupError("Completed project not found")
-        if not payload.researcher.strip():
-            raise ValueError("The project researcher name is required")
-        if not payload.consulted_objects:
-            raise ValueError("The project must contain at least one consulted object")
-        for obj in payload.consulted_objects:
-            if not obj.inventory_number.strip() or not obj.object_name.strip():
-                raise ValueError(
-                    "Every consulted object needs an inventory number and object name"
-                )
+        return await CreateScientificReturnWatch(
+            self._repository, self._project_provider
+        ).execute(
+            CreateWatchInput(
+                project_id=data.project_id,
+                review_interval_days=data.review_interval_days,
+                initial_status=(
+                    WatchStatus.ACTIVE if data.start_immediately else WatchStatus.PAUSED
+                ),
+                caller=data.caller,
+                schedule_anchor_at=data.schedule_anchor_at,
+            )
+        )
 
-        now = _now()
-        # An anchor the curator did not choose is simply now, which reproduces
-        # the previous behaviour: the first review is owed immediately.
-        anchor = data.schedule_anchor_at or now
-        snapshot = ScientificReturnProjectSnapshot(
-            id=ScientificReturnSnapshotId(_new_id()),
-            project_id=data.project_id,
-            payload=payload,
-            payload_hash=_snapshot_hash(payload),
-            builder_version=_SNAPSHOT_BUILDER_VERSION,
-            created_at=now,
+
+class LookupScientificReturnWatches:
+    def __init__(
+        self,
+        repository: ScientificReturnRepository,
+        project_provider: ProjectSnapshotProvider,
+    ) -> None:
+        self._repository = repository
+        self._project_provider = project_provider
+
+    async def execute(
+        self, project_ids: tuple[str, ...], caller: Actor
+    ) -> tuple[WatchLookupItem, ...]:
+        require_staff(caller)
+        unique_ids = tuple(dict.fromkeys(project_ids))
+        watches = await self._repository.list_watches_by_project_ids(unique_ids)
+        by_project = {watch.project_id: watch for watch in watches}
+        missing_ids = tuple(
+            project_id for project_id in unique_ids if project_id not in by_project
         )
-        watch = ScientificReturnWatch(
-            id=ScientificReturnWatchId(_new_id()),
-            project_id=data.project_id,
-            status=WatchStatus.ACTIVE,
-            review_interval_days=data.review_interval_days,
-            created_by=data.caller.id,
-            created_at=now,
-            next_run_at=anchor,
-            project_snapshot_id=snapshot.id,
-            schedule_anchor_at=anchor,
+        assessments = await self._project_provider.assess_completed_projects(
+            missing_ids
         )
-        await self._repository.add_snapshot(snapshot)
-        await self._repository.add_watch(watch)
-        return watch
+        items: list[WatchLookupItem] = []
+        for project_id in unique_ids:
+            watch = by_project.get(project_id)
+            if watch is not None:
+                items.append(WatchLookupItem(project_id, watch, True))
+                continue
+            assessment = assessments[project_id]
+            _, reason = _validated_payload(assessment)
+            items.append(
+                WatchLookupItem(
+                    project_id=project_id,
+                    watch=None,
+                    eligible=reason is None,
+                    ineligibility_reason=reason,
+                )
+            )
+        return tuple(items)
 
 
 class ChangeWatchStatus:

@@ -29,6 +29,7 @@ from app.scientific_return.domain.enums import (
     RunKind,
     RunStatus,
     StopReason,
+    WatchIneligibilityReason,
     WatchStatus,
 )
 
@@ -38,6 +39,7 @@ class ActivateWatchRequest(BaseModel):
     # The date the review series is measured from. Omitted means "now", which
     # keeps the first review owed immediately.
     scheduleAnchorAt: datetime | None = None
+    startImmediately: bool = True
 
 
 class UpdateWatchRequest(BaseModel):
@@ -59,6 +61,21 @@ class ScientificReturnWatchResponse(BaseModel):
     nextRunAt: datetime
     scheduleAnchorAt: datetime
     projectSnapshotId: str
+
+
+class WatchLookupRequest(BaseModel):
+    projectIds: list[str] = Field(min_length=1, max_length=100)
+
+
+class WatchLookupItemResponse(BaseModel):
+    projectId: str
+    watch: ScientificReturnWatchResponse | None
+    eligible: bool
+    ineligibilityReason: WatchIneligibilityReason | None = None
+
+
+class WatchLookupResponse(BaseModel):
+    items: list[WatchLookupItemResponse]
 
 
 class ScientificReturnQueryResponse(BaseModel):

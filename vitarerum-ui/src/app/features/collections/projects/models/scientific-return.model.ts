@@ -1,6 +1,12 @@
 import { Page } from '@shared/models/page.model';
 
 export type ScientificReturnWatchStatus = 'ACTIVE' | 'PAUSED' | 'CLOSED';
+export type ScientificReturnWatchIneligibilityReason =
+  | 'NO_CONSULTED_OBJECTS'
+  | 'MISSING_INVENTORY_NUMBER'
+  | 'MISSING_OBJECT_NAME'
+  | 'REQUESTER_NOT_FOUND'
+  | 'PROJECT_NOT_COMPLETED';
 export type ScientificReturnRunStatus = 'RUNNING' | 'COMPLETED' | 'FAILED';
 export type ScientificReturnQueryStatus = 'COMPLETED' | 'FAILED';
 export type ScientificReturnCandidateStatus = 'PENDING' | 'CONFIRMED' | 'DISMISSED';
@@ -43,6 +49,29 @@ export interface ScientificReturnWatch {
   readonly nextRunAt: string;
   readonly scheduleAnchorAt: string;
   readonly projectSnapshotId: string;
+}
+
+export interface CreateScientificReturnWatchRequest {
+  readonly reviewIntervalDays: number;
+  readonly scheduleAnchorAt?: string;
+  readonly startImmediately?: boolean;
+}
+
+export interface UpdateScientificReturnWatchRequest {
+  readonly status?: ScientificReturnWatchStatus;
+  readonly reviewIntervalDays?: number;
+  readonly scheduleAnchorAt?: string;
+}
+
+export interface ScientificReturnWatchLookupItem {
+  readonly projectId: string;
+  readonly watch: ScientificReturnWatch | null;
+  readonly eligible: boolean;
+  readonly ineligibilityReason: ScientificReturnWatchIneligibilityReason | null;
+}
+
+export interface ScientificReturnWatchLookupResponse {
+  readonly items: readonly ScientificReturnWatchLookupItem[];
 }
 
 export interface ScientificReturnQuery {

@@ -26,6 +26,7 @@ from app.scientific_return.application.evaluation import (
 from app.scientific_return.application.ports import (
     BibliographicRecord,
     CandidateReviewItem,
+    ProjectSnapshotAssessment,
     ScientificReturnMetrics,
 )
 from app.scientific_return.application.use_cases import (
@@ -36,7 +37,9 @@ from app.scientific_return.application.use_cases import (
     ChangeWatchStatus,
     DecideCandidate,
     DecideCandidateInput,
+    LookupScientificReturnWatches,
     RunScientificReturnSearch,
+    WatchIneligible,
 )
 from app.scientific_return.domain.enums import (
     AgentAnalysisFeedback,
@@ -48,6 +51,7 @@ from app.scientific_return.domain.enums import (
     EvidenceStrength,
     EvidenceType,
     QueryType,
+    WatchIneligibilityReason,
     WatchStatus,
 )
 from app.scientific_return.domain.evidence_delta import evidence_identity
@@ -111,10 +115,20 @@ def _snapshot() -> ProjectSnapshotPayload:
 
 
 class _ProjectProvider:
-    async def get_completed_project(
+    async def assess_completed_project(
         self, project_id: str
-    ) -> ProjectSnapshotPayload | None:
-        return _snapshot() if project_id == "project-1" else None
+    ) -> ProjectSnapshotAssessment:
+        return ProjectSnapshotAssessment(
+            payload=_snapshot() if project_id == "project-1" else None
+        )
+
+    async def assess_completed_projects(
+        self, project_ids: tuple[str, ...]
+    ) -> dict[str, ProjectSnapshotAssessment]:
+        return {
+            project_id: await self.assess_completed_project(project_id)
+            for project_id in project_ids
+        }
 
 
 class _Source:
@@ -186,12 +200,21 @@ class _Repository:
             None,
         )
 
+    async def list_watches_by_project_ids(
+        self, project_ids: tuple[str, ...]
+    ) -> list[ScientificReturnWatch]:
+        return [
+            watch for watch in self.watches.values() if watch.project_id in project_ids
+        ]
+
     async def list_due_watches(
         self, now: datetime, limit: int
     ) -> list[ScientificReturnWatch]:
-        return [watch for watch in self.watches.values() if watch.next_run_at <= now][
-            :limit
-        ]
+        return [
+            watch
+            for watch in self.watches.values()
+            if watch.status is WatchStatus.ACTIVE and watch.next_run_at <= now
+        ][:limit]
 
     async def add_snapshot(self, snapshot: ScientificReturnProjectSnapshot) -> None:
         self.snapshots[str(snapshot.id)] = snapshot
@@ -397,6 +420,158 @@ async def _repository_with_candidate() -> tuple[_Repository, CandidatePublicatio
         watch.id, _caller()
     )
     return repository, next(iter(repository.candidates.values()))
+
+
+@pytest.mark.asyncio
+async def test_watch_creation_can_be_paused_without_changing_the_default() -> None:
+    repository = _Repository()
+    active = await ActivateScientificReturnWatch(
+        repository, _ProjectProvider()
+    ).execute(ActivateWatchInput("project-1", 90, _caller()))
+    assert active.status is WatchStatus.ACTIVE
+
+    second_repository = _Repository()
+    paused = await ActivateScientificReturnWatch(
+        second_repository, _ProjectProvider()
+    ).execute(ActivateWatchInput("project-1", 90, _caller(), start_immediately=False))
+    assert paused.status is WatchStatus.PAUSED
+    assert await second_repository.list_due_watches(paused.next_run_at, 10) == []
+
+
+@pytest.mark.asyncio
+async def test_watch_creation_reports_typed_and_human_readable_ineligibility() -> None:
+    class Provider(_ProjectProvider):
+        async def assess_completed_project(
+            self, project_id: str
+        ) -> ProjectSnapshotAssessment:
+            return ProjectSnapshotAssessment(
+                ProjectSnapshotPayload(project_id, "PRJ-EMPTY", "Researcher", ())
+            )
+
+    with pytest.raises(WatchIneligible) as raised:
+        await ActivateScientificReturnWatch(_Repository(), Provider()).execute(
+            ActivateWatchInput("empty", 90, _caller())
+        )
+
+    assert raised.value.reason is WatchIneligibilityReason.NO_CONSULTED_OBJECTS
+    assert str(raised.value) == (
+        "The project must contain at least one consulted object."
+    )
+
+
+@pytest.mark.asyncio
+async def test_watch_lookup_preserves_order_and_reports_eligibility() -> None:
+    repository = _Repository()
+
+    class Provider:
+        calls: list[tuple[str, ...]] = []
+
+        async def assess_completed_project(
+            self, project_id: str
+        ) -> ProjectSnapshotAssessment:
+            if project_id == "eligible":
+                return ProjectSnapshotAssessment(
+                    payload=ProjectSnapshotPayload(
+                        project_id="eligible",
+                        project_reference="PRJ-2",
+                        researcher="Researcher",
+                        consulted_objects=(
+                            ConsultedObjectSnapshot("object-2", "MUHNAC-2", "Taxon"),
+                        ),
+                    )
+                )
+            return ProjectSnapshotAssessment(
+                payload=None,
+                ineligibility_reason=WatchIneligibilityReason.REQUESTER_NOT_FOUND,
+            )
+
+        async def assess_completed_projects(
+            self, project_ids: tuple[str, ...]
+        ) -> dict[str, ProjectSnapshotAssessment]:
+            self.calls.append(project_ids)
+            return {
+                project_id: await self.assess_completed_project(project_id)
+                for project_id in project_ids
+            }
+
+    provider = Provider()
+    items = await LookupScientificReturnWatches(repository, provider).execute(
+        ("missing", "eligible", "missing"), _caller()
+    )
+
+    assert [item.project_id for item in items] == ["missing", "eligible"]
+    assert items[0].eligible is False
+    assert items[0].ineligibility_reason is WatchIneligibilityReason.REQUESTER_NOT_FOUND
+    assert items[1].eligible is True
+    assert items[1].ineligibility_reason is None
+    assert provider.calls == [("missing", "eligible")]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("payload", "provider_reason", "expected"),
+    [
+        (
+            ProjectSnapshotPayload("p", "PRJ", "Researcher", ()),
+            None,
+            WatchIneligibilityReason.NO_CONSULTED_OBJECTS,
+        ),
+        (
+            ProjectSnapshotPayload(
+                "p", "PRJ", "Researcher", (ConsultedObjectSnapshot("o", "", "Taxon"),)
+            ),
+            None,
+            WatchIneligibilityReason.MISSING_INVENTORY_NUMBER,
+        ),
+        (
+            ProjectSnapshotPayload(
+                "p",
+                "PRJ",
+                "Researcher",
+                (ConsultedObjectSnapshot("o", "MUHNAC-1", ""),),
+            ),
+            None,
+            WatchIneligibilityReason.MISSING_OBJECT_NAME,
+        ),
+        (
+            None,
+            WatchIneligibilityReason.REQUESTER_NOT_FOUND,
+            WatchIneligibilityReason.REQUESTER_NOT_FOUND,
+        ),
+        (
+            None,
+            WatchIneligibilityReason.PROJECT_NOT_COMPLETED,
+            WatchIneligibilityReason.PROJECT_NOT_COMPLETED,
+        ),
+    ],
+)
+async def test_watch_lookup_exposes_each_typed_ineligibility_reason(
+    payload: ProjectSnapshotPayload | None,
+    provider_reason: WatchIneligibilityReason | None,
+    expected: WatchIneligibilityReason,
+) -> None:
+    class Provider:
+        async def assess_completed_project(
+            self, project_id: str
+        ) -> ProjectSnapshotAssessment:
+            return ProjectSnapshotAssessment(payload, provider_reason)
+
+        async def assess_completed_projects(
+            self, project_ids: tuple[str, ...]
+        ) -> dict[str, ProjectSnapshotAssessment]:
+            return {
+                project_id: await self.assess_completed_project(project_id)
+                for project_id in project_ids
+            }
+
+    item = (
+        await LookupScientificReturnWatches(_Repository(), Provider()).execute(
+            ("project",), _caller()
+        )
+    )[0]
+
+    assert item.eligible is False
+    assert item.ineligibility_reason is expected
 
 
 def test_planner_uses_only_author_inventory_and_object() -> None:
@@ -722,7 +897,8 @@ async def test_decision_context_uses_latest_full_agentic_reader_only() -> None:
         "unrelated", "pver-other-analysis", "unrelated query", "unrelated"
     )
     newest = completed_analysis(
-        "newest", "pver-sr-full-reader-v2",
+        "newest",
+        "pver-sr-full-reader-v2",
         "new query",
         "new explanation",
     )
@@ -730,7 +906,8 @@ async def test_decision_context_uses_latest_full_agentic_reader_only() -> None:
     # The registry labelled the archived v1 with underscores, so a rollback to
     # it must still be recognised as a full-agentic reader analysis.
     oldest = completed_analysis(
-        "oldest", "pver-sr-full-reader-v1",
+        "oldest",
+        "pver-sr-full-reader-v1",
         "old query",
         "old explanation",
     )

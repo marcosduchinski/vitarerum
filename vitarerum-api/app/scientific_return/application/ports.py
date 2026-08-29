@@ -12,6 +12,7 @@ from app.scientific_return.domain.enums import (
     EvidenceStrength,
     InvestigationMode,
     InvestigationObjective,
+    WatchIneligibilityReason,
 )
 from app.scientific_return.domain.investigation_contracts import (
     AgentObservation,
@@ -339,10 +340,20 @@ class CandidateReviewItem:
     rejected_inventory_form_count: int = 0
 
 
+@dataclass(frozen=True, slots=True)
+class ProjectSnapshotAssessment:
+    payload: ProjectSnapshotPayload | None
+    ineligibility_reason: WatchIneligibilityReason | None = None
+
+
 class ProjectSnapshotProvider(Protocol):
-    async def get_completed_project(
+    async def assess_completed_project(
         self, project_id: str
-    ) -> ProjectSnapshotPayload | None: ...
+    ) -> ProjectSnapshotAssessment: ...
+
+    async def assess_completed_projects(
+        self, project_ids: tuple[str, ...]
+    ) -> dict[str, ProjectSnapshotAssessment]: ...
 
 
 class ConfirmedPublicationWriter(Protocol):
@@ -366,6 +377,10 @@ class ScientificReturnRepository(Protocol):
     async def get_watch_by_project(
         self, project_id: str
     ) -> ScientificReturnWatch | None: ...
+
+    async def list_watches_by_project_ids(
+        self, project_ids: tuple[str, ...]
+    ) -> list[ScientificReturnWatch]: ...
 
     async def list_due_watches(
         self, now: datetime, limit: int

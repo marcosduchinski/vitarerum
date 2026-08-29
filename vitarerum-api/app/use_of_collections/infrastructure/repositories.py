@@ -726,6 +726,19 @@ class SqlAlchemyCollectionUseProjectRepository:
         record = result.scalar_one_or_none()
         return project_to_domain(record) if record else None
 
+    async def get_by_ids(
+        self, project_ids: tuple[CollectionUseProjectId, ...]
+    ) -> list[CollectionUseProject]:
+        if not project_ids:
+            return []
+        stmt = (
+            select(CollectionUseProjectRecord)
+            .where(CollectionUseProjectRecord.id.in_(project_ids))
+            .options(*_PROJECT_EAGER)
+        )
+        result = await self._session.execute(stmt)
+        return [project_to_domain(record) for record in result.scalars().all()]
+
     async def get_by_reference(
         self,
         reference_number: ReferenceNumber,
