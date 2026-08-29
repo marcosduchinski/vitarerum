@@ -83,6 +83,10 @@ from app.scientific_return.domain.models import (
     ScientificReturnSearchRun,
     ScientificReturnWatchId,
 )
+from app.scientific_return.domain.publication_identity import (
+    is_component,
+    publication_identity,
+)
 from app.shared.authorization import require_group, require_staff
 
 logger = logging.getLogger(__name__)
@@ -370,6 +374,38 @@ async def close_envelope_run(
     run.completed_at = now
     run.error_message = reason[:2000]
     await scientific_repository.save_run(run)
+
+
+def one_record_per_publication(
+    records: list[tuple[BibliographicRecord, AgenticSearchSpec]],
+) -> tuple[list[tuple[BibliographicRecord, AgenticSearchSpec]], int]:
+    """Collapse the parts of a publication onto the publication.
+
+    Indexes register figures and tables as works of their own, so one article
+    could occupy the whole candidate ceiling with its own components — and the
+    ceiling stops the search, so those near-duplicates displaced candidates that
+    were never looked for. A component only holds its group's place until the
+    work itself appears, so a publication that surfaces only through a figure is
+    still presented rather than lost.
+    """
+    groups: dict[str, tuple[BibliographicRecord, AgenticSearchSpec]] = {}
+    order: list[str] = []
+    collapsed = 0
+    for record, search in records:
+        identity = publication_identity(
+            record.doi, record.title, deduplication_key(record)
+        )
+        if identity not in groups:
+            groups[identity] = (record, search)
+            order.append(identity)
+            continue
+        collapsed += 1
+        kept, _ = groups[identity]
+        if is_component(kept.doi, kept.title) and not is_component(
+            record.doi, record.title
+        ):
+            groups[identity] = (record, search)
+    return [groups[identity] for identity in order], collapsed
 
 
 class CloseAbandonedFullAgenticInvestigations:
@@ -688,6 +724,13 @@ class ExecuteFullAgenticScientificReturn:
                 and event.payload.get("phase") == "ARTICLE_ASSESSMENT"
             )
         }
+        # A resumed pass must not present a figure of an article it already read.
+        seen_publications: set[str] = {
+            str(event.payload["publicationIdentity"])
+            for event in existing_events
+            if event.kind is AgenticTrajectoryEventKind.ARTICLE_ASSESSED
+            and event.payload.get("publicationIdentity")
+        }
         executed_sources: set[str] = set()
         executed_attempts: set[tuple[str, str, str]] = set()
         for event in existing_events:
@@ -830,12 +873,25 @@ class ExecuteFullAgenticScientificReturn:
                 executed_sources,
                 executed_attempts,
             )
+            records, collapsed = one_record_per_publication(records)
+            if collapsed:
+                await self._append_event(
+                    investigation,
+                    AgenticTrajectoryEventKind.COMPONENTS_COLLAPSED,
+                    {"iteration": iteration, "collapsedRecords": collapsed},
+                )
             relevant_count = 0
             for record, search in records:
                 key = f"{record.source}|{record.source_record_id}"
                 if key in seen_records:
                     continue
+                identity = publication_identity(
+                    record.doi, record.title, deduplication_key(record)
+                )
+                if identity in seen_publications:
+                    continue
                 seen_records.add(key)
+                seen_publications.add(identity)
                 if not self._has_room_for(
                     self._configuration.llm_total_timeout_seconds
                 ):
@@ -915,6 +971,7 @@ class ExecuteFullAgenticScientificReturn:
                         "query": search.query,
                         "author": search.author,
                         "objectId": search.object_id,
+                        "publicationIdentity": identity,
                         "searchIntent": search.intent.value,
                         "searchStrategy": search.strategy.value,
                         "discoveryBasis": search.strategy.value,

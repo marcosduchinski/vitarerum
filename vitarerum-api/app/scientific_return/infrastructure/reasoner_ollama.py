@@ -16,6 +16,14 @@ the whole exchange: a model stuck in a repetition loop keeps the connection
 busy forever without ever tripping it. ``num_predict`` caps the generation and
 the deadline caps the exchange, so a degenerate response becomes a timeout the
 agentic loop already knows how to absorb.
+
+Reasoning is off unless a deployment asks for it. Left to its default, a model
+that reasons spends the whole generation budget on a channel the contract never
+reads: measured against gemma4:12b, a planner call produced 12222 characters of
+reasoning and an empty answer, while the same prompt with reasoning disabled
+answered in 158 tokens and 14.6 seconds. Across six reader records the two modes
+agreed on every verdict reasoning managed to return, took eleven times longer,
+and lost the strongest candidate of the sample set to an empty response.
 """
 
 from __future__ import annotations
@@ -49,6 +57,7 @@ class OllamaScientificReturnReasoner:
         api_key: str = "",
         total_timeout_seconds: float | None = None,
         num_predict: int | None = None,
+        reasoning: bool | None = False,
     ) -> None:
         self._base_url = base_url
         self._model = model
@@ -61,6 +70,7 @@ class OllamaScientificReturnReasoner:
             timeout_seconds, total_timeout_seconds or timeout_seconds
         )
         self._num_predict = num_predict
+        self._reasoning = reasoning
 
     @property
     def model_name(self) -> str:
@@ -81,6 +91,7 @@ class OllamaScientificReturnReasoner:
             model=self._model,
             format="json",
             num_predict=self._num_predict,
+            reasoning=self._reasoning,
             client_kwargs=client_kwargs,
             async_client_kwargs=client_kwargs,
         )

@@ -79,6 +79,11 @@ class Settings(BaseSettings):
     # clear of ~8000 characters or valid answers would be truncated into parse
     # errors.
     scientific_return_llm_num_predict: int = 4096
+    # Reasoning is off by default. A model left to its own default can spend the
+    # whole generation budget on a channel the contracts never read, returning an
+    # empty answer; measured against gemma4:12b it did so on three planner calls
+    # in four. Turn it on only for a model measured to be better with it.
+    scientific_return_llm_reasoning: bool = False
     # How long any one bibliographic source may be waited for. A stated
     # ``Retry-After`` above the ceiling abandons the attempt rather than
     # shortening the wait, which would breach the source's rate limit.

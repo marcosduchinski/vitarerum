@@ -1912,3 +1912,74 @@ async def test_a_failed_announcement_still_leaves_the_work_queued() -> None:
     ).execute(ExecuteFullAgenticInput(investigation.id, "worker-1"))
 
     assert yielded.status is FullAgenticInvestigationStatus.QUEUED
+
+
+@pytest.mark.asyncio
+async def test_the_parts_of_one_publication_do_not_fill_the_queue() -> None:
+    """Four figures of an article are one publication, not four candidates.
+
+    The candidate ceiling stops the search, so near-duplicates do not merely add
+    noise a curator can dismiss — they displace candidates that are then never
+    looked for at all.
+    """
+
+    from app.scientific_return.application.full_agentic import (
+        one_record_per_publication,
+    )
+
+    def record(doi: str, title: str) -> BibliographicRecord:
+        return BibliographicRecord(
+            source="TEST",
+            source_record_id=doi,
+            title=title,
+            authors=("Someone",),
+            publication_date="2026",
+            abstract=None,
+            url=None,
+            doi=doi,
+            raw_metadata_hash="hash",
+        )
+
+    search = AgenticSearchSpec(
+        source="TEST",
+        query="q",
+        intent=SearchIntent.DISCOVERY,
+        strategy=SearchStrategy.OBJECT_QUERY,
+    )
+    batch = [
+        (
+            record("10.3897/bdj.14.e188597.figure4a", "Figure 4a from: a catalogue"),
+            search,
+        ),
+        (record("10.3897/bdj.14.e188597", "From Cabinet to Catalogue"), search),
+        (
+            record("10.3897/bdj.14.e188597.figure4b", "Figure 4b from: a catalogue"),
+            search,
+        ),
+        (
+            record(
+                "10.5281/zenodo.21167298",
+                "FIGURE 8. Living animals in The most wanted! three new species",
+            ),
+            search,
+        ),
+        (
+            record(
+                "10.5281/zenodo.21167299",
+                "FIGURE 6. Reproductive system in The most wanted! three new species",
+            ),
+            search,
+        ),
+        (record("10.1643/i2025093", "The Thorny History of a Holotype"), search),
+    ]
+
+    kept, collapsed = one_record_per_publication(batch)
+
+    assert collapsed == 3
+    assert [item[0].doi for item in kept] == [
+        # The article replaces the figure that was holding its place.
+        "10.3897/bdj.14.e188597",
+        # No article surfaced for this one, so its figure still stands in.
+        "10.5281/zenodo.21167298",
+        "10.1643/i2025093",
+    ]

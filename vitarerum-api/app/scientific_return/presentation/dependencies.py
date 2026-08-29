@@ -354,6 +354,7 @@ def get_agent_reasoner() -> ScientificReturnReasoner:
         timeout_seconds=settings.scientific_return_llm_timeout_seconds,
         total_timeout_seconds=settings.scientific_return_llm_total_timeout_seconds,
         num_predict=settings.scientific_return_llm_num_predict,
+        reasoning=settings.scientific_return_llm_reasoning,
     )
 
 

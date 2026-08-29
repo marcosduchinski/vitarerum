@@ -92,6 +92,8 @@ class AgenticTrajectoryEventKind(StrEnum):
     RECOVERY_LIMIT_EXHAUSTED = "RECOVERY_LIMIT_EXHAUSTED"
     # A source asked to be waited for longer than this deployment allows.
     SOURCE_WAIT_REJECTED = "SOURCE_WAIT_REJECTED"
+    # Parts of one publication folded onto the publication itself.
+    COMPONENTS_COLLAPSED = "COMPONENTS_COLLAPSED"
     ABANDONED = "ABANDONED"
 
 
