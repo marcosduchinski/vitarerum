@@ -21,14 +21,29 @@
             (input)="onSearchInput($event)"
             (keydown.enter)="applySearch()"
             placeholder="Search reference or title"
+            aria-label="Search watcher projects"
           />
+          @if (searchDraft()) {
+            <button
+              type="button"
+              class="watchers-search__clear"
+              (click)="clearSearch()"
+              aria-label="Clear watcher project search"
+            >
+              <span class="pi pi-times" aria-hidden="true"></span>
+            </button>
+          }
         </label>
         <button type="button" class="action-btn action-btn--primary" (click)="applySearch()">
           Search
         </button>
-        <label class="watchers-filter"
+        <label class="watchers-filter" for="watchers-state-filter"
           >State
-          <select [value]="watchFilter()" (change)="changeFilter($event)">
+          <select
+            id="watchers-state-filter"
+            [value]="watchFilter()"
+            (change)="changeFilter($event)"
+          >
             <option value="ALL">All</option>
             <option value="NONE">Not created</option>
             <option value="ACTIVE">Active</option>
@@ -88,7 +103,17 @@
         />
       } @else {
         <div class="watchers-table-shell">
-          <table class="watchers-table">
+          <table class="watchers-table" aria-label="Scientific return watchers">
+            <colgroup>
+              <col class="watchers-table__col-select" />
+              <col class="watchers-table__col-project" />
+              <col class="watchers-table__col-researcher" />
+              <col class="watchers-table__col-start" />
+              <col class="watchers-table__col-interval" />
+              <col class="watchers-table__col-state" />
+              <col class="watchers-table__col-next" />
+              <col class="watchers-table__col-actions" />
+            </colgroup>
             <thead>
               <tr>
                 <th scope="col"><span class="visually-hidden">Select</span></th>
@@ -98,7 +123,7 @@
                 <th scope="col">Interval</th>
                 <th scope="col">State</th>
                 <th scope="col">Next execution</th>
-                <th scope="col">Action</th>
+                <th scope="col" class="watchers-table__actions-header">Action</th>
               </tr>
             </thead>
             <tbody>
@@ -123,8 +148,12 @@
                     />
                   </td>
                   <td>
-                    <a [routerLink]="['..', row.project.id]">{{ row.project.referenceNumber }}</a
-                    ><small>{{ row.project.title }}</small>
+                    <div class="watchers-table__project">
+                      <span class="watchers-table__ref">{{ row.project.referenceNumber }}</span>
+                      <a class="watchers-table__title" [routerLink]="['..', row.project.id]">
+                        {{ row.project.title }}
+                      </a>
+                    </div>
                     <button
                       type="button"
                       class="origin-button"
@@ -135,7 +164,16 @@
                       Use as source
                     </button>
                   </td>
-                  <td>{{ requesterLabel(row.project) }}</td>
+                  <td>
+                    <div class="watchers-table__person">
+                      <span>{{ requesterLabel(row.project) }}</span>
+                      @if (requesterEmail(row.project)) {
+                        <span class="watchers-table__person-email">
+                          {{ requesterEmail(row.project) }}
+                        </span>
+                      }
+                    </div>
+                  </td>
                   <td>
                     <input
                       type="date"
@@ -188,35 +226,37 @@
                       <small class="reason">Closing is permanent.</small>
                     }
                   </td>
-                  <td>
+                  <td class="watchers-table__date">
                     {{ row.state.watch ? (row.state.watch.nextRunAt | date: 'mediumDate') : '—' }}
                   </td>
                   <td>
-                    <button
-                      type="button"
-                      class="action-btn action-btn--primary"
-                      [disabled]="
-                        !canManage() ||
-                        row.state.busy !== null ||
-                        row.state.watch?.status === 'CLOSED' ||
-                        (!row.state.watch &&
-                          (!row.state.eligible || configurationInvalid(row.state)))
-                      "
-                      (click)="lifecycleAction(row.project.id)"
-                    >
-                      @if (row.state.busy) {
-                        <span class="pi pi-spin pi-spinner" aria-hidden="true"></span>
-                      }
-                      {{
-                        !row.state.watch
-                          ? 'Create'
-                          : row.state.watch.status === 'ACTIVE'
-                            ? 'Pause'
-                            : row.state.watch.status === 'PAUSED'
-                              ? 'Start'
-                              : 'Closed'
-                      }}
-                    </button>
+                    <div class="watchers-table__actions">
+                      <button
+                        type="button"
+                        class="action-btn action-btn--primary"
+                        [disabled]="
+                          !canManage() ||
+                          row.state.busy !== null ||
+                          row.state.watch?.status === 'CLOSED' ||
+                          (!row.state.watch &&
+                            (!row.state.eligible || configurationInvalid(row.state)))
+                        "
+                        (click)="lifecycleAction(row.project.id)"
+                      >
+                        @if (row.state.busy) {
+                          <span class="pi pi-spin pi-spinner" aria-hidden="true"></span>
+                        }
+                        {{
+                          !row.state.watch
+                            ? 'Create'
+                            : row.state.watch.status === 'ACTIVE'
+                              ? 'Pause'
+                              : row.state.watch.status === 'PAUSED'
+                                ? 'Start'
+                                : 'Closed'
+                        }}
+                      </button>
+                    </div>
                   </td>
                 </tr>
                 @if (row.state.error || row.state.feedback) {
@@ -234,48 +274,64 @@
 
       @if (totalProjects() > 0) {
         <nav class="watchers-pagination" aria-label="Watchers pagination">
-          <span>{{ rangeStart() }}-{{ rangeEnd() }} of {{ totalProjects() }} projects</span>
-          <label
-            >Rows
-            <select [value]="pageSize()" (change)="changePageSize($event)">
-              @for (size of pageSizeOptions; track size) {
-                <option [value]="size">{{ size }}</option>
-              }
-            </select></label
-          >
-          <button
-            class="action-btn"
-            type="button"
-            [disabled]="currentPage() === 0"
-            (click)="firstPage()"
-          >
-            First
-          </button>
-          <button
-            class="action-btn"
-            type="button"
-            [disabled]="currentPage() === 0"
-            (click)="previousPage()"
-          >
-            Previous
-          </button>
-          <span>Page {{ currentPage() + 1 }} of {{ totalPages() }}</span>
-          <button
-            class="action-btn"
-            type="button"
-            [disabled]="currentPage() >= totalPages() - 1"
-            (click)="nextPage()"
-          >
-            Next
-          </button>
-          <button
-            class="action-btn"
-            type="button"
-            [disabled]="currentPage() >= totalPages() - 1"
-            (click)="lastPage()"
-          >
-            Last
-          </button>
+          <div class="watchers-pagination__meta">
+            <span class="watchers-pagination__info">
+              {{ rangeStart() }}-{{ rangeEnd() }} of {{ totalProjects() }} projects
+            </span>
+            <label class="watchers-pagination__size" for="watchers-page-size">
+              Rows
+              <select
+                id="watchers-page-size"
+                [value]="pageSize()"
+                (change)="changePageSize($event)"
+              >
+                @for (size of pageSizeOptions; track size) {
+                  <option [value]="size">{{ size }}</option>
+                }
+              </select>
+            </label>
+          </div>
+          <div class="watchers-pagination__controls">
+            <button
+              class="action-btn"
+              type="button"
+              [disabled]="currentPage() === 0"
+              (click)="firstPage()"
+              aria-label="First page"
+            >
+              First
+            </button>
+            <button
+              class="action-btn"
+              type="button"
+              [disabled]="currentPage() === 0"
+              (click)="previousPage()"
+              aria-label="Previous page"
+            >
+              Previous
+            </button>
+            <span class="watchers-pagination__page" aria-live="polite">
+              Page {{ currentPage() + 1 }} of {{ totalPages() }}
+            </span>
+            <button
+              class="action-btn"
+              type="button"
+              [disabled]="currentPage() >= totalPages() - 1"
+              (click)="nextPage()"
+              aria-label="Next page"
+            >
+              Next
+            </button>
+            <button
+              class="action-btn"
+              type="button"
+              [disabled]="currentPage() >= totalPages() - 1"
+              (click)="lastPage()"
+              aria-label="Last page"
+            >
+              Last
+            </button>
+          </div>
         </nav>
       }
     </section>

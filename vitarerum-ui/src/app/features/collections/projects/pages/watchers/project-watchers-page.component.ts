@@ -239,6 +239,10 @@ export class ProjectWatchersPageComponent {
     return project.requestedBy?.user.name ?? 'Unknown requester';
   }
 
+  protected requesterEmail(project: CollectionUseProjectSummary): string {
+    return project.requestedBy?.user.email ?? '';
+  }
+
   protected onAnchorInput(projectId: string, event: Event): void {
     const value = (event.target as HTMLInputElement).value;
     this.updateRow(projectId, (state) => ({ ...state, anchorDraft: value, feedback: null }));

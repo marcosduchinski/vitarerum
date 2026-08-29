@@ -159,6 +159,59 @@ describe('ProjectWatchersPageComponent', () => {
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('Not eligible');
   });
 
+  it('uses the shared project-list table and pagination structure', () => {
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelectorAll('.watchers-table colgroup col')).toHaveLength(8);
+    expect(host.querySelector('.watchers-table__ref')?.textContent).toContain('PRJ-001');
+    expect(host.querySelector('.watchers-table__title')?.textContent).toContain('Reptile research');
+    expect(host.querySelector('.watchers-pagination__meta')).not.toBeNull();
+    expect(host.querySelector('.watchers-pagination__controls')).not.toBeNull();
+    expect(host.querySelector('.watchers-pagination__page')?.getAttribute('aria-live')).toBe(
+      'polite',
+    );
+  });
+
+  it('clears the search and reloads the unfiltered project list', async () => {
+    const host = fixture.nativeElement as HTMLElement;
+    const search = host.querySelector<HTMLInputElement>('#watchers-search');
+    expect(search).not.toBeNull();
+
+    search!.value = 'reptile';
+    search!.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    const searchButton = [...host.querySelectorAll('button')].find(
+      (button) => button.textContent?.trim() === 'Search',
+    );
+    expect(searchButton).toBeDefined();
+    searchButton!.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(projectsApi.queries.at(-1)).toEqual({
+      status: 'COMPLETED',
+      page: 0,
+      size: 20,
+      search: 'reptile',
+    });
+
+    const clearButton = host.querySelector<HTMLButtonElement>(
+      'button[aria-label="Clear watcher project search"]',
+    );
+    expect(clearButton).not.toBeNull();
+    clearButton!.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(host.querySelector<HTMLInputElement>('#watchers-search')?.value).toBe('');
+    expect(projectsApi.queries.at(-1)).toEqual({
+      status: 'COMPLETED',
+      page: 0,
+      size: 20,
+      search: '',
+    });
+  });
+
   it('creates an eligible watcher paused and disables an ineligible project', async () => {
     const buttons = [...(fixture.nativeElement as HTMLElement).querySelectorAll('button')];
     const createButtons = buttons.filter((button) => button.textContent?.trim() === 'Create');
