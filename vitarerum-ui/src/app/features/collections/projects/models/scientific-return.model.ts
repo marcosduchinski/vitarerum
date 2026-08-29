@@ -387,6 +387,11 @@ export interface FullAgenticInvestigation {
   readonly heartbeatAt: string | null;
   readonly failureReason: string | null;
   readonly degradedReason?: string | null;
+  readonly recoveryCount?: number;
+  readonly maxRecoveries?: number | null;
+  readonly lastRecoveredAt?: string | null;
+  readonly lastRecoveryReason?: string | null;
+  readonly leaseExpiresAt?: string | null;
 }
 
 export interface AgenticTrajectoryEvent {

@@ -553,6 +553,15 @@ export class ScientificReturnPanelComponent {
     }
   }
 
+  /** One recovery short of the ceiling, where the next stall ends the run. */
+  protected isNearRecoveryLimit(investigation: FullAgenticInvestigation): boolean {
+    const ceiling = investigation.maxRecoveries;
+    // A ceiling of zero is a real setting — it makes the first recovery fatal —
+    // so only an absent one means there is nothing to be near.
+    if (ceiling === null || ceiling === undefined) return false;
+    return (investigation.recoveryCount ?? 0) >= ceiling;
+  }
+
   protected async startFullAgentic(watchId: string): Promise<void> {
     if (!this.canReview() || this.fullAgenticBusy()) return;
     this.fullAgenticBusy.set(true);

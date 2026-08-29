@@ -135,6 +135,9 @@ def _investigation_to_domain(
         else None,
         lease_owner=record.lease_owner,
         lease_expires_at=record.lease_expires_at,
+        recovery_count=record.recovery_count,
+        last_recovered_at=record.last_recovered_at,
+        last_recovery_reason=record.last_recovery_reason,
         version=record.version,
     )
 
@@ -286,6 +289,9 @@ class SqlAlchemyFullAgenticRepository:
                     cancel_requested_by=investigation.cancel_requested_by,
                     lease_owner=investigation.lease_owner,
                     lease_expires_at=investigation.lease_expires_at,
+                    recovery_count=investigation.recovery_count,
+                    last_recovered_at=investigation.last_recovered_at,
+                    last_recovery_reason=investigation.last_recovery_reason,
                     version=FullAgenticInvestigationRecord.version + 1,
                 )
                 .returning(FullAgenticInvestigationRecord.version)
@@ -350,6 +356,33 @@ class SqlAlchemyFullAgenticRepository:
                     heartbeat_at=claimed_at,
                     lease_owner=worker_id,
                     lease_expires_at=lease_expires_at,
+                    # Only a take-over counts. A queued row is either a first
+                    # claim or a slice the worker handed back on purpose, and
+                    # charging those would spend the allowance on healthy work.
+                    recovery_count=case(
+                        (
+                            FullAgenticInvestigationRecord.status
+                            == FullAgenticInvestigationStatus.QUEUED,
+                            FullAgenticInvestigationRecord.recovery_count,
+                        ),
+                        else_=FullAgenticInvestigationRecord.recovery_count + 1,
+                    ),
+                    last_recovered_at=case(
+                        (
+                            FullAgenticInvestigationRecord.status
+                            == FullAgenticInvestigationStatus.QUEUED,
+                            FullAgenticInvestigationRecord.last_recovered_at,
+                        ),
+                        else_=claimed_at,
+                    ),
+                    last_recovery_reason=case(
+                        (
+                            FullAgenticInvestigationRecord.status
+                            == FullAgenticInvestigationStatus.QUEUED,
+                            FullAgenticInvestigationRecord.last_recovery_reason,
+                        ),
+                        else_="Lease expired before the worker finished",
+                    ),
                     version=FullAgenticInvestigationRecord.version + 1,
                 )
                 .returning(FullAgenticInvestigationRecord)
@@ -386,6 +419,52 @@ class SqlAlchemyFullAgenticRepository:
         await self._session.flush()
         return int(next_version) if next_version is not None else None
 
+    async def reserve_llm_call(
+        self,
+        investigation: FullAgenticInvestigation,
+        worker_id: str,
+        heartbeat_at: datetime,
+        lease_expires_at: datetime,
+    ) -> int | None:
+        """Charge the reserved call and renew the lease in one statement.
+
+        The guard is the lease, not only the version: a worker whose lease was
+        taken while it was thinking must not be able to spend the budget of an
+        investigation somebody else is now running. Returning ``None`` says
+        exactly that, and the caller stops.
+
+        ``usage`` is a JSON document, so the new counters are computed by the
+        aggregate — which owns the ceiling — and written here under the guard.
+        """
+        next_version = (
+            await self._session.execute(
+                update(FullAgenticInvestigationRecord)
+                .where(
+                    FullAgenticInvestigationRecord.id == investigation.id,
+                    FullAgenticInvestigationRecord.version == investigation.version,
+                    FullAgenticInvestigationRecord.status
+                    == FullAgenticInvestigationStatus.RUNNING,
+                    FullAgenticInvestigationRecord.lease_owner == worker_id,
+                    FullAgenticInvestigationRecord.lease_expires_at > heartbeat_at,
+                )
+                .values(
+                    usage={
+                        "iterations": investigation.usage.iterations,
+                        "queries": investigation.usage.queries,
+                        "results": investigation.usage.results,
+                        "candidates": investigation.usage.candidates,
+                        "llm_calls": investigation.usage.llm_calls,
+                    },
+                    heartbeat_at=heartbeat_at,
+                    lease_expires_at=lease_expires_at,
+                    version=FullAgenticInvestigationRecord.version + 1,
+                )
+                .returning(FullAgenticInvestigationRecord.version)
+            )
+        ).scalar_one_or_none()
+        await self._session.flush()
+        return int(next_version) if next_version is not None else None
+
     async def get_investigation(
         self, investigation_id: FullAgenticInvestigationId
     ) -> FullAgenticInvestigation | None:
@@ -393,6 +472,38 @@ class SqlAlchemyFullAgenticRepository:
             FullAgenticInvestigationRecord, investigation_id, populate_existing=True
         )
         return _investigation_to_domain(record) if record else None
+
+    async def list_abandoned(
+        self, created_before: datetime, limit: int
+    ) -> list[FullAgenticInvestigation]:
+        """Live rows older than the ceiling, oldest first.
+
+        Age is measured from creation, not from the last heartbeat: a row that
+        keeps being recovered stays warm forever while never finishing, and it
+        is exactly that row the ceiling exists to end.
+        """
+        records = (
+            (
+                await self._session.execute(
+                    select(FullAgenticInvestigationRecord)
+                    .where(
+                        FullAgenticInvestigationRecord.status.in_(
+                            (
+                                FullAgenticInvestigationStatus.QUEUED,
+                                FullAgenticInvestigationStatus.RUNNING,
+                                FullAgenticInvestigationStatus.CANCEL_REQUESTED,
+                            )
+                        ),
+                        FullAgenticInvestigationRecord.created_at < created_before,
+                    )
+                    .order_by(FullAgenticInvestigationRecord.created_at)
+                    .limit(limit)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        return [_investigation_to_domain(record) for record in records]
 
     async def get_by_idempotency_key(self, key: str) -> FullAgenticInvestigation | None:
         record = (

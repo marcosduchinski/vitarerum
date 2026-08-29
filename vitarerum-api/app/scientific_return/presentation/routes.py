@@ -167,6 +167,7 @@ logger = logging.getLogger(__name__)
 
 def _full_agentic_response(
     item: FullAgenticInvestigation,
+    max_recoveries: int | None = None,
 ) -> FullAgenticInvestigationResponse:
     return FullAgenticInvestigationResponse(
         id=item.id,
@@ -196,6 +197,11 @@ def _full_agentic_response(
         heartbeatAt=item.heartbeat_at,
         failureReason=item.failure_reason,
         degradedReason=item.degraded_reason,
+        recoveryCount=item.recovery_count,
+        maxRecoveries=max_recoveries,
+        lastRecoveredAt=item.last_recovered_at,
+        lastRecoveryReason=item.last_recovery_reason,
+        leaseExpiresAt=item.lease_expires_at,
     )
 
 
@@ -277,6 +283,7 @@ async def get_full_agentic_investigation(
     investigation_id: str,
     caller: CallerPermission,
     repository: FullAgenticRepositoryDep,
+    configuration: FullAgenticConfigDep,
 ) -> FullAgenticInvestigationResponse:
     try:
         item = await GetFullAgenticInvestigation(repository).execute(
@@ -284,7 +291,7 @@ async def get_full_agentic_investigation(
         )
     except LookupError as exc:
         raise _not_found("FULL_AGENTIC_INVESTIGATION_NOT_FOUND", str(exc)) from None
-    return _full_agentic_response(item)
+    return _full_agentic_response(item, configuration.max_recoveries)
 
 
 @scientific_return_router.get(
@@ -295,11 +302,14 @@ async def list_full_agentic_investigations(
     watch_id: str,
     caller: CallerPermission,
     repository: FullAgenticRepositoryDep,
+    configuration: FullAgenticConfigDep,
     limit: int = Query(default=20, ge=1, le=100),
 ) -> list[FullAgenticInvestigationResponse]:
     require_staff(caller)
     items = await repository.list_investigations(watch_id, limit)
-    return [_full_agentic_response(item) for item in items]
+    return [
+        _full_agentic_response(item, configuration.max_recoveries) for item in items
+    ]
 
 
 @scientific_return_router.get(
@@ -728,6 +738,13 @@ async def get_metrics(
             pendingCandidates=metrics.full_agentic_pending_candidates,
             confirmedCandidates=metrics.full_agentic_confirmed_candidates,
             dismissedCandidates=metrics.full_agentic_dismissed_candidates,
+            llmTimeouts=metrics.full_agentic_llm_timeouts,
+            sourceWaitsRejected=metrics.full_agentic_source_waits_rejected,
+            recoveries=metrics.full_agentic_recoveries,
+            recoveriesExhausted=metrics.full_agentic_recoveries_exhausted,
+            liveInvestigations=metrics.full_agentic_live_investigations,
+            expiredLeases=metrics.full_agentic_expired_leases,
+            oldestLiveAgeSeconds=metrics.full_agentic_oldest_live_age_seconds,
         ),
     )
 

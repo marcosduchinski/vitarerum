@@ -78,6 +78,8 @@ async def test_planner_parses_specs_and_filters_unknown_sources() -> None:
     assert len(plan.searches) == 1
     assert plan.searches[0].source == "EUROPE_PMC"
     assert "sourceCapabilities" in json.loads(reasoner.user_prompt)
+    assert plan.prompt_version_id == "version-id"
+    assert plan.prompt_version == "v2"
 
 
 @pytest.mark.asyncio

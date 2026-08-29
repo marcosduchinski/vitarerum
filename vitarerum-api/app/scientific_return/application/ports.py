@@ -63,6 +63,28 @@ class AgentPromptUnavailable(RuntimeError):
     pass
 
 
+class SourceWaitBudgetExceeded(RuntimeError):
+    """A source asked to be waited for longer than this deployment allows.
+
+    Raised instead of shortening the wait: honouring a shorter delay would
+    breach the source's stated rate limit and risk losing access altogether.
+    The attempt is abandoned and the query is recorded as failed, which the
+    agentic loop already treats as an ordinary outcome.
+    """
+
+
+class SourceRetryDelayExceeded(SourceWaitBudgetExceeded):
+    """``Retry-After`` asked for longer than ``max_retry_after_seconds``."""
+
+
+class SourceRateLimitWaitExceeded(SourceWaitBudgetExceeded):
+    """The shared throttle queue is longer than this deployment will wait."""
+
+
+class SourceDeadlineExceeded(SourceWaitBudgetExceeded):
+    """Waits, retries and HTTP together outlived the source's total budget."""
+
+
 @dataclass(frozen=True, slots=True)
 class PublishedAgentPrompt:
     version_id: str
@@ -324,6 +346,17 @@ class ScientificReturnMetrics:
     full_agentic_pending_candidates: int = 0
     full_agentic_confirmed_candidates: int = 0
     full_agentic_dismissed_candidates: int = 0
+    # Health of the flow rather than of its results. Each of these was, at some
+    # point, a failure nobody could see until an investigation had been stuck
+    # for days: a model that never answers, a source that asks to be waited for
+    # longer than the platform allows, a row that keeps being taken over.
+    full_agentic_llm_timeouts: int = 0
+    full_agentic_source_waits_rejected: int = 0
+    full_agentic_recoveries: int = 0
+    full_agentic_recoveries_exhausted: int = 0
+    full_agentic_live_investigations: int = 0
+    full_agentic_expired_leases: int = 0
+    full_agentic_oldest_live_age_seconds: int = 0
 
 
 @dataclass(frozen=True, slots=True)

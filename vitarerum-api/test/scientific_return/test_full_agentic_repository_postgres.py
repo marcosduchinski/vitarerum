@@ -347,3 +347,157 @@ def test_the_first_degradation_reason_is_the_one_kept() -> None:
     investigation.degrade("something else later")
 
     assert investigation.degraded_reason == "the planner failed"
+
+
+async def test_only_a_take_over_counts_as_a_recovery_on_postgresql(
+    postgres_engine: AsyncEngine,
+) -> None:
+    """A first claim and a yielded slice are not recoveries; a cold lease is."""
+
+    async with postgres_engine.connect() as connection:
+        await connection.execute(
+            text(
+                "CREATE TEMP TABLE sr_full_agentic_investigations "
+                "(LIKE public.sr_full_agentic_investigations INCLUDING ALL)"
+            )
+        )
+        session = AsyncSession(bind=connection, expire_on_commit=False)
+        repository = SqlAlchemyFullAgenticRepository(session, FieldEncryptor(bytes(32)))
+        now = datetime.now(tz=UTC)
+        investigation = FullAgenticInvestigation(
+            id=FullAgenticInvestigationId("investigation-recovery"),
+            watch_id=ScientificReturnWatchId("watch-recovery"),
+            objective=InvestigationObjective.DISCOVER_CANDIDATE,
+            status=FullAgenticInvestigationStatus.QUEUED,
+            idempotency_key="recovery",
+            budget=AgenticBudget(1, 1, 1, 1, 2),
+            usage=AgenticUsage(),
+            created_by=PermissionId("permission-recovery"),
+            created_at=now,
+        )
+        await repository.add_investigation(investigation)
+
+        first = await repository.claim_investigation(
+            investigation.id, "worker-a", now, now + timedelta(minutes=5)
+        )
+        assert first is not None and first.recovery_count == 0
+
+        # The worker died: the lease goes cold and another one takes over.
+        cold = now + timedelta(minutes=10)
+        recovered = await repository.claim_investigation(
+            investigation.id, "worker-b", cold, cold + timedelta(minutes=5)
+        )
+        assert recovered is not None
+        assert recovered.recovery_count == 1
+        assert recovered.last_recovered_at is not None
+
+        # A voluntary hand-back returns the row to the queue, and the next claim
+        # of a queued row must not be charged as a recovery.
+        recovered.yield_slice("slice ended", cold)
+        await repository.save_investigation(recovered)
+        resumed = await repository.claim_investigation(
+            investigation.id, "worker-c", cold, cold + timedelta(minutes=5)
+        )
+        assert resumed is not None
+        assert resumed.recovery_count == 1
+        await session.close()
+
+
+async def test_a_stale_worker_cannot_spend_the_budget_on_postgresql(
+    postgres_engine: AsyncEngine,
+) -> None:
+    """The reservation is guarded by the lease, not only by the version."""
+
+    async with postgres_engine.connect() as connection:
+        await connection.execute(
+            text(
+                "CREATE TEMP TABLE sr_full_agentic_investigations "
+                "(LIKE public.sr_full_agentic_investigations INCLUDING ALL)"
+            )
+        )
+        session = AsyncSession(bind=connection, expire_on_commit=False)
+        repository = SqlAlchemyFullAgenticRepository(session, FieldEncryptor(bytes(32)))
+        now = datetime.now(tz=UTC)
+        investigation = FullAgenticInvestigation(
+            id=FullAgenticInvestigationId("investigation-reserve-pg"),
+            watch_id=ScientificReturnWatchId("watch-reserve-pg"),
+            objective=InvestigationObjective.DISCOVER_CANDIDATE,
+            status=FullAgenticInvestigationStatus.QUEUED,
+            idempotency_key="reserve-pg",
+            budget=AgenticBudget(1, 1, 1, 1, 4),
+            usage=AgenticUsage(),
+            created_by=PermissionId("permission-reserve"),
+            created_at=now,
+        )
+        await repository.add_investigation(investigation)
+        claimed = await repository.claim_investigation(
+            investigation.id, "worker-a", now, now + timedelta(minutes=5)
+        )
+        assert claimed is not None
+
+        claimed.reserve_llm_call()
+        version = await repository.reserve_llm_call(
+            claimed, "worker-a", now, now + timedelta(minutes=5)
+        )
+        assert version is not None
+        claimed.version = version
+
+        stored = await repository.get_investigation(investigation.id)
+        assert stored is not None and stored.usage.llm_calls == 1
+
+        # Another worker took the row over; the first must not spend its budget.
+        cold = now + timedelta(minutes=10)
+        await repository.claim_investigation(
+            investigation.id, "worker-b", cold, cold + timedelta(minutes=5)
+        )
+        claimed.reserve_llm_call()
+        assert (
+            await repository.reserve_llm_call(
+                claimed, "worker-a", cold, cold + timedelta(minutes=5)
+            )
+            is None
+        )
+        after = await repository.get_investigation(investigation.id)
+        assert after is not None and after.usage.llm_calls == 1
+        await session.close()
+
+
+async def test_abandoned_listing_finds_only_old_live_rows_on_postgresql(
+    postgres_engine: AsyncEngine,
+) -> None:
+    async with postgres_engine.connect() as connection:
+        await connection.execute(
+            text(
+                "CREATE TEMP TABLE sr_full_agentic_investigations "
+                "(LIKE public.sr_full_agentic_investigations INCLUDING ALL)"
+            )
+        )
+        session = AsyncSession(bind=connection, expire_on_commit=False)
+        repository = SqlAlchemyFullAgenticRepository(session, FieldEncryptor(bytes(32)))
+        now = datetime.now(tz=UTC)
+
+        async def add(identifier: str, created_at: datetime, status: str) -> None:
+            await repository.add_investigation(
+                FullAgenticInvestigation(
+                    id=FullAgenticInvestigationId(identifier),
+                    # One live investigation per target is enforced by a
+                    # partial unique index, so each row needs its own watch.
+                    watch_id=ScientificReturnWatchId(f"watch-{identifier}"),
+                    objective=InvestigationObjective.DISCOVER_CANDIDATE,
+                    status=FullAgenticInvestigationStatus(status),
+                    idempotency_key=identifier,
+                    budget=AgenticBudget(1, 1, 1, 1, 2),
+                    usage=AgenticUsage(),
+                    created_by=PermissionId("permission-abandoned"),
+                    created_at=created_at,
+                )
+            )
+
+        await add("old-live", now - timedelta(days=2), "QUEUED")
+        await add("recent-live", now, "QUEUED")
+        await add("old-finished", now - timedelta(days=2), "COMPLETED")
+
+        abandoned = await repository.list_abandoned(now - timedelta(days=1), 25)
+
+        assert [str(item.id) for item in abandoned] == ["old-live"]
+        await session.close()

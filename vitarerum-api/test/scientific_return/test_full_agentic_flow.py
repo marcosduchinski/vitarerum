@@ -10,6 +10,7 @@ from app.scientific_return.application.agent_tools import (
     normalized_tool_idempotency_key,
 )
 from app.scientific_return.application.full_agentic import (
+    CloseAbandonedFullAgenticInvestigations,
     ExecuteFullAgenticInput,
     ExecuteFullAgenticScientificReturn,
     FullAgenticCircuitOpen,
@@ -24,6 +25,7 @@ from app.scientific_return.application.full_agentic_ports import (
     LearningProposal,
 )
 from app.scientific_return.application.ports import (
+    AgentReasonerTimeout,
     BibliographicRecord,
     BibliographicSourceCapabilities,
     ScientificReturnMetrics,
@@ -36,6 +38,7 @@ from app.scientific_return.domain.enums import (
     FullAgenticInvestigationStatus,
     InvestigationObjective,
     RunKind,
+    RunStatus,
     SearchIntent,
     SearchStrategy,
     WatchStatus,
@@ -147,10 +150,25 @@ class FullRepository:
             return None
         if item.status is FullAgenticInvestigationStatus.QUEUED:
             item.start(claimed_at)
+        else:
+            # Mirrors the SQL: only a take-over from a cold lease is a recovery.
+            item.record_recovery(claimed_at, "Lease expired before the worker finished")
         item.lease_owner = worker_id
         item.lease_expires_at = lease_expires_at
         item.version += 1
         return item
+
+    async def list_abandoned(
+        self, created_before: datetime, limit: int
+    ) -> list[FullAgenticInvestigation]:
+        return sorted(
+            (
+                item
+                for item in self.investigations.values()
+                if not item.status.is_terminal and item.created_at < created_before
+            ),
+            key=lambda item: item.created_at,
+        )[:limit]
 
     async def renew_investigation_lease(
         self,
@@ -167,6 +185,28 @@ class FullRepository:
             or item.lease_expires_at <= heartbeat_at
         ):
             return None
+        item.heartbeat_at = heartbeat_at
+        item.lease_expires_at = lease_expires_at
+        item.version += 1
+        return item.version
+
+    async def reserve_llm_call(
+        self,
+        investigation: FullAgenticInvestigation,
+        worker_id: str,
+        heartbeat_at: datetime,
+        lease_expires_at: datetime,
+    ) -> int | None:
+        item = self.investigations[str(investigation.id)]
+        if (
+            item.status is not FullAgenticInvestigationStatus.RUNNING
+            or item.lease_owner != worker_id
+            or item.lease_expires_at is None
+            or item.lease_expires_at <= heartbeat_at
+            or item.version != investigation.version
+        ):
+            return None
+        item.usage = investigation.usage
         item.heartbeat_at = heartbeat_at
         item.lease_expires_at = lease_expires_at
         item.version += 1
@@ -946,6 +986,413 @@ async def test_a_healthy_investigation_is_never_marked_degraded() -> None:
     assert completed.degraded_reason is None
 
 
+class CommitLog:
+    """A unit of work that remembers what was durable at each commit."""
+
+    def __init__(self, repository: FullRepository, investigation_id: str) -> None:
+        self._repository = repository
+        self._investigation_id = investigation_id
+        self.snapshots: list[int] = []
+
+    async def commit(self) -> None:
+        item = self._repository.investigations.get(self._investigation_id)
+        self.snapshots.append(item.usage.llm_calls if item else 0)
+
+    async def rollback(self) -> None:
+        pass
+
+
+@pytest.mark.asyncio
+async def test_every_model_call_is_charged_and_committed_before_it_starts() -> None:
+    """The reservation must be durable before the call, not after it returns.
+
+    Charging afterwards only records calls that came back, so a worker killed
+    mid-call resumes with the budget untouched and repeats the same work at no
+    cost — the shape that lets an investigation retry forever.
+    """
+
+    scientific, watch = setup_scientific_repository()
+    repository = FullRepository()
+    config = FullAgenticConfiguration(
+        enabled=True,
+        allowed_sources=("TEST",),
+        budget=AgenticBudget(1, 2, 5, 2, 4),
+    )
+    investigation = FullAgenticInvestigation(
+        id=FullAgenticInvestigationId("investigation-reserve"),
+        watch_id=watch.id,
+        objective=InvestigationObjective.DISCOVER_CANDIDATE,
+        status=FullAgenticInvestigationStatus.QUEUED,
+        idempotency_key="reserve",
+        budget=config.budget,
+        usage=AgenticUsage(),
+        created_by=PermissionId("permission-1"),
+        created_at=_NOW,
+    )
+    await repository.add_investigation(investigation)
+    uow = CommitLog(repository, str(investigation.id))
+    charged_when_called: list[int] = []
+
+    class ObservingReasoner(Reasoner):
+        async def assess(self, **kwargs: object) -> AssessmentResult:
+            charged_when_called.append(uow.snapshots[-1] if uow.snapshots else 0)
+            return await super().assess(**kwargs)
+
+    await ExecuteFullAgenticScientificReturn(
+        scientific,
+        repository,
+        ObservingReasoner(),
+        (Source(),),
+        uow,
+        Clock(),
+        config,
+    ).execute(ExecuteFullAgenticInput(investigation.id, "worker-1"))
+
+    assert charged_when_called
+    assert charged_when_called[0] >= 1
+    starts = [
+        event
+        for event in repository.events
+        if event.kind is AgenticTrajectoryEventKind.LLM_CALL_STARTED
+    ]
+    assert starts
+    assert starts[0].payload["phase"] == "ARTICLE_ASSESSMENT"
+    assert starts[0].payload["llmCalls"] == 1
+
+
+@pytest.mark.asyncio
+async def test_a_hard_death_leaves_the_reserved_call_spent() -> None:
+    """Resuming after a kill must not rewind the budget the dead pass charged."""
+
+    scientific, watch = setup_scientific_repository()
+    repository = FullRepository()
+    config = FullAgenticConfiguration(
+        enabled=True,
+        allowed_sources=("TEST",),
+        budget=AgenticBudget(1, 2, 5, 2, 4),
+    )
+    investigation = FullAgenticInvestigation(
+        id=FullAgenticInvestigationId("investigation-killed"),
+        watch_id=watch.id,
+        objective=InvestigationObjective.DISCOVER_CANDIDATE,
+        status=FullAgenticInvestigationStatus.QUEUED,
+        idempotency_key="killed",
+        budget=config.budget,
+        usage=AgenticUsage(),
+        created_by=PermissionId("permission-1"),
+        created_at=_NOW,
+    )
+    await repository.add_investigation(investigation)
+
+    class KilledReasoner(Reasoner):
+        async def assess(self, **kwargs: object) -> AssessmentResult:
+            # A signal, not an exception the loop could absorb: this is what a
+            # platform timeout or an out-of-memory kill looks like from here.
+            raise KeyboardInterrupt("worker killed")
+
+    with pytest.raises(KeyboardInterrupt):
+        await ExecuteFullAgenticScientificReturn(
+            scientific,
+            repository,
+            KilledReasoner(),
+            (Source(),),
+            Uow(),
+            Clock(),
+            config,
+        ).execute(ExecuteFullAgenticInput(investigation.id, "worker-1"))
+
+    stored = repository.investigations[str(investigation.id)]
+    assert stored.usage.llm_calls == 1
+    assert stored.status is FullAgenticInvestigationStatus.RUNNING
+
+    # The lease outlives the process, so the row becomes claimable only later.
+    stored.lease_expires_at = _NOW - timedelta(seconds=1)
+
+    resumed = await ExecuteFullAgenticScientificReturn(
+        scientific,
+        repository,
+        Reasoner(),
+        (Source(),),
+        Uow(),
+        Clock(),
+        config,
+    ).execute(ExecuteFullAgenticInput(investigation.id, "worker-2"))
+
+    assert resumed.status is FullAgenticInvestigationStatus.COMPLETED
+    assert resumed.usage.llm_calls == 2
+
+
+@pytest.mark.asyncio
+async def test_an_exhausted_budget_never_reaches_the_model() -> None:
+    scientific, watch = setup_scientific_repository()
+    repository = FullRepository()
+    config = FullAgenticConfiguration(
+        enabled=True,
+        allowed_sources=("TEST",),
+        budget=AgenticBudget(1, 2, 5, 2, 1),
+    )
+    investigation = FullAgenticInvestigation(
+        id=FullAgenticInvestigationId("investigation-no-budget"),
+        watch_id=watch.id,
+        objective=InvestigationObjective.DISCOVER_CANDIDATE,
+        status=FullAgenticInvestigationStatus.QUEUED,
+        idempotency_key="no-budget",
+        budget=config.budget,
+        usage=AgenticUsage(llm_calls=1),
+        created_by=PermissionId("permission-1"),
+        created_at=_NOW,
+    )
+    await repository.add_investigation(investigation)
+
+    class RefusingReasoner(Reasoner):
+        async def assess(self, **kwargs: object) -> AssessmentResult:
+            raise AssertionError("The model must not be called without budget")
+
+    completed = await ExecuteFullAgenticScientificReturn(
+        scientific,
+        repository,
+        RefusingReasoner(),
+        (Source(),),
+        Uow(),
+        Clock(),
+        config,
+    ).execute(ExecuteFullAgenticInput(investigation.id, "worker-1"))
+
+    assert completed.status is FullAgenticInvestigationStatus.COMPLETED
+    assert completed.usage.llm_calls == 1
+
+
+class SpentDeadline:
+    """A slice with nothing left, however long the operation asked for."""
+
+    total_seconds = 1.0
+
+    def remaining(self) -> float:
+        return 0.0
+
+    def allows(self, seconds: float) -> bool:
+        return False
+
+
+def _live_investigation(
+    identifier: str, *, recovery_count: int = 0, created_at: datetime = _NOW
+) -> FullAgenticInvestigation:
+    return FullAgenticInvestigation(
+        id=FullAgenticInvestigationId(identifier),
+        watch_id=ScientificReturnWatchId("watch-1"),
+        objective=InvestigationObjective.DISCOVER_CANDIDATE,
+        status=FullAgenticInvestigationStatus.QUEUED,
+        idempotency_key=identifier,
+        budget=AgenticBudget(3, 4, 10, 3, 8),
+        usage=AgenticUsage(),
+        created_by=PermissionId("permission-1"),
+        created_at=created_at,
+        recovery_count=recovery_count,
+    )
+
+
+@pytest.mark.asyncio
+async def test_the_worker_hands_the_slice_back_instead_of_being_killed() -> None:
+    """Stopping early keeps the work; being killed by the platform loses it."""
+
+    scientific, watch = setup_scientific_repository()
+    repository = FullRepository()
+    config = FullAgenticConfiguration(
+        enabled=True,
+        allowed_sources=("TEST",),
+        budget=AgenticBudget(3, 4, 10, 3, 8),
+    )
+    investigation = _live_investigation("investigation-slice")
+    investigation.watch_id = watch.id
+    await repository.add_investigation(investigation)
+
+    class RefusingReasoner(Reasoner):
+        async def assess(self, **kwargs: object) -> AssessmentResult:
+            raise AssertionError("A spent slice must not start a model call")
+
+    yielded = await ExecuteFullAgenticScientificReturn(
+        scientific,
+        repository,
+        RefusingReasoner(),
+        (Source(),),
+        Uow(),
+        Clock(),
+        config,
+        SpentDeadline(),
+    ).execute(ExecuteFullAgenticInput(investigation.id, "worker-1"))
+
+    assert yielded.status is FullAgenticInvestigationStatus.QUEUED
+    assert yielded.lease_owner is None
+    assert yielded.lease_expires_at is None
+    assert any(
+        event.kind is AgenticTrajectoryEventKind.EXECUTION_SLICE_EXHAUSTED
+        for event in repository.events
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_yielded_slice_is_not_charged_as_a_recovery() -> None:
+    """Otherwise healthy long work spends its recovery allowance and is killed."""
+
+    scientific, watch = setup_scientific_repository()
+    repository = FullRepository()
+    config = FullAgenticConfiguration(
+        enabled=True,
+        allowed_sources=("TEST",),
+        budget=AgenticBudget(3, 4, 10, 3, 8),
+    )
+    investigation = _live_investigation("investigation-yield-twice")
+    investigation.watch_id = watch.id
+    await repository.add_investigation(investigation)
+
+    for _ in range(3):
+        await ExecuteFullAgenticScientificReturn(
+            scientific,
+            repository,
+            Reasoner(),
+            (Source(),),
+            Uow(),
+            Clock(),
+            config,
+            SpentDeadline(),
+        ).execute(ExecuteFullAgenticInput(investigation.id, "worker-1"))
+
+    assert repository.investigations[str(investigation.id)].recovery_count == 0
+
+
+@pytest.mark.asyncio
+async def test_a_repeatedly_recovered_investigation_is_terminated() -> None:
+    scientific, watch = setup_scientific_repository()
+    repository = FullRepository()
+    config = FullAgenticConfiguration(
+        enabled=True,
+        allowed_sources=("TEST",),
+        budget=AgenticBudget(3, 4, 10, 3, 8),
+        max_recoveries=2,
+    )
+    investigation = _live_investigation("investigation-poisoned", recovery_count=3)
+    investigation.watch_id = watch.id
+    investigation.status = FullAgenticInvestigationStatus.RUNNING
+    investigation.lease_expires_at = _NOW - timedelta(seconds=1)
+    await repository.add_investigation(investigation)
+
+    class RefusingReasoner(Reasoner):
+        async def assess(self, **kwargs: object) -> AssessmentResult:
+            raise AssertionError("An exhausted investigation must not run again")
+
+    terminated = await ExecuteFullAgenticScientificReturn(
+        scientific,
+        repository,
+        RefusingReasoner(),
+        (Source(),),
+        Uow(),
+        Clock(),
+        config,
+    ).execute(ExecuteFullAgenticInput(investigation.id, "worker-1"))
+
+    assert terminated.status is FullAgenticInvestigationStatus.FAILED
+    assert terminated.lease_owner is None
+    assert any(
+        event.kind is AgenticTrajectoryEventKind.RECOVERY_LIMIT_EXHAUSTED
+        for event in repository.events
+    )
+
+
+@pytest.mark.asyncio
+async def test_the_reaper_closes_only_investigations_past_their_age() -> None:
+    """A live row blocks its target, so one that cannot finish must stop being live."""
+
+    repository = FullRepository()
+    old = _live_investigation("investigation-old", created_at=_NOW - timedelta(days=2))
+    old.status = FullAgenticInvestigationStatus.RUNNING
+    recent = _live_investigation("investigation-recent", created_at=_NOW)
+    cancelling = _live_investigation(
+        "investigation-cancelling", created_at=_NOW - timedelta(days=2)
+    )
+    cancelling.status = FullAgenticInvestigationStatus.CANCEL_REQUESTED
+    for item in (old, recent, cancelling):
+        await repository.add_investigation(item)
+
+    scientific, _ = setup_scientific_repository()
+    closed = await CloseAbandonedFullAgenticInvestigations(
+        repository, scientific, Uow(), Clock(), timedelta(days=1)
+    ).execute(limit=25)
+
+    assert closed == 2
+    assert old.status is FullAgenticInvestigationStatus.FAILED
+    assert cancelling.status is FullAgenticInvestigationStatus.CANCELLED
+    assert recent.status is FullAgenticInvestigationStatus.QUEUED
+    assert [
+        event.kind
+        for event in repository.events
+        if event.kind is AgenticTrajectoryEventKind.ABANDONED
+    ] == [AgenticTrajectoryEventKind.ABANDONED] * 2
+
+
+@pytest.mark.asyncio
+async def test_plan_events_record_the_prompt_version_that_ran() -> None:
+    """The trajectory must name the planner prompt, not a literal in the code.
+
+    The floor produces its plan without a prompt, so it is named for what it
+    is; only a model-produced plan carries a published version label.
+    """
+
+    class VersionedReasoner(Reasoner):
+        async def plan(self, **kwargs: object) -> AgenticPlan:
+            plan = await super().plan(**kwargs)
+            return replace(
+                plan,
+                prompt_version_id="pver-sr-full-plan-v2",
+                prompt_version="scientific-return-full-agentic-plan-v2",
+            )
+
+    scientific, watch = setup_scientific_repository()
+    repository = FullRepository()
+    config = FullAgenticConfiguration(
+        enabled=True,
+        allowed_sources=("TEST",),
+        budget=AgenticBudget(3, 4, 10, 3, 8),
+    )
+    investigation = FullAgenticInvestigation(
+        id=FullAgenticInvestigationId("investigation-plan-version"),
+        watch_id=watch.id,
+        objective=InvestigationObjective.DISCOVER_CANDIDATE,
+        status=FullAgenticInvestigationStatus.QUEUED,
+        idempotency_key="plan-version",
+        budget=config.budget,
+        usage=AgenticUsage(),
+        created_by=PermissionId("permission-1"),
+        created_at=_NOW,
+    )
+    await repository.add_investigation(investigation)
+
+    await ExecuteFullAgenticScientificReturn(
+        scientific,
+        repository,
+        VersionedReasoner(),
+        (Source(),),
+        Uow(),
+        Clock(),
+        config,
+    ).execute(ExecuteFullAgenticInput(investigation.id, "worker-1"))
+
+    plans = [
+        event.payload
+        for event in repository.events
+        if event.kind is AgenticTrajectoryEventKind.PLAN_CREATED
+    ]
+    assert plans
+    assert plans[0]["contractVersion"] == "deterministic-floor"
+    assert plans[0]["promptVersionId"] is None
+    planned = [item for item in plans[1:] if item["promptVersionId"] is not None]
+    assert planned
+    assert all(
+        item["contractVersion"] == "scientific-return-full-agentic-plan-v2"
+        and item["promptVersionId"] == "pver-sr-full-plan-v2"
+        for item in planned
+    )
+
+
 @pytest.mark.asyncio
 async def test_a_metadata_only_source_is_given_fewer_results_to_spend() -> None:
     scientific, watch = setup_scientific_repository()
@@ -1290,3 +1737,178 @@ def test_repeated_cancel_request_is_idempotent() -> None:
     investigation.request_cancel(PermissionId("permission-1"), _NOW)
 
     assert investigation.status is FullAgenticInvestigationStatus.CANCEL_REQUESTED
+
+
+@pytest.mark.asyncio
+async def test_no_failure_mode_keeps_an_investigation_alive_forever() -> None:
+    """The acceptance criterion of the whole hardening, stated as one test.
+
+    A model that never answers, a source that asks to be waited for beyond the
+    ceiling, and a worker killed outright: none of them may leave the same
+    investigation live run after run. Each pass must either finish it or spend
+    something that brings its end closer.
+    """
+
+    scientific, watch = setup_scientific_repository()
+    repository = FullRepository()
+    config = FullAgenticConfiguration(
+        enabled=True,
+        allowed_sources=("TEST",),
+        budget=AgenticBudget(2, 2, 4, 2, 3),
+        max_recoveries=2,
+    )
+    investigation = _live_investigation("investigation-poison")
+    investigation.watch_id = watch.id
+    await repository.add_investigation(investigation)
+
+    class HostileReasoner(Reasoner):
+        async def assess(self, **kwargs: object) -> AssessmentResult:
+            raise AgentReasonerTimeout("never answers")
+
+    for _ in range(10):
+        stored = repository.investigations[str(investigation.id)]
+        if stored.status.is_terminal:
+            break
+        # Each run starts where the last one died: the lease has gone cold.
+        stored.lease_expires_at = _NOW - timedelta(seconds=1)
+        await ExecuteFullAgenticScientificReturn(
+            scientific,
+            repository,
+            HostileReasoner(),
+            (Source(),),
+            Uow(),
+            Clock(),
+            config,
+        ).execute(ExecuteFullAgenticInput(investigation.id, "worker-1"))
+
+    stored = repository.investigations[str(investigation.id)]
+    assert stored.status.is_terminal
+    assert stored.usage.llm_calls <= config.budget.max_llm_calls
+    timeouts = [
+        event
+        for event in repository.events
+        if event.kind is AgenticTrajectoryEventKind.LLM_CALL_TIMED_OUT
+    ]
+    assert timeouts, "a timed-out call must be distinguishable in the trajectory"
+
+
+@pytest.mark.asyncio
+async def test_a_terminated_investigation_never_leaves_its_run_open() -> None:
+    """The envelope is only completed on the happy path, so the others must close it.
+
+    A run left RUNNING for good is a lie in the project's history: it reads as
+    work still in progress long after the investigation stopped existing.
+    """
+
+    scientific, watch = setup_scientific_repository()
+    repository = FullRepository()
+    config = FullAgenticConfiguration(
+        enabled=True,
+        allowed_sources=("TEST",),
+        budget=AgenticBudget(3, 4, 10, 3, 8),
+        max_recoveries=0,
+    )
+    investigation = _live_investigation("investigation-envelope")
+    investigation.watch_id = watch.id
+    await repository.add_investigation(investigation)
+
+    # One healthy pass opens the envelope and completes normally.
+    await ExecuteFullAgenticScientificReturn(
+        scientific, repository, Reasoner(), (Source(),), Uow(), Clock(), config
+    ).execute(ExecuteFullAgenticInput(investigation.id, "worker-1"))
+
+    stored = repository.investigations[str(investigation.id)]
+    run_id = stored.search_run_id
+    assert run_id is not None
+
+    # Force it back into a live, recovered state past the ceiling.
+    stored.status = FullAgenticInvestigationStatus.RUNNING
+    stored.completed_at = None
+    stored.recovery_count = 1
+    stored.lease_expires_at = _NOW - timedelta(seconds=1)
+    run = await scientific.get_run(run_id)
+    assert run is not None
+    run.status = RunStatus.RUNNING
+    run.completed_at = None
+    await scientific.save_run(run)
+
+    terminated = await ExecuteFullAgenticScientificReturn(
+        scientific, repository, Reasoner(), (Source(),), Uow(), Clock(), config
+    ).execute(ExecuteFullAgenticInput(investigation.id, "worker-2"))
+
+    assert terminated.status is FullAgenticInvestigationStatus.FAILED
+    closed = await scientific.get_run(run_id)
+    assert closed is not None
+    assert closed.status is RunStatus.FAILED
+    assert closed.completed_at is not None
+    assert closed.error_message
+
+
+@pytest.mark.asyncio
+async def test_a_handed_back_slice_is_announced_to_a_push_queue() -> None:
+    """Under Cloud Tasks the finished task is the last one unless we say otherwise.
+
+    The database dispatcher needs no announcement — a poller finds the queued
+    row — but a push queue would simply never create the next task.
+    """
+
+    scientific, watch = setup_scientific_repository()
+    repository = FullRepository()
+    dispatcher = Dispatcher()
+    config = FullAgenticConfiguration(
+        enabled=True,
+        allowed_sources=("TEST",),
+        budget=AgenticBudget(3, 4, 10, 3, 8),
+    )
+    investigation = _live_investigation("investigation-announce")
+    investigation.watch_id = watch.id
+    await repository.add_investigation(investigation)
+
+    yielded = await ExecuteFullAgenticScientificReturn(
+        scientific,
+        repository,
+        Reasoner(),
+        (Source(),),
+        Uow(),
+        Clock(),
+        config,
+        SpentDeadline(),
+        dispatcher,
+    ).execute(ExecuteFullAgenticInput(investigation.id, "worker-1"))
+
+    assert yielded.status is FullAgenticInvestigationStatus.QUEUED
+    assert dispatcher.ids == [str(investigation.id)]
+
+
+@pytest.mark.asyncio
+async def test_a_failed_announcement_still_leaves_the_work_queued() -> None:
+    """The durable row is the queue; the announcement is only a notification."""
+
+    scientific, watch = setup_scientific_repository()
+    repository = FullRepository()
+    config = FullAgenticConfiguration(
+        enabled=True,
+        allowed_sources=("TEST",),
+        budget=AgenticBudget(3, 4, 10, 3, 8),
+    )
+    investigation = _live_investigation("investigation-announce-fails")
+    investigation.watch_id = watch.id
+    await repository.add_investigation(investigation)
+
+    class BrokenDispatcher:
+        async def enqueue(self, investigation_id: FullAgenticInvestigationId) -> None:
+            raise RuntimeError("the queue is unreachable")
+
+    yielded = await ExecuteFullAgenticScientificReturn(
+        scientific,
+        repository,
+        Reasoner(),
+        (Source(),),
+        Uow(),
+        Clock(),
+        config,
+        SpentDeadline(),
+        BrokenDispatcher(),
+    ).execute(ExecuteFullAgenticInput(investigation.id, "worker-1"))
+
+    assert yielded.status is FullAgenticInvestigationStatus.QUEUED

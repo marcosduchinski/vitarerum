@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from typing import NewType
 
@@ -176,6 +176,10 @@ class AgenticBudget:
             raise ValueError("Every full-agentic budget limit must be positive")
 
 
+class AgenticBudgetExhausted(RuntimeError):
+    """The investigation has no room left for the operation being attempted."""
+
+
 @dataclass(frozen=True, slots=True)
 class AgenticUsage:
     iterations: int = 0
@@ -224,6 +228,12 @@ class FullAgenticInvestigation:
     cancel_requested_by: PermissionId | None = None
     lease_owner: str | None = None
     lease_expires_at: datetime | None = None
+    # How many times a worker took this row over after a lease went cold. Kept
+    # on the aggregate because it is what decides whether the work itself is
+    # the problem, and that judgement is not the repository's to make.
+    recovery_count: int = 0
+    last_recovered_at: datetime | None = None
+    last_recovery_reason: str | None = None
     version: int = 0
     events: list[AgenticTrajectoryEvent] = field(default_factory=list)
 
@@ -288,6 +298,55 @@ class FullAgenticInvestigation:
         self.status = FullAgenticInvestigationStatus.FAILED
         self.failure_reason = reason[:2000]
         self.completed_at = occurred_at
+
+    def yield_slice(self, reason: str, occurred_at: datetime) -> None:
+        """Hand the investigation back to the queue, still unfinished.
+
+        A voluntary stop is not an abandonment: the row returns to QUEUED with
+        no lease, so the next claim reads as a first claim rather than as a
+        recovery from a dead worker. Counting it as a recovery would spend the
+        recovery allowance on healthy long work and terminate it.
+        """
+        if self.status is not FullAgenticInvestigationStatus.RUNNING:
+            raise ValueError("Only a running investigation can yield its slice")
+        self.status = FullAgenticInvestigationStatus.QUEUED
+        self.lease_owner = None
+        self.lease_expires_at = None
+        self.heartbeat_at = occurred_at
+        self.last_recovery_reason = reason[:200]
+
+    def record_recovery(self, occurred_at: datetime, reason: str) -> None:
+        """Note that this run picked up work a previous worker did not finish."""
+        self.recovery_count += 1
+        self.last_recovered_at = occurred_at
+        self.last_recovery_reason = reason[:200]
+
+    def recoveries_exhausted(self, ceiling: int) -> bool:
+        return self.recovery_count > ceiling
+
+    def reserve_llm_call(self) -> None:
+        """Spend one model call from the budget before the call is made.
+
+        Reserving up front is what makes the ceiling mean anything. Counting
+        afterwards only records calls that came back, so a worker killed mid
+        call — by the platform's window, by a hang, by an out-of-memory kill —
+        would resume with the budget untouched and repeat exactly the same work,
+        forever. Charging first turns any such death into progress towards the
+        end of the investigation.
+        """
+        if self.usage.llm_calls >= self.budget.max_llm_calls:
+            raise AgenticBudgetExhausted(
+                f"The model-call budget of {self.budget.max_llm_calls} is spent"
+            )
+        self.usage = replace(self.usage, llm_calls=self.usage.llm_calls + 1)
+
+    def spend_query(self, results: int) -> None:
+        """Charge one external query and the records it returned."""
+        self.usage = replace(
+            self.usage,
+            queries=self.usage.queries + 1,
+            results=self.usage.results + max(0, results),
+        )
 
 
 @dataclass(frozen=True, slots=True)

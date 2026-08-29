@@ -69,6 +69,22 @@ class Settings(BaseSettings):
     # reflecting 100-140s, so 60s would have made the deterministic fallback the
     # normal path rather than the exception.
     scientific_return_llm_timeout_seconds: float = 180.0
+    # The read timeout above bounds one streamed chunk; this bounds the whole
+    # call. ChatOllama streams even through ``ainvoke``, so without a total
+    # deadline a model looping on its own output never returns at all.
+    scientific_return_llm_total_timeout_seconds: float = 300.0
+    # Ollama generates without limit unless told otherwise. The ceiling is
+    # derived from the reader contract, whose worst legal answer is five 1200
+    # character passages plus a 2000 character explanation, so it must stay well
+    # clear of ~8000 characters or valid answers would be truncated into parse
+    # errors.
+    scientific_return_llm_num_predict: int = 4096
+    # How long any one bibliographic source may be waited for. A stated
+    # ``Retry-After`` above the ceiling abandons the attempt rather than
+    # shortening the wait, which would breach the source's rate limit.
+    scientific_return_source_max_retry_after_seconds: float = 60.0
+    scientific_return_source_total_timeout_seconds: float = 120.0
+    scientific_return_source_rate_limit_max_wait_seconds: float = 120.0
     # Agentic investigation (E1). SUPERVISED runs a tool only when staff start
     # the cycle explicitly; the server limits always win over any client value.
     scientific_return_agent_mode: str = "DISABLED"
@@ -93,6 +109,16 @@ class Settings(BaseSettings):
     scientific_return_full_agentic_circuit_min_decisions: int = 0
     scientific_return_full_agentic_circuit_min_precision: float = 0.0
     scientific_return_full_agentic_dispatcher: str = "DATABASE"
+    # One worker pass must end before the platform kills it: Cloud Run gives the
+    # job 30 minutes, and a killed process is what turns a slow investigation
+    # into an unaccounted retry. The slice is shared by everything the pass
+    # does, not granted per investigation.
+    scientific_return_full_agentic_run_deadline_seconds: float = 1500.0
+    # A row reclaimed after a lost lease is a recovery. Enough of them means the
+    # work itself is the problem, not the infrastructure.
+    scientific_return_full_agentic_max_recoveries: int = 3
+    scientific_return_full_agentic_max_age_seconds: int = 86400
+    scientific_return_full_agentic_reaper_batch_size: int = 25
     scientific_return_cloud_tasks_queue_url: str = ""
     scientific_return_cloud_tasks_worker_url: str = ""
     scientific_return_cloud_tasks_service_account: str = ""
@@ -123,6 +149,61 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    @model_validator(mode="after")
+    def validate_scientific_return_deadlines(self) -> "Settings":
+        """Reject a set of limits that cannot hold together, at startup.
+
+        These relations were only checked where the agentic configuration is
+        assembled, which happens per request, so a bad combination surfaced as
+        a failing investigation rather than as a process that refuses to boot.
+        A generation ceiling is validated here for the same reason it exists:
+        Ollama reads a non-positive ``num_predict`` as "no limit", which is
+        exactly the unbounded generation the ceiling was added to prevent.
+        """
+        errors: list[str] = []
+        if self.scientific_return_llm_timeout_seconds <= 0:
+            errors.append("scientific_return_llm_timeout_seconds must be positive")
+        if (
+            self.scientific_return_llm_total_timeout_seconds
+            < self.scientific_return_llm_timeout_seconds
+        ):
+            # The adapter would silently raise the total to the chunk timeout,
+            # honouring a limit nobody asked for; say so instead.
+            errors.append(
+                "scientific_return_llm_total_timeout_seconds cannot be below "
+                "scientific_return_llm_timeout_seconds, which bounds a single "
+                "streamed chunk"
+            )
+        if self.scientific_return_llm_num_predict <= 0:
+            errors.append(
+                "scientific_return_llm_num_predict must be positive; Ollama "
+                "reads zero or negative values as an unlimited generation"
+            )
+        if self.scientific_return_source_total_timeout_seconds <= 0:
+            errors.append(
+                "scientific_return_source_total_timeout_seconds must be positive"
+            )
+        if self.scientific_return_source_max_retry_after_seconds < 0:
+            errors.append(
+                "scientific_return_source_max_retry_after_seconds cannot be negative"
+            )
+        if self.scientific_return_source_rate_limit_max_wait_seconds < 0:
+            errors.append(
+                "scientific_return_source_rate_limit_max_wait_seconds cannot be "
+                "negative"
+            )
+        if (
+            self.scientific_return_full_agentic_run_deadline_seconds
+            <= self.scientific_return_llm_total_timeout_seconds
+        ):
+            errors.append(
+                "scientific_return_full_agentic_run_deadline_seconds must exceed "
+                "one model call, or a worker slice can never fit a single one"
+            )
+        if errors:
+            raise ValueError("; ".join(errors))
+        return self
 
     @model_validator(mode="after")
     def normalize_gmail_app_password(self) -> "Settings":

@@ -7,8 +7,6 @@ import json
 import re
 import time
 from collections.abc import Awaitable, Callable
-from datetime import UTC, datetime
-from email.utils import parsedate_to_datetime
 from typing import Any
 
 import httpx
@@ -16,6 +14,10 @@ import httpx
 from app.scientific_return.application.ports import (
     BibliographicRecord,
     BibliographicSourceCapabilities,
+)
+from app.scientific_return.infrastructure.source_wait import (
+    SourceDeadline,
+    SourceWaitBudget,
 )
 
 
@@ -42,6 +44,7 @@ class CrossrefBibliographicSource:
         min_interval_seconds: float = 0.25,
         transport: httpx.AsyncBaseTransport | None = None,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+        wait_budget: SourceWaitBudget | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout_seconds
@@ -51,6 +54,9 @@ class CrossrefBibliographicSource:
         self._min_interval_seconds = max(0.0, min_interval_seconds)
         self._transport = transport
         self._sleep = sleep
+        self._wait_budget = wait_budget or SourceWaitBudget(
+            max_retry_after_seconds=60.0, total_timeout_seconds=120.0
+        )
         self._request_lock = asyncio.Lock()
         self._last_request_at: float | None = None
 
@@ -77,17 +83,25 @@ class CrossrefBibliographicSource:
             headers={"User-Agent": user_agent},
             transport=self._transport,
         ) as client:
-            response = await self._get_with_retry(client, params)
+            response = await self._get_with_retry(
+                client, params, self._wait_budget.start(self.name)
+            )
         payload = response.json()
         items = payload.get("message", {}).get("items", [])
         return [self._to_record(item) for item in items if item.get("title")]
 
     async def _get_with_retry(
-        self, client: httpx.AsyncClient, params: dict[str, str | int]
+        self,
+        client: httpx.AsyncClient,
+        params: dict[str, str | int],
+        deadline: SourceDeadline,
     ) -> httpx.Response:
+        # The lock is taken before the budget is spent, so the wait for another
+        # caller's minimum interval counts against this call's deadline too.
         async with self._request_lock:
             for attempt in range(self._max_retries + 1):
                 await self._respect_minimum_interval()
+                deadline.ensure(self._timeout)
                 self._last_request_at = time.monotonic()
                 response = await client.get(f"{self._base_url}/works", params=params)
                 if (
@@ -96,7 +110,14 @@ class CrossrefBibliographicSource:
                 ):
                     response.raise_for_status()
                     return response
-                await self._sleep(self._retry_delay(response, attempt))
+                delay = self._wait_budget.retry_delay(
+                    source=self.name,
+                    retry_after_header=response.headers.get("Retry-After", ""),
+                    attempt=attempt,
+                    base_seconds=self._retry_base_seconds,
+                )
+                deadline.ensure(delay)
+                await self._sleep(delay)
         raise RuntimeError("Crossref retry loop ended unexpectedly")
 
     async def _respect_minimum_interval(self) -> None:
@@ -107,21 +128,6 @@ class CrossrefBibliographicSource:
         )
         if remaining > 0:
             await self._sleep(remaining)
-
-    def _retry_delay(self, response: httpx.Response, attempt: int) -> float:
-        retry_after = response.headers.get("Retry-After", "").strip()
-        if retry_after:
-            try:
-                return max(0.0, float(retry_after))
-            except ValueError:
-                try:
-                    retry_at = parsedate_to_datetime(retry_after)
-                    if retry_at.tzinfo is None:
-                        retry_at = retry_at.replace(tzinfo=UTC)
-                    return max(0.0, (retry_at - datetime.now(tz=UTC)).total_seconds())
-                except (TypeError, ValueError, OverflowError):
-                    pass
-        return self._retry_base_seconds * float(2**attempt)
 
     def _to_record(self, item: dict[str, Any]) -> BibliographicRecord:
         title = self._clean_markup(str(item.get("title", [""])[0])) or ""

@@ -15,6 +15,11 @@ import httpx
 from app.scientific_return.application.ports import (
     BibliographicRecord,
     BibliographicSourceCapabilities,
+    SourceWaitBudgetExceeded,
+)
+from app.scientific_return.infrastructure.source_wait import (
+    SourceDeadline,
+    SourceWaitBudget,
 )
 
 logger = logging.getLogger(__name__)
@@ -46,6 +51,7 @@ class EuropePmcBibliographicSource:
         email: str | None = None,
         transport: httpx.AsyncBaseTransport | None = None,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+        wait_budget: SourceWaitBudget | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout_seconds
@@ -55,6 +61,9 @@ class EuropePmcBibliographicSource:
         self._email = email
         self._transport = transport
         self._sleep = sleep
+        self._wait_budget = wait_budget or SourceWaitBudget(
+            max_retry_after_seconds=60.0, total_timeout_seconds=120.0
+        )
         self._full_text_cache: dict[str, str | None] = {}
 
     async def search(
@@ -74,12 +83,15 @@ class EuropePmcBibliographicSource:
         }
         if self._email:
             params["email"] = self._email
+        deadline = self._wait_budget.start(self.name)
         async with httpx.AsyncClient(
             timeout=self._timeout,
             headers={"User-Agent": "Vitarerum/0.1 (scientific-return evaluation)"},
             transport=self._transport,
         ) as client:
-            response = await self._get_with_retry(client, "search", params=params)
+            response = await self._get_with_retry(
+                client, "search", params=params, deadline=deadline
+            )
             items = response.json().get("resultList", {}).get("result", [])
             records: list[BibliographicRecord] = []
             for index, item in enumerate(items):
@@ -88,16 +100,26 @@ class EuropePmcBibliographicSource:
                 indexed_text = None
                 pmcid = str(item.get("pmcid", "")).strip()
                 if pmcid and index < self._full_text_result_limit:
-                    indexed_text = await self._get_full_text(client, pmcid)
+                    indexed_text = await self._get_full_text(client, pmcid, deadline)
                 records.append(self._to_record(item, indexed_text))
         return records
 
-    async def _get_full_text(self, client: httpx.AsyncClient, pmcid: str) -> str | None:
+    async def _get_full_text(
+        self, client: httpx.AsyncClient, pmcid: str, deadline: SourceDeadline
+    ) -> str | None:
+        """Enrichment is optional, so its budget failures degrade to metadata.
+
+        Running out of the call budget here is not a reason to lose the records
+        already retrieved: the search succeeded, and a record without indexed
+        text is simply one the reader cannot ground an inventory claim against.
+        """
         if pmcid in self._full_text_cache:
             return self._full_text_cache[pmcid]
         try:
-            response = await self._get_with_retry(client, f"{pmcid}/fullTextXML")
-        except httpx.HTTPError:
+            response = await self._get_with_retry(
+                client, f"{pmcid}/fullTextXML", deadline=deadline
+            )
+        except (httpx.HTTPError, SourceWaitBudgetExceeded):
             logger.warning(
                 "Europe PMC full-text enrichment failed for %s; using metadata.",
                 pmcid,
@@ -122,8 +144,10 @@ class EuropePmcBibliographicSource:
         path: str,
         *,
         params: dict[str, str | int] | None = None,
+        deadline: SourceDeadline,
     ) -> httpx.Response:
         for attempt in range(self._max_retries + 1):
+            deadline.ensure(self._timeout)
             response = await client.get(f"{self._base_url}/{path}", params=params)
             if (
                 response.status_code not in self._TRANSIENT_STATUSES
@@ -131,12 +155,14 @@ class EuropePmcBibliographicSource:
             ):
                 response.raise_for_status()
                 return response
-            retry_after = response.headers.get("Retry-After", "").strip()
-            try:
-                delay = float(retry_after)
-            except ValueError:
-                delay = self._retry_base_seconds * float(2**attempt)
-            await self._sleep(max(0.0, delay))
+            delay = self._wait_budget.retry_delay(
+                source=self.name,
+                retry_after_header=response.headers.get("Retry-After", ""),
+                attempt=attempt,
+                base_seconds=self._retry_base_seconds,
+            )
+            deadline.ensure(delay)
+            await self._sleep(delay)
         raise RuntimeError("Europe PMC retry loop ended unexpectedly")
 
     def _to_record(

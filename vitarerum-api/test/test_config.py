@@ -176,3 +176,38 @@ def test_non_gmail_smtp_password_spaces_are_preserved() -> None:
     )
 
     assert settings.smtp_password == "keep this space"
+
+
+def test_a_generation_ceiling_of_zero_is_refused() -> None:
+    """Ollama reads a non-positive num_predict as unlimited, which is the bug."""
+
+    with pytest.raises(ValidationError) as error:
+        Settings(app_env="local", scientific_return_llm_num_predict=0, _env_file=None)
+
+    assert "num_predict" in str(error.value)
+
+
+def test_a_total_llm_timeout_below_the_chunk_timeout_is_refused() -> None:
+    """The adapter would raise it silently, honouring a limit nobody asked for."""
+
+    with pytest.raises(ValidationError) as error:
+        Settings(
+            app_env="local",
+            scientific_return_llm_timeout_seconds=600,
+            scientific_return_llm_total_timeout_seconds=100,
+            _env_file=None,
+        )
+
+    assert "scientific_return_llm_total_timeout_seconds" in str(error.value)
+
+
+def test_a_worker_slice_shorter_than_one_model_call_is_refused() -> None:
+    with pytest.raises(ValidationError) as error:
+        Settings(
+            app_env="local",
+            scientific_return_llm_total_timeout_seconds=300,
+            scientific_return_full_agentic_run_deadline_seconds=120,
+            _env_file=None,
+        )
+
+    assert "run_deadline" in str(error.value)

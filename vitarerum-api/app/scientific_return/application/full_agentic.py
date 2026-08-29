@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import re
 from dataclasses import dataclass, replace
-from datetime import timedelta
+from datetime import datetime, timedelta
 from uuid import uuid4
 
 from app.identity.public import Actor, GroupName
@@ -33,11 +34,14 @@ from app.scientific_return.application.full_agentic_strategy import (
 )
 from app.scientific_return.application.knowledge import retrieve_relevant_knowledge
 from app.scientific_return.application.ports import (
+    AgentReasonerTimeout,
     BibliographicRecord,
     BibliographicSource,
     BibliographicSourceCapabilities,
     ScientificReturnRepository,
+    SourceWaitBudgetExceeded,
 )
+from app.scientific_return.application.run_deadline import RunDeadline
 from app.scientific_return.domain.enums import (
     AgentAnalysisStatus,
     AgenticCandidateRelationKind,
@@ -56,6 +60,7 @@ from app.scientific_return.domain.enums import (
 )
 from app.scientific_return.domain.full_agentic_models import (
     AgenticBudget,
+    AgenticBudgetExhausted,
     AgenticCandidateLink,
     AgenticSearchSpec,
     AgenticToolExecution,
@@ -80,6 +85,8 @@ from app.scientific_return.domain.models import (
 )
 from app.shared.authorization import require_group, require_staff
 
+logger = logging.getLogger(__name__)
+
 _MUTATION_GROUPS = (
     GroupName.CURATORIAL,
     GroupName.COLLECTIONS_MANAGEMENT,
@@ -90,6 +97,11 @@ _MUTATION_GROUPS = (
 def _string_tuple(payload: dict[str, object], key: str) -> tuple[str, ...]:
     value = payload.get(key, [])
     return tuple(str(item) for item in value) if isinstance(value, list) else ()
+
+
+# Named in the trajectory when the plan came from the deterministic floor,
+# where no prompt and no model were involved.
+_DETERMINISTIC_FLOOR_CONTRACT = "deterministic-floor"
 
 
 class FullAgenticDisabled(RuntimeError):
@@ -112,6 +124,10 @@ class _InvestigationLeaseLost(RuntimeError):
     pass
 
 
+class _SliceExhausted(RuntimeError):
+    """The worker ran out of slice where it could not simply return a value."""
+
+
 @dataclass(frozen=True, slots=True)
 class FullAgenticConfiguration:
     enabled: bool
@@ -124,6 +140,17 @@ class FullAgenticConfiguration:
     circuit_min_precision: float = 0.0
     operational_sources: tuple[str, ...] | None = None
     evidence_sources: tuple[str, ...] | None = None
+    # Every external call must be able to finish inside the lease, and a whole
+    # worker slice must finish before the platform's own window closes. The
+    # nesting is checked here rather than trusted to whoever writes the
+    # environment, because getting it wrong produces exactly the failure the
+    # deadlines exist to prevent: a process killed mid-call, with the work
+    # neither finished nor accounted for.
+    llm_total_timeout_seconds: float = 300.0
+    source_total_timeout_seconds: float = 120.0
+    run_deadline_seconds: float = 1500.0
+    max_recoveries: int = 3
+    max_age_seconds: int = 86400
 
     def __post_init__(self) -> None:
         if self.circuit_min_decisions < 0:
@@ -132,6 +159,25 @@ class FullAgenticConfiguration:
             raise ValueError("Circuit-breaker precision must be between zero and one")
         if self.investigation_lease_seconds < 60:
             raise ValueError("Investigation lease must be at least 60 seconds")
+        if self.max_recoveries < 0:
+            raise ValueError("Recovery ceiling cannot be negative")
+        if self.max_age_seconds <= 0:
+            raise ValueError("Investigation age ceiling must be positive")
+        longest_call = max(
+            self.llm_total_timeout_seconds, self.source_total_timeout_seconds
+        )
+        if longest_call >= self.investigation_lease_seconds:
+            raise ValueError(
+                "The longest external call must finish inside the investigation "
+                f"lease: {longest_call:.0f}s call against a "
+                f"{self.investigation_lease_seconds}s lease"
+            )
+        if self.run_deadline_seconds <= self.investigation_lease_seconds:
+            raise ValueError(
+                "The worker slice must outlast one lease renewal: "
+                f"{self.run_deadline_seconds:.0f}s slice against a "
+                f"{self.investigation_lease_seconds}s lease"
+            )
 
     def validate_operational_sources(self) -> None:
         if not self.allowed_sources:
@@ -302,6 +348,105 @@ class StartFullAgenticScientificReturn:
         return investigation
 
 
+async def close_envelope_run(
+    scientific_repository: ScientificReturnRepository,
+    investigation: FullAgenticInvestigation,
+    reason: str,
+    now: datetime,
+) -> None:
+    """Close the search run an ending investigation left open.
+
+    The envelope is only completed on the normal path, so every other ending —
+    a crash, an exhausted recovery allowance, the age reaper — used to leave a
+    run RUNNING for good. A yielded slice is the one case that must stay open,
+    because the investigation it belongs to has not ended.
+    """
+    if investigation.search_run_id is None:
+        return
+    run = await scientific_repository.get_run(investigation.search_run_id)
+    if run is None or run.status is not RunStatus.RUNNING:
+        return
+    run.status = RunStatus.FAILED
+    run.completed_at = now
+    run.error_message = reason[:2000]
+    await scientific_repository.save_run(run)
+
+
+class CloseAbandonedFullAgenticInvestigations:
+    """Terminate live rows that have outlived their age ceiling.
+
+    The recovery counter ends a row that keeps being taken over; this ends the
+    ones nothing takes over at all — a queued row whose dispatch was lost, a
+    cancellation nobody ever claimed. Both matter for the same reason: a live
+    row blocks every future investigation of the same target, so an
+    investigation that cannot finish must at least stop being live.
+    """
+
+    def __init__(
+        self,
+        repository: FullAgenticRepository,
+        scientific_repository: ScientificReturnRepository,
+        unit_of_work: FullAgenticUnitOfWork,
+        clock: FullAgenticClock,
+        max_age: timedelta,
+    ) -> None:
+        self._repository = repository
+        self._scientific_repository = scientific_repository
+        self._uow = unit_of_work
+        self._clock = clock
+        self._max_age = max_age
+
+    async def execute(self, *, limit: int) -> int:
+        now = self._clock.now()
+        abandoned = await self._repository.list_abandoned(now - self._max_age, limit)
+        closed = 0
+        for investigation in abandoned:
+            if investigation.status is FullAgenticInvestigationStatus.CANCEL_REQUESTED:
+                investigation.cancel(now)
+                reason = "Cancellation was never claimed by a worker"
+            else:
+                investigation.fail(
+                    "The investigation outlived its age ceiling without finishing",
+                    now,
+                )
+                reason = investigation.failure_reason or ""
+            investigation.lease_owner = None
+            investigation.lease_expires_at = None
+            try:
+                await self._repository.save_investigation(investigation)
+                await close_envelope_run(
+                    self._scientific_repository, investigation, reason, now
+                )
+                await self._append_terminal_event(investigation, reason)
+                await self._uow.commit()
+            except InvestigationConcurrencyConflict:
+                # A worker picked it up between the listing and the write. Its
+                # own guards apply from here; nothing is lost by leaving it.
+                await self._uow.rollback()
+                continue
+            closed += 1
+        return closed
+
+    async def _append_terminal_event(
+        self, investigation: FullAgenticInvestigation, reason: str
+    ) -> None:
+        sequence = await self._repository.next_event_sequence(investigation.id)
+        await self._repository.append_event(
+            AgenticTrajectoryEvent(
+                id=AgenticTrajectoryEventId(str(uuid4())),
+                investigation_id=investigation.id,
+                sequence=sequence,
+                kind=AgenticTrajectoryEventKind.ABANDONED,
+                payload={
+                    "status": investigation.status.value,
+                    "reason": reason,
+                    "recoveryCount": investigation.recovery_count,
+                },
+                occurred_at=self._clock.now(),
+            )
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class ExecuteFullAgenticInput:
     investigation_id: FullAgenticInvestigationId
@@ -318,6 +463,8 @@ class ExecuteFullAgenticScientificReturn:
         unit_of_work: FullAgenticUnitOfWork,
         clock: FullAgenticClock,
         configuration: FullAgenticConfiguration,
+        deadline: RunDeadline | None = None,
+        dispatcher: AgenticInvestigationDispatcher | None = None,
     ) -> None:
         self._scientific_repository = scientific_repository
         self._repository = repository
@@ -330,6 +477,15 @@ class ExecuteFullAgenticScientificReturn:
         self._uow = unit_of_work
         self._clock = clock
         self._configuration = configuration
+        # Without one, the only clock is the platform's, and reaching it means
+        # being killed rather than stopping.
+        self._deadline = deadline
+        # Only needed to announce a continuation. The durable QUEUED row is the
+        # real queue; this is what tells a push-based worker it exists.
+        self._dispatcher = dispatcher
+
+    def _has_room_for(self, seconds: float) -> bool:
+        return self._deadline is None or self._deadline.allows(seconds)
 
     async def execute(self, data: ExecuteFullAgenticInput) -> FullAgenticInvestigation:
         investigation = await self._repository.get_investigation(data.investigation_id)
@@ -353,6 +509,41 @@ class ExecuteFullAgenticScientificReturn:
         if investigation.status is FullAgenticInvestigationStatus.CANCEL_REQUESTED:
             investigation.cancel(now)
             await self._repository.save_investigation(investigation)
+            await close_envelope_run(
+                self._scientific_repository,
+                investigation,
+                "The investigation was cancelled before this run could continue",
+                now,
+            )
+            await self._uow.commit()
+            return investigation
+        if investigation.recoveries_exhausted(self._configuration.max_recoveries):
+            # Checked here rather than only in the reaper: a Cloud Tasks worker
+            # calls straight into this use case, and must not be able to start a
+            # run the sweep would have refused.
+            investigation.fail(
+                "The investigation was recovered "
+                f"{investigation.recovery_count} times without finishing",
+                now,
+            )
+            investigation.lease_owner = None
+            investigation.lease_expires_at = None
+            await self._repository.save_investigation(investigation)
+            await close_envelope_run(
+                self._scientific_repository,
+                investigation,
+                investigation.failure_reason or "",
+                now,
+            )
+            await self._append_event(
+                investigation,
+                AgenticTrajectoryEventKind.RECOVERY_LIMIT_EXHAUSTED,
+                {
+                    "recoveryCount": investigation.recovery_count,
+                    "maxRecoveries": self._configuration.max_recoveries,
+                    "lastRecoveryReason": investigation.last_recovery_reason,
+                },
+            )
             await self._uow.commit()
             return investigation
         try:
@@ -365,9 +556,16 @@ class ExecuteFullAgenticScientificReturn:
                     f"Investigation {investigation.id} not found"
                 ) from None
             if current.status is FullAgenticInvestigationStatus.CANCEL_REQUESTED:
-                current.cancel(self._clock.now())
+                now = self._clock.now()
+                current.cancel(now)
                 try:
                     await self._repository.save_investigation(current)
+                    await close_envelope_run(
+                        self._scientific_repository,
+                        current,
+                        "The investigation was cancelled while a worker held it",
+                        now,
+                    )
                     await self._uow.commit()
                 except InvestigationConcurrencyConflict:
                     await self._uow.rollback()
@@ -379,12 +577,19 @@ class ExecuteFullAgenticScientificReturn:
             await self._uow.rollback()
             current = await self._repository.get_investigation(investigation.id)
             if current is not None and not current.status.is_terminal:
+                now = self._clock.now()
                 if current.status is FullAgenticInvestigationStatus.CANCEL_REQUESTED:
-                    current.cancel(self._clock.now())
+                    current.cancel(now)
                 else:
-                    current.fail(f"{type(exc).__name__}: {exc}", self._clock.now())
+                    current.fail(f"{type(exc).__name__}: {exc}", now)
                 try:
                     await self._repository.save_investigation(current)
+                    await close_envelope_run(
+                        self._scientific_repository,
+                        current,
+                        f"{type(exc).__name__}: {exc}",
+                        now,
+                    )
                     await self._append_event(
                         current,
                         AgenticTrajectoryEventKind.ERROR,
@@ -540,6 +745,15 @@ class ExecuteFullAgenticScientificReturn:
             )
             if remaining_queries <= 0 or remaining_llm <= 0:
                 break
+            # An iteration is a model call plus a source call at worst. Starting
+            # one that cannot finish inside the slice is how a worker ends up
+            # killed by the platform instead of stopping on its own terms.
+            if not self._has_room_for(
+                self._configuration.llm_total_timeout_seconds
+                + self._configuration.source_total_timeout_seconds
+            ):
+                await self._yield_slice(investigation, run, iteration)
+                return
             persisted_plan = next(
                 (
                     event
@@ -572,21 +786,33 @@ class ExecuteFullAgenticScientificReturn:
                         iterations=iteration,
                     )
                 else:
-                    await self._renew_lease(investigation)
-                    plan = await self._plan_with_retry(
-                        investigation,
-                        observation=observation,
-                        memory=tuple(item.as_prompt_example() for item in memory),
-                        history=tuple(history),
-                        remaining_queries=remaining_queries,
-                        iteration=iteration,
-                    )
+                    # No separate lease renewal: reserving the call renews it,
+                    # so the two cannot disagree about who holds the row.
+                    try:
+                        plan = await self._plan_with_retry(
+                            investigation,
+                            observation=observation,
+                            memory=tuple(item.as_prompt_example() for item in memory),
+                            history=tuple(history),
+                            remaining_queries=remaining_queries,
+                            iteration=iteration,
+                        )
+                    except _SliceExhausted:
+                        await self._yield_slice(investigation, run, iteration)
+                        return
                 await self._append_event(
                     investigation,
                     AgenticTrajectoryEventKind.PLAN_CREATED,
                     {
                         "iteration": iteration,
-                        "contractVersion": "structured-search-v3",
+                        # The published planner prompt names itself, so the
+                        # trajectory records the version that actually ran
+                        # instead of a literal that drifts on the next publish.
+                        # The floor produces a plan with no prompt at all.
+                        "contractVersion": (
+                            plan.prompt_version or _DETERMINISTIC_FLOOR_CONTRACT
+                        ),
+                        "promptVersionId": plan.prompt_version_id,
                         "searches": [
                             self._search_payload(search) for search in plan.searches
                         ],
@@ -610,13 +836,21 @@ class ExecuteFullAgenticScientificReturn:
                 if key in seen_records:
                     continue
                 seen_records.add(key)
-                if investigation.usage.llm_calls >= investigation.budget.max_llm_calls:
+                if not self._has_room_for(
+                    self._configuration.llm_total_timeout_seconds
+                ):
+                    await self._yield_slice(investigation, run, iteration)
+                    return
+                try:
+                    await self._reserve_llm_call(
+                        investigation,
+                        phase="ARTICLE_ASSESSMENT",
+                        iteration=iteration,
+                        subject=f"{record.source}|{record.source_record_id}",
+                    )
+                except AgenticBudgetExhausted:
                     break
-                await self._renew_lease(investigation)
-                investigation.usage = replace(
-                    investigation.usage,
-                    llm_calls=investigation.usage.llm_calls + 1,
-                )
+                started_at = self._clock.now()
                 try:
                     assessment_result = await self._reasoner.assess(
                         record=record,
@@ -631,6 +865,14 @@ class ExecuteFullAgenticScientificReturn:
                         },
                     )
                 except Exception as exc:
+                    await self._record_llm_outcome(
+                        investigation,
+                        exc,
+                        phase="ARTICLE_ASSESSMENT",
+                        iteration=iteration,
+                        subject=f"{record.source}|{record.source_record_id}",
+                        started_at=started_at,
+                    )
                     await self._append_event(
                         investigation,
                         AgenticTrajectoryEventKind.ERROR,
@@ -644,6 +886,14 @@ class ExecuteFullAgenticScientificReturn:
                     await self._repository.save_investigation(investigation)
                     await self._uow.commit()
                     continue
+                await self._record_llm_outcome(
+                    investigation,
+                    None,
+                    phase="ARTICLE_ASSESSMENT",
+                    iteration=iteration,
+                    subject=f"{record.source}|{record.source_record_id}",
+                    started_at=started_at,
+                )
                 grounded = ground_article_assessment(
                     assessment_result.assessment,
                     record,
@@ -750,6 +1000,63 @@ class ExecuteFullAgenticScientificReturn:
         )
         await self._uow.commit()
 
+    async def _yield_slice(
+        self,
+        investigation: FullAgenticInvestigation,
+        run: ScientificReturnSearchRun,
+        iteration: int,
+    ) -> None:
+        """Stop on the worker's own clock and hand the work back untouched.
+
+        Everything already done is durable — the plan, the searches, every
+        assessment, every charged model call — so the continuation resumes from
+        the trajectory exactly as a recovery would, but without any of it having
+        been lost to a kill. The envelope run stays open because the
+        investigation it belongs to has not finished.
+        """
+        now = self._clock.now()
+        investigation.yield_slice(
+            "The worker slice ended before the investigation finished", now
+        )
+        await self._append_event(
+            investigation,
+            AgenticTrajectoryEventKind.EXECUTION_SLICE_EXHAUSTED,
+            {
+                "iteration": iteration,
+                "queries": investigation.usage.queries,
+                "llmCalls": investigation.usage.llm_calls,
+                "candidates": investigation.usage.candidates,
+            },
+        )
+        await self._repository.save_investigation(investigation)
+        await self._scientific_repository.save_run(run)
+        await self._uow.commit()
+        await self._announce_continuation(investigation)
+
+    async def _announce_continuation(
+        self, investigation: FullAgenticInvestigation
+    ) -> None:
+        """Tell a push-based queue that the work is waiting again.
+
+        With the database dispatcher the QUEUED row is enough, because a poller
+        will find it. Under Cloud Tasks the task that was running has just ended
+        successfully, and nothing else would ever create the next one.
+
+        Best effort by design: the row stays QUEUED either way, so a failure
+        here costs the next sweep's latency rather than the investigation.
+        """
+        if self._dispatcher is None:
+            return
+        try:
+            await self._dispatcher.enqueue(investigation.id)
+        except Exception:
+            logger.warning(
+                "Could not announce the continuation of investigation %s; "
+                "it stays queued for the next sweep.",
+                investigation.id,
+                exc_info=True,
+            )
+
     async def _execute_searches(
         self,
         investigation: FullAgenticInvestigation,
@@ -761,18 +1068,9 @@ class ExecuteFullAgenticScientificReturn:
     ) -> list[tuple[BibliographicRecord, AgenticSearchSpec]]:
         found: list[tuple[BibliographicRecord, AgenticSearchSpec]] = []
         for search in searches:
-            if investigation.usage.queries >= investigation.budget.max_queries:
-                break
             attempt_identity = self._attempt_identity(
                 search.source, search.query, search.author, search.intent
             )
-            if attempt_identity in executed_attempts:
-                await self._append_event(
-                    investigation,
-                    AgenticTrajectoryEventKind.SEARCH_SKIPPED_DUPLICATE,
-                    self._search_payload(search),
-                )
-                continue
             source = self._sources.get(search.source)
             capabilities = self._capabilities.get(search.source)
             if (
@@ -788,11 +1086,39 @@ class ExecuteFullAgenticScientificReturn:
             key = normalized_tool_idempotency_key(str(investigation.id), 0, invocation)
             prior = await self._repository.get_tool_execution(key)
             if prior and prior.status is AgenticToolExecutionStatus.COMPLETED:
+                # A search already paid for is replayed from its stored result,
+                # never skipped. Skipping it was silently dropping the records
+                # of an interrupted pass: the query had been spent, the reader
+                # had not seen them, and nothing would deliver them again. The
+                # already-assessed ones are filtered by the caller, so replaying
+                # costs nothing and is what makes a resumed run complete.
                 replayed = self._records_from_result(prior.result or {}, search)
                 found.extend(replayed)
                 executed_sources.add(search.source)
+                if attempt_identity in executed_attempts:
+                    await self._append_event(
+                        investigation,
+                        AgenticTrajectoryEventKind.SEARCH_SKIPPED_DUPLICATE,
+                        self._search_payload(search),
+                    )
                 executed_attempts.add(attempt_identity)
                 continue
+            if attempt_identity in executed_attempts:
+                await self._append_event(
+                    investigation,
+                    AgenticTrajectoryEventKind.SEARCH_SKIPPED_DUPLICATE,
+                    self._search_payload(search),
+                )
+                continue
+            if investigation.usage.queries >= investigation.budget.max_queries:
+                break
+            # An iteration may carry several searches — the floor alone can send
+            # six — so the slice is checked per search, not only per iteration.
+            # What was already fetched is returned and stays replayable.
+            if not self._has_room_for(
+                self._configuration.source_total_timeout_seconds
+            ):
+                break
             if prior is not None:
                 execution = prior
                 execution.status = AgenticToolExecutionStatus.RUNNING
@@ -828,13 +1154,26 @@ class ExecuteFullAgenticScientificReturn:
                 await self._renew_lease(investigation)
                 records = await source.search(
                     search.query,
-                    source_result_limit(
-                        capabilities, investigation.budget.max_results
-                    ),
+                    source_result_limit(capabilities, investigation.budget.max_results),
                     author=search.author,
                 )
             except _InvestigationLeaseLost:
                 raise
+            except SourceWaitBudgetExceeded as exc:
+                # Named apart from any other source failure: this one says the
+                # source is healthy and simply slower than the deployment can
+                # afford, which is a capacity decision rather than a fault.
+                records = []
+                error = f"{type(exc).__name__}: {exc}"[:500]
+                await self._append_event(
+                    investigation,
+                    AgenticTrajectoryEventKind.SOURCE_WAIT_REJECTED,
+                    {
+                        "source": search.source,
+                        "query": search.query,
+                        "message": error,
+                    },
+                )
             except Exception as exc:
                 records = []
                 error = f"{type(exc).__name__}: {exc}"[:500]
@@ -1018,6 +1357,85 @@ class ExecuteFullAgenticScientificReturn:
         investigation.version = next_version
         await self._uow.commit()
 
+    async def _reserve_llm_call(
+        self,
+        investigation: FullAgenticInvestigation,
+        *,
+        phase: str,
+        iteration: int,
+        subject: str,
+    ) -> None:
+        """Charge the call, renew the lease and commit — before calling.
+
+        The commit is the point of the exercise. Until it lands, a worker that
+        dies leaves the budget as it found it and the retry repeats the same
+        work at no cost, which is how an investigation can be retried forever.
+        Afterwards, every death is progress.
+        """
+        investigation.reserve_llm_call()
+        now = self._clock.now()
+        investigation.heartbeat_at = now
+        investigation.lease_expires_at = now + timedelta(
+            seconds=self._configuration.investigation_lease_seconds
+        )
+        next_version = await self._repository.reserve_llm_call(
+            investigation,
+            investigation.lease_owner or "unknown-worker",
+            now,
+            investigation.lease_expires_at,
+        )
+        if next_version is None:
+            raise _InvestigationLeaseLost(
+                f"Worker lost the lease for investigation {investigation.id}"
+            )
+        investigation.version = next_version
+        await self._append_event(
+            investigation,
+            AgenticTrajectoryEventKind.LLM_CALL_STARTED,
+            {
+                "phase": phase,
+                "iteration": iteration,
+                "subject": subject,
+                "llmCalls": investigation.usage.llm_calls,
+                "maxLlmCalls": investigation.budget.max_llm_calls,
+            },
+        )
+        await self._uow.commit()
+
+    async def _record_llm_outcome(
+        self,
+        investigation: FullAgenticInvestigation,
+        error: Exception | None,
+        *,
+        phase: str,
+        iteration: int,
+        subject: str,
+        started_at: datetime,
+    ) -> None:
+        """Close the reservation's record, keeping timeouts distinguishable.
+
+        A timeout is not the same fact as a malformed answer: one says the model
+        never finished, the other that it finished badly. The distinction is
+        what makes a slow backend visible before it starts costing whole runs.
+        """
+        if error is None:
+            kind = AgenticTrajectoryEventKind.LLM_CALL_COMPLETED
+        elif isinstance(error, AgentReasonerTimeout):
+            kind = AgenticTrajectoryEventKind.LLM_CALL_TIMED_OUT
+        else:
+            kind = AgenticTrajectoryEventKind.LLM_CALL_FAILED
+        payload: dict[str, object] = {
+            "phase": phase,
+            "iteration": iteration,
+            "subject": subject,
+            "durationMs": max(
+                0, int((self._clock.now() - started_at).total_seconds() * 1000)
+            ),
+        }
+        if error is not None:
+            payload["message"] = f"{type(error).__name__}: {error}"[:500]
+        await self._append_event(investigation, kind, payload)
+
     async def _append_event(
         self,
         investigation: FullAgenticInvestigation,
@@ -1047,21 +1465,34 @@ class ExecuteFullAgenticScientificReturn:
         iteration: int,
     ) -> AgenticPlan:
         last_error: Exception | None = None
+        exhausted_budget = False
         for attempt in range(1, 3):
-            if investigation.usage.llm_calls >= investigation.budget.max_llm_calls:
+            # The iteration's own check reserved room for one model call; a
+            # second attempt is a second call and needs its own room, or the
+            # retry is what carries the worker past the platform's window.
+            if not self._has_room_for(self._configuration.llm_total_timeout_seconds):
+                raise _SliceExhausted(
+                    "The worker slice ended before the planner could answer"
+                )
+            investigation.usage = replace(investigation.usage, iterations=iteration)
+            try:
+                await self._reserve_llm_call(
+                    investigation,
+                    phase="PLAN",
+                    iteration=iteration,
+                    subject=f"attempt-{attempt}",
+                )
+            except AgenticBudgetExhausted:
+                exhausted_budget = True
                 break
-            investigation.usage = replace(
-                investigation.usage,
-                iterations=iteration,
-                llm_calls=investigation.usage.llm_calls + 1,
-            )
+            started_at = self._clock.now()
             retry_observation = dict(observation)
             if last_error is not None:
                 retry_observation["previousPlannerContractError"] = (
                     f"{type(last_error).__name__}: {last_error}"[:500]
                 )
             try:
-                return await self._reasoner.plan(
+                plan = await self._reasoner.plan(
                     observation=retry_observation,
                     memory=memory,
                     history=history,
@@ -1072,6 +1503,14 @@ class ExecuteFullAgenticScientificReturn:
                 )
             except Exception as exc:
                 last_error = exc
+                await self._record_llm_outcome(
+                    investigation,
+                    exc,
+                    phase="PLAN",
+                    iteration=iteration,
+                    subject=f"attempt-{attempt}",
+                    started_at=started_at,
+                )
                 await self._append_event(
                     investigation,
                     AgenticTrajectoryEventKind.PLANNER_ERROR,
@@ -1083,8 +1522,24 @@ class ExecuteFullAgenticScientificReturn:
                 )
                 await self._repository.save_investigation(investigation)
                 await self._uow.commit()
+                continue
+            await self._record_llm_outcome(
+                investigation,
+                None,
+                phase="PLAN",
+                iteration=iteration,
+                subject=f"attempt-{attempt}",
+                started_at=started_at,
+            )
+            return plan
+        # The two ways out of the loop are not the same fact, and the curator
+        # reads this reason: one says the model could not be understood, the
+        # other that there was no budget left to ask it again.
         investigation.degrade(
-            "The planner contract stayed invalid after a retry, so the "
+            "The model-call budget ran out before a plan could be produced, so "
+            "the investigation finished on its deterministic floor alone"
+            if exhausted_budget
+            else "The planner contract stayed invalid after a retry, so the "
             "investigation finished on its deterministic floor alone"
         )
         await self._append_event(

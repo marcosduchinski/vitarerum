@@ -142,6 +142,8 @@ class PromptedFullAgenticReasoner:
                 payload, "reasoning", default="The planner stated no reason"
             ),
             should_stop=should_stop,
+            prompt_version_id=prompt.version_id,
+            prompt_version=prompt.version_label,
         )
 
     async def assess(

@@ -315,6 +315,23 @@
                   </span>
                 </p>
               }
+              @if (investigation.recoveryCount) {
+                <p
+                  class="investigation-recovered"
+                  [class.investigation-recovered--critical]="isNearRecoveryLimit(investigation)"
+                >
+                  <span class="pi pi-replay" aria-hidden="true"></span>
+                  <span>
+                    Resumed {{ investigation.recoveryCount }} time(s) after a worker
+                    stopped without finishing@if (investigation.maxRecoveries) {
+                      , out of {{ investigation.maxRecoveries }} allowed
+                    }.
+                    @if (investigation.lastRecoveryReason) {
+                      Last reason: {{ investigation.lastRecoveryReason }}.
+                    }
+                  </span>
+                </p>
+              }
               @if (investigation.status === 'QUEUED' || investigation.status === 'RUNNING') {
                 <div class="investigation-detail">
                   <button

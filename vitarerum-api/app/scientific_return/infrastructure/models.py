@@ -301,6 +301,13 @@ class FullAgenticInvestigationRecord(Base):
     lease_expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    recovery_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    last_recovered_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_recovery_reason: Mapped[str | None] = mapped_column(
+        String(200), nullable=True
+    )
     version: Mapped[int] = mapped_column(Integer, default=0)
 
 

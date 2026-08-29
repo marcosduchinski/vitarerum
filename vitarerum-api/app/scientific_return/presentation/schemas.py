@@ -127,6 +127,14 @@ class FullAgenticMetricsResponse(BaseModel):
     pendingCandidates: int
     confirmedCandidates: int
     dismissedCandidates: int
+    # Health of the flow, not of its results.
+    llmTimeouts: int = 0
+    sourceWaitsRejected: int = 0
+    recoveries: int = 0
+    recoveriesExhausted: int = 0
+    liveInvestigations: int = 0
+    expiredLeases: int = 0
+    oldestLiveAgeSeconds: int = 0
 
 
 class FullAgenticReadinessResponse(BaseModel):
@@ -453,6 +461,14 @@ class FullAgenticInvestigationResponse(BaseModel):
     heartbeatAt: datetime | None
     failureReason: str | None
     degradedReason: str | None = None
+    # How close this investigation is to being given up on, and why. A run that
+    # keeps being taken over looks healthy from its status alone, which is
+    # exactly how one could occupy the head of the queue unnoticed.
+    recoveryCount: int = 0
+    maxRecoveries: int | None = None
+    lastRecoveredAt: datetime | None = None
+    lastRecoveryReason: str | None = None
+    leaseExpiresAt: datetime | None = None
 
 
 class ExecuteFullAgenticRequest(BaseModel):

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, cast
 
 from sqlalchemy import exists, func, select
@@ -20,12 +20,14 @@ from app.scientific_return.application.ports import (
 from app.scientific_return.domain.enums import (
     AgentAnalysisStatus,
     AgentConfidence,
+    AgenticTrajectoryEventKind,
     AgentProgress,
     AgentRecommendedAction,
     CandidateStatus,
     EvidenceSourceField,
     EvidenceStrength,
     EvidenceType,
+    FullAgenticInvestigationStatus,
     InventoryEvidenceStatus,
     InvestigationObjective,
     InvestigationStatus,
@@ -85,10 +87,12 @@ from app.scientific_return.domain.models import (
 )
 from app.scientific_return.infrastructure.models import (
     AgenticInvestigationCandidateRecord,
+    AgenticTrajectoryEventRecord,
     CandidateAgentAnalysisRecord,
     CandidateDecisionRecord,
     CandidateEvidenceRecord,
     CandidatePublicationRecord,
+    FullAgenticInvestigationRecord,
     ScientificReturnInvestigationRecord,
     ScientificReturnIterationRecord,
     ScientificReturnQueryRecord,
@@ -1448,7 +1452,91 @@ class SqlAlchemyScientificReturnRepository:
             full_agentic_dismissed_candidates=await count_agentic_linked(
                 CandidateStatus.DISMISSED
             ),
+            **await self._full_agentic_health(),
         )
+
+    async def _full_agentic_health(self) -> dict[str, int]:
+        """Counters read from the trajectory, which is already the record.
+
+        No separate metrics store: the events are written for audit anyway, and
+        a number that disagreed with the trajectory would be the one nobody
+        could defend.
+        """
+        now = datetime.now(tz=UTC)
+
+        async def count_events(kind: AgenticTrajectoryEventKind) -> int:
+            return int(
+                (
+                    await self._session.execute(
+                        select(func.count())
+                        .select_from(AgenticTrajectoryEventRecord)
+                        .where(AgenticTrajectoryEventRecord.kind == kind)
+                    )
+                ).scalar_one()
+            )
+
+        live = (
+            FullAgenticInvestigationStatus.QUEUED,
+            FullAgenticInvestigationStatus.RUNNING,
+            FullAgenticInvestigationStatus.CANCEL_REQUESTED,
+        )
+        live_count = int(
+            (
+                await self._session.execute(
+                    select(func.count())
+                    .select_from(FullAgenticInvestigationRecord)
+                    .where(FullAgenticInvestigationRecord.status.in_(live))
+                )
+            ).scalar_one()
+        )
+        expired = int(
+            (
+                await self._session.execute(
+                    select(func.count())
+                    .select_from(FullAgenticInvestigationRecord)
+                    .where(
+                        FullAgenticInvestigationRecord.status.in_(live),
+                        FullAgenticInvestigationRecord.lease_expires_at.is_not(None),
+                        FullAgenticInvestigationRecord.lease_expires_at < now,
+                    )
+                )
+            ).scalar_one()
+        )
+        oldest = (
+            await self._session.execute(
+                select(func.min(FullAgenticInvestigationRecord.created_at)).where(
+                    FullAgenticInvestigationRecord.status.in_(live)
+                )
+            )
+        ).scalar_one_or_none()
+        recoveries = int(
+            (
+                await self._session.execute(
+                    select(
+                        func.coalesce(
+                            func.sum(FullAgenticInvestigationRecord.recovery_count), 0
+                        )
+                    )
+                )
+            ).scalar_one()
+        )
+        return {
+            "full_agentic_llm_timeouts": await count_events(
+                AgenticTrajectoryEventKind.LLM_CALL_TIMED_OUT
+            ),
+            "full_agentic_source_waits_rejected": await count_events(
+                AgenticTrajectoryEventKind.SOURCE_WAIT_REJECTED
+            ),
+            "full_agentic_recoveries": recoveries,
+            "full_agentic_recoveries_exhausted": await count_events(
+                AgenticTrajectoryEventKind.RECOVERY_LIMIT_EXHAUSTED
+            ),
+            "full_agentic_live_investigations": live_count,
+            "full_agentic_expired_leases": expired,
+            "full_agentic_oldest_live_age_seconds": (
+                int((now - oldest).total_seconds()) if oldest is not None else 0
+            ),
+        }
 
     async def add_agent_analysis(self, analysis: CandidateAgentAnalysis) -> None:
         self._session.add(

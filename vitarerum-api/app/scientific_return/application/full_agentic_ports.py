@@ -26,6 +26,9 @@ class AgenticPlan:
     searches: tuple[AgenticSearchSpec, ...]
     reasoning: str
     should_stop: bool = False
+    # Absent when no model produced the plan, as on the deterministic floor.
+    prompt_version_id: str | None = None
+    prompt_version: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,6 +108,13 @@ class FullAgenticRepository(Protocol):
         heartbeat_at: datetime,
         lease_expires_at: datetime,
     ) -> int | None: ...
+    async def reserve_llm_call(
+        self,
+        investigation: FullAgenticInvestigation,
+        worker_id: str,
+        heartbeat_at: datetime,
+        lease_expires_at: datetime,
+    ) -> int | None: ...
     async def get_investigation(
         self, investigation_id: FullAgenticInvestigationId
     ) -> FullAgenticInvestigation | None: ...
@@ -116,6 +126,9 @@ class FullAgenticRepository(Protocol):
     ) -> FullAgenticInvestigation | None: ...
     async def list_investigations(
         self, watch_id: str, limit: int
+    ) -> list[FullAgenticInvestigation]: ...
+    async def list_abandoned(
+        self, created_before: datetime, limit: int
     ) -> list[FullAgenticInvestigation]: ...
     async def append_event(self, event: AgenticTrajectoryEvent) -> None: ...
     async def list_events(

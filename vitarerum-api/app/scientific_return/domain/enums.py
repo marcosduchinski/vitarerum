@@ -80,6 +80,19 @@ class AgenticTrajectoryEventKind(StrEnum):
     PLANNER_ERROR = "PLANNER_ERROR"
     PLANNER_FALLBACK = "PLANNER_FALLBACK"
     SEARCH_SKIPPED_DUPLICATE = "SEARCH_SKIPPED_DUPLICATE"
+    # One durable record per model call, written before the call leaves. It is
+    # what proves the budget was charged when the worker never came back.
+    LLM_CALL_STARTED = "LLM_CALL_STARTED"
+    LLM_CALL_COMPLETED = "LLM_CALL_COMPLETED"
+    LLM_CALL_TIMED_OUT = "LLM_CALL_TIMED_OUT"
+    LLM_CALL_FAILED = "LLM_CALL_FAILED"
+    # The worker stopped on its own clock, short of the platform's, so the
+    # investigation is handed back to the queue intact rather than killed.
+    EXECUTION_SLICE_EXHAUSTED = "EXECUTION_SLICE_EXHAUSTED"
+    RECOVERY_LIMIT_EXHAUSTED = "RECOVERY_LIMIT_EXHAUSTED"
+    # A source asked to be waited for longer than this deployment allows.
+    SOURCE_WAIT_REJECTED = "SOURCE_WAIT_REJECTED"
+    ABANDONED = "ABANDONED"
 
 
 class AgenticCandidateRelationKind(StrEnum):

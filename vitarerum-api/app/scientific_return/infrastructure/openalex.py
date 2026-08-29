@@ -13,6 +13,10 @@ from app.scientific_return.application.ports import (
     BibliographicRecord,
     BibliographicSourceCapabilities,
 )
+from app.scientific_return.infrastructure.source_wait import (
+    SourceDeadline,
+    SourceWaitBudget,
+)
 
 
 class _HttpxSecretFilter(logging.Filter):
@@ -73,6 +77,7 @@ class OpenAlexBibliographicSource:
         retry_base_seconds: float = 1.0,
         transport: httpx.AsyncBaseTransport | None = None,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+        wait_budget: SourceWaitBudget | None = None,
     ) -> None:
         if not api_key.strip():
             raise ValueError("OpenAlex requires a non-empty API key")
@@ -84,6 +89,9 @@ class OpenAlexBibliographicSource:
         self._retry_base_seconds = max(0.0, retry_base_seconds)
         self._transport = transport
         self._sleep = sleep
+        self._wait_budget = wait_budget or SourceWaitBudget(
+            max_retry_after_seconds=60.0, total_timeout_seconds=120.0
+        )
 
     async def search(
         self, query: str, limit: int, *, author: str | None = None
@@ -110,7 +118,9 @@ class OpenAlexBibliographicSource:
             headers={"User-Agent": "Vitarerum/0.1 (scientific-return monitoring)"},
             transport=self._transport,
         ) as client:
-            response = await self._get_with_retry(client, params)
+            response = await self._get_with_retry(
+                client, params, self._wait_budget.start(self.name)
+            )
         return [
             self._to_record(item)
             for item in response.json().get("results", [])
@@ -118,9 +128,13 @@ class OpenAlexBibliographicSource:
         ]
 
     async def _get_with_retry(
-        self, client: httpx.AsyncClient, params: dict[str, str | int]
+        self,
+        client: httpx.AsyncClient,
+        params: dict[str, str | int],
+        deadline: SourceDeadline,
     ) -> httpx.Response:
         for attempt in range(self._max_retries + 1):
+            deadline.ensure(self._timeout)
             response = await client.get(f"{self._base_url}/works", params=params)
             if (
                 response.status_code not in self._TRANSIENT_STATUSES
@@ -128,12 +142,14 @@ class OpenAlexBibliographicSource:
             ):
                 response.raise_for_status()
                 return response
-            retry_after = response.headers.get("Retry-After", "").strip()
-            try:
-                delay = float(retry_after)
-            except ValueError:
-                delay = self._retry_base_seconds * float(2**attempt)
-            await self._sleep(max(0.0, delay))
+            delay = self._wait_budget.retry_delay(
+                source=self.name,
+                retry_after_header=response.headers.get("Retry-After", ""),
+                attempt=attempt,
+                base_seconds=self._retry_base_seconds,
+            )
+            deadline.ensure(delay)
+            await self._sleep(delay)
         raise RuntimeError("OpenAlex retry loop ended unexpectedly")
 
     def _to_record(self, item: dict[str, Any]) -> BibliographicRecord:

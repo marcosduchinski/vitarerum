@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Annotated
 
 from fastapi import Depends
@@ -14,6 +15,7 @@ from app.notifications.public import (
 )
 from app.scientific_return.application.agent_tools import build_default_registry
 from app.scientific_return.application.full_agentic import (
+    CloseAbandonedFullAgenticInvestigations,
     ExecuteFullAgenticScientificReturn,
     FullAgenticConfiguration,
     StartFullAgenticScientificReturn,
@@ -37,6 +39,7 @@ from app.scientific_return.application.ports import (
     ScientificReturnReasoner,
     ScientificReturnRepository,
 )
+from app.scientific_return.application.run_deadline import RunDeadline
 from app.scientific_return.application.run_investigation import (
     AgentConfiguration,
     RunScientificReturnInvestigation,
@@ -79,6 +82,7 @@ from app.scientific_return.infrastructure.source_rate_limiter import (
     PostgresBibliographicSourceRateLimiter,
     RateLimitedBibliographicSource,
 )
+from app.scientific_return.infrastructure.source_wait import SourceWaitBudget
 from app.scientific_return.infrastructure.unit_of_work import (
     SqlAlchemyInvestigationUnitOfWork,
     SystemClock,
@@ -134,6 +138,22 @@ def get_full_agentic_configuration() -> FullAgenticConfiguration:
         ),
         operational_sources=tuple(operational_sources),
         evidence_sources=tuple(evidence_sources),
+        # The adapter never runs below its per-chunk timeout, so the ceiling
+        # the deadlines are checked against is the effective one, not the
+        # configured one — otherwise a chunk timeout above the total would slip
+        # past a validation that looked at the smaller number.
+        llm_total_timeout_seconds=max(
+            settings.scientific_return_llm_timeout_seconds,
+            settings.scientific_return_llm_total_timeout_seconds,
+        ),
+        source_total_timeout_seconds=(
+            settings.scientific_return_source_total_timeout_seconds
+        ),
+        run_deadline_seconds=(
+            settings.scientific_return_full_agentic_run_deadline_seconds
+        ),
+        max_recoveries=settings.scientific_return_full_agentic_max_recoveries,
+        max_age_seconds=settings.scientific_return_full_agentic_max_age_seconds,
     )
 
 
@@ -167,9 +187,16 @@ def get_full_agentic_starter(
     )
 
 
-def get_full_agentic_executor(
-    session: DBSession,
+def build_full_agentic_executor(
+    session: AsyncSession,
+    deadline: RunDeadline | None = None,
 ) -> ExecuteFullAgenticScientificReturn:
+    """The worker's entry point, which owns a slice of wall clock.
+
+    Kept apart from the FastAPI dependency below: a request-scoped dependency
+    may only take parameters FastAPI can resolve from the request, and the
+    deadline comes from the process instead.
+    """
     enabled_sources = {
         value.upper() for value in get_full_agentic_configuration().allowed_sources
     }
@@ -186,6 +213,32 @@ def get_full_agentic_executor(
         SqlAlchemyInvestigationUnitOfWork(session),
         SystemClock(),
         get_full_agentic_configuration(),
+        deadline,
+        get_full_agentic_dispatcher(),
+    )
+
+
+def get_full_agentic_executor(
+    session: DBSession,
+) -> ExecuteFullAgenticScientificReturn:
+    # The HTTP worker endpoint runs one investigation per request, under the
+    # platform's own request timeout, so it takes the same slice as the sweep.
+    return build_full_agentic_executor(
+        session,
+        RunDeadline(get_full_agentic_configuration().run_deadline_seconds),
+    )
+
+
+def get_full_agentic_reaper(
+    session: DBSession,
+) -> CloseAbandonedFullAgenticInvestigations:
+    configuration = get_full_agentic_configuration()
+    return CloseAbandonedFullAgenticInvestigations(
+        get_full_agentic_repository(session),
+        get_repository(session),
+        SqlAlchemyInvestigationUnitOfWork(session),
+        SystemClock(),
+        timedelta(seconds=configuration.max_age_seconds),
     )
 
 
@@ -206,6 +259,13 @@ def get_notifications(session: DBSession) -> NotificationDispatcher:
     return get_notification_dispatcher(session)
 
 
+def get_source_wait_budget() -> SourceWaitBudget:
+    return SourceWaitBudget(
+        max_retry_after_seconds=settings.scientific_return_source_max_retry_after_seconds,
+        total_timeout_seconds=settings.scientific_return_source_total_timeout_seconds,
+    )
+
+
 def get_crossref_source() -> BibliographicSource:
     return CrossrefBibliographicSource(
         base_url=settings.crossref_base_url,
@@ -214,6 +274,7 @@ def get_crossref_source() -> BibliographicSource:
         max_retries=settings.crossref_max_retries,
         retry_base_seconds=settings.crossref_retry_base_seconds,
         min_interval_seconds=settings.crossref_min_interval_seconds,
+        wait_budget=get_source_wait_budget(),
     )
 
 
@@ -224,6 +285,7 @@ def get_openalex_source() -> BibliographicSource:
         timeout_seconds=settings.openalex_timeout_seconds,
         max_retries=settings.openalex_max_retries,
         retry_base_seconds=settings.openalex_retry_base_seconds,
+        wait_budget=get_source_wait_budget(),
     )
 
 
@@ -235,23 +297,34 @@ def get_europe_pmc_source() -> BibliographicSource:
         retry_base_seconds=settings.europe_pmc_retry_base_seconds,
         full_text_result_limit=settings.europe_pmc_full_text_result_limit,
         email=settings.europe_pmc_email or None,
+        wait_budget=get_source_wait_budget(),
     )
 
 
 def get_bibliographic_sources() -> tuple[BibliographicSource, ...]:
-    limiter = PostgresBibliographicSourceRateLimiter(async_session_factory)
+    limiter = PostgresBibliographicSourceRateLimiter(
+        async_session_factory,
+        settings.scientific_return_source_rate_limit_max_wait_seconds,
+    )
+    # The throttle wait counts against the same budget as the request it is
+    # waiting to make, so one source call cannot outlast the figure the worker
+    # planned its slice from.
+    total = settings.scientific_return_source_total_timeout_seconds
     sources: list[BibliographicSource] = [
         RateLimitedBibliographicSource(
-            get_crossref_source(), limiter, settings.crossref_min_interval_seconds
+            get_crossref_source(),
+            limiter,
+            settings.crossref_min_interval_seconds,
+            total,
         )
     ]
     if settings.openalex_api_key:
         sources.append(
-            RateLimitedBibliographicSource(get_openalex_source(), limiter, 0.1)
+            RateLimitedBibliographicSource(get_openalex_source(), limiter, 0.1, total)
         )
     if settings.europe_pmc_enabled:
         sources.append(
-            RateLimitedBibliographicSource(get_europe_pmc_source(), limiter, 0.1)
+            RateLimitedBibliographicSource(get_europe_pmc_source(), limiter, 0.1, total)
         )
     return tuple(sources)
 
@@ -269,11 +342,18 @@ def get_agent_prompt_provider(session: DBSession) -> AgentPromptProvider:
 
 
 def get_agent_reasoner() -> ScientificReturnReasoner:
+    """A reasoner holds no state between calls: each call owns its client.
+
+    Sharing one instance would be cheaper, but then a timed-out call could only
+    free its model slot by closing a pool other calls are using.
+    """
     return OllamaScientificReturnReasoner(
         base_url=settings.ollama_base_url,
         api_key=settings.ollama_api_key,
         model=settings.scientific_return_llm_model,
         timeout_seconds=settings.scientific_return_llm_timeout_seconds,
+        total_timeout_seconds=settings.scientific_return_llm_total_timeout_seconds,
+        num_predict=settings.scientific_return_llm_num_predict,
     )
 
 

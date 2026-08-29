@@ -28,6 +28,7 @@ from app.scientific_return.application.full_agentic import (
     ExecuteFullAgenticInput,
     FullAgenticAlreadyRunning,
     FullAgenticCircuitOpen,
+    FullAgenticConfiguration,
     FullAgenticDisabled,
     FullAgenticSourceConfigurationInvalid,
     StartFullAgenticInput,
@@ -36,6 +37,7 @@ from app.scientific_return.application.ports import (
     BibliographicSource,
     InvestigationReasoner,
 )
+from app.scientific_return.application.run_deadline import RunDeadline
 from app.scientific_return.application.run_investigation import (
     CloseAbandonedInvestigations,
     InvestigationAlreadyRunning,
@@ -56,15 +58,21 @@ from app.scientific_return.domain.models import (
     CandidatePublicationId,
     ScientificReturnWatchId,
 )
+from app.scientific_return.infrastructure.source_rate_limiter import (
+    PostgresBibliographicSourceRateLimiter,
+    RateLimitedBibliographicSource,
+)
 from app.scientific_return.infrastructure.unit_of_work import (
     SqlAlchemyInvestigationUnitOfWork,
     SystemClock,
 )
 from app.scientific_return.presentation.dependencies import (
+    build_full_agentic_executor,
     get_bibliographic_sources,
     get_crossref_source,
     get_europe_pmc_source,
-    get_full_agentic_executor,
+    get_full_agentic_configuration,
+    get_full_agentic_reaper,
     get_full_agentic_starter,
     get_investigation_repository,
     get_investigation_runner,
@@ -111,14 +119,28 @@ def phase_zero_sources(selection: str) -> tuple[BibliographicSource, ...]:
     if unknown:
         raise ValueError(f"Unknown Phase 0 source(s): {', '.join(sorted(unknown))}")
 
+    # Wrapped exactly as the agentic flow wraps them. An evaluation run makes
+    # the same calls to the same public APIs, so it owes them the same global
+    # throttle, and it gains the same enforced ceiling per call.
+    limiter = PostgresBibliographicSourceRateLimiter(
+        async_session_factory,
+        settings.scientific_return_source_rate_limit_max_wait_seconds,
+    )
+    total = settings.scientific_return_source_total_timeout_seconds
+
+    def throttled(source: BibliographicSource, interval: float) -> BibliographicSource:
+        return RateLimitedBibliographicSource(source, limiter, interval, total)
+
     sources: list[BibliographicSource] = []
     for name in requested:
         if name == "crossref":
-            sources.append(get_crossref_source())
+            sources.append(
+                throttled(get_crossref_source(), settings.crossref_min_interval_seconds)
+            )
         elif name == "europe_pmc":
-            sources.append(get_europe_pmc_source())
+            sources.append(throttled(get_europe_pmc_source(), 0.1))
         elif settings.openalex_api_key:
-            sources.append(get_openalex_source())
+            sources.append(throttled(get_openalex_source(), 0.1))
         elif selection.strip().casefold() != "all":
             raise ValueError("OpenAlex evaluation requires OPENALEX_API_KEY")
         else:
@@ -305,17 +327,62 @@ async def _prove_pending_candidates(
             logger.info("No enrichment for candidate %s: %s", candidate.id, exc)
         except Exception:
             await session.rollback()
-            logger.exception(
-                "Could not run enrichment for candidate %s.", candidate.id
-            )
+            logger.exception("Could not run enrichment for candidate %s.", candidate.id)
     return proved
 
 
-async def run_full_agentic_queue(*, limit: int, worker_id: str) -> tuple[int, int]:
-    """Claim and execute durable DB-queued investigations without overlap."""
+async def _close_abandoned_full_agentic(
+    configuration: FullAgenticConfiguration,
+) -> int:
+    """Terminate live rows past their age ceiling, before draining the queue.
+
+    Run first so a poisoned row stops occupying the head of the queue — and
+    stops blocking new investigations of its project — before this pass spends
+    its slice on the rows behind it.
+    """
+    if configuration.max_age_seconds <= 0:
+        return 0
+    try:
+        async with async_session_factory() as session:
+            return await get_full_agentic_reaper(session).execute(
+                limit=settings.scientific_return_full_agentic_reaper_batch_size
+            )
+    except Exception:
+        logger.exception("Could not close abandoned full-agentic investigations.")
+        return 0
+
+
+async def run_full_agentic_queue(
+    *, limit: int, worker_id: str, deadline: RunDeadline | None = None
+) -> tuple[int, int]:
+    """Claim and execute durable DB-queued investigations without overlap.
+
+    The deadline is the process's, not each investigation's: this loop drains
+    several of them after the deterministic sweep has already run, so a budget
+    granted per investigation would multiply by the queue length and protect
+    nothing from the platform's own timeout.
+    """
+    configuration = get_full_agentic_configuration()
+    if deadline is None:
+        deadline = RunDeadline(configuration.run_deadline_seconds)
     completed = 0
     failed = 0
+    yielded = 0
+    reaped = await _close_abandoned_full_agentic(configuration)
+    if reaped:
+        logger.info("Closed %s abandoned full-agentic investigation(s).", reaped)
     for _ in range(limit):
+        # A slice too short for one model call plus one search cannot advance
+        # any investigation, and starting one only to hand it straight back
+        # would churn the queue.
+        if not deadline.allows(
+            configuration.llm_total_timeout_seconds
+            + configuration.source_total_timeout_seconds
+        ):
+            logger.info(
+                "The worker slice is spent; leaving the queue for the next run."
+            )
+            break
         async with async_session_factory() as session:
             investigation_id = (
                 await session.execute(
@@ -333,7 +400,7 @@ async def run_full_agentic_queue(*, limit: int, worker_id: str) -> tuple[int, in
                 await session.rollback()
                 break
             try:
-                item = await get_full_agentic_executor(session).execute(
+                item = await build_full_agentic_executor(session, deadline).execute(
                     ExecuteFullAgenticInput(
                         investigation_id=FullAgenticInvestigationId(investigation_id),
                         worker_id=worker_id,
@@ -341,6 +408,11 @@ async def run_full_agentic_queue(*, limit: int, worker_id: str) -> tuple[int, in
                 )
                 if item.status.value == "FAILED":
                     failed += 1
+                elif item.status is FullAgenticInvestigationStatus.QUEUED:
+                    # Handed back mid-way, not finished: counting it as
+                    # completed would make the sweep's own log say the work is
+                    # done every time the slice runs out.
+                    yielded += 1
                 else:
                     completed += 1
                 if item.search_run_id is not None:
@@ -385,7 +457,11 @@ async def run_full_agentic_queue(*, limit: int, worker_id: str) -> tuple[int, in
                     investigation_id,
                 )
     logger.info(
-        "Processed %s full-agentic investigations; %s failed.", completed, failed
+        "Processed %s full-agentic investigations; %s failed, %s handed back "
+        "unfinished.",
+        completed,
+        failed,
+        yielded,
     )
     return completed, failed
 
@@ -415,9 +491,10 @@ async def run_sweep(*, limit: int, agent_limit: int, worker_id: str) -> tuple[in
             logger.info("Closed %s abandoned investigation(s).", closed)
     except Exception:
         logger.exception("Could not close abandoned investigations; sweeping anyway.")
+    deadline = RunDeadline(get_full_agentic_configuration().run_deadline_seconds)
     completed, failed = await run_due(limit=limit)
     agent_completed, agent_failed = await run_full_agentic_queue(
-        limit=agent_limit, worker_id=worker_id
+        limit=agent_limit, worker_id=worker_id, deadline=deadline
     )
     return completed + agent_completed, failed + agent_failed
 
