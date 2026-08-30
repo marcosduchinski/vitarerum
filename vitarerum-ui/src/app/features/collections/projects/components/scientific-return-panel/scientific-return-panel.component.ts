@@ -553,6 +553,124 @@ export class ScientificReturnPanelComponent {
     }
   }
 
+  protected readonly expandedEventId = signal<string | null>(null);
+
+  /**
+   * A trajectory row said only its number, its kind and its date, while the
+   * payload beside it carried the searches, the verdicts and the reasons. The
+   * content was never missing — it was thrown away at the template.
+   */
+  private static readonly EVENT_TITLES: Readonly<Record<string, string>> = {
+    MEMORY_RETRIEVED: 'Curatorial memory read',
+    PLAN_CREATED: 'Plan',
+    TOOL_STARTED: 'Search sent',
+    TOOL_COMPLETED: 'Search answered',
+    SEARCH_SKIPPED_DUPLICATE: 'Search skipped, already spent',
+    COMPONENTS_COLLAPSED: 'Parts folded onto their publication',
+    LLM_CALL_STARTED: 'Model call charged',
+    LLM_CALL_COMPLETED: 'Model call returned',
+    LLM_CALL_FAILED: 'Model call failed',
+    LLM_CALL_TIMED_OUT: 'Model call timed out',
+    ARTICLE_ASSESSED: 'Article read',
+    CANDIDATE_LINKED: 'Candidate',
+    PLANNER_ERROR: 'Planner contract rejected',
+    PLANNER_FALLBACK: 'Planner given up on',
+    SOURCE_WAIT_REJECTED: 'Source asked for too long a wait',
+    COVERAGE_TRUNCATED: 'Project not covered in full',
+    EXECUTION_SLICE_EXHAUSTED: 'Handed back to the queue',
+    RECOVERY_LIMIT_EXHAUSTED: 'Given up after too many recoveries',
+    ABANDONED: 'Closed as abandoned',
+    ERROR: 'Error',
+    STOPPED: 'Stopped',
+  };
+
+  protected eventTitle(event: AgenticTrajectoryEvent): string {
+    return (
+      ScientificReturnPanelComponent.EVENT_TITLES[event.kind] ??
+      event.kind.replaceAll('_', ' ').toLowerCase()
+    );
+  }
+
+  /** The one line that makes a row worth reading without opening it. */
+  protected eventSummary(event: AgenticTrajectoryEvent): string | null {
+    const payload = event.payload;
+    const text = (key: string): string => String(payload[key] ?? '');
+    const seconds = (key: string): string => {
+      const value = Number(payload[key] ?? 0);
+      return value ? `${(value / 1000).toFixed(1)}s` : '';
+    };
+    const parts: (string | number | null)[] = [];
+    switch (event.kind) {
+      case 'MEMORY_RETRIEVED':
+        return `${(payload['knowledgeItemIds'] as unknown[] | undefined)?.length ?? 0} items`;
+      case 'PLAN_CREATED':
+        parts.push(
+          `${(payload['searches'] as unknown[] | undefined)?.length ?? 0} searches`,
+          text('contractVersion'),
+        );
+        break;
+      case 'TOOL_STARTED':
+      case 'SEARCH_SKIPPED_DUPLICATE':
+        parts.push(text('source'), text('strategy'), text('query'));
+        break;
+      case 'TOOL_COMPLETED':
+        parts.push(text('source'), text('query'), `${text('resultCount')} results`);
+        break;
+      case 'COMPONENTS_COLLAPSED':
+        return `${text('collapsedRecords')} records`;
+      case 'LLM_CALL_STARTED':
+        parts.push(text('phase'), `${text('llmCalls')} of ${text('maxLlmCalls')}`);
+        break;
+      case 'LLM_CALL_COMPLETED':
+        parts.push(text('phase'), seconds('durationMs'));
+        break;
+      case 'LLM_CALL_FAILED':
+      case 'LLM_CALL_TIMED_OUT':
+        parts.push(text('phase'), seconds('durationMs'), text('message'));
+        break;
+      case 'ARTICLE_ASSESSED':
+        parts.push(
+          payload['relevant'] ? 'relevant' : 'not relevant',
+          text('confidence'),
+          text('inventoryEvidenceStatus'),
+        );
+        break;
+      case 'CANDIDATE_LINKED':
+        return text('relationKind').toLowerCase();
+      case 'COVERAGE_TRUNCATED':
+        return `${text('coveredObjects')} of ${text('consultedObjects')} objects`;
+      case 'PLANNER_ERROR':
+      case 'ERROR':
+        return text('message') || null;
+      case 'PLANNER_FALLBACK':
+        return text('reason') || null;
+      case 'SOURCE_WAIT_REJECTED':
+        parts.push(text('source'), text('message'));
+        break;
+      case 'STOPPED':
+        return text('status').toLowerCase();
+      default:
+        return null;
+    }
+    return parts.filter((part) => part !== null && part !== '').join(' · ') || null;
+  }
+
+  /** Everything the summary left out, shown only when the row is opened. */
+  protected eventDetails(
+    event: AgenticTrajectoryEvent,
+  ): readonly { readonly label: string; readonly value: string }[] {
+    return Object.entries(event.payload)
+      .filter(([, value]) => value !== null && value !== undefined && value !== '')
+      .map(([key, value]) => ({
+        label: key.replaceAll(/([A-Z])/g, ' $1').toLowerCase(),
+        value: typeof value === 'object' ? JSON.stringify(value, null, 1) : String(value),
+      }));
+  }
+
+  protected toggleEvent(eventId: string): void {
+    this.expandedEventId.set(this.expandedEventId() === eventId ? null : eventId);
+  }
+
   /** The object an investigation covers, named rather than shown as a uuid. */
   protected objectLabel(investigation: FullAgenticInvestigation): string | null {
     const objectId = investigation.objectId;

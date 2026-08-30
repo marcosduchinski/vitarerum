@@ -6,6 +6,7 @@ import { IDENTITY_SERVICE } from '@core/auth/identity.service';
 import { IdentitySession } from '@core/auth/models/identity-session.model';
 
 import {
+  AgenticTrajectoryEvent,
   FullAgenticInvestigation,
   ScientificReturnInvestigation,
   ScientificReturnKnowledgeItem,
@@ -87,6 +88,7 @@ class ApiStub {
   statusCalls: { watchId: string; status: ScientificReturnWatchStatus }[] = [];
   intervalCalls: { watchId: string; reviewIntervalDays: number }[] = [];
   fullAgentic: FullAgenticInvestigation[] = [];
+  trajectory: AgenticTrajectoryEvent[] = [];
   startedFullAgentic: string[] = [];
   knowledge: ScientificReturnKnowledgeItem[] = [];
 
@@ -108,6 +110,10 @@ class ApiStub {
 
   listFullAgenticInvestigations(): Observable<readonly FullAgenticInvestigation[]> {
     return of(this.fullAgentic);
+  }
+
+  getFullAgenticTrajectory(): Observable<readonly AgenticTrajectoryEvent[]> {
+    return of(this.trajectory);
   }
 
   startFullAgenticInvestigation(watchId: string): Observable<FullAgenticInvestigation> {
@@ -467,5 +473,85 @@ describe('ScientificReturnPanelComponent', () => {
 
     expect(api.statusCalls).toEqual([{ watchId: 'watch-1', status: 'CLOSED' }]);
     expect(dialog()).toBeNull();
+  });
+
+  it('shows what each trajectory event actually says', async () => {
+    // The row used to print a number, a kind and a date while the payload beside
+    // it carried the searches, the verdicts and the reasons.
+    api.fullAgentic = [
+      {
+        id: 'full-agentic-trajectory',
+        watchId: 'watch-1',
+        objective: 'DISCOVER_CANDIDATE',
+        candidateId: null,
+        searchRunId: null,
+        status: 'COMPLETED',
+        budget: {},
+        usage: { queries: 4, candidates: 1 },
+        createdBy: 'perm-bob-curatorial',
+        createdAt: '2026-08-30T04:35:00Z',
+        startedAt: '2026-08-30T04:35:01Z',
+        completedAt: '2026-08-30T04:40:00Z',
+        heartbeatAt: null,
+        failureReason: null,
+      },
+    ];
+    api.trajectory = [
+      {
+        id: 'event-16',
+        sequence: 16,
+        kind: 'LLM_CALL_STARTED',
+        occurredAt: '2026-08-30T04:35:34Z',
+        payload: { phase: 'PLAN', iteration: 2, llmCalls: 3, maxLlmCalls: 20 },
+      },
+      {
+        id: 'event-17',
+        sequence: 17,
+        kind: 'LLM_CALL_COMPLETED',
+        occurredAt: '2026-08-30T04:35:47Z',
+        payload: { phase: 'PLAN', durationMs: 12613 },
+      },
+      {
+        id: 'event-18',
+        sequence: 18,
+        kind: 'ARTICLE_ASSESSED',
+        occurredAt: '2026-08-30T04:35:55Z',
+        payload: {
+          relevant: true,
+          confidence: 'MEDIUM',
+          inventoryEvidenceStatus: 'NOT_OBSERVED',
+          explanation: 'The author surname matches the researcher.',
+        },
+      },
+    ];
+    fixture = TestBed.createComponent(ScientificReturnPanelComponent);
+    fixture.componentRef.setInput('projectId', 'project-1');
+    await settle();
+
+    // The agentic list is its own section; the helper above targets the
+    // supervised one.
+    const agenticRows = (fixture.nativeElement as HTMLElement).querySelectorAll<
+      HTMLButtonElement
+    >('[aria-labelledby="agentic-workspace-heading"] .run-row');
+    agenticRows[0].click();
+    await settle();
+
+    const flat = () =>
+      ((fixture.nativeElement as HTMLElement).textContent ?? '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    expect(flat()).toContain('Model call charged');
+    expect(flat()).toContain('PLAN · 3 of 20');
+    expect(flat()).toContain('12.6s');
+    expect(flat()).toContain('relevant · MEDIUM · NOT_OBSERVED');
+    // The explanation stays behind the row until it is opened.
+    expect(flat()).not.toContain('The author surname matches the researcher.');
+
+    const rows = (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>(
+      '.trajectory-event__row',
+    );
+    rows[2].click();
+    await settle();
+    expect(flat()).toContain('The author surname matches the researcher.');
   });
 });

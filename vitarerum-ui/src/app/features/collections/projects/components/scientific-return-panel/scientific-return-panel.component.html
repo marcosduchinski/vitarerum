@@ -370,10 +370,39 @@
                     event of fullAgenticTrajectory()[investigation.id] ?? [];
                     track event.sequence
                   ) {
-                    <p>
-                      <strong>#{{ event.sequence }} {{ event.kind.replaceAll('_', ' ') }}</strong>
-                      · {{ event.occurredAt | date: 'medium' }}
-                    </p>
+                    <div class="trajectory-event" [attr.data-kind]="event.kind">
+                      <button
+                        type="button"
+                        class="trajectory-event__row"
+                        [attr.aria-expanded]="expandedEventId() === event.id"
+                        (click)="toggleEvent(event.id)"
+                      >
+                        <span class="trajectory-event__seq">#{{ event.sequence }}</span>
+                        <strong class="trajectory-event__title">
+                          {{ eventTitle(event) }}
+                        </strong>
+                        @if (eventSummary(event); as summary) {
+                          <span class="trajectory-event__summary">{{ summary }}</span>
+                        }
+                        <span class="trajectory-event__time">
+                          {{ event.occurredAt | date: 'HH:mm:ss' }}
+                        </span>
+                        <span
+                          class="pi"
+                          [class.pi-chevron-down]="expandedEventId() !== event.id"
+                          [class.pi-chevron-up]="expandedEventId() === event.id"
+                          aria-hidden="true"
+                        ></span>
+                      </button>
+                      @if (expandedEventId() === event.id) {
+                        <dl class="trajectory-event__detail">
+                          @for (entry of eventDetails(event); track entry.label) {
+                            <dt>{{ entry.label }}</dt>
+                            <dd>{{ entry.value }}</dd>
+                          }
+                        </dl>
+                      }
+                    </div>
                   } @empty {
                     <p>Trajectory is being recorded.</p>
                   }

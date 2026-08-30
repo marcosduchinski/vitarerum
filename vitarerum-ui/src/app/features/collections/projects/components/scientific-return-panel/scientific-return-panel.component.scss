@@ -1003,6 +1003,84 @@ a.query-list__source:hover {
   color: var(--status-review-text);
 }
 
+/* A trajectory row used to show a number, a kind and a date, while the payload
+   beside it held the searches, the verdicts and the reasons. The summary makes
+   a row worth reading; opening it shows everything the summary left out. */
+.trajectory-event + .trajectory-event {
+  border-top: 1px solid var(--color-border);
+}
+
+.trajectory-event__row {
+  display: grid;
+  grid-template-columns: 2.6rem minmax(9rem, auto) 1fr auto 1rem;
+  align-items: baseline;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.4rem 0.2rem;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.trajectory-event__row:hover {
+  background: color-mix(in srgb, var(--color-text-muted) 6%, transparent);
+}
+
+.trajectory-event__seq,
+.trajectory-event__time {
+  color: var(--color-text-muted);
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.trajectory-event__title {
+  font-size: 0.74rem;
+}
+
+.trajectory-event__summary {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The endings a curator has to notice, marked without shouting. */
+.trajectory-event[data-kind='LLM_CALL_FAILED'] .trajectory-event__title,
+.trajectory-event[data-kind='LLM_CALL_TIMED_OUT'] .trajectory-event__title,
+.trajectory-event[data-kind='PLANNER_ERROR'] .trajectory-event__title,
+.trajectory-event[data-kind='PLANNER_FALLBACK'] .trajectory-event__title,
+.trajectory-event[data-kind='SOURCE_WAIT_REJECTED'] .trajectory-event__title,
+.trajectory-event[data-kind='COVERAGE_TRUNCATED'] .trajectory-event__title,
+.trajectory-event[data-kind='ERROR'] .trajectory-event__title {
+  color: var(--status-review-text);
+}
+
+.trajectory-event__detail {
+  display: grid;
+  grid-template-columns: minmax(7rem, max-content) 1fr;
+  gap: 0.2rem 0.8rem;
+  margin: 0 0 0.5rem;
+  padding: 0.5rem 0.7rem;
+  background: color-mix(in srgb, var(--color-text-muted) 6%, var(--color-panel));
+  font-size: 0.7rem;
+}
+
+.trajectory-event__detail dt {
+  color: var(--color-text-muted);
+}
+
+.trajectory-event__detail dd {
+  margin: 0;
+  overflow-x: auto;
+  font-family: var(--font-mono, monospace);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* Each consulted object is investigated on its own, so a project is covered
    only once every object has been reached. Partial coverage has to be visible:
    silence about an object nobody searched reads as "nothing found". */
