@@ -211,3 +211,39 @@ def test_a_worker_slice_shorter_than_one_model_call_is_refused() -> None:
         )
 
     assert "run_deadline" in str(error.value)
+
+
+def test_a_slice_that_outlives_the_platform_window_is_refused() -> None:
+    """Raising the slice past the platform's timeout disables it entirely.
+
+    The process is killed before it can hand its work back, every run then
+    reads as a recovery, and enough of them end a healthy investigation as
+    poisoned — a configuration error wearing the mask of a poisoned row.
+    """
+
+    with pytest.raises(ValidationError) as error:
+        Settings(
+            app_env="local",
+            scientific_return_full_agentic_run_deadline_seconds=3600,
+            scientific_return_platform_window_seconds=1800,
+            _env_file=None,
+        )
+
+    assert "platform_window_seconds" in str(error.value)
+
+
+def test_the_window_must_hold_the_slice_plus_one_call() -> None:
+    """The last operation may start with exactly its own timeout remaining."""
+
+    with pytest.raises(ValidationError):
+        Settings(
+            app_env="local",
+            scientific_return_full_agentic_run_deadline_seconds=1700,
+            scientific_return_llm_total_timeout_seconds=300,
+            scientific_return_platform_window_seconds=1800,
+            _env_file=None,
+        )
+
+    # The shipped defaults sit exactly on the boundary and must stay valid.
+    Settings(app_env="local", _env_file=None)
+

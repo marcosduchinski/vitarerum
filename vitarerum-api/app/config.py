@@ -119,6 +119,14 @@ class Settings(BaseSettings):
     # into an unaccounted retry. The slice is shared by everything the pass
     # does, not granted per investigation.
     scientific_return_full_agentic_run_deadline_seconds: float = 1500.0
+    # How long the platform lets one worker process live — the Cloud Run job's
+    # ``--task-timeout``. The application cannot read it, so it is declared
+    # here and checked against the slice: a slice that does not fit inside this
+    # window is not a longer slice, it is no slice at all, because the platform
+    # kills the process before it can stop itself. Worse, every such run then
+    # reads as a recovery, and enough of them terminate a healthy investigation
+    # as poisoned.
+    scientific_return_platform_window_seconds: float = 1800.0
     # A row reclaimed after a lost lease is a recovery. Enough of them means the
     # work itself is the problem, not the infrastructure.
     scientific_return_full_agentic_max_recoveries: int = 3
@@ -205,6 +213,20 @@ class Settings(BaseSettings):
             errors.append(
                 "scientific_return_full_agentic_run_deadline_seconds must exceed "
                 "one model call, or a worker slice can never fit a single one"
+            )
+        longest_call = max(
+            self.scientific_return_llm_total_timeout_seconds,
+            self.scientific_return_source_total_timeout_seconds,
+        )
+        needed = self.scientific_return_full_agentic_run_deadline_seconds + longest_call
+        if self.scientific_return_platform_window_seconds < needed:
+            # The last operation may begin with exactly its own timeout left, so
+            # the window has to hold the slice plus one full call.
+            errors.append(
+                "scientific_return_platform_window_seconds must be at least the "
+                f"worker slice plus the longest external call ({needed:.0f}s); "
+                "raise the platform's task timeout before raising the slice, or "
+                "the worker is killed instead of stopping on its own"
             )
         if errors:
             raise ValueError("; ".join(errors))

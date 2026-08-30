@@ -1983,3 +1983,15 @@ async def test_the_parts_of_one_publication_do_not_fill_the_queue() -> None:
         "10.5281/zenodo.21167298",
         "10.1643/i2025093",
     ]
+
+
+def test_the_agentic_configuration_refuses_a_slice_the_platform_would_kill() -> None:
+    with pytest.raises(ValueError, match="platform window"):
+        FullAgenticConfiguration(
+            enabled=True,
+            allowed_sources=("TEST",),
+            budget=AgenticBudget(4, 12, 40, 5, 20),
+            run_deadline_seconds=3600.0,
+            platform_window_seconds=1800.0,
+        )
+

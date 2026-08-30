@@ -152,6 +152,7 @@ def get_full_agentic_configuration() -> FullAgenticConfiguration:
         run_deadline_seconds=(
             settings.scientific_return_full_agentic_run_deadline_seconds
         ),
+        platform_window_seconds=settings.scientific_return_platform_window_seconds,
         max_recoveries=settings.scientific_return_full_agentic_max_recoveries,
         max_age_seconds=settings.scientific_return_full_agentic_max_age_seconds,
     )

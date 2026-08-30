@@ -153,6 +153,9 @@ class FullAgenticConfiguration:
     llm_total_timeout_seconds: float = 300.0
     source_total_timeout_seconds: float = 120.0
     run_deadline_seconds: float = 1500.0
+    # The platform's own timeout for one worker process, which the application
+    # cannot observe and must therefore be told.
+    platform_window_seconds: float = 1800.0
     max_recoveries: int = 3
     max_age_seconds: int = 86400
 
@@ -181,6 +184,18 @@ class FullAgenticConfiguration:
                 "The worker slice must outlast one lease renewal: "
                 f"{self.run_deadline_seconds:.0f}s slice against a "
                 f"{self.investigation_lease_seconds}s lease"
+            )
+        # A slice that outlives the platform's window is not a longer slice: the
+        # process is killed before it can hand its work back, every run then
+        # reads as a recovery, and enough of them end a healthy investigation as
+        # poisoned. The last operation may start with exactly its own timeout
+        # left, so the window must hold the slice plus one full call.
+        if self.platform_window_seconds < self.run_deadline_seconds + longest_call:
+            raise ValueError(
+                "The worker slice must finish inside the platform window: "
+                f"{self.run_deadline_seconds:.0f}s slice plus a "
+                f"{longest_call:.0f}s call against a "
+                f"{self.platform_window_seconds:.0f}s window"
             )
 
     def validate_operational_sources(self) -> None:
