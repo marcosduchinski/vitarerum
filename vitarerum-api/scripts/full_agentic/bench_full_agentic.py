@@ -32,6 +32,7 @@ import asyncio
 import csv
 import json
 import logging
+import subprocess
 import sys
 import time
 from dataclasses import dataclass
@@ -57,6 +58,7 @@ sys.path.insert(0, str(_project_root()))
 from sqlalchemy import text  # noqa: E402
 
 import app.orm_registry  # noqa: E402, F401  (registers every mapper)
+from app.config import settings  # noqa: E402
 from app.database import async_session_factory  # noqa: E402
 from app.identity.public import Actor, GroupName  # noqa: E402
 from app.scientific_return.application.full_agentic import (  # noqa: E402
@@ -109,6 +111,60 @@ class Target:
     original_object_name: str
     original_inventory_number: str
     original_user_name: str
+
+
+def provenance(samples_path: Path, target: object) -> dict[str, object]:
+    """Everything a third party needs to know what produced these numbers.
+
+    The configuration lives in the environment, not in this script's flags, so
+    a results file that records only the outcomes cannot be interpreted later:
+    the same command produces different numbers under a different reasoning
+    setting or source list. Recording it here is what makes an approximate
+    reproduction meaningful, since neither the model nor the live indexes are
+    deterministic and an exact one is not available.
+    """
+    try:
+        here = Path(__file__).parent
+        commit = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+            cwd=here,
+        ).stdout.strip()
+        # A bare hash is a lie when the tree it names has been edited since.
+        dirty = subprocess.run(
+            ["git", "status", "--porcelain"],
+            capture_output=True,
+            text=True,
+            check=True,
+            cwd=here,
+        ).stdout.strip()
+        if dirty:
+            commit = f"{commit}-dirty"
+    except Exception:
+        commit = None
+    return {
+        "startedAt": datetime.now(UTC).isoformat(),
+        "gitCommit": commit,
+        "samplesFile": str(samples_path),
+        "projectId": getattr(target, "project_id", None),
+        "objectId": getattr(target, "object_id", None),
+        "model": settings.scientific_return_llm_model,
+        "sources": settings.scientific_return_full_agentic_sources,
+        "llm": {
+            "reasoning": settings.scientific_return_llm_reasoning,
+            "numPredict": settings.scientific_return_llm_num_predict,
+            "totalTimeoutSeconds": settings.scientific_return_llm_total_timeout_seconds,
+        },
+        "budget": {
+            "maxIterations": settings.scientific_return_full_agentic_max_iterations,
+            "maxQueries": settings.scientific_return_full_agentic_max_queries,
+            "maxResults": settings.scientific_return_full_agentic_max_results,
+            "maxCandidates": settings.scientific_return_full_agentic_max_candidates,
+            "maxLlmCalls": settings.scientific_return_full_agentic_max_llm_calls,
+        },
+    }
 
 
 def read_samples(path: Path) -> list[Sample]:
@@ -406,6 +462,19 @@ async def main() -> int:
     logging.basicConfig(level=logging.WARNING)
     samples = read_samples(args.samples)
     target = await resolve_target(args.project, args.object)
+    prov = provenance(args.samples, target)
+    results: list[dict[str, object]] = []
+
+    def save() -> None:
+        """Rewrite the results file after every sample, provenance included.
+
+        Written eagerly so a run killed halfway still leaves usable data, and
+        always with the configuration that produced it: the knobs live in the
+        environment, so outcomes alone cannot be interpreted after the fact.
+        """
+        args.out.write_text(
+            json.dumps({"provenance": prov, "results": results}, indent=2, default=str)
+        )
 
     print(f"project {target.project_id}")
     print(
@@ -423,7 +492,6 @@ async def main() -> int:
             print(f"  would run {sample.reference_number} · {sample.scientific_name}")
         return 0
 
-    results: list[dict[str, object]] = []
     started = time.monotonic()
     try:
         for index, sample in enumerate(samples, start=1):
@@ -456,7 +524,7 @@ async def main() -> int:
                         "error": f"{type(exc).__name__}: {exc}",
                     }
                 )
-                args.out.write_text(json.dumps(results, indent=2, default=str))
+                save()
                 continue
             dois = {(c.get("doi") or "").casefold() for c in outcome["candidates"]}
             expected_found = (
@@ -472,7 +540,7 @@ async def main() -> int:
                 "seconds": round(time.monotonic() - began, 1),
             }
             results.append(outcome)
-            args.out.write_text(json.dumps(results, indent=2, default=str))
+            save()
             usage = outcome["usage"]
             if expected_found is None:
                 mark = ""

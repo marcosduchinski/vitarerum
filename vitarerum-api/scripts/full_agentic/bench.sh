@@ -15,6 +15,15 @@
 #   5. Sources        — at least one inspectable source operational, or the
 #                       configuration refuses to start an investigation
 #
+# The project itself is not a prerequisite this script can check, because it
+# is data rather than infrastructure. If you have none — anyone reproducing
+# these measurements outside the original machine does not — create one first:
+#
+#   uv run python scripts/full_agentic/seed_bench_project.py
+#
+# It prints the project id and the exact command below, and is idempotent, so
+# running it twice reuses the project it made the first time.
+#
 # Usage:
 #   ./scripts/full_agentic/bench.sh --project <uuid> \
 #       --samples scripts/full_agentic/bench_samples.example.csv
