@@ -202,3 +202,78 @@ def test_a_small_budget_binds_before_the_capability_rule() -> None:
 
 def test_an_undeclared_source_keeps_the_general_ceiling() -> None:
     assert source_result_limit(None, 40) == 20
+
+
+_OPENALEX = BibliographicSourceCapabilities(
+    name="OPENALEX",
+    searches_metadata=True,
+    searches_indexed_full_text=True,
+    returns_abstract=True,
+    returns_inspectable_full_text=False,
+    supports_structured_author=True,
+)
+_CROSSREF = BibliographicSourceCapabilities(
+    name="CROSSREF",
+    searches_metadata=True,
+    searches_indexed_full_text=False,
+    returns_abstract=True,
+    returns_inspectable_full_text=False,
+    supports_structured_author=False,
+)
+_EUROPE_PMC = BibliographicSourceCapabilities(
+    name="EUROPE_PMC",
+    searches_metadata=True,
+    searches_indexed_full_text=True,
+    returns_abstract=True,
+    returns_inspectable_full_text=True,
+    supports_structured_author=False,
+)
+_ALL_THREE = (_OPENALEX, _CROSSREF, _EUROPE_PMC)
+
+
+def test_discovery_asks_every_source_that_can_answer() -> None:
+    """No single index reaches every expected publication; together they do.
+
+    Measured over the eight cases with a recorded expectation: OpenAlex five,
+    Crossref six, Europe PMC five, union eight. Asking only the best-ranked
+    source made the guarantee depend on one index knowing the taxon.
+    """
+    searches = discovery_floor(_snapshot(), _ALL_THREE, 1)
+
+    assert [search.source for search in searches] == [
+        "OPENALEX",
+        "EUROPE_PMC",
+        "CROSSREF",
+    ]
+    # Only the structured-author index is told the surname separately.
+    assert searches[0].query == '"Cynoscion regalis"'
+    assert all(search.author == "Gomes" for search in searches)
+    assert all('"Gomes"' in search.query for search in searches[1:])
+
+
+def test_extra_discovery_sources_never_push_out_the_inventory_leg() -> None:
+    """Each object keeps its best discovery source and its inventory code.
+
+    Grouping the three discovery searches together would spend the reservation
+    on them and leave every object after the first without an inventory query —
+    trading one guarantee of the floor for the other.
+    """
+    snapshot = ProjectSnapshotPayload(
+        project_id="project-1",
+        project_reference="P-1",
+        researcher="Pedro Gomes",
+        consulted_objects=(
+            ConsultedObjectSnapshot("object-1", "MUHNAC/MB04-001066", "Taxon one"),
+            ConsultedObjectSnapshot("object-2", "MUHNAC/MB04-001067", "Taxon two"),
+        ),
+    )
+
+    searches = deterministic_floor(snapshot, _ALL_THREE, 6)
+
+    for object_id in ("object-1", "object-2"):
+        strategies = [
+            search.strategy for search in searches if search.object_id == object_id
+        ]
+        assert SearchStrategy.AUTHOR_OBJECT in strategies
+        assert SearchStrategy.INVENTORY_QUERY in strategies
+    assert searches[0].strategy is SearchStrategy.AUTHOR_OBJECT

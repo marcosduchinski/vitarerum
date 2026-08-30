@@ -58,38 +58,58 @@ def discovery_floor(
     capabilities: tuple[BibliographicSourceCapabilities, ...],
     limit: int,
 ) -> tuple[AgenticSearchSpec, ...]:
+    """Author plus object, on every source that can answer it.
+
+    This leg used to go to one source — whichever ranked best on declared
+    capability — and that made the whole guarantee depend on a single index
+    knowing the taxon. Measured over the eight cases with a recorded expected
+    publication, no index reaches them all: OpenAlex five, Crossref six, Europe
+    PMC five, and each finds something the others miss. **Together they reach
+    all eight.** The one publication the thirteen-sample run never surfaced sits
+    in Crossref at rank one, on exactly this query, and was never asked for.
+
+    The sources stay ordered by capability so that, under a reservation too
+    small for all of them, each object still spends its first query on the index
+    most likely to answer precisely.
+    """
     if limit <= 0:
         return ()
     surname_hypotheses = bibliographic_surname_hypotheses(snapshot.researcher)
     if not surname_hypotheses:
         return ()
-    ordered_sources = sorted(
-        capabilities,
-        key=lambda item: (
-            not item.supports_structured_author,
-            not item.searches_indexed_full_text,
-            item.name,
-        ),
-    )
+    ordered_sources = [
+        source
+        for source in sorted(
+            capabilities,
+            key=lambda item: (
+                not item.supports_structured_author,
+                not item.searches_indexed_full_text,
+                item.name,
+            ),
+        )
+        if source.searches_metadata
+    ]
     if not ordered_sources:
         return ()
-    source = ordered_sources[0]
     surname = surname_hypotheses[0]
     searches = []
     for item in snapshot.consulted_objects[:limit]:
-        query = f'"{item.object_name}"'
-        if not source.supports_structured_author:
-            query = f'{query} "{surname}"'
-        searches.append(
-            AgenticSearchSpec(
-                source=source.name,
-                query=query,
-                author=surname,
-                object_id=item.id,
-                intent=SearchIntent.DISCOVERY,
-                strategy=SearchStrategy.AUTHOR_OBJECT,
+        for source in ordered_sources:
+            query = f'"{item.object_name}"'
+            # Only an index with an authorship field can be told the surname
+            # separately; everywhere else it has to ride inside the query text.
+            if not source.supports_structured_author:
+                query = f'{query} "{surname}"'
+            searches.append(
+                AgenticSearchSpec(
+                    source=source.name,
+                    query=query,
+                    author=surname,
+                    object_id=item.id,
+                    intent=SearchIntent.DISCOVERY,
+                    strategy=SearchStrategy.AUTHOR_OBJECT,
+                )
             )
-        )
     return tuple(searches)
 
 
@@ -160,19 +180,36 @@ def deterministic_floor(
     Interleaving keeps the two strategies represented when the reservation is
     smaller than the number of consulted objects: taking one strategy first
     would spend the whole floor on it and lose the other entirely.
+
+    Within an object the order is best discovery source, then the inventory
+    code, then the remaining discovery sources. Discovery runs on several
+    indexes now, and grouping them together would let the extra ones push the
+    inventory leg past the reservation for every object but the first — trading
+    one guarantee for the other rather than keeping both.
     """
     if reservation <= 0:
         return ()
     per_strategy = max(1, reservation // 2)
     by_object: dict[str | None, list[AgenticSearchSpec]] = {}
     order: list[str | None] = []
+    discovery = discovery_floor(snapshot, capabilities, per_strategy)
+    inventory = inventory_floor(snapshot, capabilities, per_strategy)
+    first_discovery: dict[str | None, AgenticSearchSpec] = {}
+    for search in discovery:
+        first_discovery.setdefault(search.object_id, search)
+    ranked = (
+        *first_discovery.values(),
+        *inventory,
+        *(
+            search
+            for search in discovery
+            if first_discovery.get(search.object_id) is not search
+        ),
+    )
     # Author plus object comes first per object: it is the guarantee the
     # hardening plan asked for, and a reservation smaller than the object count
     # must not spend itself entirely on the inventory code.
-    for search in (
-        *discovery_floor(snapshot, capabilities, per_strategy),
-        *inventory_floor(snapshot, capabilities, per_strategy),
-    ):
+    for search in ranked:
         if search.object_id not in by_object:
             by_object[search.object_id] = []
             order.append(search.object_id)
