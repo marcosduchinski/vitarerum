@@ -8,6 +8,7 @@ form rather than of the aggregates:
 - an object occurrence entry renders onto the ROC report
   (``formOcorrenciaColecoes``), one report per occurrence — the form has a
   single date, place and description, so it cannot hold a whole log.
+- the publication log renders onto the RRP register, one register per project.
 
 Values stay typed here — date formatting, blank-line padding and the joining of
 list fields belong to the renderers, which know the forms' layouts.
@@ -82,3 +83,36 @@ class ObjectOccurrenceDocument:
     issued_on: date
     institution: str
     occurrences: tuple[ObjectOccurrenceDocumentEntry, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class PublicationLogDocumentAttachment:
+    """One supporting file named in a publication-register row."""
+
+    file_name: str
+    description: str
+
+
+@dataclass(frozen=True, slots=True)
+class PublicationLogDocumentEntry:
+    """One chronological publication or output in the RRP register."""
+
+    sequence: int
+    added_at: datetime
+    added_by: str
+    note: str
+    object_reference: str
+    attachments: tuple[PublicationLogDocumentAttachment, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class PublicationLogDocument:
+    """A project's publication log as the RRP register presents it."""
+
+    reference_number: str
+    issued_on: date
+    project_reference: str
+    project_title: str
+    requester: str
+    curator: str
+    entries: tuple[PublicationLogDocumentEntry, ...]

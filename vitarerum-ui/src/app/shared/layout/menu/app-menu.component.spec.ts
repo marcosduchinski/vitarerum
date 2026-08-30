@@ -134,7 +134,7 @@ describe('AppMenuComponent', () => {
     expect(objectSearchLink.getAttribute('href')).toBe('/p/objects/search');
   });
 
-  it('shows AI prompts for staff who can generate narratives', () => {
+  it('groups prompts, scientific return, and watchers under AI for staff', () => {
     activeSession.set(sessionForGroup('CURATORIAL'));
     const fixture = TestBed.createComponent(AppMenuComponent);
     fixture.detectChanges();
@@ -143,22 +143,19 @@ describe('AppMenuComponent', () => {
     const promptsLink = linkByText(compiled, 'Prompts');
     expect(compiled.textContent).toContain('AI');
     expect(promptsLink.getAttribute('href')).toBe('/p/ai/prompts');
-  });
-
-  it('keeps the operational scientific return entry without the retired test bench', () => {
-    activeSession.set(sessionForGroup('COLLECTIONS_MANAGEMENT'));
-    const fixture = TestBed.createComponent(AppMenuComponent);
-    fixture.detectChanges();
-
-    const compiled = fixture.nativeElement as HTMLElement;
-    buttonByText(compiled, 'Projects').click();
-    fixture.detectChanges();
     expect(linkByText(compiled, 'Scientific return').getAttribute('href')).toBe(
       '/p/collections/projects/scientific-return',
     );
     expect(linkByText(compiled, 'Watchers').getAttribute('href')).toBe(
       '/p/collections/projects/watchers',
     );
+
+    buttonByText(compiled, 'Projects').click();
+    fixture.detectChanges();
+    const projectsMenu = buttonByText(compiled, 'Projects').getAttribute('aria-controls');
+    const projectsSubmenu = projectsMenu ? compiled.querySelector(`#${projectsMenu}`) : null;
+    expect(projectsSubmenu?.textContent).not.toContain('Scientific return');
+    expect(projectsSubmenu?.textContent).not.toContain('Watchers');
     expect(compiled.textContent).not.toContain('Scientific Return Test');
   });
 

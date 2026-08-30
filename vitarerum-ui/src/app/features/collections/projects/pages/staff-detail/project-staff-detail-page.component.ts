@@ -4,11 +4,12 @@ import {
   computed,
   inject,
   input,
+  linkedSignal,
   resource,
   signal,
 } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 
 import { IDENTITY_SERVICE } from '@core/auth/identity.service';
@@ -144,11 +145,18 @@ export class ProjectStaffDetailPageComponent {
   private readonly reportsService = inject(REPORTS_API_SERVICE);
   private readonly identity = inject(IDENTITY_SERVICE);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
 
   readonly id = input.required<string>();
   readonly returnTo = input<string>();
   readonly returnLabel = input<string>();
   readonly sectionLabel = input('Staff');
+
+  // The active tab lives in the URL (query params, bound via
+  // withComponentInputBinding) so a row action can deep-link straight into a
+  // panel and the view survives a refresh. linkedSignal keeps it locally
+  // writable while resetting to the URL whenever the param changes.
+  readonly tab = input<string>();
 
   protected readonly backLink = computed(() => safeReturnTo(this.returnTo()));
   protected readonly backLabel = computed(() => `Back to ${safeReturnLabel(this.returnLabel())}`);
@@ -293,7 +301,9 @@ export class ProjectStaffDetailPageComponent {
   );
   protected readonly cascadeRemoveReason = signal('');
   protected readonly cascadeRemoveError = signal<ApiError | null>(null);
-  protected readonly activeTab = signal<ProjectDetailTab>('actions');
+  protected readonly activeTab = linkedSignal<ProjectDetailTab>(() =>
+    this.normalizeTab(this.tab()),
+  );
   protected readonly availableTabs = computed<readonly ProjectDetailTab[]>(() =>
     this.project()?.status === 'COMPLETED'
       ? [...BASE_PROJECT_DETAIL_TABS, 'scientific-return']
@@ -326,6 +336,31 @@ export class ProjectStaffDetailPageComponent {
 
   protected selectTab(tab: ProjectDetailTab): void {
     this.activeTab.set(tab);
+    this.syncUrl({ tab });
+  }
+
+  /** Only the always-present tabs are addressable. 'scientific-return' appears
+   *  solely for COMPLETED projects and the project loads asynchronously, so
+   *  honouring it here would render a panel the tab strip does not offer. */
+  private normalizeTab(tab: string | undefined): ProjectDetailTab {
+    return tab === 'objects' || tab === 'todo' ? tab : 'actions';
+  }
+
+  /** Reflects the current view state into the URL query string. A null value drops
+   *  the param (the 'actions' tab is the default, so its URL stays clean). */
+  private syncUrl(state: { tab?: ProjectDetailTab }): void {
+    const queryParams: Record<string, string | null> = {};
+    if (state.tab !== undefined) {
+      queryParams['tab'] = state.tab === 'actions' ? null : state.tab;
+    }
+    void this.router
+      .navigate([], {
+        relativeTo: this.route,
+        queryParams,
+        queryParamsHandling: 'merge',
+        replaceUrl: true,
+      })
+      .catch(() => undefined);
   }
 
   protected onTabKeydown(event: KeyboardEvent, index: number): void {
@@ -345,7 +380,7 @@ export class ProjectStaffDetailPageComponent {
 
     if (nextIndex === null) return;
     event.preventDefault();
-    this.activeTab.set(tabs[nextIndex]);
+    this.selectTab(tabs[nextIndex]);
   }
 
   protected openCancelConfirm(): void {

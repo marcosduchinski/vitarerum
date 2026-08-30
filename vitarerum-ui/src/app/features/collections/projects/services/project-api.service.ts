@@ -445,6 +445,15 @@ export class ProjectApiService {
     );
   }
 
+  // The project's persisted publications and supporting files rendered onto
+  // the RRP register. Unsaved UI drafts are intentionally not included.
+  downloadPublicationLogDocument(projectId: string): Observable<Blob> {
+    return this.http.get(
+      this.url(`/collection-use-projects/${projectId}/publication-log/document`),
+      { responseType: 'blob' },
+    );
+  }
+
   uploadPublicationEntryAttachment(
     projectId: string,
     entryId: string,

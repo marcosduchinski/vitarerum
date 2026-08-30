@@ -111,14 +111,12 @@ export class ProjectsPendingPageComponent {
       {
         label: 'Detail',
         icon: 'pi pi-eye',
-        command: () => {
-          void this.router.navigate(this.detailRoute(projectId), {
-            queryParams: {
-              returnTo: '/p/collections/projects/pending',
-              returnLabel: 'pending projects',
-            },
-          });
-        },
+        command: () => this.goToDetail(projectId),
+      },
+      {
+        label: 'TODO List',
+        icon: 'pi pi-check-square',
+        command: () => this.goToDetail(projectId, 'todo'),
       },
       {
         label: 'Start',
@@ -141,6 +139,17 @@ export class ProjectsPendingPageComponent {
 
   protected detailRoute(projectId: string): readonly string[] {
     return projectDetailRouteForGroup(projectId, this.identity.session()?.group);
+  }
+
+  /** Opens the staff detail page, optionally deep-linking into one of its tabs. */
+  private goToDetail(projectId: string, tab?: 'todo'): void {
+    void this.router.navigate([...this.detailRoute(projectId)], {
+      queryParams: {
+        ...(tab ? { tab } : {}),
+        returnTo: '/p/collections/projects/pending',
+        returnLabel: 'pending projects',
+      },
+    });
   }
 
   protected requesterEmail(project: CollectionUseProjectSummary): string {

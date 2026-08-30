@@ -7,6 +7,7 @@ from app.reference_numbers.public import ReferenceKind
 from app.use_of_collections.application.documents import (
     ObjectAccessLogDocument,
     ObjectOccurrenceDocument,
+    PublicationLogDocument,
 )
 from app.use_of_collections.domain.enums import ProposalStatus, UseStatus, UseType
 from app.use_of_collections.domain.models import (
@@ -499,4 +500,10 @@ class ObjectAccessLogDocumentRenderer(Protocol):
 class ObjectOccurrenceDocumentRenderer(Protocol):
     async def render(self, document: ObjectOccurrenceDocument) -> bytes:
         """Render one occurrence onto the museum form, returning .docx bytes."""
+        ...
+
+
+class PublicationLogDocumentRenderer(Protocol):
+    async def render(self, document: PublicationLogDocument) -> bytes:
+        """Render the publication log onto the RRP register as .docx bytes."""
         ...

@@ -585,6 +585,23 @@ describe('ProjectApiService', () => {
     });
   });
 
+  it('downloads the publication register as a DOCX blob', () => {
+    let received: Blob | undefined;
+    service
+      .downloadPublicationLogDocument('project-1')
+      .subscribe((blob) => (received = blob));
+
+    const request = http.expectOne(
+      'https://api.example.test/collection-use-projects/project-1/publication-log/document',
+    );
+    expect(request.request.method).toBe('GET');
+    expect(request.request.responseType).toBe('blob');
+
+    const blob = new Blob(['docx-bytes']);
+    request.flush(blob);
+    expect(received).toBe(blob);
+  });
+
   it('deletes a publication entry', () => {
     service.deletePublicationEntry('project-1', 'pub-entry-1').subscribe();
 

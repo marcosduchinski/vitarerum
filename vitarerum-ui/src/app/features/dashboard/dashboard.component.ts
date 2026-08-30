@@ -47,6 +47,9 @@ export class DashboardComponent {
     () => this.postitsResource.value()?.items ?? [],
   );
 
+  /** A post-it links back to the tab it came from, not the project's default one. */
+  protected readonly todoTabQueryParams = { tab: 'todo' } as const;
+
   protected projectDetailRoute(projectId: string): readonly string[] {
     const group = this.activeGroup();
     if (group === 'CURATORIAL') return ['/p/collections/projects/curatorial', projectId];

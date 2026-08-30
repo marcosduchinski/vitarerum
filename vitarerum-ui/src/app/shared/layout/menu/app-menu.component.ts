@@ -71,19 +71,9 @@ const COLLECTION_PROJECTS_STAFF: MenuNode = {
       routerLink: '/p/collections/projects/in-progress',
     },
     {
-      label: 'Completed / closed',
+      label: 'Completed',
       icon: 'pi pi-check',
       routerLink: '/p/collections/projects/completed',
-    },
-    {
-      label: 'Scientific return',
-      icon: 'pi pi-sparkles',
-      routerLink: '/p/collections/projects/scientific-return',
-    },
-    {
-      label: 'Watchers',
-      icon: 'pi pi-bell',
-      routerLink: '/p/collections/projects/watchers',
     },
     {
       label: 'Cancelled',
@@ -165,10 +155,22 @@ const USE_OF_COLLECTIONS_WITHOUT_PUBLIC_INQUIRIES: MenuNode = {
   ],
 };
 
-const AI_PROMPTS_STAFF: MenuNode = {
+const AI_STAFF: MenuNode = {
   label: 'AI',
   icon: 'pi pi-sparkles',
-  items: [{ label: 'Prompts', icon: 'pi pi-comment-edit', routerLink: '/p/ai/prompts' }],
+  items: [
+    { label: 'Prompts', icon: 'pi pi-comment-edit', routerLink: '/p/ai/prompts' },
+    {
+      label: 'Scientific return',
+      icon: 'pi pi-sparkles',
+      routerLink: '/p/collections/projects/scientific-return',
+    },
+    {
+      label: 'Watchers',
+      icon: 'pi pi-bell',
+      routerLink: '/p/collections/projects/watchers',
+    },
+  ],
 };
 
 const COLLECTION_DATA_SOURCES_ITEM: MenuNode = {
@@ -215,11 +217,11 @@ const MENUS: Record<GroupName, readonly MenuNode[]> = {
   COLLECTIONS_MANAGEMENT: [
     HOME,
     USE_OF_COLLECTIONS_WITH_PUBLIC_INQUIRIES,
-    AI_PROMPTS_STAFF,
+    AI_STAFF,
     STAFF_ADMIN_MENU,
   ],
-  CURATORIAL: [HOME, USE_OF_COLLECTIONS_WITH_PUBLIC_INQUIRIES, AI_PROMPTS_STAFF, STAFF_ADMIN_MENU],
-  DIRECTION: [HOME, USE_OF_COLLECTIONS_WITHOUT_PUBLIC_INQUIRIES, AI_PROMPTS_STAFF],
+  CURATORIAL: [HOME, USE_OF_COLLECTIONS_WITH_PUBLIC_INQUIRIES, AI_STAFF, STAFF_ADMIN_MENU],
+  DIRECTION: [HOME, USE_OF_COLLECTIONS_WITHOUT_PUBLIC_INQUIRIES, AI_STAFF],
   SYS_ADMIN: [HOME, SYS_ADMIN_MENU],
 };
 

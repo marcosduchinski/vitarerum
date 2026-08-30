@@ -6,7 +6,8 @@ untouched forms and writes Jinja placeholders into them, producing the template
 assets consumed by ``app.use_of_collections.infrastructure``:
 
 - ``RAIS_formColecoesAcessoInSituRegisto`` → the object access log register;
-- ``ROC_formOcorrenciaColecoes`` → one report per object occurrence.
+- ``ROC_formOcorrenciaColecoes`` → one report per object occurrence;
+- ``RRP_registo_resultados_publicacoes`` → one publication register per project.
 
 Re-run it whenever MUHNAC revises a form, so the layout stays theirs and only
 the placeholders are ours::
@@ -26,7 +27,9 @@ from pathlib import Path
 from typing import Any
 
 from docx import Document
+from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
+from docx.shared import Pt
 
 _API_ROOT = Path(__file__).resolve().parent.parent
 _SOURCE_DIR = _API_ROOT.parent / "docs" / "templates"
@@ -36,6 +39,14 @@ _RAIS_SOURCE = _SOURCE_DIR / "RAIS_formColecoesAcessoInSituRegisto_MUHNAC_2026.d
 _RAIS_TARGET = _TARGET_DIR / "rais_object_access_log.docx"
 _ROC_SOURCE = _SOURCE_DIR / "ROC_formOcorrenciaColecoes_MUHNAC_2026.docx"
 _ROC_TARGET = _TARGET_DIR / "roc_object_occurrence.docx"
+_RRP_SOURCE = (
+    _API_ROOT.parent
+    / "docs"
+    / "proposals"
+    / "publication-log"
+    / "RRP_registo_resultados_publicacoes_TEMPLATE_PROPOSTA_2026.docx"
+)
+_RRP_TARGET = _TARGET_DIR / "publication_log_register.docx"
 
 
 def _set_cell_text(cell: Any, text: str) -> None:
@@ -76,6 +87,25 @@ def _relax_row_height(row: Any) -> None:
     height = properties.find(qn("w:trHeight"))
     if height is not None and height.get(qn("w:hRule")) == "exact":
         height.set(qn("w:hRule"), "atLeast")
+
+
+def _prevent_row_split(row: Any) -> None:
+    """Keep one logical register entry together across page boundaries."""
+    properties = row._tr.get_or_add_trPr()
+    if properties.find(qn("w:cantSplit")) is None:
+        properties.append(OxmlElement("w:cantSplit"))
+
+
+def _minimize_trailing_paragraph(document: Any) -> None:
+    """Keep Word's required post-table paragraph from creating a blank page."""
+    paragraph = document.paragraphs[-1]
+    paragraph.paragraph_format.space_before = Pt(0)
+    paragraph.paragraph_format.space_after = Pt(0)
+    paragraph.paragraph_format.line_spacing = Pt(1)
+    if not paragraph.runs:
+        paragraph.add_run("")
+    for run in paragraph.runs:
+        run.font.size = Pt(1)
 
 
 def _insert_tag_row(table: Any, index: int, tag: str, *, after: bool = False) -> int:
@@ -191,9 +221,36 @@ def annotate_roc(source: Path, target: Path) -> None:
     document.save(str(target))
 
 
+def prepare_rrp(source: Path, target: Path) -> None:
+    """Promote the approved RRP proposal to the runtime template.
+
+    Its table already contains the docxtpl placeholders and repeating-row tags.
+    Only the proposal watermark is removed from the production asset.
+    """
+    document = Document(str(source))
+    _prevent_row_split(document.tables[2].rows[0])
+    _prevent_row_split(document.tables[2].rows[2])
+    _minimize_trailing_paragraph(document)
+    for paragraph in document.paragraphs:
+        if paragraph.text == "TEMPLATE PROPOSTO — SUJEITO A VALIDAÇÃO INSTITUCIONAL":
+            paragraph.clear()
+    for section in document.sections:
+        for paragraph in section.footer.paragraphs:
+            if "RRP • PROPOSTA v01.2026" in paragraph.text:
+                for run in paragraph.runs:
+                    run.text = run.text.replace(
+                        "RRP • PROPOSTA v01.2026", "RRP • v01.2026"
+                    )
+    document.core_properties.title = "Registo de Resultados e Publicações (RRP)"
+    document.core_properties.comments = "Template operacional do Vitarerum"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    document.save(str(target))
+
+
 _FORMS = {
     "rais": (annotate_rais, _RAIS_SOURCE, _RAIS_TARGET),
     "roc": (annotate_roc, _ROC_SOURCE, _ROC_TARGET),
+    "rrp": (prepare_rrp, _RRP_SOURCE, _RRP_TARGET),
 }
 
 

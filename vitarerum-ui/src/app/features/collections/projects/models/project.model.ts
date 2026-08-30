@@ -91,6 +91,7 @@ export interface PublicationLog {
 export interface PublicationLogEntry {
   readonly id: string;
   readonly collectionUseObjectId?: string | null;
+  readonly objectReference?: ObjectReference | null;
   readonly addedAt: string;
   readonly addedBy: PermissionPrincipal;
   readonly note: string;

@@ -36,7 +36,7 @@ export const PT_PT_CATALOG = {
   'public.askMuseum.description':
     'Tem uma pergunta rápida? Diga-nos quem é e o que gostaria de saber — respondemos por e-mail.',
   'public.askMuseum.scopeNotice':
-    'De momento, o Pergunte ao Museu está disponível apenas para perguntas sobre o uso de coleções, em especial visitas in situ para investigação. Perguntas sobre exposições, empréstimos, eventos, atividades educativas ou outros serviços do museu serão encerradas com uma resposta automática por e-mail.',
+    'De momento, o Pergunte ao Museu está disponível apenas para perguntas sobre o uso de coleções, em especial visitas in situ para investigação. Perguntas sobre exposições, empréstimos, eventos, atividades educativas ou outros serviços do museu serão encerradas com uma resposta por e-mail.',
   'public.askMuseum.form.name.label': 'Nome completo',
   'public.askMuseum.form.name.required': 'O seu nome é obrigatório.',
   'public.askMuseum.form.email.label': 'E-mail',

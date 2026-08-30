@@ -302,6 +302,9 @@ describe('project log pages', () => {
     const anchorClick = vi
       .spyOn(HTMLAnchorElement.prototype, 'click')
       .mockImplementation(() => undefined);
+    createObjectURL.mockClear();
+    revokeObjectURL.mockClear();
+    anchorClick.mockClear();
     const fixture = TestBed.createComponent(ProjectObjectLogPanelComponent);
     fixture.componentRef.setInput('projectId', 'proj-3');
     fixture.detectChanges();
@@ -766,6 +769,77 @@ describe('project log pages', () => {
     const backLink = root.querySelector<HTMLAnchorElement>('.back-link');
     expect(backLink?.getAttribute('href')).toBe('/p/collections/projects/curatorial/proj-3');
     expect(root.textContent).toContain('Publication log');
+  });
+
+  it('downloads the complete RRP register and shows the unpaginated entry count', async () => {
+    const state = TestBed.inject(MockProjectState);
+    const service = TestBed.inject(PROJECT_API_SERVICE);
+    const seedEntry = state.publicationEntries.get('proj-3')![0];
+    state.publicationEntries.set(
+      'proj-3',
+      Array.from({ length: 25 }, (_, index) => ({
+        ...seedEntry,
+        id: `publication-${index + 1}`,
+        note: `Publication ${index + 1}`,
+      })),
+    );
+    const downloadDocument = vi.spyOn(service, 'downloadPublicationLogDocument');
+    const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:publication-docx');
+    const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    const anchorClick = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => undefined);
+    createObjectURL.mockClear();
+    revokeObjectURL.mockClear();
+    anchorClick.mockClear();
+
+    const fixture = TestBed.createComponent(ProjectPublicationLogPanelComponent);
+    fixture.componentRef.setInput('projectId', 'proj-3');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const root = fixture.nativeElement as HTMLElement;
+    const summaryItems = root.querySelectorAll<HTMLElement>('.publication-summary__item');
+    expect(summaryItems[1].textContent).toContain('25');
+    expect(root.querySelectorAll('.publication-entry')).toHaveLength(20);
+    const downloadButton = buttonByText(root, 'Download DOCX');
+    expect(downloadButton.disabled).toBe(false);
+
+    downloadButton.click();
+    await fixture.whenStable();
+
+    expect(downloadDocument).toHaveBeenCalledWith('proj-3');
+    expect(createObjectURL).toHaveBeenCalledOnce();
+    expect(anchorClick).toHaveBeenCalledOnce();
+    const anchor = anchorClick.mock.instances[0] as HTMLAnchorElement;
+    expect(anchor.download).toBe('PUB-PROJ3-RRP.docx');
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:publication-docx');
+  });
+
+  it('blocks the RRP download while a publication draft is unsaved', async () => {
+    const state = TestBed.inject(MockProjectState);
+    const project = state.projects.get('proj-3')!;
+    state.projects.set('proj-3', { ...project, status: 'COMPLETED' });
+    const service = TestBed.inject(PROJECT_API_SERVICE);
+    const downloadDocument = vi.spyOn(service, 'downloadPublicationLogDocument');
+    const fixture = TestBed.createComponent(ProjectPublicationLogPanelComponent);
+    fixture.componentRef.setInput('projectId', 'proj-3');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const root = fixture.nativeElement as HTMLElement;
+    const note = root.querySelector<HTMLTextAreaElement>('#publication-note')!;
+    note.value = 'Draft publication';
+    note.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    expect(buttonByText(root, 'Download DOCX').disabled).toBe(true);
+    expect(root.textContent).toContain(
+      'Save or discard your changes before downloading the register.',
+    );
+    expect(downloadDocument).not.toHaveBeenCalled();
   });
 
   it('lets the external requester add a publication entry while in progress', async () => {

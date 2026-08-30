@@ -111,19 +111,28 @@ export class ProjectsInProgressPageComponent {
     return projectDetailRouteForGroup(projectId, this.identity.session()?.group);
   }
 
+  /** Opens the staff detail page, optionally deep-linking into one of its tabs. */
+  private goToDetail(projectId: string, tab?: 'todo'): void {
+    void this.router.navigate([...this.detailRoute(projectId)], {
+      queryParams: {
+        ...(tab ? { tab } : {}),
+        returnTo: '/p/collections/projects/in-progress',
+        returnLabel: 'in progress projects',
+      },
+    });
+  }
+
   protected actionItemsFor(project: CollectionUseProjectSummary): MenuItem[] {
     return [
       {
         label: 'Details',
         icon: 'pi pi-eye',
-        command: () => {
-          void this.router.navigate([...this.detailRoute(project.id)], {
-            queryParams: {
-              returnTo: '/p/collections/projects/in-progress',
-              returnLabel: 'in progress projects',
-            },
-          });
-        },
+        command: () => this.goToDetail(project.id),
+      },
+      {
+        label: 'TODO List',
+        icon: 'pi pi-check-square',
+        command: () => this.goToDetail(project.id, 'todo'),
       },
       {
         label: 'Complete',

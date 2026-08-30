@@ -93,6 +93,7 @@ from app.use_of_collections.presentation.dependencies import (
     ProjectRepo,
     ProposalRepo,
     PublicationLogRepo,
+    PublicationRenderer,
     ReferenceGenerator,
 )
 from app.use_of_collections.presentation.object_access_log_document import (
@@ -100,6 +101,9 @@ from app.use_of_collections.presentation.object_access_log_document import (
 )
 from app.use_of_collections.presentation.object_occurrence_document import (
     build_object_occurrence_document,
+)
+from app.use_of_collections.presentation.publication_log_document import (
+    build_publication_log_document,
 )
 from app.use_of_collections.presentation.schemas import (
     AddLogEntryRequest,
@@ -1024,6 +1028,65 @@ async def get_publication_log(
     if publication_log is None:
         raise _not_found("publication_log", project_id)
     return await _build_publication_log_response(publication_log, session)
+
+
+@projects_router.get(
+    "/{project_id}/publication-log/document",
+    response_class=Response,
+    responses={200: {"content": {DOCX_MEDIA_TYPE: {}}}},
+)
+async def download_publication_log_document(
+    project_id: str,
+    caller: CallerPermission,
+    project_repo: ProjectRepo,
+    proposal_repo: ProposalRepo,
+    publication_log_repo: PublicationLogRepo,
+    renderer: PublicationRenderer,
+    session: DBSession,
+) -> Response:
+    """The project's publications and outputs rendered onto the RRP register."""
+    typed_project_id = CollectionUseProjectId(project_id)
+    project = await _assert_existing_project_access(
+        project_id, caller, project_repo, proposal_repo
+    )
+    publication_log = await publication_log_repo.get_by_project_id(typed_project_id)
+    if publication_log is None:
+        raise _not_found("publication_log", project_id)
+    entries, total = await publication_log_repo.list_entries_by_project(
+        typed_project_id, None, 0, _DOCUMENT_ENTRY_CAP
+    )
+    if total > _DOCUMENT_ENTRY_CAP:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "error": "DOCUMENT_ENTRY_LIMIT_EXCEEDED",
+                "message": (
+                    "The publication register has too many entries to render "
+                    f"(maximum {_DOCUMENT_ENTRY_CAP})."
+                ),
+            },
+        )
+    proposal = await proposal_repo.get_by_project_id(typed_project_id)
+    document = await build_publication_log_document(
+        project,
+        publication_log,
+        entries,
+        session,
+        issued_on=route_now().date(),
+        requester_contact=proposal.requester_contact if proposal else None,
+    )
+    return Response(
+        content=await renderer.render(document),
+        media_type=DOCX_MEDIA_TYPE,
+        headers={
+            "Content-Disposition": content_disposition_attachment(
+                _document_file_name(
+                    publication_log.reference_number.value, "RRP.docx"
+                ),
+                default="publication-log.docx",
+            )
+        },
+    )
 
 
 @projects_router.post(

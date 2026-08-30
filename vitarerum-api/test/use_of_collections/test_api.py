@@ -5475,3 +5475,124 @@ async def test_get_publication_log_returns_404_without_entries() -> None:
 
     assert response.status_code == 404
     assert response.json()["error"] == "PUBLICATION_LOG_NOT_FOUND"
+
+
+async def _seed_publication_log_for_document(
+    project_repo: InMemoryProjectRepository,
+) -> None:
+    linked_object = _collection_use_object("cuo-1", "INV-001")
+    linked_object.display_title = "Tursiops truncatus"
+    linked_object.collection_name = "Zoologia"
+    await project_repo.add(
+        _project(
+            "project-1",
+            status=UseStatus.COMPLETED,
+            objects=[linked_object],
+        )
+    )
+    publication_repo: InMemoryPublicationLogRepository = app.dependency_overrides[
+        get_publication_log_repo
+    ]()
+    await publication_repo.add(
+        PublicationLog(
+            id=PublicationLogId("publication-log-1"),
+            reference_number=ReferenceNumber("PUB-MUHNAC/COL/2026/0001"),
+            collection_use_project_id=CollectionUseProjectId("project-1"),
+            curator=PermissionId("permission-staff"),
+        )
+    )
+    # Deliberately newest first: the register must read chronologically and must
+    # include records beyond the UI's default 20-row page.
+    for index in range(21, 0, -1):
+        await publication_repo.save_entry(
+            PublicationLogEntry(
+                id=PublicationLogEntryId(f"publication-entry-{index}"),
+                publication_log_id=PublicationLogId("publication-log-1"),
+                added_at=datetime(2026, 6, index, tzinfo=UTC),
+                added_by=PermissionId("permission-1"),
+                note=f"Publication {index}",
+                collection_use_object_id=(
+                    CollectionUseObjectId("cuo-1") if index == 1 else None
+                ),
+                attachments=(
+                    [
+                        Attachment(
+                            file_reference="publications/paper.pdf",
+                            file_name="paper.pdf",
+                            media_type=MediaType.DOCUMENT,
+                            uploaded_at=datetime(2026, 6, 1, tzinfo=UTC),
+                            description="Artigo aceite",
+                        )
+                    ]
+                    if index == 1
+                    else []
+                ),
+            )
+        )
+
+
+async def test_download_publication_log_document_fills_the_complete_rrp() -> None:
+    async with client_with_repos(
+        caller=_STAFF_CALLER,
+        permission_records={
+            "permission-1": _permission_record(
+                "permission-1",
+                GroupName.EXTERNAL,
+                user_name="Ana Silva",
+            ),
+            "permission-staff": _permission_record(
+                "permission-staff",
+                GroupName.CURATORIAL,
+                user_name="Nuno Curador",
+            ),
+        },
+    ) as (client, project_repo, _, _):
+        await _seed_publication_log_for_document(project_repo)
+
+        response = await client.get(
+            "/api/v1/collection-use-projects/project-1/publication-log/document",
+            headers={"X-Permission-Id": "permission-staff"},
+        )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == DOCX_MEDIA_TYPE
+    assert (
+        "PUB-MUHNAC-COL-2026-0001-RRP.docx"
+        in response.headers["content-disposition"]
+    )
+
+    document = DocxDocument(io.BytesIO(response.content))
+    assert document.tables[0].rows[2].cells[0].text == "PUB-MUHNAC/COL/2026/0001"
+    identification = {
+        row.cells[0].text.split("\n")[0]: row.cells[1].text
+        for row in document.tables[1].rows
+    }
+    assert identification["Requerente"] == "Ana Silva"
+    assert identification["Curador"] == "Nuno Curador"
+    assert identification["N.º de registos"] == "21"
+
+    rows = document.tables[2].rows[1:]
+    assert len(rows) == 21
+    assert [row.cells[3].text for row in rows] == [
+        f"Publication {index}" for index in range(1, 22)
+    ]
+    assert rows[0].cells[4].text == "INV-001 — Tursiops truncatus\nZoologia"
+    assert rows[0].cells[5].text == "paper.pdf — Artigo aceite"
+
+
+async def test_download_publication_log_document_returns_404_without_log() -> None:
+    async with client_with_repos(caller=_STAFF_CALLER) as (
+        client,
+        project_repo,
+        _,
+        _,
+    ):
+        await project_repo.add(_project("project-1", status=UseStatus.COMPLETED))
+
+        response = await client.get(
+            "/api/v1/collection-use-projects/project-1/publication-log/document",
+            headers={"X-Permission-Id": "permission-staff"},
+        )
+
+    assert response.status_code == 404
+    assert response.json()["error"] == "PUBLICATION_LOG_NOT_FOUND"

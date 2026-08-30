@@ -4,6 +4,24 @@
       <div>
         <p class="publication-sheet__eyebrow">Project · Publications</p>
         <h2 id="publication-log-heading" class="publication-sheet__title">Publication log</h2>
+        <div class="publication-sheet__actions">
+          <button
+            type="button"
+            class="publication-sheet__action publication-sheet__action--download"
+            [disabled]="!canDownloadDocument()"
+            [title]="documentBlockedMessage() ?? 'Download the filled-in RRP register'"
+            (click)="downloadPublicationDocument()"
+          >
+            <span class="pi pi-download" aria-hidden="true"></span>
+            {{ documentDownloading() ? 'Preparing DOCX…' : 'Download DOCX' }}
+          </button>
+          @if (documentBlockedMessage()) {
+            <p class="publication-sheet__action-hint">{{ documentBlockedMessage() }}</p>
+          }
+        </div>
+        @if (documentError()) {
+          <app-error-message [apiError]="documentError()!" />
+        }
       </div>
 
       <dl class="publication-summary" aria-label="Publication log summary">
@@ -13,7 +31,7 @@
         </div>
         <div class="publication-summary__item">
           <dt>Entries</dt>
-          <dd>{{ entries().length }}</dd>
+          <dd>{{ totalEntries() }}</dd>
         </div>
         <div class="publication-summary__item">
           <dt>Curator</dt>

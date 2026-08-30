@@ -33,7 +33,7 @@ export const EN_CATALOG = {
   'public.askMuseum.description':
     "Have a quick question? Tell us who you are and what you'd like to know — we'll reply by e-mail.",
   'public.askMuseum.scopeNotice':
-    'At this time, Ask the Museum is only available for questions related to the use of collections, especially in-situ visits for research. Questions about exhibitions, loans, events, educational activities, or other museum services will be closed with an automatic e-mail reply.',
+    'At this time, Ask the Museum is only available for questions related to the use of collections, especially in-situ visits for research. Questions about exhibitions, loans, events, educational activities, or other museum services will be closed with an e-mail reply.',
   'public.askMuseum.form.name.label': 'Full name',
   'public.askMuseum.form.name.required': 'Your name is required.',
   'public.askMuseum.form.email.label': 'E-mail',

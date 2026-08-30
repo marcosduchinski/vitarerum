@@ -970,6 +970,18 @@ export class ProjectApiServiceMock {
     return of(publicationLog);
   }
 
+  downloadPublicationLogDocument(projectId: string): Observable<Blob> {
+    const publicationLog = this.state.publicationLogs.get(projectId);
+    if (!publicationLog) {
+      return throwError(() => ({
+        status: 404,
+        error: 'PUBLICATION_LOG_NOT_FOUND',
+        message: 'No publication_log found with id uuid',
+      }));
+    }
+    return of(this.mockAttachmentBlob(`${publicationLog.referenceNumber}-RRP.docx`));
+  }
+
   uploadPublicationEntryAttachment(
     projectId: string,
     entryId: string,

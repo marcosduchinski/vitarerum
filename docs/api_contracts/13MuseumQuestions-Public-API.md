@@ -21,7 +21,7 @@ alert:
 > Neste momento, o Pergunte ao Museu está disponível apenas para perguntas relacionadas ao
 > uso de coleções, especialmente visitas in situ para investigação. Perguntas sobre
 > exposições, empréstimos, eventos, atividades educativas ou outros serviços do museu serão
-> encerradas com uma resposta automática por e-mail.
+> encerradas com uma resposta por e-mail.
 
 ## Trust model (read first)
 

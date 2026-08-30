@@ -195,6 +195,31 @@ downloading.
 Returns `404 OBJECT_ACCESS_LOG_NOT_FOUND` when the project has no access log yet
 (no object has been logged).
 
+## Publication Log Document
+
+`GET /collection-use-projects/{projectId}/publication-log/document`
+
+Returns the project's complete publication/output log rendered onto the RRP
+register. The download is independent of the paginated listing used by the UI:
+all persisted entries are included, oldest first, up to the document safety cap
+of 1,000 entries.
+
+Successful response: `200 OK` with
+
+- `Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document`
+- `Content-Disposition: attachment; filename="{publicationLogReferenceNumber}-RRP.docx"`,
+  with the reference's slashes folded to hyphens
+
+The register identifies the project, requester and curator, reports the total
+number of entries, and prints one row per result: sequence, date, author, note,
+optional linked object, and supporting file names/descriptions. Supporting
+files remain separate downloads; the register lists them but does not embed
+their binary content.
+
+Only persisted entries appear. Returns `404 PUBLICATION_LOG_NOT_FOUND` when no
+publication log has been issued and `422 DOCUMENT_ENTRY_LIMIT_EXCEEDED` above
+the safety cap.
+
 ## Object Occurrence Report Document
 
 `GET /collection-use-projects/{projectId}/object-occurrence-log/document`

@@ -38,6 +38,7 @@ from app.use_of_collections.application.ports import (
     ObjectOccurrenceLogRepository,
     ProposalNotificationEmailSender,
     ProposalRepository,
+    PublicationLogDocumentRenderer,
     PublicationLogRepository,
     RequesterAccessEmailSender,
     StaffProjectTodoRepository,
@@ -63,6 +64,9 @@ from app.use_of_collections.infrastructure.object_occurrence_docx import (
 from app.use_of_collections.infrastructure.proposal_notification_email import (
     LoggingProposalNotificationEmailSender,
     SmtpProposalNotificationEmailSender,
+)
+from app.use_of_collections.infrastructure.publication_log_docx import (
+    DocxPublicationLogRenderer,
 )
 from app.use_of_collections.infrastructure.repositories import (
     SqlAlchemyCollectionUseProjectRepository,
@@ -122,6 +126,10 @@ def get_object_access_log_renderer() -> ObjectAccessLogDocumentRenderer:
 
 def get_object_occurrence_renderer() -> ObjectOccurrenceDocumentRenderer:
     return DocxObjectOccurrenceRenderer()
+
+
+def get_publication_log_renderer() -> PublicationLogDocumentRenderer:
+    return DocxPublicationLogRenderer()
 
 
 def get_amendment_invitation() -> AmendmentInvitationPort:
@@ -208,6 +216,9 @@ AccessLogRenderer = Annotated[
 ]
 OccurrenceRenderer = Annotated[
     ObjectOccurrenceDocumentRenderer, Depends(get_object_occurrence_renderer)
+]
+PublicationRenderer = Annotated[
+    PublicationLogDocumentRenderer, Depends(get_publication_log_renderer)
 ]
 AmendmentInvitation = Annotated[
     AmendmentInvitationPort, Depends(get_amendment_invitation)

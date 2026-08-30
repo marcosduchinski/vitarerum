@@ -32,7 +32,11 @@
       <div class="postits__grid">
         @for (item of postits(); track item.id) {
           <article class="postit" [class.postit--busy]="busyPostitId() === item.id">
-            <a class="postit__project" [routerLink]="projectDetailRoute(item.projectId)">
+            <a
+              class="postit__project"
+              [routerLink]="projectDetailRoute(item.projectId)"
+              [queryParams]="todoTabQueryParams"
+            >
               <span>{{ item.projectReferenceNumber }}</span>
               <strong>{{ item.projectTitle }}</strong>
             </a>
@@ -45,6 +49,7 @@
               <a
                 class="postit__open"
                 [routerLink]="projectDetailRoute(item.projectId)"
+                [queryParams]="todoTabQueryParams"
                 aria-label="Open project"
                 title="Open project"
               >

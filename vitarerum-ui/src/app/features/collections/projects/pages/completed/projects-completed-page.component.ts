@@ -107,16 +107,24 @@ export class ProjectsCompletedPageComponent {
     return projectDetailRouteForGroup(projectId, this.identity.session()?.group);
   }
 
+  /** Opens the staff detail page, optionally deep-linking into one of its tabs. */
+  private goToDetail(projectId: string, tab?: 'todo'): void {
+    void this.router.navigate([...this.detailRoute(projectId)], {
+      queryParams: { ...this.detailQueryParams, ...(tab ? { tab } : {}) },
+    });
+  }
+
   protected actionItemsFor(project: CollectionUseProjectSummary): MenuItem[] {
     return [
       {
         label: 'Details',
         icon: 'pi pi-eye',
-        command: () => {
-          void this.router.navigate([...this.detailRoute(project.id)], {
-            queryParams: this.detailQueryParams,
-          });
-        },
+        command: () => this.goToDetail(project.id),
+      },
+      {
+        label: 'TODO List',
+        icon: 'pi pi-check-square',
+        command: () => this.goToDetail(project.id, 'todo'),
       },
     ];
   }

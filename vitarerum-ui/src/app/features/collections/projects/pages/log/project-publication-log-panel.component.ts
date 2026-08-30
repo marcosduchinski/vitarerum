@@ -57,6 +57,9 @@ export class ProjectPublicationLogPanelComponent {
   });
 
   protected readonly entries = computed(() => this.publicationResource.value()?.content ?? []);
+  protected readonly totalEntries = computed(
+    () => this.publicationResource.value()?.totalElements ?? 0,
+  );
   protected readonly publicationLog = computed(
     () => this.publicationResource.value()?.publicationLog ?? null,
   );
@@ -131,6 +134,33 @@ export class ProjectPublicationLogPanelComponent {
   protected readonly attachmentDownloadErrors = signal<Record<string, ApiError | null>>({});
   protected readonly attachmentDeleting = signal<Record<string, boolean>>({});
   protected readonly attachmentDeleteErrors = signal<Record<string, ApiError | null>>({});
+
+  protected readonly documentDownloading = signal(false);
+  protected readonly documentError = signal<ApiError | null>(null);
+  protected readonly hasPublicationDraftChanges = computed(
+    () =>
+      this.addNote().trim().length > 0 ||
+      this.addFiles().length > 0 ||
+      this.editingEntryId() !== null ||
+      Object.values(this.attachmentFiles()).some((file) => file !== null) ||
+      Object.values(this.attachmentDescriptions()).some(
+        (description) => description.trim().length > 0,
+      ),
+  );
+  protected readonly canDownloadDocument = computed(
+    () =>
+      !this.publicationResource.isLoading() &&
+      !this.publicationError() &&
+      !!this.publicationLog() &&
+      this.totalEntries() > 0 &&
+      !this.documentDownloading() &&
+      !this.hasPublicationDraftChanges(),
+  );
+  protected readonly documentBlockedMessage = computed(() =>
+    this.hasPublicationDraftChanges()
+      ? 'Save or discard your changes before downloading the register.'
+      : null,
+  );
 
   protected onAddNoteInput(event: Event): void {
     this.addNote.set((event.target as HTMLTextAreaElement).value);
@@ -355,6 +385,29 @@ export class ProjectPublicationLogPanelComponent {
 
   protected dateLabel(date: string): string {
     return date.slice(0, 10);
+  }
+
+  protected async downloadPublicationDocument(): Promise<void> {
+    if (!this.canDownloadDocument()) return;
+
+    this.documentDownloading.set(true);
+    this.documentError.set(null);
+    try {
+      const blob = await firstValueFrom(
+        this.projectService.downloadPublicationLogDocument(this.projectId()),
+      );
+      this.saveBlob(blob, this.documentFileName());
+    } catch (err) {
+      this.documentError.set(toApiError(err));
+    } finally {
+      this.documentDownloading.set(false);
+    }
+  }
+
+  private documentFileName(): string {
+    const reference = this.publicationLog()?.referenceNumber ?? `project-${this.projectId()}`;
+    const safeReference = reference.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
+    return `${safeReference || 'publication-log'}-RRP.docx`;
   }
 
   private saveBlob(blob: Blob, fileName: string): void {

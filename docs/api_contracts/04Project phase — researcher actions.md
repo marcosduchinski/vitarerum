@@ -890,6 +890,25 @@ project_id : UUID (required)
 
 ---
 
+### `GET /collection-use-projects/{project_id}/publication-log/document`
+
+**Description** — Downloads the complete persisted publication log as the RRP
+Word register. Unlike the paginated entry endpoint, the document includes all
+entries (oldest first), with their author, note, linked project object, and the
+names/descriptions of supporting files. Unsaved client drafts are not included.
+
+**Response `200 OK`** — DOCX body with
+`Content-Disposition: attachment; filename="{publicationLogReferenceNumber}-RRP.docx"`.
+Slashes in the reference number are converted to hyphens in the filename.
+
+**Response `404 Not Found`** — `PUBLICATION_LOG_NOT_FOUND` when no publication
+log has been issued for the project.
+
+**Response `422 Unprocessable Entity`** — `DOCUMENT_ENTRY_LIMIT_EXCEEDED` when
+the register exceeds the 1,000-entry document safety cap.
+
+---
+
 ### `POST /collection-use-projects/{project_id}/publication-entries/{entry_id}/attachments`
 
 **Description** — Uploads a file to an existing publication log entry (e.g. the publication PDF itself). Same `multipart/form-data` body and responses as the log-entry attachment endpoint; subject to the same phase/role gate as adding entries. `mediaType` is one of `DOCUMENT`, `IMAGE`, `VIDEO`, `OTHER`; `attachmentDescription` is required and non-empty.

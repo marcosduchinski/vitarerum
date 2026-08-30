@@ -13,6 +13,7 @@ import { ProjectStaffDetailPageComponent } from '../staff-detail/project-staff-d
       [id]="id()"
       [returnTo]="returnTo()"
       [returnLabel]="returnLabel()"
+      [tab]="tab()"
     />
   `,
 })
@@ -20,4 +21,5 @@ export class ProjectDirectionDetailPageComponent {
   readonly id = input.required<string>();
   readonly returnTo = input<string>();
   readonly returnLabel = input<string>();
+  readonly tab = input<string>();
 }

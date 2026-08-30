@@ -172,14 +172,12 @@ export class ProjectsMyPageComponent {
       {
         label: 'Details',
         icon: 'pi pi-eye',
-        command: () => {
-          void this.router.navigate(this.detailRoute(projectId), {
-            queryParams: {
-              returnTo: '/p/collections/projects/my',
-              returnLabel: 'my projects',
-            },
-          });
-        },
+        command: () => this.goToDetail(projectId),
+      },
+      {
+        label: 'TODO List',
+        icon: 'pi pi-check-square',
+        command: () => this.goToDetail(projectId, 'todo'),
       },
       {
         label: 'Conclude',
@@ -205,6 +203,19 @@ export class ProjectsMyPageComponent {
 
   protected detailRoute(projectId: string): readonly string[] {
     return projectDetailRouteForGroup(projectId, this.identity.session()?.group);
+  }
+
+  /** Opens the staff detail page, optionally deep-linking into one of its tabs.
+   *  Only reachable from the staff branch: an external requester's detail page
+   *  is a different component with no tabs. */
+  private goToDetail(projectId: string, tab?: 'todo'): void {
+    void this.router.navigate([...this.detailRoute(projectId)], {
+      queryParams: {
+        ...(tab ? { tab } : {}),
+        returnTo: '/p/collections/projects/my',
+        returnLabel: 'my projects',
+      },
+    });
   }
 
   protected requesterEmail(project: CollectionUseProjectSummary): string {
