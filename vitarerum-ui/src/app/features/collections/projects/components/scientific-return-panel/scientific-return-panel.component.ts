@@ -553,6 +553,31 @@ export class ScientificReturnPanelComponent {
     }
   }
 
+  /** The object an investigation covers, named rather than shown as a uuid. */
+  protected objectLabel(investigation: FullAgenticInvestigation): string | null {
+    const objectId = investigation.objectId;
+    if (!objectId) return null;
+    const consulted = this.watch()?.consultedObjects ?? [];
+    const match = consulted.find((item) => item.id === objectId);
+    return match ? `${match.inventoryNumber} · ${match.objectName}` : objectId;
+  }
+
+  /**
+   * How much of the project has been investigated at all. Each consulted object
+   * is investigated on its own, so a project is only covered once every object
+   * has been reached — and a sweep may stop short of that.
+   */
+  protected readonly objectCoverage = computed(() => {
+    const consulted = this.watch()?.consultedObjects ?? [];
+    if (consulted.length < 2) return null;
+    const reached = new Set(
+      this.fullAgenticInvestigations()
+        .map((investigation) => investigation.objectId)
+        .filter((objectId): objectId is string => !!objectId),
+    );
+    return { reached: reached.size, total: consulted.length };
+  });
+
   /** One recovery short of the ceiling, where the next stall ends the run. */
   protected isNearRecoveryLimit(investigation: FullAgenticInvestigation): boolean {
     const ceiling = investigation.maxRecoveries;

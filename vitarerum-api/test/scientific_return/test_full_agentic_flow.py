@@ -13,6 +13,7 @@ from app.scientific_return.application.full_agentic import (
     CloseAbandonedFullAgenticInvestigations,
     ExecuteFullAgenticInput,
     ExecuteFullAgenticScientificReturn,
+    FullAgenticAlreadyRunning,
     FullAgenticCircuitOpen,
     FullAgenticConfiguration,
     FullAgenticSourceConfigurationInvalid,
@@ -228,7 +229,11 @@ class FullRepository:
         )
 
     async def find_live_target(
-        self, watch_id: str, objective: str, candidate_id: str | None
+        self,
+        watch_id: str,
+        objective: str,
+        candidate_id: str | None,
+        object_id: str | None = None,
     ) -> FullAgenticInvestigation | None:
         return next(
             (
@@ -237,6 +242,7 @@ class FullRepository:
                 if str(item.watch_id) == watch_id
                 and item.objective.value == objective
                 and str(item.candidate_id or "") == str(candidate_id or "")
+                and str(item.object_id or "") == str(object_id or "")
                 and not item.status.is_terminal
             ),
             None,
@@ -1994,4 +2000,165 @@ def test_the_agentic_configuration_refuses_a_slice_the_platform_would_kill() -> 
             run_deadline_seconds=3600.0,
             platform_window_seconds=1800.0,
         )
+
+
+@pytest.mark.asyncio
+async def test_two_objects_of_one_project_are_two_targets() -> None:
+    """A project with several objects can investigate them at the same time.
+
+    The live-target rule exists so one target cannot have two investigations at
+    once. With an object per investigation the target is the object, not the
+    project, or a project would only ever investigate one of its objects.
+    """
+
+    scientific, watch = setup_scientific_repository(object_count=2)
+    repository = FullRepository()
+    config = FullAgenticConfiguration(
+        enabled=True,
+        allowed_sources=("TEST",),
+        budget=AgenticBudget(4, 12, 40, 5, 20),
+    )
+    starter = StartFullAgenticScientificReturn(
+        scientific, repository, Dispatcher(), Uow(), Clock(), config
+    )
+
+    first = await starter.execute_scheduled(
+        StartFullAgenticInput(
+            watch_id=watch.id,
+            objective=InvestigationObjective.DISCOVER_CANDIDATE,
+            candidate_id=None,
+            idempotency_key="object-1",
+            caller=Actor(PermissionId("permission-1"), GroupName.CURATORIAL),
+            object_id="object-1",
+        )
+    )
+    second = await starter.execute_scheduled(
+        StartFullAgenticInput(
+            watch_id=watch.id,
+            objective=InvestigationObjective.DISCOVER_CANDIDATE,
+            candidate_id=None,
+            idempotency_key="object-2",
+            caller=Actor(PermissionId("permission-1"), GroupName.CURATORIAL),
+            object_id="object-2",
+        )
+    )
+
+    assert first.id != second.id
+    assert (first.object_id, second.object_id) == ("object-1", "object-2")
+
+    # The same object, however, is still one live target at a time.
+    with pytest.raises(FullAgenticAlreadyRunning):
+        await starter.execute_scheduled(
+            StartFullAgenticInput(
+                watch_id=watch.id,
+                objective=InvestigationObjective.DISCOVER_CANDIDATE,
+                candidate_id=None,
+                idempotency_key="object-1-again",
+                caller=Actor(PermissionId("permission-1"), GroupName.CURATORIAL),
+                object_id="object-1",
+            )
+        )
+
+
+@pytest.mark.asyncio
+async def test_an_object_outside_the_snapshot_is_refused() -> None:
+    """The snapshot is what the investigation reads, so it is what is checked."""
+
+    scientific, watch = setup_scientific_repository()
+    repository = FullRepository()
+    config = FullAgenticConfiguration(
+        enabled=True,
+        allowed_sources=("TEST",),
+        budget=AgenticBudget(4, 12, 40, 5, 20),
+    )
+
+    with pytest.raises(ValueError, match="objectId"):
+        await StartFullAgenticScientificReturn(
+            scientific, repository, Dispatcher(), Uow(), Clock(), config
+        ).execute_scheduled(
+            StartFullAgenticInput(
+                watch_id=watch.id,
+                objective=InvestigationObjective.DISCOVER_CANDIDATE,
+                candidate_id=None,
+                idempotency_key="stranger",
+                caller=Actor(PermissionId("permission-1"), GroupName.CURATORIAL),
+                object_id="object-from-another-project",
+            )
+        )
+
+
+@pytest.mark.asyncio
+async def test_an_investigation_sees_only_its_own_object() -> None:
+    """The floor, the memory lookup and the prompt all narrow to one object.
+
+    Sharing the snapshot across a project meant the floor reservation was spent
+    on the first object and the planner's prompt grew with the project — fifteen
+    objects sent fifteen objects and a hundred and fifty inventory variants into
+    one call.
+    """
+
+    scientific, watch = setup_scientific_repository(object_count=3)
+    repository = FullRepository()
+    config = FullAgenticConfiguration(
+        enabled=True,
+        allowed_sources=("TEST",),
+        budget=AgenticBudget(2, 4, 10, 3, 6),
+    )
+    investigation = FullAgenticInvestigation(
+        id=FullAgenticInvestigationId("investigation-second-object"),
+        watch_id=watch.id,
+        objective=InvestigationObjective.DISCOVER_CANDIDATE,
+        object_id="object-2",
+        status=FullAgenticInvestigationStatus.QUEUED,
+        idempotency_key="second-object",
+        budget=config.budget,
+        usage=AgenticUsage(),
+        created_by=PermissionId("permission-1"),
+        created_at=_NOW,
+    )
+    await repository.add_investigation(investigation)
+
+    await ExecuteFullAgenticScientificReturn(
+        scientific, repository, Reasoner(), (Source(),), Uow(), Clock(), config
+    ).execute(ExecuteFullAgenticInput(investigation.id, "worker-1"))
+
+    # The first plan is the deterministic floor, which is the guarantee under
+    # test. Later plans come from the stub reasoner, whose searches carry a
+    # fixed object id of its own.
+    floor = next(
+        event
+        for event in repository.events
+        if event.kind is AgenticTrajectoryEventKind.PLAN_CREATED
+    )
+    assert floor.payload["contractVersion"] == "deterministic-floor"
+    assert floor.payload["searches"], "the floor must have planned something"
+    assert {search["objectId"] for search in floor.payload["searches"]} == {"object-2"}
+    # One source in this fixture, and it indexes authorship in a field of its
+    # own, so the surname travels beside the query rather than inside it.
+    assert {search["query"] for search in floor.payload["searches"]} == {
+        '"Taxon 2"',
+        '"MB06-005742"',
+    }
+
+
+def test_a_snapshot_narrowed_to_a_missing_object_is_refused() -> None:
+    """A snapshot rebuilt without the object cannot be investigated silently."""
+
+    from app.scientific_return.application.full_agentic import snapshot_for_object
+
+    payload = ProjectSnapshotPayload(
+        project_id="project-1",
+        project_reference="PRJ-1",
+        researcher="Researcher",
+        consulted_objects=(
+            ConsultedObjectSnapshot("object-1", "MB06-005747", "Cynoscion regalis"),
+        ),
+    )
+
+    assert snapshot_for_object(payload, None) is payload
+    assert snapshot_for_object(payload, "object-1").consulted_objects == (
+        payload.consulted_objects[0],
+    )
+    with pytest.raises(RuntimeError, match="no longer in the watch snapshot"):
+        snapshot_for_object(payload, "object-9")
 

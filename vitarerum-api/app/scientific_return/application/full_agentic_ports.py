@@ -122,7 +122,11 @@ class FullAgenticRepository(Protocol):
         self, key: str
     ) -> FullAgenticInvestigation | None: ...
     async def find_live_target(
-        self, watch_id: str, objective: str, candidate_id: str | None
+        self,
+        watch_id: str,
+        objective: str,
+        candidate_id: str | None,
+        object_id: str | None = None,
     ) -> FullAgenticInvestigation | None: ...
     async def list_investigations(
         self, watch_id: str, limit: int

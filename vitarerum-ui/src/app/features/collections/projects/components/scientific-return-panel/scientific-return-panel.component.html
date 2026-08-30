@@ -279,6 +279,23 @@
         The agent creates its own queries, chooses enabled sources and reads the context. Results
         remain candidates until a curator decides.
       </p>
+      @if (objectCoverage(); as coverage) {
+        <p
+          class="object-coverage"
+          [class.object-coverage--partial]="coverage.reached < coverage.total"
+        >
+          <span class="pi pi-box" aria-hidden="true"></span>
+          <span>
+            {{ coverage.reached }} of {{ coverage.total }} consulted objects
+            investigated.
+            @if (coverage.reached < coverage.total) {
+              The objects not reached have not been searched at all — absence of
+              results for them means nothing yet.
+            }
+          </span>
+        </p>
+      }
+
       @if (!fullAgenticInvestigations().length) {
         <p class="run-history__empty">No autonomous investigation recorded.</p>
       } @else {
@@ -295,6 +312,9 @@
                   {{ investigation.status.replaceAll('_', ' ').toLowerCase() }}
                 </span>
                 <span>{{ investigation.createdAt | date: 'medium' }}</span>
+                @if (objectLabel(investigation); as label) {
+                  <span class="run-row__object">{{ label }}</span>
+                }
                 <strong>
                   {{ investigation.usage['queries'] }} queries ·
                   {{ investigation.usage['candidates'] }} candidates

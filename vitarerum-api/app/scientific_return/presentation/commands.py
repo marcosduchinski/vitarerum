@@ -8,6 +8,7 @@ import json
 import logging
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from uuid import uuid4
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -47,15 +48,20 @@ from app.scientific_return.application.run_investigation import (
 )
 from app.scientific_return.application.use_cases import RunScientificReturnSearch
 from app.scientific_return.domain.enums import (
+    AgenticTrajectoryEventKind,
     FullAgenticInvestigationStatus,
     InvestigationMode,
     InvestigationObjective,
 )
 from app.scientific_return.domain.full_agentic_models import (
+    AgenticTrajectoryEvent,
+    AgenticTrajectoryEventId,
+    FullAgenticInvestigation,
     FullAgenticInvestigationId,
 )
 from app.scientific_return.domain.models import (
     CandidatePublicationId,
+    ConsultedObjectSnapshot,
     ScientificReturnWatchId,
 )
 from app.scientific_return.infrastructure.source_rate_limiter import (
@@ -73,6 +79,7 @@ from app.scientific_return.presentation.dependencies import (
     get_europe_pmc_source,
     get_full_agentic_configuration,
     get_full_agentic_reaper,
+    get_full_agentic_repository,
     get_full_agentic_starter,
     get_investigation_repository,
     get_investigation_runner,
@@ -175,39 +182,109 @@ async def _queue_autonomous_search(
 
     The deterministic run is the cheap first pass; the agent is what finds the
     publications no rule can match. Queuing is best-effort: a disabled feature,
-    an open circuit breaker or an investigation already live for this watch are
+    an open circuit breaker or an investigation already live for that object are
     all normal outcomes of an unattended sweep, not failures of the sweep.
 
-    The key is derived from the run, so replaying a sweep never buys a second
-    investigation for work that was already paid for.
+    **One investigation per consulted object.** The floor spends its reservation
+    on the object it is given, so a project investigated as a whole gave its
+    guarantee to the first object and to no other. Fanning out restores it, and
+    keeps the budgets meaningful — they were measured against a single object.
+
+    Each key carries the run and the object, so replaying a sweep never buys a
+    second investigation for work already paid for, and one object failing to
+    queue never stops the rest.
     """
-    try:
-        investigation = await get_full_agentic_starter(session).execute_scheduled(
-            StartFullAgenticInput(
-                watch_id=watch_id,
-                objective=InvestigationObjective.DISCOVER_CANDIDATE,
-                candidate_id=None,
-                idempotency_key=f"scheduled-sweep:{run_id}",
-                caller=_SCHEDULER,
-            )
-        )
-        logger.info(
-            "Queued autonomous investigation %s for watch %s.",
-            investigation.id,
+    configuration = get_full_agentic_configuration()
+    snapshot = await get_repository(session).get_snapshot_for_watch(watch_id)
+    if snapshot is None:
+        logger.warning("Watch %s has no snapshot; nothing to investigate.", watch_id)
+        return
+    objects = snapshot.payload.consulted_objects
+    covered = objects[: configuration.max_objects]
+    uncovered = objects[configuration.max_objects :]
+    if uncovered:
+        logger.warning(
+            "Watch %s consults %s objects; investigating the first %s.",
             watch_id,
+            len(objects),
+            len(covered),
         )
-    except (
-        FullAgenticDisabled,
-        FullAgenticCircuitOpen,
-        FullAgenticAlreadyRunning,
-        FullAgenticSourceConfigurationInvalid,
-    ) as exc:
-        logger.info("No autonomous investigation for watch %s: %s", watch_id, exc)
-    except Exception:
-        await session.rollback()
-        logger.exception(
-            "Could not queue an autonomous investigation for watch %s.", watch_id
+
+    queued = 0
+    for consulted in covered:
+        try:
+            investigation = await get_full_agentic_starter(session).execute_scheduled(
+                StartFullAgenticInput(
+                    watch_id=watch_id,
+                    objective=InvestigationObjective.DISCOVER_CANDIDATE,
+                    candidate_id=None,
+                    idempotency_key=f"scheduled-sweep:{run_id}:{consulted.id}",
+                    caller=_SCHEDULER,
+                    object_id=consulted.id,
+                )
+            )
+            if uncovered:
+                # Recorded on every investigation of the fan-out, so whichever
+                # one a curator opens says plainly that the project was not
+                # covered in full. Silence here would read as completeness.
+                await _record_truncated_coverage(
+                    session, investigation, len(covered), len(objects), uncovered
+                )
+            queued += 1
+            logger.info(
+                "Queued autonomous investigation %s for watch %s, object %s.",
+                investigation.id,
+                watch_id,
+                consulted.id,
+            )
+        except (
+            FullAgenticDisabled,
+            FullAgenticCircuitOpen,
+            FullAgenticAlreadyRunning,
+            FullAgenticSourceConfigurationInvalid,
+        ) as exc:
+            logger.info(
+                "No autonomous investigation for watch %s, object %s: %s",
+                watch_id,
+                consulted.id,
+                exc,
+            )
+        except Exception:
+            await session.rollback()
+            logger.exception(
+                "Could not queue an autonomous investigation for watch %s, object %s.",
+                watch_id,
+                consulted.id,
+            )
+    if queued:
+        logger.info(
+            "Queued %s autonomous investigation(s) for watch %s.", queued, watch_id
         )
+
+
+async def _record_truncated_coverage(
+    session: AsyncSession,
+    investigation: FullAgenticInvestigation,
+    covered: int,
+    total: int,
+    uncovered: tuple[ConsultedObjectSnapshot, ...],
+) -> None:
+    repository = get_full_agentic_repository(session)
+    await repository.append_event(
+        AgenticTrajectoryEvent(
+            id=AgenticTrajectoryEventId(str(uuid4())),
+            investigation_id=investigation.id,
+            sequence=await repository.next_event_sequence(investigation.id),
+            kind=AgenticTrajectoryEventKind.COVERAGE_TRUNCATED,
+            payload={
+                "coveredObjects": covered,
+                "consultedObjects": total,
+                "uncoveredObjectIds": [item.id for item in uncovered],
+            },
+            occurred_at=datetime.now(tz=UTC),
+        )
+    )
+    await session.commit()
 
 
 async def run_due(*, limit: int) -> tuple[int, int]:

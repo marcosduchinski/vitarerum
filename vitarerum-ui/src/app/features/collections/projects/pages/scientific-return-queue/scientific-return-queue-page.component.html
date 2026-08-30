@@ -231,6 +231,16 @@
               </div>
             </header>
 
+            @if ((candidate.citedObjectCount ?? 0) > 1) {
+              <p class="candidate-reach">
+                <span class="pi pi-link" aria-hidden="true"></span>
+                <span>
+                  Found while investigating {{ candidate.citedObjectCount }}
+                  consulted objects, and presented once.
+                </span>
+              </p>
+            }
+
             @if (candidate.inventoryEvidenceStatus; as evidenceStatus) {
               <section
                 class="agentic-provenance"

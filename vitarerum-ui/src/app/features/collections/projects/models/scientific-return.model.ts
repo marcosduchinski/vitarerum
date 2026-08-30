@@ -38,6 +38,12 @@ export type ScientificReturnAgentAction =
   | 'DEPRIORITIZE'
   | 'STOP_INSUFFICIENT_EVIDENCE';
 
+export interface ConsultedObject {
+  readonly id: string;
+  readonly inventoryNumber: string;
+  readonly objectName: string;
+}
+
 export interface ScientificReturnWatch {
   readonly id: string;
   readonly projectId: string;
@@ -49,6 +55,8 @@ export interface ScientificReturnWatch {
   readonly nextRunAt: string;
   readonly scheduleAnchorAt: string;
   readonly projectSnapshotId: string;
+  /** The objects the snapshot froze, one investigation each. */
+  readonly consultedObjects?: readonly ConsultedObject[];
 }
 
 export interface CreateScientificReturnWatchRequest {
@@ -144,6 +152,9 @@ export interface ScientificReturnReviewItem extends ScientificReturnCandidate {
   readonly groundedPassages: readonly string[];
   readonly rejectedPassageCount: number;
   readonly rejectedInventoryFormCount: number;
+  /** Consulted objects this publication was found for: two or more is one
+   *  stronger return, not two returns. */
+  readonly citedObjectCount?: number;
 }
 
 export interface ScientificReturnMetrics {
@@ -387,6 +398,7 @@ export interface FullAgenticInvestigation {
   readonly heartbeatAt: string | null;
   readonly failureReason: string | null;
   readonly degradedReason?: string | null;
+  readonly objectId?: string | null;
   readonly recoveryCount?: number;
   readonly maxRecoveries?: number | null;
   readonly lastRecoveredAt?: string | null;

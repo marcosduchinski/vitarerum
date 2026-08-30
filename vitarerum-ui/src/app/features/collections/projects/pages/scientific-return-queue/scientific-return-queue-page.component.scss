@@ -570,6 +570,27 @@
   background: var(--color-panel-muted);
 }
 
+/* A publication reached from several consulted objects. Stated as a fact and
+   not as a strength: the count presumes the reader was right, and its first
+   real occurrence marked a false positive accepted for two objects on a shared
+   surname. It says what happened; the curator judges what it is worth. */
+.candidate-reach {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin: 0 0 0.6rem;
+  padding: 0.5rem 0.8rem;
+  border-inline-start: 3px solid var(--color-text-muted);
+  background: color-mix(in srgb, var(--color-text-muted) 8%, var(--color-panel));
+  color: var(--color-text-muted);
+  font-size: 0.74rem;
+  line-height: 1.4;
+}
+
+.candidate-reach > .pi {
+  margin-top: 0.1rem;
+}
+
 .agentic-provenance {
   display: grid;
   gap: 0.7rem;

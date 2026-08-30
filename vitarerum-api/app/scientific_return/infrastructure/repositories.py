@@ -4,7 +4,7 @@ from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import Any, cast
 
-from sqlalchemy import exists, func, select
+from sqlalchemy import distinct, exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.sql.elements import ColumnElement
@@ -729,6 +729,7 @@ def _decision_to_domain(
                     else None
                 ),
                 grounded_inventory_forms=context_grounded_forms(),
+                cited_object_count=int(str(context.get("cited_object_count") or 0)),
             )
             if context is not None
             else None
@@ -1285,6 +1286,34 @@ class SqlAlchemyScientificReturnRepository:
                         dict[str, object], payload
                     )
 
+        # One publication may be found while investigating several of the
+        # project's objects. It stays one candidate — a curator should not decide
+        # the same article twice — and this counts how much of the project it
+        # reaches.
+        cited_objects: dict[str, int] = {}
+        if candidate_ids:
+            cited_result = await self._session.execute(
+                select(
+                    AgenticInvestigationCandidateRecord.candidate_id,
+                    func.count(
+                        distinct(FullAgenticInvestigationRecord.object_id)
+                    ),
+                )
+                .join(
+                    FullAgenticInvestigationRecord,
+                    FullAgenticInvestigationRecord.id
+                    == AgenticInvestigationCandidateRecord.investigation_id,
+                )
+                .where(
+                    AgenticInvestigationCandidateRecord.candidate_id.in_(
+                        candidate_ids
+                    ),
+                    FullAgenticInvestigationRecord.object_id.is_not(None),
+                )
+                .group_by(AgenticInvestigationCandidateRecord.candidate_id)
+            )
+            cited_objects = {row[0]: int(row[1]) for row in cited_result}
+
         def optional_string(payload: dict[str, object], key: str) -> str | None:
             value = payload.get(key)
             return str(value) if value is not None else None
@@ -1354,10 +1383,32 @@ class SqlAlchemyScientificReturnRepository:
                         latest_payloads.get(candidate.id, {}),
                         "rejectedInventoryFormCount",
                     ),
+                    cited_object_count=cited_objects.get(candidate.id, 0),
                 )
                 for candidate, project_id_value in rows
             ],
             total,
+        )
+
+    async def count_cited_objects(self, candidate_id: CandidatePublicationId) -> int:
+        """How many consulted objects this publication was found for."""
+        return int(
+            (
+                await self._session.execute(
+                    select(func.count(distinct(FullAgenticInvestigationRecord.object_id)))
+                    .select_from(AgenticInvestigationCandidateRecord)
+                    .join(
+                        FullAgenticInvestigationRecord,
+                        FullAgenticInvestigationRecord.id
+                        == AgenticInvestigationCandidateRecord.investigation_id,
+                    )
+                    .where(
+                        AgenticInvestigationCandidateRecord.candidate_id
+                        == str(candidate_id),
+                        FullAgenticInvestigationRecord.object_id.is_not(None),
+                    )
+                )
+            ).scalar_one()
         )
 
     async def list_decisions(

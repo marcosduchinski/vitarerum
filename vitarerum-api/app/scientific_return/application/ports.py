@@ -371,6 +371,10 @@ class CandidateReviewItem:
     grounded_passages: tuple[str, ...] = ()
     rejected_passage_count: int = 0
     rejected_inventory_form_count: int = 0
+    # How many of the project's consulted objects this publication was found
+    # for. Two or more is a stronger return, not two returns: the publication is
+    # presented once and this says how much of the project it touches.
+    cited_object_count: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -487,6 +491,9 @@ class ScientificReturnRepository(Protocol):
     async def list_decisions(
         self, candidate_id: CandidatePublicationId
     ) -> list[CandidateDecision]: ...
+    async def count_cited_objects(
+        self, candidate_id: CandidatePublicationId
+    ) -> int: ...
 
     async def get_metrics(self) -> ScientificReturnMetrics: ...
 

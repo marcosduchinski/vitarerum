@@ -116,6 +116,7 @@ def _investigation_to_domain(
         candidate_id=CandidatePublicationId(record.candidate_id)
         if record.candidate_id
         else None,
+        object_id=record.object_id,
         search_run_id=ScientificReturnRunId(record.search_run_id)
         if record.search_run_id
         else None,
@@ -240,6 +241,7 @@ class SqlAlchemyFullAgenticRepository:
                 objective=investigation.objective,
                 candidate_id=investigation.candidate_id,
                 search_run_id=investigation.search_run_id,
+                object_id=investigation.object_id,
                 status=investigation.status,
                 idempotency_key=investigation.idempotency_key,
                 budget={
@@ -516,8 +518,18 @@ class SqlAlchemyFullAgenticRepository:
         return _investigation_to_domain(record) if record else None
 
     async def find_live_target(
-        self, watch_id: str, objective: str, candidate_id: str | None
+        self,
+        watch_id: str,
+        objective: str,
+        candidate_id: str | None,
+        object_id: str | None = None,
     ) -> FullAgenticInvestigation | None:
+        """The live investigation of this exact target, if there is one.
+
+        The target includes the consulted object: two objects of the same
+        project are two targets, and each may be investigated at the same time.
+        This mirrors the partial unique index that enforces it in the database.
+        """
         record = (
             await self._session.execute(
                 select(FullAgenticInvestigationRecord).where(
@@ -525,6 +537,7 @@ class SqlAlchemyFullAgenticRepository:
                     FullAgenticInvestigationRecord.objective
                     == InvestigationObjective(objective),
                     FullAgenticInvestigationRecord.candidate_id == candidate_id,
+                    FullAgenticInvestigationRecord.object_id == object_id,
                     FullAgenticInvestigationRecord.status.in_(
                         (
                             FullAgenticInvestigationStatus.QUEUED,

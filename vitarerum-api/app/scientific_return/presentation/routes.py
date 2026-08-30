@@ -86,6 +86,7 @@ from app.scientific_return.domain.models import (
     CandidateDecision,
     CandidatePublication,
     CandidatePublicationId,
+    ScientificReturnProjectSnapshot,
     ScientificReturnSearchRun,
     ScientificReturnWatch,
     ScientificReturnWatchId,
@@ -124,6 +125,7 @@ from app.scientific_return.presentation.schemas import (
     CandidateEvidenceResponse,
     CandidatePublicationResponse,
     CandidateReviewItemResponse,
+    ConsultedObjectResponse,
     CreateKnowledgeRequest,
     ExecuteFullAgenticRequest,
     FullAgenticInvestigationResponse,
@@ -197,6 +199,7 @@ def _full_agentic_response(
         heartbeatAt=item.heartbeat_at,
         failureReason=item.failure_reason,
         degradedReason=item.degraded_reason,
+        objectId=item.object_id,
         recoveryCount=item.recovery_count,
         maxRecoveries=max_recoveries,
         lastRecoveredAt=item.last_recovered_at,
@@ -593,7 +596,10 @@ def _unprocessable(
     )
 
 
-def _watch_response(watch: ScientificReturnWatch) -> ScientificReturnWatchResponse:
+def _watch_response(
+    watch: ScientificReturnWatch,
+    snapshot: ScientificReturnProjectSnapshot | None = None,
+) -> ScientificReturnWatchResponse:
     return ScientificReturnWatchResponse(
         id=watch.id,
         projectId=watch.project_id,
@@ -605,6 +611,16 @@ def _watch_response(watch: ScientificReturnWatch) -> ScientificReturnWatchRespon
         nextRunAt=watch.next_run_at,
         scheduleAnchorAt=watch.schedule_anchor_at,
         projectSnapshotId=watch.project_snapshot_id,
+        consultedObjects=[
+            ConsultedObjectResponse(
+                id=item.id,
+                inventoryNumber=item.inventory_number,
+                objectName=item.object_name,
+            )
+            for item in (
+                snapshot.payload.consulted_objects if snapshot is not None else ()
+            )
+        ],
     )
 
 
@@ -820,6 +836,7 @@ def _decision_response(decision: CandidateDecision) -> CandidateDecisionResponse
                 groundedInventoryForms=_grounded_form_responses(
                     context.grounded_inventory_forms
                 ),
+                citedObjectCount=context.cited_object_count,
             )
             if context is not None
             else None
@@ -916,7 +933,9 @@ async def get_watch(
             "SCIENTIFIC_RETURN_WATCH_NOT_FOUND",
             f"No scientific-return watch exists for project {project_id}",
         )
-    return _watch_response(watch)
+    return _watch_response(
+        watch, await repository.get_snapshot_for_watch(watch.id)
+    )
 
 
 @scientific_return_router.patch(
@@ -1109,6 +1128,7 @@ async def list_candidate_queue(
                 groundedPassages=list(item.grounded_passages),
                 rejectedPassageCount=item.rejected_passage_count,
                 rejectedInventoryFormCount=item.rejected_inventory_form_count,
+                citedObjectCount=item.cited_object_count,
             )
             for item in items
         ],

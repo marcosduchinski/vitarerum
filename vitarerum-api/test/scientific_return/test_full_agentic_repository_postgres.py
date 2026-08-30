@@ -501,3 +501,134 @@ async def test_abandoned_listing_finds_only_old_live_rows_on_postgresql(
 
         assert [str(item.id) for item in abandoned] == ["old-live"]
         await session.close()
+
+
+async def test_the_live_target_index_counts_the_object_on_postgresql(
+    postgres_engine: AsyncEngine,
+) -> None:
+    """Two objects of one project are two targets; the same object is still one.
+
+    The index is the guarantee — the application check races with itself under
+    concurrency — so it is the index that has to know about the object.
+    """
+
+    async with postgres_engine.connect() as connection:
+        definition = (
+            await connection.execute(
+                text(
+                    "SELECT indexdef FROM pg_indexes "
+                    "WHERE indexname = 'uq_sr_fa_live_target'"
+                )
+            )
+        ).scalar_one_or_none()
+
+    assert definition is not None
+    assert "object_id" in definition
+    assert "candidate_id" in definition
+    assert "QUEUED" in definition
+
+
+async def test_one_live_investigation_per_object_on_postgresql(
+    postgres_engine: AsyncEngine,
+) -> None:
+    async with postgres_engine.connect() as connection:
+        await connection.execute(
+            text(
+                "CREATE TEMP TABLE sr_full_agentic_investigations "
+                "(LIKE public.sr_full_agentic_investigations INCLUDING ALL)"
+            )
+        )
+        session = AsyncSession(bind=connection, expire_on_commit=False)
+        repository = SqlAlchemyFullAgenticRepository(session, FieldEncryptor(bytes(32)))
+        now = datetime.now(tz=UTC)
+
+        def investigation(identifier: str, object_id: str | None):
+            return FullAgenticInvestigation(
+                id=FullAgenticInvestigationId(identifier),
+                watch_id=ScientificReturnWatchId("watch-objects"),
+                objective=InvestigationObjective.DISCOVER_CANDIDATE,
+                object_id=object_id,
+                status=FullAgenticInvestigationStatus.QUEUED,
+                idempotency_key=identifier,
+                budget=AgenticBudget(1, 1, 1, 1, 2),
+                usage=AgenticUsage(),
+                created_by=PermissionId("permission-objects"),
+                created_at=now,
+            )
+
+        await repository.add_investigation(investigation("first", "object-1"))
+        await repository.add_investigation(investigation("second", "object-2"))
+
+        with pytest.raises(IntegrityError):
+            await repository.add_investigation(investigation("third", "object-1"))
+        await session.rollback()
+        await session.close()
+
+
+async def test_one_publication_found_for_two_objects_counts_two_on_postgresql(
+    postgres_engine: AsyncEngine,
+) -> None:
+    """The same article reached from two objects is one candidate, cited twice.
+
+    Presenting it twice would ask a curator to decide the same publication
+    twice; counting the objects says how much of the project it touches, which
+    is what makes it a stronger return rather than two returns.
+    """
+
+    async with postgres_engine.connect() as connection:
+        for table in (
+            "sr_full_agentic_investigations",
+            "sr_agentic_investigation_candidates",
+        ):
+            await connection.execute(
+                text(
+                    f"CREATE TEMP TABLE {table} "
+                    f"(LIKE public.{table} INCLUDING ALL)"
+                )
+            )
+        session = AsyncSession(bind=connection, expire_on_commit=False)
+        repository = SqlAlchemyFullAgenticRepository(session, FieldEncryptor(bytes(32)))
+        scientific = SqlAlchemyScientificReturnRepository(
+            session, FieldEncryptor(bytes(32))
+        )
+        now = datetime.now(tz=UTC)
+
+        for index, object_id in enumerate(("object-1", "object-2"), start=1):
+            await repository.add_investigation(
+                FullAgenticInvestigation(
+                    id=FullAgenticInvestigationId(f"investigation-{index}"),
+                    watch_id=ScientificReturnWatchId("watch-cited"),
+                    objective=InvestigationObjective.DISCOVER_CANDIDATE,
+                    object_id=object_id,
+                    status=FullAgenticInvestigationStatus.COMPLETED,
+                    idempotency_key=f"cited-{index}",
+                    budget=AgenticBudget(1, 1, 1, 1, 2),
+                    usage=AgenticUsage(),
+                    created_by=PermissionId("permission-cited"),
+                    created_at=now,
+                )
+            )
+            await repository.link_candidate(
+                AgenticCandidateLink(
+                    investigation_id=FullAgenticInvestigationId(
+                        f"investigation-{index}"
+                    ),
+                    candidate_id=CandidatePublicationId("candidate-shared"),
+                    relation_kind=(
+                        AgenticCandidateRelationKind.CREATED
+                        if index == 1
+                        else AgenticCandidateRelationKind.REDISCOVERED
+                    ),
+                    rank=1,
+                    linked_at=now,
+                )
+            )
+
+        assert (
+            await scientific.count_cited_objects(
+                CandidatePublicationId("candidate-shared")
+            )
+            == 2
+        )
+        await session.close()
+

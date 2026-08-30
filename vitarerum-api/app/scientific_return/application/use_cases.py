@@ -673,6 +673,9 @@ class DecideCandidate:
             ),
             inventory_evidence_status=evidence_status,
             grounded_inventory_forms=tuple(grounded_forms),
+            cited_object_count=await self._repository.count_cited_objects(
+                candidate_id
+            ),
         )
 
     async def _project_id(self, candidate: CandidatePublication) -> str:

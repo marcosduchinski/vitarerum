@@ -129,6 +129,11 @@ class Settings(BaseSettings):
     scientific_return_platform_window_seconds: float = 1800.0
     # A row reclaimed after a lost lease is a recovery. Enough of them means the
     # work itself is the problem, not the infrastructure.
+    # How many consulted objects of one project the sweep will investigate. Each
+    # object gets its own investigation, so this is the ceiling on what a single
+    # project can cost in one pass. Anything above it is recorded, never
+    # silently dropped.
+    scientific_return_full_agentic_max_objects: int = 15
     scientific_return_full_agentic_max_recoveries: int = 3
     scientific_return_full_agentic_max_age_seconds: int = 86400
     scientific_return_full_agentic_reaper_batch_size: int = 25

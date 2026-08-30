@@ -50,6 +50,12 @@ class UpdateWatchRequest(BaseModel):
     scheduleAnchorAt: datetime | None = None
 
 
+class ConsultedObjectResponse(BaseModel):
+    id: str
+    inventoryNumber: str
+    objectName: str
+
+
 class ScientificReturnWatchResponse(BaseModel):
     id: str
     projectId: str
@@ -61,6 +67,10 @@ class ScientificReturnWatchResponse(BaseModel):
     nextRunAt: datetime
     scheduleAnchorAt: datetime
     projectSnapshotId: str
+    # The objects the snapshot froze. Each is investigated on its own, so the
+    # panel needs them to say which investigation covers what, and how much of
+    # the project has been covered at all.
+    consultedObjects: list[ConsultedObjectResponse] = Field(default_factory=list)
 
 
 class WatchLookupRequest(BaseModel):
@@ -203,6 +213,9 @@ class CandidateReviewItemResponse(CandidatePublicationResponse):
     groundedPassages: list[str] = Field(default_factory=list)
     rejectedPassageCount: int = Field(default=0, ge=0)
     rejectedInventoryFormCount: int = Field(default=0, ge=0)
+    # How many of the project's consulted objects this publication was found
+    # for. Two or more is one stronger return, not two returns.
+    citedObjectCount: int = Field(default=0, ge=0)
 
 
 class PaginatedCandidateQueueResponse(BaseModel):
@@ -243,6 +256,7 @@ class CandidateDecisionContextResponse(BaseModel):
     groundedInventoryForms: list[GroundedInventoryFormResponse] = Field(
         default_factory=list
     )
+    citedObjectCount: int = Field(default=0, ge=0)
 
 
 class CandidateDecisionResponse(BaseModel):
@@ -461,6 +475,7 @@ class FullAgenticInvestigationResponse(BaseModel):
     heartbeatAt: datetime | None
     failureReason: str | None
     degradedReason: str | None = None
+    objectId: str | None = None
     # How close this investigation is to being given up on, and why. A run that
     # keeps being taken over looks healthy from its status alone, which is
     # exactly how one could occupy the head of the queue unnoticed.

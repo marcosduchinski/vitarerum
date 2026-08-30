@@ -272,6 +272,12 @@ class FullAgenticInvestigationRecord(Base):
     candidate_id: Mapped[str | None] = mapped_column(
         ForeignKey("scientific_return_candidates.id"), nullable=True, index=True
     )
+    # Plain text rather than a foreign key: the snapshot already carries the
+    # object identifier that way, and this context may not depend on
+    # use_of_collections directly.
+    object_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, index=True
+    )
     search_run_id: Mapped[str | None] = mapped_column(
         ForeignKey("scientific_return_runs.id"), nullable=True, unique=True
     )

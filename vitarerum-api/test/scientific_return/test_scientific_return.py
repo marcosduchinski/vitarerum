@@ -175,6 +175,7 @@ class _Repository:
         self.queries: list[ScientificReturnQuery] = []
         self.candidates: dict[str, CandidatePublication] = {}
         self.decisions: list[CandidateDecision] = []
+        self.cited_objects: dict[str, int] = {}
         self.agent_analyses: dict[str, CandidateAgentAnalysis] = {}
 
     async def add_watch(self, watch: ScientificReturnWatch) -> None:
@@ -340,6 +341,9 @@ class _Repository:
         self, candidate_id: CandidatePublicationId
     ) -> list[CandidateDecision]:
         return [item for item in self.decisions if item.candidate_id == candidate_id]
+
+    async def count_cited_objects(self, candidate_id: CandidatePublicationId) -> int:
+        return self.cited_objects.get(str(candidate_id), 0)
 
     async def add_agent_analysis(self, analysis: CandidateAgentAnalysis) -> None:
         self.agent_analyses[str(analysis.id)] = analysis

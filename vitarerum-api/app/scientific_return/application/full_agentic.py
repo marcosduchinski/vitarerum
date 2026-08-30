@@ -77,6 +77,7 @@ from app.scientific_return.domain.models import (
     CandidateAnalysisResult,
     CandidatePublication,
     CandidatePublicationId,
+    ProjectSnapshotPayload,
     ScientificReturnQuery,
     ScientificReturnQueryId,
     ScientificReturnRunId,
@@ -156,6 +157,7 @@ class FullAgenticConfiguration:
     # The platform's own timeout for one worker process, which the application
     # cannot observe and must therefore be told.
     platform_window_seconds: float = 1800.0
+    max_objects: int = 15
     max_recoveries: int = 3
     max_age_seconds: int = 86400
 
@@ -166,6 +168,8 @@ class FullAgenticConfiguration:
             raise ValueError("Circuit-breaker precision must be between zero and one")
         if self.investigation_lease_seconds < 60:
             raise ValueError("Investigation lease must be at least 60 seconds")
+        if self.max_objects < 1:
+            raise ValueError("At least one consulted object must be investigated")
         if self.max_recoveries < 0:
             raise ValueError("Recovery ceiling cannot be negative")
         if self.max_age_seconds <= 0:
@@ -252,6 +256,9 @@ class StartFullAgenticInput:
     candidate_id: CandidatePublicationId | None
     idempotency_key: str
     caller: Actor
+    # Which consulted object to investigate. ``None`` keeps the older shape, in
+    # which one investigation covered the whole project.
+    object_id: str | None = None
 
 
 class StartFullAgenticScientificReturn:
@@ -294,6 +301,7 @@ class StartFullAgenticScientificReturn:
                 existing.watch_id != data.watch_id
                 or existing.objective is not data.objective
                 or existing.candidate_id != data.candidate_id
+                or existing.object_id != data.object_id
             ):
                 raise ValueError(
                     "Idempotency-Key is already bound to another full-agentic target"
@@ -336,10 +344,23 @@ class StartFullAgenticScientificReturn:
             )
             if candidate is None or candidate.watch_id != data.watch_id:
                 raise ValueError("candidateId does not belong to the watch")
+        if data.object_id is not None:
+            # Checked against the snapshot, not the live project: the snapshot
+            # is what the investigation will actually read.
+            snapshot = await self._scientific_repository.get_snapshot_for_watch(
+                data.watch_id
+            )
+            if snapshot is None:
+                raise RuntimeError("Watch snapshot is missing")
+            if data.object_id not in {
+                item.id for item in snapshot.payload.consulted_objects
+            }:
+                raise ValueError("objectId is not a consulted object of this watch")
         live = await self._repository.find_live_target(
             str(data.watch_id),
             data.objective.value,
             str(data.candidate_id) if data.candidate_id else None,
+            data.object_id,
         )
         if live is not None:
             raise FullAgenticAlreadyRunning(
@@ -350,6 +371,7 @@ class StartFullAgenticScientificReturn:
             watch_id=data.watch_id,
             objective=data.objective,
             candidate_id=data.candidate_id,
+            object_id=data.object_id,
             status=FullAgenticInvestigationStatus.QUEUED,
             idempotency_key=data.idempotency_key,
             budget=self._configuration.budget,
@@ -389,6 +411,32 @@ async def close_envelope_run(
     run.completed_at = now
     run.error_message = reason[:2000]
     await scientific_repository.save_run(run)
+
+
+def snapshot_for_object(
+    payload: ProjectSnapshotPayload, object_id: str | None
+) -> ProjectSnapshotPayload:
+    """The snapshot as one investigation sees it.
+
+    An investigation targets a single consulted object, so it sees a snapshot
+    of that object alone: the floor spends its whole reservation on it, the
+    curatorial memory is looked up by its inventory number only, and the
+    planner's prompt stops growing with the size of the project — fifteen
+    objects used to send fifteen objects and a hundred and fifty inventory
+    variants into a single call.
+
+    ``None`` keeps the older shape, where one investigation covered the whole
+    project, so investigations queued before this existed still run.
+    """
+    if object_id is None:
+        return payload
+    objects = tuple(item for item in payload.consulted_objects if item.id == object_id)
+    if not objects:
+        raise RuntimeError(
+            f"Object {object_id} is no longer in the watch snapshot; "
+            "the snapshot was rebuilt without it"
+        )
+    return replace(payload, consulted_objects=objects)
 
 
 def one_record_per_publication(
@@ -662,9 +710,8 @@ class ExecuteFullAgenticScientificReturn:
         )
         if snapshot is None:
             raise RuntimeError("Watch snapshot is missing")
-        inventories = tuple(
-            item.inventory_number for item in snapshot.payload.consulted_objects
-        )
+        payload = snapshot_for_object(snapshot.payload, investigation.object_id)
+        inventories = tuple(item.inventory_number for item in payload.consulted_objects)
         memory = await retrieve_relevant_knowledge(
             self._repository,
             inventories,
@@ -710,10 +757,10 @@ class ExecuteFullAgenticScientificReturn:
             if event.kind is AgenticTrajectoryEventKind.PLAN_CREATED
         ]
         observation: dict[str, object] = {
-            "projectReference": snapshot.payload.project_reference,
-            "researcher": snapshot.payload.researcher,
+            "projectReference": payload.project_reference,
+            "researcher": payload.researcher,
             "suggestedAuthorHypotheses": list(
-                bibliographic_surname_hypotheses(snapshot.payload.researcher)
+                bibliographic_surname_hypotheses(payload.researcher)
             ),
             "objects": [
                 {
@@ -721,11 +768,9 @@ class ExecuteFullAgenticScientificReturn:
                     "inventoryNumber": item.inventory_number,
                     "objectName": item.object_name,
                 }
-                for item in snapshot.payload.consulted_objects
+                for item in payload.consulted_objects
             ],
-            "suggestedInventoryVariants": suggested_inventory_variants(
-                snapshot.payload
-            ),
+            "suggestedInventoryVariants": suggested_inventory_variants(payload),
             "sourceCapabilities": [
                 item.as_prompt_payload() for item in self._capabilities.values()
             ],
@@ -781,7 +826,7 @@ class ExecuteFullAgenticScientificReturn:
         # failure must not cost the highest-yield strategy of this domain.
         floor_reservation = max(1, investigation.budget.max_queries // 2)
         floor_searches = deterministic_floor(
-            snapshot.payload,
+            payload,
             tuple(self._capabilities.values()),
             floor_reservation,
         )

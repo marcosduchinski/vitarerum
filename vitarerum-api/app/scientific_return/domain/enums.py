@@ -94,6 +94,8 @@ class AgenticTrajectoryEventKind(StrEnum):
     SOURCE_WAIT_REJECTED = "SOURCE_WAIT_REJECTED"
     # Parts of one publication folded onto the publication itself.
     COMPONENTS_COLLAPSED = "COMPONENTS_COLLAPSED"
+    # The project has more consulted objects than one sweep investigates.
+    COVERAGE_TRUNCATED = "COVERAGE_TRUNCATED"
     ABANDONED = "ABANDONED"
 
 

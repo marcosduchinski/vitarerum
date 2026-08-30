@@ -1003,6 +1003,40 @@ a.query-list__source:hover {
   color: var(--status-review-text);
 }
 
+/* Each consulted object is investigated on its own, so a project is covered
+   only once every object has been reached. Partial coverage has to be visible:
+   silence about an object nobody searched reads as "nothing found". */
+.object-coverage {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 0.8rem;
+  border-inline-start: 3px solid var(--color-text-muted);
+  background: color-mix(in srgb, var(--color-text-muted) 8%, var(--color-panel));
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.object-coverage--partial {
+  border-inline-start-color: var(--status-review-text);
+  background: color-mix(in srgb, var(--status-review-bg) 40%, var(--color-panel));
+  color: var(--color-text);
+}
+
+.object-coverage > .pi {
+  margin-top: 0.1rem;
+}
+
+.run-row__object {
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* A resumed investigation reads as healthy from its status alone, which is how
    one could sit at the head of the queue unnoticed for days. */
 .investigation-recovered {

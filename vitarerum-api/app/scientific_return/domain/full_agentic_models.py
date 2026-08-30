@@ -215,6 +215,11 @@ class FullAgenticInvestigation:
     created_by: PermissionId
     created_at: datetime
     candidate_id: CandidatePublicationId | None = None
+    # Which consulted object this investigation is for. A project may consult
+    # several, and the budgets were measured against one: giving each its own
+    # investigation keeps those numbers meaningful instead of scaling them by a
+    # count nobody has measured.
+    object_id: str | None = None
     search_run_id: ScientificReturnRunId | None = None
     heartbeat_at: datetime | None = None
     started_at: datetime | None = None
@@ -386,6 +391,10 @@ class CandidateDecisionContext:
     search_strategy: str | None = None
     inventory_evidence_status: InventoryEvidenceStatus | None = None
     grounded_inventory_forms: tuple[GroundedInventoryForm, ...] = ()
+    # Part of what the curator saw: how many consulted objects this publication
+    # was found for. Kept in the snapshot so a confirmation can be read back
+    # years later with the same context that produced it.
+    cited_object_count: int = 0
 
 
 @dataclass(frozen=True, slots=True)
