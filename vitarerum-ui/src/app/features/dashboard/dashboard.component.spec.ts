@@ -136,8 +136,9 @@ describe('DashboardComponent', () => {
     expect(compiled.textContent).toContain('CUP-20260811-0001');
     expect(compiled.textContent).toContain('Condition report');
     expect(compiled.textContent).toContain('Confirm handling conditions');
+    // A post-it deep-links into the project's TODO tab, where it came from.
     expect(compiled.querySelector('a')?.getAttribute('href')).toBe(
-      '/p/collections/projects/curatorial/project-1',
+      '/p/collections/projects/curatorial/project-1?tab=todo',
     );
   });
 

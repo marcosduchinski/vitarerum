@@ -81,6 +81,10 @@ class ProjectApiServiceStub {
     return of(EVENTS_PAGE);
   }
 
+  listTodoItems(projectId: string) {
+    return of({ projectId, items: [] });
+  }
+
   cancelProject(projectId: string, request: { reason: string }) {
     this.cancelled.push({ projectId, reason: request.reason });
     return of({
@@ -209,12 +213,13 @@ describe('ProjectCuratorialDetailPageComponent', () => {
     router = TestBed.inject(Router);
   });
 
-  async function render(): Promise<HTMLElement> {
+  async function render(tab?: string): Promise<HTMLElement> {
     const fixture = TestBed.createComponent(ProjectCuratorialDetailPageComponent);
     componentRef = fixture.componentRef;
     componentRef.setInput('id', PROJECT.id);
     componentRef.setInput('returnTo', '/p/collections/projects/my');
     componentRef.setInput('returnLabel', 'my projects');
+    componentRef.setInput('tab', tab);
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
@@ -238,14 +243,28 @@ describe('ProjectCuratorialDetailPageComponent', () => {
     expect(buttonByText(compiled, 'Cancel project').disabled).toBe(false);
   });
 
-  it('shows the frontend-only TODO List', async () => {
+  it('shows the TODO List panel', async () => {
     const compiled = await render();
 
     buttonByText(compiled, 'Todo List').click();
     componentRef.changeDetectorRef.detectChanges();
 
-    expect(compiled.textContent).toContain('Items are kept only for this demonstration');
+    expect(compiled.textContent).toContain('Project TODO List');
+    expect(compiled.textContent).toContain('New item');
     expect(projectService.cancelled).toEqual([]);
+  });
+
+  it('opens the TODO List directly when the tab query param asks for it', async () => {
+    const compiled = await render('todo');
+
+    expect(compiled.textContent).toContain('Project TODO List');
+  });
+
+  it('falls back to the Actions tab for an unknown tab query param', async () => {
+    const compiled = await render('nonsense');
+
+    expect(compiled.textContent).toContain('Cancel project');
+    expect(compiled.textContent).not.toContain('Project TODO List');
   });
 
   it('disables the cancel task when project actions do not allow it', async () => {
