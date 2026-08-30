@@ -587,9 +587,7 @@ describe('ProjectApiService', () => {
 
   it('downloads the publication register as a DOCX blob', () => {
     let received: Blob | undefined;
-    service
-      .downloadPublicationLogDocument('project-1')
-      .subscribe((blob) => (received = blob));
+    service.downloadPublicationLogDocument('project-1').subscribe((blob) => (received = blob));
 
     const request = http.expectOne(
       'https://api.example.test/collection-use-projects/project-1/publication-log/document',
@@ -668,9 +666,9 @@ describe('ProjectApiService', () => {
   });
 
   it('calls project TODO item endpoints', () => {
-    service.listMyTodoPostits({ completed: false, limit: 12 }).subscribe();
+    service.listMyTodoPostits({ completed: false, page: 0, size: 12 }).subscribe();
     const postitsRequest = http.expectOne(
-      'https://api.example.test/collection-use-projects/my-todo-items?completed=false&limit=12',
+      'https://api.example.test/collection-use-projects/my-todo-items?completed=false&page=0&size=12',
     );
     expect(postitsRequest.request.method).toBe('GET');
     postitsRequest.flush({ items: [] });

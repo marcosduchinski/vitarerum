@@ -80,6 +80,11 @@ const COLLECTION_PROJECTS_STAFF: MenuNode = {
       icon: 'pi pi-times-circle',
       routerLink: '/p/collections/projects/cancelled',
     },
+    {
+      label: 'TODO List',
+      icon: 'pi pi-check-square',
+      routerLink: '/p/collections/projects/todo',
+    },
   ],
 };
 

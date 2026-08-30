@@ -302,35 +302,9 @@ describe('ProjectsPendingPageComponent', () => {
     await fixture.whenStable();
 
     expect(document.body.textContent).toContain('Detail');
-    expect(document.body.textContent).toContain('TODO List');
     expect(document.body.textContent).toContain('Start');
     expect(document.body.textContent).toContain('Cancel');
     expect((fixture.nativeElement as HTMLElement).textContent).not.toContain('Cancel');
-  });
-
-  it('deep-links the TODO List action into the project detail TODO tab', async () => {
-    await identity.signIn({ email: 'bob@collections.example.com', password: 'vita2026' });
-    const navigateSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true);
-    const fixture = TestBed.createComponent(ProjectsPendingPageComponent);
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    openActionsMenu(fixture.nativeElement, PROJECT.referenceNumber);
-    fixture.detectChanges();
-    await fixture.whenStable();
-
-    menuItemByText('TODO List').click();
-    fixture.detectChanges();
-    await fixture.whenStable();
-
-    expect(navigateSpy).toHaveBeenCalledWith(['/p/collections/projects/collections', PROJECT.id], {
-      queryParams: {
-        tab: 'todo',
-        returnTo: '/p/collections/projects/pending',
-        returnLabel: 'pending projects',
-      },
-    });
   });
 
   it('navigates collections staff to the collections project detail route', async () => {

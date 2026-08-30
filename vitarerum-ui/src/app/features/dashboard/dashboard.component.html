@@ -13,7 +13,24 @@
         <p class="postits__eyebrow">Open TODOs</p>
         <h3 id="postits-title">My post-its</h3>
       </div>
-      <span class="postits__count" aria-label="Open TODO count">{{ postits().length }}</span>
+      <div class="postits__actions">
+        <span class="postits__count" aria-label="Open TODO count">{{ postits().length }}</span>
+        <a
+          class="postits__all"
+          routerLink="/p/collections/projects/todo"
+          [attr.aria-label]="
+            hiddenPostitCount()
+              ? hiddenPostitCount() + ' more TODO items on the full list'
+              : 'Open the full TODO list'
+          "
+        >
+          @if (hiddenPostitCount()) {
+            {{ hiddenPostitCount() }} more
+          } @else {
+            See all
+          }
+        </a>
+      </div>
     </header>
 
     @if (postitsResource.isLoading()) {

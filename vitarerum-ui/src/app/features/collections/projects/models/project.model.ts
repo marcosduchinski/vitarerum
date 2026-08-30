@@ -155,13 +155,15 @@ export interface ProjectTodoPostit extends ProjectTodoItem {
   readonly projectStatus: UseStatus;
 }
 
-export interface ProjectTodoPostitsResponse {
-  readonly items: readonly ProjectTodoPostit[];
-}
+export type ProjectTodoPostitsResponse = Page<ProjectTodoPostit>;
 
-export interface ProjectTodoPostitsQuery {
+export interface ProjectTodoPostitsQuery extends PageQuery {
+  /** Omit for both open and completed items; the server defaults to open only. */
   readonly completed?: boolean;
-  readonly limit?: number;
+  readonly projectId?: string;
+  /** 'recent' matches the dashboard widget; 'project' keeps a project's items
+   *  together across page boundaries, which a grouped list needs. */
+  readonly sort?: 'recent' | 'project';
 }
 
 export interface CreateProjectTodoItemRequest {

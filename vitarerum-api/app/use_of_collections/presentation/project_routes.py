@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import math
 from datetime import date
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import (
     HTTPException,
@@ -252,20 +252,33 @@ async def list_my_project_todo_postits(
     caller: CallerPermission,
     todo_repo: ProjectTodoRepo,
     completed: Annotated[bool | None, Query()] = False,
-    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    project_id: Annotated[str | None, Query(alias="projectId")] = None,
+    sort: Annotated[Literal["recent", "project"], Query()] = "recent",
+    page: Annotated[int, Query(ge=0)] = 0,
+    size: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> ProjectTodoPostitsResponse:
     try:
-        items = await ListMyStaffProjectTodoPostits(todo_repo).execute(
+        result = await ListMyStaffProjectTodoPostits(todo_repo).execute(
             ListMyStaffProjectTodoPostitsInput(
                 caller=caller,
                 completed=completed,
-                limit=limit,
+                project_id=(
+                    CollectionUseProjectId(project_id) if project_id else None
+                ),
+                order_by_project=sort == "project",
+                page=page,
+                size=size,
             )
         )
     except Exception as exc:
         _handle_domain_errors(exc)
+    total = result.total
     return ProjectTodoPostitsResponse(
-        items=[_todo_postit_response(item) for item in items]
+        content=[_todo_postit_response(item) for item in result.items],
+        page=page,
+        size=size,
+        totalElements=total,
+        totalPages=math.ceil(total / size) if size > 0 and total > 0 else 0,
     )
 
 

@@ -841,8 +841,36 @@ class SqlAlchemyStaffProjectTodoRepository:
         self,
         owner_permission_id: str,
         completed: bool | None,
+        project_id: CollectionUseProjectId | None,
+        order_by_project: bool,
+        offset: int,
         limit: int,
-    ) -> list[StaffProjectTodoPostit]:
+    ) -> tuple[list[StaffProjectTodoPostit], int]:
+        filters = [
+            StaffProjectTodoItemRecord.owner_permission_id == owner_permission_id
+        ]
+        if completed is not None:
+            filters.append(StaffProjectTodoItemRecord.completed == completed)
+        if project_id is not None:
+            filters.append(StaffProjectTodoItemRecord.project_id == project_id)
+
+        # Grouping by project in the UI only holds across pages when the server
+        # orders by project first; the dashboard widget keeps the recency order.
+        order = (
+            (
+                CollectionUseProjectRecord.reference_number.asc(),
+                StaffProjectTodoItemRecord.position.asc(),
+                StaffProjectTodoItemRecord.created_at.asc(),
+                StaffProjectTodoItemRecord.id.asc(),
+            )
+            if order_by_project
+            else (
+                StaffProjectTodoItemRecord.updated_at.desc(),
+                StaffProjectTodoItemRecord.created_at.desc(),
+                StaffProjectTodoItemRecord.id.asc(),
+            )
+        )
+
         stmt = (
             select(
                 StaffProjectTodoItemRecord,
@@ -854,20 +882,19 @@ class SqlAlchemyStaffProjectTodoRepository:
                 CollectionUseProjectRecord,
                 CollectionUseProjectRecord.id == StaffProjectTodoItemRecord.project_id,
             )
-            .where(
-                StaffProjectTodoItemRecord.owner_permission_id == owner_permission_id
-            )
-            .order_by(
-                StaffProjectTodoItemRecord.updated_at.desc(),
-                StaffProjectTodoItemRecord.created_at.desc(),
-                StaffProjectTodoItemRecord.id.asc(),
-            )
+            .where(*filters)
+            .order_by(*order)
+            .offset(offset)
             .limit(limit)
         )
-        if completed is not None:
-            stmt = stmt.where(StaffProjectTodoItemRecord.completed == completed)
+        count_stmt = (
+            select(func.count())
+            .select_from(StaffProjectTodoItemRecord)
+            .where(*filters)
+        )
+        total = int((await self._session.execute(count_stmt)).scalar_one())
         result = await self._session.execute(stmt)
-        return [
+        items = [
             StaffProjectTodoPostit(
                 id=StaffProjectTodoItemId(record.id),
                 project_id=CollectionUseProjectId(record.project_id),
@@ -883,6 +910,7 @@ class SqlAlchemyStaffProjectTodoRepository:
             )
             for record, reference_number, title, status in result.all()
         ]
+        return items, total
 
     async def get_by_id(
         self, item_id: StaffProjectTodoItemId

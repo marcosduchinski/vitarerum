@@ -1,0 +1,78 @@
+<div class="picker">
+  <div class="picker__label-row">
+    <span class="picker__label">{{ label() }}</span>
+    @if (selected() && clearLabel()) {
+      <button type="button" class="picker__clear" [disabled]="disabled()" (click)="clear()">
+        {{ clearLabel() }}
+      </button>
+    }
+  </div>
+
+  <button
+    type="button"
+    class="picker__current"
+    [class.picker__current--empty]="!selected()"
+    [disabled]="disabled()"
+    [attr.aria-expanded]="open()"
+    [attr.aria-label]="triggerLabel()"
+    [attr.title]="selected() ? triggerLabel() : null"
+    aria-haspopup="listbox"
+    (click)="toggle()"
+  >
+    @if (selected(); as project) {
+      <span class="picker__reference">{{ project.referenceNumber }}</span>
+      <span class="picker__title">{{ project.title }}</span>
+    } @else {
+      <span class="picker__placeholder">Choose a project…</span>
+    }
+    <span class="pi" [class.pi-chevron-down]="!open()" [class.pi-chevron-up]="open()"></span>
+  </button>
+
+  @if (open()) {
+    <div class="picker__panel">
+      <div class="picker__search">
+        <input
+          type="search"
+          [value]="draft()"
+          (input)="onDraftInput($event)"
+          (keydown.enter)="search($event)"
+          (keydown.escape)="close()"
+          placeholder="Search by reference or title"
+          aria-label="Search projects"
+        />
+        <button type="button" [disabled]="resultsResource.isLoading()" (click)="search($event)">
+          <span class="pi pi-search" aria-hidden="true"></span>
+          Search
+        </button>
+      </div>
+
+      @if (resultsResource.isLoading()) {
+        <p class="picker__state" role="status">Searching…</p>
+      } @else if (searchError()) {
+        <p class="picker__state picker__state--error" role="alert">Could not search projects.</p>
+      } @else if (searched() && !results().length) {
+        <p class="picker__state">No project matches that search.</p>
+      } @else if (!searched()) {
+        <p class="picker__state">Search to list projects.</p>
+      } @else {
+        <ul class="picker__results" role="listbox" [attr.aria-label]="label() + ' results'">
+          @for (project of results(); track project.id) {
+            <li role="presentation">
+              <button
+                type="button"
+                role="option"
+                [attr.aria-selected]="project.id === selected()?.id"
+                [title]="project.referenceNumber + ' — ' + project.title"
+                (click)="choose(project)"
+              >
+                <span class="picker__reference">{{ project.referenceNumber }}</span>
+                <span class="picker__title">{{ project.title }}</span>
+                <small>{{ statusLabel(project.status) }}</small>
+              </button>
+            </li>
+          }
+        </ul>
+      }
+    </div>
+  }
+</div>

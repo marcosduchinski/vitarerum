@@ -66,7 +66,19 @@ class DeleteStaffProjectTodoInput:
 class ListMyStaffProjectTodoPostitsInput:
     caller: Actor
     completed: bool | None = False
-    limit: int = 20
+    project_id: CollectionUseProjectId | None = None
+    # 'recent' (the dashboard widget's order) vs 'project'. Grouping a paginated
+    # list by project only works when the server orders by it too, or a project's
+    # items straddle page boundaries.
+    order_by_project: bool = False
+    page: int = 0
+    size: int = 20
+
+
+@dataclass(slots=True)
+class StaffProjectTodoPostitPage:
+    items: list[StaffProjectTodoPostit]
+    total: int
 
 
 async def _assert_project_access(
@@ -138,15 +150,21 @@ class ListMyStaffProjectTodoPostits:
 
     async def execute(
         self, data: ListMyStaffProjectTodoPostitsInput
-    ) -> list[StaffProjectTodoPostit]:
+    ) -> StaffProjectTodoPostitPage:
         require_staff(data.caller)
-        if data.limit < 1 or data.limit > 100:
-            raise ValueError("limit must be between 1 and 100")
-        return await self._todo_repository.list_dashboard_items_for_owner(
+        if data.size < 1 or data.size > 100:
+            raise ValueError("size must be between 1 and 100")
+        if data.page < 0:
+            raise ValueError("page must be greater than or equal to 0")
+        items, total = await self._todo_repository.list_dashboard_items_for_owner(
             _owner_id(data.caller),
             completed=data.completed,
-            limit=data.limit,
+            project_id=data.project_id,
+            order_by_project=data.order_by_project,
+            offset=data.page * data.size,
+            limit=data.size,
         )
+        return StaffProjectTodoPostitPage(items=items, total=total)
 
 
 class CreateStaffProjectTodo:

@@ -141,19 +141,35 @@ class InMemoryTodoRepository:
         self,
         owner_permission_id: str,
         completed: bool | None,
+        project_id: CollectionUseProjectId | None,
+        order_by_project: bool,
+        offset: int,
         limit: int,
-    ) -> list[StaffProjectTodoPostit]:
+    ) -> tuple[list[StaffProjectTodoPostit], int]:
         items = [
             item
             for item in self.items.values()
             if item.owner_permission_id == owner_permission_id
             and (completed is None or item.completed is completed)
+            and (project_id is None or item.project_id == project_id)
         ]
-        items.sort(
-            key=lambda item: (item.updated_at, item.created_at, item.id), reverse=True
-        )
+        if order_by_project:
+            items.sort(
+                key=lambda item: (
+                    self.project_repo.items[item.project_id].reference_number.value,
+                    item.position,
+                    item.created_at,
+                    item.id,
+                )
+            )
+        else:
+            items.sort(
+                key=lambda item: (item.updated_at, item.created_at, item.id),
+                reverse=True,
+            )
+        total = len(items)
         postits: list[StaffProjectTodoPostit] = []
-        for item in items[:limit]:
+        for item in items[offset : offset + limit]:
             project = self.project_repo.items[item.project_id]
             postits.append(
                 StaffProjectTodoPostit(
@@ -170,7 +186,7 @@ class InMemoryTodoRepository:
                     position=item.position,
                 )
             )
-        return postits
+        return postits, total
 
     async def add(self, item: StaffProjectTodoItem) -> None:
         self.items[item.id] = item
@@ -355,19 +371,90 @@ async def test_dashboard_postits_list_only_current_staff_profile_items() -> None
         )
     )
 
-    postits = await ListMyStaffProjectTodoPostits(todo_repo).execute(
+    page = await ListMyStaffProjectTodoPostits(todo_repo).execute(
         ListMyStaffProjectTodoPostitsInput(
             caller=CURATOR_BOB,
             completed=False,
-            limit=20,
+            size=20,
         )
     )
 
-    assert [postit.id for postit in postits] == [curator_second.id]
-    assert postits[0].project_id == "project-2"
-    assert postits[0].project_reference_number.value == "CUP-TODO002"
-    assert postits[0].project_title == "Second project"
-    assert postits[0].project_status == UseStatus.IN_PROGRESS.value
+    assert [postit.id for postit in page.items] == [curator_second.id]
+    assert page.total == 1
+    assert page.items[0].project_id == "project-2"
+    assert page.items[0].project_reference_number.value == "CUP-TODO002"
+    assert page.items[0].project_title == "Second project"
+    assert page.items[0].project_status == UseStatus.IN_PROGRESS.value
+
+    # The project filter narrows the same owner's list to one project.
+    filtered = await ListMyStaffProjectTodoPostits(todo_repo).execute(
+        ListMyStaffProjectTodoPostitsInput(
+            caller=CURATOR_BOB,
+            completed=None,
+            project_id=CollectionUseProjectId("project-1"),
+        )
+    )
+    assert [postit.id for postit in filtered.items] == [curator_first.id]
+    assert filtered.total == 1
+
+
+async def test_dashboard_postits_paginate_and_order_by_project() -> None:
+    todo_repo, project_repo, proposal_repo = _use_cases()
+    project_repo.items["project-2"] = CollectionUseProject(
+        id=CollectionUseProjectId("project-2"),
+        reference_number=ReferenceNumber("CUP-TODO002"),
+        title="Second project",
+        purpose="Loan support",
+        intended_use=UseType.EXHIBITION,
+        status=UseStatus.IN_PROGRESS,
+        begin_date=date(2026, 8, 13),
+        end_date=date(2026, 8, 14),
+        requested_by=PermissionId("perm-alice"),
+        proposal_id=ProposalId("proposal-2"),
+    )
+
+    # Created newest-first against project order, so the two sorts disagree.
+    second = await CreateStaffProjectTodo(
+        todo_repo, project_repo, proposal_repo
+    ).execute(
+        CreateStaffProjectTodoInput(
+            caller=CURATOR_BOB,
+            project_id=CollectionUseProjectId("project-2"),
+            text="On the second project",
+            now=NOW,
+        )
+    )
+    first = await CreateStaffProjectTodo(
+        todo_repo, project_repo, proposal_repo
+    ).execute(
+        CreateStaffProjectTodoInput(
+            caller=CURATOR_BOB,
+            project_id=CollectionUseProjectId("project-1"),
+            text="On the first project",
+            now=NOW.replace(hour=11),
+        )
+    )
+
+    by_recency = await ListMyStaffProjectTodoPostits(todo_repo).execute(
+        ListMyStaffProjectTodoPostitsInput(caller=CURATOR_BOB, completed=False)
+    )
+    assert [postit.id for postit in by_recency.items] == [first.id, second.id]
+
+    by_project = await ListMyStaffProjectTodoPostits(todo_repo).execute(
+        ListMyStaffProjectTodoPostitsInput(
+            caller=CURATOR_BOB, completed=False, order_by_project=True
+        )
+    )
+    assert [postit.id for postit in by_project.items] == [first.id, second.id]
+
+    # A page reports the full total, not the slice it returned.
+    page_two = await ListMyStaffProjectTodoPostits(todo_repo).execute(
+        ListMyStaffProjectTodoPostitsInput(
+            caller=CURATOR_BOB, completed=False, page=1, size=1, order_by_project=True
+        )
+    )
+    assert [postit.id for postit in page_two.items] == [second.id]
+    assert page_two.total == 2
 
 
 def test_todo_text_is_trimmed_and_limited() -> None:

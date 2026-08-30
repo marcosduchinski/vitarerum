@@ -11,8 +11,20 @@ import { firstValueFrom } from 'rxjs';
 
 import { GroupName } from '@core/auth/models/group-name.enum';
 import { IDENTITY_SERVICE } from '@core/auth/identity.service';
-import { ProjectTodoPostit } from '@features/collections/projects/models/project.model';
+import {
+  ProjectTodoPostit,
+  ProjectTodoPostitsResponse,
+} from '@features/collections/projects/models/project.model';
 import { PROJECT_API_SERVICE } from '@features/collections/projects/services/project-api.service';
+
+const WIDGET_SIZE = 20;
+const EMPTY_POSTIT_PAGE: ProjectTodoPostitsResponse = {
+  content: [],
+  page: 0,
+  size: WIDGET_SIZE,
+  totalElements: 0,
+  totalPages: 0,
+};
 
 @Component({
   selector: 'app-dashboard',
@@ -38,13 +50,19 @@ export class DashboardComponent {
     }),
     loader: ({ params }) => {
       if (!params.group || !params.permissionId || !this.identity.isStaff()) {
-        return Promise.resolve({ items: [] });
+        return Promise.resolve(EMPTY_POSTIT_PAGE);
       }
-      return firstValueFrom(this.projectService.listMyTodoPostits({ completed: false, limit: 20 }));
+      return firstValueFrom(
+        this.projectService.listMyTodoPostits({ completed: false, page: 0, size: WIDGET_SIZE }),
+      );
     },
   });
   protected readonly postits = computed<readonly ProjectTodoPostit[]>(
-    () => this.postitsResource.value()?.items ?? [],
+    () => this.postitsResource.value()?.content ?? [],
+  );
+  /** How many the widget could not show; the full list lives on the TODO page. */
+  protected readonly hiddenPostitCount = computed(() =>
+    Math.max(0, (this.postitsResource.value()?.totalElements ?? 0) - this.postits().length),
   );
 
   /** A post-it links back to the tab it came from, not the project's default one. */
@@ -73,8 +91,12 @@ export class DashboardComponent {
     this.error.set(null);
     try {
       await firstValueFrom(this.projectService.completeTodoItem(item.projectId, item.id));
+      const current = this.postitsResource.value() ?? EMPTY_POSTIT_PAGE;
+      const remaining = this.postits().filter((candidate) => candidate.id !== item.id);
       this.postitsResource.set({
-        items: this.postits().filter((candidate) => candidate.id !== item.id),
+        ...current,
+        content: remaining,
+        totalElements: Math.max(0, current.totalElements - 1),
       });
     } catch {
       this.error.set('Could not complete the TODO item.');

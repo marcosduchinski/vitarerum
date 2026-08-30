@@ -114,11 +114,6 @@ export class ProjectsPendingPageComponent {
         command: () => this.goToDetail(projectId),
       },
       {
-        label: 'TODO List',
-        icon: 'pi pi-check-square',
-        command: () => this.goToDetail(projectId, 'todo'),
-      },
-      {
         label: 'Start',
         icon: 'pi pi-play',
         command: () => {
@@ -142,10 +137,9 @@ export class ProjectsPendingPageComponent {
   }
 
   /** Opens the staff detail page, optionally deep-linking into one of its tabs. */
-  private goToDetail(projectId: string, tab?: 'todo'): void {
+  private goToDetail(projectId: string): void {
     void this.router.navigate([...this.detailRoute(projectId)], {
       queryParams: {
-        ...(tab ? { tab } : {}),
         returnTo: '/p/collections/projects/pending',
         returnLabel: 'pending projects',
       },

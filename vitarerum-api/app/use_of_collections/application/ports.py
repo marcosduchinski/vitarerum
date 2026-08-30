@@ -109,8 +109,11 @@ class StaffProjectTodoRepository(Protocol):
         self,
         owner_permission_id: str,
         completed: bool | None,
+        project_id: CollectionUseProjectId | None,
+        order_by_project: bool,
+        offset: int,
         limit: int,
-    ) -> list[StaffProjectTodoPostit]: ...
+    ) -> tuple[list[StaffProjectTodoPostit], int]: ...
 
     async def get_by_id(
         self, item_id: StaffProjectTodoItemId

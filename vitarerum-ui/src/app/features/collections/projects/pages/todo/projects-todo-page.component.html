@@ -1,0 +1,161 @@
+<app-page-header
+  eyebrow="Projects"
+  title="TODO List"
+  description="Your follow-ups across every project, for the staff profile you are acting as."
+/>
+
+<section class="todo-compose" aria-labelledby="todo-compose-heading">
+  <h2 id="todo-compose-heading" class="todo-compose__heading">Add an item</h2>
+
+  <form (submit)="addItem($event)">
+    <app-project-picker
+      label="Project"
+      [selected]="selectedProject()"
+      [disabled]="adding()"
+      clearLabel="Clear"
+      (selectedChange)="onProjectSelected($event)"
+    />
+
+    <div class="todo-compose__text">
+      <div class="todo-compose__label-row">
+        <label for="todo-page-input">Item</label>
+        <span>{{ draftRemaining() }} characters left</span>
+      </div>
+      <div class="todo-compose__controls">
+        <input
+          id="todo-page-input"
+          type="text"
+          [attr.maxlength]="maxTextLength"
+          autocomplete="off"
+          placeholder="Add a project follow-up…"
+          [value]="draft()"
+          (input)="onDraftInput($event)"
+        />
+        <button type="submit" [disabled]="!canAdd()">
+          @if (adding()) {
+            <span class="pi pi-spin pi-spinner" aria-hidden="true"></span>
+            Adding
+          } @else {
+            <span class="pi pi-plus" aria-hidden="true"></span>
+            Add
+          }
+        </button>
+      </div>
+      @if (!selectedProject()) {
+        <p class="todo-compose__hint">Every item belongs to a project — choose one first.</p>
+      }
+    </div>
+  </form>
+</section>
+
+<section class="todo-filters" aria-label="Filter TODO items">
+  <div class="todo-filters__group" role="group" aria-label="Status">
+    <button
+      type="button"
+      [class.is-active]="filter() === 'open'"
+      [attr.aria-pressed]="filter() === 'open'"
+      (click)="selectFilter('open')"
+    >
+      Open
+    </button>
+    <button
+      type="button"
+      [class.is-active]="filter() === 'completed'"
+      [attr.aria-pressed]="filter() === 'completed'"
+      (click)="selectFilter('completed')"
+    >
+      Completed
+    </button>
+    <button
+      type="button"
+      [class.is-active]="filter() === 'all'"
+      [attr.aria-pressed]="filter() === 'all'"
+      (click)="selectFilter('all')"
+    >
+      All
+    </button>
+  </div>
+
+  @if (selectedProject(); as project) {
+    <label class="todo-filters__scope">
+      <input
+        type="checkbox"
+        [checked]="filterBySelectedProject()"
+        (change)="toggleProjectFilter($event)"
+      />
+      Only {{ project.referenceNumber }}
+    </label>
+  }
+</section>
+
+@if (actionError()) {
+  <app-error-message [message]="actionError()!" />
+}
+
+@if (todosResource.isLoading()) {
+  <app-loading-state label="Loading TODO items…" />
+} @else if (loadError()) {
+  <app-error-message title="Could not load your TODO list" [apiError]="loadError()" />
+} @else if (!groups().length) {
+  <app-empty-state
+    title="Nothing here yet"
+    message="No TODO items match this filter for the staff profile you are acting as."
+  />
+} @else {
+  <ul class="todo-groups">
+    @for (group of groups(); track group.projectId) {
+      <li class="todo-group">
+        <header class="todo-group__header">
+          <a
+            class="todo-group__project"
+            [routerLink]="todoTabRoute(group.projectId)"
+            [queryParams]="todoTabQueryParams"
+            [title]="group.referenceNumber + ' — ' + group.title"
+          >
+            <span class="todo-group__reference">{{ group.referenceNumber }}</span>
+            <span class="todo-group__title">{{ group.title }}</span>
+          </a>
+          <app-status-chip kind="project" [status]="group.status" />
+        </header>
+
+        <ul class="todo-list">
+          @for (item of group.items; track item.id) {
+            <li class="todo-item" [class.todo-item--completed]="item.completed">
+              <label class="todo-item__check">
+                <input
+                  type="checkbox"
+                  [checked]="item.completed"
+                  [disabled]="busyItemId() === item.id"
+                  (change)="setCompleted(item, $event)"
+                />
+                <span class="todo-item__body">
+                  <strong>{{ item.text }}</strong>
+                  <small>{{ item.completed ? 'Completed' : 'Open' }}</small>
+                </span>
+              </label>
+              <button
+                type="button"
+                class="todo-item__remove"
+                [disabled]="busyItemId() === item.id"
+                [attr.aria-label]="'Remove ' + item.text"
+                (click)="removeItem(item)"
+              >
+                <span class="pi pi-trash" aria-hidden="true"></span>
+              </button>
+            </li>
+          }
+        </ul>
+      </li>
+    }
+  </ul>
+
+  <app-pagination
+    [page]="currentPage()"
+    [totalPages]="totalPages()"
+    [total]="total()"
+    [pageSize]="pageSize"
+    itemLabel="TODO items"
+    (previous)="previousPage()"
+    (next)="nextPage()"
+  />
+}

@@ -365,15 +365,14 @@ export class ProjectApiServiceMock {
 
   listMyTodoPostits(query: ProjectTodoPostitsQuery = {}): Observable<ProjectTodoPostitsResponse> {
     const permissionId = this.identity.getPermissionId() ?? 'anonymous';
-    const completed = query.completed ?? false;
-    const limit = Math.max(1, Math.min(100, query.limit ?? 20));
     const items: ProjectTodoPostit[] = [];
 
     for (const project of this.state.projects.values()) {
+      if (query.projectId && project.id !== query.projectId) continue;
       const projectItems =
         this.state.todoItems.get(this.todoKeyFor(project.id, permissionId)) ?? [];
       for (const item of projectItems) {
-        if (query.completed !== undefined && item.completed !== completed) continue;
+        if (query.completed !== undefined && item.completed !== query.completed) continue;
         items.push({
           ...item,
           projectReferenceNumber: project.referenceNumber,
@@ -383,14 +382,25 @@ export class ProjectApiServiceMock {
       }
     }
 
-    items.sort((a, b) => {
-      const updated = b.updatedAt.localeCompare(a.updatedAt);
-      if (updated !== 0) return updated;
-      const created = b.createdAt.localeCompare(a.createdAt);
-      if (created !== 0) return created;
-      return a.id.localeCompare(b.id);
-    });
-    return of({ items: items.slice(0, limit) });
+    if (query.sort === 'project') {
+      items.sort((a, b) => {
+        const reference = a.projectReferenceNumber.localeCompare(b.projectReferenceNumber);
+        if (reference !== 0) return reference;
+        if (a.position !== b.position) return a.position - b.position;
+        const created = a.createdAt.localeCompare(b.createdAt);
+        if (created !== 0) return created;
+        return a.id.localeCompare(b.id);
+      });
+    } else {
+      items.sort((a, b) => {
+        const updated = b.updatedAt.localeCompare(a.updatedAt);
+        if (updated !== 0) return updated;
+        const created = b.createdAt.localeCompare(a.createdAt);
+        if (created !== 0) return created;
+        return a.id.localeCompare(b.id);
+      });
+    }
+    return of(makePageFrom(items, query));
   }
 
   createTodoItem(

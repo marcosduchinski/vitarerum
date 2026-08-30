@@ -175,11 +175,6 @@ export class ProjectsMyPageComponent {
         command: () => this.goToDetail(projectId),
       },
       {
-        label: 'TODO List',
-        icon: 'pi pi-check-square',
-        command: () => this.goToDetail(projectId, 'todo'),
-      },
-      {
         label: 'Conclude',
         icon: 'pi pi-check',
         command: () => this.requestConcludeConfirmation(projectId),
@@ -208,10 +203,9 @@ export class ProjectsMyPageComponent {
   /** Opens the staff detail page, optionally deep-linking into one of its tabs.
    *  Only reachable from the staff branch: an external requester's detail page
    *  is a different component with no tabs. */
-  private goToDetail(projectId: string, tab?: 'todo'): void {
+  private goToDetail(projectId: string): void {
     void this.router.navigate([...this.detailRoute(projectId)], {
       queryParams: {
-        ...(tab ? { tab } : {}),
         returnTo: '/p/collections/projects/my',
         returnLabel: 'my projects',
       },

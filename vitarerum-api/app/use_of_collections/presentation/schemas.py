@@ -630,7 +630,11 @@ class ProjectTodoPostitResponse(ProjectTodoItemResponse):
 
 
 class ProjectTodoPostitsResponse(BaseModel):
-    items: list[ProjectTodoPostitResponse]
+    content: list[ProjectTodoPostitResponse]
+    page: int
+    size: int
+    totalElements: int
+    totalPages: int
 
 
 class ErrorResponse(BaseModel):

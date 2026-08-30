@@ -74,7 +74,7 @@ class IdentityStub {
 }
 
 class ProjectApiStub {
-  items: ProjectTodoPostitsResponse['items'] = [
+  items: ProjectTodoPostitsResponse['content'] = [
     {
       id: 'todo-1',
       projectId: 'project-1',
@@ -91,7 +91,13 @@ class ProjectApiStub {
   ];
 
   listMyTodoPostits(): Observable<ProjectTodoPostitsResponse> {
-    return of({ items: this.items });
+    return of({
+      content: this.items,
+      page: 0,
+      size: 20,
+      totalElements: this.items.length,
+      totalPages: this.items.length ? 1 : 0,
+    });
   }
 
   completeTodoItem(projectId: string, itemId: string): Observable<ProjectTodoItem> {
@@ -137,8 +143,12 @@ describe('DashboardComponent', () => {
     expect(compiled.textContent).toContain('Condition report');
     expect(compiled.textContent).toContain('Confirm handling conditions');
     // A post-it deep-links into the project's TODO tab, where it came from.
-    expect(compiled.querySelector('a')?.getAttribute('href')).toBe(
+    expect(compiled.querySelector('.postit__project')?.getAttribute('href')).toBe(
       '/p/collections/projects/curatorial/project-1?tab=todo',
+    );
+    // ...and the header offers the full list.
+    expect(compiled.querySelector('.postits__all')?.getAttribute('href')).toBe(
+      '/p/collections/projects/todo',
     );
   });
 

@@ -27,6 +27,13 @@ export const PROJECTS_ROUTES: Routes = [
       ),
   },
   {
+    path: 'todo',
+    title: 'TODO List',
+    canMatch: [staffGuard],
+    loadComponent: () =>
+      import('./pages/todo/projects-todo-page.component').then((m) => m.ProjectsTodoPageComponent),
+  },
+  {
     path: 'my',
     title: 'My Projects',
     loadComponent: () =>
