@@ -16,10 +16,11 @@
 #                       configuration refuses to start an investigation
 #
 # Usage:
-#   ./scripts/bench.sh --project <uuid> --samples scripts/bench_samples.example.csv
-#   ./scripts/bench.sh --project <uuid> --samples my.csv --out run.json --dry-run
+#   ./scripts/full_agentic/bench.sh --project <uuid> \
+#       --samples scripts/full_agentic/bench_samples.example.csv
+#   ./scripts/full_agentic/bench.sh --project <uuid> --samples my.csv --dry-run
 #
-# Any further arguments are passed through to scripts/bench_full_agentic.py.
+# Any further arguments are passed through to bench_full_agentic.py.
 #
 # The API itself is not needed: the bench drives the use cases directly. To
 # inspect the results in the panel afterwards:
@@ -27,7 +28,13 @@
 
 set -euo pipefail
 
-cd "$(dirname "$0")/.."
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# Walk up to the project root rather than counting directories, so filing this
+# script deeper does not break it.
+ROOT="$HERE"
+while [ ! -d "$ROOT/app" ] && [ "$ROOT" != "/" ]; do ROOT="$(dirname "$ROOT")"; done
+[ -d "$ROOT/app" ] || { echo "could not find the project root" >&2; exit 1; }
+cd "$ROOT"
 
 RUN="${RUN:-uv run}"
 say() { printf '\n\033[1m%s\033[0m\n' "$*"; }
@@ -82,4 +89,4 @@ print(f"     reasoning {'ON' if settings.scientific_return_llm_reasoning else 'o
 PY
 
 say "5/5  Bench"
-exec $RUN python scripts/bench_full_agentic.py "$@"
+exec $RUN python "$HERE/bench_full_agentic.py" "$@"

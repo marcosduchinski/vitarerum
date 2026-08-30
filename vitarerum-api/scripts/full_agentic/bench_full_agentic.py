@@ -39,7 +39,20 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+def _project_root() -> Path:
+    """Walk up to the directory holding ``app``, wherever this script sits.
+
+    Counting parent directories breaks the moment the file is moved, which is
+    exactly what happened when it was filed under ``scripts/full_agentic/``.
+    """
+    for candidate in Path(__file__).resolve().parents:
+        if (candidate / "app").is_dir():
+            return candidate
+    raise SystemExit("could not find the project root: no ancestor contains app/")
+
+
+sys.path.insert(0, str(_project_root()))
 
 from sqlalchemy import text  # noqa: E402
 
@@ -268,8 +281,18 @@ async def refresh_snapshot(target: Target) -> tuple[str, dict[str, str]]:
 
 
 async def run_investigation(
-    watch_id: str, reference: str, deadline_seconds: float, passes: int
+    watch_id: str,
+    reference: str,
+    object_id: str,
+    deadline_seconds: float,
+    passes: int,
 ) -> dict[str, object]:
+    """One investigation, targeting the object the sample was written into.
+
+    Without the object the investigation covers the whole project, and its floor
+    spends the reservation on whichever object comes first — which on a project
+    of several objects is not necessarily the one under test.
+    """
     async with async_session_factory() as session:
         investigation = await get_full_agentic_starter(session).execute_scheduled(
             StartFullAgenticInput(
@@ -278,6 +301,7 @@ async def run_investigation(
                 candidate_id=None,
                 idempotency_key=f"bench:{reference}:{uuid4()}",
                 caller=BENCH,
+                object_id=object_id,
             )
         )
         await session.commit()
@@ -418,7 +442,11 @@ async def main() -> int:
                 )
                 watch_id, snapshot = await refresh_snapshot(target)
                 outcome = await run_investigation(
-                    watch_id, sample.reference_number, args.deadline, args.passes
+                    watch_id,
+                    sample.reference_number,
+                    target.object_id,
+                    args.deadline,
+                    args.passes,
                 )
             except Exception as exc:  # noqa: BLE001 - one bad sample must not end the run
                 print(f"    ERROR {type(exc).__name__}: {exc}", flush=True)
