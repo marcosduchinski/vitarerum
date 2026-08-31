@@ -18,4 +18,14 @@ export class ProposalEventsSectionComponent {
   readonly loading = input.required<boolean>();
 
   protected readonly formatDateTime = formatProposalDetailDateTime;
+
+  protected eventLabel(event: ProposalEvent): string {
+    if (event.type === 'REFERRED_TO_DIRECTION') return 'Sent to Direction';
+    if (event.type === 'DIRECTION_CLARIFIED') return 'Returned to staff';
+    return event.type.replaceAll('_', ' ');
+  }
+
+  protected isDirectionEvent(event: ProposalEvent): boolean {
+    return event.type === 'REFERRED_TO_DIRECTION' || event.type === 'DIRECTION_CLARIFIED';
+  }
 }

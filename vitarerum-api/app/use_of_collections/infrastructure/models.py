@@ -421,6 +421,9 @@ class ProposalEventRecord(Base):
     triggered_by: Mapped[str | None] = mapped_column(
         String(36), index=True, nullable=True
     )
+    target_permission_id: Mapped[str | None] = mapped_column(
+        String(36), index=True, nullable=True
+    )
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     proposal: Mapped[ProposalRecord] = relationship(back_populates="events")

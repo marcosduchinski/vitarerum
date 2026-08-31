@@ -117,6 +117,7 @@ export interface ProposalEvent {
   readonly occurredAt: string;
   readonly type: ProposalEventType;
   readonly triggeredBy: PermissionPrincipal;
+  readonly targetPermission?: PermissionPrincipal | null;
   readonly note: string | null;
 }
 

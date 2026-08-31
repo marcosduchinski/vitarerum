@@ -94,6 +94,7 @@ class ProposalEventResponse(BaseModel):
     occurredAt: datetime
     type: ProposalEventType
     triggeredBy: PermissionDetail | None = None
+    targetPermission: PermissionDetail | None = None
     note: str | None
 
 
@@ -321,6 +322,16 @@ class UpdateProjectTodoItemRequest(BaseModel):
 class ForwardProposalRequest(BaseModel):
     targetPermissionId: str
     note: str | None = None
+
+
+class ReferProposalToDirectionRequest(BaseModel):
+    targetPermissionId: str
+    reason: str = Field(min_length=1)
+
+
+class ReturnProposalToStaffRequest(BaseModel):
+    targetPermissionId: str
+    reason: str = Field(min_length=1)
 
 
 class NoteRequest(BaseModel):

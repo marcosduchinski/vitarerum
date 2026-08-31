@@ -106,6 +106,10 @@ export class AppTopbarComponent {
         return `New proposal ${label} was submitted.`;
       case 'PROPOSAL_FORWARDED':
         return `${actor} forwarded ${label} to you.`;
+      case 'PROPOSAL_REFERRED_TO_DIRECTION':
+        return `${actor} sent ${label} to Direction: ${notification.note ?? ''}`.trim();
+      case 'PROPOSAL_RETURNED_TO_STAFF':
+        return `${actor} returned ${label} to staff: ${notification.note ?? ''}`.trim();
       case 'PROPOSAL_TAKEN_OVER':
         return `${actor} took over ${label}.`;
       case 'PROPOSAL_DOCUMENTS_SUBMITTED':
@@ -128,6 +132,12 @@ export class AppTopbarComponent {
 
   protected notificationLink(notification: Notification): string | null {
     if (notification.relatedResourceType === 'PROPOSAL' && notification.relatedResourceId) {
+      if (notification.kind === 'PROPOSAL_REFERRED_TO_DIRECTION') {
+        return `/p/collections/proposals/my-assignments/${notification.relatedResourceId}/direction?tab=events`;
+      }
+      if (notification.kind === 'PROPOSAL_RETURNED_TO_STAFF') {
+        return `/p/collections/proposals/my-assignments/${notification.relatedResourceId}?tab=overview`;
+      }
       if (
         notification.kind === 'PROPOSAL_DOCUMENTS_SUBMITTED' ||
         notification.kind === 'PROPOSAL_CORRECTIONS_SUBMITTED'

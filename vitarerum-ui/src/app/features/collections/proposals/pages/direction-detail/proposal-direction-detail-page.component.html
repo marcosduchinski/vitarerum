@@ -1,0 +1,147 @@
+<div class="proposal-detail">
+  <a class="proposal-detail__back" routerLink="/p/collections/proposals/my-assignments">
+    Back to Direction reviews
+  </a>
+
+  @if (proposalResource.isLoading()) {
+    <app-loading-state />
+  } @else if (error()) {
+    <app-error-message [apiError]="error()!" (retry)="proposalResource.reload()" />
+  } @else if (proposal()) {
+    <header class="proposal-detail__header">
+      <div class="proposal-detail__header-meta">
+        <p class="proposal-detail__ref">{{ proposal()!.referenceNumber }}</p>
+        <h1 class="proposal-detail__title">{{ proposal()!.title || 'Untitled proposal' }}</h1>
+        <div class="proposal-detail__status-row">
+          <app-status-chip kind="proposal" [status]="asWorkflowStatus(proposal()!.status)" />
+          <app-type-chip [type]="proposal()!.type" />
+          <span class="direction-badge">Direction review</span>
+        </div>
+      </div>
+    </header>
+
+    @if (!isCurrentAssignment()) {
+      <div class="direction-notice" role="status">
+        This proposal is no longer assigned to your active Direction permission.
+      </div>
+    }
+    @if (actionError()) {
+      <app-error-message [apiError]="actionError()!" />
+    }
+
+    <nav class="proposal-detail__tabs" aria-label="Direction review sections" role="tablist">
+      @for (item of tabs; track item.id) {
+        <button
+          type="button"
+          class="proposal-detail__tab"
+          [class.proposal-detail__tab--active]="activePanel() === item.id"
+          role="tab"
+          [attr.aria-selected]="activePanel() === item.id"
+          [attr.aria-controls]="item.id + '-panel'"
+          [attr.tabindex]="activePanel() === item.id ? 0 : -1"
+          (click)="selectPanel(item.id)"
+          (keydown)="onTabKeydown($event, $index)"
+        >
+          {{ item.label }}
+        </button>
+      }
+    </nav>
+
+    @switch (activePanel()) {
+      @case ('overview') {
+        <section id="overview-panel" class="proposal-detail__panel" role="tabpanel">
+          <app-proposal-overview-section [proposal]="proposal()!" />
+        </section>
+      }
+      @case ('events') {
+        <section id="events-panel" class="proposal-detail__panel" role="tabpanel">
+          <app-proposal-events-section [events]="events()" [loading]="eventsResource.isLoading()" />
+        </section>
+      }
+      @case ('documents') {
+        <section id="documents-panel" class="proposal-detail__panel" role="tabpanel">
+          <app-proposal-documents-section
+            [proposalId]="id()"
+            [documents]="proposal()!.documents"
+            [status]="proposal()!.status"
+            [correctionItems]="proposal()!.correctionItems ?? []"
+            [canManage]="false"
+          />
+        </section>
+      }
+      @case ('objects') {
+        <section id="objects-panel" class="proposal-detail__panel" role="tabpanel">
+          <app-proposal-objects-section
+            [objects]="proposal()!.requestedObjects"
+            [canManage]="false"
+          />
+        </section>
+      }
+      @case ('actions') {
+        <section id="actions-panel" class="proposal-detail__panel actions-panel" role="tabpanel">
+          <div class="action-group">
+            <p class="action-group__title">Direction decision</p>
+            <div class="task-row">
+              <span class="task-row__icon" aria-hidden="true"
+                ><span class="pi pi-reply"></span
+              ></span>
+              <div class="task-row__body">
+                <h2 class="task-row__title">Return to the Staff</h2>
+                <p class="task-row__desc">
+                  Return this proposal with Direction's mandatory response recorded in the Event
+                  Log.
+                </p>
+              </div>
+              <button
+                type="button"
+                class="action-btn action-btn--primary task-row__control"
+                [disabled]="returning() || !isCurrentAssignment()"
+                (click)="openReturnModal()"
+              >
+                {{ returning() ? 'Returning...' : 'Return to the Staff' }}
+              </button>
+            </div>
+          </div>
+        </section>
+      }
+    }
+
+    <app-confirm-modal
+      [open]="returnModalOpen()"
+      title="Return proposal to staff"
+      confirmLabel="Return to the Staff"
+      cancelLabel="Cancel"
+      [pending]="returning()"
+      [confirmDisabled]="!targetPermissionId() || !reason().trim() || usersResource.isLoading()"
+      (confirmed)="returnToStaff()"
+      (cancelled)="closeReturnModal()"
+    >
+      <div class="forward-modal-body">
+        @if (usersResource.isLoading()) {
+          <app-loading-state label="Loading staff members..." />
+        } @else {
+          <label for="return-target">Staff member</label>
+          <select
+            id="return-target"
+            [value]="targetPermissionId()"
+            (change)="onTargetChange($event)"
+          >
+            <option value="" disabled>Select a staff member...</option>
+            @for (option of staffOptions(); track option.permissionId) {
+              <option [value]="option.permissionId">{{ option.label }}</option>
+            }
+          </select>
+          <label for="return-reason">Reason / response to staff</label>
+          <textarea
+            id="return-reason"
+            rows="4"
+            required
+            placeholder="Record Direction's response and guidance..."
+            [value]="reason()"
+            (input)="onReasonInput($event)"
+          ></textarea>
+        }
+      </div>
+    </app-confirm-modal>
+  }
+</div>

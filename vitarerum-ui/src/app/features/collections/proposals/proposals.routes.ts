@@ -3,6 +3,10 @@ import { Routes } from '@angular/router';
 import { externalGuard } from '@core/guards/external.guard';
 import { staffGuard } from '@core/guards/staff.guard';
 import { providePublicSubmission } from '@core/providers/provide-public-submission';
+import {
+  directionProposalGuard,
+  standardProposalDetailGuard,
+} from './guards/proposal-direction.guard';
 
 export const PROPOSALS_ROUTES: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'new' },
@@ -42,13 +46,25 @@ export const PROPOSALS_ROUTES: Routes = [
     path: 'my-assignments/:id/edit',
     title: 'Edit Proposal',
     canMatch: [staffGuard],
+    canActivate: [standardProposalDetailGuard],
     loadComponent: () =>
       import('./pages/edit/proposal-edit-page.component').then((m) => m.ProposalEditPageComponent),
+  },
+  {
+    path: 'my-assignments/:id/direction',
+    title: 'Direction Review',
+    canMatch: [staffGuard],
+    canActivate: [directionProposalGuard],
+    loadComponent: () =>
+      import('./pages/direction-detail/proposal-direction-detail-page.component').then(
+        (m) => m.ProposalDirectionDetailPageComponent,
+      ),
   },
   {
     path: 'my-assignments/:id',
     title: 'My Assignment',
     canMatch: [staffGuard],
+    canActivate: [standardProposalDetailGuard],
     loadComponent: () =>
       import('./pages/my-detail/proposal-my-detail-page.component').then(
         (m) => m.ProposalMyDetailPageComponent,

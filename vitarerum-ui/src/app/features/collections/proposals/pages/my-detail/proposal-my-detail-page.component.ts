@@ -12,6 +12,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 
 import { groupNameOf } from '@core/auth/models/permission.model';
+import { IDENTITY_SERVICE } from '@core/auth/identity.service';
 import { ApiError, toApiError } from '@core/http/api-error.model';
 import { USER_MANAGEMENT_SERVICE } from '@features/admin/services/user-management.service';
 import { ConfirmModalComponent } from '@shared/components/confirm-modal/confirm-modal.component';
@@ -61,6 +62,7 @@ type MyDetailPanel = 'overview' | 'objects' | 'documents' | 'conversation' | 'ac
   styleUrl: './proposal-my-detail-page.component.scss',
 })
 export class ProposalMyDetailPageComponent {
+  private readonly identity = inject(IDENTITY_SERVICE);
   private readonly proposalService = inject(PROPOSAL_API_SERVICE);
   private readonly userService = inject(USER_MANAGEMENT_SERVICE);
   private readonly router = inject(Router);
@@ -93,6 +95,10 @@ export class ProposalMyDetailPageComponent {
     loader: () => firstValueFrom(this.userService.listUsers({ size: 100 })),
   });
 
+  protected readonly directionUsersResource = resource({
+    loader: () => firstValueFrom(this.userService.listUsers({ size: 100 })),
+  });
+
   protected readonly proposal = computed(() => this.proposalResource.value() ?? null);
   protected readonly messages = computed(() => this.conversationResource.value()?.messages ?? []);
   protected readonly events = computed(() => this.eventsResource.value()?.content ?? []);
@@ -100,7 +106,9 @@ export class ProposalMyDetailPageComponent {
     (this.staffUsersResource.value()?.content ?? []).flatMap((u) =>
       u.permissions.flatMap((p) => {
         const groupName = groupNameOf(p.group);
-        if (groupName === 'EXTERNAL') return [];
+        if (groupName === 'EXTERNAL' || groupName === 'DIRECTION' || u.status === 'DISABLED') {
+          return [];
+        }
         return [
           {
             label: `${u.name} - ${PROPOSAL_DETAIL_GROUP_LABELS[groupName]}`,
@@ -108,6 +116,15 @@ export class ProposalMyDetailPageComponent {
           },
         ];
       }),
+    ),
+  );
+  protected readonly directionOptions = computed<StaffOption[]>(() =>
+    (this.directionUsersResource.value()?.content ?? []).flatMap((u) =>
+      u.permissions.flatMap((p) =>
+        groupNameOf(p.group) === 'DIRECTION' && u.status !== 'DISABLED'
+          ? [{ label: `${u.name} - Direction`, permissionId: p.permissionId }]
+          : [],
+      ),
     ),
   );
   protected readonly proposalError = computed<ApiError | null>(() => {
@@ -122,9 +139,13 @@ export class ProposalMyDetailPageComponent {
   protected readonly acceptConfirmOpen = signal(false);
   protected readonly rejectModalOpen = signal(false);
   protected readonly forwardModalOpen = signal(false);
+  protected readonly sendDirectionModalOpen = signal(false);
   protected readonly rejectionReason = signal('');
   protected readonly forwardTargetPermissionId = signal('');
   protected readonly forwardNote = signal('');
+  protected readonly directionTargetPermissionId = signal('');
+  protected readonly directionReason = signal('');
+  protected readonly sendingToDirection = signal(false);
   protected readonly replyResetVersion = signal(0);
   protected readonly sendingMessage = signal(false);
   protected readonly actionError = signal<ApiError | null>(null);
@@ -140,6 +161,13 @@ export class ProposalMyDetailPageComponent {
   protected readonly addObjectError = signal<ApiError | null>(null);
 
   protected readonly canDecide = computed(() => this.proposal()?.status === 'PENDING');
+  protected readonly canSendToDirection = computed(() => {
+    const group = this.identity.session()?.group;
+    return (
+      this.proposal()?.status === 'PENDING' &&
+      (group === 'CURATORIAL' || group === 'COLLECTIONS_MANAGEMENT')
+    );
+  });
   protected readonly canEdit = computed(() => {
     const status = this.proposal()?.status;
     return status === 'SUBMITTED' || status === 'PENDING';
@@ -220,6 +248,47 @@ export class ProposalMyDetailPageComponent {
 
   protected closeForwardModal(): void {
     this.forwardModalOpen.set(false);
+  }
+
+  protected openSendDirectionModal(): void {
+    this.directionTargetPermissionId.set('');
+    this.directionReason.set('');
+    this.actionError.set(null);
+    this.sendDirectionModalOpen.set(true);
+  }
+
+  protected closeSendDirectionModal(): void {
+    this.sendDirectionModalOpen.set(false);
+  }
+
+  protected onDirectionTargetChange(event: Event): void {
+    this.directionTargetPermissionId.set((event.target as HTMLSelectElement).value);
+  }
+
+  protected onDirectionReasonInput(event: Event): void {
+    this.directionReason.set((event.target as HTMLTextAreaElement).value);
+  }
+
+  protected async sendToDirection(): Promise<void> {
+    const targetPermissionId = this.directionTargetPermissionId();
+    const reason = this.directionReason().trim();
+    if (!targetPermissionId || !reason || this.sendingToDirection()) return;
+    this.sendingToDirection.set(true);
+    this.actionError.set(null);
+    try {
+      await firstValueFrom(
+        this.proposalService.referProposalToDirection(this.id(), {
+          targetPermissionId,
+          reason,
+        }),
+      );
+      this.sendDirectionModalOpen.set(false);
+      await this.router.navigate(['/p/collections/proposals/my-assignments']);
+    } catch (err) {
+      this.actionError.set(toApiError(err));
+    } finally {
+      this.sendingToDirection.set(false);
+    }
   }
 
   protected onForwardTargetChange(event: Event): void {

@@ -15,6 +15,8 @@ import {
   ProposalDecisionResult,
   ProposalReasonRequest,
   RequestDocumentCorrectionsRequest,
+  ReferProposalToDirectionRequest,
+  ReturnProposalToStaffRequest,
   UpdateProposalRequest,
 } from '../models/proposal-actions.model';
 import {
@@ -373,7 +375,9 @@ export class ProposalApiServiceMock {
   }
 
   listEvents(proposalId: string, query: PageQuery = {}): Observable<ProposalEventsPage> {
-    const evts = this.events.get(proposalId) ?? [];
+    const evts = [...(this.events.get(proposalId) ?? [])].sort(
+      (left, right) => Date.parse(right.occurredAt) - Date.parse(left.occurredAt),
+    );
     return of({ ...makePageFrom(evts, query), proposalId });
   }
 
@@ -477,6 +481,32 @@ export class ProposalApiServiceMock {
     );
     this.pushEvent(proposalId, evt);
     return of({ id: proposalId, status: proposal.status, assignedTo, lastEvent: evt });
+  }
+
+  referProposalToDirection(
+    proposalId: string,
+    request: ReferProposalToDirectionRequest,
+  ): Observable<ProposalAssignmentResult> {
+    return this.directionTransfer(
+      proposalId,
+      request,
+      'REFERRED_TO_DIRECTION',
+      ['DIRECTION'],
+      ['CURATORIAL', 'COLLECTIONS_MANAGEMENT'],
+    );
+  }
+
+  returnProposalToStaff(
+    proposalId: string,
+    request: ReturnProposalToStaffRequest,
+  ): Observable<ProposalAssignmentResult> {
+    return this.directionTransfer(
+      proposalId,
+      request,
+      'DIRECTION_CLARIFIED',
+      ['CURATORIAL', 'COLLECTIONS_MANAGEMENT'],
+      ['DIRECTION'],
+    );
   }
 
   approveProposal(
@@ -607,6 +637,41 @@ export class ProposalApiServiceMock {
     const evts = this.events.get(proposalId) ?? [];
     evts.push(evt);
     this.events.set(proposalId, evts);
+  }
+
+  private directionTransfer(
+    proposalId: string,
+    request: ReferProposalToDirectionRequest | ReturnProposalToStaffRequest,
+    eventType: 'REFERRED_TO_DIRECTION' | 'DIRECTION_CLARIFIED',
+    targetGroups: readonly PermissionPrincipal['group'][],
+    callerGroups: readonly PermissionPrincipal['group'][],
+  ): Observable<ProposalAssignmentResult> {
+    const proposal = this.proposals.get(proposalId);
+    const caller = this.currentPrincipal();
+    const target = this.findPrincipalByPermissionId(request.targetPermissionId);
+    if (!proposal) return throwError(() => ({ status: 404, error: 'NOT_FOUND' }));
+    if (!callerGroups.includes(caller.group)) {
+      return throwError(() => ({ status: 403, error: 'INSUFFICIENT_GROUP' }));
+    }
+    if (proposal.status !== 'PENDING' || proposal.assignedTo?.permissionId !== caller.permissionId) {
+      return throwError(() => ({ status: 409, error: 'INVALID_TRANSITION' }));
+    }
+    if (!request.reason.trim()) {
+      return throwError(() => ({ status: 422, error: 'VALIDATION_ERROR' }));
+    }
+    if (!target || !targetGroups.includes(target.group)) {
+      return throwError(() => ({ status: 422, error: 'INVALID_PERMISSION_TARGET' }));
+    }
+    const evt: ProposalEvent = {
+      occurredAt: new Date().toISOString(),
+      type: eventType,
+      triggeredBy: caller,
+      targetPermission: target,
+      note: request.reason.trim(),
+    };
+    this.proposals.set(proposalId, { ...proposal, assignedTo: target });
+    this.pushEvent(proposalId, evt);
+    return of({ id: proposalId, status: proposal.status, assignedTo: target, lastEvent: evt });
   }
 
   private currentPrincipal(): PermissionPrincipal {

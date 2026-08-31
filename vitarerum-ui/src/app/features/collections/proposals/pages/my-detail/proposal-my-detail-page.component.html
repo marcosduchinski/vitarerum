@@ -66,6 +66,50 @@
     </app-confirm-modal>
 
     <app-confirm-modal
+      [open]="sendDirectionModalOpen()"
+      title="Send proposal to Direction"
+      confirmLabel="Send to Direction"
+      cancelLabel="Cancel"
+      tone="warning"
+      [pending]="sendingToDirection()"
+      [confirmDisabled]="
+        !directionTargetPermissionId() ||
+        !directionReason().trim() ||
+        directionUsersResource.isLoading()
+      "
+      (confirmed)="sendToDirection()"
+      (cancelled)="closeSendDirectionModal()"
+    >
+      <div class="forward-modal-body">
+        <p>{{ proposal()!.referenceNumber }} — {{ proposal()!.title || 'Untitled proposal' }}</p>
+        @if (directionUsersResource.isLoading()) {
+          <app-loading-state label="Loading Direction members..." />
+        } @else {
+          <label for="direction-target">Direction member</label>
+          <select
+            id="direction-target"
+            [value]="directionTargetPermissionId()"
+            (change)="onDirectionTargetChange($event)"
+          >
+            <option value="" disabled>Select a Direction member...</option>
+            @for (opt of directionOptions(); track opt.permissionId) {
+              <option [value]="opt.permissionId">{{ opt.label }}</option>
+            }
+          </select>
+          <label for="direction-reason">Reason</label>
+          <textarea
+            id="direction-reason"
+            rows="4"
+            required
+            placeholder="Explain why Direction review is required..."
+            [value]="directionReason()"
+            (input)="onDirectionReasonInput($event)"
+          ></textarea>
+        }
+      </div>
+    </app-confirm-modal>
+
+    <app-confirm-modal
       [open]="acceptConfirmOpen()"
       title="Accept proposal?"
       confirmLabel="Accept proposal"
@@ -318,6 +362,28 @@
                   {{ forwarding() ? 'Forwarding...' : 'Forward' }}
                 </button>
               </div>
+
+              @if (canSendToDirection()) {
+                <div class="task-row" aria-labelledby="direction-task-heading">
+                  <span class="task-row__icon" aria-hidden="true">
+                    <span class="pi pi-building"></span>
+                  </span>
+                  <div class="task-row__body">
+                    <h3 id="direction-task-heading" class="task-row__title">Send to Direction</h3>
+                    <p class="task-row__desc">
+                      Request Direction review and record the mandatory reason in the Event Log.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    class="action-btn task-row__control"
+                    [disabled]="accepting() || rejecting() || forwarding() || sendingToDirection()"
+                    (click)="openSendDirectionModal()"
+                  >
+                    {{ sendingToDirection() ? 'Sending...' : 'Send to Direction' }}
+                  </button>
+                </div>
+              }
             </div>
           }
 

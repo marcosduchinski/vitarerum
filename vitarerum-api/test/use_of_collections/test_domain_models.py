@@ -160,6 +160,60 @@ def test_assign_proposal_records_assigned_event() -> None:
     assert proposal.events[-1].type == ProposalEventType.ASSIGNED
 
 
+def test_refer_to_direction_changes_assignee_and_records_reason_and_target() -> None:
+    proposal = _make_proposal(assigned_to=PermissionId("staff-1"))
+
+    proposal.refer_to_direction(
+        occurred_at=_now(),
+        triggered_by=PermissionId("staff-1"),
+        target_permission_id=PermissionId("direction-1"),
+        reason="  Institutional risk review  ",
+    )
+
+    event = proposal.events[-1]
+    assert proposal.assigned_to == "direction-1"
+    assert event.type == ProposalEventType.REFERRED_TO_DIRECTION
+    assert event.note == "Institutional risk review"
+    assert event.target_permission_id == "direction-1"
+
+
+def test_return_to_staff_requires_reason_and_current_direction_assignee() -> None:
+    proposal = _make_proposal(assigned_to=PermissionId("direction-1"))
+
+    with pytest.raises(ValueError, match="reason is required"):
+        proposal.return_to_staff(
+            occurred_at=_now(),
+            triggered_by=PermissionId("direction-1"),
+            target_permission_id=PermissionId("staff-1"),
+            reason="   ",
+        )
+
+    with pytest.raises(InvalidTransition, match="current assignee"):
+        proposal.return_to_staff(
+            occurred_at=_now(),
+            triggered_by=PermissionId("direction-2"),
+            target_permission_id=PermissionId("staff-1"),
+            reason="Reviewed",
+        )
+
+
+def test_return_to_staff_records_direction_clarification() -> None:
+    proposal = _make_proposal(assigned_to=PermissionId("direction-1"))
+
+    proposal.return_to_staff(
+        occurred_at=_now(),
+        triggered_by=PermissionId("direction-1"),
+        target_permission_id=PermissionId("staff-1"),
+        reason="Proceed after confirming insurance.",
+    )
+
+    event = proposal.events[-1]
+    assert proposal.assigned_to == "staff-1"
+    assert event.type == ProposalEventType.DIRECTION_CLARIFIED
+    assert event.note == "Proceed after confirming insurance."
+    assert event.target_permission_id == "staff-1"
+
+
 def test_proposal_requires_requested_by_or_requester_contact() -> None:
     with pytest.raises(
         ValueError, match="requested_by or requester_contact"

@@ -52,6 +52,18 @@ const COLLECTION_PROPOSALS_STAFF: MenuNode = {
   ],
 };
 
+const COLLECTION_PROPOSALS_DIRECTION: MenuNode = {
+  label: 'Proposals',
+  icon: 'pi pi-file-edit',
+  items: [
+    {
+      label: 'Direction reviews',
+      icon: 'pi pi-building',
+      routerLink: '/p/collections/proposals/my-assignments',
+    },
+  ],
+};
+
 const COLLECTION_PROJECTS_EXTERNAL: MenuNode = {
   label: 'Projects',
   icon: 'pi pi-briefcase',
@@ -153,7 +165,7 @@ const USE_OF_COLLECTIONS_WITH_PUBLIC_INQUIRIES: MenuNode = {
 const USE_OF_COLLECTIONS_WITHOUT_PUBLIC_INQUIRIES: MenuNode = {
   label: 'Use of Collections',
   items: [
-    COLLECTION_PROPOSALS_STAFF,
+    COLLECTION_PROPOSALS_DIRECTION,
     COLLECTION_PROJECTS_STAFF,
     USE_OF_COLLECTIONS_OBJECTS,
     COLLECTION_REPORTS_STAFF,
@@ -164,7 +176,7 @@ const AI_STAFF: MenuNode = {
   label: 'AI',
   icon: 'pi pi-sparkles',
   items: [
-    { label: 'Prompts', icon: 'pi pi-comment-edit', routerLink: '/p/ai/prompts' },
+    { label: 'Prompts', icon: 'pi pi-file-edit', routerLink: '/p/ai/prompts' },
     {
       label: 'Scientific return',
       icon: 'pi pi-sparkles',

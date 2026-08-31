@@ -563,6 +563,7 @@ class ProposalEvent:
     type: ProposalEventType
     triggered_by: PermissionId | None
     note: str | None = None
+    target_permission_id: PermissionId | None = None
 
 
 @dataclass(slots=True)
@@ -987,6 +988,63 @@ class Proposal:
                 type=ProposalEventType.FORWARDED,
                 triggered_by=triggered_by,
                 note=note,
+                target_permission_id=target_permission_id,
+            )
+        )
+
+    def refer_to_direction(
+        self,
+        occurred_at: datetime,
+        triggered_by: PermissionId,
+        target_permission_id: PermissionId,
+        reason: str,
+    ) -> None:
+        """Move an actively assigned proposal into the Direction review lane."""
+        if self.status != ProposalStatus.PENDING:
+            raise InvalidTransition("Proposal must be PENDING to be sent to Direction")
+        if self.assigned_to != triggered_by:
+            raise InvalidTransition(
+                "Only the current assignee can send a proposal to Direction"
+            )
+        normalized_reason = reason.strip()
+        if not normalized_reason:
+            raise ValueError("reason is required")
+        self.assigned_to = target_permission_id
+        self.events.append(
+            ProposalEvent(
+                occurred_at=occurred_at,
+                type=ProposalEventType.REFERRED_TO_DIRECTION,
+                triggered_by=triggered_by,
+                note=normalized_reason,
+                target_permission_id=target_permission_id,
+            )
+        )
+
+    def return_to_staff(
+        self,
+        occurred_at: datetime,
+        triggered_by: PermissionId,
+        target_permission_id: PermissionId,
+        reason: str,
+    ) -> None:
+        """Return a Direction-owned proposal to its operational review lane."""
+        if self.status != ProposalStatus.PENDING:
+            raise InvalidTransition("Proposal must be PENDING to be returned to staff")
+        if self.assigned_to != triggered_by:
+            raise InvalidTransition(
+                "Only the current assignee can return a proposal to staff"
+            )
+        normalized_reason = reason.strip()
+        if not normalized_reason:
+            raise ValueError("reason is required")
+        self.assigned_to = target_permission_id
+        self.events.append(
+            ProposalEvent(
+                occurred_at=occurred_at,
+                type=ProposalEventType.DIRECTION_CLARIFIED,
+                triggered_by=triggered_by,
+                note=normalized_reason,
+                target_permission_id=target_permission_id,
             )
         )
 

@@ -56,6 +56,8 @@ from app.use_of_collections.application.use_cases import (
     EditProposalDetailsInput,
     ForwardProposal,
     ForwardProposalInput,
+    ReferProposalToDirection,
+    ReferProposalToDirectionInput,
     RejectProposal,
     RejectProposalInput,
     RemoveRequestedObject,
@@ -64,6 +66,8 @@ from app.use_of_collections.application.use_cases import (
     RequestDocumentCorrectionsInput,
     RequestDocuments,
     RequestDocumentsInput,
+    ReturnProposalToStaff,
+    ReturnProposalToStaffInput,
     SendMessage,
     SendMessageInput,
     SubmitDocuments,
@@ -121,6 +125,7 @@ from app.use_of_collections.presentation.dependencies import (
     FileStorage,
     ListProposalsQuery,
     NotificationDispatch,
+    PermReader,
     ProjectRepo,
     ProposalDetailQuery,
     ProposalEmailSender,
@@ -154,10 +159,12 @@ from app.use_of_collections.presentation.schemas import (
     ProposalListItemResponse,
     ProposalSummary,
     ReasonRequest,
+    ReferProposalToDirectionRequest,
     RequestDocumentCorrectionsRequest,
     RequestDocumentsRequest,
     RequestedDocumentResponse,
     RequestedObjectResponse,
+    ReturnProposalToStaffRequest,
     SendMessageRequest,
     SubmitProposalResponse,
     UpdateProposalRequest,
@@ -178,6 +185,20 @@ def _proposal_documents_link(proposal_id: ProposalId) -> str:
         f"{settings.public_origin}/p/collections/proposals/my-assignments/"
         f"{proposal_id}?tab=documents"
     )
+
+
+def _reject_direction_mutation(caller: CallerPermission) -> None:
+    if caller.group == GroupName.DIRECTION:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error": "DIRECTION_READ_ONLY",
+                "message": (
+                    "Direction members have read-only access and must use "
+                    "return-to-staff"
+                ),
+            },
+        )
 
 
 async def _caller_display_name(
@@ -625,6 +646,14 @@ async def edit_proposal(
         raise _not_found("proposal", proposal_id)
     assert_proposal_access(caller, proposal_before)
     require_staff(caller)
+    if caller.group == GroupName.DIRECTION:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error": "INSUFFICIENT_GROUP",
+                "message": "Direction members have read-only proposal access",
+            },
+        )
 
     fields_set = body.model_fields_set
     update_begin = "beginDate" in fields_set
@@ -699,12 +728,30 @@ async def assign_proposal(
         raise _not_found("proposal", proposal_id)
     assert_proposal_access(caller, proposal_before)
     require_staff(caller)
+    if caller.group == GroupName.DIRECTION:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error": "INSUFFICIENT_GROUP",
+                "message": (
+                    "Direction members receive proposals through refer-to-direction"
+                ),
+            },
+        )
     previous_assignee_id = proposal_before.assigned_to
     target_permission_id = (
         PermissionId(body.targetPermissionId) if body.targetPermissionId else None
     )
     if target_permission_id is not None:
-        await _require_staff_permission_target(target_permission_id, session)
+        target = await _require_staff_permission_target(target_permission_id, session)
+        if target.group == GroupName.DIRECTION:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail={
+                    "error": "INVALID_PERMISSION_TARGET",
+                    "message": "Use refer-to-direction for DIRECTION targets",
+                },
+            )
     try:
         proposal = await AssignProposal(proposal_repo).execute(
             AssignProposalInput(
@@ -814,6 +861,7 @@ async def add_requested_objects(
     if proposal is None:
         raise _not_found("proposal", proposal_id)
     assert_proposal_access(caller, proposal)
+    _reject_direction_mutation(caller)
     try:
         await AddRequestedObjects(proposal_repo).execute(
             AddRequestedObjectsInput(
@@ -855,6 +903,7 @@ async def remove_requested_object(
     if proposal is None:
         raise _not_found("proposal", proposal_id)
     assert_proposal_access(caller, proposal)
+    _reject_direction_mutation(caller)
     try:
         await RemoveRequestedObject(proposal_repo).execute(
             RemoveRequestedObjectInput(
@@ -885,6 +934,14 @@ async def request_documents(
         raise _not_found("proposal", proposal_id)
     assert_proposal_access(caller, proposal_before)
     require_staff(caller)
+    if caller.group == GroupName.DIRECTION:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error": "INSUFFICIENT_GROUP",
+                "message": "Direction members must use return-to-staff",
+            },
+        )
     try:
         proposal = await RequestDocuments(proposal_repo).execute(
             RequestDocumentsInput(
@@ -937,6 +994,7 @@ async def submit_documents(
     if proposal is None:
         raise _not_found("proposal", proposal_id)
     assert_proposal_access(caller, proposal)
+    _reject_direction_mutation(caller)
     if not file.filename or not file.filename.endswith(".docx"):
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
@@ -1055,8 +1113,24 @@ async def forward_proposal(
         raise _not_found("proposal", proposal_id)
     assert_proposal_access(caller, proposal_before)
     require_staff(caller)
+    if caller.group == GroupName.DIRECTION:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error": "INSUFFICIENT_GROUP",
+                "message": "Direction members must use return-to-staff",
+            },
+        )
     target_permission_id = PermissionId(body.targetPermissionId)
-    await _require_staff_permission_target(target_permission_id, session)
+    target = await _require_staff_permission_target(target_permission_id, session)
+    if target.group == GroupName.DIRECTION:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={
+                "error": "INVALID_PERMISSION_TARGET",
+                "message": "Use refer-to-direction for DIRECTION targets",
+            },
+        )
     try:
         proposal = await ForwardProposal(proposal_repo).execute(
             ForwardProposalInput(
@@ -1117,6 +1191,113 @@ async def forward_proposal(
     )
 
 
+async def _direction_assignment_response(
+    proposal: Proposal, session: DBSession
+) -> ProposalCommandResponse:
+    assigned_to = await hydrate_permission_or_stub(proposal.assigned_to, session)
+    last_event = await _build_proposal_event(proposal.events[-1], session)
+    return ProposalCommandResponse(
+        id=proposal.id,
+        referenceNumber=proposal.reference_number.value,
+        title=proposal.title,
+        status=proposal.status,
+        beginDate=proposal.begin_date,
+        endDate=proposal.end_date,
+        assignedTo=assigned_to,
+        lastEvent=last_event,
+    )
+
+
+@proposals_router.post(
+    "/{proposal_id}/refer-to-direction",
+    response_model=ProposalCommandResponse,
+)
+async def refer_proposal_to_direction(
+    proposal_id: str,
+    body: ReferProposalToDirectionRequest,
+    caller: CallerPermission,
+    proposal_repo: ProposalRepo,
+    permission_reader: PermReader,
+    notification_dispatcher: NotificationDispatch,
+    session: DBSession,
+) -> ProposalCommandResponse:
+    proposal_before = await proposal_repo.get_by_id(ProposalId(proposal_id))
+    if proposal_before is None:
+        raise _not_found("proposal", proposal_id)
+    assert_proposal_access(caller, proposal_before)
+    target_permission_id = PermissionId(body.targetPermissionId)
+    try:
+        proposal = await ReferProposalToDirection(
+            proposal_repo, permission_reader
+        ).execute(
+            ReferProposalToDirectionInput(
+                proposal_id=ProposalId(proposal_id),
+                caller=caller,
+                target_permission_id=target_permission_id,
+                reason=body.reason,
+            )
+        )
+    except Exception as exc:
+        _handle_domain_errors(exc)
+        raise
+    await notification_dispatcher.notify(
+        recipient_permission_id=target_permission_id,
+        kind=NotificationKind.PROPOSAL_REFERRED_TO_DIRECTION,
+        triggered_by=caller.id,
+        related_resource_type=RelatedResourceType.PROPOSAL,
+        related_resource_id=str(proposal.id),
+        related_resource_label=proposal.reference_number.value,
+        note=body.reason.strip(),
+    )
+    await session.commit()
+    return await _direction_assignment_response(proposal, session)
+
+
+@proposals_router.post(
+    "/{proposal_id}/return-to-staff",
+    response_model=ProposalCommandResponse,
+)
+async def return_proposal_to_staff(
+    proposal_id: str,
+    body: ReturnProposalToStaffRequest,
+    caller: CallerPermission,
+    proposal_repo: ProposalRepo,
+    permission_reader: PermReader,
+    notification_dispatcher: NotificationDispatch,
+    session: DBSession,
+) -> ProposalCommandResponse:
+    proposal_before = await proposal_repo.get_by_id(ProposalId(proposal_id))
+    if proposal_before is None:
+        raise _not_found("proposal", proposal_id)
+    assert_proposal_access(caller, proposal_before)
+    target_permission_id = PermissionId(body.targetPermissionId)
+    try:
+        proposal = await ReturnProposalToStaff(
+            proposal_repo, permission_reader
+        ).execute(
+            ReturnProposalToStaffInput(
+                proposal_id=ProposalId(proposal_id),
+                caller=caller,
+                target_permission_id=target_permission_id,
+                reason=body.reason,
+            )
+        )
+    except Exception as exc:
+        _handle_domain_errors(exc)
+        raise
+    await notification_dispatcher.notify(
+        recipient_permission_id=target_permission_id,
+        kind=NotificationKind.PROPOSAL_RETURNED_TO_STAFF,
+        triggered_by=caller.id,
+        related_resource_type=RelatedResourceType.PROPOSAL,
+        related_resource_id=str(proposal.id),
+        related_resource_label=proposal.reference_number.value,
+        note=body.reason.strip(),
+    )
+    await session.commit()
+    return await _direction_assignment_response(proposal, session)
+
+
 @proposals_router.post(
     "/{proposal_id}/approve",
     response_model=DualAggregateResponse,
@@ -1137,6 +1318,7 @@ async def approve_proposal(
     if proposal_before is None:
         raise _not_found("proposal", proposal_id)
     assert_proposal_access(caller, proposal_before)
+    _reject_direction_mutation(caller)
     if body.endDate < body.beginDate:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -1241,6 +1423,7 @@ async def reject_proposal(
     if proposal_before is None:
         raise _not_found("proposal", proposal_id)
     assert_proposal_access(caller, proposal_before)
+    _reject_direction_mutation(caller)
     requester = (
         await _load_permission_detail(proposal_before.requested_by, session)
         if proposal_before.requested_by is not None
@@ -1314,6 +1497,7 @@ async def request_document_corrections(
     if proposal_before is None:
         raise _not_found("proposal", proposal_id)
     assert_proposal_access(caller, proposal_before)
+    _reject_direction_mutation(caller)
     require_staff(caller)
     if not body.items:
         raise HTTPException(
@@ -1461,7 +1645,11 @@ async def list_proposal_events(
     if proposal is None:
         raise _not_found("proposal", proposal_id)
     assert_proposal_access(caller, proposal)
-    all_events = proposal.events
+    all_events = sorted(
+        proposal.events,
+        key=lambda event: event.occurred_at,
+        reverse=True,
+    )
     total = len(all_events)
     page_events = all_events[page * size : page * size + size]
     items = [await _build_proposal_event(e, session) for e in page_events]
@@ -1525,6 +1713,7 @@ async def send_message(
     if proposal is None:
         raise _not_found("proposal", proposal_id)
     assert_proposal_access(caller, proposal)
+    _reject_direction_mutation(caller)
     try:
         message = await SendMessage(proposal_repo, conversation_repo).execute(
             SendMessageInput(

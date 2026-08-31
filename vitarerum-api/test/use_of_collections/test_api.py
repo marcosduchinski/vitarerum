@@ -30,6 +30,7 @@ from app.use_of_collections.application.ports import (
 )
 from app.use_of_collections.domain.enums import (
     MediaType,
+    ProposalEventType,
     ProposalStatus,
     SubmissionChannel,
     UseStatus,
@@ -58,6 +59,7 @@ from app.use_of_collections.domain.models import (
     ObjectOccurrenceLog,
     ObjectOccurrenceLogId,
     Proposal,
+    ProposalEvent,
     ProposalId,
     PublicationLog,
     PublicationLogEntry,
@@ -1916,7 +1918,7 @@ async def test_staff_can_forward_proposal_to_staff_target() -> None:
                 "permission-staff", GroupName.CURATORIAL
             ),
             "permission-target": _permission_record(
-                "permission-target", GroupName.DIRECTION
+                "permission-target", GroupName.COLLECTIONS_MANAGEMENT
             ),
         },
         notification_dispatcher=notification_dispatcher,
@@ -1970,6 +1972,175 @@ async def test_staff_can_forward_proposal_to_staff_target() -> None:
         }
     ]
     assert proposal_email_sender.assigned_calls == []
+
+
+async def test_curator_can_refer_assigned_proposal_to_direction() -> None:
+    notification_dispatcher = RecordingNotificationDispatcher()
+    async with client_with_repos(
+        caller=_STAFF_CALLER,
+        permission_records={
+            "permission-staff": _permission_record(
+                "permission-staff", GroupName.CURATORIAL
+            ),
+            "permission-direction": _permission_record(
+                "permission-direction", GroupName.DIRECTION
+            ),
+        },
+        notification_dispatcher=notification_dispatcher,
+    ) as (client, _, proposal_repo, _):
+        proposal = _proposal()
+        proposal.assigned_to = PermissionId("permission-staff")
+        await proposal_repo.add(proposal)
+
+        response = await client.post(
+            "/api/v1/proposals/prop-1/refer-to-direction",
+            json={
+                "targetPermissionId": "permission-direction",
+                "reason": "Strategic decision required",
+            },
+        )
+        saved = await proposal_repo.get_by_id(ProposalId("prop-1"))
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["assignedTo"]["permissionId"] == "permission-direction"
+    assert body["lastEvent"]["type"] == "REFERRED_TO_DIRECTION"
+    assert body["lastEvent"]["note"] == "Strategic decision required"
+    assert body["lastEvent"]["targetPermission"]["permissionId"] == (
+        "permission-direction"
+    )
+    assert saved is not None
+    assert saved.assigned_to == PermissionId("permission-direction")
+    assert notification_dispatcher.calls == [
+        {
+            "recipient_permission_id": "permission-direction",
+            "kind": "PROPOSAL_REFERRED_TO_DIRECTION",
+            "triggered_by": "permission-staff",
+            "related_resource_type": "PROPOSAL",
+            "related_resource_id": "prop-1",
+            "related_resource_label": "VRP-20260601-0001",
+            "note": "Strategic decision required",
+        }
+    ]
+
+
+async def test_direction_can_return_proposal_to_staff_with_required_reason() -> None:
+    direction_caller = Actor(
+        id=PermissionId("permission-direction"),
+        group=GroupName.DIRECTION,
+        email="direction@example.org",
+    )
+    notification_dispatcher = RecordingNotificationDispatcher()
+    async with client_with_repos(
+        caller=direction_caller,
+        permission_records={
+            "permission-direction": _permission_record(
+                "permission-direction", GroupName.DIRECTION
+            ),
+            "permission-target": _permission_record(
+                "permission-target", GroupName.COLLECTIONS_MANAGEMENT
+            ),
+        },
+        notification_dispatcher=notification_dispatcher,
+    ) as (client, _, proposal_repo, _):
+        proposal = _proposal()
+        proposal.assigned_to = PermissionId("permission-direction")
+        await proposal_repo.add(proposal)
+
+        invalid = await client.post(
+            "/api/v1/proposals/prop-1/return-to-staff",
+            json={"targetPermissionId": "permission-target", "reason": ""},
+        )
+        response = await client.post(
+            "/api/v1/proposals/prop-1/return-to-staff",
+            json={
+                "targetPermissionId": "permission-target",
+                "reason": "Please revise the insurance conditions",
+            },
+        )
+
+    assert invalid.status_code == 422
+    assert response.status_code == 200
+    body = response.json()
+    assert body["assignedTo"]["permissionId"] == "permission-target"
+    assert body["lastEvent"]["type"] == "DIRECTION_CLARIFIED"
+    assert body["lastEvent"]["note"] == "Please revise the insurance conditions"
+    assert body["lastEvent"]["targetPermission"]["permissionId"] == (
+        "permission-target"
+    )
+    assert notification_dispatcher.calls == [
+        {
+            "recipient_permission_id": "permission-target",
+            "kind": "PROPOSAL_RETURNED_TO_STAFF",
+            "triggered_by": "permission-direction",
+            "related_resource_type": "PROPOSAL",
+            "related_resource_id": "prop-1",
+            "related_resource_label": "VRP-20260601-0001",
+            "note": "Please revise the insurance conditions",
+        }
+    ]
+
+
+async def test_direction_cannot_read_a_proposal_assigned_to_another_member() -> None:
+    direction_caller = Actor(
+        id=PermissionId("permission-direction"),
+        group=GroupName.DIRECTION,
+        email="direction@example.org",
+    )
+    async with client_with_repos(caller=direction_caller) as (
+        client,
+        _,
+        proposal_repo,
+        _,
+    ):
+        proposal = _proposal()
+        proposal.assigned_to = PermissionId("another-direction-permission")
+        await proposal_repo.add(proposal)
+
+        response = await client.get("/api/v1/proposals/prop-1")
+
+    assert response.status_code == 403
+    assert response.json()["error"] == "ACCESS_DENIED"
+
+
+async def test_proposal_event_log_is_sorted_newest_first_before_pagination() -> None:
+    async with client_with_repos() as (client, _, proposal_repo, _):
+        proposal = _proposal()
+        proposal.events = [
+            ProposalEvent(
+                occurred_at=datetime(2026, 8, 29, 9, tzinfo=UTC),
+                type=ProposalEventType.SUBMITTED,
+                triggered_by=PermissionId("permission-1"),
+                note="Oldest",
+            ),
+            ProposalEvent(
+                occurred_at=datetime(2026, 8, 31, 11, tzinfo=UTC),
+                type=ProposalEventType.FORWARDED,
+                triggered_by=PermissionId("permission-1"),
+                note="Newest",
+            ),
+            ProposalEvent(
+                occurred_at=datetime(2026, 8, 30, 10, tzinfo=UTC),
+                type=ProposalEventType.ASSIGNED,
+                triggered_by=PermissionId("permission-1"),
+                note="Middle",
+            ),
+        ]
+        await proposal_repo.add(proposal)
+
+        first_page = await client.get(
+            "/api/v1/proposals/prop-1/events", params={"page": 0, "size": 2}
+        )
+        second_page = await client.get(
+            "/api/v1/proposals/prop-1/events", params={"page": 1, "size": 2}
+        )
+
+    assert first_page.status_code == 200
+    assert [event["note"] for event in first_page.json()["content"]] == [
+        "Newest",
+        "Middle",
+    ]
+    assert [event["note"] for event in second_page.json()["content"]] == ["Oldest"]
 
 
 async def test_assign_proposal_to_self_sends_no_notification_or_email() -> None:
@@ -2123,9 +2294,9 @@ async def test_forward_proposal_rejects_non_pending_proposal() -> None:
     async with client_with_repos(
         caller=_STAFF_CALLER,
         permission_records={
-            "permission-target": _permission_record(
-                "permission-target", GroupName.DIRECTION
-            )
+                "permission-target": _permission_record(
+                    "permission-target", GroupName.COLLECTIONS_MANAGEMENT
+                )
         },
     ) as (client, _, proposal_repo, _):
         await proposal_repo.add(

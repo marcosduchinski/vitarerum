@@ -21,6 +21,7 @@ export class ProposalObjectsSectionComponent {
   readonly removeError = input<ApiError | null>(null);
   readonly addError = input<ApiError | null>(null);
   readonly adding = input(false);
+  readonly canManage = input(true);
 
   readonly removeRequested = output<string>();
   readonly addRequested = output<AddRequestedObjectsRequest>();

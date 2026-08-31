@@ -344,6 +344,7 @@ def test_proposal_roundtrip_preserves_key_data() -> None:
                 type=ProposalEventType.SUBMITTED,
                 triggered_by=PermissionId("permission-1"),
                 note="Submitted",
+                target_permission_id=PermissionId("permission-2"),
             )
         ],
         requested_objects=[
@@ -380,6 +381,7 @@ def test_proposal_roundtrip_preserves_key_data() -> None:
     assert rebuilt.submitted_at == now
     assert rebuilt.submission_channel == SubmissionChannel.AUTHENTICATED
     assert rebuilt.events[0].type == ProposalEventType.SUBMITTED
+    assert rebuilt.events[0].target_permission_id == "permission-2"
     assert rebuilt.requested_objects[0].inventory_number == "INV-010"
     assert rebuilt.requested_objects[0].collection_id == "collection-manuscripts"
     assert rebuilt.requested_objects[0].collection_name == "Manuscripts"

@@ -6,6 +6,44 @@ All authenticated endpoints require `Authorization: Bearer <token>` and
 `X-Permission-Id`. Authorization failures return `403`; authentication failures
 return `401`.
 
+## Direction Review Workflow
+
+`POST /proposals/{proposalId}/refer-to-direction`
+
+Available only to the proposal's assigned Curatorial or Collections Management
+member. The target permission must be active and belong to `DIRECTION`.
+
+```json
+{
+  "targetPermissionId": "direction-permission-id",
+  "reason": "Strategic decision required"
+}
+```
+
+`reason` is mandatory. The proposal remains `PENDING`, is assigned to the
+selected Direction permission, emits `REFERRED_TO_DIRECTION`, and notifies the
+recipient. The event exposes its structured `targetPermission` as well as the
+actor, timestamp, and reason.
+
+`POST /proposals/{proposalId}/return-to-staff`
+
+Available only to the assigned Direction member. The target permission must be
+active and belong to `CURATORIAL` or `COLLECTIONS_MANAGEMENT`.
+
+```json
+{
+  "targetPermissionId": "staff-permission-id",
+  "reason": "Please revise the insurance conditions"
+}
+```
+
+The Direction response in `reason` is mandatory. The proposal remains
+`PENDING`, is reassigned to staff, emits `DIRECTION_CLARIFIED`, and notifies the
+recipient. Direction members may only access proposals assigned to their active
+permission. Their access is read-only apart from this return command;
+generic assign/forward commands cannot be used to enter or leave the Direction
+lane.
+
 ## Proposal Approval Creates A Project
 
 `POST /proposals/{proposalId}/approve`

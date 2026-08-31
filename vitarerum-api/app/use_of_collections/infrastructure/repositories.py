@@ -446,6 +446,7 @@ def proposal_to_record(proposal: Proposal) -> ProposalRecord:
                 occurred_at=event.occurred_at,
                 type=event.type,
                 triggered_by=event.triggered_by,
+                target_permission_id=event.target_permission_id,
                 note=event.note,
             )
             for event in proposal.events
@@ -537,6 +538,9 @@ def proposal_to_domain(record: ProposalRecord) -> Proposal:
                 type=event.type,
                 triggered_by=PermissionId(event.triggered_by)
                 if event.triggered_by is not None
+                else None,
+                target_permission_id=PermissionId(event.target_permission_id)
+                if event.target_permission_id is not None
                 else None,
                 note=event.note,
             )

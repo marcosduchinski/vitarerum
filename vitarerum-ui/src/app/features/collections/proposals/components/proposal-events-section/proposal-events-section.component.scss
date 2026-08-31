@@ -1,1 +1,19 @@
 @use '../../pages/detail/proposal-detail-page.component.scss';
+
+.event--direction {
+  margin-inline: -0.75rem;
+  padding: 0.9rem 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--role-direction-text) 28%, var(--color-line));
+  border-radius: var(--radius-md);
+  background: var(--role-direction-bg);
+
+  .event__dot {
+    background: var(--role-direction-text);
+  }
+}
+
+.event__target {
+  margin: 0.2rem 0 0;
+  color: var(--color-muted);
+  font-size: 0.82rem;
+}

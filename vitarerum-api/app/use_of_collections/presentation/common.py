@@ -279,10 +279,15 @@ async def _build_proposal_event(
         await hydrate_permission_or_stub(event.triggered_by, session),
         event.triggered_by,
     )
+    target = _detail_or_stub_or_none(
+        await hydrate_permission_or_stub(event.target_permission_id, session),
+        event.target_permission_id,
+    )
     return ProposalEventResponse(
         occurredAt=event.occurred_at,
         type=event.type,
         triggeredBy=triggered,
+        targetPermission=target,
         note=event.note,
     )
 

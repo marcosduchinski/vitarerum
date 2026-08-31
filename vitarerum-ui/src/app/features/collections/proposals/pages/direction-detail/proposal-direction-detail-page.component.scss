@@ -1,0 +1,18 @@
+@use '../my-detail/proposal-my-detail-page.component.scss';
+
+.direction-badge {
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  background: var(--role-direction-bg);
+  color: var(--role-direction-text);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.direction-notice {
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-panel-muted);
+  color: var(--color-muted);
+}

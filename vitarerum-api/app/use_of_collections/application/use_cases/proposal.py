@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date
 
-from app.identity.public import Actor, GroupName
+from app.identity.public import Actor, GroupName, PermissionReader, UserStatus
 from app.reference_numbers.public import ReferenceKind
 from app.shared.authorization import require_group, require_staff
 from app.use_of_collections.application.ports import (
@@ -443,6 +443,87 @@ class ForwardProposal:
             triggered_by=data.caller.id,
             target_permission_id=data.target_permission_id,
             note=data.note,
+        )
+        await self._repo.save(proposal)
+        return proposal
+
+
+@dataclass(slots=True)
+class ReferProposalToDirectionInput:
+    proposal_id: ProposalId
+    caller: Actor
+    target_permission_id: PermissionId
+    reason: str
+
+
+class ReferProposalToDirection:
+    def __init__(
+        self,
+        proposal_repository: ProposalRepository,
+        permission_reader: PermissionReader,
+    ) -> None:
+        self._repo = proposal_repository
+        self._permissions = permission_reader
+
+    async def execute(self, data: ReferProposalToDirectionInput) -> Proposal:
+        require_group(
+            data.caller, GroupName.CURATORIAL, GroupName.COLLECTIONS_MANAGEMENT
+        )
+        target = await self._permissions.get_detail(data.target_permission_id)
+        if target is None or target.group != GroupName.DIRECTION:
+            raise ValueError("Target permission must belong to the DIRECTION group")
+        if target.user.status == UserStatus.DISABLED:
+            raise ValueError("Target permission belongs to a disabled user")
+        proposal = await self._repo.get_by_id(data.proposal_id)
+        if proposal is None:
+            raise LookupError(f"No proposal found with id {data.proposal_id}")
+        proposal.refer_to_direction(
+            occurred_at=_now(),
+            triggered_by=data.caller.id,
+            target_permission_id=data.target_permission_id,
+            reason=data.reason,
+        )
+        await self._repo.save(proposal)
+        return proposal
+
+
+@dataclass(slots=True)
+class ReturnProposalToStaffInput:
+    proposal_id: ProposalId
+    caller: Actor
+    target_permission_id: PermissionId
+    reason: str
+
+
+class ReturnProposalToStaff:
+    def __init__(
+        self,
+        proposal_repository: ProposalRepository,
+        permission_reader: PermissionReader,
+    ) -> None:
+        self._repo = proposal_repository
+        self._permissions = permission_reader
+
+    async def execute(self, data: ReturnProposalToStaffInput) -> Proposal:
+        require_group(data.caller, GroupName.DIRECTION)
+        target = await self._permissions.get_detail(data.target_permission_id)
+        if target is None or target.group not in {
+            GroupName.CURATORIAL,
+            GroupName.COLLECTIONS_MANAGEMENT,
+        }:
+            raise ValueError(
+                "Target permission must belong to CURATORIAL or COLLECTIONS_MANAGEMENT"
+            )
+        if target.user.status == UserStatus.DISABLED:
+            raise ValueError("Target permission belongs to a disabled user")
+        proposal = await self._repo.get_by_id(data.proposal_id)
+        if proposal is None:
+            raise LookupError(f"No proposal found with id {data.proposal_id}")
+        proposal.return_to_staff(
+            occurred_at=_now(),
+            triggered_by=data.caller.id,
+            target_permission_id=data.target_permission_id,
+            reason=data.reason,
         )
         await self._repo.save(proposal)
         return proposal

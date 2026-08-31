@@ -273,8 +273,8 @@ describe('ProposalApiServiceMock', () => {
     expect(result.collectionUseProject?.status).toBe('CREATED');
 
     const events = await firstValueFrom(service.listEvents('prop-3'));
-    const last = events.content[events.content.length - 1];
-    expect(last.type).toBe('APPROVED');
+    const newest = events.content[0];
+    expect(newest.type).toBe('APPROVED');
   });
 
   it('propagates proposal APPROVED status to the associated project', async () => {
@@ -320,7 +320,7 @@ describe('ProposalApiServiceMock', () => {
     expect(proposal.status).toBe('CANCELLED');
 
     const events = await firstValueFrom(service.listEvents('prop-3'));
-    expect(events.content[events.content.length - 1].type).toBe('CANCELLED');
+    expect(events.content[0].type).toBe('CANCELLED');
 
     const project = await firstValueFrom(projectService.getProject('proj-3'));
     expect(project.status).toBe('CANCELLED');

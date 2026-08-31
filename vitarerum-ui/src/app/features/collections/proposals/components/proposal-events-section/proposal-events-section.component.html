@@ -8,14 +8,17 @@
   } @else {
     <ol class="event-list" aria-label="Proposal events">
       @for (event of events(); track event.occurredAt) {
-        <li class="event">
+        <li class="event" [class.event--direction]="isDirectionEvent(event)">
           <div class="event__dot" aria-hidden="true"></div>
           <div class="event__content">
             <div class="event__header">
-              <span class="event__type">{{ event.type.replace('_', ' ') }}</span>
+              <span class="event__type">{{ eventLabel(event) }}</span>
               <span class="event__date">{{ formatDateTime(event.occurredAt) }}</span>
             </div>
             <p class="event__actor">{{ event.triggeredBy.user.name }}</p>
+            @if (event.targetPermission; as target) {
+              <p class="event__target">To {{ target.user.name }} — {{ target.group }}</p>
+            }
             @if (event.note) {
               <p class="event__note">"{{ event.note }}"</p>
             }

@@ -18,6 +18,8 @@ import {
   ProposalDecisionResult,
   ProposalReasonRequest,
   RequestDocumentCorrectionsRequest,
+  ReferProposalToDirectionRequest,
+  ReturnProposalToStaffRequest,
   UpdateProposalRequest,
 } from '../models/proposal-actions.model';
 import {
@@ -273,6 +275,26 @@ export class ProposalApiService {
   ): Observable<ProposalAssignmentResult> {
     return this.http.post<ProposalAssignmentResult>(
       this.url(`/proposals/${proposalId}/forward`),
+      request,
+    );
+  }
+
+  referProposalToDirection(
+    proposalId: string,
+    request: ReferProposalToDirectionRequest,
+  ): Observable<ProposalAssignmentResult> {
+    return this.http.post<ProposalAssignmentResult>(
+      this.url(`/proposals/${proposalId}/refer-to-direction`),
+      request,
+    );
+  }
+
+  returnProposalToStaff(
+    proposalId: string,
+    request: ReturnProposalToStaffRequest,
+  ): Observable<ProposalAssignmentResult> {
+    return this.http.post<ProposalAssignmentResult>(
+      this.url(`/proposals/${proposalId}/return-to-staff`),
       request,
     );
   }

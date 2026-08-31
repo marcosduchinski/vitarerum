@@ -143,6 +143,7 @@ describe('AppMenuComponent', () => {
     const promptsLink = linkByText(compiled, 'Prompts');
     expect(compiled.textContent).toContain('AI');
     expect(promptsLink.getAttribute('href')).toBe('/p/ai/prompts');
+    expect(promptsLink.querySelector('.pi-file-edit')).not.toBeNull();
     expect(linkByText(compiled, 'Scientific return').getAttribute('href')).toBe(
       '/p/collections/projects/scientific-return',
     );

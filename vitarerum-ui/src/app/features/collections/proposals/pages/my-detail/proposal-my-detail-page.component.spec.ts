@@ -4,6 +4,7 @@ import { provideRouter, Router } from '@angular/router';
 import { of } from 'rxjs';
 
 import { UserDetail } from '@core/auth/models/user.model';
+import { IDENTITY_SERVICE } from '@core/auth/identity.service';
 import { USER_MANAGEMENT_SERVICE } from '@features/admin/services/user-management.service';
 import { OBJECT_SEARCH_SERVICE } from '@features/objects/services/object-search.service';
 import { Page } from '@shared/models/page.model';
@@ -354,6 +355,13 @@ describe('ProposalMyDetailPageComponent', () => {
       imports: [ProposalMyDetailPageComponent],
       providers: [
         provideRouter([]),
+        {
+          provide: IDENTITY_SERVICE,
+          useValue: {
+            session: () => ({ group: 'CURATORIAL' }),
+            getPermissionId: () => 'permission-staff',
+          },
+        },
         { provide: PROPOSAL_API_SERVICE, useValue: proposalService },
         { provide: USER_MANAGEMENT_SERVICE, useClass: UserManagementServiceStub },
         { provide: OBJECT_SEARCH_SERVICE, useClass: ObjectSearchServiceStub },

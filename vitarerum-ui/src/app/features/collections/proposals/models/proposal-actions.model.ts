@@ -13,6 +13,16 @@ export interface ForwardProposalRequest {
   readonly note: string;
 }
 
+export interface ReferProposalToDirectionRequest {
+  readonly targetPermissionId: string;
+  readonly reason: string;
+}
+
+export interface ReturnProposalToStaffRequest {
+  readonly targetPermissionId: string;
+  readonly reason: string;
+}
+
 // Omitted properties are left unchanged by the backend. Explicit null clears
 // only the nullable metadata fields; intendedUse is replaced when present.
 export interface UpdateProposalRequest {

@@ -1,8 +1,12 @@
 <div class="proposals-new">
   <app-page-header
     eyebrow="Proposals"
-    title="My assignments"
-    description="Requests currently assigned to you."
+    [title]="directionMode() ? 'Direction reviews' : 'My assignments'"
+    [description]="
+      directionMode()
+        ? 'Proposals currently awaiting your Direction review.'
+        : 'Requests currently assigned to you.'
+    "
   />
 
   @if (proposalsResource.isLoading()) {
@@ -88,7 +92,7 @@
                   <td>
                     <a
                       class="proposals-table__title"
-                      [routerLink]="['/p/collections/proposals/my-assignments', proposal.id]"
+                      [routerLink]="detailRoute(proposal.id)"
                     >
                       {{ proposal.title || 'Untitled proposal' }}
                     </a>

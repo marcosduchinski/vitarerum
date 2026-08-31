@@ -90,6 +90,7 @@ export class ProposalsMyAssignmentsPageComponent {
   // The active permission id comes straight from the session — no need to fetch
   // the (admin-only) user directory to look it up.
   protected readonly currentPermissionId = computed(() => this.identity.getPermissionId());
+  protected readonly directionMode = computed(() => this.identity.session()?.group === 'DIRECTION');
 
   protected readonly proposalsResource = resource({
     params: () => ({
@@ -136,7 +137,9 @@ export class ProposalsMyAssignmentsPageComponent {
     (this.usersResource.value()?.content ?? []).flatMap((user) =>
       user.permissions.flatMap((permission) => {
         const groupName = groupNameOf(permission.group);
-        if (groupName === 'EXTERNAL') return [];
+        if (groupName === 'EXTERNAL' || groupName === 'DIRECTION' || user.status === 'DISABLED') {
+          return [];
+        }
         return [
           { label: `${user.name} — ${GROUP_LABELS[groupName]}`, permissionId: permission.permissionId },
         ];
@@ -148,19 +151,28 @@ export class ProposalsMyAssignmentsPageComponent {
     const proposalId = proposal.id;
 
     return [
-      {
-        label: 'Forward',
-        icon: 'pi pi-send',
-        command: () => this.openForwardModal(proposalId),
-      },
+      ...(this.directionMode()
+        ? []
+        : [
+            {
+              label: 'Forward',
+              icon: 'pi pi-send',
+              command: () => this.openForwardModal(proposalId),
+            },
+          ]),
       {
         label: 'Details',
         icon: 'pi pi-eye',
         command: () => {
-          void this.router.navigate(['/p/collections/proposals/my-assignments', proposalId]);
+          void this.router.navigate(this.detailRoute(proposalId));
         },
       },
     ];
+  }
+
+  protected detailRoute(proposalId: string): readonly string[] {
+    const base = ['/p/collections/proposals/my-assignments', proposalId];
+    return this.directionMode() ? [...base, 'direction'] : base;
   }
 
   protected readonly forwardModalProposalId = signal<string | null>(null);

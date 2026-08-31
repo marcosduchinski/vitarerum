@@ -57,6 +57,7 @@ export class ProposalDocumentsSectionComponent {
   readonly proposalId = input.required<string>();
   readonly documents = input.required<readonly Document[]>();
   readonly status = input.required<ProposalStatus>();
+  readonly canManage = input(true);
   readonly correctionItems = input<readonly DocumentCorrectionItem[]>([]);
   // Mutation state is owned by the container (the my-detail page), mirroring the
   // conversation section's sendingMessage / messageError / replyResetVersion.
@@ -91,7 +92,7 @@ export class ProposalDocumentsSectionComponent {
   // corrections panel.
   protected readonly highlightedDocId = signal<string | null>(null);
 
-  protected readonly canReview = computed(() => this.status() === 'PENDING');
+  protected readonly canReview = computed(() => this.canManage() && this.status() === 'PENDING');
   protected readonly hasStaged = computed(() => this.stagedItems().length > 0);
 
   // documentId -> its still-open (REQUESTED) correction, for the row badge.

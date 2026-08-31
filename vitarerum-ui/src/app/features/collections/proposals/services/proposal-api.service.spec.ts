@@ -232,6 +232,36 @@ describe('ProposalApiService', () => {
     request.flush(null);
   });
 
+  it('refers a proposal to Direction with its mandatory reason', () => {
+    const body = {
+      targetPermissionId: 'permission-direction',
+      reason: 'Direction decision required',
+    };
+
+    service.referProposalToDirection('proposal-1', body).subscribe();
+
+    const request = http.expectOne(
+      'https://api.example.test/proposals/proposal-1/refer-to-direction',
+    );
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual(body);
+    request.flush({ id: 'proposal-1', status: 'PENDING' });
+  });
+
+  it('returns a proposal to staff with Direction response', () => {
+    const body = {
+      targetPermissionId: 'permission-staff',
+      reason: 'Please revise the insurance conditions',
+    };
+
+    service.returnProposalToStaff('proposal-1', body).subscribe();
+
+    const request = http.expectOne('https://api.example.test/proposals/proposal-1/return-to-staff');
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual(body);
+    request.flush({ id: 'proposal-1', status: 'PENDING' });
+  });
+
   it('defaults missing proposal type data to other', () => {
     let listType: string | undefined;
     service.listProposals().subscribe((page) => (listType = page.content[0]?.type));
