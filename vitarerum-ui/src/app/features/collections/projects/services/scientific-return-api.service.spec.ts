@@ -171,6 +171,21 @@ describe('ScientificReturnApiService', () => {
 
   it('stores curator examples and proposes learning from a decision', () => {
     service
+      .listKnowledgeItems({
+        status: 'ACTIVE',
+        kind: 'INVENTORY_VARIATION_EXAMPLE',
+        inventoryNumber: 'MB06-5747',
+        page: 1,
+        size: 25,
+      })
+      .subscribe();
+    const list = http.expectOne(
+      'https://api.example.test/api/v1/scientific-return/knowledge-items?status=ACTIVE&kind=INVENTORY_VARIATION_EXAMPLE&inventoryNumber=MB06-5747&page=1&size=25',
+    );
+    expect(list.request.method).toBe('GET');
+    list.flush({ content: [], page: 1, size: 25, totalElements: 0, totalPages: 0, counts: {} });
+
+    service
       .createInventoryExample({
         registeredNumber: 'MUHNAC/MB06-005747',
         observedForm: 'MB06-5747',
@@ -182,6 +197,26 @@ describe('ScientificReturnApiService', () => {
     );
     expect(create.request.body.kind).toBe('INVENTORY_VARIATION_EXAMPLE');
     create.flush({});
+
+    service
+      .replaceKnowledgeItem('knowledge-1', {
+        registeredNumber: 'MUHNAC/MB06-005747',
+        observedForm: 'MB06 5747',
+        content: 'Corrected wording.',
+      })
+      .subscribe();
+    const replace = http.expectOne(
+      'https://api.example.test/api/v1/scientific-return/knowledge-items/knowledge-1',
+    );
+    expect(replace.request.method).toBe('PUT');
+    replace.flush({});
+
+    service.getKnowledgeHistory('knowledge-1').subscribe();
+    const history = http.expectOne(
+      'https://api.example.test/api/v1/scientific-return/knowledge-items/knowledge-1/history',
+    );
+    expect(history.request.method).toBe('GET');
+    history.flush([]);
 
     service.proposeKnowledge('candidate-1', 'This acronym belongs to archaeology.').subscribe();
     const proposal = http.expectOne(

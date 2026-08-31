@@ -73,6 +73,7 @@ class ScientificReturnWatch:
     project_snapshot_id: ScientificReturnSnapshotId
     schedule_anchor_at: datetime
     last_run_at: datetime | None = None
+    institution_id: str | None = None
 
     def __post_init__(self) -> None:
         if not 1 <= self.review_interval_days <= 365:
@@ -90,6 +91,7 @@ class ScientificReturnWatch:
         created_at: datetime,
         project_snapshot_id: ScientificReturnSnapshotId,
         schedule_anchor_at: datetime,
+        institution_id: str | None = None,
     ) -> ScientificReturnWatch:
         """Create a new aggregate without constraining persistence rehydration."""
         if status not in {WatchStatus.ACTIVE, WatchStatus.PAUSED}:
@@ -104,6 +106,7 @@ class ScientificReturnWatch:
             next_run_at=schedule_anchor_at,
             project_snapshot_id=project_snapshot_id,
             schedule_anchor_at=schedule_anchor_at,
+            institution_id=institution_id,
         )
 
     def change_status(self, status: WatchStatus) -> None:

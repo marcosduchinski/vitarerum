@@ -8,6 +8,7 @@ from app.scientific_return.application.ports import (
     BibliographicRecord,
     InvestigationConcurrencyConflict,
 )
+from app.scientific_return.domain.enums import KnowledgeKind, KnowledgeStatus
 from app.scientific_return.domain.full_agentic_models import (
     AgenticCandidateLink,
     AgenticSearchSpec,
@@ -19,6 +20,30 @@ from app.scientific_return.domain.full_agentic_models import (
     KnowledgeItemId,
     ScientificReturnKnowledgeItem,
 )
+
+
+@dataclass(frozen=True, slots=True)
+class KnowledgeFilters:
+    institution_id: str
+    status: KnowledgeStatus | None = None
+    kind: KnowledgeKind | None = None
+    inventory_number: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class KnowledgeCounts:
+    active: int = 0
+    proposed: int = 0
+    retired: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class KnowledgePage:
+    content: tuple[ScientificReturnKnowledgeItem, ...]
+    page: int
+    size: int
+    total_elements: int
+    counts: KnowledgeCounts
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,10 +107,19 @@ class FullAgenticRepository(Protocol):
         self, item_id: KnowledgeItemId
     ) -> ScientificReturnKnowledgeItem | None: ...
     async def list_knowledge(
-        self, *, active_only: bool, limit: int
+        self, *, active_only: bool, limit: int, institution_id: str | None = None
     ) -> list[ScientificReturnKnowledgeItem]: ...
     async def find_knowledge_exact(
-        self, registered_number: str, limit: int
+        self,
+        registered_number: str,
+        limit: int,
+        institution_id: str | None = None,
+    ) -> list[ScientificReturnKnowledgeItem]: ...
+    async def page_knowledge(
+        self, filters: KnowledgeFilters, page: int, size: int
+    ) -> KnowledgePage: ...
+    async def list_knowledge_lineage(
+        self, item_id: KnowledgeItemId, institution_id: str
     ) -> list[ScientificReturnKnowledgeItem]: ...
 
     async def add_investigation(

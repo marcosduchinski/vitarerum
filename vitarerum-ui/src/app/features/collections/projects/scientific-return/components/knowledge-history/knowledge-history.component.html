@@ -1,0 +1,56 @@
+@if (open()) {
+  <div class="history-modal">
+    <button
+      type="button"
+      class="backdrop"
+      aria-label="Close history"
+      (click)="closed.emit()"
+    ></button>
+    <section
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="knowledge-history-title"
+      tabindex="-1"
+      (keydown.escape)="closed.emit()"
+    >
+      <header>
+        <div>
+          <p>Audit trail</p>
+          <h2 id="knowledge-history-title">Knowledge item history</h2>
+        </div>
+        <button type="button" class="close" aria-label="Close history" (click)="closed.emit()">
+          <span class="pi pi-times" aria-hidden="true"></span>
+        </button>
+      </header>
+      @if (loading()) {
+        <p class="state">
+          <span class="pi pi-spin pi-spinner" aria-hidden="true"></span> Loading version history…
+        </p>
+      } @else if (error()) {
+        <p class="state error" role="alert">{{ error() }}</p>
+      } @else {
+        <ol>
+          @for (item of items(); track item.id; let version = $index) {
+            <li [attr.data-status]="item.status">
+              <div>
+                <strong>Version {{ version + 1 }}</strong
+                ><span>{{ item.status.toLowerCase() }}</span>
+              </div>
+              @if (item.registeredNumber || item.observedForm) {
+                <code>{{ item.registeredNumber ?? '—' }} → {{ item.observedForm ?? '—' }}</code>
+              }
+              <p>{{ item.content }}</p>
+              <small>Created by {{ actor(item) }} on {{ item.createdAt | date: 'medium' }}</small>
+              @if (item.validatedAt) {
+                <small>Validated {{ item.validatedAt | date: 'medium' }}</small>
+              }
+              @if (item.retiredAt) {
+                <small>Retired {{ item.retiredAt | date: 'medium' }}</small>
+              }
+            </li>
+          }
+        </ol>
+      }
+    </section>
+  </div>
+}

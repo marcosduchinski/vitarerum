@@ -178,6 +178,11 @@ const AI_STAFF: MenuNode = {
   items: [
     { label: 'Prompts', icon: 'pi pi-file-edit', routerLink: '/p/ai/prompts' },
     {
+      label: 'Knowledge Base',
+      icon: 'pi pi-book',
+      routerLink: '/p/ai/knowledge-base',
+    },
+    {
       label: 'Scientific return',
       icon: 'pi pi-sparkles',
       routerLink: '/p/collections/projects/scientific-return',

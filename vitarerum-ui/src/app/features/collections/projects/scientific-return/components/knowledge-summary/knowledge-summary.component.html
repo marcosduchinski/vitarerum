@@ -1,0 +1,44 @@
+<section class="knowledge-summary" aria-label="Knowledge item counts">
+  <button
+    type="button"
+    data-status="ACTIVE"
+    [class.is-selected]="selectedStatus() === 'ACTIVE'"
+    [attr.aria-pressed]="selectedStatus() === 'ACTIVE'"
+    (click)="statusSelected.emit('ACTIVE')"
+  >
+    <span class="summary-icon pi pi-check-circle" aria-hidden="true"></span>
+    <span class="summary-copy"
+      ><strong>{{ counts().active }}</strong
+      ><span>Active</span></span
+    >
+    <small>Available to investigations</small>
+  </button>
+  <button
+    type="button"
+    data-status="PROPOSED"
+    [class.is-selected]="selectedStatus() === 'PROPOSED'"
+    [attr.aria-pressed]="selectedStatus() === 'PROPOSED'"
+    (click)="statusSelected.emit('PROPOSED')"
+  >
+    <span class="summary-icon pi pi-clock" aria-hidden="true"></span>
+    <span class="summary-copy"
+      ><strong>{{ counts().proposed }}</strong
+      ><span>Awaiting validation</span></span
+    >
+    <small>Requires a human decision</small>
+  </button>
+  <button
+    type="button"
+    data-status="RETIRED"
+    [class.is-selected]="selectedStatus() === 'RETIRED'"
+    [attr.aria-pressed]="selectedStatus() === 'RETIRED'"
+    (click)="statusSelected.emit('RETIRED')"
+  >
+    <span class="summary-icon pi pi-archive" aria-hidden="true"></span>
+    <span class="summary-copy"
+      ><strong>{{ counts().retired }}</strong
+      ><span>Retired</span></span
+    >
+    <small>Preserved for audit</small>
+  </button>
+</section>

@@ -8,6 +8,7 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -70,6 +71,9 @@ class ScientificReturnWatchRecord(Base):
     )
     review_interval_days: Mapped[int] = mapped_column(Integer)
     created_by: Mapped[str] = mapped_column(String(36), index=True)
+    institution_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     last_run_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -226,9 +230,21 @@ class CandidateDecisionRecord(Base):
 
 class ScientificReturnKnowledgeRecord(Base):
     __tablename__ = "sr_knowledge_items"
+    __table_args__ = (
+        Index(
+            "ix_sr_knowledge_institution_status_created",
+            "institution_id",
+            "status",
+            "kind",
+            "created_at",
+            "id",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    institution_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    institution_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, index=True
+    )
     kind: Mapped[KnowledgeKind] = mapped_column(
         SAEnum(KnowledgeKind, native_enum=False, length=64)
     )
@@ -288,6 +304,9 @@ class FullAgenticInvestigationRecord(Base):
     budget: Mapped[dict[str, Any]] = mapped_column(JSON)
     usage: Mapped[dict[str, Any]] = mapped_column(JSON)
     created_by: Mapped[str] = mapped_column(String(36), index=True)
+    institution_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     heartbeat_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True

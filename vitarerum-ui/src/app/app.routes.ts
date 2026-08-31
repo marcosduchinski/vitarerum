@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import { authGuard } from '@core/guards/auth.guard';
+import { staffGuard } from '@core/guards/staff.guard';
 import { unauthenticatedGuard } from '@core/guards/unauthenticated.guard';
 
 export const routes: Routes = [
@@ -114,6 +115,15 @@ export const routes: Routes = [
             path: 'prompts',
             loadChildren: () =>
               import('@features/ai/prompts/ai-prompts.routes').then((m) => m.AI_PROMPTS_ROUTES),
+          },
+          {
+            path: 'knowledge-base',
+            title: 'Agentic Knowledge Base',
+            canMatch: [staffGuard],
+            loadComponent: () =>
+              import('@features/collections/projects/scientific-return/pages/knowledge-base/scientific-return-knowledge-base-page.component').then(
+                (m) => m.ScientificReturnKnowledgeBasePageComponent,
+              ),
           },
         ],
       },

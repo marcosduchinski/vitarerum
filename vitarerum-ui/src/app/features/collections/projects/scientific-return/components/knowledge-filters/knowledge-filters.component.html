@@ -1,0 +1,68 @@
+<form
+  class="knowledge-filters"
+  aria-label="Knowledge Base filters"
+  (submit)="$event.preventDefault(); apply(statusSelect.value, kindSelect.value, inventory.value)"
+>
+  <div class="filter-controls">
+    <label class="search-field">
+      <span class="field-label">Inventory citation</span>
+      <span class="search-control">
+        <span class="pi pi-search" aria-hidden="true"></span>
+        <input
+          #inventory
+          type="search"
+          [value]="inventoryNumber() ?? ''"
+          placeholder="Search an exact inventory number"
+        />
+      </span>
+    </label>
+    <label>
+      <span class="field-label">Status</span>
+      <select #statusSelect [value]="status() ?? ''">
+        <option value="">All statuses</option>
+        <option value="ACTIVE">Active</option>
+        <option value="PROPOSED">Awaiting validation</option>
+        <option value="RETIRED">Retired</option>
+      </select>
+    </label>
+    <label>
+      <span class="field-label">Type</span>
+      <select #kindSelect [value]="kind() ?? ''">
+        <option value="">All types</option>
+        <option value="INVENTORY_VARIATION_EXAMPLE">Inventory example</option>
+        <option value="CURATORIAL_LESSON">Curatorial lesson</option>
+      </select>
+    </label>
+    <button type="submit" class="apply-filter">
+      <span class="pi pi-filter" aria-hidden="true"></span> Apply filters
+    </button>
+  </div>
+
+  @if (hasFilters()) {
+    <div class="active-filters" aria-label="Active filters">
+      <span class="active-filters__label">Filtering by</span>
+      @if (inventoryNumber()) {
+        <button type="button" class="filter-chip" (click)="clearInventoryNumber()">
+          Inventory: {{ inventoryNumber() }}
+          <span class="pi pi-times" aria-hidden="true"></span>
+          <span class="sr-only">Remove inventory filter</span>
+        </button>
+      }
+      @if (status()) {
+        <button type="button" class="filter-chip" (click)="clearStatus()">
+          {{ statusLabel() }}
+          <span class="pi pi-times" aria-hidden="true"></span>
+          <span class="sr-only">Remove status filter</span>
+        </button>
+      }
+      @if (kind()) {
+        <button type="button" class="filter-chip" (click)="clearKind()">
+          {{ kindLabel() }}
+          <span class="pi pi-times" aria-hidden="true"></span>
+          <span class="sr-only">Remove type filter</span>
+        </button>
+      }
+      <button type="button" class="clear-all" (click)="clearAll()">Clear all</button>
+    </div>
+  }
+</form>

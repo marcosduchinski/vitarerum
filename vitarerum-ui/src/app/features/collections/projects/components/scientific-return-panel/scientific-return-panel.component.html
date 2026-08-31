@@ -286,11 +286,10 @@
         >
           <span class="pi pi-box" aria-hidden="true"></span>
           <span>
-            {{ coverage.reached }} of {{ coverage.total }} consulted objects
-            investigated.
+            {{ coverage.reached }} of {{ coverage.total }} consulted objects investigated.
             @if (coverage.reached < coverage.total) {
-              The objects not reached have not been searched at all — absence of
-              results for them means nothing yet.
+              The objects not reached have not been searched at all — absence of results for them
+              means nothing yet.
             }
           </span>
         </p>
@@ -330,8 +329,8 @@
                 <p class="investigation-degraded">
                   <span class="pi pi-exclamation-triangle" aria-hidden="true"></span>
                   <span>
-                    Finished without its full plan, so no results here does not
-                    mean there are none: {{ investigation.degradedReason }}.
+                    Finished without its full plan, so no results here does not mean there are none:
+                    {{ investigation.degradedReason }}.
                   </span>
                 </p>
               }
@@ -342,10 +341,12 @@
                 >
                   <span class="pi pi-replay" aria-hidden="true"></span>
                   <span>
-                    Resumed {{ investigation.recoveryCount }} time(s) after a worker
-                    stopped without finishing@if (investigation.maxRecoveries) {
+                    Resumed {{ investigation.recoveryCount }} time(s) after a worker stopped without
+                    finishing
+                    @if (investigation.maxRecoveries) {
                       , out of {{ investigation.maxRecoveries }} allowed
-                    }.
+                    }
+                    .
                     @if (investigation.lastRecoveryReason) {
                       Last reason: {{ investigation.lastRecoveryReason }}.
                     }
@@ -413,84 +414,6 @@
                   {{ investigation.failureReason }}
                 </div>
               }
-            </li>
-          }
-        </ol>
-      }
-    </section>
-
-    <section class="run-history" aria-labelledby="knowledge-workspace-heading">
-      <div class="run-history__heading">
-        <div>
-          <p class="section-kicker">Museum memory</p>
-          <h3 id="knowledge-workspace-heading">Inventory citation examples</h3>
-        </div>
-        <span>{{ knowledgeItems().length }} examples and lessons</span>
-      </div>
-      <p>
-        Describe what you observed; no masks, regular expressions or programming rules are needed.
-      </p>
-      @if (canReview()) {
-        <form class="decision-form decision-form--grid" (submit)="saveInventoryExample($event)">
-          <label>
-            Registered number
-            <input
-              type="text"
-              placeholder="MUHNAC/MB06-005747"
-              [formField]="knowledgeForm.registeredNumber"
-            />
-          </label>
-          <label>
-            Form found in the publication
-            <input type="text" placeholder="MB06-5747" [formField]="knowledgeForm.observedForm" />
-          </label>
-          <label class="decision-form__wide">
-            Curator explanation
-            <textarea
-              rows="2"
-              placeholder="Explain the variation in your own words."
-              [formField]="knowledgeForm.content"
-            ></textarea>
-          </label>
-          <button
-            type="submit"
-            class="button button--primary"
-            [disabled]="knowledgeDraftInvalid() || knowledgeBusyId() !== null"
-          >
-            Save example
-          </button>
-        </form>
-      }
-      @if (knowledgeItems().length) {
-        <ol class="run-list">
-          @for (item of knowledgeItems(); track item.id) {
-            <li [attr.data-status]="item.status">
-              <div class="run-row">
-                <span class="run-row__status">{{ item.status.toLowerCase() }}</span>
-                @if (item.registeredNumber && item.observedForm) {
-                  <code>{{ item.registeredNumber }} → {{ item.observedForm }}</code>
-                }
-                <p>{{ item.content }}</p>
-                @if (canReview() && item.status === 'PROPOSED') {
-                  <button
-                    type="button"
-                    class="button button--primary"
-                    [disabled]="knowledgeBusyId() !== null"
-                    (click)="activateKnowledge(item)"
-                  >
-                    Validate and activate
-                  </button>
-                } @else if (canReview() && item.status === 'ACTIVE') {
-                  <button
-                    type="button"
-                    class="text-button text-button--danger"
-                    [disabled]="knowledgeBusyId() !== null"
-                    (click)="retireKnowledge(item)"
-                  >
-                    Retire
-                  </button>
-                }
-              </div>
             </li>
           }
         </ol>

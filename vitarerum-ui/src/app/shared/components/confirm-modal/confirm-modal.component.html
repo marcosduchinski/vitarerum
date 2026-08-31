@@ -9,7 +9,9 @@
     ></button>
 
     <section
+      class="confirm-modal__dialog"
       [class]="'confirm-modal__dialog confirm-modal__dialog--' + tone()"
+      [class.confirm-modal__dialog--wide]="size() === 'wide'"
       role="dialog"
       aria-modal="true"
       aria-labelledby="confirm-modal-title"

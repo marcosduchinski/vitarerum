@@ -9,7 +9,6 @@ import {
   AgenticTrajectoryEvent,
   FullAgenticInvestigation,
   ScientificReturnInvestigation,
-  ScientificReturnKnowledgeItem,
   ScientificReturnWatch,
   ScientificReturnWatchStatus,
   UpdateScientificReturnWatchRequest,
@@ -90,7 +89,6 @@ class ApiStub {
   fullAgentic: FullAgenticInvestigation[] = [];
   trajectory: AgenticTrajectoryEvent[] = [];
   startedFullAgentic: string[] = [];
-  knowledge: ScientificReturnKnowledgeItem[] = [];
 
   getWatch(): Observable<ScientificReturnWatch> {
     return of(this.watch);
@@ -102,10 +100,6 @@ class ApiStub {
 
   listRuns(): Observable<typeof EMPTY_PAGE> {
     return of(EMPTY_PAGE);
-  }
-
-  listKnowledgeItems(): Observable<readonly ScientificReturnKnowledgeItem[]> {
-    return of(this.knowledge);
   }
 
   listFullAgenticInvestigations(): Observable<readonly FullAgenticInvestigation[]> {
@@ -135,33 +129,6 @@ class ApiStub {
       failureReason: null,
     };
     this.fullAgentic = [item];
-    return of(item);
-  }
-
-  createInventoryExample(input: {
-    registeredNumber: string;
-    observedForm: string;
-    content: string;
-  }): Observable<ScientificReturnKnowledgeItem> {
-    const item: ScientificReturnKnowledgeItem = {
-      id: 'knowledge-1',
-      institutionId: null,
-      kind: 'INVENTORY_VARIATION_EXAMPLE',
-      status: 'ACTIVE',
-      content: input.content,
-      registeredNumber: input.registeredNumber,
-      observedForm: input.observedForm,
-      supersedesId: null,
-      sourceCandidateId: null,
-      sourceDecisionId: null,
-      createdBy: 'perm-bob-curatorial',
-      createdAt: '2026-08-21T10:00:00Z',
-      validatedBy: 'perm-bob-curatorial',
-      validatedAt: '2026-08-21T10:00:00Z',
-      retiredBy: null,
-      retiredAt: null,
-    };
-    this.knowledge = [item];
     return of(item);
   }
 
@@ -374,28 +341,6 @@ describe('ScientificReturnPanelComponent', () => {
     expect(text).toContain('The planner contract stayed invalid after a retry');
   });
 
-  it('turns curator prose into an active inventory example', async () => {
-    const root = fixture.nativeElement as HTMLElement;
-    const values = [
-      ['MUHNAC/MB06-005747', 'MUHNAC/MB06-005747'],
-      ['MB06-5747', 'MB06-5747'],
-      ['The publication omitted zeroes.', 'Explain the variation in your own words.'],
-    ] as const;
-    for (const [value, placeholder] of values) {
-      const field = root.querySelector<HTMLInputElement | HTMLTextAreaElement>(
-        `[placeholder="${placeholder}"]`,
-      )!;
-      field.value = value;
-      field.dispatchEvent(new Event('input'));
-    }
-    await settle();
-    root.querySelector<HTMLFormElement>('.decision-form')!.dispatchEvent(new SubmitEvent('submit'));
-    await settle();
-
-    expect(api.knowledge[0].registeredNumber).toBe('MUHNAC/MB06-005747');
-    expect(root.textContent).toContain('MB06-5747');
-  });
-
   it('saves a new interval and shows the next review the server returned', async () => {
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('90 days');
 
@@ -530,16 +475,14 @@ describe('ScientificReturnPanelComponent', () => {
 
     // The agentic list is its own section; the helper above targets the
     // supervised one.
-    const agenticRows = (fixture.nativeElement as HTMLElement).querySelectorAll<
-      HTMLButtonElement
-    >('[aria-labelledby="agentic-workspace-heading"] .run-row');
+    const agenticRows = (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>(
+      '[aria-labelledby="agentic-workspace-heading"] .run-row',
+    );
     agenticRows[0].click();
     await settle();
 
     const flat = () =>
-      ((fixture.nativeElement as HTMLElement).textContent ?? '')
-        .replace(/\s+/g, ' ')
-        .trim();
+      ((fixture.nativeElement as HTMLElement).textContent ?? '').replace(/\s+/g, ' ').trim();
     expect(flat()).toContain('Model call charged');
     expect(flat()).toContain('PLAN · 3 of 20');
     expect(flat()).toContain('12.6s');

@@ -1,0 +1,94 @@
+<app-confirm-modal
+  [open]="open()"
+  [title]="item() ? 'Correct knowledge item' : 'Add inventory example'"
+  [message]="
+    item()
+      ? 'Saving creates a new active version and preserves this version in its audit history.'
+      : 'Add a human-validated inventory citation pattern for future investigations.'
+  "
+  [confirmLabel]="item() ? 'Save new version' : 'Add example'"
+  size="wide"
+  [pending]="pending()"
+  [confirmDisabled]="invalid()"
+  (confirmed)="submit()"
+  (cancelled)="cancelled.emit()"
+>
+  <form class="example-form" (submit)="$event.preventDefault(); submit()">
+    @if (isInventoryExample()) {
+      <fieldset class="form-section inventory-section">
+        <legend>Inventory citation</legend>
+        <p class="section-description">
+          Record how the institutional number differs from the form found in the publication.
+        </p>
+        <div class="inventory-fields">
+          <label class="field" for="knowledge-registered">
+            <span class="field-label">Registered number</span>
+            <input
+              id="knowledge-registered"
+              type="text"
+              placeholder="MUHNAC/MB06-005747"
+              [formField]="exampleForm.registeredNumber"
+              aria-describedby="knowledge-registered-hint knowledge-registered-error"
+            />
+            <small id="knowledge-registered-hint" class="field-hint">
+              Canonical number in the collection.
+            </small>
+            @if (
+              exampleForm.registeredNumber().invalid() && exampleForm.registeredNumber().touched()
+            ) {
+              <small id="knowledge-registered-error" class="error">{{
+                exampleForm.registeredNumber().errors()[0]?.message
+              }}</small>
+            }
+          </label>
+
+          <span class="relationship-arrow pi pi-arrow-right" aria-hidden="true"></span>
+
+          <label class="field" for="knowledge-observed">
+            <span class="field-label">Observed citation</span>
+            <input
+              id="knowledge-observed"
+              type="text"
+              placeholder="MB06-5747"
+              [formField]="exampleForm.observedForm"
+              aria-describedby="knowledge-observed-hint knowledge-observed-error"
+            />
+            <small id="knowledge-observed-hint" class="field-hint">
+              Form printed in the publication.
+            </small>
+            @if (exampleForm.observedForm().invalid() && exampleForm.observedForm().touched()) {
+              <small id="knowledge-observed-error" class="error">{{
+                exampleForm.observedForm().errors()[0]?.message
+              }}</small>
+            }
+          </label>
+        </div>
+      </fieldset>
+    }
+
+    <fieldset class="form-section explanation-section">
+      <legend>Curatorial explanation</legend>
+      <p class="section-description">
+        Explain the variation so the agent can recognise it in future investigations.
+      </p>
+      <label class="field" for="knowledge-content">
+        <span class="field-label field-label--sr-only">Curatorial explanation</span>
+        <textarea
+          id="knowledge-content"
+          rows="5"
+          placeholder="For example: the publication omits the internal zeroes used in the institutional catalogue."
+          [formField]="exampleForm.content"
+          aria-describedby="knowledge-content-count knowledge-content-error"
+        ></textarea>
+        <small id="knowledge-content-count" class="character-count">
+          {{ model().content.length }} / 4000
+        </small>
+        @if (exampleForm.content().invalid() && exampleForm.content().touched()) {
+          <small id="knowledge-content-error" class="error">{{
+            exampleForm.content().errors()[0]?.message
+          }}</small>
+        }
+      </label>
+    </fieldset>
+  </form>
+</app-confirm-modal>

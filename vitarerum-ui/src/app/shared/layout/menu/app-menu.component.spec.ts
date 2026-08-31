@@ -134,7 +134,7 @@ describe('AppMenuComponent', () => {
     expect(objectSearchLink.getAttribute('href')).toBe('/p/objects/search');
   });
 
-  it('groups prompts, scientific return, and watchers under AI for staff', () => {
+  it('groups prompts, the knowledge base, scientific return, and watchers under AI for staff', () => {
     activeSession.set(sessionForGroup('CURATORIAL'));
     const fixture = TestBed.createComponent(AppMenuComponent);
     fixture.detectChanges();
@@ -144,6 +144,9 @@ describe('AppMenuComponent', () => {
     expect(compiled.textContent).toContain('AI');
     expect(promptsLink.getAttribute('href')).toBe('/p/ai/prompts');
     expect(promptsLink.querySelector('.pi-file-edit')).not.toBeNull();
+    const knowledgeLink = linkByText(compiled, 'Knowledge Base');
+    expect(knowledgeLink.getAttribute('href')).toBe('/p/ai/knowledge-base');
+    expect(knowledgeLink.querySelector('.pi-book')).not.toBeNull();
     expect(linkByText(compiled, 'Scientific return').getAttribute('href')).toBe(
       '/p/collections/projects/scientific-return',
     );

@@ -9,6 +9,8 @@ from app.identity.public import Actor, GroupName
 from app.scientific_return.application.full_agentic_ports import (
     FullAgenticReasoner,
     FullAgenticRepository,
+    KnowledgeFilters,
+    KnowledgePage,
 )
 from app.scientific_return.domain.enums import KnowledgeKind, KnowledgeStatus
 from app.scientific_return.domain.full_agentic_models import (
@@ -29,6 +31,20 @@ def _now() -> datetime:
     return datetime.now(tz=UTC)
 
 
+def _institution_id(caller: Actor) -> str:
+    institution_id = (caller.institution_id or "").strip()
+    if not institution_id:
+        raise ValueError("An active institutional permission is required")
+    return institution_id
+
+
+def _require_item_access(
+    item: ScientificReturnKnowledgeItem, caller: Actor
+) -> None:
+    if item.institution_id != _institution_id(caller):
+        raise LookupError(f"Knowledge item {item.id} not found")
+
+
 @dataclass(frozen=True, slots=True)
 class CreateKnowledgeInput:
     caller: Actor
@@ -36,7 +52,6 @@ class CreateKnowledgeInput:
     content: str
     registered_number: str | None = None
     observed_form: str | None = None
-    institution_id: str | None = None
 
 
 class CreateCuratorialKnowledge:
@@ -47,13 +62,14 @@ class CreateCuratorialKnowledge:
         self, data: CreateKnowledgeInput
     ) -> ScientificReturnKnowledgeItem:
         require_group(data.caller, *_CURATOR_GROUPS)
+        institution_id = _institution_id(data.caller)
         occurred_at = _now()
         item = ScientificReturnKnowledgeItem(
             id=KnowledgeItemId(str(uuid4())),
             kind=data.kind,
             content=data.content,
             status=KnowledgeStatus.ACTIVE,
-            institution_id=data.institution_id,
+            institution_id=institution_id,
             registered_number=data.registered_number,
             observed_form=data.observed_form,
             created_by=data.caller.id,
@@ -70,11 +86,25 @@ class ListCuratorialKnowledge:
         self._repository = repository
 
     async def execute(
-        self, caller: Actor, *, active_only: bool, limit: int
-    ) -> list[ScientificReturnKnowledgeItem]:
+        self,
+        caller: Actor,
+        *,
+        status: KnowledgeStatus | None,
+        kind: KnowledgeKind | None,
+        inventory_number: str | None,
+        page: int,
+        size: int,
+    ) -> KnowledgePage:
         require_staff(caller)
-        return await self._repository.list_knowledge(
-            active_only=active_only, limit=limit
+        return await self._repository.page_knowledge(
+            KnowledgeFilters(
+                institution_id=_institution_id(caller),
+                status=status,
+                kind=kind,
+                inventory_number=(inventory_number or "").strip() or None,
+            ),
+            page,
+            size,
         )
 
 
@@ -89,6 +119,7 @@ class RetireCuratorialKnowledge:
         item = await self._repository.get_knowledge(item_id)
         if item is None:
             raise LookupError(f"Knowledge item {item_id} not found")
+        _require_item_access(item, caller)
         item.retire(caller.id, _now())
         await self._repository.save_knowledge(item)
         return item
@@ -105,6 +136,7 @@ class ActivateCuratorialKnowledge:
         item = await self._repository.get_knowledge(item_id)
         if item is None:
             raise LookupError(f"Knowledge item {item_id} not found")
+        _require_item_access(item, caller)
         item.activate(caller.id, _now())
         await self._repository.save_knowledge(item)
         return item
@@ -123,6 +155,7 @@ class ProposeKnowledgeFromDecision:
         self, decision: CandidateDecision, explanation: str, caller: Actor
     ) -> ScientificReturnKnowledgeItem:
         require_group(caller, *_CURATOR_GROUPS)
+        institution_id = _institution_id(caller)
         if not explanation.strip():
             raise ValueError("A curator explanation is required for learning")
         context = decision.decision_context
@@ -151,6 +184,7 @@ class ProposeKnowledgeFromDecision:
             kind=kind,
             content=proposal.content,
             status=KnowledgeStatus.PROPOSED,
+            institution_id=institution_id,
             registered_number=proposal.registered_number,
             observed_form=proposal.observed_form,
             source_candidate_id=decision.candidate_id,
@@ -185,6 +219,7 @@ class ReplaceCuratorialKnowledge:
         previous = await self._repository.get_knowledge(item_id)
         if previous is None:
             raise LookupError(f"Knowledge item {item_id} not found")
+        _require_item_access(previous, data.caller)
         occurred_at = _now()
         successor = ScientificReturnKnowledgeItem(
             id=KnowledgeItemId(str(uuid4())),
@@ -208,25 +243,60 @@ class ReplaceCuratorialKnowledge:
         return successor
 
 
+class GetKnowledgeHistory:
+    def __init__(self, repository: FullAgenticRepository) -> None:
+        self._repository = repository
+
+    async def execute(
+        self, item_id: KnowledgeItemId, caller: Actor
+    ) -> list[ScientificReturnKnowledgeItem]:
+        require_staff(caller)
+        item = await self._repository.get_knowledge(item_id)
+        if item is None:
+            raise LookupError(f"Knowledge item {item_id} not found")
+        institution_id = _institution_id(caller)
+        if item.institution_id != institution_id:
+            raise LookupError(f"Knowledge item {item_id} not found")
+        return await self._repository.list_knowledge_lineage(
+            item_id, institution_id
+        )
+
+
 async def retrieve_relevant_knowledge(
     repository: FullAgenticRepository,
     inventory_numbers: tuple[str, ...],
     *,
     limit: int,
+    institution_id: str | None = None,
 ) -> tuple[ScientificReturnKnowledgeItem, ...]:
     """Exact matches first, then structurally similar examples within one cap."""
     if limit <= 0:
         return ()
     selected: dict[str, ScientificReturnKnowledgeItem] = {}
     for inventory_number in inventory_numbers:
-        for item in await repository.find_knowledge_exact(inventory_number, limit):
+        exact = (
+            await repository.find_knowledge_exact(
+                inventory_number, limit, institution_id=institution_id
+            )
+            if institution_id is not None
+            else await repository.find_knowledge_exact(inventory_number, limit)
+        )
+        for item in exact:
             selected[str(item.id)] = item
             if len(selected) >= limit:
                 return tuple(selected.values())
     if len(selected) < limit:
-        corpus = await repository.list_knowledge(
-            active_only=True,
-            limit=max(limit, limit * 4),
+        corpus = (
+            await repository.list_knowledge(
+                active_only=True,
+                limit=max(limit, limit * 4),
+                institution_id=institution_id,
+            )
+            if institution_id is not None
+            else await repository.list_knowledge(
+                active_only=True,
+                limit=max(limit, limit * 4),
+            )
         )
         corpus.sort(
             key=lambda item: _knowledge_relevance(item, inventory_numbers),

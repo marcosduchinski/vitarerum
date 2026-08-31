@@ -414,7 +414,6 @@ class CreateKnowledgeRequest(BaseModel):
     content: str = Field(min_length=1, max_length=4000)
     registeredNumber: str | None = Field(default=None, max_length=255)
     observedForm: str | None = Field(default=None, max_length=255)
-    institutionId: str | None = None
 
 
 class ReplaceKnowledgeRequest(BaseModel):
@@ -425,6 +424,13 @@ class ReplaceKnowledgeRequest(BaseModel):
 
 class ProposeKnowledgeRequest(BaseModel):
     explanation: str = Field(min_length=1, max_length=2000)
+
+
+class KnowledgeActorResponse(BaseModel):
+    permissionId: str
+    name: str
+    email: str
+    group: str
 
 
 class KnowledgeItemResponse(BaseModel):
@@ -438,12 +444,32 @@ class KnowledgeItemResponse(BaseModel):
     supersedesId: str | None
     sourceCandidateId: str | None
     sourceDecisionId: str | None
+    proposedByModel: str | None
+    promptVersion: str | None
     createdBy: str
+    createdByDetail: KnowledgeActorResponse | None = None
     createdAt: datetime
     validatedBy: str | None
+    validatedByDetail: KnowledgeActorResponse | None = None
     validatedAt: datetime | None
     retiredBy: str | None
+    retiredByDetail: KnowledgeActorResponse | None = None
     retiredAt: datetime | None
+
+
+class KnowledgeCountsResponse(BaseModel):
+    active: int
+    proposed: int
+    retired: int
+
+
+class KnowledgeItemsPageResponse(BaseModel):
+    content: list[KnowledgeItemResponse]
+    page: int
+    size: int
+    totalElements: int
+    totalPages: int
+    counts: KnowledgeCountsResponse
 
 
 class StartFullAgenticRequest(BaseModel):

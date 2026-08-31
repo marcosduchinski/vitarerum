@@ -116,6 +116,10 @@ class ScientificReturnKnowledgeItem:
 
     def __post_init__(self) -> None:
         self.content = self.content.strip()
+        self.registered_number = (
+            self.registered_number.strip() if self.registered_number else None
+        )
+        self.observed_form = self.observed_form.strip() if self.observed_form else None
         if not self.content:
             raise ValueError("Knowledge content is required")
         if len(self.content) > 4000:
@@ -214,6 +218,7 @@ class FullAgenticInvestigation:
     usage: AgenticUsage
     created_by: PermissionId
     created_at: datetime
+    institution_id: str | None = None
     candidate_id: CandidatePublicationId | None = None
     # Which consulted object this investigation is for. A project may consult
     # several, and the budgets were measured against one: giving each its own

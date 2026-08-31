@@ -9,7 +9,6 @@ import {
   resource,
   signal,
 } from '@angular/core';
-import { FormField, form, maxLength, pattern, required } from '@angular/forms/signals';
 import { firstValueFrom } from 'rxjs';
 
 import { IDENTITY_SERVICE } from '@core/auth/identity.service';
@@ -36,18 +35,11 @@ import {
   ScientificReturnInvestigation,
   FullAgenticInvestigation,
   AgenticTrajectoryEvent,
-  ScientificReturnKnowledgeItem,
 } from '../../models/scientific-return.model';
 import { ScientificReturnApiService } from '../../services/scientific-return-api.service';
 
 type DecisionDraft = Exclude<ScientificReturnDecision, 'CONFIRM'> | 'CONFIRM';
 type CandidateFilter = ScientificReturnCandidateStatus | 'ALL';
-
-interface KnowledgeFormModel {
-  readonly registeredNumber: string;
-  readonly observedForm: string;
-  readonly content: string;
-}
 
 function isNotFound(error: unknown): boolean {
   return error instanceof HttpErrorResponse && error.status === 404;
@@ -61,7 +53,6 @@ function isNotFound(error: unknown): boolean {
     DatePipe,
     ErrorMessageComponent,
     FeedbackMessageComponent,
-    FormField,
     InvestigationTimelineComponent,
     LoadingStateComponent,
   ],
@@ -130,10 +121,6 @@ export class ScientificReturnPanelComponent {
   protected readonly fullAgenticInvestigations = computed(
     () => this.fullAgenticResource.value() ?? [],
   );
-  protected readonly knowledgeResource = resource({
-    loader: () => firstValueFrom(this.api.listKnowledgeItems()),
-  });
-  protected readonly knowledgeItems = computed(() => this.knowledgeResource.value() ?? []);
   protected readonly canReview = computed(() => {
     const group = this.identity.session()?.group;
     return group === 'CURATORIAL' || group === 'COLLECTIONS_MANAGEMENT' || group === 'DIRECTION';
@@ -148,7 +135,6 @@ export class ScientificReturnPanelComponent {
       this.runsResource.error() ??
       this.watchInvestigationsResource.error() ??
       this.fullAgenticResource.error() ??
-      this.knowledgeResource.error() ??
       null;
     return error ? toApiError(error) : null;
   });
@@ -206,23 +192,6 @@ export class ScientificReturnPanelComponent {
   protected readonly fullAgenticTrajectory = signal<
     Readonly<Partial<Record<string, readonly AgenticTrajectoryEvent[]>>>
   >({});
-  protected readonly knowledgeBusyId = signal<string | null>(null);
-  protected readonly knowledgeFormModel = signal<KnowledgeFormModel>({
-    registeredNumber: '',
-    observedForm: '',
-    content: '',
-  });
-  protected readonly knowledgeForm = form(this.knowledgeFormModel, (path) => {
-    required(path.registeredNumber, { message: 'Registered number is required.' });
-    pattern(path.registeredNumber, /\S/, { message: 'Registered number cannot be blank.' });
-    maxLength(path.registeredNumber, 255, { message: 'Use at most 255 characters.' });
-    required(path.observedForm, { message: 'Observed form is required.' });
-    pattern(path.observedForm, /\S/, { message: 'Observed form cannot be blank.' });
-    maxLength(path.observedForm, 255, { message: 'Use at most 255 characters.' });
-    required(path.content, { message: 'Curator explanation is required.' });
-    pattern(path.content, /\S/, { message: 'Curator explanation cannot be blank.' });
-    maxLength(path.content, 4000, { message: 'Use at most 4000 characters.' });
-  });
 
   protected setFilter(filter: CandidateFilter): void {
     this.filter.set(filter);
@@ -461,7 +430,6 @@ export class ScientificReturnPanelComponent {
       if (request.justification) {
         try {
           await firstValueFrom(this.api.proposeKnowledge(candidate.id, request.justification));
-          this.knowledgeResource.reload();
           this.feedback.set(
             `${this.decisionFeedback(decision)} A reusable lesson was proposed for curator validation.`,
           );
@@ -748,68 +716,6 @@ export class ScientificReturnPanelComponent {
       this.actionError.set(toApiError(error));
     } finally {
       this.fullAgenticBusy.set(false);
-    }
-  }
-
-  protected knowledgeDraftInvalid(): boolean {
-    const value = this.knowledgeFormModel();
-    return (
-      this.knowledgeForm().invalid() ||
-      !value.registeredNumber.trim() ||
-      !value.observedForm.trim() ||
-      !value.content.trim()
-    );
-  }
-
-  protected async saveInventoryExample(event: SubmitEvent): Promise<void> {
-    event.preventDefault();
-    if (!this.canReview() || this.knowledgeDraftInvalid() || this.knowledgeBusyId()) return;
-    this.knowledgeBusyId.set('create');
-    this.clearMessages();
-    const value = this.knowledgeFormModel();
-    try {
-      await firstValueFrom(
-        this.api.createInventoryExample({
-          registeredNumber: value.registeredNumber.trim(),
-          observedForm: value.observedForm.trim(),
-          content: value.content.trim(),
-        }),
-      );
-      this.knowledgeFormModel.set({ registeredNumber: '', observedForm: '', content: '' });
-      this.knowledgeResource.reload();
-      this.feedback.set('The curator example is active and available to future investigations.');
-    } catch (error) {
-      this.actionError.set(toApiError(error));
-    } finally {
-      this.knowledgeBusyId.set(null);
-    }
-  }
-
-  protected async activateKnowledge(item: ScientificReturnKnowledgeItem): Promise<void> {
-    if (!this.canReview() || this.knowledgeBusyId()) return;
-    this.knowledgeBusyId.set(item.id);
-    try {
-      await firstValueFrom(this.api.activateKnowledgeItem(item.id));
-      this.knowledgeResource.reload();
-      this.feedback.set('The proposed lesson is now active.');
-    } catch (error) {
-      this.actionError.set(toApiError(error));
-    } finally {
-      this.knowledgeBusyId.set(null);
-    }
-  }
-
-  protected async retireKnowledge(item: ScientificReturnKnowledgeItem): Promise<void> {
-    if (!this.canReview() || this.knowledgeBusyId()) return;
-    this.knowledgeBusyId.set(item.id);
-    try {
-      await firstValueFrom(this.api.retireKnowledgeItem(item.id));
-      this.knowledgeResource.reload();
-      this.feedback.set('The lesson was retired and will not influence future searches.');
-    } catch (error) {
-      this.actionError.set(toApiError(error));
-    } finally {
-      this.knowledgeBusyId.set(null);
     }
   }
 

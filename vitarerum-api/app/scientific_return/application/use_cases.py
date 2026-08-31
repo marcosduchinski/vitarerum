@@ -196,6 +196,7 @@ class CreateScientificReturnWatch:
             created_at=now,
             project_snapshot_id=snapshot.id,
             schedule_anchor_at=anchor,
+            institution_id=data.caller.institution_id,
         )
         await self._repository.add_snapshot(snapshot)
         await self._repository.add_watch(watch)

@@ -155,6 +155,7 @@ def _watch_to_domain(record: ScientificReturnWatchRecord) -> ScientificReturnWat
         next_run_at=record.next_run_at,
         schedule_anchor_at=record.schedule_anchor_at,
         project_snapshot_id=ScientificReturnSnapshotId(record.project_snapshot_id),
+        institution_id=record.institution_id,
     )
 
 
@@ -815,6 +816,7 @@ class SqlAlchemyScientificReturnRepository:
                 status=watch.status,
                 review_interval_days=watch.review_interval_days,
                 created_by=watch.created_by,
+                institution_id=watch.institution_id,
                 created_at=watch.created_at,
                 last_run_at=watch.last_run_at,
                 next_run_at=watch.next_run_at,

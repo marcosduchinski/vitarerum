@@ -338,6 +338,12 @@ class StartFullAgenticScientificReturn:
         watch = await self._scientific_repository.get_watch(data.watch_id)
         if watch is None:
             raise LookupError(f"Scientific-return watch {data.watch_id} not found")
+        if (
+            data.caller.institution_id is not None
+            and watch.institution_id is not None
+            and data.caller.institution_id != watch.institution_id
+        ):
+            raise ValueError("Scientific-return watch belongs to another institution")
         if data.candidate_id is not None:
             candidate = await self._scientific_repository.get_candidate(
                 data.candidate_id
@@ -378,6 +384,7 @@ class StartFullAgenticScientificReturn:
             usage=AgenticUsage(),
             created_by=data.caller.id,
             created_at=self._clock.now(),
+            institution_id=watch.institution_id or data.caller.institution_id,
         )
         await self._repository.add_investigation(investigation)
         await self._uow.commit()
@@ -712,10 +719,17 @@ class ExecuteFullAgenticScientificReturn:
             raise RuntimeError("Watch snapshot is missing")
         payload = snapshot_for_object(snapshot.payload, investigation.object_id)
         inventories = tuple(item.inventory_number for item in payload.consulted_objects)
-        memory = await retrieve_relevant_knowledge(
-            self._repository,
-            inventories,
-            limit=self._configuration.memory_limit,
+        # Legacy investigations without an institutional owner must never fall
+        # back to a cross-institution knowledge corpus.
+        memory = (
+            await retrieve_relevant_knowledge(
+                self._repository,
+                inventories,
+                limit=self._configuration.memory_limit,
+                institution_id=investigation.institution_id,
+            )
+            if investigation.institution_id is not None
+            else ()
         )
         existing_events = await self._repository.list_events(investigation.id)
         if not any(

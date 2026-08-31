@@ -1,0 +1,138 @@
+<main class="knowledge-base">
+  <app-page-header
+    eyebrow="Agentic workflow"
+    title="Knowledge Base"
+    description="Human-validated inventory examples and curatorial lessons used by autonomous investigations in your institution."
+  >
+    @if (canManage()) {
+      <button type="button" class="primary" (click)="openCreate()">
+        <span class="pi pi-plus" aria-hidden="true"></span>
+        Add knowledge
+      </button>
+    }
+  </app-page-header>
+
+  @if (feedback(); as message) {
+    <app-feedback-message
+      title="Knowledge Base updated"
+      [message]="message"
+      tone="success"
+      [dismissible]="true"
+      (dismissed)="feedback.set(null)"
+    />
+  }
+  @if (actionError(); as error) {
+    <app-error-message [apiError]="error" />
+  }
+
+  <app-knowledge-summary
+    [counts]="counts()"
+    [selectedStatus]="status()"
+    (statusSelected)="toggleStatus($event)"
+  />
+  <app-knowledge-filters
+    [status]="status()"
+    [kind]="kind()"
+    [inventoryNumber]="inventoryNumber()"
+    (changed)="applyFilters($event)"
+  />
+
+  @if (knowledgeResource.isLoading() && !result()) {
+    <app-loading-state label="Loading institutional knowledge" />
+  } @else if (loadError(); as error) {
+    <app-error-message [apiError]="error" (retry)="knowledgeResource.reload()" />
+  } @else if (!items().length) {
+    <app-empty-state
+      [title]="
+        hasFilters() ? 'No knowledge matches these filters' : 'No institutional knowledge yet'
+      "
+      [message]="
+        hasFilters()
+          ? 'Clear or change the filters to broaden the result.'
+          : 'Create the first human-validated inventory example used by scientific-return investigations.'
+      "
+    >
+      @if (hasFilters()) {
+        <button
+          type="button"
+          class="secondary"
+          (click)="applyFilters({ status: null, kind: null, inventoryNumber: null })"
+        >
+          Clear filters
+        </button>
+      } @else if (canManage()) {
+        <button type="button" class="primary" (click)="openCreate()">Add knowledge</button>
+      }
+    </app-empty-state>
+  } @else {
+    <section class="catalog-results" aria-labelledby="knowledge-results-title">
+      <div class="results-heading">
+        <div>
+          <h2 id="knowledge-results-title">Institutional catalogue</h2>
+          <p>{{ result()?.totalElements }} items · newest first</p>
+        </div>
+        @if (knowledgeResource.isLoading()) {
+          <span role="status"
+            ><span class="pi pi-spin pi-spinner" aria-hidden="true"></span> Updating…</span
+          >
+        }
+      </div>
+      <div class="catalog-results__body">
+        <app-knowledge-items-list
+          [items]="items()"
+          [canManage]="canManage()"
+          [busyId]="busyId()"
+          (activate)="requestConfirmation('activate', $event)"
+          (edit)="openEdit($event)"
+          (retire)="requestConfirmation('retire', $event)"
+          (history)="showHistory($event)"
+        />
+
+        <app-pagination
+          [page]="page()"
+          [totalPages]="result()?.totalPages ?? 0"
+          [total]="result()?.totalElements ?? 0"
+          [pageSize]="pageSize"
+          itemLabel="knowledge items"
+          (previous)="previousPage()"
+          (next)="nextPage()"
+        />
+      </div>
+    </section>
+  }
+
+  <app-knowledge-example-modal
+    [open]="editorOpen()"
+    [item]="editingItem()"
+    [pending]="busyId() !== null"
+    (saved)="saveExample($event)"
+    (cancelled)="closeEditor()"
+  />
+
+  @if (confirmation(); as pending) {
+    <app-confirm-modal
+      [open]="true"
+      [title]="
+        pending.action === 'activate' ? 'Validate and activate?' : 'Retire this knowledge item?'
+      "
+      [message]="
+        pending.action === 'activate'
+          ? 'A human validation makes this lesson available to future autonomous investigations.'
+          : 'It will stop influencing future investigations, but remains available in its audit history.'
+      "
+      [confirmLabel]="pending.action === 'activate' ? 'Validate and activate' : 'Retire item'"
+      [tone]="pending.action === 'retire' ? 'danger' : 'default'"
+      [pending]="busyId() !== null"
+      (confirmed)="confirmAction()"
+      (cancelled)="confirmation.set(null)"
+    />
+  }
+
+  <app-knowledge-history
+    [open]="historyItem() !== null"
+    [items]="historyResource.value() ?? []"
+    [loading]="historyResource.isLoading()"
+    [error]="historyError()"
+    (closed)="historyItem.set(null)"
+  />
+</main>

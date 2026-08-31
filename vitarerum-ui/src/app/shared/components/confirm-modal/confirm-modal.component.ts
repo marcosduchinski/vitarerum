@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 
 export type ConfirmModalTone = 'default' | 'warning' | 'danger';
+export type ConfirmModalSize = 'compact' | 'wide';
 
 @Component({
   selector: 'app-confirm-modal',
@@ -16,6 +17,7 @@ export class ConfirmModalComponent {
   readonly confirmLabel = input('Confirm');
   readonly cancelLabel = input('Cancel');
   readonly tone = input<ConfirmModalTone>('default');
+  readonly size = input<ConfirmModalSize>('compact');
   readonly pending = input(false);
   readonly confirmDisabled = input(false);
 

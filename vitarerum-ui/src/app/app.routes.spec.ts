@@ -6,6 +6,7 @@ import { of } from 'rxjs';
 
 import { IDENTITY_SERVICE, IdentityService } from '@core/auth/identity.service';
 import { IdentitySession } from '@core/auth/models/identity-session.model';
+import { staffGuard } from '@core/guards/staff.guard';
 import { AiPromptTemplate, AiPromptVersion } from '@features/ai/prompts/models/ai-prompt.model';
 import { AI_PROMPT_MANAGEMENT_SERVICE } from '@features/ai/prompts/services/ai-prompt-management.service';
 import { PROJECT_API_SERVICE } from '@features/collections/projects/services/project-api.service';
@@ -117,6 +118,15 @@ describe('app routes', () => {
         { provide: NOTIFICATION_API_SERVICE, useClass: NotificationApiServiceMock },
       ],
     }).compileComponents();
+  });
+
+  it('exposes the agentic knowledge base as an independent staff AI route', () => {
+    const protectedRoutes = routes.find((route) => route.path === 'p')?.children;
+    const aiRoute = protectedRoutes?.find((route) => route.path === 'ai');
+    const knowledgeRoute = aiRoute?.children?.find((route) => route.path === 'knowledge-base');
+
+    expect(knowledgeRoute?.canMatch).toContain(staffGuard);
+    expect(knowledgeRoute?.loadComponent).toBeDefined();
   });
 
   it('routes AI prompt version links to the read-only prompt page', async () => {

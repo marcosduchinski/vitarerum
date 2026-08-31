@@ -31,7 +31,10 @@ describe('PROJECTS_ROUTES', () => {
   });
 
   it('keeps scientific return and removes the retired test bench route', () => {
-    expect(PROJECTS_ROUTES.some((route) => route.path === 'scientific-return')).toBe(true);
+    const route = PROJECTS_ROUTES.find((candidate) => candidate.path === 'scientific-return');
+    expect(route).toBeDefined();
+    expect(route?.loadComponent).toBeDefined();
+    expect(route?.children).toBeUndefined();
     expect(PROJECTS_ROUTES.some((route) => route.path === 'scientific-return-test')).toBe(false);
   });
 

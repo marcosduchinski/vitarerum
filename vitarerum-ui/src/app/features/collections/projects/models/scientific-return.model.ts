@@ -417,6 +417,13 @@ export interface AgenticTrajectoryEvent {
 export type ScientificReturnKnowledgeKind = 'INVENTORY_VARIATION_EXAMPLE' | 'CURATORIAL_LESSON';
 export type ScientificReturnKnowledgeStatus = 'PROPOSED' | 'ACTIVE' | 'RETIRED';
 
+export interface ScientificReturnKnowledgeActor {
+  readonly permissionId: string;
+  readonly name: string | null;
+  readonly email: string | null;
+  readonly group: string | null;
+}
+
 export interface ScientificReturnKnowledgeItem {
   readonly id: string;
   readonly institutionId: string | null;
@@ -428,10 +435,38 @@ export interface ScientificReturnKnowledgeItem {
   readonly supersedesId: string | null;
   readonly sourceCandidateId: string | null;
   readonly sourceDecisionId: string | null;
+  readonly proposedByModel: string | null;
+  readonly promptVersion: string | null;
   readonly createdBy: string;
+  readonly createdByDetail: ScientificReturnKnowledgeActor | null;
   readonly createdAt: string;
   readonly validatedBy: string | null;
+  readonly validatedByDetail: ScientificReturnKnowledgeActor | null;
   readonly validatedAt: string | null;
   readonly retiredBy: string | null;
+  readonly retiredByDetail: ScientificReturnKnowledgeActor | null;
   readonly retiredAt: string | null;
+}
+
+export interface ScientificReturnKnowledgeCounts {
+  readonly active: number;
+  readonly proposed: number;
+  readonly retired: number;
+}
+
+export interface ScientificReturnKnowledgePage {
+  readonly content: readonly ScientificReturnKnowledgeItem[];
+  readonly page: number;
+  readonly size: number;
+  readonly totalElements: number;
+  readonly totalPages: number;
+  readonly counts: ScientificReturnKnowledgeCounts;
+}
+
+export interface ScientificReturnKnowledgeQuery {
+  readonly status: ScientificReturnKnowledgeStatus | null;
+  readonly kind: ScientificReturnKnowledgeKind | null;
+  readonly inventoryNumber: string | null;
+  readonly page: number;
+  readonly size: number;
 }

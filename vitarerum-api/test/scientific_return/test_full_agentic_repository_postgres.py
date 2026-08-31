@@ -12,6 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 
 from app.config import settings
+from app.scientific_return.application.full_agentic_ports import KnowledgeFilters
 from app.scientific_return.domain.enums import (
     AgentAnalysisStatus,
     AgentConfidence,
@@ -20,6 +21,8 @@ from app.scientific_return.domain.enums import (
     AgentRecommendedAction,
     FullAgenticInvestigationStatus,
     InvestigationObjective,
+    KnowledgeKind,
+    KnowledgeStatus,
 )
 from app.scientific_return.domain.full_agentic_models import (
     AgenticBudget,
@@ -29,6 +32,8 @@ from app.scientific_return.domain.full_agentic_models import (
     AgenticUsage,
     FullAgenticInvestigation,
     FullAgenticInvestigationId,
+    KnowledgeItemId,
+    ScientificReturnKnowledgeItem,
 )
 from app.scientific_return.domain.models import (
     CandidateAgentAnalysis,
@@ -82,6 +87,67 @@ async def test_candidate_link_table_has_expected_composite_primary_key(
         ).scalar_one_or_none()
 
     assert definition == "PRIMARY KEY (investigation_id, candidate_id)"
+
+
+async def test_knowledge_page_is_institutional_filtered_and_stably_ordered(
+    postgres_engine: AsyncEngine,
+) -> None:
+    async with postgres_engine.connect() as connection:
+        await connection.execute(
+            text(
+                "CREATE TEMP TABLE sr_knowledge_items "
+                "(LIKE public.sr_knowledge_items INCLUDING ALL)"
+            )
+        )
+        session = AsyncSession(bind=connection, expire_on_commit=False)
+        repository = SqlAlchemyFullAgenticRepository(
+            session, FieldEncryptor(bytes(32))
+        )
+        now = datetime.now(tz=UTC)
+        for item_id, institution_id, status, created_at in (
+            ("knowledge-a", "institution-1", KnowledgeStatus.ACTIVE, now),
+            ("knowledge-b", "institution-1", KnowledgeStatus.RETIRED, now),
+            (
+                "knowledge-other",
+                "institution-2",
+                KnowledgeStatus.ACTIVE,
+                now + timedelta(minutes=1),
+            ),
+        ):
+            await repository.add_knowledge(
+                ScientificReturnKnowledgeItem(
+                    id=KnowledgeItemId(item_id),
+                    institution_id=institution_id,
+                    kind=KnowledgeKind.INVENTORY_VARIATION_EXAMPLE,
+                    content=item_id,
+                    status=status,
+                    registered_number="MUHNAC/MB06-005747",
+                    observed_form="MB06-5747",
+                    created_by=PermissionId("permission-1"),
+                    created_at=created_at,
+                    validated_by=PermissionId("permission-1"),
+                )
+            )
+
+        page = await repository.page_knowledge(
+            KnowledgeFilters(
+                institution_id="institution-1",
+                status=None,
+                kind=KnowledgeKind.INVENTORY_VARIATION_EXAMPLE,
+                inventory_number="MB06-5747",
+            ),
+            page=0,
+            size=25,
+        )
+
+        assert [item.id for item in page.content] == [
+            KnowledgeItemId("knowledge-b"),
+            KnowledgeItemId("knowledge-a"),
+        ]
+        assert page.total_elements == 2
+        assert page.counts.active == 1
+        assert page.counts.retired == 1
+        await session.close()
 
 
 async def test_link_candidate_is_idempotent_on_postgresql(
@@ -631,4 +697,3 @@ async def test_one_publication_found_for_two_objects_counts_two_on_postgresql(
             == 2
         )
         await session.close()
-

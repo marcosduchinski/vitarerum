@@ -1,0 +1,109 @@
+.history-modal {
+  position: fixed;
+  z-index: 1200;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+.backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  border: 0;
+  background: var(--maskbg);
+}
+section {
+  position: relative;
+  width: min(44rem, 95vw);
+  max-height: 85vh;
+  overflow: auto;
+  padding: 1.25rem;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-panel);
+  color: var(--color-text);
+  box-shadow: var(--shadow-raised);
+}
+header,
+header > div,
+li,
+li > div {
+  display: flex;
+  gap: 0.65rem;
+}
+header {
+  align-items: start;
+  justify-content: space-between;
+}
+header > div,
+li {
+  flex-direction: column;
+}
+header p {
+  margin: 0;
+  color: var(--color-accent-strong);
+  font-size: 0.75rem;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+h2 {
+  margin: 0.2rem 0 1rem;
+}
+.close {
+  padding: 0.5rem;
+  border: 0;
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+}
+ol {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+li {
+  position: relative;
+  padding: 0 0 1.25rem 1.5rem;
+  border-left: 2px solid var(--color-line-strong);
+}
+li::before {
+  position: absolute;
+  top: 0.2rem;
+  left: -0.4rem;
+  width: 0.7rem;
+  height: 0.7rem;
+  content: '';
+  border-radius: 50%;
+  background: var(--color-muted);
+}
+li[data-status='ACTIVE']::before {
+  background: var(--status-approved-text);
+}
+li[data-status='PROPOSED']::before {
+  background: var(--status-review-text);
+}
+li > div {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+li span {
+  text-transform: capitalize;
+}
+li p {
+  margin: 0;
+  line-height: 1.5;
+}
+li small {
+  color: var(--color-muted);
+}
+.state {
+  padding: 2rem;
+  text-align: center;
+}
+.error {
+  color: var(--status-rejected-text);
+}

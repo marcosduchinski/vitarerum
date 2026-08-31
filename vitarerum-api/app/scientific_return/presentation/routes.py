@@ -10,7 +10,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Header, HTTPException, Query, status
 from sqlalchemy.exc import IntegrityError
 
-from app.identity.public import Actor
+from app.identity.public import Actor, get_permission_reader
 from app.notifications.public import NotificationKind, RelatedResourceType
 from app.scientific_return.application.agent_analysis import (
     AgentAnalysisNotFound,
@@ -32,6 +32,7 @@ from app.scientific_return.application.knowledge import (
     ActivateCuratorialKnowledge,
     CreateCuratorialKnowledge,
     CreateKnowledgeInput,
+    GetKnowledgeHistory,
     ListCuratorialKnowledge,
     ProposeKnowledgeFromDecision,
     ReplaceCuratorialKnowledge,
@@ -65,6 +66,8 @@ from app.scientific_return.domain.enums import (
     FullAgenticInvestigationStatus,
     InventoryEvidenceStatus,
     InvestigationObjective,
+    KnowledgeKind,
+    KnowledgeStatus,
     WatchIneligibilityReason,
 )
 from app.scientific_return.domain.full_agentic_models import (
@@ -142,7 +145,10 @@ from app.scientific_return.presentation.schemas import (
     InvestigationResponse,
     InvestigationTelemetryResponse,
     InvestigationToolResponse,
+    KnowledgeActorResponse,
+    KnowledgeCountsResponse,
     KnowledgeItemResponse,
+    KnowledgeItemsPageResponse,
     PaginatedCandidateQueueResponse,
     PaginatedCandidatesResponse,
     PaginatedRunsResponse,
@@ -160,6 +166,7 @@ from app.scientific_return.presentation.schemas import (
 )
 from app.shared.authorization import require_staff
 from app.shared.dependencies import CallerPermission
+from app.shared.kernel import PermissionId
 
 scientific_return_router = APIRouter(
     prefix="/scientific-return", tags=["scientific-return"]
@@ -421,7 +428,25 @@ async def execute_full_agentic_worker(
     return _full_agentic_response(item)
 
 
-def _knowledge_response(item: ScientificReturnKnowledgeItem) -> KnowledgeItemResponse:
+async def _knowledge_actor_response(
+    permission_id: PermissionId | None, session: DBSession
+) -> KnowledgeActorResponse | None:
+    if permission_id is None:
+        return None
+    detail = await get_permission_reader(session).get_detail(permission_id)
+    if detail is None:
+        return None
+    return KnowledgeActorResponse(
+        permissionId=detail.permission_id,
+        name=detail.user.name,
+        email=detail.user.email,
+        group=detail.group.value,
+    )
+
+
+async def _knowledge_response(
+    item: ScientificReturnKnowledgeItem, session: DBSession
+) -> KnowledgeItemResponse:
     return KnowledgeItemResponse(
         id=item.id,
         institutionId=item.institution_id,
@@ -433,11 +458,16 @@ def _knowledge_response(item: ScientificReturnKnowledgeItem) -> KnowledgeItemRes
         supersedesId=item.supersedes_id,
         sourceCandidateId=item.source_candidate_id,
         sourceDecisionId=item.source_decision_id,
+        proposedByModel=item.proposed_by_model,
+        promptVersion=item.prompt_version,
         createdBy=item.created_by,
+        createdByDetail=await _knowledge_actor_response(item.created_by, session),
         createdAt=item.created_at,
         validatedBy=item.validated_by,
+        validatedByDetail=await _knowledge_actor_response(item.validated_by, session),
         validatedAt=item.validated_at,
         retiredBy=item.retired_by,
+        retiredByDetail=await _knowledge_actor_response(item.retired_by, session),
         retiredAt=item.retired_at,
     )
 
@@ -461,28 +491,77 @@ async def create_knowledge_item(
                 content=body.content,
                 registered_number=body.registeredNumber,
                 observed_form=body.observedForm,
-                institution_id=body.institutionId,
             )
         )
     except ValueError as exc:
         raise _unprocessable(str(exc)) from None
     await session.commit()
-    return _knowledge_response(item)
+    return await _knowledge_response(item, session)
 
 
 @scientific_return_router.get(
-    "/knowledge-items", response_model=list[KnowledgeItemResponse]
+    "/knowledge-items", response_model=KnowledgeItemsPageResponse
 )
 async def list_knowledge_items(
     caller: CallerPermission,
     repository: FullAgenticRepositoryDep,
-    active_only: bool = Query(default=False, alias="activeOnly"),
-    limit: int = Query(default=100, ge=1, le=500),
-) -> list[KnowledgeItemResponse]:
-    items = await ListCuratorialKnowledge(repository).execute(
-        caller, active_only=active_only, limit=limit
+    session: DBSession,
+    knowledge_status: Annotated[
+        KnowledgeStatus | None, Query(alias="status")
+    ] = None,
+    kind: KnowledgeKind | None = None,
+    inventory_number: Annotated[
+        str | None, Query(alias="inventoryNumber")
+    ] = None,
+    page: Annotated[int, Query(ge=0)] = 0,
+    size: Annotated[int, Query(ge=1, le=100)] = 25,
+) -> KnowledgeItemsPageResponse:
+    try:
+        result = await ListCuratorialKnowledge(repository).execute(
+            caller,
+            status=knowledge_status,
+            kind=kind,
+            inventory_number=inventory_number,
+            page=page,
+            size=size,
+        )
+    except ValueError as exc:
+        raise _unprocessable(str(exc)) from None
+    return KnowledgeItemsPageResponse(
+        content=[
+            await _knowledge_response(item, session) for item in result.content
+        ],
+        page=result.page,
+        size=result.size,
+        totalElements=result.total_elements,
+        totalPages=ceil(result.total_elements / result.size),
+        counts=KnowledgeCountsResponse(
+            active=result.counts.active,
+            proposed=result.counts.proposed,
+            retired=result.counts.retired,
+        ),
     )
-    return [_knowledge_response(item) for item in items]
+
+
+@scientific_return_router.get(
+    "/knowledge-items/{item_id}/history",
+    response_model=list[KnowledgeItemResponse],
+)
+async def get_knowledge_history(
+    item_id: str,
+    caller: CallerPermission,
+    repository: FullAgenticRepositoryDep,
+    session: DBSession,
+) -> list[KnowledgeItemResponse]:
+    try:
+        items = await GetKnowledgeHistory(repository).execute(
+            KnowledgeItemId(item_id), caller
+        )
+    except LookupError as exc:
+        raise _not_found("SCIENTIFIC_RETURN_KNOWLEDGE_NOT_FOUND", str(exc)) from None
+    except ValueError as exc:
+        raise _unprocessable(str(exc)) from None
+    return [await _knowledge_response(item, session) for item in items]
 
 
 @scientific_return_router.put(
@@ -510,7 +589,7 @@ async def replace_knowledge_item(
     except ValueError as exc:
         raise _unprocessable(str(exc)) from None
     await session.commit()
-    return _knowledge_response(item)
+    return await _knowledge_response(item, session)
 
 
 @scientific_return_router.delete(
@@ -528,8 +607,10 @@ async def retire_knowledge_item(
         )
     except LookupError as exc:
         raise _not_found("SCIENTIFIC_RETURN_KNOWLEDGE_NOT_FOUND", str(exc)) from None
+    except ValueError as exc:
+        raise _unprocessable(str(exc)) from None
     await session.commit()
-    return _knowledge_response(item)
+    return await _knowledge_response(item, session)
 
 
 @scientific_return_router.post(
@@ -550,7 +631,7 @@ async def activate_knowledge_item(
     except ValueError as exc:
         raise _unprocessable(str(exc)) from None
     await session.commit()
-    return _knowledge_response(item)
+    return await _knowledge_response(item, session)
 
 
 @scientific_return_router.post(
@@ -573,11 +654,14 @@ async def propose_knowledge_from_decision(
             "SCIENTIFIC_RETURN_DECISION_NOT_FOUND",
             f"Candidate {candidate_id} has no curator decision",
         )
-    item = await ProposeKnowledgeFromDecision(knowledge_repository, reasoner).execute(
-        decisions[-1], body.explanation, caller
-    )
+    try:
+        item = await ProposeKnowledgeFromDecision(
+            knowledge_repository, reasoner
+        ).execute(decisions[-1], body.explanation, caller)
+    except ValueError as exc:
+        raise _unprocessable(str(exc)) from None
     await session.commit()
-    return _knowledge_response(item)
+    return await _knowledge_response(item, session)
 
 
 def _not_found(code: str, message: str) -> HTTPException:

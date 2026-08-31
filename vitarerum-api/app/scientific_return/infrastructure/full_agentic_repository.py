@@ -10,6 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.scientific_return.application.full_agentic_ports import (
     InvestigationConcurrencyConflict,
+    KnowledgeCounts,
+    KnowledgeFilters,
+    KnowledgePage,
 )
 from app.scientific_return.domain.enums import (
     FullAgenticInvestigationStatus,
@@ -125,6 +128,7 @@ def _investigation_to_domain(
         budget=_budget(record.budget),
         usage=_usage(record.usage),
         created_by=PermissionId(record.created_by),
+        institution_id=record.institution_id,
         created_at=record.created_at,
         heartbeat_at=record.heartbeat_at,
         started_at=record.started_at,
@@ -203,9 +207,13 @@ class SqlAlchemyFullAgenticRepository:
         return _knowledge_to_domain(record, self._encryptor) if record else None
 
     async def list_knowledge(
-        self, *, active_only: bool, limit: int
+        self, *, active_only: bool, limit: int, institution_id: str | None = None
     ) -> list[ScientificReturnKnowledgeItem]:
         statement = select(ScientificReturnKnowledgeRecord)
+        if institution_id is not None:
+            statement = statement.where(
+                ScientificReturnKnowledgeRecord.institution_id == institution_id
+            )
         if active_only:
             statement = statement.where(
                 ScientificReturnKnowledgeRecord.status == KnowledgeStatus.ACTIVE
@@ -218,20 +226,137 @@ class SqlAlchemyFullAgenticRepository:
         return [_knowledge_to_domain(row, self._encryptor) for row in result.scalars()]
 
     async def find_knowledge_exact(
-        self, registered_number: str, limit: int
+        self,
+        registered_number: str,
+        limit: int,
+        institution_id: str | None = None,
     ) -> list[ScientificReturnKnowledgeItem]:
         value_hash = self._encryptor.lookup_required_hash(
             registered_number, _REGISTERED_HASH
         )
-        result = await self._session.execute(
-            select(ScientificReturnKnowledgeRecord)
-            .where(
-                ScientificReturnKnowledgeRecord.status == KnowledgeStatus.ACTIVE,
-                ScientificReturnKnowledgeRecord.registered_number_hash == value_hash,
-            )
-            .limit(limit)
+        statement = select(ScientificReturnKnowledgeRecord).where(
+            ScientificReturnKnowledgeRecord.status == KnowledgeStatus.ACTIVE,
+            ScientificReturnKnowledgeRecord.registered_number_hash == value_hash,
         )
+        if institution_id is not None:
+            statement = statement.where(
+                ScientificReturnKnowledgeRecord.institution_id == institution_id
+            )
+        result = await self._session.execute(statement.limit(limit))
         return [_knowledge_to_domain(row, self._encryptor) for row in result.scalars()]
+
+    async def page_knowledge(
+        self, filters: KnowledgeFilters, page: int, size: int
+    ) -> KnowledgePage:
+        conditions = [
+            ScientificReturnKnowledgeRecord.institution_id == filters.institution_id
+        ]
+        if filters.status is not None:
+            conditions.append(ScientificReturnKnowledgeRecord.status == filters.status)
+        if filters.kind is not None:
+            conditions.append(ScientificReturnKnowledgeRecord.kind == filters.kind)
+        if filters.inventory_number is not None:
+            inventory_hash = self._encryptor.lookup_required_hash(
+                filters.inventory_number, _REGISTERED_HASH
+            )
+            observed_hash = self._encryptor.lookup_required_hash(
+                filters.inventory_number, _OBSERVED_HASH
+            )
+            conditions.append(
+                or_(
+                    ScientificReturnKnowledgeRecord.registered_number_hash
+                    == inventory_hash,
+                    ScientificReturnKnowledgeRecord.observed_form_hash
+                    == observed_hash,
+                )
+            )
+
+        total = int(
+            (
+                await self._session.execute(
+                    select(func.count())
+                    .select_from(ScientificReturnKnowledgeRecord)
+                    .where(*conditions)
+                )
+            ).scalar_one()
+        )
+        records = (
+            await self._session.execute(
+                select(ScientificReturnKnowledgeRecord)
+                .where(*conditions)
+                .order_by(
+                    ScientificReturnKnowledgeRecord.created_at.desc(),
+                    ScientificReturnKnowledgeRecord.id.desc(),
+                )
+                .offset(page * size)
+                .limit(size)
+            )
+        ).scalars()
+
+        count_rows = await self._session.execute(
+            select(
+                ScientificReturnKnowledgeRecord.status,
+                func.count(ScientificReturnKnowledgeRecord.id),
+            )
+            .where(
+                ScientificReturnKnowledgeRecord.institution_id
+                == filters.institution_id
+            )
+            .group_by(ScientificReturnKnowledgeRecord.status)
+        )
+        counts_by_status = {status: int(count) for status, count in count_rows}
+        return KnowledgePage(
+            content=tuple(
+                _knowledge_to_domain(record, self._encryptor) for record in records
+            ),
+            page=page,
+            size=size,
+            total_elements=total,
+            counts=KnowledgeCounts(
+                active=counts_by_status.get(KnowledgeStatus.ACTIVE, 0),
+                proposed=counts_by_status.get(KnowledgeStatus.PROPOSED, 0),
+                retired=counts_by_status.get(KnowledgeStatus.RETIRED, 0),
+            ),
+        )
+
+    async def list_knowledge_lineage(
+        self, item_id: KnowledgeItemId, institution_id: str
+    ) -> list[ScientificReturnKnowledgeItem]:
+        records = list(
+            (
+                await self._session.execute(
+                    select(ScientificReturnKnowledgeRecord)
+                    .where(
+                        ScientificReturnKnowledgeRecord.institution_id
+                        == institution_id
+                    )
+                    .order_by(
+                        ScientificReturnKnowledgeRecord.created_at.asc(),
+                        ScientificReturnKnowledgeRecord.id.asc(),
+                    )
+                )
+            ).scalars()
+        )
+        by_id = {record.id: record for record in records}
+        current = by_id.get(str(item_id))
+        if current is None:
+            return []
+        while current.supersedes_id is not None:
+            predecessor = by_id.get(current.supersedes_id)
+            if predecessor is None:
+                break
+            current = predecessor
+        lineage = [current]
+        while True:
+            successor = next(
+                (record for record in records if record.supersedes_id == current.id),
+                None,
+            )
+            if successor is None:
+                break
+            lineage.append(successor)
+            current = successor
+        return [_knowledge_to_domain(record, self._encryptor) for record in lineage]
 
     async def add_investigation(self, investigation: FullAgenticInvestigation) -> None:
         self._session.add(
@@ -259,6 +384,7 @@ class SqlAlchemyFullAgenticRepository:
                     "llm_calls": 0,
                 },
                 created_by=investigation.created_by,
+                institution_id=investigation.institution_id,
                 created_at=investigation.created_at,
                 version=investigation.version,
             )

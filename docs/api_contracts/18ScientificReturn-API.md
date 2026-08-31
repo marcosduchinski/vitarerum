@@ -18,7 +18,7 @@ protects the internal association between researcher, project and consulted
 objects while retaining hashes and public bibliographic metadata for audit and
 deduplication.
 
-## Full-agentic search and curatorial memory
+## Full-agentic search and institutional knowledge
 
 The full-agentic flow is a separate, asynchronous implementation. It does not
 replace the deterministic search or the assisted investigation described below.
@@ -153,23 +153,39 @@ and a 36.4% known-case precision proxy with zero terminal source errors. The
 persisted analysis records the registry's actual version id and label, never the
 template key.
 
-### Curatorial knowledge
+### Scientific Return Knowledge Base
 
-- `GET /knowledge-items?activeOnly=false&limit=100`
+- `GET /knowledge-items?status=ACTIVE&kind=INVENTORY_VARIATION_EXAMPLE&inventoryNumber=MB06-5747&page=0&size=25`
 - `POST /knowledge-items`
 - `PUT /knowledge-items/{knowledgeItemId}` creates a successor and retires the
   old item; knowledge content is never overwritten.
 - `POST /knowledge-items/{knowledgeItemId}/activate`
 - `DELETE /knowledge-items/{knowledgeItemId}` retires an item.
+- `GET /knowledge-items/{knowledgeItemId}/history` returns the full succession
+  chain from the original version to the current one.
 - `POST /candidates/{candidateId}/knowledge-proposals` transforms a curator's
   free-text decision explanation into a `PROPOSED` lesson.
+
+The list response contains `content`, `page`, `size`, `totalElements`,
+`totalPages`, and institutional `counts` for `active`, `proposed`, and
+`retired`. Results are ordered by `createdAt DESC`, then `id DESC`. The
+`inventoryNumber` filter performs normalized exact matching against either the
+registered or observed form; encrypted content is not searched in bulk.
+
+Knowledge is institution-scoped. The server derives the institution from the
+active Identity permission; clients cannot select `institutionId`. Listing,
+history, creation, correction, activation, retirement, and agent retrieval all
+use that institution. Existing unresolved legacy rows remain isolated until an
+administrator assigns their institution.
 
 An inventory example contains `registeredNumber`, `observedForm` and a free
 `content` explanation. Curators do not define regexes, masks or algorithms.
 Only `ACTIVE` items enter future prompts. Content and inventory forms are
 encrypted; keyed lookup hashes support exact coarse selection, followed by a
 bounded in-memory relevance ranking. An LLM-created proposal has no effect until
-an authorised curator activates it.
+an authorised staff member activates it. Responses hydrate creation,
+validation, and retirement actors when Identity can still resolve them, while
+preserving permission IDs as audit fallbacks.
 
 ### Investigations
 

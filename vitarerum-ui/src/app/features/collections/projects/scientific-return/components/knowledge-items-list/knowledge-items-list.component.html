@@ -1,0 +1,93 @@
+<div class="knowledge-list" role="list" aria-label="Knowledge items">
+  @for (item of items(); track item.id) {
+    <article class="knowledge-item" role="listitem" [attr.data-status]="item.status">
+      @if (item.status === 'PROPOSED') {
+        <div class="review-callout">
+          <span class="pi pi-clock" aria-hidden="true"></span>
+          <span
+            ><strong>Human review required</strong> — confirm this lesson before it informs future
+            investigations.</span
+          >
+        </div>
+      }
+      <header>
+        <div class="badges">
+          <span class="status">{{ statusLabel(item) }}</span>
+          <span class="type">{{ typeLabel(item) }}</span>
+          @if (item.sourceCandidateId) {
+            <span class="origin"
+              ><span class="pi pi-sparkles" aria-hidden="true"></span> Agent proposal</span
+            >
+          }
+        </div>
+        <time [attr.datetime]="item.createdAt">Added {{ item.createdAt | date: 'medium' }}</time>
+      </header>
+
+      @if (item.registeredNumber || item.observedForm) {
+        <div class="inventory-pair">
+          <div>
+            <span>Registered number</span>
+            <code>{{ item.registeredNumber ?? 'Not recorded' }}</code>
+          </div>
+          <span class="inventory-arrow pi pi-arrow-right" aria-label="observed as"></span>
+          <div>
+            <span>Observed citation</span>
+            <code>{{ item.observedForm ?? 'Not recorded' }}</code>
+          </div>
+        </div>
+      }
+
+      <p class="content">{{ item.content }}</p>
+      <dl class="metadata">
+        <div>
+          <dt>Created by</dt>
+          <dd>{{ actor(item) }}</dd>
+        </div>
+        @if (item.validatedAt) {
+          <div>
+            <dt>Validated</dt>
+            <dd>{{ item.validatedAt | date: 'medium' }}</dd>
+          </div>
+        }
+        @if (item.retiredAt) {
+          <div>
+            <dt>Retired</dt>
+            <dd>{{ item.retiredAt | date: 'medium' }}</dd>
+          </div>
+        }
+        @if (item.proposedByModel) {
+          <div>
+            <dt>Model</dt>
+            <dd>{{ item.proposedByModel }} · {{ item.promptVersion ?? 'prompt unknown' }}</dd>
+          </div>
+        }
+      </dl>
+
+      <footer>
+        <button type="button" class="secondary" (click)="history.emit(item)">
+          <span class="pi pi-history" aria-hidden="true"></span> View history
+        </button>
+        <div class="item-actions">
+          @if (canManage() && item.status === 'PROPOSED') {
+            <button
+              type="button"
+              class="primary"
+              [disabled]="busyId() !== null"
+              (click)="activate.emit(item)"
+            >
+              <span class="pi pi-check" aria-hidden="true"></span>
+              Validate and activate
+            </button>
+          }
+          @if (canManage() && item.status === 'ACTIVE') {
+            <app-row-actions
+              [items]="actionItemsFor(item)"
+              [disabled]="busyId() !== null"
+              ariaLabel="More actions for this knowledge item"
+            />
+          }
+        </div>
+      </footer>
+    </article>
+  }
+</div>

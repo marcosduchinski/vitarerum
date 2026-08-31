@@ -26,6 +26,8 @@ import {
   FullAgenticInvestigation,
   AgenticTrajectoryEvent,
   ScientificReturnKnowledgeItem,
+  ScientificReturnKnowledgePage,
+  ScientificReturnKnowledgeQuery,
 } from '../models/scientific-return.model';
 
 @Injectable({ providedIn: 'root' })
@@ -191,8 +193,12 @@ export class ScientificReturnApiService {
     );
   }
 
-  listKnowledgeItems(): Observable<readonly ScientificReturnKnowledgeItem[]> {
-    return this.http.get<readonly ScientificReturnKnowledgeItem[]>(this.url('/knowledge-items'));
+  listKnowledgeItems(
+    query: ScientificReturnKnowledgeQuery,
+  ): Observable<ScientificReturnKnowledgePage> {
+    return this.http.get<ScientificReturnKnowledgePage>(this.url('/knowledge-items'), {
+      params: buildHttpParams(query),
+    });
   }
 
   createInventoryExample(input: {
@@ -210,6 +216,22 @@ export class ScientificReturnApiService {
     return this.http.post<ScientificReturnKnowledgeItem>(
       this.url(`/knowledge-items/${itemId}/activate`),
       {},
+    );
+  }
+
+  replaceKnowledgeItem(
+    itemId: string,
+    input: { content: string; registeredNumber: string | null; observedForm: string | null },
+  ): Observable<ScientificReturnKnowledgeItem> {
+    return this.http.put<ScientificReturnKnowledgeItem>(
+      this.url(`/knowledge-items/${itemId}`),
+      input,
+    );
+  }
+
+  getKnowledgeHistory(itemId: string): Observable<readonly ScientificReturnKnowledgeItem[]> {
+    return this.http.get<readonly ScientificReturnKnowledgeItem[]>(
+      this.url(`/knowledge-items/${itemId}/history`),
     );
   }
 
