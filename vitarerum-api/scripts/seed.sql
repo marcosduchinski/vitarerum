@@ -1,81 +1,176 @@
--- Bootstrap identity seed for local development / smoke testing.
+-- Seed de identidade do MUHNAC.
 --
--- The API has no bootstrap endpoint: every request needs an X-Permission-Id
--- header pointing at an existing identity_permissions row, and creating users
--- itself requires a SYS_ADMIN caller permission. So seed one initial admin
--- permission here before calling the API.
+-- Recria do zero a instituicao, os usuarios, os grupos e as permissoes. E'
+-- idempotente: apaga tudo antes de inserir, entao pode ser reaplicado.
 --
--- Apply with:
---   docker compose exec -T postgres psql -U vitarerum -d vitarerum < scripts/seed.sql
+-- Aplicar com:
+--   psql -U vitarerum -d vitarerum < scripts/seed.sql
+-- ou, no ambiente provisionado:
+--   APPLY_DEV_SEED=yes STEP=seed ./deploy/provision.sh
 --
--- Permission ids created:
---   perm-sys-admin (SYS_ADMIN bootstrap administrator)
---   perm-ext       (EXTERNAL requester)
---   perm-cur       (CURATORIAL staff)
+-- Os enderecos de e-mail sao reais e intencionais: as comunicacoes do sistema
+-- (confirmacao de submissao publica, reset de senha, notificacoes de direcao)
+-- precisam chegar a uma caixa que se possa abrir para acompanhar o fluxo.
 --
--- Seeded login: all users have the password "password" (bcrypt hash below).
--- Log in via POST /auth/login to obtain a Bearer token, then send it together
--- with X-Permission-Id on every other request.
+-- A senha das duas contas e' a mesma, definida pelo hash bcrypt abaixo.
 
-INSERT INTO identity_users (id, name, email, password_hash) VALUES
-  ('c03639c9-ebf3-44ed-89d3-e067f70de914', 'System Administrator', 'admin@museum.pt', '$2b$12$MviuKDF31uPO5VtEfHQj9urZuNTC9XPB3Jp3Aj79wvniHOtfI/x8a'),
-  ('c03639c9-ebf3-44ed-89d3-e067f70de915', 'Researcher', 'researcher@uni.pt', '$2b$12$MviuKDF31uPO5VtEfHQj9urZuNTC9XPB3Jp3Aj79wvniHOtfI/x8a'),
-  ('c03639c9-ebf3-44ed-89d3-e067f70de916', 'Curator',        'curator@museum.pt', '$2b$12$MviuKDF31uPO5VtEfHQj9urZuNTC9XPB3Jp3Aj79wvniHOtfI/x8a'),
-  ('c03639c9-ebf3-44ed-89d3-e067f70de917', 'Collection Manager',        'manager@museum.pt', '$2b$12$MviuKDF31uPO5VtEfHQj9urZuNTC9XPB3Jp3Aj79wvniHOtfI/x8a')
-ON CONFLICT (id) DO NOTHING;
+BEGIN;
 
--- Every group belongs to an institution (see migration 0001_add_institutions).
--- This id matches DEFAULT_INSTITUTION_ID in that migration.
-INSERT INTO identity_institutions (id, name, email, address, phone)
-VALUES ('a0000000-0000-0000-0000-000000000001', 'MUHNAC', '', '', '')
-ON CONFLICT (id) DO NOTHING;
+-- Nenhuma das chaves estrangeiras tem ON DELETE CASCADE (todas sao NO ACTION),
+-- entao a ordem importa: primeiro o que referencia, depois o que e'
+-- referenciado. identity_users entra na limpeza porque identity_users.email e'
+-- UNIQUE - sem apagar, reinserir Bob e Carla violaria a restricao.
+DELETE FROM public.identity_permissions;
+DELETE FROM public.identity_groups;
+DELETE FROM public.identity_institutions;
+DELETE FROM public.identity_users;
 
-INSERT INTO identity_groups (id, name, institution_id)
-SELECT 'grp-ext', 'EXTERNAL', 'a0000000-0000-0000-0000-000000000001'
-WHERE NOT EXISTS (SELECT 1 FROM identity_groups WHERE name = 'EXTERNAL')
-ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
+DO $$
+DECLARE
+    v_institution_id UUID := gen_random_uuid();
 
-INSERT INTO identity_groups (id, name, institution_id)
-SELECT 'grp-cur', 'CURATORIAL', 'a0000000-0000-0000-0000-000000000001'
-WHERE NOT EXISTS (SELECT 1 FROM identity_groups WHERE name = 'CURATORIAL')
-ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
+    v_bob_id   UUID := gen_random_uuid();
+    v_carla_id UUID := gen_random_uuid();
 
-INSERT INTO identity_groups (id, name, institution_id)
-SELECT 'grp-col', 'COLLECTIONS_MANAGEMENT', 'a0000000-0000-0000-0000-000000000001'
-WHERE NOT EXISTS (
-  SELECT 1 FROM identity_groups WHERE name = 'COLLECTIONS_MANAGEMENT'
-)
-ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
+    v_default_password_hash TEXT :=
+        '$2b$12$HCAWMD5i1RBxfKDCADXc5.vG8/fCdcZJ3afbgZKF596sPQHTCSdye';
 
-INSERT INTO identity_groups (id, name, institution_id)
-SELECT 'grp-dir', 'DIRECTION', 'a0000000-0000-0000-0000-000000000001'
-WHERE NOT EXISTS (SELECT 1 FROM identity_groups WHERE name = 'DIRECTION')
-ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
+    v_external_group_id               TEXT := 'grp-ext';
+    v_direction_group_id              TEXT := 'grp-dir';
+    v_curatorial_group_id             TEXT := 'grp-cur';
+    v_collections_management_group_id TEXT := 'grp-cm';
+    v_sys_admin_group_id              TEXT := 'grp-sys-adm';
 
-INSERT INTO identity_groups (id, name, institution_id)
-SELECT 'grp-sys-admin', 'SYS_ADMIN', 'a0000000-0000-0000-0000-000000000001'
-WHERE NOT EXISTS (SELECT 1 FROM identity_groups WHERE name = 'SYS_ADMIN')
-ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
+BEGIN
 
-INSERT INTO identity_permissions (id, user_id, group_id) VALUES
-  (
-    'perm-sys-admin',
-    'c03639c9-ebf3-44ed-89d3-e067f70de914',
-    (SELECT id FROM identity_groups WHERE name = 'SYS_ADMIN' LIMIT 1)
-  ),
-  (
-    'perm-ext',
-    'c03639c9-ebf3-44ed-89d3-e067f70de915',
-    (SELECT id FROM identity_groups WHERE name = 'EXTERNAL' LIMIT 1)
-  ),
-  (
-    'perm-cur',
-    'c03639c9-ebf3-44ed-89d3-e067f70de916',
-    (SELECT id FROM identity_groups WHERE name = 'CURATORIAL' LIMIT 1)
-  ),
-  (
-    'perm-col',
-    'c03639c9-ebf3-44ed-89d3-e067f70de917',
-    (SELECT id FROM identity_groups WHERE name = 'COLLECTIONS_MANAGEMENT' LIMIT 1)
-  )
-ON CONFLICT (id) DO NOTHING;
+    -- =====================================================
+    -- Instituição
+    -- =====================================================
+
+    INSERT INTO public.identity_institutions (
+        id,
+        "name",
+        email,
+        address,
+        phone
+    )
+    VALUES (
+        v_institution_id,
+        'MUHNAC - Museu Nacional de História Natural e da Ciência de Lisboa',
+        'vitarerum.collections@gmail.com',
+        'Lisboa',
+        ''
+    );
+
+
+    -- =====================================================
+    -- Usuários
+    -- =====================================================
+
+    INSERT INTO public.identity_users (
+        id,
+        "name",
+        email,
+        password_hash
+    )
+    VALUES
+        (
+            v_bob_id,
+            'Bob',
+            'bob.curatorial.vita@outlook.com',
+            v_default_password_hash
+        ),
+        (
+            v_carla_id,
+            'Carla',
+            'carla.curatorial.vita@outlook.com',
+            v_default_password_hash
+        );
+
+
+    -- =====================================================
+    -- Grupos
+    -- =====================================================
+
+    INSERT INTO public.identity_groups (
+        id,
+        "name",
+        institution_id
+    )
+    VALUES
+        (
+            v_external_group_id,
+            'EXTERNAL'::public."identity_group_name",
+            v_institution_id
+        ),
+        (
+            v_curatorial_group_id,
+            'CURATORIAL'::public."identity_group_name",
+            v_institution_id
+        ),
+        (
+            v_direction_group_id,
+            'DIRECTION'::public."identity_group_name",
+            v_institution_id
+        ),
+        (
+            v_collections_management_group_id,
+            'COLLECTIONS_MANAGEMENT'::public."identity_group_name",
+            v_institution_id
+        ),
+        (
+            v_sys_admin_group_id,
+            'SYS_ADMIN'::public."identity_group_name",
+            v_institution_id
+        );
+
+
+    -- =====================================================
+    -- Permissões
+    -- =====================================================
+
+    INSERT INTO public.identity_permissions (
+        id,
+        user_id,
+        group_id
+    )
+    VALUES
+        -- Bob: curador
+        (
+            gen_random_uuid(),
+            v_bob_id,
+            v_curatorial_group_id
+        ),
+
+        -- Bob: gestor de coleções
+        (
+            gen_random_uuid(),
+            v_bob_id,
+            v_collections_management_group_id
+        ),
+
+        -- Bob: administrador do sistema
+        (
+            gen_random_uuid(),
+            v_bob_id,
+            v_sys_admin_group_id
+        ),
+
+        -- Carla: diretora
+        (
+            gen_random_uuid(),
+            v_carla_id,
+            v_direction_group_id
+        ),
+
+        -- Carla: curadora
+        (
+            gen_random_uuid(),
+            v_carla_id,
+            v_curatorial_group_id
+        );
+
+END
+$$;
+
+COMMIT;

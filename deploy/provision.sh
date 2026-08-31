@@ -44,6 +44,10 @@ set -a; . "${ENV_FILE}"; set +a
 : "${SCIENTIFIC_RETURN_AGENT_LIMIT:=10}"
 : "${SCIENTIFIC_RETURN_SCHEDULE:=0 3 * * 1}"
 : "${SCIENTIFIC_RETURN_TIMEZONE:=Europe/Lisbon}"
+# Fluxo agentico autonomo. Com 'false' (o default do config.py) o sweep faz so'
+# a busca deterministica e a fila fica sempre vazia. Ligado, cada watch vencido
+# enfileira uma investigacao POR OBJETO CONSULTADO, ate' max_objects (15).
+: "${SCIENTIFIC_RETURN_FULL_AGENTIC_ENABLED:=false}"
 
 # Credenciais nao precisam ser copiadas para deploy/.env: se estiverem vazias
 # la', sao herdadas dos segredos de producao e, no que producao nao tiver, do
@@ -301,6 +305,21 @@ step_network() {
 
 step_vm() {
   log "VM de banco ${DB_VM_NAME} (${ZONE})"
+
+  # IP externo estatico. O efemero muda a cada parada/religada da VM, o que
+  # quebra qualquer tunel SSH ja' configurado (DBeaver, por exemplo). Anexado a
+  # uma instancia em execucao, o endereco reservado nao custa nada.
+  local db_ip_name="${DB_VM_NAME}-ip"
+  if "${GC[@]}" compute addresses describe "${db_ip_name}" --region="${REGION}" \
+      >/dev/null 2>&1; then
+    info "IP estatico ${db_ip_name} ja' reservado"
+  else
+    "${GC[@]}" compute addresses create "${db_ip_name}" --region="${REGION}"
+    info "IP estatico ${db_ip_name} reservado"
+  fi
+  DB_EXTERNAL_IP="$("${GC[@]}" compute addresses describe "${db_ip_name}" \
+    --region="${REGION}" --format='value(address)')"
+
   if "${GC[@]}" compute instances describe "${DB_VM_NAME}" --zone="${ZONE}" \
       >/dev/null 2>&1; then
     info "ja' existe"
@@ -317,13 +336,13 @@ step_vm() {
       --image-project=ubuntu-os-cloud \
       --boot-disk-size=30GB \
       --boot-disk-type=pd-standard \
-      --network-interface=network=default,subnet=default \
+      --network-interface=network=default,subnet=default,address=${DB_EXTERNAL_IP} \
       --scopes=https://www.googleapis.com/auth/logging.write
     info "criada"
   fi
   DB_INTERNAL_IP="$("${GC[@]}" compute instances describe "${DB_VM_NAME}" \
     --zone="${ZONE}" --format='value(networkInterfaces[0].networkIP)')"
-  info "IP interno: ${DB_INTERNAL_IP}"
+  info "IP interno: ${DB_INTERNAL_IP} | IP externo estatico: ${DB_EXTERNAL_IP}"
 }
 
 step_postgres() {
@@ -509,6 +528,7 @@ SMTP_FROM_ADDRESS: "${SMTP_FROM_ADDRESS:-}"
 SMTP_USE_TLS: "${SMTP_USE_TLS:-true}"
 GCS_BUCKET_NAME: "${BUCKET}"
 FILE_STORAGE_BACKEND: gcs
+SCIENTIFIC_RETURN_FULL_AGENTIC_ENABLED: "${SCIENTIFIC_RETURN_FULL_AGENTIC_ENABLED}"
 YAML
 }
 
@@ -551,21 +571,26 @@ step_migrate() {
 
 step_seed() {
   log "Seed de identidade inicial"
-  # scripts/seed.sql e' um seed de DESENVOLVIMENTO: cria quatro usuarios cuja
-  # senha e' literalmente "password". So' e' aplicado sob pedido explicito.
+  # scripts/seed.sql RECRIA a identidade do zero: apaga permissoes, grupos,
+  # instituicoes e usuarios antes de inserir. So' e' aplicado sob pedido
+  # explicito justamente porque apaga.
   if [[ "${APPLY_DEV_SEED:-no}" != "yes" ]]; then
     info "pulado (APPLY_DEV_SEED != yes)"
     warn "Sem seed nao ha' nenhum identity_permissions, e a API exige um
-    X-Permission-Id existente em toda requisicao. Crie o administrador inicial
-    a mao na VM, ou rode com APPLY_DEV_SEED=yes e TROQUE as senhas em seguida."
+    X-Permission-Id existente em toda requisicao. Rode com APPLY_DEV_SEED=yes
+    para criar a instituicao, os grupos e as contas do MUHNAC."
     return
   fi
-  warn "Aplicando o seed de desenvolvimento: senha 'password' para 4 usuarios."
+  warn "O seed APAGA identity_permissions, identity_groups,
+    identity_institutions e identity_users antes de recriar tudo."
   "${GC[@]}" compute scp "${ROOT}/vitarerum-api/scripts/seed.sql" \
     "${DB_VM_NAME}:~/seed.sql" --zone="${ZONE}"
+  # Redirecionamento, e nao 'psql -f': com -f quem abre o arquivo e' o processo
+  # do psql, ja' rodando como 'postgres', que nao le dentro de /home/<usuario>.
+  # Com '<' quem abre e' o shell da sessao SSH, que e' o dono do arquivo.
   "${GC[@]}" compute ssh "${DB_VM_NAME}" --zone="${ZONE}" \
-    --command="sudo -u postgres psql -v ON_ERROR_STOP=1 -d '${DB_NAME}' -f ~/seed.sql && rm -f ~/seed.sql"
-  info "seed aplicado - troque as senhas antes de expor o servico"
+    --command="sudo -u postgres psql -v ON_ERROR_STOP=1 -d '${DB_NAME}' < ~/seed.sql && rm -f ~/seed.sql"
+  info "seed aplicado: MUHNAC, 5 grupos, Bob e Carla"
 }
 
 step_service() {

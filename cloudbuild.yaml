@@ -63,9 +63,11 @@ steps:
       - ${_REGION}
       - --command
       - python
-      - --args
+      # Forma com '=' e' obrigatoria: o valor comeca com '-m', e na forma
+      # separada o argparse do gcloud o le como outra flag, falhando com
+      # "argument --args: expected one argument".
       - >-
-        -m,app.jobs.scientific_return,run-sweep,--limit,${_SCIENTIFIC_RETURN_LIMIT},--agent-limit,${_SCIENTIFIC_RETURN_AGENT_LIMIT}
+        --args=-m,app.jobs.scientific_return,run-sweep,--limit,${_SCIENTIFIC_RETURN_LIMIT},--agent-limit,${_SCIENTIFIC_RETURN_AGENT_LIMIT}
 
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud

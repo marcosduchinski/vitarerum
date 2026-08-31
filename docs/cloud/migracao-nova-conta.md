@@ -99,7 +99,9 @@ Passos, em ordem: `project` `apis` `registry` `network` `vm` `postgres`
   banco e' a VM, nao Cloud SQL. `cloudscheduler` entra — e' nova.
 - **VM `postgres-gratis`** (`e2-micro`, `us-east1-d`, Ubuntu 24.04 minimal,
   disco de 30 GB) com PostgreSQL, swap de 2 GB e `shared_buffers` ajustado para
-  1 GB de RAM.
+  1 GB de RAM. O IP externo e' **estatico** (`postgres-gratis-ip`): o efemero
+  muda a cada parada da VM e quebraria um tunel SSH ja' configurado. Anexado a
+  uma instancia em execucao, o endereco reservado nao tem custo.
 - **Firewall `permitir-postgres-interno`**: `tcp:5432` apenas da sub-rede
   interna, que e' de onde o Cloud Run sai.
 - **Tres contas de servico**: `vitarerum-run` (runtime, sem papel algum no
@@ -160,6 +162,22 @@ couber.
    gcloud builds submit --project <PROJECT_ID> \
      --service-account=projects/<PROJECT_ID>/serviceAccounts/vitarerum-build@<PROJECT_ID>.iam.gserviceaccount.com
    ```
+
+## Acessar o banco de fora
+
+O Postgres so' aceita conexoes de dentro da sub-rede (`permitir-postgres-interno`),
+entao de fora e' sempre por tunel SSH na VM. Pelo terminal:
+
+```
+gcloud --project <PROJECT_ID> compute ssh postgres-gratis --zone us-east1-d \
+  --command "sudo -u postgres psql -d vitarerum"
+```
+
+Num cliente grafico (DBeaver e afins), a aba SSH aponta para o IP externo
+estatico da VM, com o usuario local e a chave que o `gcloud compute ssh` ja'
+criou em `~/.ssh/google_compute_engine`; a aba principal usa `localhost:5432`,
+porque esse host e' resolvido de dentro da VM, depois do tunel montado. A
+senha e' a do segredo `DB_PASSWORD`.
 
 ## O que continua pendente
 
