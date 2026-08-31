@@ -257,17 +257,33 @@ step_registry() {
 
 step_network() {
   log "Rede"
+  # Num projeto recem-criado a VPC default nasce de forma assincrona, minutos
+  # depois de compute.googleapis.com ser habilitada. Olhar cedo demais faria o
+  # script criar uma rede propria que depois colidiria com a automatica.
+  local attempt
+  for attempt in $(seq 1 18); do
+    "${GC[@]}" compute networks describe default >/dev/null 2>&1 && break
+    [[ ${attempt} -eq 1 ]] && info "aguardando a VPC default ser criada..."
+    sleep 10
+  done
+
   if ! "${GC[@]}" compute networks describe default >/dev/null 2>&1; then
-    warn "A VPC 'default' nao existe neste projeto (politica de organizacao?)."
+    warn "A VPC 'default' nao apareceu em 3 min (politica de organizacao?)."
     "${GC[@]}" compute networks create default --subnet-mode=auto
     info "VPC default criada em modo auto"
   else
-    info "VPC default ja' existe"
+    info "VPC default disponivel"
   fi
 
-  SUBNET_CIDR="$("${GC[@]}" compute networks subnets describe default \
-    --region="${REGION}" --format='value(ipCidrRange)')"
-  [[ -n "${SUBNET_CIDR}" ]] || die "Sub-rede default de ${REGION} nao encontrada."
+  # A sub-rede regional pode aparecer alguns segundos depois da rede.
+  for attempt in $(seq 1 18); do
+    SUBNET_CIDR="$("${GC[@]}" compute networks subnets describe default \
+      --region="${REGION}" --format='value(ipCidrRange)' 2>/dev/null || true)"
+    [[ -n "${SUBNET_CIDR}" ]] && break
+    sleep 10
+  done
+
+  [[ -n "${SUBNET_CIDR:-}" ]] || die "Sub-rede default de ${REGION} nao encontrada."
   info "sub-rede default de ${REGION}: ${SUBNET_CIDR}"
 
   if "${GC[@]}" compute firewall-rules describe "${FIREWALL_RULE}" >/dev/null 2>&1; then
@@ -289,10 +305,15 @@ step_vm() {
       >/dev/null 2>&1; then
     info "ja' existe"
   else
+    # A family leva sufixo de arquitetura: 'ubuntu-minimal-2404-lts' sozinho nao
+    # existe. Esta e' a family da imagem que a VM do projeto atual usa
+    # (ubuntu-minimal-2404-noble-amd64). Nao inserir comentarios no meio das
+    # flags abaixo: um '#' apos um '\' encerra a continuacao e o resto das
+    # flags vira comando solto.
     "${GC[@]}" compute instances create "${DB_VM_NAME}" \
       --zone="${ZONE}" \
       --machine-type=e2-micro \
-      --image-family=ubuntu-minimal-2404-lts \
+      --image-family=ubuntu-minimal-2404-lts-amd64 \
       --image-project=ubuntu-os-cloud \
       --boot-disk-size=30GB \
       --boot-disk-type=pd-standard \
