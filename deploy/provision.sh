@@ -50,6 +50,12 @@ set -a; . "${ENV_FILE}"; set +a
 # .env local. Assim nenhum segredo passa a existir num arquivo novo.
 : "${SOURCE_ENV_FILE:=${ROOT}/vitarerum-api/.env}"
 : "${SOURCE_PROJECT:=vitarerum}"
+# Conta que enxerga SOURCE_PROJECT. Depois do `gcloud auth login` com a conta
+# nova ela vira a conta ativa, e a ativa nao tem acesso ao projeto antigo: sem
+# isto a heranca falharia calada e cairia no .env local, que nao tem
+# TURNSTILE_SECRET_KEY. As duas contas convivem no gcloud, entao basta dizer
+# qual usar na leitura. Vazio = usa a conta ativa.
+: "${SOURCE_ACCOUNT:=}"
 
 # Segredos herdados do ambiente atual, na ordem em que sao criados.
 # DATABASE_URL fica FORA de proposito: o valor de producao aponta para o IP
@@ -86,6 +92,9 @@ IMAGE_PATH="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/${IMAGE}"
 export CLOUDSDK_CORE_PROJECT="${PROJECT_ID}"
 GC=(gcloud --project "${PROJECT_ID}" --quiet)
 
+SOURCE_GC=(gcloud --project "${SOURCE_PROJECT}")
+[[ -n "${SOURCE_ACCOUNT}" ]] && SOURCE_GC+=(--account "${SOURCE_ACCOUNT}")
+
 WORKDIR="$(mktemp -d)"
 trap 'rm -rf "${WORKDIR}"' EXIT
 
@@ -114,8 +123,8 @@ resolve_credential() {
 
   # Producao primeiro: e' o valor que o ambiente atual realmente usa.
   if [[ -n "${SOURCE_PROJECT}" ]]; then
-    CREDENTIAL_VALUE="$(gcloud --project "${SOURCE_PROJECT}" secrets versions \
-      access latest --secret="${name}" 2>/dev/null || true)"
+    CREDENTIAL_VALUE="$("${SOURCE_GC[@]}" secrets versions access latest \
+      --secret="${name}" 2>/dev/null || true)"
     if [[ -n "${CREDENTIAL_VALUE}" ]]; then
       CREDENTIAL_ORIGIN="producao (${SOURCE_PROJECT})"
       return
@@ -146,6 +155,17 @@ preflight() {
   [[ -n "${account}" ]] || die "Nenhuma conta autenticada. Rode: gcloud auth login"
   info "Autenticado como ${account}"
   info "Projeto de destino: ${PROJECT_ID} | regiao: ${REGION} | zona: ${ZONE}"
+
+  if [[ -n "${SOURCE_ACCOUNT}" ]]; then
+    if gcloud auth list --format='value(account)' 2>/dev/null \
+       | grep -qx "${SOURCE_ACCOUNT}"; then
+      info "Herdando segredos de ${SOURCE_PROJECT} como ${SOURCE_ACCOUNT}"
+    else
+      die "SOURCE_ACCOUNT=${SOURCE_ACCOUNT} nao esta autenticada.
+Rode 'gcloud auth login ${SOURCE_ACCOUNT}' - ela continua disponivel ao lado da
+conta nova, e so' e' usada para ler os segredos do projeto ${SOURCE_PROJECT}."
+    fi
+  fi
 
   # Relatorio de procedencia. O valor e' resolvido de novo em step_secrets;
   # aqui so' se confere que existe, antes de criar recurso nenhum.

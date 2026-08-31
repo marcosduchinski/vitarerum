@@ -26,6 +26,12 @@ O banco comeca vazio: nenhum dado e' migrado do projeto antigo.
    gcloud auth login
    ```
 
+   A conta antiga **continua autenticada ao lado** — nao a remova. O
+   `provision.sh` a usa (via `SOURCE_ACCOUNT`) so' para ler os segredos de
+   producao do projeto antigo; a conta ativa, que cria tudo, e' a nova. Sem
+   isso a heranca falharia calada e o `TURNSTILE_SECRET_KEY`, que so' existe no
+   Secret Manager de producao, apareceria como `NAO ENCONTRADA`.
+
 2. **Tenha uma conta de faturamento ativa.** A `e2-micro` em `us-east1` cabe no
    nivel gratuito, mas Artifact Registry e Cloud Build nao. Descubra o id com
    `gcloud billing accounts list` e coloque em `BILLING_ACCOUNT_ID`.
