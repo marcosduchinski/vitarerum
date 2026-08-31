@@ -77,3 +77,9 @@ steps:
       - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$BUILD_ID
       - --region
       - ${_REGION}
+
+# Um build que roda como conta de servico propria (--service-account) nao pode
+# escrever logs no bucket legado do Cloud Build: ou se aponta --gcs-log-dir, ou
+# se manda tudo para o Cloud Logging. Sem isto o build falha antes do 1o passo.
+options:
+  logging: CLOUD_LOGGING_ONLY
