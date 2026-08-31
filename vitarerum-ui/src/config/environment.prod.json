@@ -1,8 +1,0 @@
-{
-  "app-name": "Vitarerum",
-  "app-version": "0.0.1",
-  "api-base-url": "/api/v1",
-  "use-mock-api": false,
-  "use-mock-auth": false,
-  "turnstile-site-key": "0x4AAAAAAD6fXP5mreFiGSJz"
-}

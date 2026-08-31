@@ -6,16 +6,11 @@ WORKDIR /ui
 COPY vitarerum-ui/package.json vitarerum-ui/package-lock.json ./
 RUN npm ci
 COPY vitarerum-ui/ ./
+# src/config e' copiado como asset literal (o angular.json nao tem
+# fileReplacements), entao o que estiver em src/config/environment.json e' o que
+# vai ao ar. Se ele apontar a API para localhost, e' a maquina de quem abrir o
+# site que sera' chamada, e nada funciona.
 RUN npm run build
-
-# src/config e' copiado como asset literal e o angular.json nao tem
-# fileReplacements, entao o environment.json que sai do build e' o de
-# desenvolvimento: aponta a API para http://localhost:8000, que no navegador do
-# usuario e' a maquina dele. Sobrescrever aqui e' o que torna o build de
-# producao deterministico, em vez de depender de editar o arquivo antes de
-# buildar - foi assim que a imagem anterior foi feita, e o passo nao estava
-# documentado em lugar nenhum.
-RUN cp src/config/environment.prod.json dist/vitarerum-ui/browser/config/environment.json
 
 FROM python:3.12-slim AS api-builder
 

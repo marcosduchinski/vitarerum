@@ -201,6 +201,24 @@ async def health() -> dict[str, str]:
     }
 
 
+# Arquivos que mudam sem mudar de nome. Os bundles do Angular levam hash no
+# nome, entao cachear e' seguro: um deploy novo pede outro arquivo. Estes dois
+# nao: o navegador guardaria a versao velha e a serviria sem perguntar, porque
+# FileResponse manda ETag e Last-Modified mas nenhum Cache-Control, e' o cache
+# heuristico decide sozinho por quanto tempo confiar. Foi assim que um
+# environment.json apontando a API para localhost sobreviveu ao deploy que o
+# corrigiu.
+_ALWAYS_REVALIDATE = frozenset({"index.html", "config/environment.json"})
+
+
+def _static_response(path: Path, *, relative: str) -> FileResponse:
+    if relative in _ALWAYS_REVALIDATE:
+        # no-cache nao proibe guardar: obriga a revalidar. Com o ETag, a
+        # resposta continua sendo um 304 barato quando nada mudou.
+        return FileResponse(path, headers={"Cache-Control": "no-cache"})
+    return FileResponse(path)
+
+
 @app.get("/{full_path:path}")
 async def spa_fallback(full_path: str) -> FileResponse:
     if full_path == API_PREFIX or full_path.startswith(f"{API_PREFIX}/"):
@@ -208,9 +226,9 @@ async def spa_fallback(full_path: str) -> FileResponse:
 
     candidate = (STATIC_DIR / full_path).resolve()
     if candidate.is_relative_to(STATIC_DIR) and candidate.is_file():
-        return FileResponse(candidate)
+        return _static_response(candidate, relative=full_path.lstrip("/"))
 
     index_file = STATIC_DIR / "index.html"
     if not index_file.is_file():
         raise HTTPException(status_code=404)
-    return FileResponse(index_file)
+    return _static_response(index_file, relative="index.html")
