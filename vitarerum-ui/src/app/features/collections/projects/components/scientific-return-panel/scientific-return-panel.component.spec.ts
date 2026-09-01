@@ -160,13 +160,8 @@ class ApiStub {
     return of(item);
   }
 
-  investigations: ScientificReturnInvestigation[] = [];
   candidateInvestigations: ScientificReturnInvestigation[] = [];
   analyses: CandidateAgentAnalysis[] = [];
-
-  listWatchInvestigations(): Observable<readonly ScientificReturnInvestigation[]> {
-    return of(this.investigations);
-  }
 
   listCandidateInvestigations(): Observable<readonly ScientificReturnInvestigation[]> {
     return of(this.candidateInvestigations);
@@ -258,62 +253,67 @@ describe('ScientificReturnPanelComponent', () => {
     await settle();
   }
 
-  const investigationSection = () =>
-    (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('.watch-investigations');
-
-  const investigationRows = () =>
-    investigationSection()!.querySelectorAll<HTMLButtonElement>('.run-row');
-
-  it('lists a discovery recorded before this session, collapsed', async () => {
-    // The panel was built before the fixture had investigations; rebuild it so
-    // the resource loads them the way a page reload would.
-    api.investigations = [makeInvestigation('inv-discovery', null)];
+  it('says where the evidence of an agent-found candidate is held', async () => {
+    // The full-agentic flow writes no CandidateEvidence row: what it verified
+    // lives in the reader analysis. An empty list under the heading would read
+    // as "no evidence", which is the opposite of the truth.
+    api.candidates = [
+      { ...makeCandidate('candidate-agent', 'PENDING'), agenticCreated: true },
+      makeCandidate('candidate-plain', 'PENDING'),
+    ];
     fixture = TestBed.createComponent(ScientificReturnPanelComponent);
     fixture.componentRef.setInput('projectId', 'project-1');
     await settle();
 
-    const section = investigationSection()!;
-    expect(section.textContent).toContain('1 recorded');
-    expect(investigationRows()).toHaveLength(1);
-    // The row summarises; the trajectory itself stays closed until asked for.
-    expect(section.textContent).toContain('No results');
-    expect(section.querySelectorAll('.trajectory')).toHaveLength(0);
+    const root = fixture.nativeElement as HTMLElement;
+    const blocks = [...root.querySelectorAll('.evidence-block')];
+    expect(blocks[0].querySelector('.evidence-block__empty')?.textContent).toContain(
+      'Found by the autonomous agent',
+    );
+    expect(blocks[0].querySelector('.evidence-block__link')?.textContent?.trim()).toBe(
+      'Full-agentic reader history',
+    );
+    // A candidate the agent never touched is genuinely unevidenced, says so,
+    // and offers no reader analysis to open.
+    expect(blocks[1].querySelector('.evidence-block__empty')?.textContent).toContain(
+      'No evidence recorded',
+    );
+    expect(blocks[1].querySelector('.evidence-block__link')).toBeNull();
+
+    blocks[0].querySelector<HTMLButtonElement>('.evidence-block__link')!.click();
+    await settle();
+    expect(root.querySelector('[role="dialog"]')?.textContent).toContain('Reader analysis');
   });
 
-  it('expands one trajectory at a time', async () => {
-    api.investigations = [makeInvestigation('inv-a', null), makeInvestigation('inv-b', null)];
+  it('keeps the reader analysis reachable on an enriched candidate that has evidence', async () => {
+    api.candidates = [
+      {
+        ...makeCandidate('candidate-enriched', 'PENDING'),
+        agenticRediscovered: true,
+        evidences: [
+          {
+            id: 'ev-1',
+            type: 'INVENTORY_NUMBER',
+            strength: 'PRIMARY',
+            value: 'MB06-005747',
+            sourceField: 'title',
+            explanation: 'The bibliographic record mentions the consulted inventory number.',
+            objectId: null,
+          },
+        ],
+      },
+    ];
     fixture = TestBed.createComponent(ScientificReturnPanelComponent);
     fixture.componentRef.setInput('projectId', 'project-1');
     await settle();
 
-    investigationRows()[0].click();
-    await settle();
-    expect(investigationSection()!.querySelectorAll('.trajectory')).toHaveLength(1);
-    expect(investigationRows()[0].getAttribute('aria-expanded')).toBe('true');
-
-    investigationRows()[1].click();
-    await settle();
-    expect(investigationSection()!.querySelectorAll('.trajectory')).toHaveLength(1);
-    expect(investigationRows()[0].getAttribute('aria-expanded')).toBe('false');
-
-    investigationRows()[1].click();
-    await settle();
-    expect(investigationSection()!.querySelectorAll('.trajectory')).toHaveLength(0);
-  });
-
-  it('leaves enrichment investigations to their candidate', async () => {
-    api.investigations = [makeInvestigation('inv-enrichment', 'candidate-1')];
-    fixture = TestBed.createComponent(ScientificReturnPanelComponent);
-    fixture.componentRef.setInput('projectId', 'project-1');
-    await settle();
-
-    const section = investigationSection()!;
-    expect(section.textContent).toContain('0 recorded');
-    expect(section.querySelectorAll('.run-row')).toHaveLength(0);
+    const block = (fixture.nativeElement as HTMLElement).querySelector('.evidence-block')!;
+    expect(block.querySelector('.evidence-block__empty')).toBeNull();
+    expect(block.querySelector('.evidence-block__link')).not.toBeNull();
   });
 
   it('opens each candidate history in its own dialog', async () => {
-    api.candidates = [makeCandidate('candidate-1', 'PENDING')];
+    api.candidates = [{ ...makeCandidate('candidate-1', 'PENDING'), agenticCreated: true }];
     api.candidateInvestigations = [makeInvestigation('inv-candidate', 'candidate-1')];
     fixture = TestBed.createComponent(ScientificReturnPanelComponent);
     fixture.componentRef.setInput('projectId', 'project-1');
@@ -559,6 +559,116 @@ describe('ScientificReturnPanelComponent', () => {
     rows[2].click();
     await settle();
     expect(flat()).toContain('The author surname matches the researcher.');
+  });
+
+  it('cuts the trajectory at each replanning and names the source behind a reading', async () => {
+    api.fullAgentic = [
+      {
+        id: 'full-agentic-grouped',
+        watchId: 'watch-1',
+        objective: 'DISCOVER_CANDIDATE',
+        candidateId: null,
+        searchRunId: null,
+        status: 'COMPLETED',
+        budget: {},
+        usage: { queries: 3, candidates: 0 },
+        createdBy: 'perm-bob-curatorial',
+        createdAt: '2026-08-30T04:35:00Z',
+        startedAt: '2026-08-30T04:35:01Z',
+        completedAt: '2026-08-30T04:40:00Z',
+        heartbeatAt: null,
+        failureReason: null,
+      },
+    ];
+    // The shape the flow actually writes: the memory read before any plan, then
+    // a fan-out across sources whose records are pooled before being assessed,
+    // then a second plan. Only the planning events carry the iteration.
+    api.trajectory = [
+      {
+        id: 'e1',
+        sequence: 1,
+        kind: 'MEMORY_RETRIEVED',
+        occurredAt: '2026-08-30T04:35:02Z',
+        payload: { knowledgeItemIds: ['k1'] },
+      },
+      {
+        id: 'e2',
+        sequence: 2,
+        kind: 'PLAN_CREATED',
+        occurredAt: '2026-08-30T04:35:05Z',
+        payload: { iteration: 1, searches: [{}, {}], contractVersion: 'v3' },
+      },
+      {
+        id: 'e3',
+        sequence: 3,
+        kind: 'TOOL_COMPLETED',
+        occurredAt: '2026-08-30T04:35:08Z',
+        payload: { source: 'CROSSREF', query: 'MB06-5747', resultCount: 12 },
+      },
+      {
+        id: 'e4',
+        sequence: 4,
+        kind: 'TOOL_COMPLETED',
+        occurredAt: '2026-08-30T04:35:09Z',
+        payload: { source: 'OPENALEX', query: 'MB06-5747', resultCount: 5 },
+      },
+      {
+        id: 'e5',
+        sequence: 5,
+        kind: 'ARTICLE_ASSESSED',
+        occurredAt: '2026-08-30T04:35:20Z',
+        payload: {
+          source: 'OPENALEX',
+          query: 'MB06-5747',
+          relevant: true,
+          confidence: 'HIGH',
+          inventoryEvidenceStatus: 'OBSERVED',
+        },
+      },
+      {
+        id: 'e6',
+        sequence: 6,
+        kind: 'PLAN_CREATED',
+        occurredAt: '2026-08-30T04:36:00Z',
+        payload: { iteration: 2, searches: [{}], contractVersion: 'v3' },
+      },
+      {
+        id: 'e7',
+        sequence: 7,
+        kind: 'STOPPED',
+        occurredAt: '2026-08-30T04:40:00Z',
+        payload: { status: 'COMPLETED' },
+      },
+    ];
+    fixture = TestBed.createComponent(ScientificReturnPanelComponent);
+    fixture.componentRef.setInput('projectId', 'project-1');
+    await settle();
+
+    (fixture.nativeElement as HTMLElement)
+      .querySelector<HTMLButtonElement>('[aria-labelledby="agentic-workspace-heading"] .run-row')!
+      .click();
+    await settle();
+
+    const root = fixture.nativeElement as HTMLElement;
+    expect(
+      [...root.querySelectorAll('.trajectory-iteration')].map((item) => item.textContent?.trim()),
+    ).toEqual(['Iteration 1', 'Iteration 2']);
+
+    // The memory read comes before any plan, so it leads the list under no
+    // heading; the searches and the reading inherit the plan they followed.
+    const groups = [...root.querySelectorAll('.investigation-detail > *')];
+    expect(groups[1].className).toBe('trajectory-event');
+    expect(groups[1].textContent).toContain('Curatorial memory read');
+    expect(groups[2].className).toBe('trajectory-iteration');
+    expect(groups[7].className).toBe('trajectory-iteration');
+
+    // A verdict now says which search produced the article it judged.
+    const assessed = [...root.querySelectorAll('.trajectory-event')].find((row) =>
+      row.textContent?.includes('Article read'),
+    )!;
+    expect(assessed.textContent?.replace(/\s+/g, ' ')).toContain(
+      'OPENALEX · MB06-5747 · relevant · HIGH · OBSERVED',
+    );
   });
 
   it('marks which trajectory steps crossed the agent boundary', async () => {

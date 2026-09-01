@@ -261,8 +261,7 @@ a:focus-visible {
 }
 
 .candidate-section,
-.run-history,
-.watch-investigations {
+.run-history {
   display: grid;
   gap: 1rem;
 }
@@ -385,6 +384,28 @@ a:focus-visible {
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+/*
+ * An agent-found candidate carries no deterministic evidence row, so the list
+ * would otherwise render as a bare heading over nothing — which reads as "no
+ * evidence" when the grounding is simply held in the reader analysis.
+ */
+.evidence-block__empty {
+  display: grid;
+  gap: 0.4rem;
+}
+
+/* A grid item would stretch the whole width and stop reading as a link. */
+.evidence-block__link {
+  justify-self: start;
+}
+
+.evidence-block__empty p {
+  margin: 0;
+  color: var(--color-subtle);
+  font-size: 0.78rem;
+  line-height: 1.5;
 }
 
 .evidence-block li {
@@ -607,8 +628,7 @@ li[data-strength='SUPPORTING'] .evidence-block__strength {
   margin: 0.2rem 0 0;
 }
 
-.run-history,
-.watch-investigations {
+.run-history {
   padding-top: 1rem;
   border-top: 1px solid var(--color-line);
 }
@@ -666,21 +686,6 @@ li[data-strength='SUPPORTING'] .evidence-block__strength {
 
 .run-row__status[data-status='FAILED'] {
   color: var(--color-danger, #b42318);
-}
-
-/* Investigation outcomes: reviewable needs attention, stopped is a legitimate
-   result and must not read as an error. */
-.run-row__status[data-status='AWAITING_HUMAN_REVIEW'] {
-  color: #b56a08;
-}
-
-.run-row__status[data-status='STOPPED'] {
-  color: var(--color-subtle);
-}
-
-.run-row__budget {
-  color: var(--color-muted);
-  font-variant-numeric: tabular-nums;
 }
 
 .investigation-detail {
@@ -821,6 +826,33 @@ a.query-list__source:hover {
 /* A trajectory row used to show a number, a kind and a date, while the payload
    beside it held the searches, the verdicts and the reasons. The summary makes
    a row worth reading; opening it shows everything the summary left out. */
+/*
+ * The cut between one plan and the next. Without it four planning cycles read
+ * as one long run, and the second plan looks like a continuation of the first
+ * rather than a fresh attempt.
+ */
+.trajectory-iteration {
+  margin: 0.7rem 0 0.15rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--color-line);
+  color: var(--color-text-muted);
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.trajectory-iteration:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+/* The heading already separates them; a second rule would double the line. */
+.trajectory-iteration + .trajectory-event {
+  border-top: 0;
+}
+
 .trajectory-event + .trajectory-event {
   border-top: 1px solid var(--color-border);
 }

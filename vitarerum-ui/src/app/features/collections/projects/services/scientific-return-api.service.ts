@@ -138,13 +138,6 @@ export class ScientificReturnApiService {
     );
   }
 
-  startWatchInvestigation(watchId: string): Observable<ScientificReturnInvestigation> {
-    return this.http.post<ScientificReturnInvestigation>(
-      this.url(`/watches/${watchId}/investigations`),
-      {},
-    );
-  }
-
   startCandidateInvestigation(candidateId: string): Observable<ScientificReturnInvestigation> {
     return this.http.post<ScientificReturnInvestigation>(
       this.url(`/candidates/${candidateId}/investigations`),
@@ -157,12 +150,6 @@ export class ScientificReturnApiService {
   ): Observable<readonly ScientificReturnInvestigation[]> {
     return this.http.get<readonly ScientificReturnInvestigation[]>(
       this.url(`/candidates/${candidateId}/investigations`),
-    );
-  }
-
-  listWatchInvestigations(watchId: string): Observable<readonly ScientificReturnInvestigation[]> {
-    return this.http.get<readonly ScientificReturnInvestigation[]>(
-      this.url(`/watches/${watchId}/investigations`),
     );
   }
 

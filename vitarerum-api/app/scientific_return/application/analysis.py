@@ -184,7 +184,7 @@ def build_evidences(
             EvidenceStrength.SUPPORTING,
             snapshot.researcher,
             "authors",
-            "A lista de autores coincide com o investigador do projeto.",
+            "The author list matches the project researcher.",
         )
 
     for obj in snapshot.consulted_objects:
@@ -226,7 +226,7 @@ def build_evidences(
                 EvidenceStrength.PRIMARY,
                 obj.inventory_number,
                 inventory_source or "indexed_text",
-                "O registo bibliografico menciona o numero de inventario consultado.",
+                "The bibliographic record mentions the consulted inventory number.",
                 obj.id,
             )
         if object_match:
@@ -240,9 +240,9 @@ def build_evidences(
                 obj.object_name,
                 object_source or "indexed_text",
                 (
-                    "O titulo ou resumo menciona o objeto consultado."
+                    "The title or abstract mentions the consulted object."
                     if exact_object_match
-                    else "O titulo ou resumo menciona o genero do taxon consultado."
+                    else "The title or abstract mentions the consulted taxon's genus."
                 ),
                 obj.id,
             )
@@ -252,7 +252,7 @@ def build_evidences(
                 EvidenceStrength.PRIMARY,
                 f"{snapshot.researcher} | {obj.inventory_number}",
                 f"authors+{inventory_source or 'indexed_text'}",
-                "Autor e numero de inventario coincidem no mesmo candidato.",
+                "Author and inventory number match on the same candidate.",
                 obj.id,
             )
         if inventory_match and object_match:
@@ -268,7 +268,7 @@ def build_evidences(
                         )
                     )
                 ),
-                "Numero de inventario e objeto coincidem no mesmo candidato.",
+                "Inventory number and object match on the same candidate.",
                 obj.id,
             )
         if author_match and object_match:
@@ -281,9 +281,9 @@ def build_evidences(
                 ),
                 f"authors+{object_source or 'indexed_text'}",
                 (
-                    "Autor e objeto coincidem no mesmo candidato."
+                    "Author and object match on the same candidate."
                     if exact_object_match
-                    else "Autor e genero do taxon coincidem no mesmo candidato."
+                    else "Author and taxon genus match on the same candidate."
                 ),
                 obj.id,
             )

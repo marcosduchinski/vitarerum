@@ -24,11 +24,6 @@ import {
   CandidateAnalysesModalComponent,
 } from '../candidate-analyses-modal/candidate-analyses-modal.component';
 import { CandidateInvestigationsModalComponent } from '../candidate-investigations-modal/candidate-investigations-modal.component';
-import {
-  budgetLabel,
-  InvestigationTimelineComponent,
-  stopReasonLabel,
-} from '../investigation-timeline/investigation-timeline.component';
 
 import {
   CandidateAgentAnalysis,
@@ -45,6 +40,41 @@ import { ScientificReturnApiService } from '../../services/scientific-return-api
 
 type DecisionDraft = Exclude<ScientificReturnDecision, 'CONFIRM'> | 'CONFIRM';
 type TrajectoryFlow = 'in' | 'out' | 'none';
+
+interface TrajectoryGroup {
+  readonly key: string;
+  readonly iteration: number | null;
+  readonly events: readonly AgenticTrajectoryEvent[];
+}
+
+/**
+ * Cut the flat trajectory at each replanning.
+ *
+ * Only the planning events carry an iteration number; the searches, the
+ * readings and the endings that follow inherit the one in force, which is why
+ * the number is carried forward instead of read per event. What comes before
+ * the first plan — the curatorial memory — belongs to no iteration and leads
+ * the list without a heading.
+ */
+function groupByIteration(events: readonly AgenticTrajectoryEvent[]): readonly TrajectoryGroup[] {
+  const groups: { iteration: number | null; events: AgenticTrajectoryEvent[] }[] = [];
+  let current: number | null = null;
+  for (const event of events) {
+    const iteration = event.payload['iteration'];
+    if (typeof iteration === 'number') current = iteration;
+    const last = groups.at(-1);
+    if (last && last.iteration === current) {
+      last.events.push(event);
+    } else {
+      groups.push({ iteration: current, events: [event] });
+    }
+  }
+  return groups.map((group, index) => ({
+    key: `${group.iteration ?? 'start'}-${index}`,
+    iteration: group.iteration,
+    events: group.events,
+  }));
+}
 type CandidateFilter = ScientificReturnCandidateStatus | 'ALL';
 
 function isNotFound(error: unknown): boolean {
@@ -61,7 +91,6 @@ function isNotFound(error: unknown): boolean {
     DatePipe,
     ErrorMessageComponent,
     FeedbackMessageComponent,
-    InvestigationTimelineComponent,
     AgentFlowIconComponent,
     LoadingStateComponent,
   ],
@@ -142,7 +171,6 @@ export class ScientificReturnPanelComponent {
       this.watchResource.error() ??
       this.candidatesResource.error() ??
       this.runsResource.error() ??
-      this.watchInvestigationsResource.error() ??
       this.fullAgenticResource.error() ??
       null;
     return error ? toApiError(error) : null;
@@ -164,7 +192,6 @@ export class ScientificReturnPanelComponent {
   protected readonly correctedUrl = signal('');
   protected readonly correctedAuthors = signal('');
   protected readonly expandedRunId = signal<string | null>(null);
-  protected readonly expandedInvestigationId = signal<string | null>(null);
   protected readonly decisionsByCandidate = signal<
     Readonly<Record<string, readonly CandidateDecisionRecord[]>>
   >({});
@@ -176,24 +203,6 @@ export class ScientificReturnPanelComponent {
   protected readonly investigationsCandidateId = signal<string | null>(null);
   protected readonly loadingInvestigationsId = signal<string | null>(null);
   protected readonly investigationsError = signal<string | null>(null);
-  protected readonly watchInvestigationsResource = resource({
-    params: () => this.watch()?.id ?? null,
-    loader: ({ params }) => {
-      if (!params) return Promise.resolve([] as readonly ScientificReturnInvestigation[]);
-      return firstValueFrom(this.api.listWatchInvestigations(params));
-    },
-  });
-  /**
-   * Discovery only. Enrichment investigations share the watch but belong to a
-   * candidate, and are already shown there; listing them twice would read as
-   * two separate investigations.
-   */
-  protected readonly discoveryInvestigations = computed(() =>
-    (this.watchInvestigationsResource.value() ?? []).filter(
-      (investigation) => investigation.candidateId === null,
-    ),
-  );
-
   protected readonly analysesByCandidate = signal<
     Readonly<Record<string, readonly CandidateAgentAnalysis[]>>
   >({});
@@ -226,6 +235,13 @@ export class ScientificReturnPanelComponent {
   protected readonly fullAgenticTrajectory = signal<
     Readonly<Partial<Record<string, readonly AgenticTrajectoryEvent[]>>>
   >({});
+  protected readonly trajectoryGroups = computed(() => {
+    const grouped: Record<string, readonly TrajectoryGroup[]> = {};
+    for (const [investigationId, events] of Object.entries(this.fullAgenticTrajectory())) {
+      grouped[investigationId] = groupByIteration(events ?? []);
+    }
+    return grouped;
+  });
 
   protected setFilter(filter: CandidateFilter): void {
     this.filter.set(filter);
@@ -488,17 +504,6 @@ export class ScientificReturnPanelComponent {
     this.expandedRunId.update((current) => (current === runId ? null : runId));
   }
 
-  protected toggleInvestigation(investigationId: string): void {
-    this.expandedInvestigationId.update((current) =>
-      current === investigationId ? null : investigationId,
-    );
-  }
-
-  // Shared with the timeline so the collapsed row and the expanded trajectory
-  // never disagree about the outcome.
-  protected readonly investigationOutcome = stopReasonLabel;
-  protected readonly investigationBudget = budgetLabel;
-
   protected sourceSearchUrl(source: string, query: string): string | null {
     const encodedQuery = encodeURIComponent(query);
     if (source === 'CROSSREF') {
@@ -645,7 +650,12 @@ export class ScientificReturnPanelComponent {
         parts.push(text('phase'), seconds('durationMs'), text('message'));
         break;
       case 'ARTICLE_ASSESSED':
+        // Source and query first, matching the search rows above: the records
+        // of every source in the iteration are pooled before any of them is
+        // read, so without them a verdict names no origin.
         parts.push(
+          text('source'),
+          text('query'),
           payload['relevant'] ? 'relevant' : 'not relevant',
           text('confidence'),
           text('inventoryEvidenceStatus'),

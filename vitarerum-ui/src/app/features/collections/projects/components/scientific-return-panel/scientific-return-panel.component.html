@@ -275,7 +275,7 @@
             {{ coverage.reached }} of {{ coverage.total }} consulted objects investigated.
             @if (coverage.reached < coverage.total) {
               The objects not reached have not been searched at all — absence of results for them
-                means nothing yet.
+              means nothing yet.
             }
           </span>
         </p>
@@ -364,53 +364,57 @@
                     </span>
                     <span>Unmarked steps are the system at work, not the model.</span>
                   </p>
-                  @for (event of fullAgenticTrajectory()[investigation.id] ?? [];
-                    track event.sequence) {
-                    <div class="trajectory-event" [attr.data-kind]="event.kind">
-                      <button
-                        type="button"
-                        class="trajectory-event__row"
-                        [attr.aria-expanded]="expandedEventId() === event.id"
-                        (click)="toggleEvent(event.id)"
-                      >
-                        <span class="trajectory-event__seq">#{{ event.sequence }}</span>
-                        <span
-                          class="trajectory-event__flow"
-                          [attr.data-flow]="eventFlow(event)"
-                          [attr.title]="eventFlowLabel(event) || null"
+                  @for (group of trajectoryGroups()[investigation.id] ?? []; track group.key) {
+                    @if (group.iteration !== null) {
+                      <p class="trajectory-iteration">Iteration {{ group.iteration }}</p>
+                    }
+                    @for (event of group.events; track event.sequence) {
+                      <div class="trajectory-event" [attr.data-kind]="event.kind">
+                        <button
+                          type="button"
+                          class="trajectory-event__row"
+                          [attr.aria-expanded]="expandedEventId() === event.id"
+                          (click)="toggleEvent(event.id)"
                         >
-                          @if (eventFlow(event); as flow) {
-                            @if (flow !== 'none') {
-                              <app-agent-flow-icon [flow]="flow" />
-                              <span class="sr-only">{{ eventFlowLabel(event) }}.</span>
+                          <span class="trajectory-event__seq">#{{ event.sequence }}</span>
+                          <span
+                            class="trajectory-event__flow"
+                            [attr.data-flow]="eventFlow(event)"
+                            [attr.title]="eventFlowLabel(event) || null"
+                          >
+                            @if (eventFlow(event); as flow) {
+                              @if (flow !== 'none') {
+                                <app-agent-flow-icon [flow]="flow" />
+                                <span class="sr-only">{{ eventFlowLabel(event) }}.</span>
+                              }
                             }
+                          </span>
+                          <strong class="trajectory-event__title">
+                            {{ eventTitle(event) }}
+                          </strong>
+                          @if (eventSummary(event); as summary) {
+                            <span class="trajectory-event__summary">{{ summary }}</span>
                           }
-                        </span>
-                        <strong class="trajectory-event__title">
-                          {{ eventTitle(event) }}
-                        </strong>
-                        @if (eventSummary(event); as summary) {
-                          <span class="trajectory-event__summary">{{ summary }}</span>
+                          <span class="trajectory-event__time">
+                            {{ event.occurredAt | date: 'HH:mm:ss' }}
+                          </span>
+                          <span
+                            class="pi"
+                            [class.pi-chevron-down]="expandedEventId() !== event.id"
+                            [class.pi-chevron-up]="expandedEventId() === event.id"
+                            aria-hidden="true"
+                          ></span>
+                        </button>
+                        @if (expandedEventId() === event.id) {
+                          <dl class="trajectory-event__detail">
+                            @for (entry of eventDetails(event); track entry.label) {
+                              <dt>{{ entry.label }}</dt>
+                              <dd>{{ entry.value }}</dd>
+                            }
+                          </dl>
                         }
-                        <span class="trajectory-event__time">
-                          {{ event.occurredAt | date: 'HH:mm:ss' }}
-                        </span>
-                        <span
-                          class="pi"
-                          [class.pi-chevron-down]="expandedEventId() !== event.id"
-                          [class.pi-chevron-up]="expandedEventId() === event.id"
-                          aria-hidden="true"
-                        ></span>
-                      </button>
-                      @if (expandedEventId() === event.id) {
-                        <dl class="trajectory-event__detail">
-                          @for (entry of eventDetails(event); track entry.label) {
-                            <dt>{{ entry.label }}</dt>
-                            <dd>{{ entry.value }}</dd>
-                          }
-                        </dl>
-                      }
-                    </div>
+                      </div>
+                    }
                   } @empty {
                     <p>Trajectory is being recorded.</p>
                   }
@@ -481,8 +485,35 @@
                       <strong>{{ evidence.value }}</strong>
                       <p>{{ evidence.explanation }}</p>
                     </li>
+                  } @empty {
+                    <li class="evidence-block__empty">
+                      @if (candidate.agenticCreated) {
+                        <p>
+                          Found by the autonomous agent. Its grounded passages and inventory forms
+                          are in the Full-agentic reader history.
+                        </p>
+                      } @else {
+                        <p>No evidence recorded for this candidate.</p>
+                      }
+                    </li>
                   }
                 </ul>
+                <!--
+                  The reader analysis is evidence about the publication, so it belongs here
+                  rather than among the row actions. Enrichment leaves the deterministic
+                  evidence in place, so the link cannot hang off the empty case alone.
+                -->
+                @if (canReview() && (candidate.agenticCreated || candidate.agenticRediscovered)) {
+                  <button
+                    type="button"
+                    class="text-button evidence-block__link"
+                    [disabled]="loadingAgentAnalysisId() === candidate.id"
+                    (click)="openAgentHistory(candidate)"
+                  >
+                    <span class="pi pi-history" aria-hidden="true"></span>
+                    Full-agentic reader history
+                  </button>
+                }
               </section>
 
               <div class="candidate__publication">
@@ -506,15 +537,6 @@
 
               @if (canReview()) {
                 <div class="agent-analysis-actions" aria-label="Agentic analysis actions">
-                  <button
-                    type="button"
-                    class="text-button"
-                    [disabled]="loadingAgentAnalysisId() === candidate.id"
-                    (click)="openAgentHistory(candidate)"
-                  >
-                    <span class="pi pi-history" aria-hidden="true"></span>
-                    Full-agentic reader history
-                  </button>
                   @if (candidate.status === 'PENDING') {
                     <!--
                     Disbale for now, for simplicity
