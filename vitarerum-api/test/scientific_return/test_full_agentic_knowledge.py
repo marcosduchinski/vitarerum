@@ -211,6 +211,38 @@ async def test_retired_memory_is_not_retrieved() -> None:
 
 
 @pytest.mark.asyncio
+async def test_reactivating_active_knowledge_keeps_the_original_validation() -> None:
+    repository = MemoryRepository()
+    proposal = ScientificReturnKnowledgeItem(
+        id=KnowledgeItemId("knowledge-proposal-1"),
+        kind=KnowledgeKind.CURATORIAL_LESSON,
+        content="Proposta do agente",
+        status=KnowledgeStatus.PROPOSED,
+        institution_id="institution-1",
+        created_by=PermissionId("permission-1"),
+        created_at=datetime.now(tz=UTC),
+    )
+    await repository.add_knowledge(proposal)
+    validated = await ActivateCuratorialKnowledge(repository).execute(  # type: ignore[arg-type]
+        proposal.id, curator()
+    )
+    first_validation = validated.validated_at
+
+    other_curator = Actor(
+        PermissionId("permission-2"),
+        GroupName.DIRECTION,
+        institution_id="institution-1",
+    )
+    reactivated = await ActivateCuratorialKnowledge(repository).execute(  # type: ignore[arg-type]
+        proposal.id, other_curator
+    )
+
+    assert reactivated.status is KnowledgeStatus.ACTIVE
+    assert reactivated.validated_by == PermissionId("permission-1")
+    assert reactivated.validated_at == first_validation
+
+
+@pytest.mark.asyncio
 async def test_discarded_proposal_stays_unvalidated_and_unretrieved() -> None:
     """A turned-down proposal is retired without ever gaining a validation.
 

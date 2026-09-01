@@ -135,8 +135,16 @@ class ScientificReturnKnowledgeItem:
             raise ValueError("Active knowledge requires a curator validation")
 
     def activate(self, actor: PermissionId, occurred_at: datetime) -> None:
+        """Records the validation that promoted a proposal to active knowledge.
+
+        Activating an already active item is a no-op: the validation kept is
+        the one that actually let the item reach investigations, so a repeated
+        call must not reassign the audit trail to whoever pressed last.
+        """
         if self.status is KnowledgeStatus.RETIRED:
             raise ValueError("Retired knowledge cannot be activated")
+        if self.status is KnowledgeStatus.ACTIVE:
+            return
         self.status = KnowledgeStatus.ACTIVE
         self.validated_by = actor
         self.validated_at = occurred_at
