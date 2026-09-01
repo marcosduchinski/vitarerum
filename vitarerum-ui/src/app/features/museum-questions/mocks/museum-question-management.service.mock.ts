@@ -140,7 +140,9 @@ export class MuseumQuestionManagementServiceMock implements MuseumQuestionManage
 
   answer(questionId: string, body: AnswerMuseumQuestionRequest): Observable<MuseumQuestion> {
     const question = this.require(questionId);
-    if (question.status !== 'SUBMITTED') return this.invalidTransition();
+    if (question.status !== 'SUBMITTED' && question.status !== 'IN_PROGRESS') {
+      return this.invalidTransition();
+    }
     return of(
       this.replace(questionId, {
         ...question,
@@ -155,11 +157,14 @@ export class MuseumQuestionManagementServiceMock implements MuseumQuestionManage
 
   forward(questionId: string, body: ForwardMuseumQuestionRequest): Observable<MuseumQuestion> {
     const question = this.require(questionId);
-    if (question.status !== 'SUBMITTED') return this.invalidTransition();
+    if (question.status !== 'SUBMITTED' && question.status !== 'IN_PROGRESS') {
+      return this.invalidTransition();
+    }
     const assignedTo = PRINCIPALS[body.targetPermissionId] ?? PRINCIPALS['perm-carol'];
     return of(
       this.replace(questionId, {
         ...question,
+        status: 'IN_PROGRESS',
         assignedTo,
       }),
     ).pipe(delay(250));
@@ -167,7 +172,9 @@ export class MuseumQuestionManagementServiceMock implements MuseumQuestionManage
 
   markOutOfScope(questionId: string, body: MarkOutOfScopeRequest): Observable<MuseumQuestion> {
     const question = this.require(questionId);
-    if (question.status !== 'SUBMITTED') return this.invalidTransition();
+    if (question.status !== 'SUBMITTED' && question.status !== 'IN_PROGRESS') {
+      return this.invalidTransition();
+    }
     return of(
       this.replace(questionId, {
         ...question,

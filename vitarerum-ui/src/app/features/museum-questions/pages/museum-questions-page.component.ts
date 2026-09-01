@@ -28,6 +28,7 @@ const DEFAULT_PAGE_SIZE = 20;
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
 const STATUS_OPTIONS: readonly { value: MuseumQuestionStatus | ''; label: string }[] = [
   { value: 'SUBMITTED', label: 'Submitted' },
+  { value: 'IN_PROGRESS', label: 'In progress' },
   { value: 'ANSWERED', label: 'Answered' },
   { value: 'OUT_OF_SCOPE', label: 'Out of scope' },
   { value: 'CLOSED', label: 'Closed' },
@@ -35,6 +36,7 @@ const STATUS_OPTIONS: readonly { value: MuseumQuestionStatus | ''; label: string
 ];
 const STATUS_LABELS: Record<MuseumQuestionStatus, string> = {
   SUBMITTED: 'Submitted',
+  IN_PROGRESS: 'In progress',
   ANSWERED: 'Answered',
   OUT_OF_SCOPE: 'Out of scope',
   CLOSED: 'Closed',

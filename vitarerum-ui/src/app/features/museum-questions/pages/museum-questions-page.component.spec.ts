@@ -56,6 +56,7 @@ class ServiceStub {
     this.forwardCalls.push({ questionId, targetPermissionId: body.targetPermissionId });
     return of({
       ...QUESTION,
+      status: 'IN_PROGRESS' as const,
       assignedTo: {
         permissionId: 'perm-carol',
         user: { id: 'u-carol', name: 'Carol Souza', email: 'carol@example.org' },

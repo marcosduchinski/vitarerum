@@ -26,7 +26,7 @@ Repo --> UseCases : MuseumQuestion
 UseCases --> Routes : question
 Routes --> UI : MuseumQuestionResponse
 
-alt question is SUBMITTED and staff answers
+alt question is SUBMITTED or IN_PROGRESS and staff answers
   Staff -> UI : write answer
   UI -> Routes : POST /api/v1/museum-questions/{id}/answer
   Routes -> UseCases : answer(caller, id, body)
@@ -34,7 +34,7 @@ alt question is SUBMITTED and staff answers
   Routes -> Repo : commit transaction
   Routes -> Email : send answer after commit
   Routes --> UI : MuseumQuestionResponse
-else question is SUBMITTED and staff marks out-of-scope
+else question is SUBMITTED or IN_PROGRESS and staff marks out-of-scope
   Staff -> UI : confirm out-of-scope reason
   UI -> Routes : POST /api/v1/museum-questions/{id}/mark-out-of-scope
   Routes -> UseCases : markOutOfScope(caller, id, reason)

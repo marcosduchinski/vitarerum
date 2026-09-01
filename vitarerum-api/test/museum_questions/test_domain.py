@@ -48,6 +48,31 @@ def test_answer_transitions_submitted_question() -> None:
     assert question.answer_sent_at == _NOW
 
 
+def test_answer_transitions_in_progress_question() -> None:
+    question = _question(MuseumQuestionStatus.IN_PROGRESS)
+    question.answer(
+        body="Response body",
+        answered_by="perm-1",
+        answered_at=_NOW,
+        sent_at=_NOW,
+    )
+    assert question.status == MuseumQuestionStatus.ANSWERED
+
+
+def test_forward_transitions_submitted_question_to_in_progress() -> None:
+    question = _question()
+    question.forward(target_permission_id="perm-1")
+    assert question.status == MuseumQuestionStatus.IN_PROGRESS
+    assert question.assigned_to == "perm-1"
+
+
+def test_forward_keeps_reassigned_question_in_progress() -> None:
+    question = _question(MuseumQuestionStatus.IN_PROGRESS)
+    question.forward(target_permission_id="perm-2")
+    assert question.status == MuseumQuestionStatus.IN_PROGRESS
+    assert question.assigned_to == "perm-2"
+
+
 def test_close_rejects_submitted_question() -> None:
     question = _question()
     with pytest.raises(InvalidMuseumQuestionTransition):
@@ -71,6 +96,11 @@ def _question(
 
 def test_submitted_question_is_overdue_after_response_due_at() -> None:
     question = _question()
+    assert question.is_unanswered_overdue(_NOW + timedelta(days=15))
+
+
+def test_in_progress_question_is_overdue_after_response_due_at() -> None:
+    question = _question(MuseumQuestionStatus.IN_PROGRESS)
     assert question.is_unanswered_overdue(_NOW + timedelta(days=15))
 
 

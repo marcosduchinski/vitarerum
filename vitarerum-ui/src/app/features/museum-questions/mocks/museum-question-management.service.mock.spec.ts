@@ -40,10 +40,11 @@ describe('MuseumQuestionManagementServiceMock', () => {
       service.forward('q-1', { targetPermissionId: 'perm-carol' }),
     );
     const page = await firstValueFrom(
-      service.list({ assignedTo: 'perm-carol', status: 'SUBMITTED', page: 0, size: 20 }),
+      service.list({ assignedTo: 'perm-carol', status: 'IN_PROGRESS', page: 0, size: 20 }),
     );
 
     expect(updated.assignedTo?.permissionId).toBe('perm-carol');
+    expect(updated.status).toBe('IN_PROGRESS');
     expect(page.content.map((question) => question.id)).toContain('q-1');
   });
 

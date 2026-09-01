@@ -78,6 +78,7 @@
                     <span
                       class="status-chip"
                       [class.status-chip--submitted]="question.status === 'SUBMITTED'"
+                      [class.status-chip--in-progress]="question.status === 'IN_PROGRESS'"
                       [class.status-chip--answered]="question.status === 'ANSWERED'"
                       [class.status-chip--out-of-scope]="question.status === 'OUT_OF_SCOPE'"
                       [class.status-chip--closed]="question.status === 'CLOSED'"

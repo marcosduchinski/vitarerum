@@ -133,9 +133,9 @@
   white-space: nowrap;
 }
 
-.status-chip--submitted {
-  background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+.status-chip--in-progress {
+  background: color-mix(in srgb, #f59e0b 16%, var(--color-panel));
+  color: #92400e;
 }
 
 .due-chip {

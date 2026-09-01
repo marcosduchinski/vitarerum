@@ -124,7 +124,8 @@ class _Repo:
         rows = [
             q
             for q in self.questions.values()
-            if q.status == MuseumQuestionStatus.SUBMITTED
+            if q.status
+            in {MuseumQuestionStatus.SUBMITTED, MuseumQuestionStatus.IN_PROGRESS}
             and q.answered_at is None
             and q.response_due_at <= now
             and q.response_overdue_notified_at is None
@@ -942,6 +943,7 @@ async def test_forward_internal_question_assigns_and_notifies_target() -> None:
             json={"targetPermissionId": "perm-curator"},
         )
     assert resp.status_code == 200
+    assert resp.json()["status"] == "IN_PROGRESS"
     assert repo.questions["q1"].assigned_to == "perm-curator"
     assert resp.json()["assignedTo"]["permissionId"] == "perm-curator"
     assert dispatcher.single == [
@@ -955,6 +957,19 @@ async def test_forward_internal_question_assigns_and_notifies_target() -> None:
         }
     ]
     assert session.committed is True
+
+
+async def test_answer_in_progress_internal_question() -> None:
+    async with _client(
+        questions=[_question(status=MuseumQuestionStatus.IN_PROGRESS)]
+    ) as (client, repo, sender, _, _storage):
+        resp = await client.post(
+            f"{_INTERNAL_URL}/q1/answer", json={"answerBody": "Answer"}
+        )
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "ANSWERED"
+    assert repo.questions["q1"].status == MuseumQuestionStatus.ANSWERED
+    assert sender.answers == [("ana@example.org", "Answer")]
 
 
 async def test_forward_internal_question_rejects_invalid_target_group() -> None:

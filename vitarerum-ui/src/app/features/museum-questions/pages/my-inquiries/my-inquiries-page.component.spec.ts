@@ -22,7 +22,7 @@ const QUESTION: MuseumQuestionListItem = {
   requesterEmail: 'ana@example.org',
   subject: 'Visit question',
   message: 'I would like to visit.',
-  status: 'SUBMITTED',
+  status: 'IN_PROGRESS',
   createdAt: '2026-07-05T10:00:00Z',
   responseDueAt: '2026-07-20T10:00:00Z',
   responseOverdueNotifiedAt: null,
@@ -86,7 +86,7 @@ describe('MyInquiriesPageComponent', () => {
     });
   });
 
-  it('lists submitted enquiries assigned to the active permission', async () => {
+  it('lists in-progress enquiries assigned to the active permission', async () => {
     service = new ServiceStub();
     await TestBed.configureTestingModule({
       imports: [MyInquiriesPageComponent],
@@ -107,7 +107,7 @@ describe('MyInquiriesPageComponent', () => {
     expect(compiled.textContent).toContain('Visit question');
     expect(service.listCalls[0]).toMatchObject({
       assignedTo: 'perm-carol',
-      status: 'SUBMITTED',
+      status: 'IN_PROGRESS',
       page: 0,
       size: 100,
     });

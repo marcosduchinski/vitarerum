@@ -15,7 +15,10 @@ Authorization: `CURATORIAL` and `COLLECTIONS_MANAGEMENT`.
 ```text
 SUBMITTED -> ANSWERED
 SUBMITTED -> OUT_OF_SCOPE
-SUBMITTED -> SUBMITTED (forward/assign responsible staff)
+SUBMITTED -> IN_PROGRESS (forward/assign responsible staff)
+IN_PROGRESS -> IN_PROGRESS (forward/reassign responsible staff)
+IN_PROGRESS -> ANSWERED
+IN_PROGRESS -> OUT_OF_SCOPE
 ANSWERED -> CLOSED
 OUT_OF_SCOPE -> CLOSED
 ```
@@ -43,7 +46,7 @@ Response:
 
 Filters:
 
-- `status` is optional: `SUBMITTED`, `ANSWERED`, `OUT_OF_SCOPE`, `CLOSED`
+- `status` is optional: `SUBMITTED`, `IN_PROGRESS`, `ANSWERED`, `OUT_OF_SCOPE`, `CLOSED`
 - `requesterEmail` matches the encrypted lookup hash
 - `assignedTo` filters questions forwarded to a permission id
 - `unassignedOnly=true` filters questions that have not been forwarded
@@ -61,7 +64,7 @@ Request:
 { "answerBody": "Manual answer sent to the requester." }
 ```
 
-Valid only from `SUBMITTED`. Sends an e-mail, records `answeredAt`, `answeredBy`,
+Valid from `SUBMITTED` or `IN_PROGRESS`. Sends an e-mail, records `answeredAt`, `answeredBy`,
 `answerBody`, `answerSentAt`, and returns status `ANSWERED`.
 
 ### `POST /museum-questions/{id}/mark-out-of-scope`
@@ -72,7 +75,7 @@ Request:
 { "reason": "Exhibition question" }
 ```
 
-`reason` may be `null`. Valid only from `SUBMITTED`. Sends the standard
+`reason` may be `null`. Valid from `SUBMITTED` or `IN_PROGRESS`. Sends the standard
 out-of-scope e-mail, records `outOfScopeAt`, `outOfScopeBy`, `outOfScopeReason`,
 `outOfScopeEmailSentAt`, and returns status `OUT_OF_SCOPE`.
 
@@ -84,9 +87,9 @@ Request:
 { "targetPermissionId": "perm-curator" }
 ```
 
-Valid only from `SUBMITTED`. The target permission must belong to `CURATORIAL`
-or `COLLECTIONS_MANAGEMENT`. Records `assignedTo`, sends an in-app notification
-to the target, and keeps the question in `SUBMITTED`.
+Valid from `SUBMITTED` or `IN_PROGRESS`. The target permission must belong to
+`CURATORIAL` or `COLLECTIONS_MANAGEMENT`. Records `assignedTo`, sends an in-app
+notification to the target, and moves the question to (or keeps it in) `IN_PROGRESS`.
 
 ### `PATCH /museum-questions/{id}/close`
 
@@ -116,7 +119,7 @@ Each question receives a response deadline of 15 calendar days from
 
 Questions are overdue when:
 
-- `status` is `SUBMITTED`
+- `status` is `SUBMITTED` or `IN_PROGRESS`
 - `answeredAt` is `null`
 - `responseDueAt` is in the past
 

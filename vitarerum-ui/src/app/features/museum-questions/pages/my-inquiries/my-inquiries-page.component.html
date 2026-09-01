@@ -14,7 +14,7 @@
       @if (!questions().length) {
         <app-empty-state
           title="No assigned enquiries"
-          message="There are no submitted enquiries assigned to your active profile."
+          message="There are no enquiries in progress assigned to your active profile."
         />
       } @else {
         <div class="my-inquiries-panel__header">
@@ -60,7 +60,7 @@
                     </div>
                   </td>
                   <td>
-                    <span class="status-chip status-chip--submitted">
+                    <span class="status-chip status-chip--in-progress">
                       {{ statusLabel(question.status) }}
                     </span>
                   </td>

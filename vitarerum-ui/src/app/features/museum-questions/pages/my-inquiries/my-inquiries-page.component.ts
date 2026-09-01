@@ -16,6 +16,7 @@ import { MUSEUM_QUESTION_MANAGEMENT_SERVICE } from '../../services/museum-questi
 
 const STATUS_LABELS: Record<MuseumQuestionStatus, string> = {
   SUBMITTED: 'Submitted',
+  IN_PROGRESS: 'In progress',
   ANSWERED: 'Answered',
   OUT_OF_SCOPE: 'Out of scope',
   CLOSED: 'Closed',
@@ -52,7 +53,7 @@ export class MyInquiriesPageComponent {
       return firstValueFrom(
         this.service.list({
           assignedTo: params.assignedTo,
-          status: 'SUBMITTED',
+          status: 'IN_PROGRESS',
           page: 0,
           size: 100,
         }),

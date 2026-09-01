@@ -52,7 +52,9 @@ class MuseumQuestionReceipt(BaseModel):
     email: EmailStr
 
 
-MuseumQuestionStatusValue = Literal["SUBMITTED", "ANSWERED", "OUT_OF_SCOPE", "CLOSED"]
+MuseumQuestionStatusValue = Literal[
+    "SUBMITTED", "IN_PROGRESS", "ANSWERED", "OUT_OF_SCOPE", "CLOSED"
+]
 
 
 class MuseumQuestionAttachmentResponse(BaseModel):

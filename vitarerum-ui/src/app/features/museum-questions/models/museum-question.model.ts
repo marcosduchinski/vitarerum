@@ -1,7 +1,12 @@
 import { Page } from '@shared/models/page.model';
 import { PermissionPrincipal } from '@core/auth/models/permission.model';
 
-export type MuseumQuestionStatus = 'SUBMITTED' | 'ANSWERED' | 'OUT_OF_SCOPE' | 'CLOSED';
+export type MuseumQuestionStatus =
+  | 'SUBMITTED'
+  | 'IN_PROGRESS'
+  | 'ANSWERED'
+  | 'OUT_OF_SCOPE'
+  | 'CLOSED';
 
 export interface MuseumQuestion {
   readonly id: string;

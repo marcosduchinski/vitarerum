@@ -52,6 +52,7 @@ const BLOCKED_RICH_TEXT_TAGS = new Set([
 
 const STATUS_LABELS: Record<MuseumQuestionStatus, string> = {
   SUBMITTED: 'Submitted',
+  IN_PROGRESS: 'In progress',
   ANSWERED: 'Answered',
   OUT_OF_SCOPE: 'Out of scope',
   CLOSED: 'Closed',

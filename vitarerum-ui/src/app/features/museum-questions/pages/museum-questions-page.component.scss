@@ -251,6 +251,11 @@
   color: var(--color-accent-strong);
 }
 
+.status-chip--in-progress {
+  background: color-mix(in srgb, #f59e0b 16%, var(--color-panel));
+  color: #92400e;
+}
+
 .status-chip--answered {
   background: color-mix(in srgb, #22c55e 16%, var(--color-panel));
   color: #166534;

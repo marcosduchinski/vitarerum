@@ -15,6 +15,7 @@ from enum import StrEnum
 
 class MuseumQuestionStatus(StrEnum):
     SUBMITTED = "SUBMITTED"
+    IN_PROGRESS = "IN_PROGRESS"
     ANSWERED = "ANSWERED"
     OUT_OF_SCOPE = "OUT_OF_SCOPE"
     CLOSED = "CLOSED"
@@ -80,9 +81,12 @@ class MuseumQuestion:
         answered_at: datetime,
         sent_at: datetime,
     ) -> None:
-        if self.status != MuseumQuestionStatus.SUBMITTED:
+        if self.status not in {
+            MuseumQuestionStatus.SUBMITTED,
+            MuseumQuestionStatus.IN_PROGRESS,
+        }:
             raise InvalidMuseumQuestionTransition(
-                "Only submitted questions can be answered."
+                "Only submitted or in-progress questions can be answered."
             )
         body = body.strip()
         if not body:
@@ -101,9 +105,12 @@ class MuseumQuestion:
         occurred_at: datetime,
         email_sent_at: datetime,
     ) -> None:
-        if self.status != MuseumQuestionStatus.SUBMITTED:
+        if self.status not in {
+            MuseumQuestionStatus.SUBMITTED,
+            MuseumQuestionStatus.IN_PROGRESS,
+        }:
             raise InvalidMuseumQuestionTransition(
-                "Only submitted questions can be marked out of scope."
+                "Only submitted or in-progress questions can be marked out of scope."
             )
         cleaned_reason = reason.strip() if reason else None
         self.status = MuseumQuestionStatus.OUT_OF_SCOPE
@@ -125,15 +132,20 @@ class MuseumQuestion:
         self.closed_at = closed_at
 
     def forward(self, *, target_permission_id: str) -> None:
-        if self.status != MuseumQuestionStatus.SUBMITTED:
+        if self.status not in {
+            MuseumQuestionStatus.SUBMITTED,
+            MuseumQuestionStatus.IN_PROGRESS,
+        }:
             raise InvalidMuseumQuestionTransition(
-                "Only submitted questions can be forwarded."
+                "Only submitted or in-progress questions can be forwarded."
             )
         self.assigned_to = target_permission_id
+        self.status = MuseumQuestionStatus.IN_PROGRESS
 
     def is_unanswered_overdue(self, now: datetime) -> bool:
         return (
-            self.status == MuseumQuestionStatus.SUBMITTED
+            self.status
+            in {MuseumQuestionStatus.SUBMITTED, MuseumQuestionStatus.IN_PROGRESS}
             and self.answered_at is None
             and self.response_due_at <= now
         )

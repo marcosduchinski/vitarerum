@@ -325,9 +325,12 @@ class AnswerMuseumQuestion:
         question = await self._repo.get_by_id(data.question_id)
         if question is None:
             raise MuseumQuestionNotFound(data.question_id)
-        if question.status != MuseumQuestionStatus.SUBMITTED:
+        if question.status not in {
+            MuseumQuestionStatus.SUBMITTED,
+            MuseumQuestionStatus.IN_PROGRESS,
+        }:
             raise InvalidMuseumQuestionTransition(
-                "Only submitted questions can be answered."
+                "Only submitted or in-progress questions can be answered."
             )
         answer_body = data.answer_body.strip()
         if not answer_body:
@@ -356,9 +359,12 @@ class MarkMuseumQuestionOutOfScope:
         question = await self._repo.get_by_id(data.question_id)
         if question is None:
             raise MuseumQuestionNotFound(data.question_id)
-        if question.status != MuseumQuestionStatus.SUBMITTED:
+        if question.status not in {
+            MuseumQuestionStatus.SUBMITTED,
+            MuseumQuestionStatus.IN_PROGRESS,
+        }:
             raise InvalidMuseumQuestionTransition(
-                "Only submitted questions can be marked out of scope."
+                "Only submitted or in-progress questions can be marked out of scope."
             )
         now = self._clock.now()
         question.mark_out_of_scope(

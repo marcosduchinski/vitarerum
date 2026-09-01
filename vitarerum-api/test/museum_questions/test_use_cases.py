@@ -105,7 +105,8 @@ class _Repo:
         rows = [
             q
             for q in self.questions.values()
-            if q.status == MuseumQuestionStatus.SUBMITTED
+            if q.status
+            in {MuseumQuestionStatus.SUBMITTED, MuseumQuestionStatus.IN_PROGRESS}
             and q.answered_at is None
             and q.response_due_at <= now
             and q.response_overdue_notified_at is None
@@ -457,6 +458,14 @@ async def test_answer_question_marks_answered() -> None:
     assert result.answer_sent_at == _NOW
 
 
+async def test_answer_in_progress_question_marks_answered() -> None:
+    repo = _Repo([_question(status=MuseumQuestionStatus.IN_PROGRESS)])
+    result = await AnswerMuseumQuestion(repo, _Clock()).execute(
+        AnswerMuseumQuestionInput(_STAFF, "q1", "Yes, we can help.")
+    )
+    assert result.status == MuseumQuestionStatus.ANSWERED
+
+
 async def test_answer_question_rejects_finalized_question() -> None:
     repo = _Repo([_question(status=MuseumQuestionStatus.ANSWERED)])
     with pytest.raises(InvalidMuseumQuestionTransition):
@@ -476,14 +485,33 @@ async def test_mark_out_of_scope_updates_status() -> None:
     assert result.out_of_scope_email_sent_at == _NOW
 
 
+async def test_mark_in_progress_question_out_of_scope() -> None:
+    repo = _Repo([_question(status=MuseumQuestionStatus.IN_PROGRESS)])
+    result = await MarkMuseumQuestionOutOfScope(repo, _Clock()).execute(
+        MarkMuseumQuestionOutOfScopeInput(_STAFF, "q1", None)
+    )
+    assert result.status == MuseumQuestionStatus.OUT_OF_SCOPE
+
+
 async def test_forward_question_assigns_submitted_question() -> None:
     repo = _Repo([_question()])
     result = await ForwardMuseumQuestion(repo).execute(
         ForwardMuseumQuestionInput(_STAFF, "q1", "perm-curator")
     )
-    assert result.status == MuseumQuestionStatus.SUBMITTED
+    assert result.status == MuseumQuestionStatus.IN_PROGRESS
     assert result.assigned_to == "perm-curator"
     assert repo.questions["q1"].assigned_to == "perm-curator"
+
+
+async def test_forward_question_reassigns_in_progress_question() -> None:
+    repo = _Repo(
+        [_question(status=MuseumQuestionStatus.IN_PROGRESS, assigned_to="perm-curator")]
+    )
+    result = await ForwardMuseumQuestion(repo).execute(
+        ForwardMuseumQuestionInput(_STAFF, "q1", "perm-collections")
+    )
+    assert result.status == MuseumQuestionStatus.IN_PROGRESS
+    assert result.assigned_to == "perm-collections"
 
 
 async def test_forward_question_rejects_finalized_question() -> None:

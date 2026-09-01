@@ -232,7 +232,12 @@ class SqlAlchemyMuseumQuestionRepository:
         result = await self._session.execute(
             select(MuseumQuestionRecord)
             .where(
-                MuseumQuestionRecord.status == MuseumQuestionStatus.SUBMITTED.value,
+                MuseumQuestionRecord.status.in_(
+                    (
+                        MuseumQuestionStatus.SUBMITTED.value,
+                        MuseumQuestionStatus.IN_PROGRESS.value,
+                    )
+                ),
                 MuseumQuestionRecord.answered_at.is_(None),
                 MuseumQuestionRecord.response_due_at <= now,
                 MuseumQuestionRecord.response_overdue_notified_at.is_(None),

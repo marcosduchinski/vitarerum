@@ -265,6 +265,12 @@ describe('MuseumQuestionDetailPageComponent', () => {
     expect(service.answerCalls).toEqual([['q1', '<p>Answer <strong>body</strong></p>']]);
   });
 
+  it('allows answering questions in progress', async () => {
+    const el = await setup({ ...QUESTION, status: 'IN_PROGRESS' });
+    expect(el.textContent).toContain('In progress');
+    expect(el.querySelector('.reply-editor')).not.toBeNull();
+  });
+
   it('requires confirmation before marking out of scope', async () => {
     const el = await setup();
     const reason = el.querySelector<HTMLTextAreaElement>('#question-out-of-scope-reason')!;
