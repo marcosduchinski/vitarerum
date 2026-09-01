@@ -1,0 +1,43 @@
+@if (open()) {
+  <div class="modal-panel" role="presentation" (keydown.escape)="closed.emit()">
+    <button
+      type="button"
+      class="modal-panel__backdrop"
+      [attr.aria-label]="closeLabel()"
+      (click)="closed.emit()"
+    ></button>
+
+    <section
+      #dialog
+      class="modal-panel__dialog"
+      role="dialog"
+      aria-modal="true"
+      [attr.aria-labelledby]="titleId"
+      tabindex="-1"
+    >
+      <header class="modal-panel__header">
+        <div>
+          @if (eyebrow()) {
+            <p class="modal-panel__eyebrow">{{ eyebrow() }}</p>
+          }
+          <h2 [id]="titleId">{{ title() }}</h2>
+          @if (subtitle()) {
+            <p class="modal-panel__subtitle">{{ subtitle() }}</p>
+          }
+        </div>
+        <button
+          type="button"
+          class="modal-panel__close"
+          [attr.aria-label]="closeLabel()"
+          (click)="closed.emit()"
+        >
+          <span class="pi pi-times" aria-hidden="true"></span>
+        </button>
+      </header>
+
+      <div class="modal-panel__body">
+        <ng-content />
+      </div>
+    </section>
+  </div>
+}

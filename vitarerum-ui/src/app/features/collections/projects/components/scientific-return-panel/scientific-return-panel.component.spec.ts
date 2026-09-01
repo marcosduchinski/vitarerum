@@ -7,6 +7,7 @@ import { IdentitySession } from '@core/auth/models/identity-session.model';
 
 import {
   AgenticTrajectoryEvent,
+  CandidateAgentAnalysis,
   FullAgenticInvestigation,
   ScientificReturnCandidate,
   ScientificReturnCandidatesPage,
@@ -160,9 +161,19 @@ class ApiStub {
   }
 
   investigations: ScientificReturnInvestigation[] = [];
+  candidateInvestigations: ScientificReturnInvestigation[] = [];
+  analyses: CandidateAgentAnalysis[] = [];
 
   listWatchInvestigations(): Observable<readonly ScientificReturnInvestigation[]> {
     return of(this.investigations);
+  }
+
+  listCandidateInvestigations(): Observable<readonly ScientificReturnInvestigation[]> {
+    return of(this.candidateInvestigations);
+  }
+
+  listAgentAnalyses(): Observable<readonly CandidateAgentAnalysis[]> {
+    return of(this.analyses);
   }
 
   updateWatch(
@@ -301,29 +312,43 @@ describe('ScientificReturnPanelComponent', () => {
     expect(section.querySelectorAll('.run-row')).toHaveLength(0);
   });
 
-  it('offers enrichment only while the candidate is undecided', async () => {
-    api.candidates = [makeCandidate('candidate-pending', 'PENDING')];
+  it('opens each candidate history in its own dialog', async () => {
+    api.candidates = [makeCandidate('candidate-1', 'PENDING')];
+    api.candidateInvestigations = [makeInvestigation('inv-candidate', 'candidate-1')];
     fixture = TestBed.createComponent(ScientificReturnPanelComponent);
     fixture.componentRef.setInput('projectId', 'project-1');
     await settle();
 
-    const enrichmentButtons = () =>
-      [...(fixture.nativeElement as HTMLElement).querySelectorAll('button')].filter((button) =>
-        button.textContent?.includes('Investigate missing evidence'),
-      );
-    expect(enrichmentButtons()).toHaveLength(1);
+    const root = () => fixture.nativeElement as HTMLElement;
+    const dialogs = () => root().querySelectorAll('[role="dialog"]');
+    const clickButton = async (label: string) => {
+      [...root().querySelectorAll('button')]
+        .find((button) => button.textContent?.includes(label))!
+        .click();
+      await settle();
+    };
 
-    api.candidates = [
-      makeCandidate('candidate-confirmed', 'CONFIRMED'),
-      makeCandidate('candidate-dismissed', 'DISMISSED'),
-    ];
-    fixture = TestBed.createComponent(ScientificReturnPanelComponent);
-    fixture.componentRef.setInput('projectId', 'project-1');
+    expect(dialogs()).toHaveLength(0);
+
+    await clickButton('Investigation history');
+    expect(dialogs()).toHaveLength(1);
+    expect(root().textContent).toContain('Investigation history');
+    // The dialog names the publication it belongs to.
+    expect(root().textContent).toContain('Publication candidate-1');
+
+    root().querySelector<HTMLButtonElement>('[aria-label="Close investigation history"]')!.click();
     await settle();
+    expect(dialogs()).toHaveLength(0);
 
-    expect(enrichmentButtons()).toHaveLength(0);
-    // The audit trail stays reachable for a decided candidate.
-    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Investigation history');
+    // The reader history is a separate dialog, not the same panel reused.
+    await clickButton('Full-agentic reader history');
+    expect(dialogs()).toHaveLength(1);
+    expect(root().textContent).toContain('Reader analysis');
+    expect(root().textContent).toContain('No full-agentic reader analyses recorded.');
+
+    root().querySelector<HTMLButtonElement>('[aria-label="Close reader history"]')!.click();
+    await settle();
+    expect(dialogs()).toHaveLength(0);
   });
 
   it('queues the autonomous flow explicitly', async () => {

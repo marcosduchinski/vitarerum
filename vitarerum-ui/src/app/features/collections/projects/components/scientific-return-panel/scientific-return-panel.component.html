@@ -489,12 +489,14 @@
                     type="button"
                     class="text-button"
                     [disabled]="loadingAgentAnalysisId() === candidate.id"
-                    (click)="toggleAgentHistory(candidate.id)"
+                    (click)="openAgentHistory(candidate)"
                   >
                     <span class="pi pi-history" aria-hidden="true"></span>
                     Full-agentic reader history
                   </button>
                   @if (candidate.status === 'PENDING') {
+                    <!--
+                    Disbale for now, for simplicity
                     <button
                       type="button"
                       class="button"
@@ -508,170 +510,18 @@
                         <span class="pi pi-search" aria-hidden="true"></span>
                         Investigate missing evidence
                       }
-                    </button>
+                    </button>-->
                   }
                   <button
                     type="button"
                     class="text-button"
                     [disabled]="runningInvestigationId() === candidate.id"
-                    (click)="toggleInvestigations(candidate.id)"
+                    (click)="openInvestigations(candidate)"
                   >
                     <span class="pi pi-list" aria-hidden="true"></span>
                     Investigation history
                   </button>
                 </div>
-              }
-
-              @if (investigationsByCandidate()[candidate.id]; as investigations) {
-                <section class="investigations" aria-label="Assisted investigations">
-                  @for (investigation of investigations; track investigation.id) {
-                    <app-investigation-timeline [investigation]="investigation" />
-                  } @empty {
-                    <p class="agent-analysis__empty">No assisted investigation recorded.</p>
-                  }
-                </section>
-              }
-
-              @if (analysesByCandidate()[candidate.id]; as analyses) {
-                <section
-                  class="agent-analysis"
-                  [attr.aria-labelledby]="'agent-analysis-' + candidate.id"
-                >
-                  <header>
-                    <div>
-                      <p class="section-kicker">Full-agentic · grounded reader</p>
-                      <h4 [id]="'agent-analysis-' + candidate.id">Reader analysis</h4>
-                    </div>
-                    <span>Human decision required</span>
-                  </header>
-
-                  @if (!analyses.length) {
-                    <p class="agent-analysis__empty">No full-agentic reader analyses recorded.</p>
-                  } @else {
-                    <ol class="agent-analysis__history">
-                      @for (agentRun of analyses; track agentRun.id) {
-                        <li class="agent-analysis__run" [attr.data-status]="agentRun.status">
-                          <div class="agent-analysis__meta">
-                            <strong>{{ agentRun.status.toLowerCase() }}</strong>
-                            <span>{{ agentRun.model }}</span>
-                            <span>{{ agentRun.startedAt | date: 'medium' }}</span>
-                            @if (agentRun.latencyMs !== null) {
-                              <span>{{ agentRun.latencyMs }} ms</span>
-                            }
-                          </div>
-
-                          @if (agentRun.analysis; as suggestion) {
-                            <p class="agent-analysis__summary">{{ suggestion.summary }}</p>
-                            <div class="agent-analysis__recommendation">
-                              <span>Recommended next step</span>
-                              <strong>{{ agentActionLabel(suggestion.recommendedAction) }}</strong>
-                              <small>{{ suggestion.confidence.toLowerCase() }} confidence</small>
-                            </div>
-
-                            <div class="agent-analysis__columns">
-                              <div>
-                                <h5>Supporting signals</h5>
-                                @if (suggestion.supportingEvidence.length) {
-                                  <ul>
-                                    @for (item of suggestion.supportingEvidence; track item) {
-                                      <li>{{ item }}</li>
-                                    }
-                                  </ul>
-                                } @else {
-                                  <p>None identified.</p>
-                                }
-                              </div>
-                              <div>
-                                <h5>Evidence gaps</h5>
-                                @if (suggestion.missingEvidence.length) {
-                                  <ul>
-                                    @for (item of suggestion.missingEvidence; track item) {
-                                      <li>{{ item }}</li>
-                                    }
-                                  </ul>
-                                } @else {
-                                  <p>None identified.</p>
-                                }
-                              </div>
-                              @if (suggestion.contradictions.length) {
-                                <div>
-                                  <h5>Contradictions</h5>
-                                  <ul>
-                                    @for (item of suggestion.contradictions; track item) {
-                                      <li>{{ item }}</li>
-                                    }
-                                  </ul>
-                                </div>
-                              }
-                            </div>
-
-                            <p class="agent-analysis__reasoning">
-                              {{ suggestion.reasoningSummary }}
-                            </p>
-                            @if (suggestion.proposedQueries.length) {
-                              <div class="agent-analysis__queries">
-                                <span>Queries proposed, not executed</span>
-                                @for (query of suggestion.proposedQueries; track query) {
-                                  <code>{{ query }}</code>
-                                }
-                              </div>
-                            }
-
-                            @if (agentRun.staffFeedback) {
-                              <p class="agent-analysis__feedback">
-                                Staff feedback:
-                                <strong>{{ agentActionLabel(agentRun.staffFeedback) }}</strong>
-                              </p>
-                            } @else {
-                              <div
-                                class="agent-analysis__feedback-actions"
-                                aria-label="Rate AI analysis"
-                              >
-                                <span>Was this recommendation useful?</span>
-                                <button
-                                  type="button"
-                                  [disabled]="feedbackBusyAnalysisId() === agentRun.id"
-                                  (click)="recordAgentFeedback(candidate.id, agentRun.id, 'USEFUL')"
-                                >
-                                  Useful
-                                </button>
-                                <button
-                                  type="button"
-                                  [disabled]="feedbackBusyAnalysisId() === agentRun.id"
-                                  (click)="
-                                    recordAgentFeedback(
-                                      candidate.id,
-                                      agentRun.id,
-                                      'PARTIALLY_USEFUL'
-                                    )
-                                  "
-                                >
-                                  Partly
-                                </button>
-                                <button
-                                  type="button"
-                                  [disabled]="feedbackBusyAnalysisId() === agentRun.id"
-                                  (click)="
-                                    recordAgentFeedback(candidate.id, agentRun.id, 'NOT_USEFUL')
-                                  "
-                                >
-                                  Not useful
-                                </button>
-                              </div>
-                            }
-                          } @else {
-                            <p class="agent-analysis__error" role="status">
-                              {{
-                                agentRun.errorMessage ??
-                                  'The analysis did not produce a valid result.'
-                              }}
-                            </p>
-                          }
-                        </li>
-                      }
-                    </ol>
-                  }
-                </section>
               }
 
               @if (candidate.status === 'PENDING' && canReview()) {
@@ -950,4 +800,24 @@
       }
     </section>
   }
+
+  <app-candidate-investigations-modal
+    [open]="investigationsCandidate() !== null"
+    [candidateTitle]="investigationsCandidate()?.title ?? ''"
+    [investigations]="openInvestigationsList()"
+    [loading]="loadingInvestigationsId() !== null"
+    [error]="investigationsError()"
+    (closed)="closeInvestigations()"
+  />
+
+  <app-candidate-analyses-modal
+    [open]="analysesCandidate() !== null"
+    [candidateTitle]="analysesCandidate()?.title ?? ''"
+    [analyses]="openAnalysesList()"
+    [loading]="loadingAgentAnalysisId() !== null"
+    [error]="analysesError()"
+    [feedbackBusyId]="feedbackBusyAnalysisId()"
+    (closed)="closeAgentHistory()"
+    (feedbackGiven)="recordAgentFeedback($event)"
+  />
 </section>

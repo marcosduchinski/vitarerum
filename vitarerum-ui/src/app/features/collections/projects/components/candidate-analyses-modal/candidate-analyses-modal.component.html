@@ -1,0 +1,129 @@
+<app-modal-panel
+  [open]="open()"
+  eyebrow="Full-agentic · grounded reader"
+  title="Reader analysis"
+  [subtitle]="candidateTitle()"
+  closeLabel="Close reader history"
+  (closed)="closed.emit()"
+>
+  <p class="decision-notice">
+    <span class="pi pi-user" aria-hidden="true"></span>
+    Whatever the reader recommends, only your decision records scientific return.
+  </p>
+
+  @if (loading()) {
+    <p class="state" role="status">
+      <span class="pi pi-spin pi-spinner" aria-hidden="true"></span> Loading reader analyses…
+    </p>
+  } @else if (error(); as message) {
+    <p class="state state--error" role="alert">{{ message }}</p>
+  } @else if (!analyses().length) {
+    <p class="state">No full-agentic reader analyses recorded.</p>
+  } @else {
+    <ol class="analysis-history">
+      @for (agentRun of analyses(); track agentRun.id) {
+        <li class="analysis-run" [attr.data-status]="agentRun.status">
+          <div class="analysis-run__meta">
+            <strong>{{ agentRun.status.toLowerCase() }}</strong>
+            <span>{{ agentRun.model }}</span>
+            <span>{{ agentRun.startedAt | date: 'medium' }}</span>
+            @if (agentRun.latencyMs !== null) {
+              <span>{{ agentRun.latencyMs }} ms</span>
+            }
+          </div>
+
+          @if (agentRun.analysis; as suggestion) {
+            <p class="analysis-run__summary">{{ suggestion.summary }}</p>
+            <div class="analysis-run__recommendation">
+              <span>Recommended next step</span>
+              <strong>{{ agentActionLabel(suggestion.recommendedAction) }}</strong>
+              <small>{{ suggestion.confidence.toLowerCase() }} confidence</small>
+            </div>
+
+            <div class="analysis-run__columns">
+              <div>
+                <h5>Supporting signals</h5>
+                @if (suggestion.supportingEvidence.length) {
+                  <ul>
+                    @for (item of suggestion.supportingEvidence; track item) {
+                      <li>{{ item }}</li>
+                    }
+                  </ul>
+                } @else {
+                  <p>None identified.</p>
+                }
+              </div>
+              <div>
+                <h5>Evidence gaps</h5>
+                @if (suggestion.missingEvidence.length) {
+                  <ul>
+                    @for (item of suggestion.missingEvidence; track item) {
+                      <li>{{ item }}</li>
+                    }
+                  </ul>
+                } @else {
+                  <p>None identified.</p>
+                }
+              </div>
+              @if (suggestion.contradictions.length) {
+                <div>
+                  <h5>Contradictions</h5>
+                  <ul>
+                    @for (item of suggestion.contradictions; track item) {
+                      <li>{{ item }}</li>
+                    }
+                  </ul>
+                </div>
+              }
+            </div>
+
+            <p class="analysis-run__reasoning">{{ suggestion.reasoningSummary }}</p>
+            @if (suggestion.proposedQueries.length) {
+              <div class="analysis-run__queries">
+                <span>Queries proposed, not executed</span>
+                @for (query of suggestion.proposedQueries; track query) {
+                  <code>{{ query }}</code>
+                }
+              </div>
+            }
+
+            @if (agentRun.staffFeedback) {
+              <p class="analysis-run__feedback">
+                Staff feedback: <strong>{{ agentActionLabel(agentRun.staffFeedback) }}</strong>
+              </p>
+            } @else {
+              <div class="analysis-run__feedback-actions" aria-label="Rate AI analysis">
+                <span>Was this recommendation useful?</span>
+                <button
+                  type="button"
+                  [disabled]="feedbackBusyId() === agentRun.id"
+                  (click)="rate(agentRun.id, 'USEFUL')"
+                >
+                  Useful
+                </button>
+                <button
+                  type="button"
+                  [disabled]="feedbackBusyId() === agentRun.id"
+                  (click)="rate(agentRun.id, 'PARTIALLY_USEFUL')"
+                >
+                  Partly
+                </button>
+                <button
+                  type="button"
+                  [disabled]="feedbackBusyId() === agentRun.id"
+                  (click)="rate(agentRun.id, 'NOT_USEFUL')"
+                >
+                  Not useful
+                </button>
+              </div>
+            }
+          } @else {
+            <p class="analysis-run__error" role="status">
+              {{ agentRun.errorMessage ?? 'The analysis did not produce a valid result.' }}
+            </p>
+          }
+        </li>
+      }
+    </ol>
+  }
+</app-modal-panel>

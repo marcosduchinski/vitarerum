@@ -1,0 +1,16 @@
+.investigations {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.state {
+  margin: 0;
+  padding: 1.5rem 0;
+  color: var(--color-subtle);
+  font-size: 0.82rem;
+  text-align: center;
+}
+
+.state--error {
+  color: var(--status-rejected-text);
+}

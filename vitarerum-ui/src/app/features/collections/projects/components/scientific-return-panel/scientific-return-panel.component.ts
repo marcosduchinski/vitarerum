@@ -12,12 +12,17 @@ import {
 import { firstValueFrom } from 'rxjs';
 
 import { IDENTITY_SERVICE } from '@core/auth/identity.service';
-import { ApiError, toApiError } from '@core/http/api-error.model';
+import { ApiError, getApiErrorPresentation, toApiError } from '@core/http/api-error.model';
 import { ConfirmModalComponent } from '@shared/components/confirm-modal/confirm-modal.component';
 import { ErrorMessageComponent } from '@shared/components/error-message/error-message.component';
 import { FeedbackMessageComponent } from '@shared/components/feedback-message/feedback-message.component';
 import { LoadingStateComponent } from '@shared/components/loading-state/loading-state.component';
 
+import {
+  AgentAnalysisFeedback,
+  CandidateAnalysesModalComponent,
+} from '../candidate-analyses-modal/candidate-analyses-modal.component';
+import { CandidateInvestigationsModalComponent } from '../candidate-investigations-modal/candidate-investigations-modal.component';
 import {
   budgetLabel,
   InvestigationTimelineComponent,
@@ -31,7 +36,6 @@ import {
   ScientificReturnCandidate,
   ScientificReturnCandidateStatus,
   ScientificReturnDecision,
-  ScientificReturnAgentFeedback,
   ScientificReturnInvestigation,
   FullAgenticInvestigation,
   AgenticTrajectoryEvent,
@@ -49,6 +53,8 @@ function isNotFound(error: unknown): boolean {
   selector: 'app-scientific-return-panel',
   standalone: true,
   imports: [
+    CandidateAnalysesModalComponent,
+    CandidateInvestigationsModalComponent,
     ConfirmModalComponent,
     DatePipe,
     ErrorMessageComponent,
@@ -164,6 +170,9 @@ export class ScientificReturnPanelComponent {
     Record<string, readonly ScientificReturnInvestigation[]>
   >({});
   protected readonly runningInvestigationId = signal<string | null>(null);
+  protected readonly investigationsCandidateId = signal<string | null>(null);
+  protected readonly loadingInvestigationsId = signal<string | null>(null);
+  protected readonly investigationsError = signal<string | null>(null);
   protected readonly watchInvestigationsResource = resource({
     params: () => this.watch()?.id ?? null,
     loader: ({ params }) => {
@@ -187,6 +196,28 @@ export class ScientificReturnPanelComponent {
   >({});
   protected readonly loadingAgentAnalysisId = signal<string | null>(null);
   protected readonly feedbackBusyAnalysisId = signal<string | null>(null);
+  protected readonly analysesCandidateId = signal<string | null>(null);
+  protected readonly analysesError = signal<string | null>(null);
+
+  /**
+   * One modal instance serves the whole list, so the open candidate is looked
+   * up here rather than rendered per row. Reading it back from `candidates()`
+   * keeps the dialog on the refreshed record after a decision or a reload.
+   */
+  protected readonly investigationsCandidate = computed(() =>
+    this.candidateById(this.investigationsCandidateId()),
+  );
+  protected readonly analysesCandidate = computed(() =>
+    this.candidateById(this.analysesCandidateId()),
+  );
+  protected readonly openInvestigationsList = computed(() => {
+    const id = this.investigationsCandidateId();
+    return id ? (this.investigationsByCandidate()[id] ?? []) : [];
+  });
+  protected readonly openAnalysesList = computed(() => {
+    const id = this.analysesCandidateId();
+    return id ? (this.analysesByCandidate()[id] ?? []) : [];
+  });
   protected readonly fullAgenticBusy = signal(false);
   protected readonly expandedFullAgenticId = signal<string | null>(null);
   protected readonly fullAgenticTrajectory = signal<
@@ -715,6 +746,10 @@ export class ScientificReturnPanelComponent {
         ...current,
         [candidateId]: [investigation, ...(current[candidateId] ?? [])],
       }));
+      // The trajectory is the answer to what was just run, so it opens where
+      // the reader is already looking instead of waiting behind a button.
+      this.investigationsError.set(null);
+      this.investigationsCandidateId.set(candidateId);
       // The candidate stays pending whatever the cycle found: only a human
       // decision records scientific return.
       this.feedback.set(
@@ -730,15 +765,20 @@ export class ScientificReturnPanelComponent {
     }
   }
 
-  protected async toggleInvestigations(candidateId: string): Promise<void> {
-    if (this.investigationsByCandidate()[candidateId]) {
-      this.investigationsByCandidate.update((current) => {
-        const next = { ...current };
-        delete next[candidateId];
-        return next;
-      });
-      return;
-    }
+  protected async openInvestigations(candidate: ScientificReturnCandidate): Promise<void> {
+    const candidateId = candidate.id;
+    this.analysesCandidateId.set(null);
+    this.investigationsCandidateId.set(candidateId);
+    this.investigationsError.set(null);
+    await this.loadInvestigations(candidateId);
+  }
+
+  protected closeInvestigations(): void {
+    this.investigationsCandidateId.set(null);
+  }
+
+  private async loadInvestigations(candidateId: string): Promise<void> {
+    this.loadingInvestigationsId.set(candidateId);
     try {
       const investigations = await firstValueFrom(
         this.api.listCandidateInvestigations(candidateId),
@@ -748,19 +788,19 @@ export class ScientificReturnPanelComponent {
         [candidateId]: investigations,
       }));
     } catch (error) {
-      this.actionError.set(toApiError(error));
+      // Reported inside the dialog: the panel-level banner would sit behind
+      // the backdrop, where the reader who triggered the load cannot see it.
+      this.investigationsError.set(getApiErrorPresentation(toApiError(error)).message);
+    } finally {
+      this.loadingInvestigationsId.set(null);
     }
   }
 
-  protected async toggleAgentHistory(candidateId: string): Promise<void> {
-    if (this.analysesByCandidate()[candidateId]) {
-      this.analysesByCandidate.update((current) => {
-        const next = { ...current };
-        delete next[candidateId];
-        return next;
-      });
-      return;
-    }
+  protected async openAgentHistory(candidate: ScientificReturnCandidate): Promise<void> {
+    const candidateId = candidate.id;
+    this.investigationsCandidateId.set(null);
+    this.analysesCandidateId.set(candidateId);
+    this.analysesError.set(null);
     this.loadingAgentAnalysisId.set(candidateId);
     this.clearMessages();
     try {
@@ -770,18 +810,19 @@ export class ScientificReturnPanelComponent {
         [candidateId]: analyses,
       }));
     } catch (error) {
-      this.actionError.set(toApiError(error));
+      this.analysesError.set(getApiErrorPresentation(toApiError(error)).message);
     } finally {
       this.loadingAgentAnalysisId.set(null);
     }
   }
 
-  protected async recordAgentFeedback(
-    candidateId: string,
-    analysisId: string,
-    value: ScientificReturnAgentFeedback,
-  ): Promise<void> {
-    if (!this.canReview() || this.feedbackBusyAnalysisId()) return;
+  protected closeAgentHistory(): void {
+    this.analysesCandidateId.set(null);
+  }
+
+  protected async recordAgentFeedback({ analysisId, value }: AgentAnalysisFeedback): Promise<void> {
+    const candidateId = this.analysesCandidateId();
+    if (!candidateId || !this.canReview() || this.feedbackBusyAnalysisId()) return;
     this.feedbackBusyAnalysisId.set(analysisId);
     this.clearMessages();
     try {
@@ -812,8 +853,9 @@ export class ScientificReturnPanelComponent {
     return decision.toLowerCase().replaceAll('_', ' ');
   }
 
-  protected agentActionLabel(action: string): string {
-    return action.toLowerCase().replaceAll('_', ' ');
+  private candidateById(candidateId: string | null): ScientificReturnCandidate | null {
+    if (!candidateId) return null;
+    return this.candidates().find((item) => item.id === candidateId) ?? null;
   }
 
   private clearMessages(): void {

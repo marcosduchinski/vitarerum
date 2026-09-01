@@ -1,0 +1,24 @@
+<app-modal-panel
+  [open]="open()"
+  eyebrow="Assisted investigation"
+  title="Investigation history"
+  [subtitle]="candidateTitle()"
+  closeLabel="Close investigation history"
+  (closed)="closed.emit()"
+>
+  @if (loading()) {
+    <p class="state" role="status">
+      <span class="pi pi-spin pi-spinner" aria-hidden="true"></span> Loading investigations…
+    </p>
+  } @else if (error(); as message) {
+    <p class="state state--error" role="alert">{{ message }}</p>
+  } @else {
+    <div class="investigations">
+      @for (investigation of investigations(); track investigation.id) {
+        <app-investigation-timeline [investigation]="investigation" />
+      } @empty {
+        <p class="state">No assisted investigation recorded.</p>
+      }
+    </div>
+  }
+</app-modal-panel>
