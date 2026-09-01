@@ -152,6 +152,21 @@ describe('ScientificReturnApiService', () => {
   });
 
   it('starts the full agent with an idempotency key and lists its runs', () => {
+    service.getFullAgenticReadiness().subscribe();
+    const readiness = http.expectOne(
+      'https://api.example.test/api/v1/scientific-return/full-agentic-readiness',
+    );
+    expect(readiness.request.method).toBe('GET');
+    readiness.flush({
+      enabled: true,
+      requestedSources: ['CROSSREF', 'EUROPE_PMC'],
+      operationalSources: ['CROSSREF', 'EUROPE_PMC'],
+      unavailableSources: [],
+      inspectableEvidenceSources: ['EUROPE_PMC'],
+      configurationValid: true,
+      message: null,
+    });
+
     service.startFullAgenticInvestigation('watch-1').subscribe();
     const start = http.expectOne(
       'https://api.example.test/api/v1/scientific-return/watches/watch-1/full-agentic-investigations',

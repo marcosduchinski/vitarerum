@@ -257,6 +257,13 @@
   gap: 0.5rem;
 }
 
+.agentic-readiness {
+  flex-basis: 100%;
+  margin: 0.15rem 0 0;
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}
+
 .button,
 .icon-button,
 .candidate__actions button,

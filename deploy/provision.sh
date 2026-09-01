@@ -48,6 +48,7 @@ set -a; . "${ENV_FILE}"; set +a
 # a busca deterministica e a fila fica sempre vazia. Ligado, cada watch vencido
 # enfileira uma investigacao POR OBJETO CONSULTADO, ate' max_objects (15).
 : "${SCIENTIFIC_RETURN_FULL_AGENTIC_ENABLED:=false}"
+: "${EUROPE_PMC_ENABLED:=true}"
 
 # Credenciais nao precisam ser copiadas para deploy/.env: se estiverem vazias
 # la', sao herdadas dos segredos de producao e, no que producao nao tiver, do
@@ -519,6 +520,7 @@ INSTITUTION_NAME: "${INSTITUTION_NAME}"
 OLLAMA_BASE_URL: "${OLLAMA_BASE_URL:-https://ollama.com}"
 NARRATIVE_MODEL: "${NARRATIVE_MODEL:-gemma4:31b-cloud}"
 TRIAGE_MODEL: "${TRIAGE_MODEL:-gemma4:31b-cloud}"
+SCIENTIFIC_RETURN_LLM_MODEL: "${SCIENTIFIC_RETURN_LLM_MODEL:-gemma4:31b-cloud}"
 PUBLIC_ORIGIN: "${public_origin}"
 CORS_ORIGINS: '${cors}'
 SMTP_HOST: "${SMTP_HOST:-smtp.gmail.com}"
@@ -529,6 +531,7 @@ SMTP_USE_TLS: "${SMTP_USE_TLS:-true}"
 GCS_BUCKET_NAME: "${BUCKET}"
 FILE_STORAGE_BACKEND: gcs
 SCIENTIFIC_RETURN_FULL_AGENTIC_ENABLED: "${SCIENTIFIC_RETURN_FULL_AGENTIC_ENABLED}"
+EUROPE_PMC_ENABLED: "${EUROPE_PMC_ENABLED}"
 YAML
 }
 

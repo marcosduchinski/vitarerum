@@ -194,6 +194,14 @@ foram reproduzidas como estao:
   deterministica e depois roda as investigacoes que ela enfileirou — mas
   `scientific_return_full_agentic_enabled` e `scientific_return_agent_mode`
   vem desligados. Ligue-os na env do job quando quiser o fluxo agentico.
+- **O full-agentic precisa do Europe PMC.** Quando
+  `SCIENTIFIC_RETURN_FULL_AGENTIC_ENABLED=true`, mantenha tambem
+  `EUROPE_PMC_ENABLED=true`: e' a fonte operacional que devolve texto de
+  inventario inspecionavel. Sem ela a API recusa o enqueue com
+  `503 FULL_AGENTIC_SOURCE_CONFIGURATION_INVALID`.
+- **O reasoner cientifico precisa de um modelo Ollama Cloud explicito.** Defina
+  `SCIENTIFIC_RETURN_LLM_MODEL=gemma4:31b-cloud`; sem a variavel, a aplicacao
+  usa o fallback local `llama3.1:8b`, que pode nao existir na conta Cloud.
 - **O banco nao tem backup.** VM sem snapshot agendado e com
   `deletionProtection: false`.
 - **Sem CI.** Nao ha' trigger no Cloud Build; todo deploy e' manual.

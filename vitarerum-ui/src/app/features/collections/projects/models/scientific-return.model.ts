@@ -382,6 +382,16 @@ export type FullAgenticStatus =
   | 'FAILED'
   | 'CANCELLED';
 
+export interface FullAgenticReadiness {
+  readonly enabled: boolean;
+  readonly requestedSources: readonly string[];
+  readonly operationalSources: readonly string[];
+  readonly unavailableSources: readonly string[];
+  readonly inspectableEvidenceSources: readonly string[];
+  readonly configurationValid: boolean;
+  readonly message: string | null;
+}
+
 export interface FullAgenticInvestigation {
   readonly id: string;
   readonly watchId: string;

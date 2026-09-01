@@ -24,6 +24,7 @@ import {
   ScientificReturnWatchLookupResponse,
   ScientificReturnWatchStatus,
   FullAgenticInvestigation,
+  FullAgenticReadiness,
   AgenticTrajectoryEvent,
   ScientificReturnKnowledgeItem,
   ScientificReturnKnowledgePage,
@@ -159,6 +160,10 @@ export class ScientificReturnApiService {
       { objective: 'DISCOVER_CANDIDATE' },
       { headers: { 'Idempotency-Key': crypto.randomUUID() } },
     );
+  }
+
+  getFullAgenticReadiness(): Observable<FullAgenticReadiness> {
+    return this.http.get<FullAgenticReadiness>(this.url('/full-agentic-readiness'));
   }
 
   listFullAgenticInvestigations(watchId: string): Observable<readonly FullAgenticInvestigation[]> {

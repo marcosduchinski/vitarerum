@@ -2,6 +2,7 @@ import {
   afterNextRender,
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   effect,
   ElementRef,
   inject,
@@ -85,6 +86,7 @@ function loadTurnstileScript(): Promise<void> {
 })
 export class TurnstileComponent {
   private readonly i18n = inject(PublicI18nService);
+  private readonly destroyRef = inject(DestroyRef);
 
   /** Public Turnstile site key (from runtime config). */
   readonly siteKey = input.required<string>();
@@ -96,6 +98,8 @@ export class TurnstileComponent {
 
   private readonly host = viewChild.required<ElementRef<HTMLElement>>('host');
   private widgetId: string | null = null;
+  private renderGeneration = 0;
+  private destroyed = false;
 
   constructor() {
     afterNextRender(() => {
@@ -107,10 +111,16 @@ export class TurnstileComponent {
     effect(() => {
       this.i18n.locale();
       if (this.widgetId && window.turnstile) {
-        window.turnstile.remove(this.widgetId);
-        this.widgetId = null;
+        this.renderGeneration += 1;
+        this.removeWidget();
         void this.renderWidget();
       }
+    });
+
+    this.destroyRef.onDestroy(() => {
+      this.destroyed = true;
+      this.renderGeneration += 1;
+      this.removeWidget();
     });
   }
 
@@ -122,12 +132,14 @@ export class TurnstileComponent {
   }
 
   private async renderWidget(): Promise<void> {
+    const generation = ++this.renderGeneration;
     try {
       await loadTurnstileScript();
     } catch {
       this.invalidated.emit();
       return;
     }
+    if (this.destroyed || generation !== this.renderGeneration) return;
     if (!window.turnstile) {
       this.invalidated.emit();
       return;
@@ -141,5 +153,11 @@ export class TurnstileComponent {
       'error-callback': () => this.invalidated.emit(),
       'expired-callback': () => this.invalidated.emit(),
     });
+  }
+
+  private removeWidget(): void {
+    const widgetId = this.widgetId;
+    this.widgetId = null;
+    if (widgetId && window.turnstile) window.turnstile.remove(widgetId);
   }
 }

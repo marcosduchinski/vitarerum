@@ -206,7 +206,8 @@
             <button
               type="button"
               class="button"
-              [disabled]="busyAction() !== null || fullAgenticBusy()"
+              [disabled]="busyAction() !== null || fullAgenticBusy() || !fullAgenticAvailable()"
+              [attr.title]="fullAgenticUnavailableMessage()"
               (click)="startFullAgentic(currentWatch.id)"
             >
               @if (fullAgenticBusy()) {
@@ -217,6 +218,9 @@
                 Start autonomous search
               }
             </button>
+            @if (fullAgenticUnavailableMessage(); as message) {
+              <p class="agentic-readiness" role="status">{{ message }}</p>
+            }
           } @else if (currentWatch.status === 'PAUSED') {
             <button
               type="button"
@@ -262,7 +266,7 @@
           <p class="section-kicker">Autonomous workflow</p>
           <h3 id="agentic-workspace-heading">Agentic investigations</h3>
         </div>
-        <button type="button" class="text-button" (click)="fullAgenticResource.reload()">
+        <button type="button" class="text-button" (click)="refreshFullAgentic()">
           <span class="pi pi-refresh" aria-hidden="true"></span>
           Refresh
         </button>

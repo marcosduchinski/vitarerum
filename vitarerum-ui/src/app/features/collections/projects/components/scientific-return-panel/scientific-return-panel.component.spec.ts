@@ -10,6 +10,7 @@ import {
   AgenticTrajectoryEvent,
   CandidateAgentAnalysis,
   FullAgenticInvestigation,
+  FullAgenticReadiness,
   ScientificReturnCandidate,
   ScientificReturnCandidatesPage,
   ScientificReturnCandidateStatus,
@@ -144,14 +145,36 @@ function makeAnalysis(candidateId: string): CandidateAgentAnalysis {
 
 class ApiStub {
   watch = makeWatch();
+  lookupCalls: readonly (readonly string[])[] = [];
   statusCalls: { watchId: string; status: ScientificReturnWatchStatus }[] = [];
   intervalCalls: { watchId: string; reviewIntervalDays: number }[] = [];
   fullAgentic: FullAgenticInvestigation[] = [];
   trajectory: AgenticTrajectoryEvent[] = [];
   startedFullAgentic: string[] = [];
+  readiness: FullAgenticReadiness = {
+    enabled: true,
+    requestedSources: ['CROSSREF', 'EUROPE_PMC'],
+    operationalSources: ['CROSSREF', 'EUROPE_PMC'],
+    unavailableSources: [],
+    inspectableEvidenceSources: ['EUROPE_PMC'],
+    configurationValid: true,
+    message: null,
+  };
 
-  getWatch(): Observable<ScientificReturnWatch> {
-    return of(this.watch);
+  lookupWatches(projectIds: readonly string[]) {
+    this.lookupCalls = [...this.lookupCalls, projectIds];
+    return of({
+      items: projectIds.map((projectId) => ({
+        projectId,
+        watch: this.watch,
+        eligible: true,
+        ineligibilityReason: null,
+      })),
+    });
+  }
+
+  getFullAgenticReadiness(): Observable<FullAgenticReadiness> {
+    return of(this.readiness);
   }
 
   candidates: ScientificReturnCandidate[] = [];
@@ -456,6 +479,54 @@ describe('ScientificReturnPanelComponent', () => {
 
     expect(api.startedFullAgentic).toEqual(['watch-1']);
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('queued');
+  });
+
+  it('loads an optional watch through lookup without relying on a 404 response', () => {
+    expect(api.lookupCalls).toEqual([['project-1']]);
+  });
+
+  it('refreshes the candidates produced by autonomous investigations', async () => {
+    expect((fixture.nativeElement as HTMLElement).textContent).not.toContain(
+      'Publication candidate-refreshed',
+    );
+    const candidateLoadsBeforeRefresh = api.candidateStatusQueries.length;
+
+    api.candidates = [makeCandidate('candidate-refreshed', 'PENDING')];
+    const refresh = [...(fixture.nativeElement as HTMLElement).querySelectorAll('button')].find(
+      (button) => button.textContent?.trim() === 'Refresh',
+    )!;
+    refresh.click();
+    await settle();
+
+    expect(api.candidateStatusQueries).toHaveLength(candidateLoadsBeforeRefresh + 1);
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain(
+      'Publication candidate-refreshed',
+    );
+  });
+
+  it('explains invalid agentic configuration and refuses to enqueue', async () => {
+    api.readiness = {
+      ...api.readiness,
+      operationalSources: ['CROSSREF'],
+      inspectableEvidenceSources: [],
+      configurationValid: false,
+      message: 'No operational source can return inspectable inventory text',
+    };
+    fixture.destroy();
+    fixture = TestBed.createComponent(ScientificReturnPanelComponent);
+    fixture.componentRef.setInput('projectId', 'project-1');
+    await settle();
+
+    const button = [...(fixture.nativeElement as HTMLElement).querySelectorAll('button')].find(
+      (item) => item.textContent?.includes('Start autonomous search'),
+    )!;
+    expect(button.disabled).toBe(true);
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain(
+      'No operational source can return inspectable inventory text',
+    );
+    button.click();
+
+    expect(api.startedFullAgentic).toEqual([]);
   });
 
   it('warns that a degraded investigation did not run its full plan', async () => {

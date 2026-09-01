@@ -152,8 +152,26 @@ class ObjectSearchServiceStub {
 /** Enough of the API for the scientific-return panel to settle on its
  *  "no monitoring watch" state; this suite is about the tab, not the panel. */
 class ScientificReturnApiStub {
-  getWatch() {
-    return throwError(() => new HttpErrorResponse({ status: 404 }));
+  lookupWatches(projectIds: readonly string[]) {
+    return of({
+      items: projectIds.map((projectId) => ({
+        projectId,
+        watch: null,
+        eligible: true,
+        ineligibilityReason: null,
+      })),
+    });
+  }
+  getFullAgenticReadiness() {
+    return of({
+      enabled: true,
+      requestedSources: ['EUROPE_PMC'],
+      operationalSources: ['EUROPE_PMC'],
+      unavailableSources: [],
+      inspectableEvidenceSources: ['EUROPE_PMC'],
+      configurationValid: true,
+      message: null,
+    });
   }
   listCandidates() {
     return of({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 });

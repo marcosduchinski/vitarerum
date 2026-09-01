@@ -1,5 +1,4 @@
 import { DatePipe } from '@angular/common';
-import { HttpErrorResponse } from '@angular/common/http';
 import { DOCUMENT } from '@angular/common';
 import {
   afterNextRender,
@@ -41,6 +40,7 @@ import {
   ScientificReturnDecision,
   ScientificReturnInvestigation,
   FullAgenticInvestigation,
+  FullAgenticReadiness,
   AgenticTrajectoryEvent,
 } from '../../models/scientific-return.model';
 import { ScientificReturnApiService } from '../../services/scientific-return-api.service';
@@ -83,10 +83,6 @@ function groupByIteration(events: readonly AgenticTrajectoryEvent[]): readonly T
   }));
 }
 type CandidateFilter = ScientificReturnCandidateStatus | 'ALL';
-
-function isNotFound(error: unknown): boolean {
-  return error instanceof HttpErrorResponse && error.status === 404;
-}
 
 @Component({
   selector: 'app-scientific-return-panel',
@@ -133,12 +129,8 @@ export class ScientificReturnPanelComponent {
   protected readonly watchResource = resource({
     params: () => this.projectId(),
     loader: async ({ params }) => {
-      try {
-        return await firstValueFrom(this.api.getWatch(params));
-      } catch (error) {
-        if (isNotFound(error)) return null;
-        throw error;
-      }
+      const response = await firstValueFrom(this.api.lookupWatches([params]));
+      return response.items.find((item) => item.projectId === params)?.watch ?? null;
     },
   });
   protected readonly watch = computed(() => this.watchResource.value() ?? null);
@@ -181,6 +173,28 @@ export class ScientificReturnPanelComponent {
   protected readonly fullAgenticInvestigations = computed(
     () => this.fullAgenticResource.value() ?? [],
   );
+  protected readonly fullAgenticReadinessResource = resource({
+    loader: () => firstValueFrom(this.api.getFullAgenticReadiness()),
+  });
+  protected readonly fullAgenticReadiness = computed<FullAgenticReadiness | null>(
+    () => this.fullAgenticReadinessResource.value() ?? null,
+  );
+  protected readonly fullAgenticAvailable = computed(() => {
+    const readiness = this.fullAgenticReadiness();
+    return readiness?.enabled === true && readiness.configurationValid;
+  });
+  protected readonly fullAgenticUnavailableMessage = computed(() => {
+    if (this.fullAgenticReadinessResource.error()) {
+      return 'Autonomous search availability could not be checked. Try refreshing the page.';
+    }
+    const readiness = this.fullAgenticReadiness();
+    if (readiness === null) return 'Checking autonomous search availability…';
+    if (!readiness.enabled) return 'Autonomous search is disabled in this environment.';
+    if (!readiness.configurationValid) {
+      return readiness.message ?? 'Autonomous search sources are not configured correctly.';
+    }
+    return null;
+  });
   protected readonly canReview = computed(() => {
     const group = this.identity.session()?.group;
     return group === 'CURATORIAL' || group === 'COLLECTIONS_MANAGEMENT' || group === 'DIRECTION';
@@ -783,7 +797,7 @@ export class ScientificReturnPanelComponent {
   }
 
   protected async startFullAgentic(watchId: string): Promise<void> {
-    if (!this.canReview() || this.fullAgenticBusy()) return;
+    if (!this.canReview() || !this.fullAgenticAvailable() || this.fullAgenticBusy()) return;
     this.fullAgenticBusy.set(true);
     this.clearMessages();
     try {
@@ -797,6 +811,12 @@ export class ScientificReturnPanelComponent {
     } finally {
       this.fullAgenticBusy.set(false);
     }
+  }
+
+  /** Refresh both the autonomous run state and the review queue it produces. */
+  protected refreshFullAgentic(): void {
+    this.fullAgenticResource.reload();
+    this.candidatesResource.reload();
   }
 
   protected async toggleFullAgentic(investigationId: string): Promise<void> {
