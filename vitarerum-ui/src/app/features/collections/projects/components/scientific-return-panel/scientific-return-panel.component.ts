@@ -1,14 +1,19 @@
 import { DatePipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
+import { DOCUMENT } from '@angular/common';
 import {
+  afterNextRender,
   ChangeDetectionStrategy,
   Component,
   computed,
+  effect,
   inject,
+  Injector,
   input,
   resource,
   signal,
 } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 
 import { IDENTITY_SERVICE } from '@core/auth/identity.service';
@@ -18,6 +23,8 @@ import { ErrorMessageComponent } from '@shared/components/error-message/error-me
 import { FeedbackMessageComponent } from '@shared/components/feedback-message/feedback-message.component';
 import { LoadingStateComponent } from '@shared/components/loading-state/loading-state.component';
 import { AgentFlowIconComponent } from '@shared/components/agent-flow-icon/agent-flow-icon.component';
+
+import { CandidateEvidenceListComponent } from '../candidate-evidence-list/candidate-evidence-list.component';
 
 import {
   AgentAnalysisFeedback,
@@ -86,6 +93,7 @@ function isNotFound(error: unknown): boolean {
   standalone: true,
   imports: [
     CandidateAnalysesModalComponent,
+    CandidateEvidenceListComponent,
     CandidateInvestigationsModalComponent,
     ConfirmModalComponent,
     DatePipe,
@@ -101,6 +109,18 @@ function isNotFound(error: unknown): boolean {
 export class ScientificReturnPanelComponent {
   private readonly api = inject(ScientificReturnApiService);
   private readonly identity = inject(IDENTITY_SERVICE);
+
+  /**
+   * The candidate the review queue sent the reader here to decide.
+   *
+   * Read from the snapshot rather than the stream: it is a one-shot intent
+   * carried by the link, and reacting to later changes would fight the filter
+   * the reader picks once they are here.
+   */
+  private readonly focusedCandidateId =
+    inject(ActivatedRoute).snapshot.queryParamMap.get('candidate');
+  private readonly injector = inject(Injector);
+  private readonly document = inject(DOCUMENT);
 
   readonly projectId = input.required<string>();
   protected readonly filterOptions: readonly CandidateFilter[] = [
@@ -122,7 +142,9 @@ export class ScientificReturnPanelComponent {
     },
   });
   protected readonly watch = computed(() => this.watchResource.value() ?? null);
-  protected readonly filter = signal<CandidateFilter>('PENDING');
+  /* A candidate arrived at from the queue may be already decided, and the
+     pending filter would hide the very row the link promised. */
+  protected readonly filter = signal<CandidateFilter>(this.focusedCandidateId ? 'ALL' : 'PENDING');
   protected readonly candidatesResource = resource({
     params: () => ({
       projectId: this.projectId(),
@@ -197,14 +219,14 @@ export class ScientificReturnPanelComponent {
   >({});
   protected readonly loadingHistoryId = signal<string | null>(null);
   protected readonly investigationsByCandidate = signal<
-    Record<string, readonly ScientificReturnInvestigation[]>
+    Readonly<Partial<Record<string, readonly ScientificReturnInvestigation[]>>>
   >({});
   protected readonly runningInvestigationId = signal<string | null>(null);
   protected readonly investigationsCandidateId = signal<string | null>(null);
   protected readonly loadingInvestigationsId = signal<string | null>(null);
   protected readonly investigationsError = signal<string | null>(null);
   protected readonly analysesByCandidate = signal<
-    Readonly<Record<string, readonly CandidateAgentAnalysis[]>>
+    Readonly<Partial<Record<string, readonly CandidateAgentAnalysis[]>>>
   >({});
   protected readonly loadingAgentAnalysisId = signal<string | null>(null);
   protected readonly feedbackBusyAnalysisId = signal<string | null>(null);
@@ -235,13 +257,42 @@ export class ScientificReturnPanelComponent {
   protected readonly fullAgenticTrajectory = signal<
     Readonly<Partial<Record<string, readonly AgenticTrajectoryEvent[]>>>
   >({});
+  /*
+   * `Partial`, because the map only holds the investigations whose trajectory
+   * has been fetched. A plain `Record` types every lookup as a hit, which made
+   * the compiler call the `?? []` guarding the template's `@for` redundant —
+   * the one thing standing between an unopened investigation and iterating
+   * `undefined`.
+   */
   protected readonly trajectoryGroups = computed(() => {
-    const grouped: Record<string, readonly TrajectoryGroup[]> = {};
+    const grouped: Partial<Record<string, readonly TrajectoryGroup[]>> = {};
     for (const [investigationId, events] of Object.entries(this.fullAgenticTrajectory())) {
       grouped[investigationId] = groupByIteration(events ?? []);
     }
     return grouped;
   });
+
+  protected isFocused(candidate: ScientificReturnCandidate): boolean {
+    return candidate.id === this.focusedCandidateId;
+  }
+
+  /** Bring the linked candidate into view once the list that holds it exists. */
+  private readonly scrollToFocused = effect(() => {
+    const id = this.focusedCandidateId;
+    if (!id || this.scrolledToFocused) return;
+    if (!this.candidates().some((candidate) => candidate.id === id)) return;
+    this.scrolledToFocused = true;
+    afterNextRender(
+      () => {
+        this.document
+          .getElementById(`candidate-${id}`)
+          ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      },
+      { injector: this.injector },
+    );
+  });
+
+  private scrolledToFocused = false;
 
   protected setFilter(filter: CandidateFilter): void {
     this.filter.set(filter);
@@ -892,10 +943,6 @@ export class ScientificReturnPanelComponent {
 
   protected candidateAuthors(candidate: ScientificReturnCandidate): string {
     return candidate.authors.join(', ') || 'Unknown authors';
-  }
-
-  protected evidenceLabel(type: string): string {
-    return type.toLowerCase().replaceAll('_', ' ');
   }
 
   protected decisionLabel(decision: ScientificReturnDecision): string {

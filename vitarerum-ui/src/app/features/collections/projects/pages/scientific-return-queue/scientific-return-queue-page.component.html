@@ -1,11 +1,10 @@
 <main class="return-queue">
   <app-page-header
-    class="queue-hero"
     eyebrow="Collections · Evidence workbench"
     title="Scientific return review"
     description="Trace publications back to completed collection-use projects. Evidence is automated; attribution remains a staff decision."
   >
-    <div class="queue-hero__actions">
+    <div class="queue-actions">
       <span class="governance-badge">
         <span class="pi pi-shield" aria-hidden="true"></span>
         Human decision required
@@ -174,7 +173,9 @@
           <article class="candidate-dossier" [attr.data-status]="candidate.status">
             <header class="candidate-dossier__publication">
               <div class="candidate-dossier__meta">
-                <span class="candidate-number"> Review item {{ page() * 20 + position + 1 }} </span>
+                <span class="candidate-number">
+                  Review item {{ page() * pageSize + position + 1 }}
+                </span>
                 <span class="source">{{ sourceLabel(candidate.source) }}</span>
                 <span class="status" [attr.data-status]="candidate.status">
                   {{ filterLabel(candidate.status) }}
@@ -296,10 +297,7 @@
               </header>
 
               @if (candidate.groundedPassages.length) {
-                <ul
-                  class="evidence-list grounded-passage-list"
-                  aria-label="Agent-grounded publication passages"
-                >
+                <ul class="grounded-passage-list" aria-label="Agent-grounded publication passages">
                   @for (passage of candidate.groundedPassages; track $index) {
                     <li>
                       <span class="pi pi-quote-left" aria-hidden="true"></span>
@@ -323,26 +321,10 @@
               }
 
               @if (candidate.evidences.length) {
-                <ul class="evidence-list" aria-label="Structured candidate matches">
-                  @for (evidence of candidate.evidences; track evidence.id) {
-                    <li [attr.data-strength]="evidence.strength">
-                      <div class="evidence-list__heading">
-                        <span>{{ evidence.strength }}</span>
-                        <strong>{{ evidenceLabel(evidence) }}</strong>
-                      </div>
-                      <code>{{ evidence.value }}</code>
-                      <p>{{ evidence.explanation }}</p>
-                      <div class="evidence-list__provenance">
-                        <span class="pi pi-search" aria-hidden="true"></span>
-                        Found in {{ evidenceSourceLabel(evidence.sourceField) }}
-                        @if (evidence.objectId) {
-                          <span aria-hidden="true">·</span>
-                          Linked to consulted object
-                        }
-                      </div>
-                    </li>
-                  }
-                </ul>
+                <app-candidate-evidence-list
+                  [evidences]="candidate.evidences"
+                  [showProvenance]="true"
+                />
               }
 
               @if (!candidate.evidences.length && !candidate.groundedPassages.length) {
@@ -385,10 +367,12 @@
                   }
                 }
               </div>
-              <a class="review-action" [routerLink]="detailRoute(candidate.projectId)">
-                {{
-                  candidate.status === 'PENDING' ? 'Review candidate' : 'Open project record'
-                }}
+              <a
+                class="review-action"
+                [routerLink]="detailRoute(candidate.projectId)"
+                [queryParams]="{ tab: 'scientific-return', candidate: candidate.id }"
+              >
+                {{ candidate.status === 'PENDING' ? 'Review candidate' : 'Open project record' }}
                 <span class="pi pi-arrow-right" aria-hidden="true"></span>
               </a>
             </footer>
@@ -397,31 +381,14 @@
       }
     </ol>
 
-    <nav class="pagination" aria-label="Candidate pages">
-      <button
-        type="button"
-        aria-label="Go to previous candidate page"
-        [disabled]="page() === 0"
-        (click)="previousPage()"
-      >
-        <span class="pi pi-chevron-left" aria-hidden="true"></span>
-        Previous
-      </button>
-      <span class="pagination__position" aria-live="polite" aria-atomic="true">
-        <small>Candidate pages</small>
-        <span
-          ><strong>{{ page() + 1 }}</strong> of {{ totalPages() }}</span
-        >
-      </span>
-      <button
-        type="button"
-        aria-label="Go to next candidate page"
-        [disabled]="page() + 1 >= totalPages()"
-        (click)="nextPage()"
-      >
-        Next
-        <span class="pi pi-chevron-right" aria-hidden="true"></span>
-      </button>
-    </nav>
+    <app-pagination
+      [page]="page()"
+      [totalPages]="totalPages()"
+      [total]="total()"
+      [pageSize]="pageSize"
+      itemLabel="candidates"
+      (previous)="previousPage()"
+      (next)="nextPage()"
+    />
   }
 </main>

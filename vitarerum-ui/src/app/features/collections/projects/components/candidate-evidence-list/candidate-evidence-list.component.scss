@@ -1,0 +1,90 @@
+.evidence-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.evidence-list li {
+  display: grid;
+  gap: 0.42rem;
+  padding: 0.72rem 0.8rem;
+  border-inline-start: 3px solid var(--strength-color);
+}
+
+.evidence-list li + li {
+  border-block-start: 1px solid var(--color-line);
+}
+
+/* One rule per grade, so a missing one can never fall through to another's
+   colour and paint weak evidence as primary. */
+.evidence-list li[data-strength='PRIMARY'] {
+  --strength-color: var(--status-approved-text);
+  --strength-bg: var(--status-approved-bg);
+}
+
+.evidence-list li[data-strength='SUPPORTING'] {
+  --strength-color: var(--status-review-text);
+  --strength-bg: var(--status-review-bg);
+}
+
+.evidence-list li[data-strength='WEAK'] {
+  --strength-color: var(--status-pending-text);
+  --strength-bg: var(--status-pending-bg);
+}
+
+.evidence-list__heading {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+
+.evidence-list__strength {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.6rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  background: var(--strength-bg);
+  color: var(--strength-color);
+  font-size: var(--text-xs);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.evidence-list__type {
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  text-transform: capitalize;
+}
+
+.evidence-list code {
+  width: fit-content;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  padding: 0.2rem 0.38rem;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-panel-muted);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.evidence-list p {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.evidence-list__provenance {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  color: var(--color-subtle);
+  font-size: var(--text-xs);
+}

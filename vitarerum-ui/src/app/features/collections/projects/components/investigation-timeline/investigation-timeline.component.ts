@@ -1,4 +1,3 @@
-import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 
 import {
@@ -56,7 +55,6 @@ export function budgetLabel(investigation: ScientificReturnInvestigation): strin
 @Component({
   selector: 'app-investigation-timeline',
   standalone: true,
-  imports: [DatePipe],
   templateUrl: './investigation-timeline.component.html',
   styleUrl: './investigation-timeline.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -64,16 +62,9 @@ export function budgetLabel(investigation: ScientificReturnInvestigation): strin
 export class InvestigationTimelineComponent {
   readonly investigation = input.required<ScientificReturnInvestigation>();
 
-  /** Hides the header and meta: an expandable row already carries them. */
-  readonly compact = input(false);
-
-  readonly stopReasonLabel = computed(() => stopReasonLabel(this.investigation()));
-
   readonly awaitingReview = computed(() => this.investigation().status === 'AWAITING_HUMAN_REVIEW');
 
   readonly failed = computed(() => this.investigation().status === 'FAILED');
-
-  readonly budgetLabel = computed(() => budgetLabel(this.investigation()));
 
   /** One flat, ordered list so the reader follows the cycle as it happened. */
   readonly steps = computed<readonly TimelineStep[]>(() =>

@@ -226,7 +226,7 @@ def build_evidences(
                 EvidenceStrength.PRIMARY,
                 obj.inventory_number,
                 inventory_source or "indexed_text",
-                "The bibliographic record mentions the consulted inventory number.",
+                "   The bibliographic record mentions the consulted inventory number.",
                 obj.id,
             )
         if object_match:

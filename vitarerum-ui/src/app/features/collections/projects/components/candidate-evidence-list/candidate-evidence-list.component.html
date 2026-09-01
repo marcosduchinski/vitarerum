@@ -1,0 +1,22 @@
+<ul class="evidence-list" aria-label="Structured candidate matches">
+  @for (evidence of evidences(); track evidence.id) {
+    <li [attr.data-strength]="evidence.strength">
+      <div class="evidence-list__heading">
+        <span class="evidence-list__strength">{{ evidence.strength }}</span>
+        <strong class="evidence-list__type">{{ typeLabel(evidence) }}</strong>
+      </div>
+      <code>{{ evidence.value }}</code>
+      <p>{{ evidence.explanation }}</p>
+      @if (showProvenance()) {
+        <div class="evidence-list__provenance">
+          <span class="pi pi-search" aria-hidden="true"></span>
+          Found in {{ sourceLabel(evidence.sourceField) }}
+          @if (evidence.objectId) {
+            <span aria-hidden="true">·</span>
+            Linked to consulted object
+          }
+        </div>
+      }
+    </li>
+  }
+</ul>

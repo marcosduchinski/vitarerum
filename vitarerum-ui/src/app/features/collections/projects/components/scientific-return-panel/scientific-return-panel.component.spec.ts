@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { computed, signal } from '@angular/core';
 import { Observable, of } from 'rxjs';
 
@@ -108,6 +109,39 @@ function makeInvestigation(id: string, candidateId: string | null): ScientificRe
   };
 }
 
+function makeAnalysis(candidateId: string): CandidateAgentAnalysis {
+  return {
+    id: 'analysis-1',
+    candidateId,
+    runId: 'run-1',
+    status: 'COMPLETED',
+    model: 'gemma4:12b',
+    promptVersionId: 'prompt-version-1',
+    promptVersion: 'grounded-reader-v1',
+    inputHash: 'input-hash',
+    responseHash: 'response-hash',
+    analysis: {
+      summary: 'The publication is relevant to the consulted object.',
+      supportingEvidence: ['Inventory number found in the indexed text.'],
+      contradictions: [],
+      missingEvidence: [],
+      recommendedAction: 'PRESENT_FOR_REVIEW',
+      proposedQueries: [],
+      reasoningSummary: 'The grounded passage supports human review.',
+      confidence: 'HIGH',
+    },
+    startedAt: '2026-08-18T10:00:00Z',
+    completedAt: '2026-08-18T10:00:01Z',
+    latencyMs: 1000,
+    errorMessage: null,
+    createdBy: 'perm-bob-curatorial',
+    staffFeedback: null,
+    feedbackComment: null,
+    feedbackBy: null,
+    feedbackAt: null,
+  };
+}
+
 class ApiStub {
   watch = makeWatch();
   statusCalls: { watchId: string; status: ScientificReturnWatchStatus }[] = [];
@@ -121,8 +155,13 @@ class ApiStub {
   }
 
   candidates: ScientificReturnCandidate[] = [];
+  candidateStatusQueries: (string | null)[] = [];
 
-  listCandidates(): Observable<ScientificReturnCandidatesPage> {
+  listCandidates(
+    _projectId: string,
+    status: string | null,
+  ): Observable<ScientificReturnCandidatesPage> {
+    this.candidateStatusQueries.push(status);
     return of({ ...EMPTY_PAGE, content: this.candidates, totalElements: this.candidates.length });
   }
 
@@ -217,12 +256,28 @@ describe('ScientificReturnPanelComponent', () => {
     fixture.detectChanges();
   }
 
+  /** The candidate id the review queue would have put in the URL, if any. */
+  let focusedCandidateId: string | null = null;
+
   beforeEach(async () => {
     api = new ApiStub();
+    focusedCandidateId = null;
 
     await TestBed.configureTestingModule({
       imports: [ScientificReturnPanelComponent],
       providers: [
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            get snapshot() {
+              return {
+                queryParamMap: convertToParamMap(
+                  focusedCandidateId ? { candidate: focusedCandidateId } : {},
+                ),
+              };
+            },
+          },
+        },
         { provide: ScientificReturnApiService, useValue: api },
         { provide: IDENTITY_SERVICE, useValue: new IdentityStub() },
       ],
@@ -312,9 +367,42 @@ describe('ScientificReturnPanelComponent', () => {
     expect(block.querySelector('.evidence-block__link')).not.toBeNull();
   });
 
+  it('shows and marks the candidate the review queue linked to, whatever its status', async () => {
+    // The queue links to a decided candidate as readily as a pending one, and
+    // the default pending filter would hide the very row the link promised.
+    focusedCandidateId = 'candidate-decided';
+    api.candidates = [
+      makeCandidate('candidate-pending', 'PENDING'),
+      makeCandidate('candidate-decided', 'CONFIRMED'),
+    ];
+    fixture = TestBed.createComponent(ScientificReturnPanelComponent);
+    fixture.componentRef.setInput('projectId', 'project-1');
+    await settle();
+
+    expect(api.candidateStatusQueries.at(-1)).toBeNull();
+    const root = fixture.nativeElement as HTMLElement;
+    const focused = root.querySelector('#candidate-candidate-decided');
+    expect(focused).not.toBeNull();
+    expect(focused!.getAttribute('data-focused')).toBe('true');
+    expect(
+      root.querySelector('#candidate-candidate-pending')!.getAttribute('data-focused'),
+    ).toBeNull();
+  });
+
+  it('leaves the queue filter on pending when no candidate was linked', async () => {
+    api.candidates = [makeCandidate('candidate-1', 'PENDING')];
+    fixture = TestBed.createComponent(ScientificReturnPanelComponent);
+    fixture.componentRef.setInput('projectId', 'project-1');
+    await settle();
+
+    expect(api.candidateStatusQueries.at(-1)).toBe('PENDING');
+    expect((fixture.nativeElement as HTMLElement).querySelector('[data-focused]')).toBeNull();
+  });
+
   it('opens each candidate history in its own dialog', async () => {
     api.candidates = [{ ...makeCandidate('candidate-1', 'PENDING'), agenticCreated: true }];
     api.candidateInvestigations = [makeInvestigation('inv-candidate', 'candidate-1')];
+    api.analyses = [makeAnalysis('candidate-1')];
     fixture = TestBed.createComponent(ScientificReturnPanelComponent);
     fixture.componentRef.setInput('projectId', 'project-1');
     await settle();
@@ -333,6 +421,11 @@ describe('ScientificReturnPanelComponent', () => {
     await clickButton('Investigation history');
     expect(dialogs()).toHaveLength(1);
     expect(root().textContent).toContain('Investigation history');
+    expect(dialogs()[0].textContent?.match(/Assisted investigation/g)).toHaveLength(1);
+    expect(dialogs()[0].querySelector('app-agent-execution-card h4')?.textContent).toContain(
+      'Enrichment',
+    );
+    expect(dialogs()[0].querySelectorAll('.execution-card__meta div')).toHaveLength(4);
     // The dialog names the publication it belongs to.
     expect(root().textContent).toContain('Publication candidate-1');
 
@@ -344,7 +437,10 @@ describe('ScientificReturnPanelComponent', () => {
     await clickButton('Reader analysis');
     expect(dialogs()).toHaveLength(1);
     expect(root().textContent).toContain('Reader analysis');
-    expect(root().textContent).toContain('No reader analysis recorded.');
+    expect(dialogs()[0].querySelector('app-agent-execution-card h4')?.textContent).toContain(
+      'Reader assessment',
+    );
+    expect(dialogs()[0].querySelectorAll('.execution-card__meta div')).toHaveLength(3);
 
     root().querySelector<HTMLButtonElement>('[aria-label="Close reader analysis"]')!.click();
     await settle();

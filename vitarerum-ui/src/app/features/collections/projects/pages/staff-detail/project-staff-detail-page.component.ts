@@ -339,11 +339,20 @@ export class ProjectStaffDetailPageComponent {
     this.syncUrl({ tab });
   }
 
-  /** Only the always-present tabs are addressable. 'scientific-return' appears
-   *  solely for COMPLETED projects and the project loads asynchronously, so
-   *  honouring it here would render a panel the tab strip does not offer. */
+  /**
+   * 'scientific-return' appears solely for COMPLETED projects, and the project
+   * loads asynchronously, so selecting it from the URL alone would render a
+   * panel the tab strip does not yet offer. It is honoured against
+   * `availableTabs`, which the linked signal re-reads once the project lands —
+   * the review queue links straight to a candidate inside that panel, and
+   * dropping the reader on Actions would strand them a tab away from it.
+   */
   private normalizeTab(tab: string | undefined): ProjectDetailTab {
-    return tab === 'objects' || tab === 'todo' ? tab : 'actions';
+    if (tab === 'objects' || tab === 'todo') return tab;
+    if (tab === 'scientific-return' && this.availableTabs().includes('scientific-return')) {
+      return 'scientific-return';
+    }
+    return 'actions';
   }
 
   /** Reflects the current view state into the URL query string. A null value drops

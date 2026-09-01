@@ -16,14 +16,14 @@
 legend {
   padding-inline: 0.35rem;
   color: var(--color-text);
-  font-size: 0.82rem;
+  font-size: var(--text-sm);
   font-weight: 750;
 }
 
 .section-description {
   margin: 0 0 0.8rem;
   color: var(--color-subtle);
-  font-size: 0.78rem;
+  font-size: var(--text-sm);
   line-height: 1.45;
 }
 
@@ -43,7 +43,7 @@ legend {
 
 .field-label {
   color: var(--color-muted);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 700;
 }
 
@@ -62,7 +62,7 @@ legend {
   align-self: center;
   margin-top: 0.7rem;
   color: var(--color-accent);
-  font-size: 0.8rem;
+  font-size: var(--text-sm);
 }
 
 input,
@@ -96,7 +96,7 @@ textarea {
 .field-hint,
 .character-count {
   color: var(--color-subtle);
-  font-size: 0.7rem;
+  font-size: var(--text-xs);
 }
 
 .character-count {
@@ -106,7 +106,7 @@ textarea {
 
 .error {
   color: var(--status-rejected-text);
-  font-size: 0.72rem;
+  font-size: var(--text-xs);
   font-weight: 650;
 }
 

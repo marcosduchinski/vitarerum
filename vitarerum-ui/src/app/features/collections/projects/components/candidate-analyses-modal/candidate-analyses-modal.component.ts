@@ -1,4 +1,4 @@
-import { DatePipe } from '@angular/common';
+import { formatDate } from '@angular/common';
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 
 import { ModalPanelComponent } from '@shared/components/modal-panel/modal-panel.component';
@@ -7,6 +7,10 @@ import {
   CandidateAgentAnalysis,
   ScientificReturnAgentFeedback,
 } from '../../models/scientific-return.model';
+import {
+  AgentExecutionCardComponent,
+  AgentExecutionMetadata,
+} from '../agent-execution-card/agent-execution-card.component';
 
 export interface AgentAnalysisFeedback {
   readonly analysisId: string;
@@ -16,7 +20,7 @@ export interface AgentAnalysisFeedback {
 @Component({
   selector: 'app-candidate-analyses-modal',
   standalone: true,
-  imports: [DatePipe, ModalPanelComponent],
+  imports: [AgentExecutionCardComponent, ModalPanelComponent],
   templateUrl: './candidate-analyses-modal.component.html',
   styleUrl: './candidate-analyses-modal.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -34,6 +38,16 @@ export class CandidateAnalysesModalComponent {
 
   protected agentActionLabel(action: string): string {
     return action.toLowerCase().replaceAll('_', ' ');
+  }
+
+  protected analysisMetadata(analysis: CandidateAgentAnalysis): readonly AgentExecutionMetadata[] {
+    return [
+      { label: 'Model', value: analysis.model },
+      { label: 'Started', value: formatDate(analysis.startedAt, 'medium', 'en-GB') },
+      ...(analysis.latencyMs === null
+        ? []
+        : [{ label: 'Latency', value: `${analysis.latencyMs} ms` }]),
+    ];
   }
 
   protected rate(analysisId: string, value: ScientificReturnAgentFeedback): void {

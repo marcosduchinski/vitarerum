@@ -1,74 +1,39 @@
-<article class="investigation" [attr.data-status]="investigation().status">
-  @if (!compact()) {
-    <header class="investigation__header">
-      <div>
-        <p class="investigation__eyebrow">Assisted investigation</p>
-        <h4 class="investigation__title">
-          {{ investigation().objective === 'DISCOVER_CANDIDATE' ? 'Discovery' : 'Enrichment' }}
-        </h4>
-      </div>
-      <span class="investigation__status" [attr.data-status]="investigation().status">
-        {{ investigation().status.replaceAll('_', ' ').toLowerCase() }}
-      </span>
-    </header>
+@if (awaitingReview()) {
+  <p class="investigation__notice" role="status">
+    This investigation produced something reviewable. The candidate is still pending: only your
+    decision records it as scientific return.
+  </p>
+}
+@if (failed()) {
+  <p class="investigation__notice investigation__notice--warning" role="status">
+    The cycle did not finish. Nothing was changed, and the review queue is unaffected.
+  </p>
+}
 
-    <dl class="investigation__meta">
-      <div>
-        <dt>Outcome</dt>
-        <dd>{{ stopReasonLabel() }}</dd>
+<ol class="trajectory">
+  @for (step of steps(); track step.key) {
+    <li class="trajectory__step" [attr.data-origin]="step.origin">
+      <div class="trajectory__marker" aria-hidden="true"></div>
+      <div class="trajectory__body">
+        <p class="trajectory__label">
+          {{ step.label }}
+          <span class="trajectory__origin">{{ step.origin }}</span>
+        </p>
+        <p class="trajectory__summary">{{ step.summary }}</p>
+        @if (step.details.length) {
+          <ul class="trajectory__details">
+            @for (detail of step.details; track detail) {
+              <li>{{ detail }}</li>
+            }
+          </ul>
+        }
       </div>
-      <div>
-        <dt>Mode</dt>
-        <dd>{{ investigation().mode.toLowerCase() }}</dd>
+    </li>
+  } @empty {
+    <li class="trajectory__step trajectory__step--empty">
+      <div class="trajectory__body">
+        <p class="trajectory__summary">This investigation recorded no steps.</p>
       </div>
-      <div>
-        <dt>Budget used</dt>
-        <dd>{{ budgetLabel() }}</dd>
-      </div>
-      <div>
-        <dt>Started</dt>
-        <dd>{{ investigation().startedAt | date: 'short' }}</dd>
-      </div>
-    </dl>
+    </li>
   }
-
-  @if (awaitingReview()) {
-    <p class="investigation__notice" role="status">
-      This investigation produced something reviewable. The candidate is still pending: only your
-      decision records it as scientific return.
-    </p>
-  }
-  @if (failed()) {
-    <p class="investigation__notice investigation__notice--warning" role="status">
-      The cycle did not finish. Nothing was changed, and the review queue is unaffected.
-    </p>
-  }
-
-  <ol class="trajectory">
-    @for (step of steps(); track step.key) {
-      <li class="trajectory__step" [attr.data-origin]="step.origin">
-        <div class="trajectory__marker" aria-hidden="true"></div>
-        <div class="trajectory__body">
-          <p class="trajectory__label">
-            {{ step.label }}
-            <span class="trajectory__origin">{{ step.origin }}</span>
-          </p>
-          <p class="trajectory__summary">{{ step.summary }}</p>
-          @if (step.details.length) {
-            <ul class="trajectory__details">
-              @for (detail of step.details; track detail) {
-                <li>{{ detail }}</li>
-              }
-            </ul>
-          }
-        </div>
-      </li>
-    } @empty {
-      <li class="trajectory__step trajectory__step--empty">
-        <div class="trajectory__body">
-          <p class="trajectory__summary">This investigation recorded no steps.</p>
-        </div>
-      </li>
-    }
-  </ol>
-</article>
+</ol>

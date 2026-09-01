@@ -15,7 +15,13 @@
   } @else {
     <div class="investigations">
       @for (investigation of investigations(); track investigation.id) {
-        <app-investigation-timeline [investigation]="investigation" />
+        <app-agent-execution-card
+          [title]="investigationTitle(investigation)"
+          [status]="investigation.status"
+          [metadata]="investigationMetadata(investigation)"
+        >
+          <app-investigation-timeline [investigation]="investigation" />
+        </app-agent-execution-card>
       } @empty {
         <p class="state">No assisted investigation recorded.</p>
       }

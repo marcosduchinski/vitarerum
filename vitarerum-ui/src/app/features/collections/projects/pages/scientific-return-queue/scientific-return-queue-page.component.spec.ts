@@ -313,7 +313,8 @@ describe('ScientificReturnQueuePageComponent', () => {
     fixture.detectChanges();
 
     expect(api.queries.at(-1)?.page).toBe(1);
-    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Candidate pages');
+    // The shared pagination names the range, not just the page number.
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('21–40 of 40 candidates');
   });
 
   it('keeps candidate review available when metrics fail and retries only metrics', async () => {

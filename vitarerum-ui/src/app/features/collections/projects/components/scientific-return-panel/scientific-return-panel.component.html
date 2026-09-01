@@ -467,7 +467,12 @@
       } @else {
         <div class="candidate-list">
           @for (candidate of candidates(); track candidate.id) {
-            <article class="candidate" [attr.data-status]="candidate.status">
+            <article
+              class="candidate"
+              [id]="'candidate-' + candidate.id"
+              [attr.data-status]="candidate.status"
+              [attr.data-focused]="isFocused(candidate) ? 'true' : null"
+            >
               <div class="candidate__topline">
                 <div class="candidate__source">
                   <span>{{ candidate.source }}</span>
@@ -483,27 +488,20 @@
 
               <section class="evidence-block" [attr.aria-labelledby]="'evidence-' + candidate.id">
                 <h4 [id]="'evidence-' + candidate.id">Evidence</h4>
-                <ul>
-                  @for (evidence of candidate.evidences; track evidence.id) {
-                    <li [attr.data-strength]="evidence.strength">
-                      <span class="evidence-block__strength">{{ evidence.strength }}</span>
-                      <span class="evidence-block__type">{{ evidenceLabel(evidence.type) }}</span>
-                      <strong>{{ evidence.value }}</strong>
-                      <p>{{ evidence.explanation }}</p>
-                    </li>
-                  } @empty {
-                    <li class="evidence-block__empty">
-                      @if (candidate.agenticCreated) {
-                        <p>
-                          Found by the autonomous agent. Its grounded passages and inventory forms
-                          are in the reader analysis below.
-                        </p>
-                      } @else {
-                        <p>No evidence recorded for this candidate.</p>
-                      }
-                    </li>
-                  }
-                </ul>
+                @if (candidate.evidences.length) {
+                  <app-candidate-evidence-list [evidences]="candidate.evidences" />
+                } @else {
+                  <div class="evidence-block__empty">
+                    @if (candidate.agenticCreated) {
+                      <p>
+                        Found by the autonomous agent. Its grounded passages and inventory forms are
+                        in the reader analysis below.
+                      </p>
+                    } @else {
+                      <p>No evidence recorded for this candidate.</p>
+                    }
+                  </div>
+                }
                 <!--
                   The reader analysis is evidence about the publication, so it belongs here
                   rather than among the row actions. Enrichment leaves the deterministic

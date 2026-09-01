@@ -55,13 +55,13 @@
 }
 
 .results-heading h2 {
-  font-size: 0.95rem;
+  font-size: var(--text-lg);
 }
 
 .results-heading p,
 .results-heading span {
   color: var(--color-subtle);
-  font-size: 0.78rem;
+  font-size: var(--text-sm);
 }
 
 .catalog-results__body {

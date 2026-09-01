@@ -8,6 +8,20 @@
      stylesheets that reference var(--font-display) need no edits. */
   --font-display: var(--font-body);
 
+  /* ── Type scale ───────────────────────────────────────────
+     Seven steps drawn from the sizes this codebase already leans on most
+     (0.72 / 0.8 / 0.875 / 1 / 1.25, plus the page title at 1.625). Components
+     had been picking free values two hundredths of a rem apart, which reads as
+     noise rather than hierarchy; `2xs` is the floor, so dense audit rows stay
+     compact without dropping under eleven pixels. */
+  --text-2xs: 0.68rem;
+  --text-xs: 0.72rem;
+  --text-sm: 0.8rem;
+  --text-md: 0.875rem;
+  --text-lg: 1rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.625rem;
+
   /* ── Core palette ─────────────────────────────────────── */
   --color-indigo: #2c4bce;
   --color-coral: #c53314;

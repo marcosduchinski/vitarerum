@@ -1,10 +1,12 @@
 import { signal } from '@angular/core';
-import { HttpErrorResponse } from '@angular/common/http';
+import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { Router, provideRouter } from '@angular/router';
 import { TestBed } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
 
 import { IDENTITY_SERVICE } from '@core/auth/identity.service';
+import { API_BASE_URL } from '@core/config/app-config.model';
 import { OBJECT_SEARCH_SERVICE } from '@features/objects/services/object-search.service';
 
 import {
@@ -14,6 +16,7 @@ import {
   RemoveProjectObjectRequest,
 } from '../../models/project.model';
 import { PROJECT_API_SERVICE } from '../../services/project-api.service';
+import { ScientificReturnApiService } from '../../services/scientific-return-api.service';
 import { REPORTS_API_SERVICE } from '../../../reports/services/reports-api.service';
 import { ProjectStaffDetailPageComponent } from './project-staff-detail-page.component';
 
@@ -146,6 +149,23 @@ class ObjectSearchServiceStub {
   }
 }
 
+/** Enough of the API for the scientific-return panel to settle on its
+ *  "no monitoring watch" state; this suite is about the tab, not the panel. */
+class ScientificReturnApiStub {
+  getWatch() {
+    return throwError(() => new HttpErrorResponse({ status: 404 }));
+  }
+  listCandidates() {
+    return of({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 });
+  }
+  listRuns() {
+    return of({ content: [], page: 0, size: 10, totalElements: 0, totalPages: 0 });
+  }
+  listFullAgenticInvestigations() {
+    return of([]);
+  }
+}
+
 describe('ProjectStaffDetailPageComponent', () => {
   let projectService: ProjectApiServiceStub;
   let router: Router;
@@ -158,6 +178,11 @@ describe('ProjectStaffDetailPageComponent', () => {
       imports: [ProjectStaffDetailPageComponent],
       providers: [
         provideRouter([]),
+        // The scientific-return tab renders a panel that talks to the API.
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: API_BASE_URL, useValue: 'https://api.example.test/api/v1' },
+        { provide: ScientificReturnApiService, useClass: ScientificReturnApiStub },
         { provide: IDENTITY_SERVICE, useClass: IdentityServiceStub },
         { provide: PROJECT_API_SERVICE, useValue: projectService },
         { provide: REPORTS_API_SERVICE, useClass: ReportsApiServiceStub },
@@ -264,6 +289,38 @@ describe('ProjectStaffDetailPageComponent', () => {
     );
   });
 
+  it('opens the scientific-return tab when the review queue links into it', async () => {
+    // The queue links straight to a candidate inside that panel. Landing on
+    // Actions would strand the reader one tab away from the row they were sent
+    // to decide, so the tab is honoured once the project proves it offers it.
+    currentProject = { ...PROJECT, status: 'COMPLETED', result: 'COMPLETED' };
+    const fixture = TestBed.createComponent(ProjectStaffDetailPageComponent);
+    fixture.componentRef.setInput('id', PROJECT.id);
+    fixture.componentRef.setInput('tab', 'scientific-return');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const tab = fixture.nativeElement.querySelector('#scientific-return-tab');
+    expect(tab.getAttribute('aria-selected')).toBe('true');
+    expect(fixture.nativeElement.querySelector('#scientific-return-panel')).not.toBeNull();
+  });
+
+  it('falls back to Actions when the linked tab is not on offer', async () => {
+    // A project still running has no scientific-return tab; selecting it from
+    // the URL alone would render a panel the tab strip does not show.
+    currentProject = { ...PROJECT, status: 'IN_PROGRESS' };
+    const fixture = TestBed.createComponent(ProjectStaffDetailPageComponent);
+    fixture.componentRef.setInput('id', PROJECT.id);
+    fixture.componentRef.setInput('tab', 'scientific-return');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('#scientific-return-tab')).toBeNull();
+    expect(fixture.nativeElement.querySelector('#actions-panel')).not.toBeNull();
+  });
+
   it('hides follow-up creation for projects that are not completed', async () => {
     currentProject = { ...PROJECT, status: 'IN_PROGRESS' };
     const fixture = TestBed.createComponent(ProjectStaffDetailPageComponent);
@@ -299,9 +356,7 @@ describe('ProjectStaffDetailPageComponent', () => {
     fixture.detectChanges();
 
     expect(fixture.nativeElement.textContent).toContain('Follow-up of');
-    const anchors: HTMLAnchorElement[] = Array.from(
-      fixture.nativeElement.querySelectorAll('a'),
-    );
+    const anchors: HTMLAnchorElement[] = Array.from(fixture.nativeElement.querySelectorAll('a'));
     const link = anchors.find((item) => item.textContent?.trim() === 'proj-origin');
     expect(link?.getAttribute('href')).toBe('/p/collections/projects/collections/proj-origin');
   });

@@ -1,0 +1,23 @@
+<article class="execution-card" [attr.data-status]="status()">
+  <header class="execution-card__header">
+    <h4>{{ title() }}</h4>
+    <span class="execution-card__status" [attr.data-status]="status()">
+      {{ statusLabel() }}
+    </span>
+  </header>
+
+  @if (metadata().length) {
+    <dl class="execution-card__meta">
+      @for (item of metadata(); track item.label) {
+        <div>
+          <dt>{{ item.label }}</dt>
+          <dd>{{ item.value }}</dd>
+        </div>
+      }
+    </dl>
+  }
+
+  <div class="execution-card__body">
+    <ng-content />
+  </div>
+</article>

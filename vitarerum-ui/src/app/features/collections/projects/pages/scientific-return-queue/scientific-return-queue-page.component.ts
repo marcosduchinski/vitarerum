@@ -16,10 +16,12 @@ import { EmptyStateComponent } from '@shared/components/empty-state/empty-state.
 import { ErrorMessageComponent } from '@shared/components/error-message/error-message.component';
 import { LoadingStateComponent } from '@shared/components/loading-state/loading-state.component';
 import { PageHeaderComponent } from '@shared/components/page-header/page-header.component';
+import { PaginationComponent } from '@shared/components/pagination/pagination.component';
+
+import { CandidateEvidenceListComponent } from '../../components/candidate-evidence-list/candidate-evidence-list.component';
 
 import {
   ScientificReturnCandidateStatus,
-  ScientificReturnEvidence,
   ScientificReturnEvidenceStrength,
   ScientificReturnReviewItem,
   InventoryEvidenceStatus,
@@ -31,16 +33,20 @@ type StatusFilter = ScientificReturnCandidateStatus | 'ALL';
 type StrengthFilter = 'ALL' | 'PRIMARY' | 'SUPPORTING' | 'WEAK';
 type SourceFilter = 'ALL' | 'CROSSREF' | 'OPENALEX' | 'EUROPE_PMC';
 
+const PAGE_SIZE = 20;
+
 @Component({
   selector: 'app-scientific-return-queue-page',
   standalone: true,
   imports: [
+    CandidateEvidenceListComponent,
     DatePipe,
     RouterLink,
     EmptyStateComponent,
     ErrorMessageComponent,
     LoadingStateComponent,
     PageHeaderComponent,
+    PaginationComponent,
   ],
   templateUrl: './scientific-return-queue-page.component.html',
   styleUrl: './scientific-return-queue-page.component.scss',
@@ -54,6 +60,7 @@ export class ScientificReturnQueuePageComponent {
   protected readonly strength = signal<StrengthFilter>('ALL');
   protected readonly source = signal<SourceFilter>('ALL');
   protected readonly page = signal(0);
+  protected readonly pageSize = PAGE_SIZE;
 
   protected readonly metricsResource = resource({
     params: () => this.identity.getPermissionId(),
@@ -75,7 +82,7 @@ export class ScientificReturnQueuePageComponent {
           evidenceStrength: params.strength === 'ALL' ? null : params.strength,
           source: params.source === 'ALL' ? null : params.source,
           page: params.page,
-          size: 20,
+          size: PAGE_SIZE,
         }),
       ),
   });
@@ -115,15 +122,6 @@ export class ScientificReturnQueuePageComponent {
     return projectDetailRouteForGroup(projectId, this.identity.session()?.group);
   }
 
-  protected evidenceLabel(evidence: ScientificReturnEvidence): string {
-    return evidence.type.toLowerCase().replaceAll('_', ' ');
-  }
-
-  protected evidenceSourceLabel(sourceField: string): string {
-    const label = sourceField.replaceAll('_', ' ').replaceAll('+', ' + ');
-    return label.charAt(0).toUpperCase() + label.slice(1);
-  }
-
   protected filterLabel(value: string): string {
     const label = value.toLowerCase().replaceAll('_', ' ');
     return label.charAt(0).toUpperCase() + label.slice(1);
@@ -158,7 +156,9 @@ export class ScientificReturnQueuePageComponent {
   }
 
   protected discoveryLabel(candidate: ScientificReturnReviewItem): string {
-    return this.filterLabel(candidate.searchStrategy ?? candidate.discoveryBasis ?? 'Agentic search');
+    return this.filterLabel(
+      candidate.searchStrategy ?? candidate.discoveryBasis ?? 'Agentic search',
+    );
   }
 
   protected refreshAll(): void {

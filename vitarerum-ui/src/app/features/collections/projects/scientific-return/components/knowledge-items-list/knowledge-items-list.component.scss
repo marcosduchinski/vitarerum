@@ -46,7 +46,7 @@
   padding: 0.55rem 1.1rem;
   background: color-mix(in srgb, var(--status-review-bg) 72%, var(--color-panel));
   color: var(--status-review-text);
-  font-size: 0.78rem;
+  font-size: var(--text-sm);
 }
 
 .review-callout .pi {
@@ -74,7 +74,7 @@ footer {
   border-radius: 999px;
   background: var(--color-panel-muted);
   color: var(--color-muted);
-  font-size: 0.7rem;
+  font-size: var(--text-xs);
   font-weight: 700;
 }
 
@@ -91,7 +91,7 @@ footer {
 time,
 dt {
   color: var(--color-subtle);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 
 .inventory-pair {
@@ -115,20 +115,20 @@ dt {
 
 .inventory-pair > div > span {
   color: var(--color-subtle);
-  font-size: 0.68rem;
+  font-size: var(--text-2xs);
   font-weight: 700;
   text-transform: uppercase;
 }
 
 .inventory-arrow {
   color: var(--color-accent);
-  font-size: 0.8rem;
+  font-size: var(--text-sm);
 }
 
 code {
   overflow: hidden;
   color: var(--color-text);
-  font-size: 0.82rem;
+  font-size: var(--text-sm);
   font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -153,7 +153,7 @@ dl div {
 dd {
   margin: 0;
   color: var(--color-muted);
-  font-size: 0.85rem;
+  font-size: var(--text-md);
 }
 
 footer {
