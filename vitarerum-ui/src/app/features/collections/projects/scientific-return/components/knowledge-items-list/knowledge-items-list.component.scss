@@ -170,7 +170,8 @@ footer {
 }
 
 button.primary,
-button.secondary {
+button.secondary,
+button.discard {
   display: inline-flex;
   gap: 0.4rem;
   align-items: center;
@@ -193,6 +194,17 @@ button.secondary {
 
 button.secondary:hover {
   text-decoration: underline;
+}
+
+button.discard {
+  border-color: color-mix(in srgb, var(--status-rejected-text) 38%, transparent);
+  background: transparent;
+  color: var(--status-rejected-text);
+}
+
+button.discard:hover {
+  border-color: var(--status-rejected-text);
+  background: var(--status-rejected-bg);
 }
 
 button:disabled {

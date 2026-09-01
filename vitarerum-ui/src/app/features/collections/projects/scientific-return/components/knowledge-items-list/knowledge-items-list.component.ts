@@ -4,6 +4,7 @@ import { MenuItem } from 'primeng/api';
 
 import { RowActionsComponent } from '@shared/components/row-actions/row-actions.component';
 import { ScientificReturnKnowledgeItem } from '../../../models/scientific-return.model';
+import { isDiscardedProposal, knowledgeStatusLabel } from '../../../utils/knowledge-status.util';
 
 @Component({
   selector: 'app-knowledge-items-list',
@@ -19,6 +20,7 @@ export class KnowledgeItemsListComponent {
   readonly busyId = input<string | null>(null);
   readonly activate = output<ScientificReturnKnowledgeItem>();
   readonly edit = output<ScientificReturnKnowledgeItem>();
+  readonly reject = output<ScientificReturnKnowledgeItem>();
   readonly retire = output<ScientificReturnKnowledgeItem>();
   readonly history = output<ScientificReturnKnowledgeItem>();
 
@@ -31,9 +33,11 @@ export class KnowledgeItemsListComponent {
   }
 
   protected statusLabel(item: ScientificReturnKnowledgeItem): string {
-    if (item.status === 'PROPOSED') return 'Awaiting validation';
-    if (item.status === 'RETIRED') return 'Retired';
-    return 'Active';
+    return knowledgeStatusLabel(item);
+  }
+
+  protected closingLabel(item: ScientificReturnKnowledgeItem): string {
+    return isDiscardedProposal(item) ? 'Discarded' : 'Retired';
   }
 
   protected actionItemsFor(item: ScientificReturnKnowledgeItem): MenuItem[] {

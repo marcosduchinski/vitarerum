@@ -42,6 +42,19 @@ const ITEM: ScientificReturnKnowledgeItem = {
   retiredAt: null,
 };
 
+const PROPOSAL: ScientificReturnKnowledgeItem = {
+  ...ITEM,
+  id: 'knowledge-2',
+  status: 'PROPOSED',
+  content: 'Publications sometimes drop the institutional prefix.',
+  sourceCandidateId: 'candidate-1',
+  sourceDecisionId: 'decision-1',
+  proposedByModel: 'gemini-2.5-flash',
+  promptVersion: 'scientific-return-full-agentic-learning-v1',
+  validatedBy: null,
+  validatedAt: null,
+};
+
 class IdentityStub {
   readonly state = signal<IdentitySession | null>({
     accessToken: 'token',
@@ -61,13 +74,15 @@ class IdentityStub {
 class ApiStub {
   queries: ScientificReturnKnowledgeQuery[] = [];
   page: ScientificReturnKnowledgePage = {
-    content: [ITEM],
+    content: [ITEM, PROPOSAL],
     page: 0,
     size: 25,
-    totalElements: 1,
+    totalElements: 2,
     totalPages: 1,
-    counts: { active: 1, proposed: 0, retired: 0 },
+    counts: { active: 1, proposed: 1, retired: 0 },
   };
+  retired: string[] = [];
+  activated: string[] = [];
 
   listKnowledgeItems(
     query: ScientificReturnKnowledgeQuery,
@@ -78,6 +93,23 @@ class ApiStub {
 
   getKnowledgeHistory(): Observable<readonly ScientificReturnKnowledgeItem[]> {
     return of([ITEM]);
+  }
+
+  activateKnowledgeItem(itemId: string): Observable<ScientificReturnKnowledgeItem> {
+    this.activated.push(itemId);
+    return of(ITEM);
+  }
+
+  retireKnowledgeItem(itemId: string): Observable<ScientificReturnKnowledgeItem> {
+    this.retired.push(itemId);
+    const discarded: ScientificReturnKnowledgeItem = {
+      ...PROPOSAL,
+      status: 'RETIRED',
+      retiredBy: 'permission-1',
+      retiredAt: '2026-08-31T12:00:00Z',
+    };
+    this.page = { ...this.page, content: [ITEM, discarded] };
+    return of(discarded);
   }
 }
 
@@ -142,6 +174,24 @@ describe('ScientificReturnKnowledgeBasePageComponent', () => {
     expect(root.querySelector('.inventory-fields')).not.toBeNull();
     expect(root.textContent).toContain('Canonical number in the collection');
     expect(root.textContent).toContain('Form printed in the publication');
+  });
+
+  it('discards an agent proposal without ever activating it', async () => {
+    const root = fixture.nativeElement as HTMLElement;
+
+    root.querySelector<HTMLButtonElement>('button.discard')!.click();
+    fixture.detectChanges();
+    expect(root.textContent).toContain('Discard this proposal?');
+
+    root.querySelector<HTMLButtonElement>('.confirm-modal__button--primary')!.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(api.retired).toEqual(['knowledge-2']);
+    expect(api.activated).toEqual([]);
+    expect(root.textContent).toContain('The proposal was discarded.');
+    expect(root.textContent).toContain('Discarded proposal');
+    expect(root.textContent).not.toContain('Discard proposal');
   });
 
   it('sends exact inventory and status filters to the API', async () => {

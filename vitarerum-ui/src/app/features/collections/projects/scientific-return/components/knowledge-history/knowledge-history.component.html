@@ -34,7 +34,7 @@
             <li [attr.data-status]="item.status">
               <div>
                 <strong>Version {{ version + 1 }}</strong
-                ><span>{{ item.status.toLowerCase() }}</span>
+                ><span>{{ statusLabel(item) }}</span>
               </div>
               @if (item.registeredNumber || item.observedForm) {
                 <code>{{ item.registeredNumber ?? '—' }} → {{ item.observedForm ?? '—' }}</code>
@@ -45,7 +45,7 @@
                 <small>Validated {{ item.validatedAt | date: 'medium' }}</small>
               }
               @if (item.retiredAt) {
-                <small>Retired {{ item.retiredAt | date: 'medium' }}</small>
+                <small>{{ closingLabel(item) }} {{ item.retiredAt | date: 'medium' }}</small>
               }
             </li>
           }

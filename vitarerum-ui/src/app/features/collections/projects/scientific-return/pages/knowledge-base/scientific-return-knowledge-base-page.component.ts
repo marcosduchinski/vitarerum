@@ -36,12 +36,42 @@ import {
 } from '../../../models/scientific-return.model';
 import { ScientificReturnApiService } from '../../../services/scientific-return-api.service';
 
-type ConfirmationAction = 'activate' | 'retire';
+type ConfirmationAction = 'activate' | 'reject' | 'retire';
 
 interface PendingConfirmation {
   readonly action: ConfirmationAction;
   readonly item: ScientificReturnKnowledgeItem;
 }
+
+interface ConfirmationCopy {
+  readonly title: string;
+  readonly message: string;
+  readonly confirmLabel: string;
+  readonly tone: 'default' | 'danger';
+}
+
+const CONFIRMATION_COPY: Record<ConfirmationAction, ConfirmationCopy> = {
+  activate: {
+    title: 'Validate and activate?',
+    message: 'A human validation makes this lesson available to future autonomous investigations.',
+    confirmLabel: 'Validate and activate',
+    tone: 'default',
+  },
+  reject: {
+    title: 'Discard this proposal?',
+    message:
+      'The agent proposal is turned down and never reaches an investigation. It stays in the audit history, recorded against your name.',
+    confirmLabel: 'Discard proposal',
+    tone: 'danger',
+  },
+  retire: {
+    title: 'Retire this knowledge item?',
+    message:
+      'It will stop influencing future investigations, but remains available in its audit history.',
+    confirmLabel: 'Retire item',
+    tone: 'danger',
+  },
+};
 
 @Component({
   selector: 'app-scientific-return-knowledge-base-page',
@@ -111,6 +141,10 @@ export class ScientificReturnKnowledgeBasePageComponent {
   protected readonly editorOpen = signal(false);
   protected readonly editingItem = signal<ScientificReturnKnowledgeItem | null>(null);
   protected readonly confirmation = signal<PendingConfirmation | null>(null);
+  protected readonly confirmationCopy = computed(() => {
+    const pending = this.confirmation();
+    return pending ? CONFIRMATION_COPY[pending.action] : null;
+  });
   protected readonly historyItem = signal<ScientificReturnKnowledgeItem | null>(null);
   protected readonly historyResource = resource({
     params: () => this.historyItem()?.id ?? null,
@@ -199,6 +233,11 @@ export class ScientificReturnKnowledgeBasePageComponent {
       if (pending.action === 'activate') {
         await firstValueFrom(this.api.activateKnowledgeItem(pending.item.id));
         this.feedback.set('The proposed lesson is active and available to future investigations.');
+      } else if (pending.action === 'reject') {
+        await firstValueFrom(this.api.retireKnowledgeItem(pending.item.id));
+        this.feedback.set(
+          'The proposal was discarded. It never reached an investigation and stays in the audit history.',
+        );
       } else {
         await firstValueFrom(this.api.retireKnowledgeItem(pending.item.id));
         this.feedback.set('The item was retired. It remains available in the audit history.');

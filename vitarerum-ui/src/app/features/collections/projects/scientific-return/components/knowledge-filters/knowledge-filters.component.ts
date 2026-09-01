@@ -53,7 +53,7 @@ export class KnowledgeFiltersComponent {
 
   protected statusLabel(): string {
     if (this.status() === 'PROPOSED') return 'Awaiting validation';
-    if (this.status() === 'RETIRED') return 'Retired';
+    if (this.status() === 'RETIRED') return 'Retired or discarded';
     return 'Active';
   }
 

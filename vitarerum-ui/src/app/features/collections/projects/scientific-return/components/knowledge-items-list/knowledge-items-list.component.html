@@ -5,8 +5,8 @@
         <div class="review-callout">
           <span class="pi pi-clock" aria-hidden="true"></span>
           <span
-            ><strong>Human review required</strong> — confirm this lesson before it informs future
-            investigations.</span
+            ><strong>Human review required</strong> — validate this lesson before it informs future
+            investigations, or discard it.</span
           >
         </div>
       }
@@ -51,7 +51,7 @@
         }
         @if (item.retiredAt) {
           <div>
-            <dt>Retired</dt>
+            <dt>{{ closingLabel(item) }}</dt>
             <dd>{{ item.retiredAt | date: 'medium' }}</dd>
           </div>
         }
@@ -69,6 +69,15 @@
         </button>
         <div class="item-actions">
           @if (canManage() && item.status === 'PROPOSED') {
+            <button
+              type="button"
+              class="discard"
+              [disabled]="busyId() !== null"
+              (click)="reject.emit(item)"
+            >
+              <span class="pi pi-times-circle" aria-hidden="true"></span>
+              Discard proposal
+            </button>
             <button
               type="button"
               class="primary"

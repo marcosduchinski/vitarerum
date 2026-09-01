@@ -211,6 +211,41 @@ async def test_retired_memory_is_not_retrieved() -> None:
 
 
 @pytest.mark.asyncio
+async def test_discarded_proposal_stays_unvalidated_and_unretrieved() -> None:
+    """A turned-down proposal is retired without ever gaining a validation.
+
+    The absence of ``validated_at`` is what tells a discarded proposal apart
+    from knowledge the institution used and later retired.
+    """
+    repository = MemoryRepository()
+    proposal = ScientificReturnKnowledgeItem(
+        id=KnowledgeItemId("knowledge-proposal-1"),
+        kind=KnowledgeKind.INVENTORY_VARIATION_EXAMPLE,
+        content="Proposta do agente",
+        status=KnowledgeStatus.PROPOSED,
+        institution_id="institution-1",
+        registered_number="MB06-005747",
+        observed_form="MB06-5747",
+        created_by=PermissionId("permission-1"),
+        created_at=datetime.now(tz=UTC),
+    )
+    await repository.add_knowledge(proposal)
+
+    discarded = await RetireCuratorialKnowledge(repository).execute(  # type: ignore[arg-type]
+        proposal.id, curator()
+    )
+
+    assert discarded.status is KnowledgeStatus.RETIRED
+    assert discarded.validated_by is None
+    assert discarded.validated_at is None
+    assert discarded.retired_by == PermissionId("permission-1")
+    selected = await retrieve_relevant_knowledge(  # type: ignore[arg-type]
+        repository, ("MB06-005747",), limit=10
+    )
+    assert selected == ()
+
+
+@pytest.mark.asyncio
 async def test_memory_limit_is_global_across_multiple_objects() -> None:
     repository = MemoryRepository()
     for index in range(5):

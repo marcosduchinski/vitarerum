@@ -2,6 +2,7 @@ import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 
 import { ScientificReturnKnowledgeItem } from '../../../models/scientific-return.model';
+import { isDiscardedProposal, knowledgeStatusLabel } from '../../../utils/knowledge-status.util';
 
 @Component({
   selector: 'app-knowledge-history',
@@ -20,5 +21,13 @@ export class KnowledgeHistoryComponent {
 
   protected actor(item: ScientificReturnKnowledgeItem): string {
     return item.createdByDetail?.name ?? item.createdByDetail?.email ?? item.createdBy;
+  }
+
+  protected statusLabel(item: ScientificReturnKnowledgeItem): string {
+    return knowledgeStatusLabel(item).toLowerCase();
+  }
+
+  protected closingLabel(item: ScientificReturnKnowledgeItem): string {
+    return isDiscardedProposal(item) ? 'Discarded' : 'Retired';
   }
 }

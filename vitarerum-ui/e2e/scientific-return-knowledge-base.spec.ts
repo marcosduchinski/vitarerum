@@ -129,5 +129,92 @@ test('creates, corrects, audits, and retires institutional knowledge', async ({ 
   await page.getByRole('button', { name: 'More actions for this knowledge item' }).click();
   await page.getByRole('menuitem', { name: 'Retire knowledge' }).click();
   await page.getByRole('button', { name: 'Retire item' }).click();
-  await expect(page.getByText('preserved for audit', { exact: false })).toBeVisible();
+  await expect(page.getByText('The item was retired.', { exact: false })).toBeVisible();
+});
+
+test('discards an agent proposal instead of validating it', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      'vitarerum.session',
+      JSON.stringify({
+        accessToken: 'e2e-access-token',
+        user: { id: 'curator-1', email: 'curator@example.test', displayName: 'Curator' },
+        group: 'CURATORIAL',
+        availableGroups: ['CURATORIAL'],
+        permissions: [{ permissionId: 'permission-curator', group: 'CURATORIAL' }],
+      }),
+    );
+  });
+
+  const actor = {
+    permissionId: 'permission-curator',
+    name: 'Curator',
+    email: 'curator@example.test',
+    group: 'CURATORIAL',
+  };
+  let proposal: Record<string, unknown> = {
+    id: 'knowledge-proposal-1',
+    institutionId: 'institution-1',
+    kind: 'CURATORIAL_LESSON',
+    status: 'PROPOSED',
+    content: 'Publications sometimes drop the institutional prefix.',
+    registeredNumber: null,
+    observedForm: null,
+    supersedesId: null,
+    sourceCandidateId: 'candidate-1',
+    sourceDecisionId: 'decision-1',
+    proposedByModel: 'gemini-2.5-flash',
+    promptVersion: 'scientific-return-full-agentic-learning-v1',
+    createdBy: actor.permissionId,
+    createdByDetail: actor,
+    createdAt: '2026-08-31T10:00:00Z',
+    validatedBy: null,
+    validatedByDetail: null,
+    validatedAt: null,
+    retiredBy: null,
+    retiredByDetail: null,
+    retiredAt: null,
+  };
+
+  await page.route('**/scientific-return/knowledge-items**', async (route) => {
+    const request = route.request();
+    if (request.method() === 'DELETE') {
+      proposal = {
+        ...proposal,
+        status: 'RETIRED',
+        retiredBy: actor.permissionId,
+        retiredByDetail: actor,
+        retiredAt: '2026-08-31T12:00:00Z',
+      };
+      await route.fulfill({ json: proposal });
+      return;
+    }
+    await route.fulfill({
+      json: {
+        content: [proposal],
+        page: 0,
+        size: 25,
+        totalElements: 1,
+        totalPages: 1,
+        counts: {
+          active: 0,
+          proposed: proposal['status'] === 'PROPOSED' ? 1 : 0,
+          retired: proposal['status'] === 'RETIRED' ? 1 : 0,
+        },
+      },
+    });
+  });
+
+  await page.goto('/p/ai/knowledge-base');
+  await expect(page.getByText('Awaiting validation').first()).toBeVisible();
+  await expect(page.getByText('Human review required')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Discard proposal' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Discard this proposal?' });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('button', { name: 'Discard proposal' }).click();
+
+  await expect(page.getByText('The proposal was discarded.', { exact: false })).toBeVisible();
+  await expect(page.getByText('Discarded proposal')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Validate and activate' })).toHaveCount(0);
 });

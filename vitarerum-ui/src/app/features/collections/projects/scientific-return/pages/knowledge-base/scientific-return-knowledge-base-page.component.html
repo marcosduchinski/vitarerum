@@ -84,6 +84,7 @@
           [busyId]="busyId()"
           (activate)="requestConfirmation('activate', $event)"
           (edit)="openEdit($event)"
+          (reject)="requestConfirmation('reject', $event)"
           (retire)="requestConfirmation('retire', $event)"
           (history)="showHistory($event)"
         />
@@ -109,19 +110,13 @@
     (cancelled)="closeEditor()"
   />
 
-  @if (confirmation(); as pending) {
+  @if (confirmationCopy(); as copy) {
     <app-confirm-modal
       [open]="true"
-      [title]="
-        pending.action === 'activate' ? 'Validate and activate?' : 'Retire this knowledge item?'
-      "
-      [message]="
-        pending.action === 'activate'
-          ? 'A human validation makes this lesson available to future autonomous investigations.'
-          : 'It will stop influencing future investigations, but remains available in its audit history.'
-      "
-      [confirmLabel]="pending.action === 'activate' ? 'Validate and activate' : 'Retire item'"
-      [tone]="pending.action === 'retire' ? 'danger' : 'default'"
+      [title]="copy.title"
+      [message]="copy.message"
+      [confirmLabel]="copy.confirmLabel"
+      [tone]="copy.tone"
       [pending]="busyId() !== null"
       (confirmed)="confirmAction()"
       (cancelled)="confirmation.set(null)"
