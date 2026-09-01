@@ -134,13 +134,13 @@ describe('ScientificReturnApiService', () => {
     request.flush({ content: [], page: 1, size: 20, totalElements: 0, totalPages: 0 });
   });
 
-  it('keeps full-agentic reader history and staff feedback on separate endpoints', () => {
+  it('keeps the reader analysis and staff feedback on separate endpoints', () => {
     service.listAgentAnalyses('candidate-1').subscribe();
-    const history = http.expectOne(
+    const analyses = http.expectOne(
       'https://api.example.test/api/v1/scientific-return/candidates/candidate-1/agent-analyses',
     );
-    expect(history.request.method).toBe('GET');
-    history.flush([]);
+    expect(analyses.request.method).toBe('GET');
+    analyses.flush([]);
 
     service.recordAgentAnalysisFeedback('analysis-1', 'USEFUL').subscribe();
     const feedback = http.expectOne(

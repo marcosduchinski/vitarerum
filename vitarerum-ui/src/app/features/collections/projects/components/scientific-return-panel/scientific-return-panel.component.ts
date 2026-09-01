@@ -845,7 +845,7 @@ export class ScientificReturnPanelComponent {
     }
   }
 
-  protected async openAgentHistory(candidate: ScientificReturnCandidate): Promise<void> {
+  protected async openReaderAnalysis(candidate: ScientificReturnCandidate): Promise<void> {
     const candidateId = candidate.id;
     this.investigationsCandidateId.set(null);
     this.analysesCandidateId.set(candidateId);
@@ -865,7 +865,7 @@ export class ScientificReturnPanelComponent {
     }
   }
 
-  protected closeAgentHistory(): void {
+  protected closeReaderAnalysis(): void {
     this.analysesCandidateId.set(null);
   }
 

@@ -271,7 +271,7 @@ describe('ScientificReturnPanelComponent', () => {
       'Found by the autonomous agent',
     );
     expect(blocks[0].querySelector('.evidence-block__link')?.textContent?.trim()).toBe(
-      'Full-agentic reader history',
+      'Reader analysis',
     );
     // A candidate the agent never touched is genuinely unevidenced, says so,
     // and offers no reader analysis to open.
@@ -340,13 +340,13 @@ describe('ScientificReturnPanelComponent', () => {
     await settle();
     expect(dialogs()).toHaveLength(0);
 
-    // The reader history is a separate dialog, not the same panel reused.
-    await clickButton('Full-agentic reader history');
+    // The reader analysis is a separate dialog, not the same panel reused.
+    await clickButton('Reader analysis');
     expect(dialogs()).toHaveLength(1);
     expect(root().textContent).toContain('Reader analysis');
-    expect(root().textContent).toContain('No full-agentic reader analyses recorded.');
+    expect(root().textContent).toContain('No reader analysis recorded.');
 
-    root().querySelector<HTMLButtonElement>('[aria-label="Close reader history"]')!.click();
+    root().querySelector<HTMLButtonElement>('[aria-label="Close reader analysis"]')!.click();
     await settle();
     expect(dialogs()).toHaveLength(0);
   });

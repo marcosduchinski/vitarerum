@@ -3,7 +3,7 @@
   eyebrow="Full-agentic · grounded reader"
   title="Reader analysis"
   [subtitle]="candidateTitle()"
-  closeLabel="Close reader history"
+  closeLabel="Close reader analysis"
   (closed)="closed.emit()"
 >
   <p class="decision-notice">
@@ -13,12 +13,12 @@
 
   @if (loading()) {
     <p class="state" role="status">
-      <span class="pi pi-spin pi-spinner" aria-hidden="true"></span> Loading reader analyses…
+      <span class="pi pi-spin pi-spinner" aria-hidden="true"></span> Loading the reader analysis…
     </p>
   } @else if (error(); as message) {
     <p class="state state--error" role="alert">{{ message }}</p>
   } @else if (!analyses().length) {
-    <p class="state">No full-agentic reader analyses recorded.</p>
+    <p class="state">No reader analysis recorded.</p>
   } @else {
     <ol class="analysis-history">
       @for (agentRun of analyses(); track agentRun.id) {

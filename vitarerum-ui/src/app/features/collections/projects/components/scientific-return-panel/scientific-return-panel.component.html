@@ -57,17 +57,22 @@
   } @else if (watch(); as currentWatch) {
     <div class="watch-toolbar">
       <dl class="watch-metrics">
-        <div>
+        <div class="watch-metric">
           <dt>Last search</dt>
           <dd>
-            {{ currentWatch.lastRunAt ? (currentWatch.lastRunAt | date: 'medium') : 'Not run' }}
+            @if (currentWatch.lastRunAt; as lastRunAt) {
+              {{ lastRunAt | date: 'mediumDate' }}
+              <span class="watch-metric__time">{{ lastRunAt | date: 'HH:mm' }}</span>
+            } @else {
+              <span class="watch-metric__absent">Not run</span>
+            }
           </dd>
         </div>
-        <div>
+        <div class="watch-metric">
           <dt>Next review</dt>
           <dd>{{ currentWatch.nextRunAt | date: 'mediumDate' }}</dd>
         </div>
-        <div>
+        <div class="watch-metric" data-editable="true">
           <dt>Reviews start from</dt>
           <dd>
             @if (anchorEditing()) {
@@ -115,7 +120,7 @@
             }
           </dd>
         </div>
-        <div>
+        <div class="watch-metric" data-editable="true">
           <dt>Interval</dt>
           <dd>
             @if (intervalEditing()) {
@@ -152,7 +157,8 @@
                 </button>
               </form>
             } @else {
-              {{ currentWatch.reviewIntervalDays }} days
+              {{ currentWatch.reviewIntervalDays }}
+              <span class="watch-metric__unit">days</span>
               @if (canReview() && currentWatch.status !== 'CLOSED') {
                 <button
                   type="button"
@@ -490,7 +496,7 @@
                       @if (candidate.agenticCreated) {
                         <p>
                           Found by the autonomous agent. Its grounded passages and inventory forms
-                          are in the Full-agentic reader history.
+                          are in the reader analysis below.
                         </p>
                       } @else {
                         <p>No evidence recorded for this candidate.</p>
@@ -508,10 +514,10 @@
                     type="button"
                     class="text-button evidence-block__link"
                     [disabled]="loadingAgentAnalysisId() === candidate.id"
-                    (click)="openAgentHistory(candidate)"
+                    (click)="openReaderAnalysis(candidate)"
                   >
                     <span class="pi pi-history" aria-hidden="true"></span>
-                    Full-agentic reader history
+                    Reader analysis
                   </button>
                 }
               </section>
@@ -806,7 +812,7 @@
     [loading]="loadingAgentAnalysisId() !== null"
     [error]="analysesError()"
     [feedbackBusyId]="feedbackBusyAnalysisId()"
-    (closed)="closeAgentHistory()"
+    (closed)="closeReaderAnalysis()"
     (feedbackGiven)="recordAgentFeedback($event)"
   />
 </section>

@@ -122,30 +122,84 @@
   border-block: 1px solid var(--color-line);
 }
 
+/*
+ * A data strip, not a list of labels.
+ *
+ * The four metrics used to be set at 0.72rem/800 over 0.88rem/700: the label
+ * was the heavier of the two relative to its size, so both lines read as
+ * captions and the values disappeared. The label now recedes — lighter, paler,
+ * tracked out — and the value carries the weight of the row. Hairline rules do
+ * the separating that whitespace alone could not, and `auto-fit` fixes a
+ * three-column track that had been splitting four metrics into 3 + 1.
+ */
 .watch-metrics {
   display: grid;
-  grid-template-columns: repeat(3, minmax(8rem, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: 0.4rem 1.4rem;
   margin: 0;
 }
 
-.watch-metrics div {
+.watch-metric {
   min-width: 0;
+  padding-left: 1.4rem;
+  border-left: 1px solid var(--color-line);
+}
+
+.watch-metric:first-child {
+  padding-left: 0;
+  border-left: 0;
 }
 
 .watch-metrics dt {
-  color: var(--color-muted);
-  font-size: 0.72rem;
-  font-weight: 800;
+  color: var(--color-subtle);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
 }
 
+/* Inline flow, not flex: the space between a number and its unit has to be a
+   real character, or "90 days" reaches the clipboard as "90days". */
 .watch-metrics dd {
-  margin: 0.25rem 0 0;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0.3rem 0 0;
   overflow-wrap: anywhere;
   color: var(--color-text);
-  font-size: 0.88rem;
-  font-weight: 700;
+  font-size: 1.02rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+}
+
+/* A watch that never ran is not a date; it should not be set like one. */
+.watch-metric__absent {
+  color: var(--color-subtle);
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+/* The unit of a number and the time of a date: both qualify the value beside
+   them, and neither should compete with it for the first glance. */
+.watch-metric__unit,
+.watch-metric__time {
+  color: var(--color-muted);
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+/*
+ * The two cadence metrics are settings, not readings. The dotted rule under
+ * the value says so before the pencil is noticed, and survives a colour-blind
+ * reader in a way an accent tint would not.
+ */
+.watch-metric[data-editable='true'] dd {
+  padding-bottom: 0.1rem;
+  border-bottom: 1px dashed var(--color-line-strong);
+}
+
+.watch-metric[data-editable='true']:hover dd {
+  border-bottom-color: var(--color-accent);
 }
 
 /* Inline cadence editor: sized to sit inside the metric row, not to match the
@@ -182,10 +236,16 @@
 
 .watch-metrics dd .text-button {
   min-height: auto;
-  margin-left: 0.35rem;
-  padding: 0.1rem 0.3rem;
+  margin-left: 0.1rem;
+  padding: 0.15rem 0.35rem;
+  border-radius: var(--radius-sm);
   color: var(--color-subtle);
-  font-size: 0.7rem;
+  font-size: 0.72rem;
+}
+
+.watch-metrics dd .text-button:hover:not(:disabled) {
+  background: var(--color-accent-soft);
+  color: var(--color-accent-strong);
 }
 
 .watch-actions,
@@ -777,6 +837,19 @@ a.query-list__source:hover {
 
   .watch-metrics {
     grid-template-columns: 1fr;
+    gap: 0.9rem;
+  }
+
+  .watch-metric {
+    padding-top: 0.9rem;
+    padding-left: 0;
+    border-top: 1px solid var(--color-line);
+    border-left: 0;
+  }
+
+  .watch-metric:first-child {
+    padding-top: 0;
+    border-top: 0;
   }
 
   .candidate-section__heading,
