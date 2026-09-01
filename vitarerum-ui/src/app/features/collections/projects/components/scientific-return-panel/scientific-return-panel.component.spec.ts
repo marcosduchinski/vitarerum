@@ -8,6 +8,9 @@ import { IdentitySession } from '@core/auth/models/identity-session.model';
 import {
   AgenticTrajectoryEvent,
   FullAgenticInvestigation,
+  ScientificReturnCandidate,
+  ScientificReturnCandidatesPage,
+  ScientificReturnCandidateStatus,
   ScientificReturnInvestigation,
   ScientificReturnWatch,
   ScientificReturnWatchStatus,
@@ -56,6 +59,28 @@ function makeWatch(status: ScientificReturnWatchStatus = 'ACTIVE'): ScientificRe
 
 const EMPTY_PAGE = { content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 };
 
+function makeCandidate(
+  id: string,
+  status: ScientificReturnCandidateStatus,
+): ScientificReturnCandidate {
+  return {
+    id,
+    watchId: 'watch-1',
+    source: 'EUROPE_PMC',
+    sourceRecordId: `record-${id}`,
+    doi: null,
+    title: `Publication ${id}`,
+    authors: ['Bob Santos'],
+    publicationDate: '2026-05-01',
+    abstract: null,
+    url: null,
+    status,
+    confirmedPublicationEntryId: null,
+    firstSeenAt: '2026-08-18T10:00:00Z',
+    evidences: [],
+  };
+}
+
 function makeInvestigation(id: string, candidateId: string | null): ScientificReturnInvestigation {
   return {
     id,
@@ -94,8 +119,10 @@ class ApiStub {
     return of(this.watch);
   }
 
-  listCandidates(): Observable<typeof EMPTY_PAGE> {
-    return of(EMPTY_PAGE);
+  candidates: ScientificReturnCandidate[] = [];
+
+  listCandidates(): Observable<ScientificReturnCandidatesPage> {
+    return of({ ...EMPTY_PAGE, content: this.candidates, totalElements: this.candidates.length });
   }
 
   listRuns(): Observable<typeof EMPTY_PAGE> {
@@ -133,17 +160,9 @@ class ApiStub {
   }
 
   investigations: ScientificReturnInvestigation[] = [];
-  startedWatchInvestigations: string[] = [];
 
   listWatchInvestigations(): Observable<readonly ScientificReturnInvestigation[]> {
     return of(this.investigations);
-  }
-
-  startWatchInvestigation(watchId: string): Observable<ScientificReturnInvestigation> {
-    this.startedWatchInvestigations.push(watchId);
-    const investigation = makeInvestigation('inv-new', null);
-    this.investigations = [investigation, ...this.investigations];
-    return of(investigation);
   }
 
   updateWatch(
@@ -282,17 +301,29 @@ describe('ScientificReturnPanelComponent', () => {
     expect(section.querySelectorAll('.run-row')).toHaveLength(0);
   });
 
-  it('shows the trajectory of an investigation started from the panel', async () => {
-    expect(investigationSection()!.textContent).toContain('0 recorded');
-
-    const investigate = [...(fixture.nativeElement as HTMLElement).querySelectorAll('button')].find(
-      (button) => button.textContent?.includes('Investigate publications not found'),
-    )!;
-    investigate.click();
+  it('offers enrichment only while the candidate is undecided', async () => {
+    api.candidates = [makeCandidate('candidate-pending', 'PENDING')];
+    fixture = TestBed.createComponent(ScientificReturnPanelComponent);
+    fixture.componentRef.setInput('projectId', 'project-1');
     await settle();
 
-    expect(api.startedWatchInvestigations).toEqual(['watch-1']);
-    expect(investigationRows()).toHaveLength(1);
+    const enrichmentButtons = () =>
+      [...(fixture.nativeElement as HTMLElement).querySelectorAll('button')].filter((button) =>
+        button.textContent?.includes('Investigate missing evidence'),
+      );
+    expect(enrichmentButtons()).toHaveLength(1);
+
+    api.candidates = [
+      makeCandidate('candidate-confirmed', 'CONFIRMED'),
+      makeCandidate('candidate-dismissed', 'DISMISSED'),
+    ];
+    fixture = TestBed.createComponent(ScientificReturnPanelComponent);
+    fixture.componentRef.setInput('projectId', 'project-1');
+    await settle();
+
+    expect(enrichmentButtons()).toHaveLength(0);
+    // The audit trail stays reachable for a decided candidate.
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Investigation history');
   });
 
   it('queues the autonomous flow explicitly', async () => {

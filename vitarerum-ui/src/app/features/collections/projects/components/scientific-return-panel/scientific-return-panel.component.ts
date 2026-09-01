@@ -499,28 +499,6 @@ export class ScientificReturnPanelComponent {
     }
   }
 
-  protected async investigateWatch(watchId: string): Promise<void> {
-    if (!this.canReview() || this.runningInvestigationId()) return;
-    this.runningInvestigationId.set(watchId);
-    this.clearMessages();
-    try {
-      const investigation = await firstValueFrom(this.api.startWatchInvestigation(watchId));
-      this.watchInvestigationsResource.reload();
-      // Discovery may legitimately end without a candidate; that is a result,
-      // not a failure, so the message says which happened.
-      this.feedback.set(
-        investigation.status === 'AWAITING_HUMAN_REVIEW'
-          ? 'The investigation found a candidate. It still needs your decision.'
-          : `The investigation ended without a candidate: ${investigation.stopReason ?? 'no reason recorded'}.`,
-      );
-      this.candidatesResource.reload();
-    } catch (error) {
-      this.actionError.set(toApiError(error));
-    } finally {
-      this.runningInvestigationId.set(null);
-    }
-  }
-
   protected readonly expandedEventId = signal<string | null>(null);
 
   /**
@@ -719,8 +697,16 @@ export class ScientificReturnPanelComponent {
     }
   }
 
-  protected async investigateCandidate(candidateId: string): Promise<void> {
-    if (!this.canReview() || this.runningInvestigationId()) return;
+  /**
+   * Enrichment is only meaningful while the candidate is undecided: the action
+   * policy refuses a decided one, but only after the planner has already been
+   * charged for a call, so the decision is taken here instead.
+   */
+  protected async investigateCandidate(candidate: ScientificReturnCandidate): Promise<void> {
+    if (!this.canReview() || candidate.status !== 'PENDING' || this.runningInvestigationId()) {
+      return;
+    }
+    const candidateId = candidate.id;
     this.runningInvestigationId.set(candidateId);
     this.clearMessages();
     try {

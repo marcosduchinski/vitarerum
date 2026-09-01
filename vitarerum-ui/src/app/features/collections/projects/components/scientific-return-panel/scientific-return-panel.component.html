@@ -211,20 +211,6 @@
                 Start autonomous search
               }
             </button>
-            <button
-              type="button"
-              class="button"
-              [disabled]="busyAction() !== null || runningInvestigationId() !== null"
-              (click)="investigateWatch(currentWatch.id)"
-            >
-              @if (runningInvestigationId() === currentWatch.id) {
-                <span class="pi pi-spin pi-spinner" aria-hidden="true"></span>
-                Investigating
-              } @else {
-                <span class="pi pi-sparkles" aria-hidden="true"></span>
-                Investigate publications not found
-              }
-            </button>
           } @else if (currentWatch.status === 'PAUSED') {
             <button
               type="button"
@@ -508,20 +494,22 @@
                     <span class="pi pi-history" aria-hidden="true"></span>
                     Full-agentic reader history
                   </button>
-                  <button
-                    type="button"
-                    class="button"
-                    [disabled]="runningInvestigationId() !== null"
-                    (click)="investigateCandidate(candidate.id)"
-                  >
-                    @if (runningInvestigationId() === candidate.id) {
-                      <span class="pi pi-spin pi-spinner" aria-hidden="true"></span>
-                      Investigating
-                    } @else {
-                      <span class="pi pi-search" aria-hidden="true"></span>
-                      Investigate missing evidence
-                    }
-                  </button>
+                  @if (candidate.status === 'PENDING') {
+                    <button
+                      type="button"
+                      class="button"
+                      [disabled]="runningInvestigationId() !== null"
+                      (click)="investigateCandidate(candidate)"
+                    >
+                      @if (runningInvestigationId() === candidate.id) {
+                        <span class="pi pi-spin pi-spinner" aria-hidden="true"></span>
+                        Investigating
+                      } @else {
+                        <span class="pi pi-search" aria-hidden="true"></span>
+                        Investigate missing evidence
+                      }
+                    </button>
+                  }
                   <button
                     type="button"
                     class="text-button"
