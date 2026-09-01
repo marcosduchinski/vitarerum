@@ -524,6 +524,13 @@ describe('ScientificReturnPanelComponent', () => {
           explanation: 'The author surname matches the researcher.',
         },
       },
+      {
+        id: 'event-19',
+        sequence: 19,
+        kind: 'STOPPED',
+        occurredAt: '2026-08-30T04:40:00Z',
+        payload: { status: 'COMPLETED' },
+      },
     ];
     fixture = TestBed.createComponent(ScientificReturnPanelComponent);
     fixture.componentRef.setInput('projectId', 'project-1');
@@ -552,5 +559,94 @@ describe('ScientificReturnPanelComponent', () => {
     rows[2].click();
     await settle();
     expect(flat()).toContain('The author surname matches the researcher.');
+  });
+
+  it('marks which trajectory steps crossed the agent boundary', async () => {
+    api.fullAgentic = [
+      {
+        id: 'full-agentic-flow',
+        watchId: 'watch-1',
+        objective: 'DISCOVER_CANDIDATE',
+        candidateId: null,
+        searchRunId: null,
+        status: 'COMPLETED',
+        budget: {},
+        usage: { queries: 1, candidates: 1 },
+        createdBy: 'perm-bob-curatorial',
+        createdAt: '2026-08-30T04:35:00Z',
+        startedAt: '2026-08-30T04:35:01Z',
+        completedAt: '2026-08-30T04:40:00Z',
+        heartbeatAt: null,
+        failureReason: null,
+      },
+    ];
+    api.trajectory = [
+      {
+        id: 'event-1',
+        sequence: 1,
+        kind: 'PLAN_CREATED',
+        occurredAt: '2026-08-30T04:35:10Z',
+        payload: { searches: [{ query: 'MB06-5747' }], contractVersion: 'v3' },
+      },
+      {
+        id: 'event-2',
+        sequence: 2,
+        kind: 'TOOL_COMPLETED',
+        occurredAt: '2026-08-30T04:35:12Z',
+        payload: { source: 'CROSSREF', query: 'MB06-5747', resultCount: 3 },
+      },
+      {
+        // Sending the query is the system executing the plan, not the model
+        // speaking, so it stays unmarked next to the two that are.
+        id: 'event-3',
+        sequence: 3,
+        kind: 'TOOL_STARTED',
+        occurredAt: '2026-08-30T04:35:11Z',
+        payload: { source: 'CROSSREF', query: 'MB06-5747' },
+      },
+      {
+        id: 'event-4',
+        sequence: 4,
+        kind: 'STOPPED',
+        occurredAt: '2026-08-30T04:40:00Z',
+        payload: { status: 'COMPLETED' },
+      },
+    ];
+    fixture = TestBed.createComponent(ScientificReturnPanelComponent);
+    fixture.componentRef.setInput('projectId', 'project-1');
+    await settle();
+
+    (fixture.nativeElement as HTMLElement)
+      .querySelector<HTMLButtonElement>('[aria-labelledby="agentic-workspace-heading"] .run-row')!
+      .click();
+    await settle();
+
+    const flows = [
+      ...(fixture.nativeElement as HTMLElement).querySelectorAll('.trajectory-event__flow'),
+    ];
+    expect(flows.map((flow) => flow.getAttribute('data-flow'))).toEqual([
+      'out',
+      'in',
+      'none',
+      'none',
+    ]);
+    // A step on neither side of the model gets no icon, only the column that
+    // keeps the rows aligned.
+    expect(flows[2].textContent?.trim()).toBe('');
+    expect(flows[3].textContent?.trim()).toBe('');
+    expect(flows[0].textContent).toContain('Produced by the model');
+    expect(flows[1].textContent).toContain('Given to the model');
+    // Robot, balloon and sound waves are drawn in place: PrimeIcons has none
+    // of the three. The cue and the side the robot stands on carry the
+    // direction on their own, before the colour is read.
+    expect(flows[0].querySelector('.agent-flow__balloon')).not.toBeNull();
+    expect(flows[0].querySelector('.agent-flow__robot')?.getAttribute('transform')).toBe(
+      'translate(0, 3)',
+    );
+    expect(flows[1].querySelector('.agent-flow__waves')).not.toBeNull();
+    expect(flows[1].querySelector('.agent-flow__robot')?.getAttribute('transform')).toBe(
+      'translate(17, 3)',
+    );
+    expect(flows[2].querySelector('app-agent-flow-icon')).toBeNull();
   });
 });

@@ -17,6 +17,7 @@ import { ConfirmModalComponent } from '@shared/components/confirm-modal/confirm-
 import { ErrorMessageComponent } from '@shared/components/error-message/error-message.component';
 import { FeedbackMessageComponent } from '@shared/components/feedback-message/feedback-message.component';
 import { LoadingStateComponent } from '@shared/components/loading-state/loading-state.component';
+import { AgentFlowIconComponent } from '@shared/components/agent-flow-icon/agent-flow-icon.component';
 
 import {
   AgentAnalysisFeedback,
@@ -43,6 +44,7 @@ import {
 import { ScientificReturnApiService } from '../../services/scientific-return-api.service';
 
 type DecisionDraft = Exclude<ScientificReturnDecision, 'CONFIRM'> | 'CONFIRM';
+type TrajectoryFlow = 'in' | 'out' | 'none';
 type CandidateFilter = ScientificReturnCandidateStatus | 'ALL';
 
 function isNotFound(error: unknown): boolean {
@@ -60,6 +62,7 @@ function isNotFound(error: unknown): boolean {
     ErrorMessageComponent,
     FeedbackMessageComponent,
     InvestigationTimelineComponent,
+    AgentFlowIconComponent,
     LoadingStateComponent,
   ],
   templateUrl: './scientific-return-panel.component.html',
@@ -566,6 +569,42 @@ export class ScientificReturnPanelComponent {
       ScientificReturnPanelComponent.EVENT_TITLES[event.kind] ??
       event.kind.replaceAll('_', ' ').toLowerCase()
     );
+  }
+
+  /**
+   * Which side of the reasoning model a step sits on.
+   *
+   * The boundary is drawn around the model, not around the investigation, so
+   * the column answers the question a curator actually has before deciding:
+   * what was this model shown, and what did it claim from it.
+   *
+   * That leaves three kinds of step unmarked on purpose. `TOOL_STARTED` and
+   * `CANDIDATE_LINKED` are the system executing a plan and persisting a
+   * result, not the model speaking. The `LLM_CALL_*` pair carries no content
+   * at all — only phase, duration and budget — so marking it would repeat the
+   * direction of the `PLAN_CREATED` or `ARTICLE_ASSESSED` beside it. And a
+   * failure, a skip or a lifecycle notice moved nothing either way.
+   */
+  private static readonly EVENT_FLOW: Readonly<Record<string, TrajectoryFlow>> = {
+    // Curatorial knowledge injected into the planner prompt, and the source
+    // records that become material for the next one.
+    MEMORY_RETRIEVED: 'in',
+    TOOL_COMPLETED: 'in',
+    // The searches and the reasoning the model asked for, and its verdict on
+    // an article it was shown: relevance, confidence, passages, contradictions.
+    PLAN_CREATED: 'out',
+    ARTICLE_ASSESSED: 'out',
+  };
+
+  protected eventFlow(event: AgenticTrajectoryEvent): TrajectoryFlow {
+    return ScientificReturnPanelComponent.EVENT_FLOW[event.kind] ?? 'none';
+  }
+
+  protected eventFlowLabel(event: AgenticTrajectoryEvent): string {
+    const flow = this.eventFlow(event);
+    if (flow === 'in') return 'Given to the model';
+    if (flow === 'out') return 'Produced by the model';
+    return '';
   }
 
   /** The one line that makes a row worth reading without opening it. */

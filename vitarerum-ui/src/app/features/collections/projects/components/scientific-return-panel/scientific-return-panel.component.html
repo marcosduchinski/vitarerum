@@ -275,7 +275,7 @@
             {{ coverage.reached }} of {{ coverage.total }} consulted objects investigated.
             @if (coverage.reached < coverage.total) {
               The objects not reached have not been searched at all — absence of results for them
-              means nothing yet.
+                means nothing yet.
             }
           </span>
         </p>
@@ -353,10 +353,19 @@
               }
               @if (expandedFullAgenticId() === investigation.id) {
                 <div class="investigation-detail">
-                  @for (
-                    event of fullAgenticTrajectory()[investigation.id] ?? [];
-                    track event.sequence
-                  ) {
+                  <p class="trajectory-legend">
+                    <span data-flow="in">
+                      <app-agent-flow-icon flow="in" />
+                      shown to the model
+                    </span>
+                    <span data-flow="out">
+                      <app-agent-flow-icon flow="out" />
+                      the model produced it
+                    </span>
+                    <span>Unmarked steps are the system at work, not the model.</span>
+                  </p>
+                  @for (event of fullAgenticTrajectory()[investigation.id] ?? [];
+                    track event.sequence) {
                     <div class="trajectory-event" [attr.data-kind]="event.kind">
                       <button
                         type="button"
@@ -365,6 +374,18 @@
                         (click)="toggleEvent(event.id)"
                       >
                         <span class="trajectory-event__seq">#{{ event.sequence }}</span>
+                        <span
+                          class="trajectory-event__flow"
+                          [attr.data-flow]="eventFlow(event)"
+                          [attr.title]="eventFlowLabel(event) || null"
+                        >
+                          @if (eventFlow(event); as flow) {
+                            @if (flow !== 'none') {
+                              <app-agent-flow-icon [flow]="flow" />
+                              <span class="sr-only">{{ eventFlowLabel(event) }}.</span>
+                            }
+                          }
+                        </span>
                         <strong class="trajectory-event__title">
                           {{ eventTitle(event) }}
                         </strong>
@@ -738,60 +759,6 @@
                   @if (run.errorMessage) {
                     <p role="alert">{{ run.errorMessage }}</p>
                   }
-                </div>
-              }
-            </li>
-          }
-        </ol>
-      }
-    </section>
-
-    <section class="watch-investigations" aria-labelledby="watch-investigations-heading">
-      <div class="run-history__heading">
-        <div>
-          <p class="section-kicker">Audit trail</p>
-          <h3 id="watch-investigations-heading">Discovery investigations</h3>
-        </div>
-        <span>{{ discoveryInvestigations().length }} recorded</span>
-      </div>
-      @if (!discoveryInvestigations().length) {
-        <p class="run-history__empty">
-          No discovery investigation recorded. Investigate searches the inventory number in the
-          alternative spellings used by the literature.
-        </p>
-      } @else {
-        <ol class="run-list">
-          @for (investigation of discoveryInvestigations(); track investigation.id) {
-            <li>
-              <button
-                type="button"
-                class="run-row"
-                [attr.aria-expanded]="expandedInvestigationId() === investigation.id"
-                (click)="toggleInvestigation(investigation.id)"
-              >
-                <span class="run-row__status" [attr.data-status]="investigation.status">
-                  <span
-                    class="pi"
-                    [class.pi-check-circle]="investigation.status === 'AWAITING_HUMAN_REVIEW'"
-                    [class.pi-minus-circle]="investigation.status === 'STOPPED'"
-                    [class.pi-times-circle]="investigation.status === 'FAILED'"
-                    aria-hidden="true"
-                  ></span>
-                  {{ investigation.status.replaceAll('_', ' ').toLowerCase() }}
-                </span>
-                <span>{{ investigation.startedAt | date: 'medium' }}</span>
-                <strong>{{ investigationOutcome(investigation) }}</strong>
-                <span class="run-row__budget">{{ investigationBudget(investigation) }}</span>
-                <span
-                  class="pi"
-                  [class.pi-chevron-down]="expandedInvestigationId() !== investigation.id"
-                  [class.pi-chevron-up]="expandedInvestigationId() === investigation.id"
-                  aria-hidden="true"
-                ></span>
-              </button>
-              @if (expandedInvestigationId() === investigation.id) {
-                <div class="investigation-detail">
-                  <app-investigation-timeline [investigation]="investigation" [compact]="true" />
                 </div>
               }
             </li>

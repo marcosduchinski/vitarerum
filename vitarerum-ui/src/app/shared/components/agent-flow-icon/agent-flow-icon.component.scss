@@ -1,0 +1,26 @@
+:host {
+  display: inline-block;
+  width: 1.85em;
+  height: 1.31em;
+  line-height: 0;
+}
+
+svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+/*
+ * Heavier than the rest: three open curves with nothing enclosed thin out at
+ * the sizes this icon is read at, where the robot and the balloon still hold
+ * their shape.
+ */
+.agent-flow__waves {
+  stroke-width: 2.2;
+}
