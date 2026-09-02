@@ -389,6 +389,9 @@ class AddLogEntryRequest(BaseModel):
     collectionUseObjectId: str = Field(min_length=1)
     numberOfObjects: int = Field(ge=1)
     observations: str | None = None
+    # Omitted for an access being registered as it happens; supplied when the
+    # register is filled in after the fact.
+    addedAt: datetime | None = None
 
 
 class EditLogEntryRequest(BaseModel):

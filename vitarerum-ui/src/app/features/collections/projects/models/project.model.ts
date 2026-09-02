@@ -67,6 +67,9 @@ export interface ObjectAccessLog {
   readonly id: string;
   readonly referenceNumber: string;
   readonly projectId: string;
+  // Set once a curator concludes the log; from then on the API rejects every
+  // entry write with 409.
+  readonly dateConclusion: string | null;
   readonly curator: PermissionPrincipal | null;
 }
 
@@ -363,6 +366,9 @@ export interface CreateObjectLogEntryRequest {
   readonly collectionUseObjectId: string;
   readonly numberOfObjects: number;
   readonly observations?: string;
+  // Omitted when the access is being registered as it happens; the API stamps
+  // the current time.
+  readonly addedAt?: string;
 }
 
 export interface UpdateObjectLogEntryRequest {

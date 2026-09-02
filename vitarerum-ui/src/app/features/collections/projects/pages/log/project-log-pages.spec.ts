@@ -156,6 +156,9 @@ describe('project log pages', () => {
     expect(save).toBeTruthy();
     expect(save.disabled).toBe(true);
 
+    expandAccessRow(root, 'INV-ZOO-1892-001');
+    fixture.detectChanges();
+
     const dateInput = root.querySelector<HTMLInputElement>(
       'input[aria-label="Access date for INV-ZOO-1892-001"]',
     )!;
@@ -208,6 +211,9 @@ describe('project log pages', () => {
     );
     expect(headers).not.toContain('Files');
     expect(root.querySelector('select[aria-label="Object entry media type"]')).toBeNull();
+
+    expandAccessRow(root, 'INV-ZOO-1892-001');
+    fixture.detectChanges();
 
     const objectToggle = Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find(
       (button) => button.getAttribute('aria-controls') === 'object-entry-files-entry-101',
@@ -262,19 +268,25 @@ describe('project log pages', () => {
     const root = fixture.nativeElement as HTMLElement;
     expect(root.querySelector('.object-register__details-row')).toBeNull();
 
+    expandAccessRow(root, 'INV-ZOO-1892-001');
+    fixture.detectChanges();
+
     const toggle = Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find((button) =>
       button.getAttribute('aria-controls')?.startsWith('object-entry-files-'),
     );
     expect(toggle).toBeTruthy();
     expect(toggle?.getAttribute('aria-controls')).toMatch(/^object-entry-files-/);
     expect(toggle?.classList.contains('object-register__toggle')).toBe(true);
+    expect(root.querySelector('#object-entry-files-entry-101')).toBeNull();
 
     toggle!.click();
     fixture.detectChanges();
 
-    const detailRow = root.querySelector<HTMLTableRowElement>('.object-register__details-row');
-    expect(detailRow).toBeTruthy();
-    expect(detailRow?.querySelector('td')?.getAttribute('colspan')).toBe('6');
+    const files = root.querySelector<HTMLElement>('#object-entry-files-entry-101');
+    expect(files).toBeTruthy();
+    expect(
+      files?.closest('.object-register__details-row')?.querySelector('td')?.getAttribute('colspan'),
+    ).toBe('6');
     expect(root.textContent).toContain('Entry files');
     expect(root.querySelector('input[aria-label="Object entry file"]')).toBeTruthy();
   });
@@ -336,6 +348,9 @@ describe('project log pages', () => {
     fixture.detectChanges();
 
     const root = fixture.nativeElement as HTMLElement;
+    expandAccessRow(root, 'INV-ZOO-1892-001');
+    fixture.detectChanges();
+
     const observations = root.querySelector<HTMLTextAreaElement>('.object-register__textarea')!;
     observations.value = 'Edited but not saved';
     observations.dispatchEvent(new Event('input'));
@@ -363,6 +378,10 @@ describe('project log pages', () => {
     expect(text).toContain(
       'Researcher entries are only available while the project is in progress.',
     );
+
+    expandAccessRow(root, 'INV-ZOO-1892-001');
+    fixture.detectChanges();
+
     expect(
       root.querySelector<HTMLInputElement>(
         'input[aria-label="Number of objects for INV-ZOO-1892-001"]',
@@ -390,6 +409,10 @@ describe('project log pages', () => {
 
     const root = fixture.nativeElement as HTMLElement;
     expect(root.querySelector('#object-access-lock-message')?.getAttribute('role')).toBe('status');
+
+    expandAccessRow(root, 'INV-ZOO-1892-001');
+    fixture.detectChanges();
+
     expect(
       root
         .querySelector<HTMLInputElement>(
@@ -441,6 +464,9 @@ describe('project log pages', () => {
     fixture.detectChanges();
 
     const root = fixture.nativeElement as HTMLElement;
+    expandAccessRow(root, 'INV-ZOO-1892-001');
+    fixture.detectChanges();
+
     const quantityInput = root.querySelector<HTMLInputElement>(
       'input[aria-label="Number of objects for INV-ZOO-1892-001"]',
     )!;
@@ -452,6 +478,228 @@ describe('project log pages', () => {
     expect(root.querySelector<HTMLButtonElement>('.object-register-form__save')?.disabled).toBe(
       false,
     );
+  });
+
+  it('registers a further access to an object that already has one', async () => {
+    const state = TestBed.inject(MockProjectState);
+    const service = TestBed.inject(PROJECT_API_SERVICE);
+    const createEntry = vi.spyOn(service, 'createObjectLogEntry');
+
+    const fixture = TestBed.createComponent(ProjectObjectLogPanelComponent);
+    fixture.componentRef.setInput('projectId', 'proj-3');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const root = fixture.nativeElement as HTMLElement;
+    expect(root.textContent).toContain('1 access');
+
+    buttonByText(root, 'Register access').click();
+    fixture.detectChanges();
+
+    const dateInput = root.querySelector<HTMLInputElement>(
+      '#access-added-at-collection-use-object\\:INV-ZOO-1892-001',
+    )!;
+    dateInput.value = '2026-06-20T14:15';
+    dateInput.dispatchEvent(new Event('input'));
+    const quantityInput = root.querySelector<HTMLInputElement>(
+      '#access-quantity-collection-use-object\\:INV-ZOO-1892-001',
+    )!;
+    quantityInput.value = '2';
+    quantityInput.dispatchEvent(new Event('input'));
+    const observations = root.querySelector<HTMLTextAreaElement>(
+      '#access-observations-collection-use-object\\:INV-ZOO-1892-001',
+    )!;
+    observations.value = 'Second handling session.';
+    observations.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    root
+      .querySelector<HTMLFormElement>('form[aria-label="Register an access to INV-ZOO-1892-001"]')!
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(createEntry).toHaveBeenCalledWith('proj-3', {
+      collectionUseObjectId: 'INV-ZOO-1892-001',
+      numberOfObjects: 2,
+      addedAt: '2026-06-20T14:15:00',
+      observations: 'Second handling session.',
+    });
+    const entries = (state.logEntries.get('proj-3') ?? []).filter(
+      (entry) => entry.collectionUseObjectId === 'INV-ZOO-1892-001',
+    );
+    expect(entries).toHaveLength(2);
+    expect(entries[1].addedAt).toBe('2026-06-20T14:15:00');
+
+    // Both accesses group under the one object row.
+    const reopened = TestBed.createComponent(ProjectObjectLogPanelComponent);
+    reopened.componentRef.setInput('projectId', 'proj-3');
+    reopened.detectChanges();
+    await reopened.whenStable();
+    reopened.detectChanges();
+
+    const reopenedRoot = reopened.nativeElement as HTMLElement;
+    expect(reopenedRoot.textContent).toContain('2 accesses');
+
+    expandAccessRow(reopenedRoot, 'INV-ZOO-1892-001');
+    reopened.detectChanges();
+    expect(
+      reopenedRoot.querySelectorAll('input[aria-label="Access date for INV-ZOO-1892-001"]'),
+    ).toHaveLength(2);
+  });
+
+  it('offers to register the first access to an object that has none', async () => {
+    const state = TestBed.inject(MockProjectState);
+    const project = state.projects.get('proj-3')!;
+    state.projects.set('proj-3', {
+      ...project,
+      objects: [
+        ...(project.objects ?? []),
+        {
+          id: 'INV-ZOO-1892-003',
+          inventoryNumber: 'INV-ZOO-1892-003',
+          displayTitle: 'Specimen list',
+          objectName: 'Specimen list',
+          briefDescriptionSnapshot: null,
+          collectionId: null,
+          collectionName: null,
+          category: 'Documento',
+          description: 'Specimen list requested but not yet handled.',
+        },
+      ],
+    });
+
+    const fixture = TestBed.createComponent(ProjectObjectLogPanelComponent);
+    fixture.componentRef.setInput('projectId', 'proj-3');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const root = fixture.nativeElement as HTMLElement;
+    expect(root.textContent).toContain('INV-ZOO-1892-003');
+    expect(root.textContent).toContain('0 accesses');
+
+    expandAccessRow(root, 'INV-ZOO-1892-003');
+    fixture.detectChanges();
+
+    expect(root.textContent).toContain('No access registered for this object.');
+    expect(
+      Array.from(root.querySelectorAll<HTMLButtonElement>('button')).filter(
+        (button) => button.textContent?.trim() === 'Register access',
+      ),
+    ).toHaveLength(3);
+  });
+
+  it('warns before deleting an access and removes it only after confirmation', async () => {
+    const state = TestBed.inject(MockProjectState);
+    const service = TestBed.inject(PROJECT_API_SERVICE);
+    const deleteEntry = vi.spyOn(service, 'deleteObjectLogEntry');
+
+    const fixture = TestBed.createComponent(ProjectObjectLogPanelComponent);
+    fixture.componentRef.setInput('projectId', 'proj-3');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const root = fixture.nativeElement as HTMLElement;
+    expandAccessRow(root, 'INV-ZOO-1892-001');
+    fixture.detectChanges();
+
+    root
+      .querySelector<HTMLButtonElement>('button[aria-label="Delete access for INV-ZOO-1892-001"]')!
+      .click();
+    fixture.detectChanges();
+
+    expect(root.textContent).toContain('Delete this access?');
+    root.querySelector<HTMLButtonElement>('.confirm-modal__button--secondary')!.click();
+    fixture.detectChanges();
+    expect(deleteEntry).not.toHaveBeenCalled();
+    expect(state.logEntries.get('proj-3')?.some((entry) => entry.id === 'entry-101')).toBe(true);
+
+    root
+      .querySelector<HTMLButtonElement>('button[aria-label="Delete access for INV-ZOO-1892-001"]')!
+      .click();
+    fixture.detectChanges();
+    await (
+      fixture.componentInstance as unknown as { confirmDelete(): Promise<void> }
+    ).confirmDelete();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(deleteEntry).toHaveBeenCalledWith('proj-3', 'entry-101');
+    expect(state.logEntries.get('proj-3')?.some((entry) => entry.id === 'entry-101')).toBe(false);
+    // The object stays in the register even with no access left against it.
+    expect(root.textContent).toContain('INV-ZOO-1892-001');
+    expect(root.textContent).toContain('0 accesses');
+  });
+
+  it('locks every control once the access log is concluded', async () => {
+    const state = TestBed.inject(MockProjectState);
+    const accessLog = state.objectAccessLogs.get('proj-3')!;
+    state.objectAccessLogs.set('proj-3', {
+      ...accessLog,
+      dateConclusion: '2026-06-30T10:00:00Z',
+    });
+
+    const fixture = TestBed.createComponent(ProjectObjectLogPanelComponent);
+    fixture.componentRef.setInput('projectId', 'proj-3');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const root = fixture.nativeElement as HTMLElement;
+    expect(root.textContent).toContain(
+      'This access log is concluded; its entries can no longer be changed.',
+    );
+    expect(buttonByText(root, 'Register access').disabled).toBe(true);
+    expect(root.querySelector('.object-register-form__save')).toBeNull();
+
+    expandAccessRow(root, 'INV-ZOO-1892-001');
+    fixture.detectChanges();
+
+    expect(
+      root.querySelector<HTMLInputElement>(
+        'input[aria-label="Number of objects for INV-ZOO-1892-001"]',
+      )?.disabled,
+    ).toBe(true);
+    expect(
+      root.querySelector<HTMLButtonElement>(
+        'button[aria-label="Delete access for INV-ZOO-1892-001"]',
+      )?.disabled,
+    ).toBe(true);
+  });
+
+  it('reads every page of the access log so no entry is dropped from the register', async () => {
+    const state = TestBed.inject(MockProjectState);
+    const service = TestBed.inject(PROJECT_API_SERVICE);
+    const listEntries = vi.spyOn(service, 'listObjectLogEntries');
+    const seeded = state.logEntries.get('proj-3') ?? [];
+    state.logEntries.set('proj-3', [
+      ...seeded,
+      ...Array.from({ length: 120 }, (_unused, index) => ({
+        ...seeded[0],
+        id: `entry-bulk-${index}`,
+        observations: `Bulk access ${index}`,
+      })),
+    ]);
+
+    const fixture = TestBed.createComponent(ProjectObjectLogPanelComponent);
+    fixture.componentRef.setInput('projectId', 'proj-3');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const root = fixture.nativeElement as HTMLElement;
+    expect(listEntries).toHaveBeenCalledWith('proj-3', { page: 0, size: 100 });
+    expect(listEntries).toHaveBeenCalledWith('proj-3', { page: 1, size: 100 });
+    expect(root.textContent).toContain('121 accesses');
+    expect(root.textContent).not.toContain('Only the first');
   });
 
   it('renders object occurrence logging as a separate journal surface', async () => {
@@ -784,7 +1032,9 @@ describe('project log pages', () => {
       })),
     );
     const downloadDocument = vi.spyOn(service, 'downloadPublicationLogDocument');
-    const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:publication-docx');
+    const createObjectURL = vi
+      .spyOn(URL, 'createObjectURL')
+      .mockReturnValue('blob:publication-docx');
     const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
     const anchorClick = vi
       .spyOn(HTMLAnchorElement.prototype, 'click')
@@ -1051,6 +1301,18 @@ function renderOccurrence<T extends { readonly id: () => string }>(
   expect(text).toContain('Object occurrence log');
   expect(text).not.toContain('Object access log');
   return text;
+}
+
+/**
+ * The register groups accesses under their object, so an object's access rows
+ * only exist once its row is expanded.
+ */
+function expandAccessRow(root: HTMLElement, inventoryNumber: string): void {
+  const toggle = Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find(
+    (button) => button.getAttribute('aria-label') === `Show accesses for ${inventoryNumber}`,
+  );
+  expect(toggle).toBeDefined();
+  toggle!.click();
 }
 
 function buttonByText(root: HTMLElement, text: string): HTMLButtonElement {

@@ -35,6 +35,8 @@ from app.use_of_collections.application.use_cases import (
     AddPublicationEntryAttachmentInput,
     AddPublicationLogEntry,
     AddPublicationLogEntryInput,
+    DeleteObjectLogEntry,
+    DeleteObjectLogEntryInput,
     DeletePublicationLogEntry,
     DeletePublicationLogEntryInput,
     EditObjectLogEntry,
@@ -204,6 +206,7 @@ async def add_log_entry(
                 ),
                 number_of_objects=body.numberOfObjects,
                 observations=body.observations,
+                added_at=body.addedAt,
                 restrict_to_in_progress=not _is_staff(caller),
             )
         )
@@ -255,6 +258,44 @@ async def edit_log_entry(
         entry.collection_use_object_id
     ]
     return await _build_object_log_entry(entry, session, collection_use_object)
+
+
+@projects_router.delete(
+    "/{project_id}/log-entries/{entry_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_log_entry(
+    project_id: str,
+    entry_id: str,
+    caller: CallerPermission,
+    project_repo: ProjectRepo,
+    proposal_repo: ProposalRepo,
+    access_log_repo: AccessLogRepo,
+    file_storage: FileStorage,
+    session: DBSession,
+) -> Response:
+    await _assert_existing_project_access(
+        project_id, caller, project_repo, proposal_repo
+    )
+    try:
+        attachments = await DeleteObjectLogEntry(
+            project_repo, access_log_repo
+        ).execute(
+            DeleteObjectLogEntryInput(
+                project_id=CollectionUseProjectId(project_id),
+                entry_id=ObjectLogEntryId(entry_id),
+                caller=caller,
+                restrict_to_in_progress=not _is_staff(caller),
+            )
+        )
+        await session.commit()
+    except LookupError as exc:
+        raise _not_found("entry", entry_id) from exc
+    except Exception as exc:
+        _handle_domain_errors(exc)
+    for attachment in attachments:
+        await file_storage.delete(attachment.file_reference)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @projects_router.get(

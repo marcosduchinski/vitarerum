@@ -491,7 +491,7 @@ export class ProjectApiServiceMock {
       collectionUseObjectId: request.collectionUseObjectId,
       objectReference: this.collectionUseObjectReference(p, request.collectionUseObjectId),
       numberOfObjects: request.numberOfObjects,
-      addedAt: new Date().toISOString(),
+      addedAt: request.addedAt ?? new Date().toISOString(),
       addedBy: currentPrincipal,
       observations: request.observations ?? null,
       requestedObjectId: request.collectionUseObjectId,
@@ -929,6 +929,32 @@ export class ProjectApiServiceMock {
     allEntries[idx] = updated;
     this.state.publicationEntries.set(projectId, allEntries);
     return of(updated);
+  }
+
+  deleteObjectLogEntry(projectId: string, entryId: string): Observable<void> {
+    const project = this.state.projects.get(projectId);
+    if (!project) return throwError(() => ({ status: 404, error: 'NOT_FOUND' }));
+    const currentPrincipal = this.currentPrincipal();
+    if (currentPrincipal.group === 'EXTERNAL' && project.status !== 'IN_PROGRESS') {
+      return throwError(() => ({
+        status: 409,
+        error: 'INVALID_TRANSITION',
+        message: 'Entries can only be added while the project is IN_PROGRESS',
+      }));
+    }
+    const entries = this.state.logEntries.get(projectId) ?? [];
+    if (!entries.some((entry) => entry.id === entryId)) {
+      return throwError(() => ({
+        status: 404,
+        error: 'ENTRY_NOT_FOUND',
+        message: `No entry found with id ${entryId}`,
+      }));
+    }
+    this.state.logEntries.set(
+      projectId,
+      entries.filter((entry) => entry.id !== entryId),
+    );
+    return of(void 0);
   }
 
   deletePublicationEntry(projectId: string, entryId: string): Observable<void> {
@@ -1462,6 +1488,7 @@ export class ProjectApiServiceMock {
       id: this.state.nextObjectAccessLogId(),
       referenceNumber: this.state.nextObjectAccessLogReference(),
       projectId,
+      dateConclusion: null,
       curator: null,
     };
     this.state.objectAccessLogs.set(projectId, accessLog);

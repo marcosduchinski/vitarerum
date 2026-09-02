@@ -1175,7 +1175,9 @@ class SqlAlchemyObjectAccessLogRepository:
                 == collection_use_object_id,
             )
             .options(*_LOG_ENTRY_EAGER)
-            .order_by(ObjectLogEntryRecord.added_at)
+            # Seeded entries all share one added_at, so the id breaks the tie and
+            # keeps the order stable across pages.
+            .order_by(ObjectLogEntryRecord.added_at, ObjectLogEntryRecord.id)
         )
         records = (await self._session.execute(stmt)).scalars().all()
         return [log_entry_to_domain(record) for record in records]
@@ -1214,7 +1216,7 @@ class SqlAlchemyObjectAccessLogRepository:
         total = (await self._session.execute(count_stmt)).scalar_one()
         data_stmt = (
             base_stmt.options(*_LOG_ENTRY_EAGER)
-            .order_by(ObjectLogEntryRecord.added_at)
+            .order_by(ObjectLogEntryRecord.added_at, ObjectLogEntryRecord.id)
             .offset(page * size)
             .limit(size)
         )

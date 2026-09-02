@@ -131,6 +131,9 @@ class AddObjectLogEntryInput:
     collection_use_object_id: CollectionUseObjectId
     number_of_objects: int
     observations: str | None = None
+    # An access being registered after the fact carries its own date; the
+    # register only ever states when the object was handled.
+    added_at: datetime | None = None
     restrict_to_in_progress: bool = False
 
 
@@ -158,7 +161,7 @@ class AddObjectLogEntry:
             object_access_log_id=access_log.id,
             collection_use_object_id=data.collection_use_object_id,
             number_of_objects=data.number_of_objects,
-            added_at=_now(),
+            added_at=data.added_at or _now(),
             added_by=data.caller.id,
             observations=data.observations,
         )
@@ -216,6 +219,47 @@ class EditObjectLogEntry:
         )
         await self._repo.save_entry(entry)
         return entry
+
+
+@dataclass(slots=True)
+class DeleteObjectLogEntryInput:
+    project_id: CollectionUseProjectId
+    entry_id: ObjectLogEntryId
+    caller: Actor
+    restrict_to_in_progress: bool = False
+
+
+class DeleteObjectLogEntry:
+    """Delete one access entry and return its attachments for post-commit cleanup."""
+
+    def __init__(
+        self,
+        project_repository: CollectionUseProjectRepository,
+        access_log_repository: ObjectAccessLogRepository,
+    ) -> None:
+        self._project_repo = project_repository
+        self._repo = access_log_repository
+
+    async def execute(
+        self, data: DeleteObjectLogEntryInput
+    ) -> tuple[Attachment, ...]:
+        await _load_writable_project(
+            self._project_repo, data.project_id, data.restrict_to_in_progress
+        )
+        entry = await self._repo.get_entry_by_id(data.entry_id)
+        if entry is None:
+            raise LookupError(f"No entry found with id {data.entry_id}")
+        access_log = await self._repo.get_by_id(entry.object_access_log_id)
+        _assert_entry_log_writable(
+            access_log,
+            data.project_id,
+            data.entry_id,
+            action="delete entries of",
+            log_kind="object access log",
+        )
+        attachments = tuple(entry.attachments)
+        await self._repo.remove_entries([entry.id])
+        return attachments
 
 
 @dataclass(slots=True)

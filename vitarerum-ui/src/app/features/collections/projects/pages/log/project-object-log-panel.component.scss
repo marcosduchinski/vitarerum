@@ -384,8 +384,9 @@
   background: var(--color-panel-muted);
 }
 
-// Drawer: an inset panel that reads as a tray opening beneath the row — left
-// accent rail, recessed surface, soft inset top shadow, and indentation.
+// Level-1 drawer: an inset panel that reads as a tray opening beneath the row —
+// left accent rail, recessed surface, soft inset top shadow, and indentation.
+.access-details,
 .entry-files {
   display: grid;
   gap: 0.75rem;
@@ -579,5 +580,187 @@
 
   @media (max-width: 760px) {
     grid-template-columns: 1fr;
+  }
+}
+
+// Level-2 drawer (attachments nested under an access row): a step deeper —
+// indented further, a lighter surface, and a quieter rail than level 1.
+.access-details .entry-files {
+  padding-left: 1.9rem;
+  border-left-color: var(--color-line-strong);
+  background: var(--color-bg-raised);
+}
+
+.access-details__table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-panel);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.06),
+    0 6px 14px -10px rgba(15, 23, 42, 0.22);
+}
+
+.access-details__table {
+  width: 100%;
+  min-width: 52rem;
+  border-collapse: collapse;
+
+  th,
+  td {
+    padding: 0.6rem 0.65rem;
+    border-bottom: 1px solid var(--color-line);
+    text-align: left;
+    vertical-align: top;
+  }
+
+  th {
+    color: var(--color-subtle);
+    font-size: 0.66rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  td {
+    font-size: 0.8rem;
+  }
+
+  th:nth-child(1),
+  td:nth-child(1) {
+    width: 3.25rem;
+  }
+
+  th:nth-child(3),
+  td:nth-child(3) {
+    width: 6rem;
+  }
+
+  th:nth-child(5),
+  td:nth-child(5),
+  th:nth-child(6),
+  td:nth-child(6) {
+    width: 8rem;
+  }
+}
+
+.object-register__orphan {
+  display: block;
+  color: var(--color-muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.object-register__action {
+  min-height: 1.9rem;
+  padding: 0.25rem 0.65rem;
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    border-color: var(--color-accent);
+    background: color-mix(in srgb, var(--color-accent) 10%, var(--color-bg));
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+}
+
+.object-register__action--danger {
+  color: var(--color-cta);
+
+  &:hover:not(:disabled) {
+    border-color: var(--color-cta);
+    background: color-mix(in srgb, var(--color-cta) 10%, var(--color-bg));
+  }
+}
+
+.object-register__action--secondary {
+  color: var(--color-subtle);
+}
+
+.access-entry-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+  padding: 0.85rem 0.9rem;
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-raised);
+
+  @media (max-width: 760px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.access-entry-form__field {
+  display: grid;
+  gap: 0.35rem;
+
+  label {
+    color: var(--color-subtle);
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  input,
+  textarea {
+    width: 100%;
+    min-width: 0;
+    padding: 0.5rem 0.6rem;
+    border: 1px solid var(--color-line-strong);
+    border-radius: var(--radius-sm);
+    background: var(--color-bg);
+    color: var(--color-text);
+    font: inherit;
+
+    &:focus {
+      border-color: var(--color-accent);
+      outline: none;
+      box-shadow: var(--focus-ring);
+    }
+
+    &[aria-invalid='true'] {
+      border-color: var(--color-cta);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-cta) 18%, transparent);
+    }
+  }
+
+  textarea {
+    resize: vertical;
+  }
+}
+
+.access-entry-form__field--wide {
+  grid-column: span 2;
+
+  @media (max-width: 760px) {
+    grid-column: auto;
+  }
+}
+
+.access-entry-form__actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: flex-end;
+  grid-column: span 2;
+
+  @media (max-width: 760px) {
+    grid-column: auto;
   }
 }

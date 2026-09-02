@@ -204,6 +204,38 @@ Clients must not use this endpoint as the default removal path. First call the
 non-cascade `DELETE`; call this endpoint only after showing the dependency
 summary and collecting an explicit reason.
 
+## Object Access Log Entries
+
+`POST /collection-use-projects/{projectId}/log-entries`
+`PATCH /collection-use-projects/{projectId}/log-entries/{entryId}`
+`DELETE /collection-use-projects/{projectId}/log-entries/{entryId}`
+`GET /collection-use-projects/{projectId}/log-entries?addedBy=&page=&size=`
+
+An entry records **one access to one object**, not the object itself: the same
+`collectionUseObjectId` may carry as many entries as the work required, and each
+prints its own line on the RAIS register. Starting a project seeds one entry per
+project object (quantity 1, dated at the start) so the register opens filled in;
+clients add, edit and delete entries from there.
+
+`POST` body: `collectionUseObjectId`, `numberOfObjects` (>= 1), optional
+`observations`, and optional `addedAt`. Omit `addedAt` for an access being
+registered as it happens (the server stamps the current time); supply it when
+the register is filled in after the fact. Returns `201` with the entry.
+
+`DELETE` returns `204` and also deletes the entry's stored attachments. It
+returns `404 ENTRY_NOT_FOUND` for an unknown entry or one belonging to another
+project, and `409 INVALID_TRANSITION` once the access log is concluded.
+
+Writes are restricted to `IN_PROGRESS` projects for non-staff callers; staff may
+write in any status. A concluded access log (`accessLog.dateConclusion` set)
+rejects every write with `409 INVALID_TRANSITION`.
+
+`GET` is paginated (`size` defaults to `20`, maximum `100`) and ordered by
+`addedAt` then entry id, so the order is stable across pages even though seeded
+entries share one timestamp. Entries are returned alongside the `accessLog`
+envelope; clients that group entries by object must read every page. The RAIS
+document endpoint renders up to 1000 entries.
+
 ## Object Access Log Document
 
 `GET /collection-use-projects/{projectId}/object-access-log/document`

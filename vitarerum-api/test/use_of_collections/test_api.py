@@ -4619,6 +4619,262 @@ async def test_edit_log_entry_unknown_entry_returns_404() -> None:
     assert response.json()["error"] == "ENTRY_NOT_FOUND"
 
 
+async def test_log_entry_records_several_accesses_to_the_same_object() -> None:
+    """One object is handled as many times as the work requires; the register
+    keeps a row per access, not per object."""
+    async with client_with_repos(caller=_STAFF_CALLER) as (
+        client,
+        project_repo,
+        proposal_repo,
+        _,
+    ):
+        await project_repo.add(
+            _project(
+                "project-1",
+                status=UseStatus.IN_PROGRESS,
+                objects=[_collection_use_object()],
+            )
+        )
+        first = await client.post(
+            "/api/v1/collection-use-projects/project-1/log-entries",
+            json={
+                "collectionUseObjectId": "cuo-1",
+                "numberOfObjects": 2,
+                "observations": "measured",
+                "addedAt": "2026-03-04T10:00:00",
+            },
+            headers={"X-Permission-Id": "permission-staff"},
+        )
+        second = await client.post(
+            "/api/v1/collection-use-projects/project-1/log-entries",
+            json={
+                "collectionUseObjectId": "cuo-1",
+                "numberOfObjects": 1,
+                "observations": "photographed",
+                "addedAt": "2026-03-11T09:30:00",
+            },
+            headers={"X-Permission-Id": "permission-staff"},
+        )
+        listing = await client.get(
+            "/api/v1/collection-use-projects/project-1/log-entries",
+            headers={"X-Permission-Id": "permission-staff"},
+        )
+
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert first.json()["id"] != second.json()["id"]
+    body = listing.json()
+    assert body["totalElements"] == 2
+    assert [entry["collectionUseObjectId"] for entry in body["content"]] == [
+        "cuo-1",
+        "cuo-1",
+    ]
+    assert [entry["addedAt"] for entry in body["content"]] == [
+        "2026-03-04T10:00:00",
+        "2026-03-11T09:30:00",
+    ]
+
+
+async def test_add_log_entry_defaults_added_at_to_now() -> None:
+    async with client_with_repos(caller=_STAFF_CALLER) as (
+        client,
+        project_repo,
+        proposal_repo,
+        _,
+    ):
+        await project_repo.add(
+            _project(
+                "project-1",
+                status=UseStatus.IN_PROGRESS,
+                objects=[_collection_use_object()],
+            )
+        )
+        before = datetime.now(UTC)
+        created = await client.post(
+            "/api/v1/collection-use-projects/project-1/log-entries",
+            json={"collectionUseObjectId": "cuo-1", "numberOfObjects": 1},
+            headers={"X-Permission-Id": "permission-staff"},
+        )
+
+    assert created.status_code == 201
+    added_at = datetime.fromisoformat(created.json()["addedAt"])
+    assert added_at >= before.replace(tzinfo=added_at.tzinfo)
+
+
+async def test_delete_log_entry_removes_entry_and_attachments() -> None:
+    storage = InMemoryFileStorage()
+    async with client_with_repos(caller=_STAFF_CALLER, file_storage=storage) as (
+        client,
+        project_repo,
+        proposal_repo,
+        _,
+    ):
+        await project_repo.add(
+            _project(
+                "project-1",
+                status=UseStatus.IN_PROGRESS,
+                objects=[_collection_use_object()],
+            )
+        )
+        created = await client.post(
+            "/api/v1/collection-use-projects/project-1/log-entries",
+            json={"collectionUseObjectId": "cuo-1", "numberOfObjects": 1},
+            headers={"X-Permission-Id": "permission-staff"},
+        )
+        entry_id = created.json()["id"]
+        uploaded = await client.post(
+            f"/api/v1/collection-use-projects/project-1/log-entries/{entry_id}/attachments",
+            files={"file": ("notes.txt", b"field notes", "text/plain")},
+            data={"mediaType": "DOCUMENT", "attachmentDescription": "Field notes"},
+            headers={"X-Permission-Id": "permission-staff"},
+        )
+        file_reference = uploaded.json()["fileReference"]
+
+        deleted = await client.delete(
+            f"/api/v1/collection-use-projects/project-1/log-entries/{entry_id}",
+            headers={"X-Permission-Id": "permission-staff"},
+        )
+        listing = await client.get(
+            "/api/v1/collection-use-projects/project-1/log-entries",
+            headers={"X-Permission-Id": "permission-staff"},
+        )
+
+    assert deleted.status_code == 204
+    assert listing.json()["content"] == []
+    assert file_reference not in storage.files
+
+
+async def test_delete_log_entry_unknown_entry_returns_404() -> None:
+    async with client_with_repos(caller=_STAFF_CALLER) as (
+        client,
+        project_repo,
+        _,
+        _,
+    ):
+        await project_repo.add(_project("project-1", status=UseStatus.IN_PROGRESS))
+
+        deleted = await client.delete(
+            "/api/v1/collection-use-projects/project-1/log-entries/missing",
+            headers={"X-Permission-Id": "permission-staff"},
+        )
+
+    assert deleted.status_code == 404
+    assert deleted.json()["error"] == "ENTRY_NOT_FOUND"
+
+
+async def test_delete_log_entry_returns_404_for_another_project() -> None:
+    async with client_with_repos(caller=_STAFF_CALLER) as (
+        client,
+        project_repo,
+        _,
+        _,
+    ):
+        await project_repo.add(
+            _project(
+                "project-1",
+                status=UseStatus.IN_PROGRESS,
+                objects=[_collection_use_object()],
+            )
+        )
+        await project_repo.add(_project("project-2", status=UseStatus.IN_PROGRESS))
+        created = await client.post(
+            "/api/v1/collection-use-projects/project-1/log-entries",
+            json={"collectionUseObjectId": "cuo-1", "numberOfObjects": 1},
+            headers={"X-Permission-Id": "permission-staff"},
+        )
+
+        deleted = await client.delete(
+            "/api/v1/collection-use-projects/project-2/log-entries/"
+            f"{created.json()['id']}",
+            headers={"X-Permission-Id": "permission-staff"},
+        )
+
+    assert deleted.status_code == 404
+    assert deleted.json()["error"] == "ENTRY_NOT_FOUND"
+
+
+async def test_delete_log_entry_on_concluded_access_log_is_blocked() -> None:
+    async with client_with_repos(caller=_STAFF_CALLER) as (
+        client,
+        project_repo,
+        _,
+        _,
+    ):
+        await project_repo.add(
+            _project(
+                "project-1",
+                status=UseStatus.IN_PROGRESS,
+                objects=[_collection_use_object()],
+            )
+        )
+        created = await client.post(
+            "/api/v1/collection-use-projects/project-1/log-entries",
+            json={"collectionUseObjectId": "cuo-1", "numberOfObjects": 1},
+            headers={"X-Permission-Id": "permission-staff"},
+        )
+        access_log_repo = app.dependency_overrides[get_access_log_repo]()
+        access_log = await access_log_repo.get_by_project_id(
+            CollectionUseProjectId("project-1")
+        )
+        access_log.date_conclusion = datetime(2026, 6, 9, tzinfo=UTC)
+        await access_log_repo.save(access_log)
+
+        deleted = await client.delete(
+            "/api/v1/collection-use-projects/project-1/log-entries/"
+            f"{created.json()['id']}",
+            headers={"X-Permission-Id": "permission-staff"},
+        )
+
+    assert deleted.status_code == 409
+    assert deleted.json()["error"] == "INVALID_TRANSITION"
+
+
+async def test_delete_log_entry_is_blocked_for_researcher_outside_in_progress() -> None:
+    async with client_with_repos(caller=_STAFF_CALLER) as (
+        client,
+        project_repo,
+        proposal_repo,
+        _,
+    ):
+        await project_repo.add(
+            _project(
+                "project-1",
+                requested_by=PermissionId("permission-1"),
+                status=UseStatus.IN_PROGRESS,
+                objects=[_collection_use_object()],
+            )
+        )
+        created = await client.post(
+            "/api/v1/collection-use-projects/project-1/log-entries",
+            json={"collectionUseObjectId": "cuo-1", "numberOfObjects": 1},
+            headers={"X-Permission-Id": "permission-staff"},
+        )
+        entry_id = created.json()["id"]
+
+    async with client_with_repos(caller=_CALLER) as (
+        client,
+        project_repo,
+        proposal_repo,
+        _,
+    ):
+        await project_repo.add(
+            _project(
+                "project-1",
+                requested_by=PermissionId("permission-1"),
+                status=UseStatus.COMPLETED,
+                objects=[_collection_use_object()],
+            )
+        )
+
+        deleted = await client.delete(
+            f"/api/v1/collection-use-projects/project-1/log-entries/{entry_id}",
+            headers={"X-Permission-Id": "permission-1"},
+        )
+
+    assert deleted.status_code == 409
+    assert deleted.json()["error"] == "INVALID_TRANSITION"
+
+
 async def test_log_entry_links_to_requested_object_over_http() -> None:
     async with client_with_repos(caller=_STAFF_CALLER) as (
         client,

@@ -641,6 +641,33 @@ export const SEED_PROJECTS: MutableProjectState[] = [
     proposalId: 'prop-3',
     proposalStatus: 'APPROVED',
     proposalAssignedTo: P['carol'],
+    // Object ids match the seeded log entries' collectionUseObjectId: the access
+    // register is grouped by the project's own objects.
+    objects: [
+      {
+        id: 'INV-ZOO-1892-001',
+        inventoryNumber: 'INV-ZOO-1892-001',
+        displayTitle: 'Atlantic forest field notebook',
+        objectName: 'Field notebook',
+        briefDescriptionSnapshot:
+          'Zoological field notebook used for Atlantic forest specimen records.',
+        collectionId: null,
+        collectionName: null,
+        category: 'Documento',
+        description: 'Field notebook requested for comparative reading.',
+      },
+      {
+        id: 'INV-ZOO-1892-002',
+        inventoryNumber: 'INV-ZOO-1892-002',
+        displayTitle: 'Field sketch set',
+        objectName: 'Sketches',
+        briefDescriptionSnapshot: 'Three field sketches cross-referenced with catalogue records.',
+        collectionId: null,
+        collectionName: null,
+        category: 'Documento',
+        description: 'Sketch set requested alongside the notebook.',
+      },
+    ],
   },
   {
     id: 'proj-4',
@@ -799,6 +826,7 @@ export const SEED_PROJECT_OBJECT_ACCESS_LOGS: Record<string, ObjectAccessLog> = 
     id: 'oal-proj-3',
     referenceNumber: 'OAL-PROJ3',
     projectId: 'proj-3',
+    dateConclusion: null,
     curator: null,
   },
 };

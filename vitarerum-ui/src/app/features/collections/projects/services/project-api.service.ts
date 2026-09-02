@@ -244,6 +244,12 @@ export class ProjectApiService {
     );
   }
 
+  deleteObjectLogEntry(projectId: string, entryId: string): Observable<void> {
+    return this.http.delete<void>(
+      this.url(`/collection-use-projects/${projectId}/log-entries/${entryId}`),
+    );
+  }
+
   getObjectAccessLog(projectId: string): Observable<ObjectAccessLog> {
     return this.http.get<ObjectAccessLog>(
       this.url(`/collection-use-projects/${projectId}/object-access-log`),
