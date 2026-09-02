@@ -510,6 +510,8 @@ async def list_knowledge_items(
         KnowledgeStatus | None, Query(alias="status")
     ] = None,
     kind: KnowledgeKind | None = None,
+    search: Annotated[str | None, Query(alias="q")] = None,
+    # Superseded by ``q``, kept so an older client keeps searching citations.
     inventory_number: Annotated[
         str | None, Query(alias="inventoryNumber")
     ] = None,
@@ -521,7 +523,7 @@ async def list_knowledge_items(
             caller,
             status=knowledge_status,
             kind=kind,
-            inventory_number=inventory_number,
+            search=search or inventory_number,
             page=page,
             size=size,
         )

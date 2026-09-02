@@ -28,7 +28,6 @@ import {
 } from '../../components/knowledge-filters/knowledge-filters.component';
 import { KnowledgeHistoryComponent } from '../../components/knowledge-history/knowledge-history.component';
 import { KnowledgeItemsListComponent } from '../../components/knowledge-items-list/knowledge-items-list.component';
-import { KnowledgeSummaryComponent } from '../../components/knowledge-summary/knowledge-summary.component';
 import {
   ScientificReturnKnowledgeItem,
   ScientificReturnKnowledgeKind,
@@ -85,7 +84,6 @@ const CONFIRMATION_COPY: Record<ConfirmationAction, ConfirmationCopy> = {
     KnowledgeFiltersComponent,
     KnowledgeHistoryComponent,
     KnowledgeItemsListComponent,
-    KnowledgeSummaryComponent,
     LoadingStateComponent,
     PageHeaderComponent,
     PaginationComponent,
@@ -100,7 +98,7 @@ export class ScientificReturnKnowledgeBasePageComponent {
 
   protected readonly status = signal<ScientificReturnKnowledgeStatus | null>(null);
   protected readonly kind = signal<ScientificReturnKnowledgeKind | null>(null);
-  protected readonly inventoryNumber = signal<string | null>(null);
+  protected readonly search = signal<string | null>(null);
   protected readonly page = signal(0);
   protected readonly pageSize = 25;
 
@@ -109,7 +107,7 @@ export class ScientificReturnKnowledgeBasePageComponent {
       permissionId: this.identity.getPermissionId(),
       status: this.status(),
       kind: this.kind(),
-      inventoryNumber: this.inventoryNumber(),
+      q: this.search(),
       page: this.page(),
       size: this.pageSize,
     }),
@@ -120,15 +118,12 @@ export class ScientificReturnKnowledgeBasePageComponent {
     this.knowledgeResource.hasValue() ? this.knowledgeResource.value() : null,
   );
   protected readonly items = computed(() => this.result()?.content ?? []);
-  protected readonly counts = computed(
-    () => this.result()?.counts ?? { active: 0, proposed: 0, retired: 0 },
-  );
   protected readonly loadError = computed<ApiError | null>(() => {
     const error = this.knowledgeResource.error();
     return error ? toApiError(error) : null;
   });
   protected readonly hasFilters = computed(
-    () => this.status() !== null || this.kind() !== null || this.inventoryNumber() !== null,
+    () => this.status() !== null || this.kind() !== null || this.search() !== null,
   );
   protected readonly canManage = computed(() => {
     const group = this.identity.session()?.group;
@@ -161,12 +156,7 @@ export class ScientificReturnKnowledgeBasePageComponent {
   protected applyFilters(change: KnowledgeFilterChange): void {
     this.status.set(change.status);
     this.kind.set(change.kind);
-    this.inventoryNumber.set(change.inventoryNumber);
-    this.page.set(0);
-  }
-
-  protected toggleStatus(status: ScientificReturnKnowledgeStatus): void {
-    this.status.update((current) => (current === status ? null : status));
+    this.search.set(change.search);
     this.page.set(0);
   }
 

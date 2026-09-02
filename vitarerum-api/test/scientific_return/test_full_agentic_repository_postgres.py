@@ -134,7 +134,7 @@ async def test_knowledge_page_is_institutional_filtered_and_stably_ordered(
                 institution_id="institution-1",
                 status=None,
                 kind=KnowledgeKind.INVENTORY_VARIATION_EXAMPLE,
-                inventory_number="MB06-5747",
+                search="MB06-5747",
             ),
             page=0,
             size=25,
@@ -147,6 +147,68 @@ async def test_knowledge_page_is_institutional_filtered_and_stably_ordered(
         assert page.total_elements == 2
         assert page.counts.active == 1
         assert page.counts.retired == 1
+        await session.close()
+
+
+async def test_knowledge_search_reaches_the_encrypted_lesson_content(
+    postgres_engine: AsyncEngine,
+) -> None:
+    async with postgres_engine.connect() as connection:
+        await connection.execute(
+            text(
+                "CREATE TEMP TABLE sr_knowledge_items "
+                "(LIKE public.sr_knowledge_items INCLUDING ALL)"
+            )
+        )
+        session = AsyncSession(bind=connection, expire_on_commit=False)
+        repository = SqlAlchemyFullAgenticRepository(
+            session, FieldEncryptor(bytes(32))
+        )
+        now = datetime.now(tz=UTC)
+        await repository.add_knowledge(
+            ScientificReturnKnowledgeItem(
+                id=KnowledgeItemId("knowledge-example"),
+                institution_id="institution-1",
+                kind=KnowledgeKind.INVENTORY_VARIATION_EXAMPLE,
+                content="Zeros internos podem ser omitidos.",
+                status=KnowledgeStatus.ACTIVE,
+                registered_number="MUHNAC/MB06-005747",
+                observed_form="MB06-5747",
+                created_by=PermissionId("permission-1"),
+                created_at=now,
+                validated_by=PermissionId("permission-1"),
+            )
+        )
+        await repository.add_knowledge(
+            ScientificReturnKnowledgeItem(
+                id=KnowledgeItemId("knowledge-lesson"),
+                institution_id="institution-1",
+                kind=KnowledgeKind.CURATORIAL_LESSON,
+                content="Publicações de herbário citam o coletor.",
+                status=KnowledgeStatus.PROPOSED,
+                proposed_by_model="model-x",
+                created_by=PermissionId("permission-1"),
+                created_at=now + timedelta(minutes=1),
+            )
+        )
+
+        page = await repository.page_knowledge(
+            KnowledgeFilters(
+                institution_id="institution-1",
+                status=None,
+                kind=None,
+                search="herbario",
+            ),
+            page=0,
+            size=25,
+        )
+
+        assert [item.id for item in page.content] == [
+            KnowledgeItemId("knowledge-lesson")
+        ]
+        assert page.total_elements == 1
+        assert page.counts.active == 1
+        assert page.counts.proposed == 1
         await session.close()
 
 

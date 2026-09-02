@@ -3,14 +3,7 @@
     eyebrow="Agentic workflow"
     title="Knowledge Base"
     description="Human-validated inventory examples and curatorial lessons used by autonomous investigations in your institution."
-  >
-    @if (canManage()) {
-      <button type="button" class="primary" (click)="openCreate()">
-        <span class="pi pi-plus" aria-hidden="true"></span>
-        Add knowledge
-      </button>
-    }
-  </app-page-header>
+  />
 
   @if (feedback(); as message) {
     <app-feedback-message
@@ -25,17 +18,19 @@
     <app-error-message [apiError]="error" />
   }
 
-  <app-knowledge-summary
-    [counts]="counts()"
-    [selectedStatus]="status()"
-    (statusSelected)="toggleStatus($event)"
-  />
   <app-knowledge-filters
     [status]="status()"
     [kind]="kind()"
-    [inventoryNumber]="inventoryNumber()"
+    [search]="search()"
     (changed)="applyFilters($event)"
-  />
+  >
+    @if (canManage()) {
+      <button type="button" class="primary" (click)="openCreate()">
+        <span class="pi pi-plus" aria-hidden="true"></span>
+        Add knowledge
+      </button>
+    }
+  </app-knowledge-filters>
 
   @if (knowledgeResource.isLoading() && !result()) {
     <app-loading-state label="Loading institutional knowledge" />
@@ -48,7 +43,7 @@
       "
       [message]="
         hasFilters()
-          ? 'Clear or change the filters to broaden the result.'
+          ? 'Clear or change the filters to broaden the result. The search covers inventory citations and the text of each item, including the lessons the agent proposes.'
           : 'Create the first human-validated inventory example used by scientific-return investigations.'
       "
     >
@@ -56,7 +51,7 @@
         <button
           type="button"
           class="secondary"
-          (click)="applyFilters({ status: null, kind: null, inventoryNumber: null })"
+          (click)="applyFilters({ status: null, kind: null, search: null })"
         >
           Clear filters
         </button>

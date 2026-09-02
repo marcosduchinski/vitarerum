@@ -189,13 +189,13 @@ describe('ScientificReturnApiService', () => {
       .listKnowledgeItems({
         status: 'ACTIVE',
         kind: 'INVENTORY_VARIATION_EXAMPLE',
-        inventoryNumber: 'MB06-5747',
+        q: 'MB06-5747',
         page: 1,
         size: 25,
       })
       .subscribe();
     const list = http.expectOne(
-      'https://api.example.test/api/v1/scientific-return/knowledge-items?status=ACTIVE&kind=INVENTORY_VARIATION_EXAMPLE&inventoryNumber=MB06-5747&page=1&size=25',
+      'https://api.example.test/api/v1/scientific-return/knowledge-items?status=ACTIVE&kind=INVENTORY_VARIATION_EXAMPLE&q=MB06-5747&page=1&size=25',
     );
     expect(list.request.method).toBe('GET');
     list.flush({ content: [], page: 1, size: 25, totalElements: 0, totalPages: 0, counts: {} });

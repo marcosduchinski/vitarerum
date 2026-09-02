@@ -28,7 +28,9 @@ def test_openapi_excludes_bench_and_keeps_operational_scientific_return() -> Non
 
     list_operation = openapi_paths["/api/v1/scientific-return/knowledge-items"]["get"]
     parameter_names = {parameter["name"] for parameter in list_operation["parameters"]}
-    assert {"status", "kind", "inventoryNumber", "page", "size"} <= parameter_names
+    assert {"status", "kind", "q", "page", "size"} <= parameter_names
+    # The superseded citation-only parameter stays for older clients.
+    assert "inventoryNumber" in parameter_names
 
 
 def test_openapi_removes_shadow_generation_but_keeps_reader_provenance() -> None:

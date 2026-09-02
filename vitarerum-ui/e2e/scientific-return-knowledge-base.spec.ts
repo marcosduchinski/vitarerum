@@ -176,8 +176,12 @@ test('discards an agent proposal instead of validating it', async ({ page }) => 
     retiredAt: null,
   };
 
+  const listRequests: string[] = [];
   await page.route('**/scientific-return/knowledge-items**', async (route) => {
     const request = route.request();
+    if (request.method() === 'GET') {
+      listRequests.push(request.url());
+    }
     if (request.method() === 'DELETE') {
       proposal = {
         ...proposal,
@@ -206,7 +210,16 @@ test('discards an agent proposal instead of validating it', async ({ page }) => 
   });
 
   await page.goto('/p/ai/knowledge-base');
-  await expect(page.getByText('Awaiting validation').first()).toBeVisible();
+  await expect(page.locator('.knowledge-item .status')).toHaveText('Awaiting validation');
+  await expect(page.getByText('Human review required')).toBeVisible();
+
+  // The lesson carries no inventory citation, so only a content search reaches it.
+  await page.getByLabel('Search knowledge').fill('institutional prefix');
+  await page.getByRole('button', { name: 'Apply filters' }).click();
+  await expect(page.getByRole('button', { name: 'Remove search filter' })).toBeVisible();
+  expect(new URL(listRequests[listRequests.length - 1]).searchParams.get('q')).toBe(
+    'institutional prefix',
+  );
   await expect(page.getByText('Human review required')).toBeVisible();
 
   await page.getByRole('button', { name: 'Discard proposal' }).click();

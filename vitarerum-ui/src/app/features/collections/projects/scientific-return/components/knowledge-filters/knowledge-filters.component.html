@@ -1,18 +1,18 @@
 <form
   class="knowledge-filters"
   aria-label="Knowledge Base filters"
-  (submit)="$event.preventDefault(); apply(statusSelect.value, kindSelect.value, inventory.value)"
+  (submit)="$event.preventDefault(); apply(statusSelect.value, kindSelect.value, term.value)"
 >
   <div class="filter-controls">
     <label class="search-field">
-      <span class="field-label">Inventory citation</span>
+      <span class="field-label">Search knowledge</span>
       <span class="search-control">
         <span class="pi pi-search" aria-hidden="true"></span>
         <input
-          #inventory
+          #term
           type="search"
-          [value]="inventoryNumber() ?? ''"
-          placeholder="Search an exact inventory number"
+          [value]="search() ?? ''"
+          placeholder="An inventory number, or words of the lesson"
         />
       </span>
     </label>
@@ -33,19 +33,27 @@
         <option value="CURATORIAL_LESSON">Curatorial lesson</option>
       </select>
     </label>
-    <button type="submit" class="apply-filter">
-      <span class="pi pi-filter" aria-hidden="true"></span> Apply filters
-    </button>
+    <div class="filter-actions">
+      <button type="submit" class="apply-filter">
+        <span class="pi pi-filter" aria-hidden="true"></span> Apply filters
+      </button>
+      <ng-content />
+    </div>
   </div>
+
+  <p class="filters-hint">
+    An inventory number matches the registered or observed citation whole; any other text is
+    searched inside the item content, which is how curatorial lessons are found.
+  </p>
 
   @if (hasFilters()) {
     <div class="active-filters" aria-label="Active filters">
       <span class="active-filters__label">Filtering by</span>
-      @if (inventoryNumber()) {
-        <button type="button" class="filter-chip" (click)="clearInventoryNumber()">
-          Inventory: {{ inventoryNumber() }}
+      @if (search()) {
+        <button type="button" class="filter-chip" (click)="clearSearch()">
+          Search: {{ search() }}
           <span class="pi pi-times" aria-hidden="true"></span>
-          <span class="sr-only">Remove inventory filter</span>
+          <span class="sr-only">Remove search filter</span>
         </button>
       }
       @if (status()) {

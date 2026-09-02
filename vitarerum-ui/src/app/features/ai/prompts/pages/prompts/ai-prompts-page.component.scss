@@ -89,7 +89,7 @@
 
 .prompts-table {
   width: 100%;
-  min-width: 64rem;
+  min-width: 73.5rem;
   border-collapse: collapse;
   table-layout: fixed;
   font-size: 0.875rem;
@@ -118,7 +118,16 @@
 }
 
 .prompts-table td {
-  overflow-wrap: normal;
+  overflow-wrap: anywhere;
+}
+
+.prompts-table th:nth-child(3),
+.prompts-table td:nth-child(3),
+.prompts-table th:nth-child(5),
+.prompts-table td:nth-child(5),
+.prompts-table th:nth-child(7),
+.prompts-table td:nth-child(7) {
+  white-space: nowrap;
 }
 
 .prompts-table tbody tr:last-child td {
@@ -232,6 +241,7 @@
   font-size: 0.6875rem;
   font-weight: 800;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .status-pill--published {

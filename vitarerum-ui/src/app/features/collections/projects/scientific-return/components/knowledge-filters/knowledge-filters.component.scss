@@ -9,7 +9,7 @@
 
 .filter-controls {
   display: grid;
-  grid-template-columns: minmax(15rem, 2fr) repeat(2, minmax(10rem, 1fr)) auto;
+  grid-template-columns: minmax(12rem, 2fr) repeat(2, minmax(9rem, 1fr)) max-content;
   gap: 0.75rem;
   align-items: end;
   padding: 0.85rem;
@@ -32,6 +32,14 @@ label {
   color: var(--color-subtle);
   font-size: var(--text-xs);
   font-weight: 700;
+}
+
+.filters-hint {
+  margin: 0;
+  padding: 0 0.85rem 0.7rem;
+  color: var(--color-subtle);
+  font-size: var(--text-xs);
+  line-height: 1.35;
 }
 
 input,
@@ -74,6 +82,16 @@ select:focus {
 
 .search-control input {
   padding-left: 2.15rem;
+}
+
+.filter-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: end;
+}
+
+.filter-actions > * {
+  white-space: nowrap;
 }
 
 .apply-filter {
@@ -171,6 +189,11 @@ select:focus {
 @media (max-width: 560px) {
   .filter-controls {
     grid-template-columns: 1fr;
+  }
+
+  .filter-actions > * {
+    flex: 1;
+    justify-content: center;
   }
 
   .search-field {

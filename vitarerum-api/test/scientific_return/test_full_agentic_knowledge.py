@@ -26,6 +26,7 @@ from app.scientific_return.domain.full_agentic_models import (
     KnowledgeItemId,
     ScientificReturnKnowledgeItem,
 )
+from app.scientific_return.domain.models import CandidatePublicationId
 from app.shared.kernel import PermissionId
 
 
@@ -81,13 +82,8 @@ class MemoryRepository:
             values = [item for item in values if item.status is filters.status]
         if filters.kind is not None:
             values = [item for item in values if item.kind is filters.kind]
-        if filters.inventory_number is not None:
-            values = [
-                item
-                for item in values
-                if filters.inventory_number
-                in {item.registered_number, item.observed_form}
-            ]
+        if filters.search is not None:
+            values = [item for item in values if item.matches_search(filters.search)]
         values.sort(key=lambda item: (item.created_at, str(item.id)), reverse=True)
         counts = KnowledgeCounts(
             active=sum(
@@ -369,7 +365,7 @@ async def test_knowledge_page_is_scoped_to_the_callers_institution() -> None:
         curator(),
         status=None,
         kind=None,
-        inventory_number=None,
+        search=None,
         page=0,
         size=25,
     )
@@ -377,6 +373,104 @@ async def test_knowledge_page_is_scoped_to_the_callers_institution() -> None:
     assert page.content == (own,)
     assert page.total_elements == 1
     assert page.counts.active == 1
+
+
+async def _searchable_corpus(repository: MemoryRepository) -> None:
+    await CreateCuratorialKnowledge(repository).execute(  # type: ignore[arg-type]
+        CreateKnowledgeInput(
+            caller=curator(),
+            kind=KnowledgeKind.INVENTORY_VARIATION_EXAMPLE,
+            content="Zeros internos podem ser omitidos na citação.",
+            registered_number="MUHNAC/MB06-005747",
+            observed_form="MB06-5747",
+        )
+    )
+    lesson = ScientificReturnKnowledgeItem(
+        id=KnowledgeItemId("knowledge-lesson"),
+        kind=KnowledgeKind.CURATORIAL_LESSON,
+        content="Publicações de herbário citam o coletor, não o número de registo.",
+        status=KnowledgeStatus.PROPOSED,
+        institution_id="institution-1",
+        source_candidate_id=CandidatePublicationId("candidate-1"),
+        proposed_by_model="model-x",
+        created_by=PermissionId("permission-1"),
+        created_at=datetime.now(tz=UTC),
+    )
+    await repository.add_knowledge(lesson)
+
+
+@pytest.mark.asyncio
+async def test_search_finds_an_agent_lesson_by_its_own_words() -> None:
+    repository = MemoryRepository()
+    await _searchable_corpus(repository)
+
+    page = await ListCuratorialKnowledge(repository).execute(  # type: ignore[arg-type]
+        curator(),
+        status=None,
+        kind=None,
+        search="herbario",
+        page=0,
+        size=25,
+    )
+
+    assert [item.id for item in page.content] == [KnowledgeItemId("knowledge-lesson")]
+    assert page.total_elements == 1
+    # The proposal is pending, so the whole institution stays visible in counts.
+    assert page.counts.proposed == 1
+
+
+@pytest.mark.asyncio
+async def test_search_still_matches_an_inventory_citation() -> None:
+    repository = MemoryRepository()
+    await _searchable_corpus(repository)
+
+    page = await ListCuratorialKnowledge(repository).execute(  # type: ignore[arg-type]
+        curator(),
+        status=None,
+        kind=None,
+        search="mb06-5747",
+        page=0,
+        size=25,
+    )
+
+    assert [item.kind for item in page.content] == [
+        KnowledgeKind.INVENTORY_VARIATION_EXAMPLE
+    ]
+
+
+@pytest.mark.asyncio
+async def test_search_ignores_a_citation_fragment_that_matches_nothing() -> None:
+    repository = MemoryRepository()
+    await _searchable_corpus(repository)
+
+    page = await ListCuratorialKnowledge(repository).execute(  # type: ignore[arg-type]
+        curator(),
+        status=None,
+        kind=None,
+        search="BOT-0001",
+        page=0,
+        size=25,
+    )
+
+    assert page.content == ()
+    assert page.total_elements == 0
+
+
+@pytest.mark.asyncio
+async def test_search_matches_lesson_content_ignoring_case_and_accents() -> None:
+    repository = MemoryRepository()
+    await _searchable_corpus(repository)
+
+    page = await ListCuratorialKnowledge(repository).execute(  # type: ignore[arg-type]
+        curator(),
+        status=None,
+        kind=None,
+        search="  NÚMERO   DE Registo ",
+        page=0,
+        size=25,
+    )
+
+    assert [item.id for item in page.content] == [KnowledgeItemId("knowledge-lesson")]
 
 
 @pytest.mark.asyncio
@@ -389,7 +483,7 @@ async def test_institutional_listing_requires_an_active_institution() -> None:
             caller,
             status=None,
             kind=None,
-            inventory_number=None,
+            search=None,
             page=0,
             size=25,
         )

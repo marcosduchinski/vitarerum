@@ -256,6 +256,33 @@ describe('AiPromptsPageComponent', () => {
     ).not.toBeNull();
   });
 
+  it('contains long table values without allowing them to overlap adjacent columns', async () => {
+    paramMap.next(convertToParamMap({}));
+    service.versionsByTemplate[TEMPLATE.id] = [
+      {
+        ...VERSION,
+        versionLabel: 'institutionalnarrativeversionwithanuninterruptedidentifier',
+        publishedBy: 'publisheridentifierwithoutanynaturalbreakpointswhatsoever',
+      },
+    ];
+
+    fixture = TestBed.createComponent(AiPromptsPageComponent);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const root = fixture.nativeElement as HTMLElement;
+    const table = root.querySelector<HTMLTableElement>('.prompts-table');
+    const cells = root.querySelectorAll<HTMLTableCellElement>('tbody tr:first-child td');
+    if (!table || cells.length !== 7) throw new Error('Prompt table row not found');
+
+    expect(getComputedStyle(table).minWidth).toBe('73.5rem');
+    expect(getComputedStyle(cells[3]).overflowWrap).toBe('anywhere');
+    expect(getComputedStyle(cells[5]).overflowWrap).toBe('anywhere');
+    expect(getComputedStyle(cells[2]).whiteSpace).toBe('nowrap');
+    expect(getComputedStyle(cells[4]).whiteSpace).toBe('nowrap');
+    expect(getComputedStyle(cells[6]).whiteSpace).toBe('nowrap');
+  });
+
   it('navigates to prompt detail from the row actions menu', async () => {
     paramMap.next(convertToParamMap({}));
 

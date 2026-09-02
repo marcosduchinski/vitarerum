@@ -91,7 +91,7 @@ class ListCuratorialKnowledge:
         *,
         status: KnowledgeStatus | None,
         kind: KnowledgeKind | None,
-        inventory_number: str | None,
+        search: str | None,
         page: int,
         size: int,
     ) -> KnowledgePage:
@@ -101,7 +101,7 @@ class ListCuratorialKnowledge:
                 institution_id=_institution_id(caller),
                 status=status,
                 kind=kind,
-                inventory_number=(inventory_number or "").strip() or None,
+                search=(search or "").strip() or None,
             ),
             page,
             size,

@@ -8,7 +8,7 @@ import {
 export interface KnowledgeFilterChange {
   readonly status: ScientificReturnKnowledgeStatus | null;
   readonly kind: ScientificReturnKnowledgeKind | null;
-  readonly inventoryNumber: string | null;
+  readonly search: string | null;
 }
 
 @Component({
@@ -21,17 +21,17 @@ export interface KnowledgeFilterChange {
 export class KnowledgeFiltersComponent {
   readonly status = input<ScientificReturnKnowledgeStatus | null>(null);
   readonly kind = input<ScientificReturnKnowledgeKind | null>(null);
-  readonly inventoryNumber = input<string | null>(null);
+  readonly search = input<string | null>(null);
   readonly changed = output<KnowledgeFilterChange>();
   protected readonly hasFilters = computed(
-    () => this.status() !== null || this.kind() !== null || this.inventoryNumber() !== null,
+    () => this.status() !== null || this.kind() !== null || this.search() !== null,
   );
 
-  protected apply(status: string, kind: string, inventoryNumber: string): void {
+  protected apply(status: string, kind: string, search: string): void {
     this.changed.emit({
       status: (status || null) as ScientificReturnKnowledgeStatus | null,
       kind: (kind || null) as ScientificReturnKnowledgeKind | null,
-      inventoryNumber: inventoryNumber.trim() || null,
+      search: search.trim() || null,
     });
   }
 
@@ -43,12 +43,12 @@ export class KnowledgeFiltersComponent {
     this.emitCurrent({ kind: null });
   }
 
-  protected clearInventoryNumber(): void {
-    this.emitCurrent({ inventoryNumber: null });
+  protected clearSearch(): void {
+    this.emitCurrent({ search: null });
   }
 
   protected clearAll(): void {
-    this.changed.emit({ status: null, kind: null, inventoryNumber: null });
+    this.changed.emit({ status: null, kind: null, search: null });
   }
 
   protected statusLabel(): string {
@@ -65,7 +65,7 @@ export class KnowledgeFiltersComponent {
     this.changed.emit({
       status: this.status(),
       kind: this.kind(),
-      inventoryNumber: this.inventoryNumber(),
+      search: this.search(),
       ...overrides,
     });
   }

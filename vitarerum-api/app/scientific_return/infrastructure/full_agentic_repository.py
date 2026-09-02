@@ -54,6 +54,9 @@ _REGISTERED_NUMBER = "scientific_return.knowledge.registered_number"
 _REGISTERED_HASH = "scientific_return.knowledge.registered_number_hash"
 _OBSERVED_FORM = "scientific_return.knowledge.observed_form"
 _OBSERVED_HASH = "scientific_return.knowledge.observed_form_hash"
+# A free-text search reads the encrypted content, so it scans and decrypts
+# instead of filtering in SQL. The cap keeps one institution's page bounded.
+_KNOWLEDGE_SEARCH_SCAN_LIMIT = 2000
 _TRAJECTORY_PAYLOAD = "scientific_return.full_agentic.trajectory"
 _TOOL_INVOCATION = "scientific_return.full_agentic.tool.invocation"
 _TOOL_RESULT = "scientific_return.full_agentic.tool.result"
@@ -255,43 +258,56 @@ class SqlAlchemyFullAgenticRepository:
             conditions.append(ScientificReturnKnowledgeRecord.status == filters.status)
         if filters.kind is not None:
             conditions.append(ScientificReturnKnowledgeRecord.kind == filters.kind)
-        if filters.inventory_number is not None:
-            inventory_hash = self._encryptor.lookup_required_hash(
-                filters.inventory_number, _REGISTERED_HASH
-            )
-            observed_hash = self._encryptor.lookup_required_hash(
-                filters.inventory_number, _OBSERVED_HASH
-            )
-            conditions.append(
-                or_(
-                    ScientificReturnKnowledgeRecord.registered_number_hash
-                    == inventory_hash,
-                    ScientificReturnKnowledgeRecord.observed_form_hash
-                    == observed_hash,
-                )
-            )
 
-        total = int(
-            (
-                await self._session.execute(
-                    select(func.count())
-                    .select_from(ScientificReturnKnowledgeRecord)
-                    .where(*conditions)
-                )
-            ).scalar_one()
+        ordering = (
+            ScientificReturnKnowledgeRecord.created_at.desc(),
+            ScientificReturnKnowledgeRecord.id.desc(),
         )
-        records = (
-            await self._session.execute(
-                select(ScientificReturnKnowledgeRecord)
-                .where(*conditions)
-                .order_by(
-                    ScientificReturnKnowledgeRecord.created_at.desc(),
-                    ScientificReturnKnowledgeRecord.id.desc(),
-                )
-                .offset(page * size)
-                .limit(size)
+        if filters.search is None:
+            total = int(
+                (
+                    await self._session.execute(
+                        select(func.count())
+                        .select_from(ScientificReturnKnowledgeRecord)
+                        .where(*conditions)
+                    )
+                ).scalar_one()
             )
-        ).scalars()
+            records = (
+                await self._session.execute(
+                    select(ScientificReturnKnowledgeRecord)
+                    .where(*conditions)
+                    .order_by(*ordering)
+                    .offset(page * size)
+                    .limit(size)
+                )
+            ).scalars()
+            content = tuple(
+                _knowledge_to_domain(record, self._encryptor) for record in records
+            )
+        else:
+            # Content is sealed with a random nonce, so no SQL predicate reaches
+            # it. Matching happens after decryption, over a capped scan, so that
+            # a curatorial lesson is found by its own words and not only by an
+            # inventory citation it never carries.
+            scanned = (
+                await self._session.execute(
+                    select(ScientificReturnKnowledgeRecord)
+                    .where(*conditions)
+                    .order_by(*ordering)
+                    .limit(_KNOWLEDGE_SEARCH_SCAN_LIMIT)
+                )
+            ).scalars()
+            matches = [
+                item
+                for item in (
+                    _knowledge_to_domain(record, self._encryptor)
+                    for record in scanned
+                )
+                if item.matches_search(filters.search)
+            ]
+            total = len(matches)
+            content = tuple(matches[page * size : page * size + size])
 
         count_rows = await self._session.execute(
             select(
@@ -306,9 +322,7 @@ class SqlAlchemyFullAgenticRepository:
         )
         counts_by_status = {status: int(count) for status, count in count_rows}
         return KnowledgePage(
-            content=tuple(
-                _knowledge_to_domain(record, self._encryptor) for record in records
-            ),
+            content=content,
             page=page,
             size=size,
             total_elements=total,

@@ -132,10 +132,9 @@ describe('ScientificReturnKnowledgeBasePageComponent', () => {
     fixture.detectChanges();
   });
 
-  it('shows institutional counts, audit metadata, and management actions', () => {
+  it('shows the catalogue, audit metadata, and management actions', () => {
     const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
     expect(text).toContain('Knowledge Base');
-    expect(text).toContain('Available to investigations');
     expect(text).toContain('MUHNAC/MB06-005747');
     expect(text).toContain('Curator One');
     expect(
@@ -145,29 +144,10 @@ describe('ScientificReturnKnowledgeBasePageComponent', () => {
     ).not.toBeNull();
   });
 
-  it('uses the summary counts as toggleable status filters', async () => {
-    const activeSummary = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
-      '[data-status="ACTIVE"]',
-    )!;
-
-    activeSummary.click();
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    expect(api.queries.at(-1)).toMatchObject({ status: 'ACTIVE', page: 0 });
-    expect(activeSummary.getAttribute('aria-pressed')).toBe('true');
-    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Filtering by');
-
-    activeSummary.click();
-    await fixture.whenStable();
-
-    expect(api.queries.at(-1)).toMatchObject({ status: null, page: 0 });
-  });
-
   it('opens the inventory editor in the wide structured layout', () => {
     const root = fixture.nativeElement as HTMLElement;
 
-    root.querySelector<HTMLButtonElement>('app-page-header button.primary')!.click();
+    root.querySelector<HTMLButtonElement>('.filter-actions button.primary')!.click();
     fixture.detectChanges();
 
     expect(root.querySelector('.confirm-modal__dialog--wide')).not.toBeNull();
@@ -194,11 +174,11 @@ describe('ScientificReturnKnowledgeBasePageComponent', () => {
     expect(root.textContent).not.toContain('Discard proposal');
   });
 
-  it('sends exact inventory and status filters to the API', async () => {
+  it('sends the free-text search and status filters to the API', async () => {
     const root = fixture.nativeElement as HTMLElement;
-    const inventory = root.querySelector<HTMLInputElement>('input[type="search"]')!;
+    const term = root.querySelector<HTMLInputElement>('input[type="search"]')!;
     const selects = root.querySelectorAll<HTMLSelectElement>('select');
-    inventory.value = 'MB06-5747';
+    term.value = 'MB06-5747';
     selects[0].value = 'ACTIVE';
     root
       .querySelector<HTMLFormElement>('.knowledge-filters')!
@@ -207,8 +187,22 @@ describe('ScientificReturnKnowledgeBasePageComponent', () => {
 
     expect(api.queries.at(-1)).toMatchObject({
       status: 'ACTIVE',
-      inventoryNumber: 'MB06-5747',
+      q: 'MB06-5747',
       page: 0,
     });
+  });
+
+  it('searches words of a lesson that carries no inventory citation', async () => {
+    const root = fixture.nativeElement as HTMLElement;
+    const term = root.querySelector<HTMLInputElement>('input[type="search"]')!;
+    term.value = 'institutional prefix';
+    root
+      .querySelector<HTMLFormElement>('.knowledge-filters')!
+      .dispatchEvent(new SubmitEvent('submit', { bubbles: true }));
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(api.queries.at(-1)).toMatchObject({ q: 'institutional prefix', page: 0 });
+    expect(root.textContent).toContain('Search: institutional prefix');
   });
 });

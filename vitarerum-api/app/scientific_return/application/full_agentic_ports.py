@@ -27,7 +27,8 @@ class KnowledgeFilters:
     institution_id: str
     status: KnowledgeStatus | None = None
     kind: KnowledgeKind | None = None
-    inventory_number: str | None = None
+    # Free text: an inventory citation, or any words of the lesson content.
+    search: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

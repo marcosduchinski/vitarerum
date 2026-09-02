@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+import unicodedata
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from typing import NewType
@@ -91,6 +93,18 @@ class GroundingRejection:
     excerpt: str
 
 
+_SEARCH_WHITESPACE = re.compile(r"\s+")
+
+
+def normalize_for_search(value: str) -> str:
+    """Folds case, accents and whitespace so curators type what they remember."""
+    decomposed = unicodedata.normalize("NFKD", value)
+    without_accents = "".join(
+        char for char in decomposed if not unicodedata.combining(char)
+    )
+    return _SEARCH_WHITESPACE.sub(" ", without_accents).strip().casefold()
+
+
 @dataclass(slots=True)
 class ScientificReturnKnowledgeItem:
     """Curator-owned, immutable knowledge consumed as an LLM example."""
@@ -155,6 +169,24 @@ class ScientificReturnKnowledgeItem:
         self.status = KnowledgeStatus.RETIRED
         self.retired_by = actor
         self.retired_at = occurred_at
+
+    def matches_search(self, term: str) -> bool:
+        """Inventory citations match whole; the lesson text matches by substring.
+
+        A curatorial lesson carries no inventory citation at all, so matching
+        only the citation columns would hide every lesson the agent proposes
+        from any search a curator types.
+        """
+        normalized = normalize_for_search(term)
+        if not normalized:
+            return True
+        citations = (self.registered_number, self.observed_form)
+        if any(
+            citation and normalize_for_search(citation) == normalized
+            for citation in citations
+        ):
+            return True
+        return normalized in normalize_for_search(self.content)
 
     def as_prompt_example(self) -> str:
         if self.kind is KnowledgeKind.INVENTORY_VARIATION_EXAMPLE:

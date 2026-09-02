@@ -476,7 +476,8 @@ export interface ScientificReturnKnowledgePage {
 export interface ScientificReturnKnowledgeQuery {
   readonly status: ScientificReturnKnowledgeStatus | null;
   readonly kind: ScientificReturnKnowledgeKind | null;
-  readonly inventoryNumber: string | null;
+  /** Free text: an inventory citation, or any words of the item content. */
+  readonly q: string | null;
   readonly page: number;
   readonly size: number;
 }
