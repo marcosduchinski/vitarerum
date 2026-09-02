@@ -54,48 +54,6 @@
         </label>
       </div>
 
-      @if (canManage() && (selectedCount() > 0 || bulkFeedback())) {
-        <div class="bulk-bar" aria-label="Bulk watcher configuration">
-          <strong>{{ selectedCount() }} selected</strong>
-          <button
-            type="button"
-            class="action-btn"
-            [disabled]="!originProjectId() || selectedCount() === 0 || bulkBusy()"
-            (click)="replicateConfiguration()"
-          >
-            Replicate configuration
-          </button>
-          <button
-            type="button"
-            class="action-btn action-btn--primary"
-            [disabled]="selectedCount() === 0 || bulkBusy()"
-            (click)="applySelected()"
-          >
-            @if (bulkBusy()) {
-              <span class="pi pi-spin pi-spinner" aria-hidden="true"></span>
-              Applying…
-            } @else {
-              Apply selected
-            }
-          </button>
-          <button
-            type="button"
-            class="action-btn"
-            [disabled]="bulkBusy()"
-            (click)="clearSelection()"
-          >
-            Clear
-          </button>
-          @if (bulkFeedback()) {
-            <span aria-live="polite">{{ bulkFeedback() }}</span>
-          } @else if (selectedCount() >= maxBulkSelection) {
-            <span aria-live="polite">
-              Selection limit reached ({{ maxBulkSelection }} projects).
-            </span>
-          }
-        </div>
-      }
-
       @if (!rows().length) {
         <app-empty-state
           title="No watcher projects"
@@ -105,7 +63,6 @@
         <div class="watchers-table-shell">
           <table class="watchers-table" aria-label="Scientific return watchers">
             <colgroup>
-              <col class="watchers-table__col-select" />
               <col class="watchers-table__col-project" />
               <col class="watchers-table__col-researcher" />
               <col class="watchers-table__col-start" />
@@ -116,7 +73,6 @@
             </colgroup>
             <thead>
               <tr>
-                <th scope="col"><span class="visually-hidden">Select</span></th>
                 <th scope="col">Project</th>
                 <th scope="col">Researcher</th>
                 <th scope="col">Start date</th>
@@ -130,39 +86,12 @@
               @for (row of rows(); track row.project.id) {
                 <tr [class.row--disabled]="!row.state.watch && !row.state.eligible">
                   <td>
-                    <input
-                      type="checkbox"
-                      [checked]="row.state.selected"
-                      [disabled]="
-                        !canSelect(row.state) ||
-                        bulkBusy() ||
-                        (!row.state.selected && selectedCount() >= maxBulkSelection)
-                      "
-                      [attr.title]="
-                        !row.state.selected && selectedCount() >= maxBulkSelection
-                          ? 'A maximum of ' + maxBulkSelection + ' projects can be selected.'
-                          : null
-                      "
-                      [attr.aria-label]="'Select ' + row.project.referenceNumber"
-                      (change)="onSelectionInput(row.project.id, $event)"
-                    />
-                  </td>
-                  <td>
                     <div class="watchers-table__project">
                       <span class="watchers-table__ref">{{ row.project.referenceNumber }}</span>
                       <a class="watchers-table__title" [routerLink]="['..', row.project.id]">
                         {{ row.project.title }}
                       </a>
                     </div>
-                    <button
-                      type="button"
-                      class="origin-button"
-                      [class.origin-button--active]="originProjectId() === row.project.id"
-                      (click)="setOrigin(row.project.id)"
-                      [disabled]="!canManage() || (!row.state.watch && !row.state.eligible)"
-                    >
-                      Use as source
-                    </button>
                   </td>
                   <td>
                     <div class="watchers-table__person">
@@ -261,7 +190,7 @@
                 </tr>
                 @if (row.state.error || row.state.feedback) {
                   <tr class="message-row">
-                    <td colspan="8" [class.message-row--error]="row.state.error" aria-live="polite">
+                    <td colspan="7" [class.message-row--error]="row.state.error" aria-live="polite">
                       {{ row.state.error ?? row.state.feedback }}
                     </td>
                   </tr>

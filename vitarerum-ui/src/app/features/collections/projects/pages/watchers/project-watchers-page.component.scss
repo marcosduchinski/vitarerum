@@ -48,10 +48,7 @@
 }
 .watchers-table {
   @extend .proposals-table;
-  min-width: 82rem;
-}
-.watchers-table__col-select {
-  width: 3rem;
+  min-width: 79rem;
 }
 .watchers-table__col-project {
   width: 17rem;

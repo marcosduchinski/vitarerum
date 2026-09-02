@@ -16,146 +16,17 @@
     </div>
   </app-page-header>
 
-  @if (metrics(); as metrics) {
-    <section class="impact-strip" aria-label="Scientific return metrics">
-      <div class="impact-card" data-tone="monitoring">
-        <span class="impact-card__icon pi pi-eye" aria-hidden="true"></span>
-        <div>
-          <span>Active watches</span>
-          <strong>{{ metrics.activeWatches }}</strong>
-          <small>Projects under continued monitoring</small>
-        </div>
-      </div>
-      <div class="impact-card" data-tone="attention">
-        <span class="impact-card__icon pi pi-inbox" aria-hidden="true"></span>
-        <div>
-          <span>Awaiting review</span>
-          <strong>{{ metrics.pendingCandidates }}</strong>
-          <small>Candidates requiring a staff decision</small>
-        </div>
-      </div>
-      <div class="impact-card" data-tone="success">
-        <span class="impact-card__icon pi pi-check-circle" aria-hidden="true"></span>
-        <div>
-          <span>Confirmed returns</span>
-          <strong>{{ metrics.confirmedCandidates }}</strong>
-          <small>Publications attributed to projects</small>
-        </div>
-      </div>
-      <div class="impact-card" data-tone="risk">
-        <span class="impact-card__icon pi pi-exclamation-circle" aria-hidden="true"></span>
-        <div>
-          <span>Failed runs</span>
-          <strong>{{ metrics.failedRuns }}</strong>
-          <small>Search executions needing attention</small>
-        </div>
-      </div>
-    </section>
-  } @else if (metricsResource.isLoading()) {
-    <section class="metrics-state" aria-label="Loading scientific return metrics" aria-busy="true">
-      <span class="pi pi-spin pi-spinner" aria-hidden="true"></span>
-      <div>
-        <strong>Loading monitoring overview</strong>
-        <span>The review queue remains available while metrics are updated.</span>
-      </div>
-    </section>
-  } @else if (metricsError()) {
-    <section class="metrics-state metrics-state--warning" role="status">
-      <span class="pi pi-exclamation-triangle" aria-hidden="true"></span>
-      <div>
-        <strong>Monitoring overview is temporarily unavailable</strong>
-        <span>Candidate review is unaffected. Retry only the summary metrics.</span>
-      </div>
-      <button type="button" (click)="metricsResource.reload()">
-        <span class="pi pi-refresh" aria-hidden="true"></span>
-        Retry metrics
-      </button>
-    </section>
-  }
-
-  <section class="queue-toolbar" aria-label="Candidate filters">
-    <header class="queue-toolbar__header">
-      <div>
-        <span>Review scope</span>
-        <strong>Refine the evidence queue</strong>
-      </div>
-      <span class="queue-total" aria-live="polite" aria-atomic="true">
-        {{ candidateCountLabel() }}
-      </span>
-    </header>
-
-    <div class="queue-toolbar__controls">
-      <label>
-        <span>Status</span>
-        <select
-          [value]="status()"
-          [disabled]="queueResource.isLoading()"
-          (change)="onStatus($event)"
-        >
-          <option value="PENDING">Pending</option>
-          <option value="CONFIRMED">Confirmed</option>
-          <option value="DISMISSED">Dismissed</option>
-          <option value="ALL">All statuses</option>
-        </select>
-      </label>
-      <label>
-        <span>Evidence</span>
-        <select
-          [value]="strength()"
-          [disabled]="queueResource.isLoading()"
-          (change)="onStrength($event)"
-        >
-          <option value="ALL">All strengths</option>
-          <option value="PRIMARY">Primary</option>
-          <option value="SUPPORTING">Supporting</option>
-          <option value="WEAK">Weak</option>
-        </select>
-      </label>
-      <label>
-        <span>Source</span>
-        <select
-          [value]="source()"
-          [disabled]="queueResource.isLoading()"
-          (change)="onSource($event)"
-        >
-          <option value="ALL">All sources</option>
-          <option value="CROSSREF">Crossref</option>
-          <option value="OPENALEX">OpenAlex</option>
-          <option value="EUROPE_PMC">Europe PMC</option>
-        </select>
-      </label>
-    </div>
-
-    <footer class="queue-toolbar__active">
-      <div class="active-filters" aria-label="Active filters">
-        <span class="active-filters__count">
-          <span class="pi pi-filter" aria-hidden="true"></span>
-          {{ activeFilterCount() }} active
-        </span>
-        @if (status() !== 'ALL') {
-          <span
-            >Status: <strong>{{ filterLabel(status()) }}</strong></span
-          >
-        }
-        @if (strength() !== 'ALL') {
-          <span
-            >Evidence: <strong>{{ filterLabel(strength()) }}</strong></span
-          >
-        }
-        @if (source() !== 'ALL') {
-          <span
-            >Source: <strong>{{ sourceLabel(source()) }}</strong></span
-          >
-        }
-      </div>
-      @if (activeFilterCount()) {
-        <button type="button" [disabled]="queueResource.isLoading()" (click)="clearFilters()">
-          <span class="pi pi-times" aria-hidden="true"></span>
-          Clear filters
-        </button>
-      }
-    </footer>
-  </section>
+  <app-filters-bar
+    ariaLabel="Candidate filters"
+    [count]="total()"
+    itemSingular="candidate"
+    itemPlural="candidates"
+    [selects]="filterSelects()"
+    [disabled]="queueResource.isLoading()"
+    [canClear]="activeFilterCount() > 0"
+    (selectChanged)="applyFilter($event)"
+    (cleared)="clearFilters()"
+  />
 
   @if (queueResource.isLoading()) {
     <app-loading-state />

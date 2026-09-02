@@ -18,11 +18,21 @@
     <app-error-message [apiError]="error" />
   }
 
-  <app-knowledge-filters
-    [status]="status()"
-    [kind]="kind()"
-    [search]="search()"
-    (changed)="applyFilters($event)"
+  <app-filters-bar
+    ariaLabel="Knowledge Base filters"
+    [count]="result()?.totalElements ?? 0"
+    itemSingular="knowledge item"
+    itemPlural="knowledge items"
+    searchLabel="Search knowledge"
+    searchPlaceholder="Inventory number or text"
+    [searchValue]="search()"
+    [selects]="filterSelects()"
+    [disabled]="knowledgeResource.isLoading()"
+    [canClear]="hasFilters()"
+    hint="An inventory number matches the registered or observed citation whole; any other text is searched inside the item content, which is how curatorial lessons are found."
+    (searchChanged)="applySearch($event)"
+    (selectChanged)="applyFilter($event)"
+    (cleared)="clearFilters()"
   >
     @if (canManage()) {
       <button type="button" class="primary" (click)="openCreate()">
@@ -30,7 +40,7 @@
         Add knowledge
       </button>
     }
-  </app-knowledge-filters>
+  </app-filters-bar>
 
   @if (knowledgeResource.isLoading() && !result()) {
     <app-loading-state label="Loading institutional knowledge" />
@@ -48,13 +58,7 @@
       "
     >
       @if (hasFilters()) {
-        <button
-          type="button"
-          class="secondary"
-          (click)="applyFilters({ status: null, kind: null, search: null })"
-        >
-          Clear filters
-        </button>
+        <button type="button" class="secondary" (click)="clearFilters()">Clear filters</button>
       } @else if (canManage()) {
         <button type="button" class="primary" (click)="openCreate()">Add knowledge</button>
       }
@@ -64,7 +68,7 @@
       <div class="results-heading">
         <div>
           <h2 id="knowledge-results-title">Institutional catalogue</h2>
-          <p>{{ result()?.totalElements }} items · newest first</p>
+          <p>Newest first</p>
         </div>
         @if (knowledgeResource.isLoading()) {
           <span role="status"

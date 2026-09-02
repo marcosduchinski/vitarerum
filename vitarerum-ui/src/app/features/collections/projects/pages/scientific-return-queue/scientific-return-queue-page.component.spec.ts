@@ -7,7 +7,6 @@ import { IDENTITY_SERVICE } from '@core/auth/identity.service';
 import { IdentityServiceMock } from '@core/auth/identity.service.mock';
 
 import {
-  ScientificReturnMetrics,
   ScientificReturnReviewItem,
   ScientificReturnReviewQueuePage,
 } from '../../models/scientific-return.model';
@@ -21,15 +20,6 @@ interface QueueQuery {
   readonly page: number;
   readonly size: number;
 }
-
-const METRICS: ScientificReturnMetrics = {
-  activeWatches: 7,
-  runs: 18,
-  failedRuns: 1,
-  pendingCandidates: 4,
-  confirmedCandidates: 12,
-  dismissedCandidates: 2,
-};
 
 const CANDIDATE: ScientificReturnReviewItem = {
   id: 'candidate-1',
@@ -84,27 +74,11 @@ const CANDIDATE: ScientificReturnReviewItem = {
 
 class ScientificReturnApiServiceStub {
   readonly queries: QueueQuery[] = [];
-  metricsCalls = 0;
   queueCalls = 0;
-  metricsFail = false;
   queueFail = false;
   empty = false;
   totalPages = 1;
   candidates: readonly ScientificReturnReviewItem[] = [CANDIDATE];
-
-  getMetrics(): Observable<ScientificReturnMetrics> {
-    this.metricsCalls += 1;
-    if (this.metricsFail) {
-      return throwError(
-        () =>
-          new HttpErrorResponse({
-            status: 503,
-            error: { detail: { error: 'METRICS_UNAVAILABLE', message: 'Metrics unavailable' } },
-          }),
-      );
-    }
-    return of(METRICS);
-  }
 
   listReviewQueue(query: QueueQuery): Observable<ScientificReturnReviewQueuePage> {
     this.queueCalls += 1;
@@ -187,19 +161,6 @@ describe('ScientificReturnQueuePageComponent', () => {
     ).not.toBeNull();
   });
 
-  it('renders operational metrics with independent business meaning', async () => {
-    const fixture = await render();
-    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
-
-    expect(text).toContain('7');
-    expect(text).toContain('Projects under continued monitoring');
-    expect(text).toContain('4');
-    expect(text).toContain('Candidates requiring a staff decision');
-    expect(text).toContain('12');
-    expect(text).toContain('Publications attributed to projects');
-    expect(text).toContain('Search executions needing attention');
-  });
-
   it('distinguishes unobserved and unavailable evidence without hiding review', async () => {
     api.candidates = [
       {
@@ -265,7 +226,7 @@ describe('ScientificReturnQueuePageComponent', () => {
   it('filters the queue by Europe PMC and resets all filters', async () => {
     const fixture = await render();
     const compiled = fixture.nativeElement as HTMLElement;
-    const selects = compiled.querySelectorAll<HTMLSelectElement>('.queue-toolbar select');
+    const selects = compiled.querySelectorAll<HTMLSelectElement>('.filters-bar select');
 
     selects[2].value = 'EUROPE_PMC';
     selects[2].dispatchEvent(new Event('change'));
@@ -274,7 +235,7 @@ describe('ScientificReturnQueuePageComponent', () => {
     fixture.detectChanges();
 
     expect(api.queries.at(-1)?.source).toBe('EUROPE_PMC');
-    expect(compiled.textContent).toContain('Source: Europe PMC');
+    expect(compiled.querySelector('.filters-bar__clear')).not.toBeNull();
 
     buttonByText(compiled, 'Clear filters').click();
     fixture.detectChanges();
@@ -288,10 +249,11 @@ describe('ScientificReturnQueuePageComponent', () => {
       page: 0,
       size: 20,
     });
-    expect(compiled.textContent).toContain('0 active');
+    // With no filter left, the toolbar drops the reset action entirely.
+    expect(compiled.querySelector('.filters-bar__clear')).toBeNull();
   });
 
-  it('refreshes metrics and candidates together', async () => {
+  it('refreshes the candidate queue', async () => {
     const fixture = await render();
     const compiled = fixture.nativeElement as HTMLElement;
 
@@ -299,7 +261,6 @@ describe('ScientificReturnQueuePageComponent', () => {
     fixture.detectChanges();
     await fixture.whenStable();
 
-    expect(api.metricsCalls).toBe(2);
     expect(api.queueCalls).toBe(2);
   });
 
@@ -315,25 +276,6 @@ describe('ScientificReturnQueuePageComponent', () => {
     expect(api.queries.at(-1)?.page).toBe(1);
     // The shared pagination names the range, not just the page number.
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('21–40 of 40 candidates');
-  });
-
-  it('keeps candidate review available when metrics fail and retries only metrics', async () => {
-    api.metricsFail = true;
-    const fixture = await render();
-    const compiled = fixture.nativeElement as HTMLElement;
-
-    expect(compiled.textContent).toContain('Monitoring overview is temporarily unavailable');
-    expect(compiled.textContent).toContain(CANDIDATE.title);
-
-    api.metricsFail = false;
-    buttonByText(compiled, 'Retry metrics').click();
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    expect(api.metricsCalls).toBe(2);
-    expect(api.queueCalls).toBe(1);
-    expect(compiled.textContent).toContain('Projects under continued monitoring');
   });
 
   it('renders the queue failure state', async () => {

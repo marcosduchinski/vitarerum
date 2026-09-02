@@ -214,9 +214,9 @@ test('discards an agent proposal instead of validating it', async ({ page }) => 
   await expect(page.getByText('Human review required')).toBeVisible();
 
   // The lesson carries no inventory citation, so only a content search reaches it.
+  // The shared filter bar has no submit button: typing applies on its own.
   await page.getByLabel('Search knowledge').fill('institutional prefix');
-  await page.getByRole('button', { name: 'Apply filters' }).click();
-  await expect(page.getByRole('button', { name: 'Remove search filter' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Clear filters' })).toBeVisible();
   expect(new URL(listRequests[listRequests.length - 1]).searchParams.get('q')).toBe(
     'institutional prefix',
   );

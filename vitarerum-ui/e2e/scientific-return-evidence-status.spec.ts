@@ -1,6 +1,13 @@
 import { expect, test } from '@playwright/test';
 
-const BASE_CANDIDATE = {
+import type {
+  ScientificReturnReviewItem,
+  ScientificReturnReviewQueuePage,
+} from '@features/collections/projects/models/scientific-return.model';
+
+// Typed against the model the page consumes: a field the API always sends but
+// the fixture forgets is a type error here, not a blank card at run time.
+const BASE_CANDIDATE: Omit<ScientificReturnReviewItem, 'id' | 'title'> = {
   projectId: 'project-scientific-return',
   watchId: 'watch-scientific-return',
   source: 'EUROPE_PMC',
@@ -20,7 +27,42 @@ const BASE_CANDIDATE = {
   searchIntent: 'DISCOVERY',
   searchStrategy: 'AUTHOR_OBJECT',
   evidences: [],
-} as const;
+  groundedPassages: [],
+  rejectedPassageCount: 0,
+  rejectedInventoryFormCount: 0,
+};
+
+const QUEUE: ScientificReturnReviewQueuePage = {
+  content: [
+    {
+      ...BASE_CANDIDATE,
+      id: 'verified',
+      title: 'Verified inventory candidate',
+      inventoryEvidenceStatus: 'VERIFIED',
+      groundedInventoryForms: [
+        { observedForm: 'MB04-001066', sourceField: 'ABSTRACT', sourceLocator: null },
+      ],
+    },
+    {
+      ...BASE_CANDIDATE,
+      id: 'not-observed',
+      title: 'Author object discovery candidate',
+      inventoryEvidenceStatus: 'NOT_OBSERVED',
+      groundedInventoryForms: [],
+    },
+    {
+      ...BASE_CANDIDATE,
+      id: 'unavailable',
+      title: 'Metadata only candidate',
+      inventoryEvidenceStatus: 'UNAVAILABLE',
+      groundedInventoryForms: [],
+    },
+  ],
+  page: 0,
+  size: 20,
+  totalElements: 3,
+  totalPages: 1,
+};
 
 test('keeps all evidence states explicit and available for human review', async ({ page }) => {
   await page.addInitScript(() => {
@@ -35,58 +77,14 @@ test('keeps all evidence states explicit and available for human review', async 
       }),
     );
   });
-  await page.route('**/scientific-return/metrics', (route) =>
-    route.fulfill({
-      json: {
-        activeWatches: 1,
-        runs: 1,
-        failedRuns: 0,
-        pendingCandidates: 3,
-        confirmedCandidates: 0,
-        dismissedCandidates: 0,
-      },
-    }),
-  );
-  await page.route('**/scientific-return/candidates?**', (route) =>
-    route.fulfill({
-      json: {
-        content: [
-          {
-            ...BASE_CANDIDATE,
-            id: 'verified',
-            title: 'Verified inventory candidate',
-            inventoryEvidenceStatus: 'VERIFIED',
-            groundedInventoryForms: [
-              { observedForm: 'MB04-001066', sourceField: 'ABSTRACT', sourceLocator: null },
-            ],
-          },
-          {
-            ...BASE_CANDIDATE,
-            id: 'not-observed',
-            title: 'Author object discovery candidate',
-            inventoryEvidenceStatus: 'NOT_OBSERVED',
-            groundedInventoryForms: [],
-          },
-          {
-            ...BASE_CANDIDATE,
-            id: 'unavailable',
-            title: 'Metadata only candidate',
-            inventoryEvidenceStatus: 'UNAVAILABLE',
-            groundedInventoryForms: [],
-          },
-        ],
-        page: 0,
-        size: 20,
-        totalElements: 3,
-        totalPages: 1,
-      },
-    }),
-  );
+  await page.route('**/scientific-return/candidates?**', (route) => route.fulfill({ json: QUEUE }));
 
   await page.goto('/p/collections/projects/scientific-return');
 
   await expect(page.getByText('Inventory number observed in publication')).toBeVisible();
-  await expect(page.getByText('Publication text inspected; inventory number not found')).toBeVisible();
+  await expect(
+    page.getByText('Publication text inspected; inventory number not found'),
+  ).toBeVisible();
   await expect(page.getByText('Source did not provide inspectable inventory text')).toBeVisible();
   await expect(page.getByText('MB04-001066')).toBeVisible();
   await expect(page.getByRole('link', { name: 'Review candidate' })).toHaveCount(3);

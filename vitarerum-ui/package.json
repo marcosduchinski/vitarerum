@@ -9,6 +9,7 @@
     "test": "ng test",
     "test:e2e": "playwright test",
     "lint": "ng lint",
+    "typecheck:e2e": "tsc -p e2e/tsconfig.json",
     "format": "prettier --write \"**/*.{js,mjs,ts,mts,d.ts,html,scss,json,md}\" --cache"
   },
   "private": true,
@@ -33,6 +34,7 @@
     "@angular/compiler-cli": "^21.2.17",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.60.0",
+    "@types/node": "^26.4.1",
     "angular-eslint": "21.4.0",
     "eslint": "^10.3.0",
     "jsdom": "^28.0.0",

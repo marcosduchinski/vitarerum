@@ -14,6 +14,11 @@ import { ConfirmModalComponent } from '@shared/components/confirm-modal/confirm-
 import { EmptyStateComponent } from '@shared/components/empty-state/empty-state.component';
 import { ErrorMessageComponent } from '@shared/components/error-message/error-message.component';
 import { FeedbackMessageComponent } from '@shared/components/feedback-message/feedback-message.component';
+import {
+  FiltersBarComponent,
+  FiltersBarSelect,
+  FiltersBarSelectChange,
+} from '@shared/components/filters-bar/filters-bar.component';
 import { LoadingStateComponent } from '@shared/components/loading-state/loading-state.component';
 import { PageHeaderComponent } from '@shared/components/page-header/page-header.component';
 import { PaginationComponent } from '@shared/components/pagination/pagination.component';
@@ -22,10 +27,6 @@ import {
   KnowledgeExampleDraft,
   KnowledgeExampleModalComponent,
 } from '../../components/knowledge-example-modal/knowledge-example-modal.component';
-import {
-  KnowledgeFilterChange,
-  KnowledgeFiltersComponent,
-} from '../../components/knowledge-filters/knowledge-filters.component';
 import { KnowledgeHistoryComponent } from '../../components/knowledge-history/knowledge-history.component';
 import { KnowledgeItemsListComponent } from '../../components/knowledge-items-list/knowledge-items-list.component';
 import {
@@ -80,8 +81,8 @@ const CONFIRMATION_COPY: Record<ConfirmationAction, ConfirmationCopy> = {
     EmptyStateComponent,
     ErrorMessageComponent,
     FeedbackMessageComponent,
+    FiltersBarComponent,
     KnowledgeExampleModalComponent,
-    KnowledgeFiltersComponent,
     KnowledgeHistoryComponent,
     KnowledgeItemsListComponent,
     LoadingStateComponent,
@@ -125,6 +126,29 @@ export class ScientificReturnKnowledgeBasePageComponent {
   protected readonly hasFilters = computed(
     () => this.status() !== null || this.kind() !== null || this.search() !== null,
   );
+  protected readonly filterSelects = computed<readonly FiltersBarSelect[]>(() => [
+    {
+      key: 'status',
+      label: 'Status',
+      value: this.status() ?? '',
+      options: [
+        { value: '', label: 'All statuses' },
+        { value: 'ACTIVE', label: 'Active' },
+        { value: 'PROPOSED', label: 'Awaiting validation' },
+        { value: 'RETIRED', label: 'Retired or discarded' },
+      ],
+    },
+    {
+      key: 'kind',
+      label: 'Type',
+      value: this.kind() ?? '',
+      options: [
+        { value: '', label: 'All types' },
+        { value: 'INVENTORY_VARIATION_EXAMPLE', label: 'Inventory example' },
+        { value: 'CURATORIAL_LESSON', label: 'Curatorial lesson' },
+      ],
+    },
+  ]);
   protected readonly canManage = computed(() => {
     const group = this.identity.session()?.group;
     return group === 'CURATORIAL' || group === 'COLLECTIONS_MANAGEMENT' || group === 'DIRECTION';
@@ -153,10 +177,24 @@ export class ScientificReturnKnowledgeBasePageComponent {
     return error ? getApiErrorPresentation(toApiError(error)).message : null;
   });
 
-  protected applyFilters(change: KnowledgeFilterChange): void {
-    this.status.set(change.status);
-    this.kind.set(change.kind);
-    this.search.set(change.search);
+  protected applyFilter(change: FiltersBarSelectChange): void {
+    if (change.key === 'status') {
+      this.status.set((change.value || null) as ScientificReturnKnowledgeStatus | null);
+    } else {
+      this.kind.set((change.value || null) as ScientificReturnKnowledgeKind | null);
+    }
+    this.page.set(0);
+  }
+
+  protected applySearch(term: string | null): void {
+    this.search.set(term);
+    this.page.set(0);
+  }
+
+  protected clearFilters(): void {
+    this.status.set(null);
+    this.kind.set(null);
+    this.search.set(null);
     this.page.set(0);
   }
 

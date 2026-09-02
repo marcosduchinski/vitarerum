@@ -162,7 +162,7 @@ describe('ProjectWatchersPageComponent', () => {
   it('uses the shared project-list table and pagination structure', () => {
     const host = fixture.nativeElement as HTMLElement;
 
-    expect(host.querySelectorAll('.watchers-table colgroup col')).toHaveLength(8);
+    expect(host.querySelectorAll('.watchers-table colgroup col')).toHaveLength(7);
     expect(host.querySelector('.watchers-table__ref')?.textContent).toContain('PRJ-001');
     expect(host.querySelector('.watchers-table__title')?.textContent).toContain('Reptile research');
     expect(host.querySelector('.watchers-pagination__meta')).not.toBeNull();
@@ -170,6 +170,18 @@ describe('ProjectWatchersPageComponent', () => {
     expect(host.querySelector('.watchers-pagination__page')?.getAttribute('aria-live')).toBe(
       'polite',
     );
+  });
+
+  it('hides bulk selection and configuration replication controls', () => {
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('.bulk-bar')).toBeNull();
+    expect(host.querySelector('input[type="checkbox"]')).toBeNull();
+    expect(host.textContent).not.toContain('Use as source');
+    expect(host.textContent).not.toContain('Replicate configuration');
+    expect(host.textContent).not.toContain('Apply selected');
+    expect(host.querySelector('input[type="date"]')).not.toBeNull();
+    expect(host.querySelector('input[type="number"]')).not.toBeNull();
   });
 
   it('clears the search and reloads the unfiltered project list', async () => {
@@ -243,26 +255,20 @@ describe('ProjectWatchersPageComponent', () => {
   it('prevents a second bulk apply while the first one is running', async () => {
     const pendingCreate = new Subject<ScientificReturnWatch>();
     watchersApi.createResponse = pendingCreate;
-    const host = fixture.nativeElement as HTMLElement;
-    const eligibleCheckbox = host.querySelector<HTMLInputElement>(
-      'input[aria-label="Select PRJ-001"]',
-    );
-    expect(eligibleCheckbox).not.toBeNull();
-    eligibleCheckbox?.click();
-    fixture.detectChanges();
+    const component = fixture.componentInstance as unknown as {
+      toggleSelected(projectId: string, checked: boolean): void;
+      applySelected(): Promise<void>;
+      selectedCount(): number;
+    };
+    component.toggleSelected('project-1', true);
 
-    const applyButton = [...host.querySelectorAll('button')].find(
-      (button) => button.textContent?.trim() === 'Apply selected',
-    );
-    expect(applyButton).toBeDefined();
-    applyButton?.click();
-    applyButton?.click();
+    const firstApply = component.applySelected();
+    const secondApply = component.applySelected();
 
     expect(watchersApi.creates).toHaveLength(1);
     pendingCreate.next(watch());
     pendingCreate.complete();
-    await fixture.whenStable();
-    fixture.detectChanges();
-    expect(host.textContent).toContain('1 of 1 selected projects were applied.');
+    await Promise.all([firstApply, secondApply]);
+    expect(component.selectedCount()).toBe(0);
   });
 });

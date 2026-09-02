@@ -1,0 +1,60 @@
+<section class="filters-bar" [attr.aria-label]="ariaLabel()">
+  <div class="filters-bar__row">
+    <div class="filters-bar__summary" aria-live="polite" aria-atomic="true">
+      <span class="filters-bar__count">{{ count() }}</span>
+      <span>{{ count() === 1 ? itemSingular() : itemPlural() }}</span>
+    </div>
+
+    <div class="filters-bar__filters">
+      @if (searchLabel(); as label) {
+        <label class="field field--search">
+          <span class="field__label">{{ label }}</span>
+          <span class="field__search">
+            <span class="pi pi-search" aria-hidden="true"></span>
+            <input
+              class="field__input"
+              type="search"
+              [value]="searchValue() ?? ''"
+              [placeholder]="searchPlaceholder()"
+              [disabled]="disabled()"
+              (input)="onSearchInput($event)"
+              (keydown.enter)="onSearchEnter($event)"
+            />
+          </span>
+        </label>
+      }
+
+      @for (select of selects(); track select.key) {
+        <label class="field">
+          <span class="field__label">{{ select.label }}</span>
+          <select
+            class="field__input"
+            [value]="select.value"
+            [disabled]="disabled()"
+            (change)="onSelect(select.key, $event)"
+          >
+            @for (option of select.options; track option.value) {
+              <option [value]="option.value" [selected]="option.value === select.value">
+                {{ option.label }}
+              </option>
+            }
+          </select>
+        </label>
+      }
+
+      @if (canClear()) {
+        <button type="button" class="filters-bar__clear" [disabled]="disabled()" (click)="clear()">
+          <span class="pi pi-times" aria-hidden="true"></span>
+          Clear filters
+        </button>
+      }
+
+      <!-- Trailing page action, aligned with the controls (e.g. "Add …"). -->
+      <ng-content />
+    </div>
+  </div>
+
+  @if (hint(); as text) {
+    <p class="filters-bar__hint">{{ text }}</p>
+  }
+</section>

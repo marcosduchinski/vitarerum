@@ -147,7 +147,7 @@ describe('ScientificReturnKnowledgeBasePageComponent', () => {
   it('opens the inventory editor in the wide structured layout', () => {
     const root = fixture.nativeElement as HTMLElement;
 
-    root.querySelector<HTMLButtonElement>('.filter-actions button.primary')!.click();
+    root.querySelector<HTMLButtonElement>('.filters-bar button.primary')!.click();
     fixture.detectChanges();
 
     expect(root.querySelector('.confirm-modal__dialog--wide')).not.toBeNull();
@@ -174,35 +174,44 @@ describe('ScientificReturnKnowledgeBasePageComponent', () => {
     expect(root.textContent).not.toContain('Discard proposal');
   });
 
-  it('sends the free-text search and status filters to the API', async () => {
+  it('applies the status filter as soon as the select changes', async () => {
     const root = fixture.nativeElement as HTMLElement;
-    const term = root.querySelector<HTMLInputElement>('input[type="search"]')!;
-    const selects = root.querySelectorAll<HTMLSelectElement>('select');
-    term.value = 'MB06-5747';
-    selects[0].value = 'ACTIVE';
-    root
-      .querySelector<HTMLFormElement>('.knowledge-filters')!
-      .dispatchEvent(new SubmitEvent('submit', { bubbles: true }));
+    const status = root.querySelectorAll<HTMLSelectElement>('.filters-bar select')[0];
+
+    status.value = 'ACTIVE';
+    status.dispatchEvent(new Event('change'));
     await fixture.whenStable();
 
-    expect(api.queries.at(-1)).toMatchObject({
-      status: 'ACTIVE',
-      q: 'MB06-5747',
-      page: 0,
-    });
+    expect(api.queries.at(-1)).toMatchObject({ status: 'ACTIVE', page: 0 });
   });
 
   it('searches words of a lesson that carries no inventory citation', async () => {
     const root = fixture.nativeElement as HTMLElement;
     const term = root.querySelector<HTMLInputElement>('input[type="search"]')!;
+
+    // Enter skips the debounce the shared bar applies while typing.
     term.value = 'institutional prefix';
-    root
-      .querySelector<HTMLFormElement>('.knowledge-filters')!
-      .dispatchEvent(new SubmitEvent('submit', { bubbles: true }));
+    term.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     await fixture.whenStable();
     fixture.detectChanges();
 
     expect(api.queries.at(-1)).toMatchObject({ q: 'institutional prefix', page: 0 });
-    expect(root.textContent).toContain('Search: institutional prefix');
+    expect(root.querySelector('.filters-bar__clear')).not.toBeNull();
+  });
+
+  it('clears every filter from the shared bar', async () => {
+    const root = fixture.nativeElement as HTMLElement;
+    const status = root.querySelectorAll<HTMLSelectElement>('.filters-bar select')[0];
+    status.value = 'PROPOSED';
+    status.dispatchEvent(new Event('change'));
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    root.querySelector<HTMLButtonElement>('.filters-bar__clear')!.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(api.queries.at(-1)).toMatchObject({ status: null, kind: null, q: null, page: 0 });
+    expect(root.querySelector('.filters-bar__clear')).toBeNull();
   });
 });

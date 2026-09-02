@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { MenuItem } from 'primeng/api';
 import { firstValueFrom } from 'rxjs';
@@ -7,6 +7,11 @@ import { firstValueFrom } from 'rxjs';
 import { ApiError, toApiError } from '@core/http/api-error.model';
 import { EmptyStateComponent } from '@shared/components/empty-state/empty-state.component';
 import { ErrorMessageComponent } from '@shared/components/error-message/error-message.component';
+import {
+  FiltersBarComponent,
+  FiltersBarSelect,
+  FiltersBarSelectChange,
+} from '@shared/components/filters-bar/filters-bar.component';
 import { LoadingStateComponent } from '@shared/components/loading-state/loading-state.component';
 import { PageHeaderComponent } from '@shared/components/page-header/page-header.component';
 import { RowActionsComponent } from '@shared/components/row-actions/row-actions.component';
@@ -36,6 +41,7 @@ const STATUS_OPTIONS: readonly { readonly value: AiPromptStatus; readonly label:
     PageHeaderComponent,
     EmptyStateComponent,
     ErrorMessageComponent,
+    FiltersBarComponent,
     LoadingStateComponent,
     RowActionsComponent,
   ],
@@ -47,8 +53,6 @@ export class AiPromptsPageComponent {
   private readonly service = inject(AI_PROMPT_MANAGEMENT_SERVICE);
   private readonly router = inject(Router);
 
-  protected readonly purposeOptions = AI_PROMPT_PURPOSE_OPTIONS;
-  protected readonly statusOptions = STATUS_OPTIONS;
   protected readonly purposeFilter = signal<AiPromptPurpose | null>(null);
   protected readonly statusFilter = signal<AiPromptStatus | null>(null);
   protected readonly templates = signal<readonly AiPromptTemplate[]>([]);
@@ -57,20 +61,49 @@ export class AiPromptsPageComponent {
   >({});
   protected readonly loadingTemplates = signal(false);
   protected readonly loadError = signal<ApiError | null>(null);
+  protected readonly hasFilters = computed(
+    () => this.purposeFilter() !== null || this.statusFilter() !== null,
+  );
+  protected readonly filterSelects = computed<readonly FiltersBarSelect[]>(() => [
+    {
+      key: 'purpose',
+      label: 'Purpose',
+      value: this.purposeFilter() ?? '',
+      options: [
+        { value: '', label: 'All purposes' },
+        ...AI_PROMPT_PURPOSE_OPTIONS.map((option) => ({
+          value: option.value as string,
+          label: option.label,
+        })),
+      ],
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      value: this.statusFilter() ?? '',
+      options: [
+        { value: '', label: 'Any status' },
+        ...STATUS_OPTIONS.map((option) => ({ value: option.value as string, label: option.label })),
+      ],
+    },
+  ]);
 
   constructor() {
     void this.loadTemplates();
   }
 
-  protected async setPurposeFilter(event: Event): Promise<void> {
-    const value = (event.target as HTMLSelectElement).value;
-    this.purposeFilter.set(value ? (value as AiPromptPurpose) : null);
+  protected async applyFilter(change: FiltersBarSelectChange): Promise<void> {
+    if (change.key === 'purpose') {
+      this.purposeFilter.set(change.value ? (change.value as AiPromptPurpose) : null);
+    } else {
+      this.statusFilter.set(change.value ? (change.value as AiPromptStatus) : null);
+    }
     await this.loadTemplates();
   }
 
-  protected async setStatusFilter(event: Event): Promise<void> {
-    const value = (event.target as HTMLSelectElement).value;
-    this.statusFilter.set(value ? (value as AiPromptStatus) : null);
+  protected async clearFilters(): Promise<void> {
+    this.purposeFilter.set(null);
+    this.statusFilter.set(null);
     await this.loadTemplates();
   }
 

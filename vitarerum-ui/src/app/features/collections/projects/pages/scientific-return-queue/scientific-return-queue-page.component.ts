@@ -14,6 +14,11 @@ import { IDENTITY_SERVICE } from '@core/auth/identity.service';
 import { ApiError, toApiError } from '@core/http/api-error.model';
 import { EmptyStateComponent } from '@shared/components/empty-state/empty-state.component';
 import { ErrorMessageComponent } from '@shared/components/error-message/error-message.component';
+import {
+  FiltersBarComponent,
+  FiltersBarSelect,
+  FiltersBarSelectChange,
+} from '@shared/components/filters-bar/filters-bar.component';
 import { LoadingStateComponent } from '@shared/components/loading-state/loading-state.component';
 import { PageHeaderComponent } from '@shared/components/page-header/page-header.component';
 import { PaginationComponent } from '@shared/components/pagination/pagination.component';
@@ -44,6 +49,7 @@ const PAGE_SIZE = 20;
     RouterLink,
     EmptyStateComponent,
     ErrorMessageComponent,
+    FiltersBarComponent,
     LoadingStateComponent,
     PageHeaderComponent,
     PaginationComponent,
@@ -61,11 +67,6 @@ export class ScientificReturnQueuePageComponent {
   protected readonly source = signal<SourceFilter>('ALL');
   protected readonly page = signal(0);
   protected readonly pageSize = PAGE_SIZE;
-
-  protected readonly metricsResource = resource({
-    params: () => this.identity.getPermissionId(),
-    loader: () => firstValueFrom(this.api.getMetrics()),
-  });
 
   protected readonly queueResource = resource({
     params: () => ({
@@ -87,17 +88,12 @@ export class ScientificReturnQueuePageComponent {
       ),
   });
 
-  protected readonly metrics = computed(() =>
-    this.metricsResource.hasValue() ? this.metricsResource.value() : null,
-  );
   protected readonly queuePage = computed(() =>
     this.queueResource.hasValue() ? this.queueResource.value() : null,
   );
   protected readonly candidates = computed(() => this.queuePage()?.content ?? []);
   protected readonly total = computed(() => this.queuePage()?.totalElements ?? 0);
-  protected readonly isRefreshing = computed(
-    () => this.metricsResource.isLoading() || this.queueResource.isLoading(),
-  );
+  protected readonly isRefreshing = computed(() => this.queueResource.isLoading());
   protected readonly totalPages = computed(() => this.queuePage()?.totalPages ?? 0);
   protected readonly activeFilterCount = computed(
     () =>
@@ -105,14 +101,41 @@ export class ScientificReturnQueuePageComponent {
       Number(this.strength() !== 'ALL') +
       Number(this.source() !== 'ALL'),
   );
-  protected readonly candidateCountLabel = computed(() => {
-    const total = this.total();
-    return `${total} ${total === 1 ? 'candidate' : 'candidates'}`;
-  });
-  protected readonly metricsError = computed<ApiError | null>(() => {
-    const error = this.metricsResource.error();
-    return error ? toApiError(error) : null;
-  });
+  protected readonly filterSelects = computed<readonly FiltersBarSelect[]>(() => [
+    {
+      key: 'status',
+      label: 'Status',
+      value: this.status(),
+      options: [
+        { value: 'PENDING', label: 'Pending' },
+        { value: 'CONFIRMED', label: 'Confirmed' },
+        { value: 'DISMISSED', label: 'Dismissed' },
+        { value: 'ALL', label: 'All statuses' },
+      ],
+    },
+    {
+      key: 'strength',
+      label: 'Evidence',
+      value: this.strength(),
+      options: [
+        { value: 'ALL', label: 'All strengths' },
+        { value: 'PRIMARY', label: 'Primary' },
+        { value: 'SUPPORTING', label: 'Supporting' },
+        { value: 'WEAK', label: 'Weak' },
+      ],
+    },
+    {
+      key: 'source',
+      label: 'Source',
+      value: this.source(),
+      options: [
+        { value: 'ALL', label: 'All sources' },
+        { value: 'CROSSREF', label: 'Crossref' },
+        { value: 'OPENALEX', label: 'OpenAlex' },
+        { value: 'EUROPE_PMC', label: 'Europe PMC' },
+      ],
+    },
+  ]);
   protected readonly queueError = computed<ApiError | null>(() => {
     const error = this.queueResource.error();
     return error ? toApiError(error) : null;
@@ -163,7 +186,6 @@ export class ScientificReturnQueuePageComponent {
 
   protected refreshAll(): void {
     if (this.isRefreshing()) return;
-    this.metricsResource.reload();
     this.queueResource.reload();
   }
 
@@ -174,18 +196,10 @@ export class ScientificReturnQueuePageComponent {
     this.page.set(0);
   }
 
-  protected onStatus(event: Event): void {
-    this.status.set((event.target as HTMLSelectElement).value as StatusFilter);
-    this.page.set(0);
-  }
-
-  protected onStrength(event: Event): void {
-    this.strength.set((event.target as HTMLSelectElement).value as StrengthFilter);
-    this.page.set(0);
-  }
-
-  protected onSource(event: Event): void {
-    this.source.set((event.target as HTMLSelectElement).value as SourceFilter);
+  protected applyFilter(change: FiltersBarSelectChange): void {
+    if (change.key === 'status') this.status.set(change.value as StatusFilter);
+    else if (change.key === 'strength') this.strength.set(change.value as StrengthFilter);
+    else this.source.set(change.value as SourceFilter);
     this.page.set(0);
   }
 
