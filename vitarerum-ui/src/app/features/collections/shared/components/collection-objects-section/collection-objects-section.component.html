@@ -14,6 +14,18 @@
     }
   </div>
 
+  <aside class="object-use-guidance" aria-label="Object use requirements">
+    <span class="pi pi-info-circle object-use-guidance__icon" aria-hidden="true"></span>
+    <div>
+      <h3 class="object-use-guidance__title">Object use requirements</h3>
+      <ul class="object-use-guidance__list">
+        <li>Objects must be reserved for the period of use.</li>
+        <li>Objects must be in suitable condition for use.</li>
+        <li>If necessary, arrange for the objects to be moved before and after use.</li>
+      </ul>
+    </div>
+  </aside>
+
   @if (addError()) {
     <app-error-message [apiError]="addError()!" />
   }
@@ -138,9 +150,9 @@
               <span class="search-method search-method--text">Text</span>
               <span class="search-method search-method--approximate">Approximate</span>
               <p>
-                Search runs automatically across the selected searchable columns for each
-                imported file. It checks exact values, contained phrases, text matches and
-                approximate similarities. Semantic search is not enabled yet.
+                Search runs automatically across the selected searchable columns for each imported
+                file. It checks exact values, contained phrases, text matches and approximate
+                similarities. Semantic search is not enabled yet.
               </p>
             </div>
           </details>

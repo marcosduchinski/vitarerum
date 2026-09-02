@@ -77,7 +77,10 @@ describe('ProposalObjectsSectionComponent', () => {
     }
   }
 
-  async function setup(objects: RequestedObject[] = [REQUESTED_OBJECT]): Promise<HTMLElement> {
+  async function setup(
+    objects: RequestedObject[] = [REQUESTED_OBJECT],
+    canManage = true,
+  ): Promise<HTMLElement> {
     objectSearch = new ObjectSearchServiceStub();
     await TestBed.configureTestingModule({
       imports: [ProposalObjectsSectionComponent],
@@ -86,6 +89,7 @@ describe('ProposalObjectsSectionComponent', () => {
 
     fixture = TestBed.createComponent(ProposalObjectsSectionComponent);
     fixture.componentRef.setInput('objects', objects);
+    fixture.componentRef.setInput('canManage', canManage);
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
@@ -96,6 +100,12 @@ describe('ProposalObjectsSectionComponent', () => {
     const el = await setup();
 
     expect(el.textContent).toContain('Requested objects');
+    expect(el.textContent).toContain('Object use requirements');
+    expect(el.textContent).toContain('Objects must be reserved for the period of use.');
+    expect(el.textContent).toContain('Objects must be in suitable condition for use.');
+    expect(el.textContent).toContain(
+      'If necessary, arrange for the objects to be moved before and after use.',
+    );
     expect(el.textContent).toContain('INV-001');
     expect(el.textContent).toContain('Book of Hours');
     expect(el.textContent).toContain('Illuminated manuscript');
@@ -105,6 +115,14 @@ describe('ProposalObjectsSectionComponent', () => {
     const el = await setup([]);
 
     expect(el.textContent).toContain('No objects have been requested');
+  });
+
+  it('shows object use requirements in read-only mode', async () => {
+    const el = await setup([REQUESTED_OBJECT], false);
+
+    expect(el.querySelector('.objects__add')).toBeNull();
+    expect(el.querySelector('.object__remove')).toBeNull();
+    expect(el.querySelector('.object-use-guidance')).not.toBeNull();
   });
 
   it('confirms before emitting remove requests', async () => {
@@ -148,7 +166,9 @@ describe('ProposalObjectsSectionComponent', () => {
     fixture.detectChanges();
 
     expect(el.textContent).toContain('Jaguar');
-    expect(el.querySelector('.search-explainer summary')?.textContent).toContain('How search works');
+    expect(el.querySelector('.search-explainer summary')?.textContent).toContain(
+      'How search works',
+    );
     expect(el.textContent).toContain('Exact');
     expect(el.textContent).toContain('Text');
     expect(el.textContent).toContain('Approximate');

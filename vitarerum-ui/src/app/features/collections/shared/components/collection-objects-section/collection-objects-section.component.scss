@@ -12,6 +12,48 @@
   gap: 1rem;
 }
 
+.object-use-guidance {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.75rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--color-line);
+  border-left: 3px solid var(--color-accent);
+  border-radius: 0.5rem;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--color-accent-soft) 55%, var(--color-panel)),
+    var(--color-panel)
+  );
+}
+
+.object-use-guidance__icon {
+  margin-top: 0.15rem;
+  color: var(--color-accent-strong);
+  font-size: 1rem;
+}
+
+.object-use-guidance__title {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 0.875rem;
+  font-weight: 800;
+}
+
+.object-use-guidance__list {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0.4rem 0 0;
+  padding-left: 1.1rem;
+  color: var(--color-muted);
+  font-size: 0.875rem;
+  line-height: 1.45;
+
+  li::marker {
+    color: var(--color-accent-strong);
+  }
+}
+
 .objects-action,
 .object-row__remove,
 .add-modal__close {

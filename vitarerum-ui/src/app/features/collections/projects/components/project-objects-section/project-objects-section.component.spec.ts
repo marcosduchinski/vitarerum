@@ -89,8 +89,8 @@ describe('ProjectObjectsSectionComponent', () => {
   }
 
   function addObjectButton(el: HTMLElement): HTMLButtonElement {
-    return Array.from(el.querySelectorAll<HTMLButtonElement>('.objects-action')).find(
-      (button) => button.textContent?.includes('Add object'),
+    return Array.from(el.querySelectorAll<HTMLButtonElement>('.objects-action')).find((button) =>
+      button.textContent?.includes('Add object'),
     )!;
   }
 
@@ -98,6 +98,12 @@ describe('ProjectObjectsSectionComponent', () => {
     const el = await setup();
 
     expect(el.textContent).toContain('Objects');
+    expect(el.textContent).toContain('Object use requirements');
+    expect(el.textContent).toContain('Objects must be reserved for the period of use.');
+    expect(el.textContent).toContain('Objects must be in suitable condition for use.');
+    expect(el.textContent).toContain(
+      'If necessary, arrange for the objects to be moved before and after use.',
+    );
     expect(el.textContent).toContain('INV-001');
     expect(el.textContent).toContain('Book of Hours');
   });
@@ -113,6 +119,7 @@ describe('ProjectObjectsSectionComponent', () => {
 
     expect(addObjectButton(el)).toBeUndefined();
     expect(el.querySelector('.object-row__remove')).toBeNull();
+    expect(el.querySelector('.object-use-guidance')).not.toBeNull();
   });
 
   it('confirms before emitting remove requests', async () => {
@@ -156,7 +163,9 @@ describe('ProjectObjectsSectionComponent', () => {
     fixture.detectChanges();
 
     expect(el.textContent).toContain('Jaguar');
-    expect(el.querySelector('.search-explainer summary')?.textContent).toContain('How search works');
+    expect(el.querySelector('.search-explainer summary')?.textContent).toContain(
+      'How search works',
+    );
     expect(el.textContent).toContain('Exact');
     expect(el.textContent).toContain('Text');
     expect(el.textContent).toContain('Approximate');

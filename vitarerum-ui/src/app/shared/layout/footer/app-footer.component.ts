@@ -4,10 +4,10 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
   selector: 'app-footer',
   standalone: true,
   templateUrl: './app-footer.component.html',
-  styleUrl: './app-footer.component.scss',
+  styleUrls: ['./app-footer.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class AppFooterComponent {
   protected readonly appName = 'Vitarerum';
-  protected readonly appVersion = 'v0.1';
+  protected readonly appVersion = 'v1.0.0';
 }
