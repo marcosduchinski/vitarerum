@@ -1,7 +1,11 @@
+---
+status: current
+---
+
 # Architecture Decision Records
 
-ADRs capture durable architecture decisions that should outlive implementation
-plans. Plans in `docs/plans/` remain useful history, but an ADR is the compact
+ADRs capture durable architecture decisions that should outlive the work that
+prompted them. An ADR is the compact
 record of a decision that affects boundaries, public contracts, persistence,
 security, or integration between bounded contexts.
 

@@ -63,7 +63,7 @@ async def get_caller_permission(
     # A password change/reset bumps password_changed_at; tokens minted before
     # that instant are stale sessions, not merely expired ones — same 401 as
     # an invalid token so a stolen bearer token stops working once the owner
-    # reacts (docs/plans/plano-gestao-passwords.md).
+    # reacts.
     #
     # JWT `iat` only has whole-second resolution (PyJWT truncates it on
     # encode), while password_changed_at keeps microseconds. Comparing the two

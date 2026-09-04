@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="798" viewBox="0 0 1800 798">
+  <defs>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#061a36" flood-opacity="0.12"/>
+    </filter>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 Z" fill="#6b7c93"/>
+    </marker>
+  </defs>
+  <rect width="1800" height="798" rx="34" fill="#f4f7fb"/>
+  <text x="70" y="80" font-family="Arial, sans-serif" font-size="42" font-weight="700" fill="#061a36">Da submissão à proposta</text>
+  <text x="70" y="125" font-family="Arial, sans-serif" font-size="24" fill="#52647a">O pedido só chega à equipa depois da confirmação por email.</text>
+
+  <g stroke="#6b7c93" stroke-width="7" fill="none" marker-end="url(#arrow)">
+    <path d="M356 361 H406"/><path d="M696 361 H746"/><path d="M1036 361 H1086"/><path d="M1376 361 H1426"/>
+  </g>
+
+  <g font-family="Arial, sans-serif" filter="url(#shadow)">
+    <g transform="translate(60 185)">
+      <rect width="296" height="350" rx="28" fill="#ffffff"/>
+      <circle cx="48" cy="52" r="30" fill="#0c5ea8"/><text x="48" y="63" text-anchor="middle" font-size="30" font-weight="700" fill="#fff">1</text>
+      <rect x="34" y="111" width="228" height="86" rx="15" fill="#e9f3fc"/>
+      <path d="M75 144h145M75 169h110" stroke="#0c5ea8" stroke-width="10" stroke-linecap="round"/>
+      <text x="148" y="243" text-anchor="middle" font-size="27" font-weight="700" fill="#0b2648">Preencher o pedido</text>
+      <text x="148" y="284" text-anchor="middle" font-size="20" fill="#52647a">Dados, datas e</text><text x="148" y="314" text-anchor="middle" font-size="20" fill="#52647a">1 a 5 documentos</text>
+    </g>
+    <g transform="translate(400 185)">
+      <rect width="296" height="350" rx="28" fill="#ffffff"/>
+      <circle cx="48" cy="52" r="30" fill="#287f8e"/><text x="48" y="63" text-anchor="middle" font-size="30" font-weight="700" fill="#fff">2</text>
+      <circle cx="148" cy="152" r="47" fill="#e4f5f6" stroke="#287f8e" stroke-width="8"/><path d="M125 153l17 18 33-40" fill="none" stroke="#287f8e" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="148" y="243" text-anchor="middle" font-size="27" font-weight="700" fill="#0b2648">Enviar</text>
+      <text x="148" y="284" text-anchor="middle" font-size="20" fill="#52647a">Consentimento e</text><text x="148" y="314" text-anchor="middle" font-size="20" fill="#52647a">verificação anti-robô</text>
+    </g>
+    <g transform="translate(740 185)">
+      <rect width="296" height="350" rx="28" fill="#ffffff"/>
+      <circle cx="48" cy="52" r="30" fill="#fc4c16"/><text x="48" y="63" text-anchor="middle" font-size="30" font-weight="700" fill="#fff">3</text>
+      <rect x="91" y="117" width="114" height="78" rx="12" fill="#fff0ea" stroke="#fc4c16" stroke-width="7"/><path d="M95 124l53 40 53-40" fill="none" stroke="#fc4c16" stroke-width="7"/>
+      <text x="148" y="243" text-anchor="middle" font-size="27" font-weight="700" fill="#0b2648">Confirmar o email</text>
+      <text x="148" y="284" text-anchor="middle" font-size="20" fill="#52647a">Ligação única,</text><text x="148" y="314" text-anchor="middle" font-size="20" fill="#52647a">válida por 24 horas</text>
+    </g>
+    <g transform="translate(1080 185)">
+      <rect width="296" height="350" rx="28" fill="#ffffff"/>
+      <circle cx="48" cy="52" r="30" fill="#4d63a8"/><text x="48" y="63" text-anchor="middle" font-size="30" font-weight="700" fill="#fff">4</text>
+      <path d="M98 117h100v91H98z" fill="#edf0fb" stroke="#4d63a8" stroke-width="7"/><path d="M118 145h60M118 171h43" stroke="#4d63a8" stroke-width="8" stroke-linecap="round"/>
+      <text x="148" y="243" text-anchor="middle" font-size="27" font-weight="700" fill="#0b2648">Proposta criada</text>
+      <text x="148" y="284" text-anchor="middle" font-size="20" fill="#52647a">É apresentado o</text><text x="148" y="314" text-anchor="middle" font-size="20" fill="#52647a">número de referência</text>
+    </g>
+    <g transform="translate(1420 185)">
+      <rect width="320" height="350" rx="28" fill="#ffffff"/>
+      <circle cx="48" cy="52" r="30" fill="#21835b"/><text x="48" y="63" text-anchor="middle" font-size="30" font-weight="700" fill="#fff">5</text>
+      <circle cx="160" cy="157" r="52" fill="#e8f6ef"/><path d="M126 158l23 23 47-57" fill="none" stroke="#21835b" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="160" y="243" text-anchor="middle" font-size="27" font-weight="700" fill="#0b2648">Acompanhar</text>
+      <text x="160" y="284" text-anchor="middle" font-size="20" fill="#52647a">A equipa pode pedir</text><text x="160" y="314" text-anchor="middle" font-size="20" fill="#52647a">correções posteriores</text>
+    </g>
+  </g>
+  <rect x="60" y="595" width="1680" height="125" rx="22" fill="#fff5e9" stroke="#f0b36d" stroke-width="3"/>
+  <circle cx="112" cy="657" r="28" fill="#fc4c16"/><text x="112" y="668" text-anchor="middle" font-family="Arial, sans-serif" font-size="31" font-weight="700" fill="#fff">!</text>
+  <text x="160" y="644" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#7a351c">Se a ligação expirar, é necessário submeter novamente.</text>
+  <text x="160" y="681" font-family="Arial, sans-serif" font-size="20" fill="#765440">Voltar a confirmar uma proposta já criada não produz duplicados.</text>
+</svg>

@@ -4,7 +4,7 @@
  * Security note: every field here is an *untrusted* input. The frontend only
  * does friendly validation (presence, email shape, consent) — the real
  * defences (Turnstile verification, rate-limiting, sanitisation) live on the
- * server. See docs/plans/museum-questions-public-page-plan.md.
+ * server.
  */
 export interface MuseumQuestionSubmission {
   readonly requesterName: string;

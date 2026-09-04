@@ -1,3 +1,7 @@
+---
+status: current
+---
+
 # ADR-NNNN - Title
 
 ## Status

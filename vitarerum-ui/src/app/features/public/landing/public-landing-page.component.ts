@@ -7,8 +7,7 @@ import { PublicI18nPipe } from '../i18n/public-i18n.pipe';
 
 /**
  * Public entry point offering two distinct paths, so simple questions no
- * longer get funnelled into the formal proposal flow (see
- * docs/plans/museum-questions-public-page-plan.md).
+ * longer get funnelled into the formal proposal flow.
  */
 @Component({
   selector: 'app-public-landing-page',

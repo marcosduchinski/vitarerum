@@ -1,3 +1,7 @@
+---
+status: current
+---
+
 # ADR-0002 - Use published language over event bus for module integration
 
 ## Status

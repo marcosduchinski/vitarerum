@@ -1,6 +1,6 @@
 """Management-scope policy for collection data sources.
 
-Two rules (see docs/plans/plano-collection-data-sources-admin.md §6):
+Two rules:
 - SYS_ADMIN alone administers the collection catalog itself — create, rename,
   remove a collection (permanent), and assign/remove its curators.
 - SYS_ADMIN and COLLECTIONS_MANAGEMENT manage any collection's source

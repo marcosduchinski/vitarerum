@@ -416,8 +416,8 @@ class SqlAlchemySourceDocumentRepository:
 
 
 # word_similarity() computed value (not the `<%` operator's default 0.6 GUC
-# threshold, which is too strict for a short code embedded in a long row — see
-# docs/plans/plano-objects-search.md). Chosen empirically against the running
+# threshold, which is too strict for a short code embedded in a long row).
+# Chosen empirically against the running
 # dev database; revisit during ranking calibration.
 _WORD_SIMILARITY_THRESHOLD = 0.4
 

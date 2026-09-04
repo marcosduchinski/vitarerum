@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1834" viewBox="0 0 1800 1834">
+  <defs>
+    <filter id="s" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="10" stdDeviation="13" flood-color="#061a36" flood-opacity="0.12"/></filter>
+    <marker id="a" markerWidth="13" markerHeight="13" refX="11" refY="6.5" orient="auto"><path d="M0 0L13 6.5 0 13z" fill="#7b8798"/></marker>
+  </defs>
+  <rect width="1800" height="1834" rx="40" fill="#f4f7fb"/>
+  <text x="90" y="95" font-family="Arial, sans-serif" font-size="55" font-weight="700" fill="#061a36">O percurso de um projeto</text>
+  <text x="90" y="150" font-family="Arial, sans-serif" font-size="29" fill="#52647a">Da aprovação do acesso ao registo dos resultados.</text>
+
+  <g stroke="#7b8798" stroke-width="10" fill="none" marker-end="url(#a)"><path d="M900 300v78"/><path d="M900 570v78"/><path d="M900 855v88"/><path d="M900 1270v80"/></g>
+
+  <g font-family="Arial, sans-serif" filter="url(#s)">
+    <g transform="translate(495 205)"><rect width="810" height="105" rx="52" fill="#dceafd" stroke="#0c5ea8" stroke-width="4"/><circle cx="70" cy="52" r="34" fill="#0c5ea8"/><path d="M53 52l13 14 25-30" fill="none" stroke="#fff" stroke-width="9" stroke-linecap="round"/><text x="125" y="65" font-size="34" font-weight="700" fill="#0b2648">Proposta aprovada</text></g>
+    <g transform="translate(390 380)"><rect width="1020" height="190" rx="34" fill="#fff"/><rect width="215" height="190" rx="34" fill="#4d63a8"/><text x="108" y="86" text-anchor="middle" font-size="25" fill="#dfe4fa">ESTADO</text><text x="108" y="128" text-anchor="middle" font-size="30" font-weight="700" fill="#fff">CREATED</text><text x="265" y="75" font-size="38" font-weight="700" fill="#0b2648">Projeto criado</text><text x="265" y="124" font-size="26" fill="#52647a">A equipa confirma datas e objetos.</text><text x="265" y="161" font-size="22" fill="#52647a">Um projeto de seguimento também começa aqui.</text></g>
+    <g transform="translate(390 650)"><rect width="1020" height="205" rx="34" fill="#fff"/><rect width="215" height="205" rx="34" fill="#287f8e"/><text x="108" y="91" text-anchor="middle" font-size="25" fill="#dff5f5">ESTADO</text><text x="108" y="135" text-anchor="middle" font-size="27" font-weight="700" fill="#fff">IN_PROGRESS</text><text x="265" y="76" font-size="38" font-weight="700" fill="#0b2648">Começar o projeto</text><text x="265" y="126" font-size="26" fill="#52647a">O trabalho e os registos ficam ativos.</text><text x="265" y="166" font-size="22" fill="#52647a">O requerente recebe uma notificação.</text></g>
+  </g>
+
+  <text x="900" y="1002" text-anchor="middle" font-family="Arial, sans-serif" font-size="31" font-weight="700" fill="#0b2648">Durante o trabalho</text>
+  <g font-family="Arial, sans-serif" filter="url(#s)">
+    <g transform="translate(130 1040)"><rect width="470" height="230" rx="30" fill="#fff"/><circle cx="62" cy="62" r="36" fill="#e9f3fc"/><path d="M45 63h34M62 46v34" stroke="#0c5ea8" stroke-width="9" stroke-linecap="round"/><text x="118" y="64" font-size="28" font-weight="700" fill="#0b2648">Acessos</text><text x="45" y="125" font-size="22" fill="#52647a">Objetos consultados,</text><text x="45" y="160" font-size="22" fill="#52647a">quantidades e observações</text></g>
+    <g transform="translate(665 1040)"><rect width="470" height="230" rx="30" fill="#fff"/><circle cx="62" cy="62" r="36" fill="#fff0ea"/><text x="62" y="74" text-anchor="middle" font-size="42" font-weight="700" fill="#fc4c16">!</text><text x="118" y="64" font-size="28" font-weight="700" fill="#0b2648">Ocorrências</text><text x="45" y="125" font-size="22" fill="#52647a">Eventos relevantes,</text><text x="45" y="160" font-size="22" fill="#52647a">local, descrição e anexos</text></g>
+    <g transform="translate(1200 1040)"><rect width="470" height="230" rx="30" fill="#fff"/><circle cx="62" cy="62" r="36" fill="#e8f6ef"/><path d="M44 75l18-22 17 13 21-27" fill="none" stroke="#21835b" stroke-width="8" stroke-linecap="round"/><text x="118" y="64" font-size="28" font-weight="700" fill="#0b2648">Publicações</text><text x="45" y="125" font-size="22" fill="#52647a">Resultados científicos</text><text x="45" y="160" font-size="22" fill="#52647a">associados ao projeto</text></g>
+  </g>
+
+  <g font-family="Arial, sans-serif" filter="url(#s)">
+    <g transform="translate(145 1370)"><rect width="880" height="315" rx="35" fill="#fff" stroke="#21835b" stroke-width="5"/><circle cx="78" cy="78" r="46" fill="#21835b"/><path d="M54 79l19 20 38-48" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><text x="150" y="70" font-size="38" font-weight="700" fill="#0b2648">Concluir</text><text x="150" y="112" font-size="25" font-weight="700" fill="#21835b">COMPLETED</text><text x="55" y="175" font-size="24" fill="#52647a">Exige pelo menos um objeto associado.</text><text x="55" y="215" font-size="22" fill="#52647a">Liberta relatórios, exportação CIDOC-CRM</text><text x="55" y="250" font-size="22" fill="#52647a">e monitorização do retorno científico.</text></g>
+    <g transform="translate(1080 1370)"><rect width="575" height="315" rx="35" fill="#fff" stroke="#c85b52" stroke-width="5"/><circle cx="78" cy="78" r="46" fill="#c85b52"/><path d="M58 58l40 40M98 58L58 98" stroke="#fff" stroke-width="11" stroke-linecap="round"/><text x="150" y="70" font-size="38" font-weight="700" fill="#0b2648">Cancelar</text><text x="150" y="112" font-size="25" font-weight="700" fill="#c85b52">CANCELLED</text><text x="55" y="175" font-size="24" fill="#52647a">Exige um motivo.</text><text x="55" y="215" font-size="22" fill="#52647a">Disponível enquanto o projeto</text><text x="55" y="250" font-size="22" fill="#52647a">ainda não terminou.</text></g>
+  </g>
+</svg>

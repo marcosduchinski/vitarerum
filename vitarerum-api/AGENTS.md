@@ -117,7 +117,9 @@ Cross-context rules:
 - When adding, removing, or changing import-linter contracts between bounded contexts, update `../docs/architecture/context-map.puml` in the same change.
 
 API contract rules:
-- Treat `docs/api_contracts/` as the public contract.
+- Treat `docs/specs/` as the authoritative description of implemented behaviour
+  and `docs/api_contracts/README.md` as the cross-cutting HTTP contract.
+  Per-endpoint schemas are generated: OpenAPI at `/openapi.json`.
 - Preserve response shapes covered by golden contract tests.
 - Use existing error envelope patterns from `app/main.py`.
 
@@ -192,7 +194,7 @@ Do not weaken Ruff, mypy, pytest, or import-linter settings to make a change pas
 Before editing:
 - Check `git status --short`.
 - Read the relevant domain, application, infrastructure, presentation, and test files.
-- Read related docs in `README.md` and `docs/api_contracts/`.
+- Read related docs in `README.md`, `docs/specs/` and `docs/api_contracts/README.md`.
 - Check `pyproject.toml` import-linter contracts before changing imports.
 - Identify whether the change crosses bounded contexts.
 

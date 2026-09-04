@@ -38,8 +38,7 @@ export const routes: Routes = [
   },
   {
     // Public entry point offering "Ask the Museum" vs "Request an in-situ
-    // visit" — additive, /submit-proposal keeps working directly (see
-    // docs/plans/museum-questions-public-page-plan.md).
+    // visit" — additive, /submit-proposal keeps working directly.
     path: 'public',
     loadChildren: () =>
       import('@features/public/landing/public-landing.routes').then((m) => m.PUBLIC_LANDING_ROUTES),

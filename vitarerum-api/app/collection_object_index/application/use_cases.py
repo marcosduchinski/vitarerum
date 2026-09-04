@@ -842,7 +842,7 @@ class RemoveCollectionArea:
 # ── Objects -> Search (read side) ────────────────────────────────────────────
 #
 # Search is deliberately broad: any authenticated staff member searches across
-# every indexed collection (see docs/plans/plano-objects-search.md). This
+# every indexed collection. This
 # avoids row-level ACLs in the index; the per-collection management scope
 # above governs who may *change* the index, not who may search it.
 

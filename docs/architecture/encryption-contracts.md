@@ -1,3 +1,7 @@
+---
+status: current
+---
+
 # Encryption Contracts
 
 Encryption in this application authenticates certain identifier strings as

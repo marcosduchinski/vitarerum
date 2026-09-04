@@ -1,27 +1,40 @@
+---
+status: current
+---
+
 # Manual do Utilizador — Vitarerum
 
-> versão 0.0-DRAFT (under construction)
-> PT
+> Versão 0.1 — revista em 4 de setembro de 2026
+> Idioma: PT-PT
+> Verificada contra o estado atual da aplicação em 4 de setembro de 2026
+
+Este manual descreve as funcionalidades visíveis na aplicação. Detalhes de
+implementação, contratos HTTP e procedimentos de implantação encontram-se na
+documentação técnica do repositório.
 
 ## Índice
 
 **Parte I — Introdução**
+
 1. O que é o Vitarerum
 2. Perfis de utilizador e o que cada um pode fazer
 3. Acesso ao sistema
 
 **Parte II — Acesso Público (sem autenticação)**
+
 4. Página de entrada pública
 5. Submeter uma proposta de uso de coleção (pedido público)
 6. "Pergunte ao Museu": submeter uma pergunta pública
 
 **Parte III — Investigador/Proponente (conta autenticada)**
+
 7. Submeter uma proposta autenticada
 8. Acompanhar "As minhas propostas"
 9. Conversação e troca de documentos com a equipa do museu
 10. Projetos de uso de coleções
 
 **Parte IV — Equipa do Museu (Gestão de Coleções / Curatorial)**
+
 11. Gestão de propostas
 12. Gestão de projetos
 13. Pesquisa de objetos de coleção
@@ -29,29 +42,50 @@
 15. Visitas *in situ* e registo CIDOC-CRM
 16. Relatórios
 
-**Parte V — Inteligência Artificial**
+**Parte V — Inteligência Artificial e retorno científico**
+
 17. Prompts de IA
-18. Boas práticas
+18. Retorno científico
+19. Watchers de retorno científico
+20. Base de conhecimento
+21. Boas práticas
 
 **Parte VI — Administração (Administrador de Sistema)**
-19. Gestão de utilizadores
-20. Gestão de grupos/permissões
-21. Gestão de instituições
-22. Modelos de documentos
-23. Fontes de dados de coleção
-24. Máscaras de número de referência
-25. Acesso a Recursos Externos
+
+22. Gestão de utilizadores
+23. Gestão de grupos/permissões
+24. Gestão de instituições
+25. Modelos de documentos
+26. Fontes de dados de coleção
+27. Máscaras de número de referência
+28. Acesso a Recursos Externos
 
 **Parte VII — Funcionalidades Transversais**
-26. Notificações internas
-27. Painel (Dashboard) e indicadores
-28. Estados e ciclos de vida (glossário)
+
+29. Notificações internas
+30. Painel (Dashboard)
+31. Estados e ciclos de vida (glossário)
 
 **Anexos**
+
 A. Glossário de termos
 B. Perguntas frequentes
 C. Resolução de problemas comuns
 D. Contactos e suporte
+
+### Percursos de leitura rápida
+
+Não é necessário ler o manual de princípio a fim. Comece pela Parte I e siga o
+percurso correspondente ao seu papel:
+
+- público sem conta: Parte II;
+- investigador ou proponente autenticado: Parte III;
+- Gestão de Coleções ou Curadoria: Partes IV e V;
+- Direção: secção 11.4, secção 12 e Parte V;
+- Administração de Sistema: Parte VI.
+
+As notificações, o Dashboard, os estados, as perguntas frequentes e a resolução
+de problemas podem ser consultados apenas quando necessário.
 
 ---
 
@@ -59,15 +93,16 @@ D. Contactos e suporte
 
 ### 1. O que é o Vitarerum
 
-O Vitarerum é o sistema de gestão de pedidos de uso de coleções museológicas. Cobre todo o percurso desde o pedido inicial (público ou autenticado)
+O Vitarerum é o sistema de gestão de pedidos de uso de coleções museológicas. Cobre o percurso desde o pedido inicial (público ou autenticado)
 até ao projeto de investigação em curso, incluindo:
 
 - Receção e avaliação de propostas de uso de coleções
 - Gestão de projetos de uso de coleções
 - Pesquisa de objetos de coleção
-- Visitas técnicas *in situ* e o respetivo registo mapeado para o modelo CIDOC-CRM
 - Perguntas públicas dirigidas ao museu ("Pergunte ao Museu") e resposta pela equipa
 - Geração de narrativas assistida por IA a partir dos registos *in situ*
+- Acompanhamento de tarefas pessoais da equipa por projeto
+- Monitorização assistida do retorno científico de projetos concluídos
 - Administração de utilizadores, instituições, modelos de documentos e outras
   configurações
 
@@ -75,7 +110,7 @@ A aplicação distingue claramente entre **área pública** (sem sessão iniciad
 acessível a qualquer cidadão) e **área autenticada** (acessível após
 login), cada uma com o seu próprio menu e permissões.
 
-O desenho funcional do módulo de uso de coleções busca ser compatível com o
+O desenho funcional do módulo de uso de coleções busca ser compatível com parte do
 procedimento **Use of collections** do **Spectrum**, publicado pela
 Collections Trust. Em particular, o Vitarerum suporta os pontos centrais
 da especificação: registar pedidos de uso com referência própria, rever e
@@ -108,7 +143,7 @@ não todo o universo de documentação museológica.
 ### 2. Perfis de utilizador e o que cada um pode fazer
 
 O acesso é controlado por **grupos**. Um utilizador pode pertencer a mais do
-que um grupo em simultâneo e alternar entre eles através do seletor "papel
+que um grupo em simultâneo e alternar entre eles através do seletor de "papel
 ativo" na barra superior — cada pedido ao sistema é feito "como" um grupo
 específico, e o que é permitido depende do grupo ativo no momento, não apenas
 do login.
@@ -117,18 +152,20 @@ do login.
 |---|---|---|
 | **Público (sem conta)** | Qualquer cidadão | Página de entrada pública, submissão de proposta, "Pergunte ao Museu" |
 | **EXTERNAL** (Investigador/Proponente) | Investigadores externos com conta | Início, Propostas (submeter / "As minhas propostas"), Projetos ("Os meus projetos") |
-| **COLLECTIONS_MANAGEMENT** (Gestão de Coleções) | Equipa técnica de gestão de coleções | Início, módulo completo "Use of Collections" (propostas, projetos, objetos, relatórios, perguntas públicas), Prompts de IA, Fontes de Dados de Coleção |
-| **CURATORIAL** (Curadoria) | Equipa curatorial | Mesmo acesso que COLLECTIONS_MANAGEMENT |
-| **DIRECTION** (Direção) | Direção do museu | Início, módulo "Use of Collections" e Prompts de IA — sem acesso de administração |
+| **COLLECTIONS_MANAGEMENT** (Gestão de Coleções) | Equipa técnica de gestão de coleções | Início, propostas, projetos e TODOs, objetos, relatórios, perguntas públicas, IA, retorno científico e Fontes de Dados de Coleção |
+| **CURATORIAL** (Curadoria) | Equipa curatorial | Mesmo menu que COLLECTIONS_MANAGEMENT, incluindo decisão de propostas e retorno científico |
+| **DIRECTION** (Direção) | Direção do museu | Início, revisões enviadas à Direção, projetos e TODOs, objetos, relatórios, IA e retorno científico; não vê perguntas públicas nem Administração |
 | **SYS_ADMIN** (Administrador de Sistema) | Administrador técnico/aplicacional | Início e módulo completo de Administração (utilizadores, grupos, instituições, modelos de documentos, máscaras de referência, acesso a recursos externos, fontes de dados) |
 
 Pontos importantes a reter:
 
 - **Um utilizador sem qualquer grupo atribuído não consegue iniciar sessão** —
   é tratado como credenciais inválidas.
-- CURATORIAL e COLLECTIONS_MANAGEMENT têm, na prática, o mesmo menu; as
-  diferenças de permissão real (o que cada um pode efetivamente aprovar ou
-  editar) são aplicadas no backend, não apenas escondidas na interface.
+- CURATORIAL e COLLECTIONS_MANAGEMENT têm o mesmo menu, mas não as mesmas
+  autorizações. Por exemplo, a decisão final de aprovar ou rejeitar propostas
+  pertence a CURATORIAL. O servidor valida sempre o papel ativo.
+- DIRECTION recebe propostas para revisão e devolve-as à equipa operacional;
+  não aprova, rejeita ou altera diretamente essas propostas.
 - O sino de notificações só aparece para perfis de equipa (staff) — não para o
   perfil EXTERNAL.
 - Trocar de "papel ativo" na barra superior não é logout: é apenas mudar o
@@ -140,7 +177,7 @@ Pontos importantes a reter:
 Autenticação por email e password. Em caso de erro, a página mostra a falha
 sem redirecionar — as credenciais inválidas nunca terminam a sessão de
 alguém, apenas impedem que comece.
-
+  
 **3.2 Esqueci-me da password (`/forgot-password`)**
 Fluxo de recuperação por email, disponível mesmo a quem já tem uma sessão
 local (propositadamente não bloqueado a utilizadores já "autenticados"), para
@@ -196,6 +233,10 @@ favorito) — a página de entrada em `/public` é um complemento, não uma
 substituição.
 
 ### 5. Submeter uma proposta de uso de coleção (pedido público)
+
+![Infográfico com os cinco passos entre o preenchimento do pedido público e o acompanhamento da proposta.](assets/infografico-submissao-publica.svg)
+
+*Figura 1 — Da submissão pública à criação e acompanhamento da proposta.*
 
 Formulário em `/submit-proposal`, organizado em duas secções: **"Os seus
 dados"** e **"O seu pedido"**.
@@ -260,17 +301,18 @@ pedido), a pessoa recebe um novo email com um link próprio para
 Canal mais leve do que a submissão de proposta, pensado para perguntas
 simples — não substitui o formulário de proposta formal.
 
-- **Âmbito atual**: o formulário avisa que, por agora, só perguntas
-  relacionadas com o uso de coleções (em especial visitas in situ para
-  investigação) recebem resposta manual; outros assuntos (exposições,
-  empréstimos, eventos, atividades educativas, etc.) são encerrados com uma
-  resposta automática por email.
+- **Âmbito atual**: o formulário informa que este canal se destina a questões
+  relacionadas com o uso de coleções, em especial visitas *in situ* para
+  investigação. A equipa avalia e encaminha cada pergunta recebida.
 - **Campos do formulário**: nome completo, email (para onde vai a resposta),
   assunto, mensagem, consentimento de tratamento de dados (RGPD) e
   verificação anti-robô.
-- **Sem documentos anexos** e **sem duplo opt-in** — ao contrário da
-  submissão de proposta, o envio é feito numa única chamada; não há link de
-  confirmação nem número de referência público.
+- **Imagens opcionais**: podem ser anexadas até 10 imagens JPEG ou PNG, com um
+  máximo de 5 MB por imagem e 25 MB no total. Os anexos ajudam a contextualizar
+  a pergunta, mas não são obrigatórios.
+- **Sem duplo opt-in** — ao contrário da submissão de proposta, o envio é
+  concluído de uma vez; não há link de confirmação nem número de referência
+  público.
 - Depois de enviar, a pessoa vê o ecrã "Question received"; a única resposta
   seguinte é o email da equipa do museu — não existe consulta pública de
   estado nem conversação contínua.
@@ -370,6 +412,10 @@ que funciona como uma troca de emails estruturada dentro do sistema:
 
 ### 10. Projetos de uso de coleções
 
+![Infográfico do percurso do projeto, desde a aprovação da proposta até à conclusão ou cancelamento.](assets/infografico-projeto.svg)
+
+*Figura 2 — Percurso de um projeto de uso de coleções.*
+
 Quando uma proposta é **aprovada**, o sistema cria automaticamente um
 **projeto de uso de coleções** (referência `CUP-XXXXXXXX`), que passa a ser
 o espaço de trabalho para o período de acesso autorizado. Não existe
@@ -387,10 +433,10 @@ acontecer a partir de qualquer estado não terminal. Não existem estados
 como "suspenso" ou "fechado" — o ciclo de vida é sempre um destes quatro.
 
 **10.3 Iniciar o projeto**: ação "Start project", disponível quando o
-projeto está `CREATED`. Ao iniciar, o sistema cria automaticamente o
-**registo de acesso a objetos** do projeto e semeia-o com uma entrada por
-cada objeto associado ao projeto — o ponto de partida para o
-acompanhamento do trabalho.
+projeto está `CREATED`. Quando já existem objetos associados e ainda não existe
+um registo de acesso, o sistema cria esse registo e acrescenta uma entrada por
+objeto. Um projeto iniciado sem objetos mantém o registo por criar até este ser
+necessário.
 
 **10.4 Registos disponíveis enquanto o projeto está em curso** (a partir do
 separador "Actions" no detalhe do projeto, ou diretamente do cartão em
@@ -408,9 +454,10 @@ separador "Actions" no detalhe do projeto, ou diretamente do cartão em
   adicionar entradas aqui; depois de `COMPLETED`, passa a ser só a equipa
   do museu.
 
-Estes três registos ficam disponíveis apenas com o projeto `IN_PROGRESS` —
-enquanto está `CREATED` (antes de iniciar), as respetivas tarefas aparecem
-bloqueadas no ecrã.
+Para o investigador, os registos de acesso e de ocorrências ficam disponíveis
+apenas com o projeto `IN_PROGRESS`. O registo de publicações também pode ser
+consultado depois de `COMPLETED`, embora a escrita passe para a equipa do
+museu. Enquanto o projeto está `CREATED`, as tarefas aparecem bloqueadas.
 
 **10.5 Concluir o projeto**: ação "Complete project", disponível a partir de
 `IN_PROGRESS`. **Exige pelo menos um objeto associado ao projeto** — não é
@@ -452,7 +499,22 @@ retira da fila de novos pedidos e a coloca em análise ativa.
 `PENDING`. Escolhe-se outro membro da equipa e, opcionalmente, uma nota;
 a proposta passa a estar atribuída a essa pessoa.
 
-**11.4 Pedir documentos**: dois mecanismos diferentes, para duas
+**11.4 Enviar à Direção**: COLLECTIONS_MANAGEMENT ou CURATORIAL pode enviar
+uma proposta `PENDING` para revisão por um membro de DIRECTION. É obrigatório
+escolher o destinatário e registar o motivo. A proposta continua `PENDING`, mas
+passa a aparecer na fila "Direction reviews" da pessoa escolhida.
+
+A Direção consulta o resumo, os eventos, os documentos e os objetos em modo de
+leitura. Depois regista uma resposta obrigatória e devolve a proposta a um
+membro de COLLECTIONS_MANAGEMENT ou CURATORIAL através de "Return to the
+Staff". O envio e a devolução ficam no registo de eventos e geram notificações.
+A Direção não aprova, rejeita, edita ou gere documentos neste fluxo.
+
+Este mecanismo é diferente de "Forward": o reencaminhamento comum transfere o
+trabalho entre membros da equipa operacional; a revisão da Direção abre uma
+consulta institucional que tem sempre de regressar à equipa.
+
+**11.5 Pedir documentos**: dois mecanismos diferentes, para duas
 situações diferentes:
 - **Pedir documentos novos** — quando ainda não foi entregue nada desse
   tipo; a proposta mantém-se em `PENDING`.
@@ -464,7 +526,7 @@ situações diferentes:
   públicos, é o ecrã descrito na secção 5.4; para propostas autenticadas,
   a mesma lógica aplica-se através da conversação/documentos da proposta.
 
-**11.5 Aprovar** (só CURATORIAL): ao aprovar, confirma-se ou ajusta-se
+**11.6 Aprovar** (só CURATORIAL): ao aprovar, confirma-se ou ajusta-se
 título, propósito e datas do futuro projeto — **é este passo que cria o
 projeto de uso de coleções**, nunca antes disso. Se a proposta veio do
 formulário público e a pessoa ainda não tinha conta, o Vitarerum cria
@@ -476,7 +538,7 @@ redefinida a qualquer momento através de "Esqueci-me da password" no
 ecrã de login (Parte I, secção 3.2), pelo que convém avisar a pessoa a
 trocá-la assim que entrar.
 
-**11.6 Rejeitar** (só CURATORIAL): exige sempre um motivo, que é enviado
+**11.7 Rejeitar** (só CURATORIAL): exige sempre um motivo, que é enviado
 automaticamente ao proponente como mensagem na conversação. É uma decisão
 final — `REJECTED` é um estado terminal; a proposta não gera projeto.
 
@@ -506,6 +568,17 @@ continua uma investigação já encerrada, mantendo rastreabilidade para o
 projeto de origem. O histórico do projeto original (registos, eventos,
 anexos) permanece imutável.
 
+**12.4 TODOs pessoais da equipa**: cada projeto tem um separador "TODO List"
+onde um membro da equipa pode criar, editar, concluir, reabrir e remover os
+seus próprios lembretes. Cada item pertence ao **papel ativo** que o criou;
+outro utilizador, ou o mesmo utilizador a atuar com outro papel, não vê nem
+altera esse item.
+
+A página `/p/collections/projects/todo` agrega os TODOs do papel ativo em todos
+os projetos. Permite filtrar por abertos, concluídos ou todos, limitar a lista a
+um projeto e criar um item escolhendo primeiro o projeto respetivo. Os TODOs
+abertos mais recentes também aparecem como post-its no Dashboard (secção 30).
+
 ### 13. Pesquisa de objetos de coleção (`/p/objects/search`)
 
 Pesquisa de texto livre sobre os dados de objetos importados para o
@@ -526,27 +599,49 @@ associar objetos a uma proposta ou projeto (secções 11 e 12).
 
 ### 14. Perguntas públicas ("Public Inquiries", `/p/museum-questions`)
 
+![Infográfico do tratamento de uma pergunta pública pela equipa do museu.](assets/infografico-pergunte-museu.svg)
+
+*Figura 3 — Receção, encaminhamento, resposta e encerramento de uma pergunta.*
+
 Fila de mensagens recebidas por "Pergunte ao Museu" (Parte II, secção 6),
-com filtro por estado.
+disponível para COLLECTIONS_MANAGEMENT e CURATORIAL. O menu oferece três
+vistas:
 
-**14.1 Estados**: `SUBMITTED` → `ANSWERED` ou `OUT_OF_SCOPE` → `CLOSED`.
-Não é possível fechar uma pergunta diretamente de `SUBMITTED` — tem de
-passar primeiro por uma resposta ou por "fora de âmbito".
+- **All Enquiries** — todas as perguntas acessíveis, com filtros;
+- **New Inquiries** — perguntas `SUBMITTED` ainda sem responsável;
+- **My Enquiries** — perguntas `IN_PROGRESS` atribuídas ao papel ativo.
 
-**14.2 Responder**: só a partir de `SUBMITTED`. O editor de resposta
-permite formatação simples; ao enviar, a pergunta passa a `ANSWERED` e um
-email é enviado ao autor.
+**14.1 Estados**: `SUBMITTED` → `IN_PROGRESS` → `ANSWERED` ou
+`OUT_OF_SCOPE` → `CLOSED`. Uma pergunta também pode ser respondida ou marcada
+como fora de âmbito ainda em `SUBMITTED`. Não é possível fechar diretamente
+uma pergunta por responder.
 
-**14.3 Marcar como fora de âmbito**: para perguntas que não são sobre uso
-de coleções/visitas in situ (o único âmbito atualmente operacional — ver
-secção 6). É enviado automaticamente o email padrão de "fora de âmbito";
-pode acrescentar-se um motivo interno opcional. A pergunta passa a
-`OUT_OF_SCOPE`.
+**14.2 Atribuir ou reencaminhar**: uma pergunta `SUBMITTED` ou `IN_PROGRESS`
+pode ser encaminhada para um membro de COLLECTIONS_MANAGEMENT ou CURATORIAL.
+A operação define o responsável, muda o estado para `IN_PROGRESS` e gera uma
+notificação para o destinatário.
 
-**14.4 Fechar**: disponível a partir de `ANSWERED` ou `OUT_OF_SCOPE`. Só
-arquiva a pergunta — **não envia email**.
+**14.3 Prazo de resposta**: cada pergunta recebe um prazo de 15 dias. As listas
+e o detalhe mostram a data limite e destacam atrasos. Quando uma pergunta fica
+por responder para além do prazo, o sistema pode notificar a equipa responsável.
 
-**14.5 Histórico do requerente**: o separador "History" mostra outras
+**14.4 Consultar imagens**: se a pessoa tiver anexado imagens no formulário
+público, estas aparecem na mensagem original e podem ser abertas a partir do
+detalhe da pergunta.
+
+**14.5 Responder**: possível em `SUBMITTED` ou `IN_PROGRESS`. O editor permite
+formatação simples; ao enviar, a pergunta passa a `ANSWERED` e um email é
+enviado ao autor.
+
+**14.6 Fora de âmbito**: o servidor suporta a classificação como
+`OUT_OF_SCOPE` e o envio do respetivo email, mas esta ação encontra-se
+temporariamente indisponível na interface. Enquanto assim for, não deve ser
+apresentada aos utilizadores como um passo executável no ecrã.
+
+**14.7 Fechar**: disponível a partir de `ANSWERED` ou `OUT_OF_SCOPE`. Apenas
+arquiva a pergunta; **não envia email**.
+
+**14.8 Histórico do requerente**: o separador "History" mostra outras
 perguntas já enviadas pelo mesmo email, para dar contexto antes de
 responder.
 
@@ -620,7 +715,8 @@ tipo, criatividade).
 é possível corrigir o texto manualmente, ficando um histórico de
 revisões) e o **registo estruturado** subjacente (objetos, ocorrências,
 registos de acesso e publicações, com os respetivos anexos). A partir
-daqui é possível **imprimir** ou **exportar** o relatório.
+daqui é possível **imprimir** ou **exportar em JSON** o conteúdo simples do
+relatório. A exportação em PDF ainda não está disponível.
 
 **16.4 Trilho de auditoria** ("Audit trail"): para cada relatório,
 organiza a proveniência da narrativa em passos claros — a evidência de
@@ -632,26 +728,32 @@ veio cada afirmação do texto final.
 
 ---
 
-## Parte V — Inteligência Artificial
+## Parte V — Inteligência Artificial e retorno científico
 
 Esta parte destina-se a quem tem acesso ao menu "AI" (COLLECTIONS_MANAGEMENT,
-CURATORIAL e DIRECTION) e explica como o Vitarerum gere os textos que
-instruem os modelos de IA usados nas Partes IV — a geração de narrativas de
-visitas *in situ* (secção 16). Não é preciso saber nada de IA para usar este ecrã: é, na prática, um
-gestor de versões de texto, com histórico e um "banco de testes" para
-experimentar alterações antes de as tornar ativas.
+CURATORIAL e DIRECTION). Reúne a gestão de prompts, a monitorização do retorno
+científico de projetos concluídos e a base de conhecimento validada pela
+instituição. A automação organiza pesquisas e evidência; a decisão institucional
+continua sempre a pertencer a uma pessoa.
 
 ### 17. Prompts de IA (`/p/ai/prompts`)
+
+![Infográfico do ciclo de criação, teste, publicação e arquivo de um prompt de IA.](assets/infografico-prompts-ia.svg)
+
+*Figura 4 — Publicação e histórico das versões de um prompt.*
 
 **17.1 O que é um "prompt"**: o texto de instrução que é enviado ao modelo
 de IA antes do pedido concreto (por exemplo, "escreve uma narrativa
 institucional a partir destes factos, em português, com este tom"). Cada
 prompt do Vitarerum serve uma **finalidade** fixa:
-- **In-situ narrative** — usado na geração de narrativas de relatórios de
+- **Narrative** — usado na geração de narrativas de relatórios de
   visita (Parte IV, secção 16);
-- **Proposal assistance** e **Project assistance** — finalidades já
-  previstas no sistema mas ainda sem workflow associado; aparecem como
-  opção de filtro mas não têm, para já, nenhum ecrã que as use.
+- **Scientific Return** — usado nas análises assistidas de candidatos a
+  publicação descritas nas secções seguintes.
+
+As finalidades internas "Proposal assistance" e "Project assistance" estão
+reservadas no sistema, mas não aparecem atualmente como filtros nem possuem um
+fluxo utilizável na interface.
 
 **17.2 Versões e estados**: cada prompt (por finalidade) pode ter várias
 **versões**, cada uma num destes três estados:
@@ -688,26 +790,116 @@ diretamente.
 prompt existentes, com finalidade, estado atual, versão ativa, data e
 autor da última publicação, e filtros por finalidade e estado.
 
-### 18. Boas práticas
+### 18. Retorno científico (`/p/collections/projects/scientific-return`)
 
-**18.1 A IA nunca decide sozinha.** As narrativas geradas (secção 16.3)
+O retorno científico procura publicações potencialmente relacionadas com
+objetos consultados em projetos concluídos. A pesquisa automática não atribui
+uma publicação ao museu por si só: produz candidatos e evidência para revisão
+humana.
+
+**18.1 Fila de revisão**: a página "Scientific return" agrega candidatos de
+todos os projetos monitorizados. É possível filtrar a lista por estado e origem,
+consultar dados bibliográficos, abrir o DOI ou registo de origem e ver:
+
+- termos e campos que produziram a correspondência;
+- evidência primária, de suporte ou fraca;
+- passagens efetivamente verificadas na fonte;
+- formas de número de inventário observadas;
+- afirmações rejeitadas por falta de verificação.
+
+**18.2 Estados dos candidatos**:
+
+- `PENDING` — aguarda decisão da equipa;
+- `CONFIRMED` — a relação foi confirmada por uma pessoa;
+- `DISMISSED` — o candidato foi rejeitado, mantendo-se a decisão no histórico.
+
+**18.3 Rever um candidato**: "Review candidate" abre o projeto no separador
+"Scientific return". A equipa pode confirmar, corrigir dados bibliográficos e
+confirmar, ou rejeitar o candidato. A justificação e a evidência usada ficam
+registadas. Uma confirmação cria a correspondente entrada no registo de
+publicações; resultados automáticos nunca entram nesse registo sem decisão
+humana.
+
+**18.4 Investigações assistidas**: no detalhe do projeto, a equipa pode
+consultar as pesquisas executadas e iniciar investigações adicionais para
+descobrir ou enriquecer candidatos. O planeador pode experimentar consultas
+sucessivas, mas a leitura de conteúdo externo é isolada e todas as conclusões
+continuam sujeitas a revisão.
+
+### 19. Watchers de retorno científico (`/p/collections/projects/watchers`)
+
+Um watcher define a monitorização periódica de um projeto concluído. A lista
+permite pesquisar por referência ou título e filtrar por estado.
+
+**19.1 Elegibilidade**: um projeto tem de estar concluído e possuir informação
+suficiente sobre os objetos consultados e o requerente. Quando não for elegível,
+a interface apresenta o motivo, por exemplo ausência de objetos, número de
+inventário ou nome do objeto.
+
+**19.2 Configuração**: para criar um watcher, indique a data inicial e o
+intervalo de revisão, entre 1 e 365 dias. A data da próxima execução fica
+visível na lista.
+
+**19.3 Estados**:
+
+- `ACTIVE` — participa nas execuções agendadas;
+- `PAUSED` — suspende temporariamente a cadeia de pesquisa;
+- `CLOSED` — encerra definitivamente o watcher; não pode ser reativado.
+
+Pausar não apaga execuções, candidatos ou decisões anteriores. Retomar volta a
+usar a configuração guardada.
+
+### 20. Base de conhecimento (`/p/ai/knowledge-base`)
+
+A base de conhecimento guarda exemplos e orientações validados pela equipa
+para ajudar futuras investigações. Contém dois tipos principais:
+
+- **Inventory example** — uma forma alternativa observada para citar um número
+  de inventário;
+- **Curatorial lesson** — uma orientação textual validada a partir da experiência
+  de revisão.
+
+**20.1 Pesquisa e filtros**: é possível procurar pelo número de inventário ou
+por texto, e filtrar por tipo e estado.
+
+**20.2 Estados**:
+
+- `PROPOSED` — aguarda validação humana;
+- `ACTIVE` — pode ser usado pelas investigações;
+- `RETIRED` — foi retirado ou rejeitado, mas permanece no histórico.
+
+Membros de COLLECTIONS_MANAGEMENT, CURATORIAL e DIRECTION podem acrescentar,
+editar, ativar, rejeitar ou retirar conhecimento e consultar o respetivo
+histórico. A ativação deve ocorrer apenas depois de confirmada a qualidade e o
+âmbito institucional do conteúdo.
+
+### 21. Boas práticas
+
+**21.1 A IA nunca decide sozinha.** As narrativas geradas (secção 16.3)
 são editáveis e cada correção manual fica registada no histórico de revisões.
+Da mesma forma, nenhum candidato de retorno científico é atribuído sem uma
+decisão da equipa.
 
-**18.2 Testar antes de publicar.** Alterar o texto de um prompt afeta
+**21.2 Testar antes de publicar.** Alterar o texto de um prompt afeta
 imediatamente todas as gerações seguintes dessa finalidade, em todo o
 sistema — por isso o banco de testes (17.3) deve ser usado sempre antes
 de publicar uma versão nova, e não apenas na primeira vez.
 
-**18.3 Publicar cria histórico, nunca apaga.** Nenhuma versão de prompt é
+**21.3 Publicar cria histórico, nunca apaga.** Nenhuma versão de prompt é
 destruída ao publicar uma nova — a anterior fica arquivada e continua
 consultável, o que permite perceber, mais tarde, que instrução exata
 gerou um texto específico (ver também o trilho de auditoria, secção
 16.4).
 
-**18.4 A geração de narrativas é lenta e pode falhar.** Corre um modelo
-de linguagem local; é normal demorar mais do que uma ação comum do
-sistema, e uma indisponibilidade temporária do modelo é reportada como
-erro em vez de gerar um texto incompleto silenciosamente.
+**21.4 Operações com modelos podem demorar ou falhar.** O modelo é acedido
+através do serviço configurado para a instalação. É normal uma geração ou
+investigação demorar mais do que uma ação comum; uma indisponibilidade é
+apresentada como erro, em vez de produzir silenciosamente um resultado
+incompleto.
+
+**21.5 Confirmar sempre a fonte.** Títulos, autores, DOI, números de inventário
+e passagens produzidos por pesquisa automática devem ser comparados com a fonte
+apresentada antes de uma confirmação institucional.
 
 ---
 
@@ -721,18 +913,18 @@ nível de permissão (Modelos de documentos), noutros com permissões mais
 limitadas consoante o papel (Fontes de Dados de Coleção); essas
 diferenças são assinaladas em cada secção.
 
-### 19. Gestão de utilizadores (`/p/admin/users`)
+### 22. Gestão de utilizadores (`/p/admin/users`)
 
-**19.1 Listar e procurar**: lista paginada de todos os utilizadores,
+**22.1 Listar e procurar**: lista paginada de todos os utilizadores,
 com pesquisa por nome/email e filtro por grupo.
 
-**19.2 Criar utilizador** (`/p/admin/users/new`): nome, email e,
-opcionalmente, uma password inicial. **Um utilizador criado sem grupo
+**22.2 Criar utilizador** (`/p/admin/users/new`): nome, email e password
+inicial são obrigatórios na interface. **Um utilizador criado sem grupo
 atribuído não consegue iniciar sessão** — é necessário, a seguir,
-atribuí-lo a pelo menos um grupo a partir do seu detalhe (secção 19.3,
+atribuí-lo a pelo menos um grupo a partir do seu detalhe (secção 22.3,
 "Assign to group") para que a conta fique utilizável.
 
-**19.3 Detalhe do utilizador** (`/p/admin/users/:id`):
+**22.3 Detalhe do utilizador** (`/p/admin/users/:id`):
 - **Conta**: editar o nome, **enviar email de reposição de password**
   (para o próprio utilizador definir uma nova) e **ativar/desativar a
   conta** — desativar bloqueia o acesso sem apagar o utilizador nem o seu
@@ -743,37 +935,37 @@ atribuí-lo a pelo menos um grupo a partir do seu detalhe (secção 19.3,
 - **Assign to group**: atribuir um novo papel a partir dos grupos ainda
   não atribuídos a esse utilizador.
 
-### 20. Gestão de grupos/permissões (`/p/admin/groups`)
+### 23. Gestão de grupos/permissões (`/p/admin/groups`)
 
 Os cinco papéis do sistema (`EXTERNAL`, `COLLECTIONS_MANAGEMENT`,
 `CURATORIAL`, `DIRECTION`, `SYS_ADMIN` — ver Parte I, secção 2) são
 fixos: não é possível criar ou apagar grupos, apenas consultar cada um e
 gerir a sua composição.
 
-**20.1 Lista de grupos**: os cinco grupos, cada um ligado à instituição a
+**23.1 Lista de grupos**: os cinco grupos, cada um ligado à instituição a
 que pertence.
 
-**20.2 Detalhe de um grupo**: lista paginada de todos os membros desse
-grupo, com acesso direto ao detalhe de cada utilizador (secção 19.3) —
+**23.2 Detalhe de um grupo**: lista paginada de todos os membros desse
+grupo, com acesso direto ao detalhe de cada utilizador (secção 22.3) —
 este é o caminho mais rápido para ver "quem é curador", "quem é direção",
 etc., sem ter de percorrer a lista completa de utilizadores.
 
-### 21. Gestão de instituições (`/p/admin/institutions`)
+### 24. Gestão de instituições (`/p/admin/institutions`)
 
 A instalação atual do Vitarerum serve **uma instituição** (MUHNAC), mas o
 ecrã de administração já suporta várias — cada grupo pertence a
 exatamente uma instituição.
 
-**21.1 Lista de instituições**: nome, email, morada e telefone.
+**24.1 Lista de instituições**: nome, email, morada e telefone.
 
-**21.2 Criar / editar**: só o **nome** é obrigatório e tem de ser único;
+**24.2 Criar / editar**: só o **nome** é obrigatório e tem de ser único;
 os restantes campos (email, morada, telefone) são opcionais.
 
-**21.3 Remover**: só é possível remover uma instituição que já não tenha
+**24.3 Remover**: só é possível remover uma instituição que já não tenha
 **nenhum grupo** associado — é preciso primeiro mover ou desativar os
 grupos que dependem dela.
 
-### 22. Modelos de documentos (`/p/admin/document-templates`)
+### 25. Modelos de documentos (`/p/admin/document-templates`)
 
 Modelos `.docx` que os proponentes descarregam no formulário público de
 submissão (Parte II, secção 5.2) e no formulário autenticado (Parte III,
@@ -786,23 +978,23 @@ equipa que precisem de o gerir têm de aceder diretamente pelo URL
 (`/p/admin/document-templates`), já que a rota não tem uma restrição
 adicional de SYS_ADMIN.
 
-**22.1 Carregar um modelo**: ficheiro `.docx` (validado pelo conteúdo
+**25.1 Carregar um modelo**: ficheiro `.docx` (validado pelo conteúdo
 real do ficheiro, não só pela extensão), tipo de uso, título, descrição
 opcional, se é **obrigatório** (informativo — ainda não é imposto no
 momento da submissão) e a ordem de apresentação.
 
-**22.2 Ativar/desativar**: um modelo **inativo** desaparece de imediato
+**25.2 Ativar/desativar**: um modelo **inativo** desaparece de imediato
 do formulário público — mesmo que alguém já tivesse o link direto para o
 ficheiro, deixa de conseguir descarregá-lo. É a forma de retirar um
 modelo de circulação sem apagar o seu histórico.
 
-**22.3 Substituir o ficheiro**: é possível trocar o `.docx` de um modelo
+**25.3 Substituir o ficheiro**: é possível trocar o `.docx` de um modelo
 existente mantendo o mesmo título/configuração.
 
-**22.4 Remover**: elimina definitivamente o modelo e o ficheiro
+**25.4 Remover**: elimina definitivamente o modelo e o ficheiro
 associado.
 
-### 23. Fontes de dados de coleção (`/p/admin/collection-data-sources`)
+### 26. Fontes de dados de coleção (`/p/admin/collection-data-sources`)
 
 Este é o catálogo que alimenta a pesquisa de objetos (Parte IV, secção
 13): ficheiros `.xlsx` carregados pela equipa, indexados linha a linha.
@@ -814,7 +1006,7 @@ Desde julho de 2026 o catálogo tem dois níveis:
   ficheiros, os curadores e as permissões; a área não concede, por si
   só, nenhum acesso.
 
-**23.1 Quem pode gerir o quê**: a permissão é sempre aplicada ao nível da
+**26.1 Quem pode gerir o quê**: a permissão é sempre aplicada ao nível da
 **coleção**, nunca da área — a interface não é a fronteira de segurança,
 o servidor verifica sempre.
 - **SYS_ADMIN** — único que pode criar/renomear/remover áreas e
@@ -826,18 +1018,18 @@ o servidor verifica sempre.
 - **DIRECTION** e outros papéis de equipa — acesso de leitura ao
   catálogo, sem poder de gestão.
 
-**23.2 Criar uma área ou coleção**: nome obrigatório e único; uma
+**26.2 Criar uma área ou coleção**: nome obrigatório e único; uma
 coleção nova exige sempre uma área de destino. Remover uma área só é
 possível quando já não tem nenhuma coleção associada; remover uma
 coleção é **permanente e irreversível** — leva consigo curadores,
 documentos e linhas indexadas, sem estado "inativo" de recurso.
 
-**23.3 Atribuir curadores**: a lista de candidatos mostra apenas
+**26.3 Atribuir curadores**: a lista de candidatos mostra apenas
 utilizadores do grupo CURATORIAL. Atribuir um curador já atribuído não dá
 erro (é idempotente); atribuir alguém fora do grupo CURATORIAL é
 recusado.
 
-**23.4 Carregar um ficheiro de coleção**: fluxo em dois passos —
+**26.4 Carregar um ficheiro de coleção**: fluxo em dois passos —
 1. **Pré-visualizar colunas**: o sistema lê o `.xlsx` e devolve os nomes
    de todas as colunas encontradas, sem guardar nada ainda.
 2. **Definir o mapeamento e carregar**: indicar qual coluna é o número de
@@ -853,21 +1045,21 @@ ser processado (por exemplo, excede o limite de linhas), fica registado
 com estado **ERROR** em vez de desaparecer — o erro é visível no ecrã de
 administração e o ficheiro carregado não se perde.
 
-**23.5 Reindexar**: relê o ficheiro já guardado e reconstrói as linhas
+**26.5 Reindexar**: relê o ficheiro já guardado e reconstrói as linhas
 indexadas — útil depois de corrigir um `ERROR` ou de ajustar o
 mapeamento de colunas.
 
-**23.6 Remover um documento**: remoção suave (soft delete) — retira o
+**26.6 Remover um documento**: remoção suave (soft delete) — retira o
 documento e as suas linhas do índice de pesquisa; o ficheiro em si só é
 libertado depois de confirmada a remoção.
 
-### 24. Máscaras de número de referência (`/p/admin/reference-number-policies`)
+### 27. Máscaras de número de referência (`/p/admin/reference-number-policies`)
 
 Controla o formato dos números de referência atribuídos a propostas,
 projetos e registos operacionais (por exemplo `VRP-20260730-0001` ou
 `CUP-00000001`).
 
-**24.1 Como funciona uma máscara**: combina texto fixo, tokens de data
+**27.1 Como funciona uma máscara**: combina texto fixo, tokens de data
 opcionais (`YYYY`, `YY`, `MM`, `DD`) e, no final, um token de sequência
 (`X` repetido, até 12 carateres). Os tokens de data decidem quando a
 numeração reinicia — por ano, mês, dia, ou nunca (sequência global). Só
@@ -878,24 +1070,24 @@ Exemplos concretos mostrados no próprio ecrã:
 - `CUP-XXXXXXXX` → `CUP-00000001` (sequência global de oito dígitos, sem
   data).
 
-**24.2 Criar e testar uma máscara**: escolher o tipo de referência,
+**27.2 Criar e testar uma máscara**: escolher o tipo de referência,
 escrever a máscara e usar "Preview" com uma data de amostra para ver o
 resultado exato antes de gravar — a nova máscara fica guardada como
 **rascunho**, não substitui de imediato a que está em uso.
 
-**24.3 Ativar/desativar**: só pode existir **uma máscara ativa de cada
+**27.3 Ativar/desativar**: só pode existir **uma máscara ativa de cada
 vez** por tipo de referência; ativar uma nova é a forma de a pôr em
 produção. As máscaras anteriores ficam no histórico, agrupadas por tipo,
 com data de criação e de ativação.
 
-### 25. Acesso a Recursos Externos (`/p/admin/external-publications`)
+### 28. Acesso a Recursos Externos (`/p/admin/external-publications`)
 
 Publica recursos aprovados (por exemplo, um relatório de visita in situ —
 Parte IV, secção 16) através de **links controlados e tokenizados**, para
 consulta por sistemas ou pessoas fora do Vitarerum, sem lhes dar acesso à
 aplicação.
 
-**25.1 Publicar um novo link**: assistente em quatro passos:
+**28.1 Publicar um novo link**: assistente em quatro passos:
 1. **Type** — a família de recurso a publicar (por agora, sobretudo
    relatórios de visita in situ).
 2. **Resource** — escolher o recurso concreto, por referência, título,
@@ -907,12 +1099,12 @@ aplicação.
 4. **Review** — confirmação final; ao publicar, o sistema emite o **URL
    tokenizado**, que fica disponível para copiar.
 
-**25.2 Registo de publicações**: lista de todos os links já emitidos,
+**28.2 Registo de publicações**: lista de todos os links já emitidos,
 com contadores de quantos estão **live** (ativos), **a expirar** e
 **revogados**; pesquisável por id de publicação ou de recurso, e
 filtrável por tipo, estado e perfil de acesso.
 
-**25.3 Revogar**: invalida um link publicado antes do tempo — ação
+**28.3 Revogar**: invalida um link publicado antes do tempo — ação
 irreversível (não é possível reativar o mesmo link depois de revogado;
 seria preciso publicar um novo).
 
@@ -920,65 +1112,59 @@ seria preciso publicar um novo).
 
 ## Parte VII — Funcionalidades Transversais
 
-### 26. Notificações internas
+### 29. Notificações internas
 
 Disponíveis apenas para papéis de equipa (COLLECTIONS_MANAGEMENT,
 CURATORIAL, DIRECTION, SYS_ADMIN) — o perfil EXTERNAL não tem sino de
 notificações na barra superior.
 
-**26.1 O que gera uma notificação**: eventos do fluxo de propostas —
-nova proposta submetida, proposta atribuída, reencaminhada, assumida por
-outro colega, documentos submetidos pelo requerente, ou correções de
-documentos submetidas. Cada notificação identifica quem a desencadeou e
-o recurso a que se refere (proposta ou projeto), com um link direto para
-lá.
+**29.1 O que gera uma notificação**:
 
-**26.2 Onde consultar**: o ícone de sino na barra superior mostra a
+- proposta submetida, atribuída, reencaminhada ou assumida por outra pessoa;
+- documentos ou correções submetidos pelo requerente;
+- proposta enviada à Direção ou devolvida à equipa;
+- pergunta pública submetida, encaminhada ou sem resposta há 15 dias;
+- novos candidatos de retorno científico prontos para revisão.
+
+Cada notificação identifica o recurso relacionado e, quando aplicável, quem
+desencadeou a ação, com ligação direta para o local relevante.
+
+**29.2 Onde consultar**: o ícone de sino na barra superior mostra a
 contagem de não lidas (até "9+") e, ao abrir, uma lista das **8 mais
 recentes**. Não existe, para já, um ecrã dedicado com o histórico
 completo de notificações — só esta lista curta.
 
-**26.3 Ações disponíveis**:
+**29.3 Ações disponíveis**:
 - Clicar numa notificação **marca-a como lida** e abre o recurso
   relacionado.
 - **"Mark all read"** — marca todas as visíveis como lidas de uma vez.
 - **"Clear all"** — limpa a lista visível (e zera a contagem de não
   lidas).
 
-**26.4 Atualização**: a contagem de não lidas é atualizada
+**29.4 Atualização**: a contagem de não lidas é atualizada
 automaticamente a cada 45 segundos enquanto a sessão está aberta, além de
 ser recalculada sempre que a lista é aberta ou uma notificação é
 marcada como lida.
 
-### 27. Painel (Dashboard) e indicadores (`/p/dashboard`)
+### 30. Painel (Dashboard) (`/p/dashboard`)
 
-**Estado atual**: o Dashboard é, neste momento, um ecrã de aviso —
-"Dashboard coming soon" — e não mostra ainda nenhum indicador real; serve
-apenas como página inicial após o login, remetendo para o menu lateral
-para aceder às áreas de trabalho.
+O Dashboard é a página inicial depois do login. Para papéis de equipa, mostra
+os TODOs abertos mais recentes do papel ativo como post-its.
 
-**Planeado** (ainda não implementado nem na interface nem no backend —
-apenas documentado num contrato técnico de API, sem endpoints
-construídos): quando implementado, o Dashboard deverá agregar, consoante
-o papel de quem consulta, contagens como:
-- Propostas por fila — novas, minhas atribuições, atribuições de outros,
-  aprovadas, rejeitadas/canceladas (para EXTERNAL, apenas os totais
-  aprovadas/rejeitadas-canceladas das suas próprias propostas, sem
-  conceito de "atribuição").
-- Projetos por estado — pendentes, em curso, concluídos, cancelados.
-- Perguntas públicas pendentes de resposta.
-- Estado do catálogo de fontes de dados de coleção — nº de coleções,
-  documentos vivos, documentos por estado e, em destaque, quantos
-  documentos ainda precisam de reindexação.
-- Contagens simples já hoje visíveis nas respetivas listas: relatórios
-  de visita recentes, utilizadores, grupos, instituições e modelos de
-  prompt de IA.
+Cada post-it apresenta o projeto, o texto da tarefa, o estado do projeto e a
+data da última alteração. A partir do cartão é possível:
 
-Estes indicadores serão sempre **de leitura**, sem filtros nem exportação
-— um resumo rápido do que precisa de atenção, não um novo ecrã de
-gestão.
+- abrir diretamente o separador TODO do projeto;
+- marcar o item como concluído;
+- usar "See all" para abrir a lista completa em
+  `/p/collections/projects/todo`.
 
-### 28. Estados e ciclos de vida (glossário)
+Os post-its são pessoais ao papel ativo. Trocar de papel pode apresentar outra
+lista. Perfis EXTERNAL não possuem TODOs de equipa e, por isso, veem o Dashboard
+sem itens desta natureza. Os indicadores agregados de propostas, projetos e
+catálogo anteriormente planeados ainda não fazem parte deste ecrã.
+
+### 31. Estados e ciclos de vida (glossário)
 
 Resumo dos estados percorridos pelas principais entidades do sistema, tal
 como descritos ao longo deste manual — útil como referência rápida.
@@ -1003,11 +1189,22 @@ aceitam novas entradas nem edições.
 proposta) | `EXPIRED` | `INVALID` | `ALREADY_CONFIRMED`.
 
 **Pergunta pública / "Museum question"** (Parte II/IV): `SUBMITTED` →
-`ANSWERED` | `OUT_OF_SCOPE` → `CLOSED`. Não é possível fechar
-diretamente a partir de `SUBMITTED`.
+`IN_PROGRESS` → `ANSWERED` | `OUT_OF_SCOPE` → `CLOSED`. A resposta ou a
+classificação fora de âmbito também pode ocorrer diretamente a partir de
+`SUBMITTED`; o fecho exige que a pergunta já esteja respondida ou fora de
+âmbito.
 
 **Versão de prompt de IA** (Parte V): `draft` → `published` → `archived`.
 Só pode existir uma versão publicada por prompt em cada momento.
+
+**Watcher de retorno científico** (Parte V): `ACTIVE` ↔ `PAUSED` →
+`CLOSED`. O fecho é definitivo.
+
+**Candidato de retorno científico** (Parte V): `PENDING` → `CONFIRMED` |
+`DISMISSED`. A decisão é sempre registada por uma pessoa.
+
+**Conhecimento institucional** (Parte V): `PROPOSED` → `ACTIVE` |
+`RETIRED`. Conteúdo retirado permanece no histórico.
 
 **Máscara de número de referência** (Parte VI): `DRAFT` → `ACTIVE` →
 `INACTIVE`. Só pode existir uma máscara ativa por tipo de referência.
@@ -1065,11 +1262,11 @@ secção 10.4).
 **Coleção** / **Área de coleção** — a coleção é onde vivem os ficheiros
 de objetos, os curadores e as permissões de gestão; a área é apenas um
 agrupamento administrativo/científico de coleções, sem poder de
-permissão próprio (Parte VI, secção 23).
+permissão próprio (Parte VI, secção 26).
 
 **Curador** — utilizador do grupo CURATORIAL associado a uma ou mais
 coleções específicas, com permissão para gerir os documentos-fonte
-dessas coleções (Parte VI, secção 23.1). Não confundir com o grupo
+dessas coleções (Parte VI, secção 26.1). Não confundir com o grupo
 CURATORIAL em si, que também aprova/rejeita propostas (Parte IV).
 
 **Grupo / papel** — os cinco perfis de acesso fixos do sistema: EXTERNAL,
@@ -1088,11 +1285,28 @@ antes do pedido concreto (por exemplo, "escreve esta narrativa neste
 tom"). Gerido por versões com estado *draft*/*published*/*archived*
 (Parte V).
 
+**TODO de projeto** — lembrete pessoal criado por um membro da equipa no
+contexto de um projeto. Pertence simultaneamente ao utilizador e ao papel
+ativo com que foi criado; não é uma tarefa partilhada por toda a equipa
+(Parte IV, secção 12.4).
+
+**Retorno científico** — processo de procurar, avaliar e registar publicações
+que possam resultar do acesso a objetos de coleção. O sistema apresenta
+candidatos e evidência, mas exige sempre confirmação humana (Parte V, secção
+18).
+
+**Watcher** — configuração que repete periodicamente a pesquisa de retorno
+científico de um projeto concluído (Parte V, secção 19).
+
+**Base de conhecimento** — conjunto de exemplos de números de inventário e
+orientações curatoriais validados para apoiar futuras investigações de retorno
+científico (Parte V, secção 20).
+
 **Número de referência** — identificador legível atribuído
 automaticamente a propostas (`VRP-...`), projetos (`CUP-...`), registos
 de acesso (`OAL-...`), de ocorrências (`OOL-...`) e de publicações
 (`PUB-...`), gerado a partir de uma máscara configurável (Parte VI,
-secção 24).
+secção 27).
 
 ### B. Perguntas frequentes
 
@@ -1113,7 +1327,7 @@ proposta.**
 Use "Esqueci-me da password" no ecrã de login (Parte I, secção 3.2). Não
 existe outra forma de recuperar essa password inicial — ela é enviada
 apenas uma vez, por email, no momento da aprovação (Parte IV, secção
-11.5).
+11.6).
 
 **Não vejo o menu de Administração / de IA.**
 O menu **completo** de Administração (utilizadores, grupos,
@@ -1122,7 +1336,7 @@ recursos externos) é exclusivo de SYS_ADMIN. Ainda assim, alguns ecrãs
 administrativos específicos aparecem para outros papéis de equipa dentro
 do seu próprio menu "Administration" — por exemplo, Fontes de Dados de
 Coleção, visível para COLLECTIONS_MANAGEMENT e CURATORIAL (Parte VI,
-secção 23.1). O menu de IA aparece para COLLECTIONS_MANAGEMENT,
+secção 26.1). O menu de IA aparece para COLLECTIONS_MANAGEMENT,
 CURATORIAL e DIRECTION, mas não para EXTERNAL (Parte I, secção 2). Se
 acha que devia ter acesso a algo que não vê, contacte o administrador de
 sistema da sua instituição (ver Anexo D).
@@ -1144,10 +1358,11 @@ alguém?**
 Não — só é possível responder na conversação depois de a proposta ter
 alguém da equipa atribuído como responsável (Parte III, secção 9).
 
-**O Dashboard não mostra nada.**
-É esperado, por agora — o Dashboard ainda é um ecrã "coming soon", sem
-indicadores implementados (Parte VII, secção 27). Use o menu lateral
-para aceder diretamente às áreas de trabalho.
+**Porque é que os meus TODOs não aparecem no Dashboard?**
+O Dashboard mostra apenas os TODOs abertos mais recentes do papel ativo. Um
+item concluído deixa de aparecer; um item criado com outro papel só volta a ser
+visível depois de selecionar esse papel. Use "See all" para consultar a lista
+completa e os itens concluídos (Parte VII, secção 30).
 
 ### C. Resolução de problemas comuns
 
@@ -1158,11 +1373,11 @@ mostra um erro sem fechar a sessão (Parte I, secção 3.6). Basta iniciar
 sessão de novo.
 
 **"Ficheiro não aceite" ao anexar um documento.**
-Confirme o formato (PDF, JPG, PNG ou DOCX, consoante o ecrã) e o
-tamanho (normalmente até 10 MB por ficheiro nos formulários públicos e
-de proposta). O sistema valida o conteúdo real do ficheiro, não apenas
-a extensão — renomear um ficheiro para `.pdf` não o torna válido se o
-conteúdo não corresponder.
+Confirme o formato e o limite indicados no próprio ecrã. Nas propostas, os
+documentos aceites dependem do tipo solicitado; em "Pergunte ao Museu" são
+aceites apenas imagens JPEG ou PNG, até 5 MB por imagem, 10 imagens e 25 MB no
+total (Parte II, secção 6). O sistema valida o conteúdo real do ficheiro, não
+apenas a extensão — renomear um ficheiro não altera o seu formato real.
 
 **"Demasiados pedidos" / erro 429 ao submeter um formulário público.**
 Os formulários públicos (proposta e "Pergunte ao Museu") têm limites de
@@ -1186,12 +1401,12 @@ correção).
 A maior parte das ações do Vitarerum só está disponível em determinados
 estados (por exemplo, só se pode aprovar uma proposta `PENDING`, só se
 pode concluir um projeto `IN_PROGRESS`). Consulte o glossário de estados
-(Parte VII, secção 28) para confirmar em que fase o recurso está antes
+(Parte VII, secção 31) para confirmar em que fase o recurso está antes
 de repetir a ação.
 
 **A pesquisa de objetos não encontra nada que eu sei que existe.**
 A pesquisa depende de a coleção correspondente já ter sido carregada e
-indexada pela equipa (Parte VI, secção 23) e de o termo pesquisado
+indexada pela equipa (Parte VI, secção 26) e de o termo pesquisado
 constar de uma coluna marcada como pesquisável. Confirme com a equipa de
 gestão de coleções se essa fonte de dados já foi importada.
 
@@ -1208,9 +1423,9 @@ o apoio depende de quem precisa de ajuda e do tipo de problema:
 - **Problemas de acesso, conta ou permissões** (password, conta
   desativada, papel em falta): contacte o **administrador de sistema
   (SYS_ADMIN)** da sua instituição — é quem gere contas e grupos (Parte
-  VI, secções 19-20).
+  VI, secções 22-23).
 - **Dados de contacto institucionais** (email, morada, telefone) ficam
-  registados em Administração → Instituições (Parte VI, secção 21); é
+  registados em Administração → Instituições (Parte VI, secção 24); é
   aí que a equipa deve manter esta informação atualizada para consulta.
 - **Questões técnicas sobre o próprio sistema** (arquitetura, APIs,
   implantação): consultar a documentação técnica em `README.md` e

@@ -1,3 +1,7 @@
+---
+status: current
+---
+
 # Relatório de Conformidade — RGPD e Regulamento de IA
 
 Avaliação técnica da aplicação Vitarerum face ao Regulamento (UE) 2016/679

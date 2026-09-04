@@ -1,3 +1,7 @@
+---
+status: current
+---
+
 # Subir o Vitarerum numa conta Google Cloud nova
 
 Recria o ambiente de producao inteiro num projeto novo, mantendo a regiao

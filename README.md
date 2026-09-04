@@ -17,8 +17,9 @@ AI-assisted narrative workflows.
   architecture fitness checks.
 - [vitarerum-ui](./vitarerum-ui/README.md): Angular 21 SPA, public and
   authenticated routes, runtime frontend configuration, unit and e2e tests.
-- [docs](./docs/): architecture notes, API contracts, diagrams, deployment
-  notes, and source document templates.
+- [docs](./docs/README.md): documentation index with reading paths by audience,
+  covering specifications, architecture, API contracts, diagrams, deployment,
+  compliance, and source document templates.
 - [Dockerfile](./Dockerfile): production-oriented image that builds the
   Angular UI and serves it from the FastAPI runtime.
 - [cloudbuild.yaml](./cloudbuild.yaml): Cloud Build pipeline for image build,
@@ -93,6 +94,17 @@ npm run build
 `npm run test:e2e` starts its own Angular dev server on
 `http://127.0.0.1:4201` through Playwright.
 
+Documentation:
+
+```bash
+python3 scripts/check_docs.py
+```
+
+Checks the tracked Markdown for broken local links, spec acceptance criteria
+citing tests that no longer exist, and documents that do not declare whether
+they describe current behaviour. Standard library only; also runs on every push
+and pull request through [.github/workflows/docs.yml](./.github/workflows/docs.yml).
+
 ## Build And Deployment
 
 For local backend-only container work, use the Compose setup in
@@ -110,38 +122,23 @@ Cloud Build configuration for the integrated image lives in
 [cloudbuild.yaml](./cloudbuild.yaml), with runtime environment examples under
 [docs/cloud](./docs/cloud/).
 
-## Documentation Map
+## Documentation
 
-Architecture:
+[docs/README.md](./docs/README.md) is the documentation index: reading paths by
+audience, and which directories describe current behaviour as opposed to
+proposals for behaviour that does not exist yet.
+
+Most direct entry points:
 
 - [Architecture overview](./docs/architecture/README.md)
-- [Module boundaries](./docs/architecture/module-boundaries.md)
-- [Business flows](./docs/architecture/business-flows.md)
-- [Architecture decisions](./docs/architecture/adr/README.md)
-
-Contracts and flows:
-
-- [API contracts](./docs/api_contracts/)
-- [Business flows](./docs/architecture/business-flows.md): rendered flow and
-  domain diagrams with links to the related API contracts.
-- [Diagrams](./docs/diagrams/): rendered SVG files and PlantUML sources.
-
-To regenerate the rendered diagrams from PlantUML sources:
-
-```bash
-java -jar /path/to/plantuml.jar -tsvg docs/architecture docs/diagrams
-```
-
-Planning and operations:
-
-- [Cloud Run env example](./docs/cloud/vitarerum-cloudrun.env.example.yaml)
-
-Implementation plans used during local development live under `docs/plans/`.
-That directory is ignored by Git in this repository.
-
-Templates:
-
-- [Document templates](./docs/templates/)
+- [Specifications](./docs/specs/README.md): implemented behaviour, with
+  numbered requirements and invariants traced to the tests that verify them
+- [Cross-cutting API contract](./docs/api_contracts/README.md): session headers,
+  error envelope, pagination and the full catalogue of typed error codes —
+  alongside the OpenAPI schema generated from code at `/docs` in a running
+  instance
+- [User manual](./docs/manual/user-manual.md)
+- [GDPR and AI Act compliance report](./docs/legal/relatorio-conformidade-rgpd-ia.md)
 
 ## Operational Notes
 

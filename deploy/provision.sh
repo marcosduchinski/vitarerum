@@ -67,7 +67,8 @@ set -a; . "${ENV_FILE}"; set +a
 # interno e a senha da VM antiga, que nao existem no projeto novo. Ele e' sempre
 # remontado a partir da VM recem-criada, junto com DB_PASSWORD.
 INHERITED_SECRETS=(JWT_SECRET FILE_ENCRYPTION_KEY DB_FIELD_ENCRYPTION_KEY
-                   OLLAMA_API_KEY SMTP_PASSWORD TURNSTILE_SECRET_KEY)
+                   OLLAMA_API_KEY SMTP_PASSWORD TURNSTILE_SECRET_KEY
+                   OPENALEX_API_KEY)
 
 # Chaves que sao aleatorias por natureza: se nem producao nem o .env local
 # tiverem, o script gera. As credenciais externas nao entram aqui - inventar
@@ -535,7 +536,7 @@ EUROPE_PMC_ENABLED: "${EUROPE_PMC_ENABLED}"
 YAML
 }
 
-RUN_SECRETS="DATABASE_URL=DATABASE_URL:latest,JWT_SECRET=JWT_SECRET:latest,OLLAMA_API_KEY=OLLAMA_API_KEY:latest,TURNSTILE_SECRET_KEY=TURNSTILE_SECRET_KEY:latest,SMTP_PASSWORD=SMTP_PASSWORD:latest,FILE_ENCRYPTION_KEY=FILE_ENCRYPTION_KEY:latest,DB_FIELD_ENCRYPTION_KEY=DB_FIELD_ENCRYPTION_KEY:latest"
+RUN_SECRETS="DATABASE_URL=DATABASE_URL:latest,JWT_SECRET=JWT_SECRET:latest,OLLAMA_API_KEY=OLLAMA_API_KEY:latest,TURNSTILE_SECRET_KEY=TURNSTILE_SECRET_KEY:latest,SMTP_PASSWORD=SMTP_PASSWORD:latest,FILE_ENCRYPTION_KEY=FILE_ENCRYPTION_KEY:latest,DB_FIELD_ENCRYPTION_KEY=DB_FIELD_ENCRYPTION_KEY:latest,OPENALEX_API_KEY=OPENALEX_API_KEY:latest"
 
 # URL deterministica do Cloud Run, conhecida antes do primeiro deploy.
 default_origin() {

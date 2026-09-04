@@ -1,3 +1,7 @@
+---
+status: current
+---
+
 # ADR-0001 - Persist proposal submission channel
 
 ## Status
@@ -44,5 +48,6 @@ derive the channel from requester contact fields.
 
 ## References
 
-- [Plan: authenticated/public proposal alignment](../../plans/plano-alinhar-submit-proposal-autenticado-publico.md)
+- [SPEC-008 - Proposta de uso de colecoes](../../specs/008-proposta-uso-de-colecoes/spec.md)
+- [SPEC-010 - Submissao publica](../../specs/010-submissao-publica/spec.md)
 

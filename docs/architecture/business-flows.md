@@ -1,29 +1,38 @@
+---
+status: current
+---
+
 # Business Flows
 
-This is an index of end-to-end business flows and the diagrams or contracts
-that currently describe them. When a flow is not yet diagrammed, this file
-records the gap without inventing an incomplete diagram.
+This is an index of end-to-end business flows, the diagrams that draw them and
+the specifications that state their rules. When a flow is not yet diagrammed,
+this file records the gap without inventing an incomplete diagram.
+
+Endpoint-level HTTP documentation is the generated OpenAPI schema; what is
+shared by every endpoint is in the
+[cross-cutting contract](../api_contracts/README.md).
 
 ## Proposal Intake and Lifecycle
 
 - Public proposal submission:
-  [PublicProposalSubmission API](../api_contracts/11PublicProposalSubmission-API.md).
+  [SPEC-010](../specs/010-submissao-publica/spec.md).
 
 ![Public submission double opt-in](../diagrams/public-submission-double-opt-in.svg)
 
 ![Public proposal lifecycle](../diagrams/public-proposal-life-cycle.svg)
 
 - Authenticated proposal submission:
-  [Proposal phase - researcher actions](../api_contracts/02Proposal%20phase%20%E2%80%94%20researcher%20actions.md).
+  [SPEC-008](../specs/008-proposta-uso-de-colecoes/spec.md).
 - Proposal origin identification: documented by
   [ADR 0001](./adr/0001-submission-channel.md).
 - Proposal lifecycle:
-  [Proposal phase - staff actions](../api_contracts/03Proposal%20phase%20%E2%80%94%20staff%20actions.md).
+  [SPEC-008](../specs/008-proposta-uso-de-colecoes/spec.md).
 
 ![Proposal lifecycle](../diagrams/proposal-life-cycle.svg)
 
-- Document correction and attachments: covered across proposal API contracts and
-  the public submission/amendment states above.
+- Document correction and attachments: covered by
+  [SPEC-008](../specs/008-proposta-uso-de-colecoes/spec.md) and the public
+  submission/amendment states above.
 - Staff notifications triggered by proposal events:
 
 ![Notifications flow](../diagrams/notifications-flow.svg)
@@ -31,13 +40,12 @@ records the gap without inventing an incomplete diagram.
 ## Collection Use Projects
 
 - Project lifecycle:
-  [Project phase - researcher actions](../api_contracts/04Project%20phase%20%E2%80%94%20researcher%20actions.md),
-  [Project phase - staff actions](../api_contracts/05Project%20phase%20%E2%80%94%20staff%20actions.md).
+  [SPEC-009](../specs/009-projeto-uso-de-colecoes/spec.md).
 
 ![Use of collections lifecycle](../diagrams/use-of-collections-life-cycle.svg)
 
 - Object search and requested-object snapshots:
-  [CollectionDataSources Admin API](../api_contracts/15CollectionDataSources-Admin-API.md).
+  [SPEC-014](../specs/014-catalogo-e-indice-de-objetos/spec.md).
   A dedicated end-to-end diagram for object selection is still to document.
 - Reference number policy administration:
 
@@ -54,16 +62,16 @@ records the gap without inventing an incomplete diagram.
 ![In-situ visit context map](../diagrams/in-situ-visit-context-map.svg)
 
 - CIDOC-CRM mapping:
-  [InSituVisit-CIDOC-CRM API](../api_contracts/08InSituVisit-CIDOC-CRM.md).
+  [SPEC-013](../specs/013-mapeamento-cidoc-crm/spec.md).
 
 ![CIDOC-CRM in-situ visit record model](../diagrams/cidoc-crm-in-situ-visit-record-model.svg)
 
 ![CIDOC example in-situ visit](../diagrams/cidoc-example-in-situ-visit.svg)
 
 - Narrative generation:
-  [KG-RAG Narrative API](../api_contracts/09KG-RAG-Narrative.md).
+  [SPEC-017](../specs/017-narrativa-museologica/spec.md).
 - Report aggregation:
-  [Reports InSituVisit API](../api_contracts/10Reports-InSituVisit.md).
+  [SPEC-015](../specs/015-relatorio-visita-in-situ/spec.md).
 - External publication of reports and JSON-LD:
 
 ![External publications flow](../diagrams/external-publications-flow.svg)
@@ -71,28 +79,29 @@ records the gap without inventing an incomplete diagram.
 ## Museum Questions
 
 - Public question submission:
-  [MuseumQuestions Public API](../api_contracts/13MuseumQuestions-Public-API.md).
+  [SPEC-011](../specs/011-perguntas-ao-museu/spec.md).
 
 ![Museum questions public flow](../diagrams/museum-questions-public-flow.svg)
 
-- Staff response:
-  [MuseumQuestions Internal API](../api_contracts/14MuseumQuestions-Internal-API.md).
+- Staff response: same spec, staff-facing requirements.
 
 ![Museum questions response flow](../diagrams/museum-questions-response-flow.svg)
 
 ## Administration
 
 - Document templates:
-  [DocumentTemplates API](../api_contracts/12DocumentTemplates-API.md).
-- Collection data sources:
-  [CollectionDataSources Admin API](../api_contracts/15CollectionDataSources-Admin-API.md).
+  [SPEC-012](../specs/012-modelos-de-documento/spec.md).
+- Collection data sources and catalog administration:
+  [SPEC-014](../specs/014-catalogo-e-indice-de-objetos/spec.md).
 - AI prompts:
-  [AI Prompts Admin API](../api_contracts/16AI-Prompts-Admin-API.md).
+  [SPEC-016](../specs/016-prompts-versionados/spec.md).
 
 ![AI prompts lifecycle](../diagrams/ai-prompts-life-cycle.svg)
 
-- Dashboard summary:
-  [Dashboard Summary API](../api_contracts/17Dashboard-Summary-API.md).
+- Dashboard summary: the `/p/dashboard` page is served by existing list
+  endpoints. Dedicated summary endpoints are proposed but not implemented -
+  see [Dashboard Summary API (proposed)](../proposals/17Dashboard-Summary-API.md)
+  and [SPEC-021](../specs/021-resumos-de-painel/spec.md).
 
 ![Dashboard summary flow](../diagrams/dashboard-summary-flow.svg)
 

@@ -1,3 +1,7 @@
+---
+status: current
+---
+
 # Module Boundaries
 
 This document is a semantic catalog of active backend bounded contexts. Layering

@@ -1,3 +1,7 @@
+---
+status: current
+---
+
 # Architecture
 
 This directory documents the Vitarerum backend architecture at the level needed
@@ -17,7 +21,7 @@ durable architecture decisions.
   associated data.
 - [Business flows](./business-flows.md): index of end-to-end flows and existing
   diagrams.
-- [CIDOC-CRM in-situ visit alignment](./cidoc-crm-in-situ-visit-alignment.md):
+- [CIDOC-CRM in-situ visit mapping](../specs/013-mapeamento-cidoc-crm/spec.md):
   how the `InSituVisitRecord` aggregate is mapped onto CIDOC-CRM 7.1.3 classes
   and properties, how the rules are externalised, and how the graph is validated.
 - [Architecture decisions](./adr/README.md): ADR index and template.
@@ -30,7 +34,9 @@ durable architecture decisions.
   configuration, migrations, and local commands.
 - [Frontend README](../../vitarerum-ui/README.md): frontend setup and Angular
   commands.
-- [API contracts](../api_contracts/): public HTTP contract documentation.
+- [Cross-cutting API contract](../api_contracts/README.md): session headers,
+  error envelope, pagination and the typed error codes.
+- [Specifications](../specs/README.md): the rules each context guarantees.
 - [Diagrams](../diagrams/): existing PlantUML flow and domain diagrams.
 - [Backend import-linter contracts](../../vitarerum-api/pyproject.toml):
   executable architecture rules for module dependencies.
