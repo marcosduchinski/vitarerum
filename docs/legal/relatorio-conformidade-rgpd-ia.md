@@ -9,10 +9,19 @@ Avaliação técnica da aplicação Vitarerum face ao Regulamento (UE) 2016/679
 
 | | |
 |---|---|
-| **Data** | 7 de agosto de 2026 |
+| **Data da avaliação** | 7 de agosto de 2026 |
+| **Revisto em** | 4 de setembro de 2026 (`main`, commit `d085b36`) |
 | **Âmbito** | `vitarerum-api`, `vitarerum-ui`, configuração de implantação (`docs/cloud`, `cloudbuild.yaml`) |
-| **Ramo analisado** | `cryptography` |
+| **Ramo analisado** | `cryptography` na avaliação original; `main` na revisão |
 | **Método** | Inspeção estática do código-fonte e da configuração de implantação |
+
+> **Natureza desta revisão.** A revisão de setembro **não repetiu a avaliação**.
+> Verificou as 28 referências a ficheiros e as 26 referências a linhas do
+> relatório contra o código atual — nove tinham derivado e foram corrigidas — e
+> acrescentou os destinatários externos introduzidos depois de agosto. Os
+> problemas RGPD-01 a RGPD-11 e IA-01 a IA-03 **não foram reavaliados**: o seu
+> estado de resolução é desconhecido a esta data. Ver
+> "[Alterações desde a avaliação](#alteracoes)" no fim.
 
 ## Ressalva
 
@@ -91,7 +100,7 @@ o que não é auditável nem reproduzível.
 O problema é agravado pela dispersão dos dados pessoais por tabelas satélite,
 que replicam ou referenciam a informação do titular:
 
-- `use_of_collections/infrastructure/models.py:375` — `ProposalEventRecord`
+- `use_of_collections/infrastructure/models.py:412` — `ProposalEventRecord`
 - `use_of_collections/infrastructure/models.py:466,481` — `ConversationRecord`, `MessageRecord`
 - `public_submission/infrastructure/models.py:67` — `requester_email` em `ProposalAmendmentTokenRecord`
 - `museum_questions/infrastructure/models.py:23-26` — `requester_name`, `requester_email`, `subject`, `message`
@@ -189,7 +198,26 @@ Os textos usados na geração de narrativas assistidas por IA podem ser enviados
 a um serviço de terceiro fora da União Europeia:
 
 - `docs/cloud/vitarerum-cloudrun.env.example.yaml:2` — `OLLAMA_BASE_URL: https://ollama.com`
-- `ai/museum_narrative/infrastructure/llm_ollama.py` — cliente Ollama usado pela geração de narrativas
+- `ai/museum_narrative/infrastructure/model_ollama.py` — cliente Ollama usado pela geração de narrativas
+
+**Acrescentado na revisão de 4 de setembro.** O contexto de retorno científico,
+introduzido a 14 de agosto e ampliado a 24 de agosto, alarga a lista de
+destinatários externos. Nenhum constava da avaliação original:
+
+| Destinatário | O que recebe | Onde |
+|---|---|---|
+| Ollama Cloud (`https://ollama.com`) | Instruções de planeamento e excertos de publicações, agora também no ciclo agêntico, não só nas narrativas | Fora da UE |
+| OpenAlex (`https://api.openalex.org`) | Termos de pesquisa e **o nome do autor**, encaminhado num filtro próprio (`scientific_return/infrastructure/openalex.py:97`) | EUA |
+| Crossref (`https://api.crossref.org`) | Termos de pesquisa **com o nome do autor embutido no texto livre** (`scientific_return/infrastructure/crossref.py:66`) | EUA |
+| Europe PMC (`https://europepmc.org`, `https://www.ebi.ac.uk`) | Termos de pesquisa | Reino Unido |
+| Cloudflare Turnstile (`https://challenges.cloudflare.com`) | Validação do desafio na submissão pública (`config.py:148`), com o endereço IP do visitante | Fora da UE |
+
+O nome do investigador é dado pessoal, e é precisamente o que a pesquisa
+bibliográfica precisa de enviar para encontrar as publicações do projeto. É
+tratamento com finalidade legítima, mas é **transferência para país terceiro** e
+não está coberto pela informação prestada ao titular nem por avaliação
+documentada — exatamente a lacuna que este problema descreve, agora com mais
+destinatários do que os identificados em agosto.
 
 O fluxo de perguntas públicas deixou de enviar o texto livre do cidadão para
 classificação automática por IA. Ainda assim, os dados de projetos e visitas usados em narrativa
@@ -219,7 +247,7 @@ preferência:
 
 1. **Auto-hospedar o modelo.** A aplicação já suporta esta configuração —
    `ollama_api_key` vazio aponta para uma instância local
-   (`config.py:41`). Elimina a transferência por completo e é a opção mais
+   (`config.py:38`). Elimina a transferência por completo e é a opção mais
    limpa.
 2. **Pseudonimizar antes do envio.** Remover nome e endereço eletrónico do texto
    antes da chamada. Mitiga, mas não elimina: o corpo da mensagem pode conter
@@ -359,7 +387,7 @@ detém a seu respeito.
 
 O único acesso concedido ao titular é o fluxo de correção por token, que expõe
 exclusivamente os itens dentro do âmbito de correção — tudo o resto responde
-`OUT_OF_SCOPE` (`public_submission/presentation/routes.py:462`). É um mecanismo
+`OUT_OF_SCOPE` (`public_submission/presentation/routes.py:427`). É um mecanismo
 de edição delimitada, não de acesso.
 
 ### Recomendação
@@ -406,7 +434,7 @@ armazenamento que não existe no código:
 
 - `docs/cloud/vitarerum-cloudrun.env.example.yaml:10-11` — `GCS_BUCKET_NAME` e `FILE_STORAGE_BACKEND: gcs`
 - Não existe qualquer implementação de armazenamento em GCS na aplicação
-- `config.py:90` — `extra="ignore"` faz com que estas variáveis sejam descartadas sem aviso
+- `config.py:168` — `extra="ignore"` faz com que estas variáveis sejam descartadas sem aviso
 - Consequentemente, todas as injeções resolvem para `LocalDiskFileStorage(settings.data_dir)`, apontando para `/app/data` (`Dockerfile:41`)
 
 Em Cloud Run, `/app/data` reside no sistema de ficheiros **efémero** do
@@ -496,7 +524,7 @@ controlo no prazo de 72 horas.
 
 Não existe registo de quem acedeu a que dados pessoais e quando.
 
-`ObjectAccessLogRecord` (`use_of_collections/infrastructure/models.py:123`)
+`ObjectAccessLogRecord` (`use_of_collections/infrastructure/models.py:160`)
 regista acessos a **objetos do acervo**, não a dados pessoais — apesar da
 semelhança de nome, não cumpre esta função.
 
@@ -576,7 +604,7 @@ de confirmação:
 - Idem na linha 51, para a hiperligação de correção
 
 O comportamento **está mitigado em produção**: `validate_non_local_security`
-(`config.py:160`) exige `smtp_host` configurado fora de ambiente local ou de
+(`config.py:157`) exige `smtp_host` configurado fora de ambiente local ou de
 teste, pelo que este remetente não é instanciado.
 
 Regista-se como risco residual por depender integralmente dessa validação.
@@ -613,9 +641,10 @@ nessa categoria.
 **Existe intervenção humana em todas as decisões**, o que é determinante e está
 verificado no código:
 
-- `museum_questions/application/use_cases.py:257` — `require_staff(data.caller)` em `MarkMuseumQuestionOutOfScope`
-- `museum_questions/application/use_cases.py:267` — o fundamento (`reason`) é redigido por pessoal, não gerado
-- Todos os pontos finais de IA ativos exigem `require_staff`
+- `museum_questions/application/use_cases.py:358` — `require_museum_question_access(data.caller)` em `MarkMuseumQuestionOutOfScope`, que exige pertença a um grupo de pessoal
+- `museum_questions/application/use_cases.py:371` — o fundamento (`reason`) é redigido por pessoal, não gerado
+- `scientific_return/application/use_cases.py` — a decisão sobre um candidato exige um grupo curatorial; o agente propõe e nunca confirma
+- Todos os pontos finais de IA ativos exigem pessoal autenticado
 
 A IA **sugere**; a decisão é humana. Isto mantém o sistema fora do alto risco e,
 adicionalmente, afasta a aplicação do **Art. 22.º do RGPD** (decisões
@@ -885,3 +914,54 @@ urgente**. Surge na Fase 5 por três razões:
    primeiro.
 
 Cifrar ficheiros que estão a ser perdidos não melhora a posição de conformidade.
+
+---
+
+<a id="alteracoes"></a>
+## Alterações desde a avaliação
+
+Levantadas a 4 de setembro de 2026 por comparação com o código em `main`
+(`d085b36`). Nenhuma foi avaliada quanto à conformidade: são o **delta de
+âmbito** que uma reavaliação terá de cobrir.
+
+### Superfície de IA que aumentou
+
+| Quando | O quê | Porque importa |
+|---|---|---|
+| 14 de agosto | Contexto `scientific_return`: pesquisa bibliográfica determinística e ciclo agêntico assistido | Novos destinatários externos; nome do investigador transmitido a três fontes |
+| 24 de agosto | Ciclo agêntico **autónomo** (`full-agentic`) | Passa a correr **fora do pedido HTTP**, por agendamento, sem pessoa presente no momento da execução |
+| 24 de agosto | Base de conhecimento curatorial | Um modelo **propõe** memória institucional a partir de decisões de curadores; a proposta só entra em uso depois de validação humana |
+
+O ciclo autónomo merece atenção específica numa reavaliação. Não decide — os
+candidatos que produz são confirmados ou descartados por pessoal curatorial, o
+que mantém o afastamento do Art. 22.º do RGPD que este relatório invoca. Mas
+executa sem operador presente, contacta fontes externas por sua iniciativa
+dentro de um orçamento, e persiste instantâneos de projeto cifrados. Nada disso
+existia em agosto.
+
+### Superfície de IA que diminuiu
+
+| Quando | O quê |
+|---|---|
+| Antes de setembro | Triagem das perguntas ao museu por IA — removida; resta apenas metadados ORM das tabelas históricas, à espera de decisão de retenção |
+| Commit `a571392` | Geração de análise LLM "em sombra" sobre candidatos — removida |
+
+A remoção da triagem confirma o que o [RGPD-03](#rgpd-03) já registava: o texto
+livre do cidadão deixou de ser enviado para classificação automática.
+
+**Ponto pendente:** as tabelas históricas de triagem continuam a existir na base
+de dados por decisão explícita adiada. Enquanto contiverem texto de perguntas de
+cidadãos, são dados pessoais conservados sem finalidade ativa — o que pertence
+ao [RGPD-02](#rgpd-02), limitação da conservação.
+
+### Correções de referências
+
+Nove referências ao código tinham derivado e foram corrigidas: oito números de
+linha e um ficheiro cujo nome mudou de *llm_ollama.py* para
+`ai/museum_narrative/infrastructure/model_ollama.py`. Uma
+mudança de substância: `MarkMuseumQuestionOutOfScope` usa
+`require_museum_question_access`, não `require_staff` — o efeito é o mesmo,
+exigir pertença a um grupo de pessoal, mas o relatório nomeava a função errada.
+
+As restantes 19 referências com número de linha continuam a apontar para o que o
+relatório afirma.

@@ -6,7 +6,7 @@
 | Estado | Implementado |
 | Contexto delimitado | `app/ai/prompts` |
 | Escrita a partir de | `app/ai/prompts/`, `test/ai/prompts/`, contrato 16 |
-| Specs relacionadas | [SPEC-017](../017-narrativa-museologica/spec.md), [SPEC-005](../005-analise-llm-sombra/spec.md), [SPEC-001](../001-investigacao-agentica-assistida/spec.md) |
+| Specs relacionadas | [SPEC-017](../017-narrativa-museologica/spec.md), [SPEC-005](../005-analise-agentica-de-candidato/spec.md), [SPEC-001](../001-investigacao-agentica-assistida/spec.md) |
 
 ## 1. Problema
 
@@ -140,7 +140,7 @@ de narrativa. Utilizadores `EXTERNAL` nao leem, publicam nem arquivam.
 
 ## 7. Requisitos nao funcionais
 
-- **Auditabilidade**: cada saida assistida guarda identificador e rotulo da versao usada ([SPEC-005](../005-analise-llm-sombra/spec.md), RF-005; [SPEC-017](../017-narrativa-museologica/spec.md), RF-006).
+- **Auditabilidade**: cada saida assistida guarda identificador e rotulo da versao usada ([SPEC-005](../005-analise-agentica-de-candidato/spec.md), RF-001; [SPEC-017](../017-narrativa-museologica/spec.md), RF-006).
 - **Operacao sem deploy**: alterar comportamento de IA e um ato de publicacao, nao de instalacao.
 - **Fronteiras**: contextos consumidores acedem por linguagem publicada, nunca as tabelas deste contexto.
 

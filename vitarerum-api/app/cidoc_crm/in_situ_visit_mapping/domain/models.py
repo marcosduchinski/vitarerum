@@ -4,9 +4,10 @@ A generated, read-oriented projection of an in-situ visit ready to be mapped to
 CIDOC-CRM. ``InSituVisitRecord`` is the aggregate root; its four child
 collections (requested objects, occurrences, logs, publications) and the
 attachments hanging off occurrences/logs/publications form one consistency
-boundary. Names follow ``docs/cidoc-crm.puml`` (so they keep the ``...Record``
-suffix); the ORM counterparts in ``infrastructure/models.py`` use an ``Orm``
-suffix to avoid the clash.
+boundary. Names follow
+``docs/diagrams/cidoc-crm-in-situ-visit-record-model.puml`` (so they keep the
+``...Record`` suffix); the ORM counterparts in ``infrastructure/models.py``
+use an ``Orm`` suffix to avoid the clash.
 """
 
 from __future__ import annotations

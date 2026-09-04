@@ -99,16 +99,24 @@ ativacao). A primeira revisao nao espera um intervalo.
 `reviewIntervalDays` situa-se entre 1 e 365, tanto na ativacao como na
 re-cadencia. Fora do intervalo, o pedido e recusado.
 
-### RF-008 — Re-cadencia ancorada na ultima pesquisa
+### RF-008 — Re-cadencia ancorada na data escolhida
 
-Ao mudar a cadencia, o proximo vencimento e calculado como
-`lastRunAt + intervalo`, nunca a partir de agora. Consequencias deliberadas:
+As revisoes assentam numa **grelha fixa** medida a partir de
+`scheduleAnchorAt`, a data que o curador escolheu na ativacao: o proximo
+vencimento e o primeiro ponto da grelha estritamente posterior ao momento atual,
+`ancora + n x intervalo`.
+
+Mudar a cadencia re-deriva a grelha **a partir da mesma ancora**, nunca a partir
+de agora. Consequencias deliberadas:
 
 - encurtar a cadencia pode tornar a vigilancia vencida imediatamente;
 - alargar a cadencia nao concede um periodo completo novo;
 - uma vigilancia que nunca correu permanece vencida na sua data de ativacao.
 
 Re-cadenciar nao e uma forma de adiar uma revisao ja em divida.
+
+A ancora e o que faz "de 90 em 90 dias a partir de 1 de marco" continuar a
+significar isso mesmo quando uma execucao arranca com atraso.
 
 ### RF-009 — Fecho irreversivel
 
@@ -117,8 +125,11 @@ Uma vigilancia `CLOSED` nao pode ser reaberta nem re-cadenciada. `ACTIVE` e
 
 ### RF-010 — Registo de execucao
 
-Concluida uma pesquisa, a vigilancia regista `lastRunAt` e recalcula
-`nextRunAt = lastRunAt + reviewIntervalDays`.
+Concluida uma pesquisa, a vigilancia regista `lastRunAt` e o proximo vencimento
+passa a ser o ponto seguinte da grelha da ancora — **nao** `lastRunAt +
+intervalo`. Uma execucao atrasada nao empurra a serie para a frente; uma
+interrupcao longa retoma no primeiro ponto futuro da grelha, sem tentar
+recuperar as revisoes perdidas uma a uma.
 
 ### RF-011 — Varrimento agendado
 
@@ -179,31 +190,37 @@ pergunta para um projeto so.
 
 ## 8. Criterios de aceitacao
 
-### CA-001 — Nova cadencia ancorada na ultima pesquisa
+### CA-001 — Nova cadencia re-derivada da ancora, nao de agora
 Dado uma vigilancia que ja pesquisou
 Quando a cadencia e alterada
-Entao o proximo vencimento e `lastRunAt + novo intervalo`
-→ `test_scientific_return.py::test_a_new_interval_moves_the_next_review_from_the_last_search`
+Entao a ancora mantem-se e o proximo vencimento e `ancora + novo intervalo`; uma vigilancia que nunca correu continua vencida
+→ `test_scientific_return.py::test_a_new_interval_is_re_derived_from_the_anchor_not_from_now`, `::test_a_new_interval_leaves_a_never_run_watch_due`
 
-### CA-002 — Vigilancia nunca executada permanece vencida
+### CA-002 — A grelha nao escorrega com atrasos
+Dado uma vigilancia cuja execucao arranca depois da hora
+Quando a execucao e registada
+Entao a serie continua medida a partir da ancora, e uma interrupcao longa retoma no primeiro ponto futuro
+→ `test_scientific_return.py::test_a_late_search_does_not_push_the_series_later`, `::test_a_long_outage_resumes_at_the_next_future_slot`, `::test_a_future_anchor_postpones_the_first_review`
+
+### CA-003 — Vigilancia nunca executada permanece vencida
 Dado uma vigilancia sem execucoes
 Quando a cadencia e alargada
 Entao continua vencida na data de ativacao
 → `test_scientific_return.py::test_a_new_interval_leaves_a_never_run_watch_due`
 
-### CA-003 — Fecho irreversivel
+### CA-004 — Fecho irreversivel
 Dado uma vigilancia `CLOSED`
 Quando se tenta re-cadencia-la
 Entao o pedido e recusado
 → `test_scientific_return.py::test_a_closed_watch_cannot_be_rescheduled`
 
-### CA-004 — Intervalo fora do dominio
+### CA-005 — Intervalo fora do dominio
 Dado um intervalo de 0 ou 366 dias
 Quando a cadencia e definida
 Entao o pedido e recusado
 → `test_scientific_return.py::test_an_interval_outside_the_allowed_range_is_refused`
 
-### CA-005 — Consulta em lote publicada no contrato
+### CA-006 — Consulta em lote publicada no contrato
 Dado o esquema OpenAPI publicado
 Quando e inspecionado
 Entao a consulta em lote de vigilancias aparece entre as rotas operacionais

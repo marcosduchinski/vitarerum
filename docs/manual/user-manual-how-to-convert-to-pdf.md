@@ -15,6 +15,8 @@ e não deve ser editado diretamente.
 | --- | --- |
 | Fonte do conteúdo | [`user-manual.md`](./user-manual.md) |
 | Imagens e infográficos | [`assets/`](./assets/) |
+| Marca vetorial usada pela aplicação | `vitarerum-ui/src/app/shared/components/logo-mark/` |
+| Versões gráficas oficiais | `vitarerum-ui/public/vita01.png` a `vita04.png` |
 | PDF final | [`vitarerum-manual-utilizador.pdf`](./vitarerum-manual-utilizador.pdf) |
 | Área de trabalho temporária | `tmp/pdfs/` |
 
@@ -49,6 +51,25 @@ testes atuais.
    conteúdo sobreposto ao cabeçalho ou rodapé.
 8. Gere primeiro um candidato em `tmp/pdfs/`. Substitua o PDF final apenas
    depois de todas as verificações passarem.
+
+### Identidade visual obrigatória da capa
+
+A capa não deve usar uma composição genérica. Deve ser reconhecível como parte
+do Vitarerum e preservar estes elementos da interface atual:
+
+- símbolo oficial definido em
+  `vitarerum-ui/src/app/shared/components/logo-mark/logo-mark.component.html`;
+- azul-marinho `#022149` como cor dominante;
+- vermelhão `#f43e1a` como cor de destaque;
+- branco quente `#f5f4ef` para a marca e o texto sobre fundo escuro;
+- nome **vitarerum** em minúsculas, acompanhado do símbolo;
+- título **Manual do Utilizador**, subtítulo, versão, idioma e data de revisão.
+
+As imagens `vita01.png` a `vita04.png` são referências oficiais para proporção,
+cor e combinação do símbolo com o nome. Dê preferência à geometria vetorial do
+componente para manter a marca nítida. Se precisar de rasterizá-la, use fundo
+transparente e resolução adequada a impressão A4. Não redesenhe, simplifique ou
+substitua a marca por formas apenas semelhantes.
 
 ## Preparar o ambiente
 
@@ -136,6 +157,8 @@ A existência do ficheiro não basta. Faça todas estas verificações:
 4. Renderize **todas** as páginas como PNG com PyMuPDF ou Poppler. Inspecione uma
    folha de contacto e, em tamanho legível, a capa, o índice, todas as tabelas e
    todas as páginas com infográficos.
+   Na capa, compare o símbolo e as cores com o componente `logo-mark` e com as
+   imagens oficiais em `vitarerum-ui/public/`.
 5. Confirme visualmente que não há cortes, sobreposições, texto minúsculo,
    imagens deformadas, páginas vazias ou quebras de página inadequadas.
 6. Execute `git diff --check` para detetar problemas de formatação nos ficheiros
@@ -183,6 +206,7 @@ A atualização está concluída somente quando:
 - o PDF foi gerado a partir da versão atual de `user-manual.md`;
 - texto e infográficos estão aderentes ao comportamento atual da aplicação;
 - índice, marcadores e links funcionam;
+- a capa preserva a marca, a paleta e a composição visual do Vitarerum;
 - todas as páginas foram renderizadas e inspecionadas visualmente;
 - não existem cortes, sobreposições, páginas vazias ou imagens ilegíveis;
 - o ficheiro validado está em `docs/manual/vitarerum-manual-utilizador.pdf`;

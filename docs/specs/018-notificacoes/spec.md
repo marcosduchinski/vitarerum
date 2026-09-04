@@ -62,16 +62,18 @@ marca as notificacoes de outra.
 
 ### RF-006 — Marcar todas como lidas
 
-Limitado a permissao ativa.
+`POST /api/v1/notifications/read-all`, limitado a permissao ativa.
 
 ### RF-007 — Limpar todas
 
-Oculta as notificacoes da permissao ativa e zera a contagem de nao lidas, sem
+`POST /api/v1/notifications/clear-all` oculta as notificacoes da permissao ativa e zera a contagem de nao lidas, sem
 afetar outras permissoes.
 
 ### RF-008 — Contagem e filtros
 
-Os endpoints permitem listar, filtrar, contar nao lidas e marcar como lida.
+Os endpoints permitem listar e filtrar (`GET /api/v1/notifications`), contar
+nao lidas (`GET /api/v1/notifications/unread-count`) e marcar como lida
+(`POST /api/v1/notifications/{notificationId}/read`).
 
 ### RF-009 — Isolamento
 

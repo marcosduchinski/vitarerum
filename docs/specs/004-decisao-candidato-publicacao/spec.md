@@ -30,8 +30,8 @@ projeto.
 
 ## 4. Linguagem ubiqua
 
-- **Candidato**: publicacao proposta, com estado `PENDING`, `CONFIRMED`, `DISMISSED` ou `SNOOZED`.
-- **Decisao**: ato tipado sobre um candidato — `CONFIRM`, `CORRECT_AND_CONFIRM`, `DISMISS`, `SNOOZE`.
+- **Candidato**: publicacao proposta, com estado `PENDING`, `CONFIRMED` ou `DISMISSED`.
+- **Decisao**: ato tipado sobre um candidato — `CONFIRM`, `CORRECT_AND_CONFIRM` ou `DISMISS`.
 - **Correcao**: alteracao de titulo, DOI, URL ou autores feita por uma pessoa no momento da confirmacao.
 - **Entrada de publicacao**: registo no `PublicationLog` do projeto, no contexto `use_of_collections`.
 - **Instantaneo de evidencia**: copia da evidencia tal como estava visivel no momento da decisao.
@@ -62,7 +62,6 @@ confianca automatica.
 | `CONFIRM` | — | Cria a entrada no `PublicationLog` e marca `CONFIRMED` |
 | `CORRECT_AND_CONFIRM` | `correction` | Aplica a correcao, cria a entrada e marca `CONFIRMED` |
 | `DISMISS` | `justification` nao vazia | Marca `DISMISSED` |
-| `SNOOZE` | `snoozedUntil` no futuro | Marca `SNOOZED` ate a data |
 
 ### RF-003 — Materializacao transacional
 
@@ -81,15 +80,13 @@ o valor original. Nenhuma outra propriedade do candidato e editavel.
 
 ### RF-005 — Decisoes finais nao se revisitam
 
-Um candidato `CONFIRMED` ou `DISMISSED` recusa nova decisao. `SNOOZED` e
-`PENDING` continuam decidiveis.
+Um candidato `CONFIRMED` ou `DISMISSED` recusa nova decisao. So `PENDING` e
+decidivel.
 
-### RF-006 — Adiamento com regresso automatico
+Nao existe adiamento: a decisao curatorial e binaria e definitiva. O `SNOOZE` e o
+estado `SNOOZED` existiram e foram removidos no commit `7ab131f`.
 
-Um candidato `SNOOZED` cujo prazo expirou volta a `PENDING` quando a execucao
-seguinte o reencontra ([SPEC-003](../003-pipeline-deterministico-bibliografico/spec.md), RF-012).
-
-### RF-007 — Historico auditavel
+### RF-006 — Historico auditavel
 
 `GET /api/v1/scientific-return/candidates/{candidateId}/decisions` devolve cada
 decisao com tipo, justificacao, autor, instante, correcao aplicada e o
@@ -108,10 +105,9 @@ com que fundamento a pessoa decidiu.
 | INV-001 | Nenhuma entrada no `PublicationLog` existe sem uma confirmacao humana explicita |
 | INV-002 | Confirmacao e entrada de publicacao sao criadas na mesma transacao |
 | INV-003 | Um descarte exige justificacao registada |
-| INV-004 | Um adiamento exige data futura |
-| INV-005 | Uma decisao final e definitiva |
-| INV-006 | Toda a decisao guarda a evidencia que a fundamentou |
-| INV-007 | Nenhum processo automatico — pipeline, analise LLM ou ciclo agentic — decide um candidato |
+| INV-004 | Uma decisao final e definitiva |
+| INV-005 | Toda a decisao guarda a evidencia que a fundamentou |
+| INV-006 | Nenhum processo automatico — pipeline, analise LLM ou ciclo agentic — decide um candidato |
 
 ## 7. Criterios de aceitacao
 
@@ -121,13 +117,10 @@ Quando um curador confirma
 Entao e criada a entrada de publicacao no projeto e a decisao guarda o instantaneo da evidencia
 → `test_scientific_return.py::test_confirm_materializes_publication_and_audits_evidence`
 
-### CA-002 — Adiamento exige data futura
-→ `test_scientific_return.py::test_snooze_requires_a_future_date`
-
-### CA-003 — Descarte sobrevive as execucoes seguintes
+### CA-002 — Descarte sobrevive as execucoes seguintes
 → `test_scientific_return.py::test_dismissed_candidate_is_remembered_on_later_run`
 
-### CA-004 — Nenhum automatismo decide
+### CA-003 — Nenhum automatismo decide
 → `test_agent_security.py::test_no_candidate_is_ever_decided_by_the_cycle`, `::test_the_cycle_has_no_route_to_the_publication_log`, `test_run_investigation.py::test_the_candidate_still_requires_a_human_decision`
 
 ## 8. Requisitos nao funcionais
@@ -141,9 +134,9 @@ Entao e criada a entrada de publicacao no projeto e a decisao guarda o instantan
 | Elemento | Localizacao |
 | --- | --- |
 | Estados e transicoes do candidato (RF-002, RF-005, RF-006) | `app/scientific_return/domain/models.py` |
-| Caso de uso da decisao (RF-002..RF-004, RF-007) | `app/scientific_return/application/use_cases.py` |
+| Caso de uso da decisao (RF-002..RF-004, RF-006) | `app/scientific_return/application/use_cases.py` |
 | Escrita no `PublicationLog` (RF-003) | `app/scientific_return/infrastructure/acls.py` |
-| Endpoints e filtros (RF-001, RF-007) | `app/scientific_return/presentation/routes.py` |
+| Endpoints e filtros (RF-001, RF-006) | `app/scientific_return/presentation/routes.py` |
 | Contrato publico | Esquema OpenAPI em `/openapi.json`; regras transversais em `docs/api_contracts/README.md` |
 
 ## 10. Questoes em aberto

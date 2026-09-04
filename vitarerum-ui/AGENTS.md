@@ -105,7 +105,8 @@ ng update              # check for Angular updates
 
 ## Security Rules
 - Never use `bypassSecurityTrust*` without a comment justifying it
-- No sensitive values in `environment.ts` files committed to git
+- No sensitive values in `src/config/environment.json`, which is served to the
+  browser at runtime and is therefore public by construction
 - Run `npm audit` — do not introduce packages with critical vulnerabilities
 
 ## Legal Rules

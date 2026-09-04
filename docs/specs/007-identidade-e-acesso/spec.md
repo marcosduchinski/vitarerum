@@ -98,6 +98,8 @@ divergir para uma politica mais fraca.
 
 ### RF-008 — Alterar a propria password
 
+`POST /api/v1/auth/change-password`.
+
 Exige a password atual. Password atual errada e recusada; password nova fraca e
 recusada. O sucesso devolve `204` e atualiza `passwordChangedAt`.
 
@@ -141,6 +143,9 @@ utilizadores e atribuir grupos e vedado ao grupo `EXTERNAL`.
 Alterar o nome de exibicao altera **apenas** o nome.
 
 ### RF-015 — Protecao do ultimo administrador ativo
+
+Desativar e reativar uma conta faz-se por `POST /api/v1/users/{userId}/disable`
+e `POST /api/v1/users/{userId}/enable`.
 
 Desativar o ultimo `SYS_ADMIN` ativo, ou remove-lo do grupo, e recusado. O
 sistema nao permite ficar sem administracao.

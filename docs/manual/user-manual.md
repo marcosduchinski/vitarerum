@@ -6,7 +6,6 @@ status: current
 
 > Versão 0.1 — revista em 4 de setembro de 2026
 > Idioma: PT-PT
-> Verificada contra o estado atual da aplicação em 4 de setembro de 2026
 
 Este manual descreve as funcionalidades visíveis na aplicação. Detalhes de
 implementação, contratos HTTP e procedimentos de implantação encontram-se na
@@ -177,7 +176,7 @@ Pontos importantes a reter:
 Autenticação por email e password. Em caso de erro, a página mostra a falha
 sem redirecionar — as credenciais inválidas nunca terminam a sessão de
 alguém, apenas impedem que comece.
-  
+
 **3.2 Esqueci-me da password (`/forgot-password`)**
 Fluxo de recuperação por email, disponível mesmo a quem já tem uma sessão
 local (propositadamente não bloqueado a utilizadores já "autenticados"), para
@@ -464,9 +463,10 @@ museu. Enquanto o projeto está `CREATED`, as tarefas aparecem bloqueadas.
 possível concluir um projeto sem nenhum objeto registado.
 
 **10.6 Cancelar o projeto**: possível a partir de qualquer estado não
-terminal; é sempre pedido um motivo. É uma ação irreversível — o aviso no
-ecrã confirma que o projeto passa para "cancelado" e sai da lista de
-projetos ativos.
+terminal. A interface atual apresenta uma confirmação, mas não pede um motivo
+escrito: regista automaticamente uma justificação genérica conforme a área de
+origem. É uma ação irreversível — o aviso no ecrã confirma que o projeto passa
+para "cancelado" e sai da lista de projetos ativos.
 
 ---
 

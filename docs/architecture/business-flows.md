@@ -76,6 +76,107 @@ shared by every endpoint is in the
 
 ![External publications flow](../diagrams/external-publications-flow.svg)
 
+## Scientific Return
+
+The largest flow in the system, and the newest. Rules and invariants live in
+[SPEC-001](../specs/001-investigacao-agentica-assistida/spec.md) through
+[SPEC-006](../specs/006-avaliacao-retorno-cientifico/spec.md),
+[SPEC-024](../specs/024-investigacao-agentica-autonoma/spec.md) and
+[SPEC-025](../specs/025-base-de-conhecimento-curatorial/spec.md); the reading
+order is in the [specifications index](../specs/README.md).
+
+- Coexisting flows and the full-agentic cycle:
+
+![Scientific return flows](../diagrams/scientific-return-flow.svg)
+
+- The exclusively autonomous cycle:
+
+![Scientific return full-agentic flow](../diagrams/scientific-return-full-agentic-flow.svg)
+
+- Autonomous search, from trigger to curatorial decision:
+
+```mermaid
+%% source: ../diagrams/flow-autonomous-search.mmd
+flowchart TD
+    SEARCH_NOW["Search now"]:::gray
+    START_AGENT["Start autonomous search"]:::gray
+    SCHEDULE["Data programada alcançada"]:::gray
+
+    ACTIVE{"Monitorização ativa?"}:::dec
+    STOP["Nenhuma pesquisa executada"]:::gray
+
+    RULES["Pesquisa por regras sobre o snapshot do projeto:<br/>inventário, autor+inventário, inventário+objeto e autor+objeto"]:::blue
+    ACTIONABLE{"O resultado liga-se ao objeto<br/>ou ao investigador?"}:::dec
+    DISCARD["Resultado descartado"]:::gray
+    CANDIDATE_RULES["Candidato pendente"]:::blue
+
+    QUEUE_AI["Investigação autónoma em fila, executada em segundo plano"]:::viol
+    MEMORY["Carrega o snapshot e o conhecimento curatorial ativo"]:::gray
+    FLOOR["Pesquisa inicial garantida: apelido + objeto<br/>e número de inventário sem prefixo"]:::blue
+    READ["IA analisa cada publicação separadamente"]:::viol
+    RELEVANT{"Publicação relevante?"}:::dec
+    CANDIDATE_AI["Cria ou reutiliza candidato pendente"]:::blue
+    CONTINUE{"Continuar?"}:::dec
+    PLAN["IA prepara novas pesquisas e escolhe as fontes"]:::viol
+    FINISH["Investigação concluída"]:::viol
+
+    REVIEW["Fila de revisão humana"]:::green
+    DECISION{"Decisão do curador"}:::dec
+    PENDING["Continua pendente"]:::gray
+    DISMISSED["Candidato rejeitado"]:::red
+    PUBLICATION["Registo de publicação criado no Projeto"]:::green
+    LEARN["A justificação do curador é convertida pela IA numa lição proposta"]:::viol
+    ACTIVATE["Curador ativa a lição"]:::green
+
+    SEARCH_NOW --> ACTIVE
+    SCHEDULE --> ACTIVE
+    START_AGENT --> ACTIVE
+    ACTIVE -->|Não| STOP
+    ACTIVE -->|"Sim: Search now ou data programada"| RULES
+    ACTIVE -->|"Sim: Start autonomous search"| QUEUE_AI
+
+    RULES --> ACTIONABLE
+    ACTIONABLE -->|Não| DISCARD
+    ACTIONABLE -->|Sim| CANDIDATE_RULES
+    CANDIDATE_RULES --> REVIEW
+
+    QUEUE_AI --> MEMORY
+    MEMORY --> FLOOR
+    FLOOR --> READ
+    READ --> RELEVANT
+    RELEVANT -->|"Não, descartada"| CONTINUE
+    RELEVANT -->|Sim| CANDIDATE_AI
+    CANDIDATE_AI --> REVIEW
+    CANDIDATE_AI --> CONTINUE
+    CONTINUE -->|"Sim, dentro dos limites"| PLAN
+    PLAN --> READ
+    CONTINUE -->|"Não: limite atingido ou a IA decidiu parar"| FINISH
+    FINISH -.->|"Segue para revisao humana"| REVIEW
+
+    REVIEW --> DECISION
+    DECISION -->|"Decidir mais tarde"| PENDING
+    DECISION -->|"Rejeitar, com nota obrigatória"| DISMISSED
+    DECISION -->|"Confirmar, sem nota"| PUBLICATION
+    DECISION -->|"Corrigir e confirmar, com nota opcional"| PUBLICATION
+    DISMISSED -.-> LEARN
+    PUBLICATION -.->|"só a partir de corrigir e confirmar,<br/>e só se a nota for preenchida"| LEARN
+    LEARN --> ACTIVATE
+    ACTIVATE -.->|"usada nas investigações seguintes"| MEMORY
+
+    REFRESH["O painel só mostra o progresso depois de Refresh"]:::gray
+    REFRESH -.-> QUEUE_AI
+
+    LIMITS["Limites padrão por investigação: 4 ciclos, 12 pesquisas,<br/>40 resultados, 5 candidatos e 20 chamadas à IA"]:::gray
+    LIMITS -.-> CONTINUE
+
+    classDef blue fill:#E6F1FB,color:#0C447C,stroke:#378ADD,stroke-width:0.5px;
+    classDef viol fill:#EEEDFE,color:#3C3489,stroke:#7F77DD,stroke-width:0.5px;
+    classDef green fill:#EAF3DE,color:#27500A,stroke:#639922,stroke-width:0.5px;
+    classDef gray fill:#F1EFE8,color:#444441,stroke:#888780,stroke-width:0.5px;
+    classDef red fill:#FCEBEB,color:#791F1F,stroke:#E24B4A,stroke-width:0.5px;
+    classDef dec fill:none,color:#3d3d3a,stroke:#73726c,stroke-width:0.5px;
+```
+
 ## Museum Questions
 
 - Public question submission:

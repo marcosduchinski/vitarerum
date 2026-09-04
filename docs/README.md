@@ -109,6 +109,11 @@ One source of truth per document — never both — and `scripts/check_docs.py`
 fails when a document declares nothing, declares an unknown value, or disagrees
 with the directory it sits in.
 
+The same script also refuses an HTTP route that no specification names. A route
+added without its specification fails the build, which is the defect this
+repository rediscovered twice by hand: 23 endpoints in one pass, and the
+Direction review workflow in another.
+
 A document under `proposals/` describes intent, never current behaviour. Do not
 implement against it without checking the matching spec first.
 
@@ -117,3 +122,7 @@ implement against it without checking the matching spec first.
 ```bash
 java -jar /path/to/plantuml.jar -tsvg docs/architecture docs/diagrams
 ```
+
+PlantUML names its output after the `@startuml <name>` line, not after the file.
+Keep the two identical — `scripts/check_docs.py` enforces it — or a regeneration
+writes an SVG that no document references while the referenced one goes stale.

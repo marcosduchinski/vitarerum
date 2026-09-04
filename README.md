@@ -100,10 +100,20 @@ Documentation:
 python3 scripts/check_docs.py
 ```
 
-Checks the tracked Markdown for broken local links, spec acceptance criteria
-citing tests that no longer exist, and documents that do not declare whether
-they describe current behaviour. Standard library only; also runs on every push
-and pull request through [.github/workflows/docs.yml](./.github/workflows/docs.yml).
+Six checks over the tracked Markdown, the diagrams and the backend routes:
+
+| Check | Fails when |
+| --- | --- |
+| `--links` | A relative link points at a file that is not there |
+| `--tests` | A spec's acceptance criterion cites a test that no longer exists |
+| `--status` | A document does not declare whether it describes current behaviour |
+| `--diagrams` | A diagram has no source, renders to a different name than its file, or nothing references it |
+| `--citations` | A document cites a source file that does not exist, or a line past its end |
+| `--routes` | The backend declares an HTTP route that no specification names |
+
+Standard library only — the route check reads the decorators statically rather
+than importing the application. Runs on every push and pull request through
+[.github/workflows/docs.yml](./.github/workflows/docs.yml).
 
 ## Build And Deployment
 

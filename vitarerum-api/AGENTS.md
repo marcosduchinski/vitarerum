@@ -114,7 +114,7 @@ Cross-context rules:
 - Do not bypass published-language modules with direct imports into another context.
 - Preserve import-linter contracts in `pyproject.toml`.
 - Every bounded context must register its own import-linter contracts in `pyproject.toml`: a `layers` contract for its `presentation > infrastructure > application > domain` ordering, plus coverage in the domain/application purity (`forbidden`) contracts. A new context is not complete until these are added.
-- When adding, removing, or changing import-linter contracts between bounded contexts, update `../docs/architecture/context-map.puml` in the same change.
+- When adding, removing, or changing import-linter contracts between bounded contexts, update `../docs/architecture/vitarerum-context-map.puml` in the same change.
 
 API contract rules:
 - Treat `docs/specs/` as the authoritative description of implemented behaviour

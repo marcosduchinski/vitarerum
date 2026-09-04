@@ -185,7 +185,6 @@ Contract-sensitive behavior is documented under:
 
 - [cross-cutting API contract](../docs/api_contracts/README.md)
 - [specifications](../docs/specs/README.md)
-- [backend-local use-of-collections contract](./docs/api_contracts/use_of_collections.md)
 
 ## Migrations
 

@@ -3,19 +3,31 @@
 Step-by-step curl commands to seed the identity context and create proposals.
 All commands assume the server is running at `http://localhost:8000`.
 
-**Group IDs (seeded by `scripts/seed.sql`):**
+**Group IDs (seeded by `scripts/seed.sql`, verified 2026-09-04):**
 
 | Group | ID |
 |-------|-----|
 | EXTERNAL | `grp-ext` |
 | CURATORIAL | `grp-cur` |
-| COLLECTIONS_MANAGEMENT | `grp-col` |
+| COLLECTIONS_MANAGEMENT | `grp-cm` |
 | DIRECTION | `grp-dir` |
-| SYS_ADMIN | `grp-sys-admin` |
+| SYS_ADMIN | `grp-sys-adm` |
 
-> **Bootstrap:** user and group administration calls below use `perm-sys-admin`,
-> which is seeded by `scripts/seed.sql`. Proposal calls use an EXTERNAL permission,
-> such as the seeded `perm-ext` or the `permissionId` returned when assigning Bruno
+> **Bootstrap.** Permission ids are **not** stable: `scripts/seed.sql` generates
+> them with `gen_random_uuid()`, so there is no `perm-sys-admin` to hard-code.
+> Get one by logging in as a seeded user and reading the `permissions` array of
+> the response — `Bob` holds `CURATORIAL`, `COLLECTIONS_MANAGEMENT` and
+> `SYS_ADMIN`, `Carla` holds `DIRECTION`:
+>
+> ```bash
+> curl -s -X POST http://localhost:8000/api/v1/auth/login \
+>   -H 'Content-Type: application/json' \
+>   -d '{"email":"bob.curatorial.vita@outlook.com","password":"<seeded password>"}'
+> ```
+>
+> Use the `accessToken` as the bearer token and the chosen `permissionId` as
+> `X-Permission-Id` on every call below. Proposal calls need an EXTERNAL
+> permission — the `permissionId` returned when assigning Bruno
 > to EXTERNAL in step 2.
 
 ---
@@ -28,31 +40,31 @@ permissions are assigned in step 2.
 ```bash
 # Curator 1
 curl -s -X POST http://localhost:8000/api/v1/users \
-  -H "X-Permission-Id: perm-sys-admin" \
+  -H "X-Permission-Id: {sys-admin-permission-id}" \
   -H "Content-Type: application/json" \
   -d '{"name": "Carla Sousa", "email": "carla@museum.pt", "password": "password"}' | python3 -m json.tool
 
 # Curator 2
 curl -s -X POST http://localhost:8000/api/v1/users \
-  -H "X-Permission-Id: perm-sys-admin" \
+  -H "X-Permission-Id: {sys-admin-permission-id}" \
   -H "Content-Type: application/json" \
   -d '{"name": "Diogo Lopes", "email": "diogo@museum.pt", "password": "password"}' | python3 -m json.tool
 
 # Collections management
 curl -s -X POST http://localhost:8000/api/v1/users \
-  -H "X-Permission-Id: perm-sys-admin" \
+  -H "X-Permission-Id: {sys-admin-permission-id}" \
   -H "Content-Type: application/json" \
   -d '{"name": "Eva Rodrigues", "email": "eva@museum.pt", "password": "password"}' | python3 -m json.tool
 
 # Direction
 curl -s -X POST http://localhost:8000/api/v1/users \
-  -H "X-Permission-Id: perm-sys-admin" \
+  -H "X-Permission-Id: {sys-admin-permission-id}" \
   -H "Content-Type: application/json" \
   -d '{"name": "Fernando Costa", "email": "fernando@museum.pt", "password": "password"}' | python3 -m json.tool
 
 # Researcher 2
 curl -s -X POST http://localhost:8000/api/v1/users \
-  -H "X-Permission-Id: perm-sys-admin" \
+  -H "X-Permission-Id: {sys-admin-permission-id}" \
   -H "Content-Type: application/json" \
   -d '{"name": "Bruno Mendes", "email": "bruno@research.pt", "password": "password"}' | python3 -m json.tool
 ```
@@ -68,23 +80,23 @@ A user cannot log in until they have at least one group permission.
 ```bash
 # Carla → CURATORIAL
 curl -s -X POST http://localhost:8000/api/v1/users/{carla-id}/groups/grp-cur \
-  -H "X-Permission-Id: perm-sys-admin" | python3 -m json.tool
+  -H "X-Permission-Id: {sys-admin-permission-id}" | python3 -m json.tool
 
 # Diogo → CURATORIAL
 curl -s -X POST http://localhost:8000/api/v1/users/{diogo-id}/groups/grp-cur \
-  -H "X-Permission-Id: perm-sys-admin" | python3 -m json.tool
+  -H "X-Permission-Id: {sys-admin-permission-id}" | python3 -m json.tool
 
 # Eva → COLLECTIONS_MANAGEMENT
-curl -s -X POST http://localhost:8000/api/v1/users/{eva-id}/groups/grp-col \
-  -H "X-Permission-Id: perm-sys-admin" | python3 -m json.tool
+curl -s -X POST http://localhost:8000/api/v1/users/{eva-id}/groups/grp-cm \
+  -H "X-Permission-Id: {sys-admin-permission-id}" | python3 -m json.tool
 
 # Fernando → DIRECTION
 curl -s -X POST http://localhost:8000/api/v1/users/{fernando-id}/groups/grp-dir \
-  -H "X-Permission-Id: perm-sys-admin" | python3 -m json.tool
+  -H "X-Permission-Id: {sys-admin-permission-id}" | python3 -m json.tool
 
 # Bruno → EXTERNAL
 curl -s -X POST http://localhost:8000/api/v1/users/{bruno-id}/groups/grp-ext \
-  -H "X-Permission-Id: perm-sys-admin" | python3 -m json.tool
+  -H "X-Permission-Id: {sys-admin-permission-id}" | python3 -m json.tool
 ```
 
 ---
@@ -96,7 +108,7 @@ Uses `X-Permission-Id` of the researcher submitting the form.
 ```bash
 # Proposal 1 — Alice, IN_SITU_VISIT
 curl -s -X POST http://localhost:8000/api/v1/proposals \
-  -H "X-Permission-Id: perm-ext" \
+  -H "X-Permission-Id: {external-permission-id}" \
   -F "title=Study of 18th-century ceramics" \
   -F "intendedUse=IN_SITU_VISIT" \
   -F "purpose=Doctoral thesis on glazing techniques in Portuguese ceramics." \
@@ -108,7 +120,7 @@ curl -s -X POST http://localhost:8000/api/v1/proposals \
 
 # Proposal 2 — Alice, EXHIBITION
 curl -s -X POST http://localhost:8000/api/v1/proposals \
-  -H "X-Permission-Id: perm-ext" \
+  -H "X-Permission-Id: {external-permission-id}" \
   -F "title=Loan request for travelling exhibition" \
   -F "intendedUse=EXHIBITION" \
   -F "purpose=Temporary loan of three azulejo panels for a European travelling exhibition." \
@@ -130,10 +142,10 @@ proposals with `submissionChannel: "PUBLIC"`.
 ```bash
 # List all groups and their members
 curl -s http://localhost:8000/api/v1/groups \
-  -H "X-Permission-Id: perm-sys-admin" | python3 -m json.tool
+  -H "X-Permission-Id: {sys-admin-permission-id}" | python3 -m json.tool
 
 curl -s http://localhost:8000/api/v1/groups/grp-cur/users \
-  -H "X-Permission-Id: perm-sys-admin" | python3 -m json.tool
+  -H "X-Permission-Id: {sys-admin-permission-id}" | python3 -m json.tool
 
 # List all proposals as a staff member (use Carla's permissionId from step 2)
 curl -s "http://localhost:8000/api/v1/proposals?page=0&size=10" \

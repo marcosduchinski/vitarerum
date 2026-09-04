@@ -96,7 +96,7 @@ Um contexto novo nao esta completo enquanto nao registar em `pyproject.toml`:
 2. a sua cobertura nos contratos de pureza do dominio e da aplicacao.
 
 Alterar contratos entre contextos obriga a atualizar o mapa de contextos
-(`docs/architecture/context-map.puml`) na mesma alteracao.
+(`docs/architecture/vitarerum-context-map.puml`) na mesma alteracao.
 
 ### RF-008 — Verificacao automatica
 
@@ -182,7 +182,7 @@ Entao todos os contratos declarados passam
 | Contrato transversal publicado (RF-009..RF-013) | `docs/api_contracts/README.md` |
 | Linguagens publicadas (RF-003) | `app/*/public.py` |
 | Nucleo partilhado (RF-006) | `app/shared/kernel.py` |
-| Mapa de contextos | `docs/architecture/context-map.puml`, `vitarerum-context-map.svg` |
+| Mapa de contextos | `docs/architecture/vitarerum-context-map.puml`, `vitarerum-context-map.svg` |
 | Fronteiras documentadas | `docs/architecture/module-boundaries.md`, `AGENTS.md` |
 
 ## 9. Questoes em aberto

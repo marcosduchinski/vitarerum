@@ -66,11 +66,10 @@ sugerida; entre camadas, cada uma assenta nas anteriores.
 | 2 | **Fluxo institucional** — o ciclo de vida central | [010](010-submissao-publica/spec.md) submissao publica → [008](008-proposta-uso-de-colecoes/spec.md) proposta → [009](009-projeto-uso-de-colecoes/spec.md) projeto → [019](019-numeros-de-referencia/spec.md) numeros de referencia |
 | 3 | **Capacidades de apoio** — servem o fluxo sem participar nele | [014](014-catalogo-e-indice-de-objetos/spec.md) catalogo → [012](012-modelos-de-documento/spec.md) modelos → [011](011-perguntas-ao-museu/spec.md) perguntas → [018](018-notificacoes/spec.md) notificacoes |
 | 4 | **Patrimonio e IA** — o que a visita produz | [013](013-mapeamento-cidoc-crm/spec.md) CIDOC-CRM → [015](015-relatorio-visita-in-situ/spec.md) relatorio → [016](016-prompts-versionados/spec.md) prompts → [017](017-narrativa-museologica/spec.md) narrativa → [020](020-publicacao-externa/spec.md) publicacao externa |
-| 5 | **Retorno cientifico** — o objeto do trabalho | [001](001-investigacao-agentica-assistida/spec.md) ciclo assistido → [002](002-vigilancia-retorno-cientifico/spec.md) vigilancia → [003](003-pipeline-deterministico-bibliografico/spec.md) pipeline → [004](004-decisao-candidato-publicacao/spec.md) decisao → [006](006-avaliacao-retorno-cientifico/spec.md) avaliacao → [024](024-investigacao-agentica-autonoma/spec.md) ciclo autonomo → [025](025-base-de-conhecimento-curatorial/spec.md) memoria curatorial |
+| 5 | **Retorno cientifico** — o objeto do trabalho | [001](001-investigacao-agentica-assistida/spec.md) ciclo assistido → [002](002-vigilancia-retorno-cientifico/spec.md) vigilancia → [003](003-pipeline-deterministico-bibliografico/spec.md) pipeline → [004](004-decisao-candidato-publicacao/spec.md) decisao → [006](006-avaliacao-retorno-cientifico/spec.md) avaliacao → [024](024-investigacao-agentica-autonoma/spec.md) ciclo autonomo → [005](005-analise-agentica-de-candidato/spec.md) analise e retorno → [025](025-base-de-conhecimento-curatorial/spec.md) memoria curatorial |
 
-Fora do percurso: [005](005-analise-llm-sombra/spec.md) descreve funcionalidade
-removida (divergencia 4) e [021](021-resumos-de-painel/spec.md) especifica o que
-ainda nao existe.
+Fora do percurso: [021](021-resumos-de-painel/spec.md) especifica o que ainda
+nao existe.
 
 ### Como as camadas dependem umas das outras
 
@@ -111,7 +110,7 @@ Extraidas das citacoes `SPEC-NNN` dentro de cada spec.
 | 002 | 003, 004 |
 | 003 | 001, 002, 004, 006 |
 | 004 | 003, 009 |
-| 005 | 001, 004, 016 |
+| 005 | 001, 004, 016, 024 |
 | 006 | 001, 003 |
 | 007 | — |
 | 008 | 007, 009, 010, 019 |
@@ -133,9 +132,9 @@ Extraidas das citacoes `SPEC-NNN` dentro de cada spec.
 | 024 | 001, 002, 004, 025 |
 | 025 | 001, 004, 024 |
 
-As mais citadas sao 009 (8 vezes), 008 (7) e 004 e 001 (6 cada): sao as specs a
-ler antes de mexer em qualquer outra. As unicas sem dependencias sao 007 e 001 —
-os dois pontos de entrada do sistema.
+As mais citadas sao **009** (8 vezes), **008** (7), **004** (6): sao as specs a ler antes de mexer em
+qualquer outra. As unicas sem dependencias sao 001 e 007 — os dois pontos
+de entrada do sistema.
 
 ## Inventario
 
@@ -153,7 +152,7 @@ terem chegado ao contexto `scientific_return` depois de ele existir.
 | [SPEC-002](002-vigilancia-retorno-cientifico/spec.md) | Vigilancia e cadencia de revisao | Implementado | 2026-08-14 |
 | [SPEC-003](003-pipeline-deterministico-bibliografico/spec.md) | Pipeline deterministico de descoberta | Implementado | 2026-08-14 |
 | [SPEC-004](004-decisao-candidato-publicacao/spec.md) | Decisao curatorial e registo de publicacao | Implementado | 2026-08-14 |
-| [SPEC-005](005-analise-llm-sombra/spec.md) | Analise LLM em sombra | Implementado | 2026-08-14 |
+| [SPEC-005](005-analise-agentica-de-candidato/spec.md) | Analise agentica de candidato e retorno curatorial | Implementado | 2026-08-14 |
 | [SPEC-006](006-avaliacao-retorno-cientifico/spec.md) | Avaliacao reprodutivel | Implementado | 2026-08-14 |
 | [SPEC-024](024-investigacao-agentica-autonoma/spec.md) | Ciclo agentic autonomo (full-agentic) | Implementado | 2026-08-24 |
 | [SPEC-025](025-base-de-conhecimento-curatorial/spec.md) | Base de conhecimento curatorial | Implementado | 2026-08-24 |
@@ -208,14 +207,14 @@ Em 2026-08-18, ao escrever as specs:
   ([SPEC-023](023-fronteiras-e-envelope-de-erro/spec.md), CA-001).
 
 Em 2026-09-04, ao acrescentar a cobertura dos endpoints em falta (SPEC-024,
-SPEC-025 e acrescentos a SPEC-009, SPEC-014, SPEC-015 e SPEC-017):
+SPEC-025 e acrescentos a SPEC-009, SPEC-014, SPEC-015 e SPEC-017) e ao
+reconciliar as specs com o codigo (divergencias 3 a 5):
 
-- **Referencias a testes**: 782 referencias conferidas; **6 inexistentes**, todas
-  anteriores a esta revisao e todas por remocao de funcionalidade — ver
-  divergencias 3 e 4 abaixo.
-- **Cobertura de endpoints**: os endpoints documentados em
-  `docs/api_contracts/` foram comparados com os citados nestas specs. A lacuna
-  de 23 endpoints ficou fechada.
+- **Referencias a testes**: conferidas por `scripts/check_docs.py`; **zero
+  inexistentes**. O verificador ja nao tolera nenhuma.
+- **Cobertura de endpoints**: todos os endpoints documentados foram comparados
+  com os citados nestas specs, incluindo o contrato local do backend que
+  escapara a consolidacao. Lacuna: zero.
 
 ## Divergencias encontradas entre contrato e codigo
 
@@ -232,17 +231,21 @@ Levantadas ao escrever as specs, em 2026-08-18:
    *Resolvido: o contrato 17 foi movido para
    [`docs/proposals/`](../proposals/17Dashboard-Summary-API.md) e marcado como
    proposta nao implementada.*
-Levantadas em 2026-09-04, ao conferir as referencias a testes:
+Levantadas em 2026-09-04, ao conferir as referencias a testes, e **todas
+resolvidas** na mesma data:
 
-3. **[SPEC-005](005-analise-llm-sombra/spec.md) descreve funcionalidade
-   removida.** A analise LLM em sombra foi retirada no commit `a571392`
-   ("AI shadow mode removal"); do codigo resta o modo de investigacao `SHADOW`
-   em `domain/enums.py`, nao a analise que a spec documenta. Quatro das suas
-   referencias a testes ja nao existem. A spec continua marcada `Implementado`
-   no inventario acima — **o estado esta errado** e a decisao (corrigir ou
-   arquivar) esta por tomar.
-4. **[SPEC-004](004-decisao-candidato-publicacao/spec.md) documenta o
-   adiamento (`SNOOZE`, estado `SNOOZED`, INV-004), removido no commit
-   `7ab131f`.** [SPEC-002](002-vigilancia-retorno-cientifico/spec.md) CA-001
-   aponta para um teste de ancoragem de cadencia substituido no commit
-   `e4a4ce0`. Ambas precisam de revisao pontual, nao de arquivo.
+3. A SPEC-005 descrevia a geracao em sombra, removida no commit `a571392`.
+   Reescrita como [SPEC-005 — Analise agentica de candidato e retorno
+   curatorial](005-analise-agentica-de-candidato/spec.md): a geracao saiu, o
+   registo da analise do leitor e o feedback curatorial ficaram, porque
+   continuam em codigo.
+4. A SPEC-004 documentava o adiamento (`SNOOZE`, estado `SNOOZED`), removido no
+   commit `7ab131f` — retirado, com os requisitos e criterios renumerados. A
+   [SPEC-002](002-vigilancia-retorno-cientifico/spec.md) descrevia a cadencia
+   ancorada em `lastRunAt`, substituida no commit `e4a4ce0` pela grelha fixa a
+   partir de `scheduleAnchorAt` — RF-008, RF-010 e os criterios reescritos.
+5. O fluxo de revisao da Direcao (`refer-to-direction`, `return-to-staff`)
+   estava implementado e testado sem spec nenhuma, documentado apenas num
+   contrato local do backend. Absorvido pela
+   [SPEC-008](008-proposta-uso-de-colecoes/spec.md) (RF-021 a RF-023) e o
+   contrato removido.

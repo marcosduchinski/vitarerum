@@ -51,6 +51,8 @@ vez** no momento da publicacao.
 
 ### RF-003 — Perfil `JSON_LD` restrito
 
+Servido em `GET /api/v1/external/publications/{token}/json-ld`.
+
 O perfil `JSON_LD` so e valido para relatorios de visita in situ. Publicar
 qualquer outro tipo de recurso com esse perfil e recusado.
 
@@ -87,6 +89,9 @@ gratuita para quem sonda.
 
 ### RF-008 — Registo de acessos
 
+O historico le-se em
+`GET /api/v1/external-publications/{publicationId}/accesses`.
+
 Cada resolucao regista o acesso com o seu desfecho, incluindo os concedidos.
 
 ### RF-009 — Resposta por perfil
@@ -96,6 +101,8 @@ documento JSON-LD so e servido para relatorios de visita, apenas com perfil
 compativel, e com o tipo de conteudo proprio de JSON-LD.
 
 ### RF-010 — Listagem de recursos publicaveis
+
+`GET /api/v1/external-publications/publishable-resources`.
 
 A listagem de recursos publicaveis delega por tipo no contexto proprietario,
 atraves das interfaces publicadas.

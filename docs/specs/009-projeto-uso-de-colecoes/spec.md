@@ -92,12 +92,20 @@ Sincronizacao com o diario de acesso:
 
 ### RF-007 — Remocao de objetos e dependencias
 
-Remover um objeto do projeto remove tambem a sua entrada automatica de diario.
-Se existirem dependencias (entradas editadas, ocorrencias, anexos), a remocao e
-bloqueada e o sistema descreve as dependencias.
+`DELETE /collection-use-projects/{projectId}/objects/{objectId}` e
+deliberadamente conservador. Remove o objeto quando nada depende dele, ou quando
+a unica dependencia e a entrada automatica de diario criada ao adiciona-lo —
+nesse caso a entrada e apagada com o objeto. Responde `204`.
 
-A remocao em cascata existe, mas **exige confirmacao explicita**: apagar
-trabalho registado nunca acontece por omissao.
+Havendo ocorrencias, entradas de publicacao, anexos ou entradas de diario
+editadas, a remocao e bloqueada com `409` `PROJECT_OBJECT_HAS_DEPENDENCIES`, e a
+resposta traz `dependencies` com a contagem por tipo — o cliente precisa dela
+para apresentar uma confirmacao que diga o que se perde.
+
+A remocao em cascata existe em
+`POST /collection-use-projects/{projectId}/objects/{objectId}/remove`, mas
+**exige confirmacao explicita**: apagar trabalho registado nunca acontece por
+omissao.
 
 ### RF-008 — Notificacao do requerente externo
 
@@ -151,7 +159,7 @@ objeto do projeto — recusando um objeto que pertenca a outro projeto.
 
 ### RF-013 — Projetos de seguimento
 
-`POST` de projeto de seguimento, restrito ao staff, cria um projeto novo a
+`POST /collection-use-projects/{projectId}/follow-ups`, restrito ao staff, cria um projeto novo a
 partir de um projeto de origem `COMPLETED`, com um subconjunto nao vazio dos
 seus objetos e um intervalo de datas valido.
 
@@ -160,8 +168,10 @@ trabalho. O proprietario do projeto de origem acede ao projeto criado.
 
 ### RF-014 — Post-its de projeto por perfil
 
-Cada membro do staff mantem a sua propria lista de tarefas por projeto: criar,
-renomear, marcar concluida, reabrir, reordenar e apagar. O texto e aparado e
+Cada membro do staff mantem a sua propria lista de tarefas por projeto sob
+`/collection-use-projects/{projectId}/todo-items`: criar, renomear, marcar
+concluida, reabrir (`/todo-items/{itemId}/reopen`), reordenar e apagar. O painel
+pessoal agrega-as em `GET /collection-use-projects/my-todo-items`. O texto e aparado e
 limitado a 160 caracteres; a posicao e nao negativa.
 
 As listas sao **isoladas por permissao**: um membro do staff nunca ve nem altera

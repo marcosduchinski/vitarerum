@@ -26,8 +26,9 @@ correcoes e conversa, com evento registado em cada passo.
 | Ator | Papel |
 | --- | --- |
 | Investigador (`EXTERNAL`) | Submete, acrescenta objetos, envia documentos, conversa, cancela |
-| `CURATORIAL`, `COLLECTIONS_MANAGEMENT`, `DIRECTION`, `SYS_ADMIN` | Atribuem, pedem documentos e correcoes, encaminham, rejeitam |
+| `CURATORIAL`, `COLLECTIONS_MANAGEMENT`, `SYS_ADMIN` | Atribuem, pedem documentos e correcoes, encaminham, rejeitam |
 | `CURATORIAL` | **Unico** grupo que aprova |
+| `DIRECTION` | Le as propostas que lhe foram encaminhadas e devolve-as ao staff com a sua resposta. Nao executa mais nenhuma alteracao (RF-023) |
 
 ## 4. Linguagem ubiqua
 
@@ -38,6 +39,7 @@ correcoes e conversa, com evento registado em cada passo.
 - **Item de correcao**: pedido de substituicao de um documento entregue, ou de entrega de um documento em falta. Estados `REQUESTED`, `RESOLVED`.
 - **Evento de proposta**: registo imutavel de cada ato relevante.
 - **Conversa**: fio de mensagens associado a proposta.
+- **Via da Direcao**: desvio temporario de uma proposta `PENDING` para a Direcao, para decisao que o staff operacional nao toma sozinho. Entra por `REFERRED_TO_DIRECTION` e sai por `DIRECTION_CLARIFIED`.
 
 ---
 
@@ -202,6 +204,52 @@ cada um com instante, tipo, autor e nota.
 Um utilizador `EXTERNAL` nao acede a eventos, documentos ou projetos de outra
 proposta que nao a sua.
 
+### RF-021 — Encaminhar para a Direcao
+
+`POST /proposals/{proposalId}/refer-to-direction`, com `targetPermissionId` e
+`reason`, passa a proposta para a via da Direcao.
+
+Condicoes, todas verificadas:
+
+| Condicao | Falha |
+| --- | --- |
+| Chamador em `CURATORIAL` ou `COLLECTIONS_MANAGEMENT` | `403` |
+| Chamador e o **responsavel atual** da proposta | `409` `INVALID_TRANSITION` |
+| Proposta em `PENDING` | `409` `INVALID_TRANSITION` |
+| `targetPermissionId` existe e pertence a `DIRECTION` | `422` |
+| Utilizador de destino nao esta desativado | `422` |
+| `reason` nao vazio | `422` |
+
+O efeito e uma **reatribuicao, nao uma transicao de estado**: a proposta
+permanece `PENDING`, `assignedTo` passa a ser a permissao da Direcao, e fica
+registado o evento `REFERRED_TO_DIRECTION` com o autor, o instante, a razao e a
+permissao de destino. O destinatario e notificado.
+
+Exigir que o chamador seja o responsavel atual e o que impede que a via da
+Direcao seja usada para tirar uma proposta a quem a esta a tratar.
+
+### RF-022 — Devolver ao staff
+
+`POST /proposals/{proposalId}/return-to-staff`, com `targetPermissionId` e
+`reason`, e o caminho de saida — e o **unico** que a Direcao tem.
+
+As condicoes espelham RF-021: chamador em `DIRECTION` e responsavel atual,
+proposta `PENDING`, destino ativo em `CURATORIAL` ou `COLLECTIONS_MANAGEMENT`, e
+`reason` nao vazio. Regista `DIRECTION_CLARIFIED` com a resposta da Direcao, que
+fica assim no historico da proposta e nao apenas numa conversa paralela.
+
+### RF-023 — A Direcao e so de leitura fora da sua via
+
+Um chamador do grupo `DIRECTION` que tente qualquer outra alteracao sobre uma
+proposta — atribuir, encaminhar, pedir documentos ou correcoes, aprovar,
+rejeitar — recebe `403` com `DIRECTION_READ_ONLY`.
+
+A Direcao acede apenas as propostas atribuidas a sua permissao ativa.
+
+A restricao e deliberada: a Direcao decide, nao administra o processo. Sem ela,
+os comandos genericos de atribuicao permitiriam entrar e sair da via da Direcao
+sem deixar os eventos que a tornam auditavel.
+
 ---
 
 ## 6. Invariantes
@@ -217,6 +265,9 @@ proposta que nao a sua.
 | INV-007 | Uma proposta rejeitada nunca cria utilizador nem envia credenciais |
 | INV-008 | Um requerente so ve a sua propria proposta |
 | INV-009 | Uma proposta rejeitada nao pode ser cancelada |
+| INV-010 | A via da Direcao nunca muda o estado da proposta: entra e sai em `PENDING` |
+| INV-011 | So o responsavel atual encaminha para a Direcao ou devolve ao staff |
+| INV-012 | Entrada e saida da via da Direcao deixam sempre evento com razao |
 
 ## 7. Criterios de aceitacao
 
@@ -261,6 +312,24 @@ proposta que nao a sua.
 
 ### CA-014 — Tipo de documento em texto livre com limites
 → `test_domain_models.py::test_document_type_accepts_free_text_and_trims`, `::test_document_type_rejects_blank`, `::test_document_type_rejects_over_128_characters`, `::test_document_type_accepts_exactly_128_characters`
+
+### CA-015 — Encaminhamento reatribui e regista a razao
+Dado uma proposta `PENDING` atribuida a um curador
+Quando este a encaminha para uma permissao da Direcao com uma razao
+Entao a proposta continua `PENDING`, passa a estar atribuida a Direcao, e o evento `REFERRED_TO_DIRECTION` guarda a razao, o autor e a permissao de destino
+→ `test_domain_models.py::test_refer_to_direction_changes_assignee_and_records_reason_and_target`, `test_api.py::test_curator_can_refer_assigned_proposal_to_direction`
+
+### CA-016 — Devolucao exige razao e responsavel atual
+Dado uma proposta na via da Direcao
+Quando a Direcao a devolve ao staff
+Entao a razao e obrigatoria, so o responsavel atual pode devolver, e fica registado `DIRECTION_CLARIFIED`
+→ `test_domain_models.py::test_return_to_staff_requires_reason_and_current_direction_assignee`, `::test_return_to_staff_records_direction_clarification`, `test_api.py::test_direction_can_return_proposal_to_staff_with_required_reason`
+
+### CA-017 — A Direcao nao ve o que nao lhe foi encaminhado
+Dado uma proposta atribuida a outro membro da Direcao
+Quando um membro da Direcao a tenta ler
+Entao o acesso e recusado
+→ `test_api.py::test_direction_cannot_read_a_proposal_assigned_to_another_member`
 
 ## 8. Requisitos nao funcionais
 

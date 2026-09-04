@@ -26,6 +26,8 @@ durable architecture decisions.
   and properties, how the rules are externalised, and how the graph is validated.
 - [Architecture decisions](./adr/README.md): ADR index and template.
 
+![Vitarerum domain model overview](../diagrams/vitarerum-domain-model-overview.svg)
+
 ## Related Sources
 
 - [Backend agent guide](../../vitarerum-api/AGENTS.md): canonical developer and
