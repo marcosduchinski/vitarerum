@@ -1,0 +1,3758 @@
+{
+  "generatedAt": "2026-08-17T16:10:53.942848+00:00",
+  "fixtureVersion": "scientific-return-eval-fixture-v3",
+  "caseCount": 12,
+  "retrievedCount": 10,
+  "recall": 0.8333333333333334,
+  "actionableCandidates": 21,
+  "knownActionableMatches": 8,
+  "knownCasePrecisionProxy": 0.38095238095238093,
+  "sourceMetrics": [
+    {
+      "source": "CROSSREF",
+      "case_count": 12,
+      "retrieved_count": 6,
+      "recall": 0.5,
+      "actionable_candidates": 17,
+      "known_actionable_matches": 5,
+      "known_case_precision_proxy": 0.29411764705882354,
+      "query_count": 60,
+      "error_count": 0
+    },
+    {
+      "source": "EUROPE_PMC",
+      "case_count": 12,
+      "retrieved_count": 6,
+      "recall": 0.5,
+      "actionable_candidates": 4,
+      "known_actionable_matches": 3,
+      "known_case_precision_proxy": 0.75,
+      "query_count": 64,
+      "error_count": 0
+    }
+  ],
+  "humanReviewMetrics": {
+    "total_candidates": 21,
+    "reviewed_candidates": 0,
+    "pending_candidates": 21,
+    "confirmed_candidates": 0,
+    "dismissed_candidates": 0,
+    "uncertain_candidates": 0,
+    "review_coverage": 0.0,
+    "human_precision": null
+  },
+  "baselineDeclarationMetrics": {
+    "declared_resolved": 8,
+    "declared_gap": 4,
+    "declared_unverified": 0,
+    "observed_resolved": 8,
+    "observed_gap": 4,
+    "mismatched_case_ids": [],
+    "unverified_case_ids": [],
+    "discovery_target_case_ids": [
+      "cynoscion-regalis-2017",
+      "sao-tome-fishes-2019",
+      "nembrotha-cristata-2026",
+      "trichoniscoides-machadoi-2025"
+    ],
+    "enrichment_target_case_ids": [
+      "rhoptropus-2025",
+      "acontias-2023",
+      "pachydactylus-2025",
+      "ophichthus-rufus-2020",
+      "lipogenys-2024"
+    ],
+    "inventory_format_gap_case_ids": [
+      "cynoscion-regalis-2017",
+      "ophichthus-rufus-2020",
+      "lipogenys-2024",
+      "nembrotha-cristata-2026",
+      "trichoniscoides-machadoi-2025"
+    ]
+  },
+  "reviewQueue": [
+    {
+      "review_id": "rhoptropus-2025|doi:10.11646/zootaxa.5569.3.2",
+      "case_id": "rhoptropus-2025",
+      "deduplication_key": "doi:10.11646/zootaxa.5569.3.2",
+      "sources": [
+        "CROSSREF"
+      ],
+      "source_record_ids": [
+        "10.11646/zootaxa.5569.3.2"
+      ],
+      "doi": "10.11646/zootaxa.5569.3.2",
+      "title": "A new species of Namib Day Gecko (Gekkonidae: Rhoptropus Peters, 1869) from the Serra da Neve inselberg, southwestern Angola",
+      "authors": [
+        "DIOGO PARRINHA",
+        "MARIANA P. MARQUES",
+        "ARTHUR TIUTENKO",
+        "MATTHEW P. HEINICKE",
+        "AARON M. BAUER",
+        "LUIS M.P. CER\u00cdACO"
+      ],
+      "publication_date": "2025-1-15",
+      "url": "https://doi.org/10.11646/zootaxa.5569.3.2",
+      "known_case_match": true,
+      "evidences": [
+        {
+          "type": "AUTHOR",
+          "strength": "SUPPORTING",
+          "value": "Diogo Parrinha",
+          "source_field": "authors",
+          "explanation": "A lista de autores coincide com o investigador do projeto."
+        },
+        {
+          "type": "OBJECT_NAME",
+          "strength": "SUPPORTING",
+          "value": "Rhoptropus nivimontanus",
+          "source_field": "title_or_abstract",
+          "explanation": "O titulo ou resumo menciona o objeto consultado."
+        },
+        {
+          "type": "AUTHOR_OBJECT",
+          "strength": "SUPPORTING",
+          "value": "Diogo Parrinha | Rhoptropus nivimontanus",
+          "source_field": "authors+title_or_abstract",
+          "explanation": "Autor e objeto coincidem no mesmo candidato."
+        }
+      ],
+      "human_decision": null,
+      "human_justification": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "review_id": "acontias-2023|doi:10.1080/21564574.2023.2246487",
+      "case_id": "acontias-2023",
+      "deduplication_key": "doi:10.1080/21564574.2023.2246487",
+      "sources": [
+        "CROSSREF"
+      ],
+      "source_record_ids": [
+        "10.1080/21564574.2023.2246487"
+      ],
+      "doi": "10.1080/21564574.2023.2246487",
+      "title": "A new species of African legless skink, genus Acontias Cuvier, 1816 \u201c1817\u201d (Squamata: Scincidae) from Serra da Neve inselberg, south-western Angola",
+      "authors": [
+        "Mariana P. Marques",
+        "Diogo Parrinha",
+        "Arthur Tiutenko",
+        "Manuel Lopes-Lima",
+        "Aaron M. Bauer",
+        "Luis M. P. Cer\u00edaco"
+      ],
+      "publication_date": "2023-9-19",
+      "url": "https://doi.org/10.1080/21564574.2023.2246487",
+      "known_case_match": true,
+      "evidences": [
+        {
+          "type": "AUTHOR",
+          "strength": "SUPPORTING",
+          "value": "Mariana P. Marques",
+          "source_field": "authors",
+          "explanation": "A lista de autores coincide com o investigador do projeto."
+        },
+        {
+          "type": "OBJECT_NAME",
+          "strength": "WEAK",
+          "value": "Acontias mukwando",
+          "source_field": "title_or_abstract",
+          "explanation": "O titulo ou resumo menciona o genero do taxon consultado."
+        },
+        {
+          "type": "AUTHOR_OBJECT",
+          "strength": "SUPPORTING",
+          "value": "Mariana P. Marques | acontias",
+          "source_field": "authors+title_or_abstract",
+          "explanation": "Autor e genero do taxon coincidem no mesmo candidato."
+        }
+      ],
+      "human_decision": null,
+      "human_justification": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "review_id": "acontias-2023|doi:10.3897/zookeys.1201.120750",
+      "case_id": "acontias-2023",
+      "deduplication_key": "doi:10.3897/zookeys.1201.120750",
+      "sources": [
+        "EUROPE_PMC"
+      ],
+      "source_record_ids": [
+        "MED:38779586"
+      ],
+      "doi": "10.3897/zookeys.1201.120750",
+      "title": "\ufeffAn island in a sea of sand: a first checklist of the herpetofauna of the Serra da Neve inselberg, southwestern Angola.",
+      "authors": [
+        "Marques MP",
+        "Parrinha D",
+        "Lopes-Lima M",
+        "Tiutenko A",
+        "Bauer AM",
+        "Cer\u00edaco LMP"
+      ],
+      "publication_date": "2024-05-14",
+      "url": "https://doi.org/10.3897/zookeys.1201.120750",
+      "known_case_match": false,
+      "evidences": [
+        {
+          "type": "INVENTORY_NUMBER",
+          "strength": "PRIMARY",
+          "value": "MUHNAC/MB03-001522",
+          "source_field": "full_text",
+          "explanation": "O registo bibliografico menciona o numero de inventario consultado."
+        },
+        {
+          "type": "OBJECT_NAME",
+          "strength": "SUPPORTING",
+          "value": "Acontias mukwando",
+          "source_field": "full_text",
+          "explanation": "O titulo ou resumo menciona o objeto consultado."
+        },
+        {
+          "type": "INVENTORY_OBJECT",
+          "strength": "PRIMARY",
+          "value": "MUHNAC/MB03-001522 | Acontias mukwando",
+          "source_field": "full_text",
+          "explanation": "Numero de inventario e objeto coincidem no mesmo candidato."
+        }
+      ],
+      "human_decision": null,
+      "human_justification": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "review_id": "pachydactylus-2025|doi:10.1643/h2024108",
+      "case_id": "pachydactylus-2025",
+      "deduplication_key": "doi:10.1643/h2024108",
+      "sources": [
+        "CROSSREF"
+      ],
+      "source_record_ids": [
+        "10.1643/h2024108"
+      ],
+      "doi": "10.1643/h2024108",
+      "title": "Two New Species of Pachydactylus (Squamata: Gekkonidae) from the Kaokoveld",
+      "authors": [
+        "Diogo Parrinha",
+        "Mariana P. Marques",
+        "Amanda M. Picelli",
+        "Adriaan Jordaan",
+        "Lacey J. Bishop-Schouster",
+        "Matthew P. Heinicke",
+        "Aaron M. Bauer",
+        "Luis M. P. Cer\u00edaco"
+      ],
+      "publication_date": "2025-8-8",
+      "url": "https://doi.org/10.1643/h2024108",
+      "known_case_match": true,
+      "evidences": [
+        {
+          "type": "AUTHOR",
+          "strength": "SUPPORTING",
+          "value": "Diogo Parrinha",
+          "source_field": "authors",
+          "explanation": "A lista de autores coincide com o investigador do projeto."
+        },
+        {
+          "type": "OBJECT_NAME",
+          "strength": "WEAK",
+          "value": "Pachydactylus namibensis",
+          "source_field": "title_or_abstract",
+          "explanation": "O titulo ou resumo menciona o genero do taxon consultado."
+        },
+        {
+          "type": "AUTHOR_OBJECT",
+          "strength": "SUPPORTING",
+          "value": "Diogo Parrinha | pachydactylus",
+          "source_field": "authors+title_or_abstract",
+          "explanation": "Autor e genero do taxon coincidem no mesmo candidato."
+        }
+      ],
+      "human_decision": null,
+      "human_justification": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "review_id": "pachydactylus-2025|doi:10.3897/vz.73.e101329",
+      "case_id": "pachydactylus-2025",
+      "deduplication_key": "doi:10.3897/vz.73.e101329",
+      "sources": [
+        "CROSSREF"
+      ],
+      "source_record_ids": [
+        "10.3897/vz.73.e101329"
+      ],
+      "doi": "10.3897/vz.73.e101329",
+      "title": "A new species of thick-toed gecko (Pachydactylus) from Serra da Neve and surrounding rocky areas of southwestern Angola (Squamata: Gekkonidae)",
+      "authors": [
+        "Mariana P. Marques",
+        "Diogo Parrinha",
+        "Luis M. P. Cer\u00edaco",
+        "Ian G. Brennan",
+        "Matthew P. Heinicke",
+        "Aaron M. Bauer"
+      ],
+      "publication_date": "2023-4-6",
+      "url": "https://doi.org/10.3897/vz.73.e101329",
+      "known_case_match": false,
+      "evidences": [
+        {
+          "type": "AUTHOR",
+          "strength": "SUPPORTING",
+          "value": "Diogo Parrinha",
+          "source_field": "authors",
+          "explanation": "A lista de autores coincide com o investigador do projeto."
+        },
+        {
+          "type": "OBJECT_NAME",
+          "strength": "WEAK",
+          "value": "Pachydactylus namibensis",
+          "source_field": "title_or_abstract",
+          "explanation": "O titulo ou resumo menciona o genero do taxon consultado."
+        },
+        {
+          "type": "AUTHOR_OBJECT",
+          "strength": "SUPPORTING",
+          "value": "Diogo Parrinha | pachydactylus",
+          "source_field": "authors+title_or_abstract",
+          "explanation": "Autor e genero do taxon coincidem no mesmo candidato."
+        }
+      ],
+      "human_decision": null,
+      "human_justification": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "review_id": "pachydactylus-2025|doi:10.3897/vz.73.e101329.figure1",
+      "case_id": "pachydactylus-2025",
+      "deduplication_key": "doi:10.3897/vz.73.e101329.figure1",
+      "sources": [
+        "CROSSREF"
+      ],
+      "source_record_ids": [
+        "10.3897/vz.73.e101329.figure1"
+      ],
+      "doi": "10.3897/vz.73.e101329.figure1",
+      "title": "Figure 1 from: Marques MP, Parrinha D, Cer\u00edaco LMP, Brennan IG, Heinicke MP, Bauer AM (2023) A new species of thick-toed gecko (Pachydactylus) from Serra da Neve and surrounding rocky areas of southwestern Angola (Squamata: Gekkonidae). Vertebrate Zoology 73: 325-343. https://doi.org/10.3897/vz.73.e101329",
+      "authors": [
+        "Mariana P. Marques",
+        "Diogo Parrinha",
+        "Luis M. P. Cer\u00edaco",
+        "Ian G. Brennan",
+        "Matthew P. Heinicke",
+        "Aaron M. Bauer"
+      ],
+      "publication_date": "2023-4-6",
+      "url": "https://doi.org/10.3897/vz.73.e101329.figure1",
+      "known_case_match": false,
+      "evidences": [
+        {
+          "type": "AUTHOR",
+          "strength": "SUPPORTING",
+          "value": "Diogo Parrinha",
+          "source_field": "authors",
+          "explanation": "A lista de autores coincide com o investigador do projeto."
+        },
+        {
+          "type": "OBJECT_NAME",
+          "strength": "WEAK",
+          "value": "Pachydactylus namibensis",
+          "source_field": "title_or_abstract",
+          "explanation": "O titulo ou resumo menciona o genero do taxon consultado."
+        },
+        {
+          "type": "AUTHOR_OBJECT",
+          "strength": "SUPPORTING",
+          "value": "Diogo Parrinha | pachydactylus",
+          "source_field": "authors+title_or_abstract",
+          "explanation": "Autor e genero do taxon coincidem no mesmo candidato."
+        }
+      ],
+      "human_decision": null,
+      "human_justification": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "review_id": "pachydactylus-2025|doi:10.3897/vz.73.e101329.figure2",
+      "case_id": "pachydactylus-2025",
+      "deduplication_key": "doi:10.3897/vz.73.e101329.figure2",
+      "sources": [
+        "CROSSREF"
+      ],
+      "source_record_ids": [
+        "10.3897/vz.73.e101329.figure2"
+      ],
+      "doi": "10.3897/vz.73.e101329.figure2",
+      "title": "Figure 2 from: Marques MP, Parrinha D, Cer\u00edaco LMP, Brennan IG, Heinicke MP, Bauer AM (2023) A new species of thick-toed gecko (Pachydactylus) from Serra da Neve and surrounding rocky areas of southwestern Angola (Squamata: Gekkonidae). Vertebrate Zoology 73: 325-343. https://doi.org/10.3897/vz.73.e101329",
+      "authors": [
+        "Mariana P. Marques",
+        "Diogo Parrinha",
+        "Luis M. P. Cer\u00edaco",
+        "Ian G. Brennan",
+        "Matthew P. Heinicke",
+        "Aaron M. Bauer"
+      ],
+      "publication_date": "2023-4-6",
+      "url": "https://doi.org/10.3897/vz.73.e101329.figure2",
+      "known_case_match": false,
+      "evidences": [
+        {
+          "type": "AUTHOR",
+          "strength": "SUPPORTING",
+          "value": "Diogo Parrinha",
+          "source_field": "authors",
+          "explanation": "A lista de autores coincide com o investigador do projeto."
+        },
+        {
+          "type": "OBJECT_NAME",
+          "strength": "WEAK",
+          "value": "Pachydactylus namibensis",
+          "source_field": "title_or_abstract",
+          "explanation": "O titulo ou resumo menciona o genero do taxon consultado."
+        },
+        {
+          "type": "AUTHOR_OBJECT",
+          "strength": "SUPPORTING",
+          "value": "Diogo Parrinha | pachydactylus",
+          "source_field": "authors+title_or_abstract",
+          "explanation": "Autor e genero do taxon coincidem no mesmo candidato."
+        }
+      ],
+      "human_decision": null,
+      "human_justification": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "review_id": "pachydactylus-2025|doi:10.3897/vz.73.e101329.figure3",
+      "case_id": "pachydactylus-2025",
+      "deduplication_key": "doi:10.3897/vz.73.e101329.figure3",
+      "sources": [
+        "CROSSREF"
+      ],
+      "source_record_ids": [
+        "10.3897/vz.73.e101329.figure3"
+      ],
+      "doi": "10.3897/vz.73.e101329.figure3",
+      "title": "Figure 3 from: Marques MP, Parrinha D, Cer\u00edaco LMP, Brennan IG, Heinicke MP, Bauer AM (2023) A new species of thick-toed gecko (Pachydactylus) from Serra da Neve and surrounding rocky areas of southwestern Angola (Squamata: Gekkonidae). Vertebrate Zoology 73: 325-343. https://doi.org/10.3897/vz.73.e101329",
+      "authors": [
+        "Mariana P. Marques",
+        "Diogo Parrinha",
+        "Luis M. P. Cer\u00edaco",
+        "Ian G. Brennan",
+        "Matthew P. Heinicke",
+        "Aaron M. Bauer"
+      ],
+      "publication_date": "2023-4-6",
+      "url": "https://doi.org/10.3897/vz.73.e101329.figure3",
+      "known_case_match": false,
+      "evidences": [
+        {
+          "type": "AUTHOR",
+          "strength": "SUPPORTING",
+          "value": "Diogo Parrinha",
+          "source_field": "authors",
+          "explanation": "A lista de autores coincide com o investigador do projeto."
+        },
+        {
+          "type": "OBJECT_NAME",
+          "strength": "WEAK",
+          "value": "Pachydactylus namibensis",
+          "source_field": "title_or_abstract",
+          "explanation": "O titulo ou resumo menciona o genero do taxon consultado."
+        },
+        {
+          "type": "AUTHOR_OBJECT",
+          "strength": "SUPPORTING",
+          "value": "Diogo Parrinha | pachydactylus",
+          "source_field": "authors+title_or_abstract",
+          "explanation": "Autor e genero do taxon coincidem no mesmo candidato."
+        }
+      ],
+      "human_decision": null,
+      "human_justification": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "review_id": "pachydactylus-2025|doi:10.3897/vz.73.e101329.figure4",
+      "case_id": "pachydactylus-2025",
+      "deduplication_key": "doi:10.3897/vz.73.e101329.figure4",
+      "sources": [
+        "CROSSREF"
+      ],
+      "source_record_ids": [
+        "10.3897/vz.73.e101329.figure4"
+      ],
+      "doi": "10.3897/vz.73.e101329.figure4",
+      "title": "Figure 4 from: Marques MP, Parrinha D, Cer\u00edaco LMP, Brennan IG, Heinicke MP, Bauer AM (2023) A new species of thick-toed gecko (Pachydactylus) from Serra da Neve and surrounding rocky areas of southwestern Angola (Squamata: Gekkonidae). Vertebrate Zoology 73: 325-343. https://doi.org/10.3897/vz.73.e101329",
+      "authors": [
+        "Mariana P. Marques",
+        "Diogo Parrinha",
+        "Luis M. P. Cer\u00edaco",
+        "Ian G. Brennan",
+        "Matthew P. Heinicke",
+        "Aaron M. Bauer"
+      ],
+      "publication_date": "2023-4-6",
+      "url": "https://doi.org/10.3897/vz.73.e101329.figure4",
+      "known_case_match": false,
+      "evidences": [
+        {
+          "type": "AUTHOR",
+          "strength": "SUPPORTING",
+          "value": "Diogo Parrinha",
+          "source_field": "authors",
+          "explanation": "A lista de autores coincide com o investigador do projeto."
+        },
+        {
+          "type": "OBJECT_NAME",
+          "strength": "WEAK",
+          "value": "Pachydactylus namibensis",
+          "source_field": "title_or_abstract",
+          "explanation": "O titulo ou resumo menciona o genero do taxon consultado."
+        },
+        {
+          "type": "AUTHOR_OBJECT",
+          "strength": "SUPPORTING",
+          "value": "Diogo Parrinha | pachydactylus",
+          "source_field": "authors+title_or_abstract",
+          "explanation": "Autor e genero do taxon coincidem no mesmo candidato."
+        }
+      ],
+      "human_decision": null,
+      "human_justification": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "review_id": "pachydactylus-2025|doi:10.3897/vz.73.e101329.figure5",
+      "case_id": "pachydactylus-2025",
+      "deduplication_key": "doi:10.3897/vz.73.e101329.figure5",
+      "sources": [
+        "CROSSREF"
+      ],
+      "source_record_ids": [
+        "10.3897/vz.73.e101329.figure5"
+      ],
+      "doi": "10.3897/vz.73.e101329.figure5",
+      "title": "Figure 5 from: Marques MP, Parrinha D, Cer\u00edaco LMP, Brennan IG, Heinicke MP, Bauer AM (2023) A new species of thick-toed gecko (Pachydactylus) from Serra da Neve and surrounding rocky areas of southwestern Angola (Squamata: Gekkonidae). Vertebrate Zoology 73: 325-343. https://doi.org/10.3897/vz.73.e101329",
+      "authors": [
+        "Mariana P. Marques",
+        "Diogo Parrinha",
+        "Luis M. P. Cer\u00edaco",
+        "Ian G. Brennan",
+        "Matthew P. Heinicke",
+        "Aaron M. Bauer"
+      ],
+      "publication_date": "2023-4-6",
+      "url": "https://doi.org/10.3897/vz.73.e101329.figure5",
+      "known_case_match": false,
+      "evidences": [
+        {
+          "type": "AUTHOR",
+          "strength": "SUPPORTING",
+          "value": "Diogo Parrinha",
+          "source_field": "authors",
+          "explanation": "A lista de autores coincide com o investigador do projeto."
+        },
+        {
+          "type": "OBJECT_NAME",
+          "strength": "WEAK",
+          "value": "Pachydactylus namibensis",
+          "source_field": "title_or_abstract",
+          "explanation": "O titulo ou resumo menciona o genero do taxon consultado."
+        },
+        {
+          "type": "AUTHOR_OBJECT",
+          "strength": "SUPPORTING",
+          "value": "Diogo Parrinha | pachydactylus",
+          "source_field": "authors+title_or_abstract",
+          "explanation": "Autor e genero do taxon coincidem no mesmo candidato."
+        }
+      ],
+      "human_decision": null,
+      "human_justification": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "review_id": "pachydactylus-2025|doi:10.3897/vz.73.e101329.figure6",
+      "case_id": "pachydactylus-2025",
+      "deduplication_key": "doi:10.3897/vz.73.e101329.figure6",
+      "sources": [
+        "CROSSREF"
+      ],
+      "source_record_ids": [
+        "10.3897/vz.73.e101329.figure6"
+      ],
+      "doi": "10.3897/vz.73.e101329.figure6",
+      "title": "Figure 6 from: Marques MP, Parrinha D, Cer\u00edaco LMP, Brennan IG, Heinicke MP, Bauer AM (2023) A new species of thick-toed gecko (Pachydactylus) from Serra da Neve and surrounding rocky areas of southwestern Angola (Squamata: Gekkonidae). Vertebrate Zoology 73: 325-343. https://doi.org/10.3897/vz.73.e101329",
+      "authors": [
+        "Mariana P. Marques",
+        "Diogo Parrinha",
+        "Luis M. P. Cer\u00edaco",
+        "Ian G. Brennan",
+        "Matthew P. Heinicke",
+        "Aaron M. Bauer"
+      ],
+      "publication_date": "2023-4-6",
+      "url": "https://doi.org/10.3897/vz.73.e101329.figure6",
+      "known_case_match": false,
+      "evidences": [
+        {
+          "type": "AUTHOR",
+          "strength": "SUPPORTING",
+          "value": "Diogo Parrinha",
+          "source_field": "authors",
+          "explanation": "A lista de autores coincide com o investigador do projeto."
+        },
+        {
+          "type": "OBJECT_NAME",
+          "strength": "WEAK",
+          "value": "Pachydactylus namibensis",
+          "source_field": "title_or_abstract",
+          "explanation": "O titulo ou resumo menciona o genero do taxon consultado."
+        },
+        {
+          "type": "AUTHOR_OBJECT",
+          "strength": "SUPPORTING",
+          "value": "Diogo Parrinha | pachydactylus",
+          "source_field": "authors+title_or_abstract",
+          "explanation": "Autor e genero do taxon coincidem no mesmo candidato."
+        }
+      ],
+      "human_decision": null,
+      "human_justification": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "review_id": "pachydactylus-2025|doi:10.3897/vz.73.e101329.figure7",
+      "case_id": "pachydactylus-2025",
+      "deduplication_key": "doi:10.3897/vz.73.e101329.figure7",
+      "sources": [
+        "CROSSREF"
+      ],
+      "source_record_ids": [
+        "10.3897/vz.73.e101329.figure7"
+      ],
+      "doi": "10.3897/vz.73.e101329.figure7",
+      "title": "Figure 7 from: Marques MP, Parrinha D, Cer\u00edaco LMP, Brennan IG, Heinicke MP, Bauer AM (2023) A new species of thick-toed gecko (Pachydactylus) from Serra da Neve and surrounding rocky areas of southwestern Angola (Squamata: Gekkonidae). Vertebrate Zoology 73: 325-343. https://doi.org/10.3897/vz.73.e101329",
+      "authors": [
+        "Mariana P. Marques",
+        "Diogo Parrinha",
+        "Luis M. P. Cer\u00edaco",
+        "Ian G. Brennan",
+        "Matthew P. Heinicke",
+        "Aaron M. Bauer"
+      ],
+      "publication_date": "2023-4-6",
+      "url": "https://doi.org/10.3897/vz.73.e101329.figure7",
+      "known_case_match": false,
+      "evidences": [
+        {
+          "type": "AUTHOR",
+          "strength": "SUPPORTING",
+          "value": "Diogo Parrinha",
+          "source_field": "authors",
+          "explanation": "A lista de autores coincide com o investigador do projeto."
+        },
+        {
+          "type": "OBJECT_NAME",
+          "strength": "WEAK",
+          "value": "Pachydactylus namibensis",
+          "source_field": "title_or_abstract",
+          "explanation": "O titulo ou resumo menciona o genero do taxon consultado."
+        },
+        {
+          "type": "AUTHOR_OBJECT",
+          "strength": "SUPPORTING",
+          "value": "Diogo Parrinha | pachydactylus",
+          "source_field": "authors+title_or_abstract",
+          "explanation": "Autor e genero do taxon coincidem no mesmo candidato."
+        }
+      ],
+      "human_decision": null,
+      "human_justification": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "review_id": "pachydactylus-2025|doi:10.3897/vz.73.e101329.figure8",
+      "case_id": "pachydactylus-2025",
+      "deduplication_key": "doi:10.3897/vz.73.e101329.figure8",
+      "sources": [
+        "CROSSREF"
+      ],
+      "source_record_ids": [
+        "10.3897/vz.73.e101329.figure8"
+      ],
+      "doi": "10.3897/vz.73.e101329.figure8",
+      "title": "Figure 8 from: Marques MP, Parrinha D, Cer\u00edaco LMP, Brennan IG, Heinicke MP, Bauer AM (2023) A new species of thick-toed gecko (Pachydactylus) from Serra da Neve and surrounding rocky areas of southwestern Angola (Squamata: Gekkonidae). Vertebrate Zoology 73: 325-343. https://doi.org/10.3897/vz.73.e101329",
+      "authors": [
+        "Mariana P. Marques",
+        "Diogo Parrinha",
+        "Luis M. P. Cer\u00edaco",
+        "Ian G. Brennan",
+        "Matthew P. Heinicke",
+        "Aaron M. Bauer"
+      ],
+      "publication_date": "2023-4-6",
+      "url": "https://doi.org/10.3897/vz.73.e101329.figure8",
+      "known_case_match": false,
+      "evidences": [
+        {
+          "type": "AUTHOR",
+          "strength": "SUPPORTING",
+          "value": "Diogo Parrinha",
+          "source_field": "authors",
+          "explanation": "A lista de autores coincide com o investigador do projeto."
+        },
+        {
+          "type": "OBJECT_NAME",
+          "strength": "WEAK",
+          "value": "Pachydactylus namibensis",
+          "source_field": "title_or_abstract",
+          "explanation": "O titulo ou resumo menciona o genero do taxon consultado."
+        },
+        {
+          "type": "AUTHOR_OBJECT",
+          "strength": "SUPPORTING",
+          "value": "Diogo Parrinha | pachydactylus",
+          "source_field": "authors+title_or_abstract",
+          "explanation": "Autor e genero do taxon coincidem no mesmo candidato."
+        }
+      ],
+      "human_decision": null,
+      "human_justification": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "review_id": "pachydactylus-2025|doi:10.3897/vz.73.e101329.figure9",
+      "case_id": "pachydactylus-2025",
+      "deduplication_key": "doi:10.3897/vz.73.e101329.figure9",
+      "sources": [
+        "CROSSREF"
+      ],
+      "source_record_ids": [
+        "10.3897/vz.73.e101329.figure9"
+      ],
+      "doi": "10.3897/vz.73.e101329.figure9",
+      "title": "Figure 9 from: Marques MP, Parrinha D, Cer\u00edaco LMP, Brennan IG, Heinicke MP, Bauer AM (2023) A new species of thick-toed gecko (Pachydactylus) from Serra da Neve and surrounding rocky areas of southwestern Angola (Squamata: Gekkonidae). Vertebrate Zoology 73: 325-343. https://doi.org/10.3897/vz.73.e101329",
+      "authors": [
+        "Mariana P. Marques",
+        "Diogo Parrinha",
+        "Luis M. P. Cer\u00edaco",
+        "Ian G. Brennan",
+        "Matthew P. Heinicke",
+        "Aaron M. Bauer"
+      ],
+      "publication_date": "2023-4-6",
+      "url": "https://doi.org/10.3897/vz.73.e101329.figure9",
+      "known_case_match": false,
+      "evidences": [
+        {
+          "type": "AUTHOR",
+          "strength": "SUPPORTING",
+          "value": "Diogo Parrinha",
+          "source_field": "authors",
+          "explanation": "A lista de autores coincide com o investigador do projeto."
+        },
+        {
+          "type": "OBJECT_NAME",
+          "strength": "WEAK",
+          "value": "Pachydactylus namibensis",
+          "source_field": "title_or_abstract",
+          "explanation": "O titulo ou resumo menciona o genero do taxon consultado."
+        },
+        {
+          "type": "AUTHOR_OBJECT",
+          "strength": "SUPPORTING",
+          "value": "Diogo Parrinha | pachydactylus",
+          "source_field": "authors+title_or_abstract",
+          "explanation": "Autor e genero do taxon coincidem no mesmo candidato."
+        }
+      ],
+      "human_decision": null,
+      "human_justification": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "review_id": "serra-da-neve-checklist-2024|doi:10.3897/zookeys.1201.120750",
+      "case_id": "serra-da-neve-checklist-2024",
+      "deduplication_key": "doi:10.3897/zookeys.1201.120750",
+      "sources": [
+        "EUROPE_PMC"
+      ],
+      "source_record_ids": [
+        "MED:38779586"
+      ],
+      "doi": "10.3897/zookeys.1201.120750",
+      "title": "\ufeffAn island in a sea of sand: a first checklist of the herpetofauna of the Serra da Neve inselberg, southwestern Angola.",
+      "authors": [
+        "Marques MP",
+        "Parrinha D",
+        "Lopes-Lima M",
+        "Tiutenko A",
+        "Bauer AM",
+        "Cer\u00edaco LMP"
+      ],
+      "publication_date": "2024-05-14",
+      "url": "https://doi.org/10.3897/zookeys.1201.120750",
+      "known_case_match": true,
+      "evidences": [
+        {
+          "type": "INVENTORY_NUMBER",
+          "strength": "PRIMARY",
+          "value": "MUNHAC/MB03-001552",
+          "source_field": "full_text",
+          "explanation": "O registo bibliografico menciona o numero de inventario consultado."
+        },
+        {
+          "type": "OBJECT_NAME",
+          "strength": "SUPPORTING",
+          "value": "Afroedura praedicta",
+          "source_field": "full_text",
+          "explanation": "O titulo ou resumo menciona o objeto consultado."
+        },
+        {
+          "type": "INVENTORY_OBJECT",
+          "strength": "PRIMARY",
+          "value": "MUNHAC/MB03-001552 | Afroedura praedicta",
+          "source_field": "full_text",
+          "explanation": "Numero de inventario e objeto coincidem no mesmo candidato."
+        }
+      ],
+      "human_decision": null,
+      "human_justification": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "review_id": "sao-tome-barcode-2023|doi:10.3897/zookeys.1168.101334",
+      "case_id": "sao-tome-barcode-2023",
+      "deduplication_key": "doi:10.3897/zookeys.1168.101334",
+      "sources": [
+        "EUROPE_PMC"
+      ],
+      "source_record_ids": [
+        "MED:37415718"
+      ],
+      "doi": "10.3897/zookeys.1168.101334",
+      "title": "\ufeffIllustrated keys and a DNA barcode reference library of the amphibians and terrestrial reptiles (Amphibia, Reptilia) of S\u00e3o Tom\u00e9 and Pr\u00edncipe (Gulf of Guinea, West Africa).",
+      "authors": [
+        "Cer\u00edaco LMP",
+        "Marques MP",
+        "de Sousa ACA",
+        "Ver\u00edssimo J",
+        "Beja P",
+        "Ferreira S"
+      ],
+      "publication_date": "2023-06-27",
+      "url": "https://doi.org/10.3897/zookeys.1168.101334",
+      "known_case_match": true,
+      "evidences": [
+        {
+          "type": "INVENTORY_NUMBER",
+          "strength": "PRIMARY",
+          "value": "MUHNAC/MB04-000792",
+          "source_field": "full_text",
+          "explanation": "O registo bibliografico menciona o numero de inventario consultado."
+        },
+        {
+          "type": "OBJECT_NAME",
+          "strength": "SUPPORTING",
+          "value": "Leptopelis palmatus",
+          "source_field": "full_text",
+          "explanation": "O titulo ou resumo menciona o objeto consultado."
+        },
+        {
+          "type": "INVENTORY_OBJECT",
+          "strength": "PRIMARY",
+          "value": "MUHNAC/MB04-000792 | Leptopelis palmatus",
+          "source_field": "full_text",
+          "explanation": "Numero de inventario e objeto coincidem no mesmo candidato."
+        }
+      ],
+      "human_decision": null,
+      "human_justification": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "review_id": "ophichthus-rufus-2020|doi:10.3750/aiep/02782",
+      "case_id": "ophichthus-rufus-2020",
+      "deduplication_key": "doi:10.3750/aiep/02782",
+      "sources": [
+        "CROSSREF"
+      ],
+      "source_record_ids": [
+        "10.3750/aiep/02782"
+      ],
+      "doi": "10.3750/aiep/02782",
+      "title": "First record of Ophichthus rufus (Actinopterygii: Anguilliformes: Ophichthidae) off the western Iberian coast: The northernmost occurrence in the eastern Atlantic",
+      "authors": [
+        "Pedro Gomes",
+        "Lu\u00eds Oliveira",
+        "Rui Oliveira",
+        "Helena Silva"
+      ],
+      "publication_date": "2020-6-1",
+      "url": "https://doi.org/10.3750/aiep/02782",
+      "known_case_match": true,
+      "evidences": [
+        {
+          "type": "AUTHOR",
+          "strength": "SUPPORTING",
+          "value": "Pedro Gomes",
+          "source_field": "authors",
+          "explanation": "A lista de autores coincide com o investigador do projeto."
+        },
+        {
+          "type": "OBJECT_NAME",
+          "strength": "SUPPORTING",
+          "value": "Ophichthus rufus",
+          "source_field": "title_or_abstract",
+          "explanation": "O titulo ou resumo menciona o objeto consultado."
+        },
+        {
+          "type": "AUTHOR_OBJECT",
+          "strength": "SUPPORTING",
+          "value": "Pedro Gomes | Ophichthus rufus",
+          "source_field": "authors+title_or_abstract",
+          "explanation": "Autor e objeto coincidem no mesmo candidato."
+        }
+      ],
+      "human_decision": null,
+      "human_justification": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "review_id": "lipogenys-2024|doi:10.1111/jfb.15769",
+      "case_id": "lipogenys-2024",
+      "deduplication_key": "doi:10.1111/jfb.15769",
+      "sources": [
+        "CROSSREF"
+      ],
+      "source_record_ids": [
+        "10.1111/jfb.15769"
+      ],
+      "doi": "10.1111/jfb.15769",
+      "title": "Hidden in the depths, discovery of a new spiny sucker eel of the genus Lipogenys Goode and Bean 1895 (Teleostei, Notacanthiformes, Notacanthidae) in the eastern North Atlantic Ocean",
+      "authors": [
+        "Pedro Gomes",
+        "Helena Silva",
+        "Catarina Churro"
+      ],
+      "publication_date": "2024-4-23",
+      "url": "https://doi.org/10.1111/jfb.15769",
+      "known_case_match": true,
+      "evidences": [
+        {
+          "type": "AUTHOR",
+          "strength": "SUPPORTING",
+          "value": "Pedro Gomes",
+          "source_field": "authors",
+          "explanation": "A lista de autores coincide com o investigador do projeto."
+        },
+        {
+          "type": "OBJECT_NAME",
+          "strength": "SUPPORTING",
+          "value": "Lipogenys hyalinumvelum",
+          "source_field": "title_or_abstract",
+          "explanation": "O titulo ou resumo menciona o objeto consultado."
+        },
+        {
+          "type": "AUTHOR_OBJECT",
+          "strength": "SUPPORTING",
+          "value": "Pedro Gomes | Lipogenys hyalinumvelum",
+          "source_field": "authors+title_or_abstract",
+          "explanation": "Autor e objeto coincidem no mesmo candidato."
+        }
+      ],
+      "human_decision": null,
+      "human_justification": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "review_id": "xenopus-petersii-2024|doi:10.3897/zookeys.1201.120750",
+      "case_id": "xenopus-petersii-2024",
+      "deduplication_key": "doi:10.3897/zookeys.1201.120750",
+      "sources": [
+        "EUROPE_PMC"
+      ],
+      "source_record_ids": [
+        "MED:38779586"
+      ],
+      "doi": "10.3897/zookeys.1201.120750",
+      "title": "\ufeffAn island in a sea of sand: a first checklist of the herpetofauna of the Serra da Neve inselberg, southwestern Angola.",
+      "authors": [
+        "Marques MP",
+        "Parrinha D",
+        "Lopes-Lima M",
+        "Tiutenko A",
+        "Bauer AM",
+        "Cer\u00edaco LMP"
+      ],
+      "publication_date": "2024-05-14",
+      "url": "https://doi.org/10.3897/zookeys.1201.120750",
+      "known_case_match": true,
+      "evidences": [
+        {
+          "type": "INVENTORY_NUMBER",
+          "strength": "PRIMARY",
+          "value": "MUHNAC/MB04-001066",
+          "source_field": "full_text",
+          "explanation": "O registo bibliografico menciona o numero de inventario consultado."
+        },
+        {
+          "type": "OBJECT_NAME",
+          "strength": "SUPPORTING",
+          "value": "Xenopus petersii",
+          "source_field": "full_text",
+          "explanation": "O titulo ou resumo menciona o objeto consultado."
+        },
+        {
+          "type": "INVENTORY_OBJECT",
+          "strength": "PRIMARY",
+          "value": "MUHNAC/MB04-001066 | Xenopus petersii",
+          "source_field": "full_text",
+          "explanation": "Numero de inventario e objeto coincidem no mesmo candidato."
+        }
+      ],
+      "human_decision": null,
+      "human_justification": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "review_id": "nembrotha-cristata-2026|doi:10.3989/scimar.05371.072",
+      "case_id": "nembrotha-cristata-2026",
+      "deduplication_key": "doi:10.3989/scimar.05371.072",
+      "sources": [
+        "CROSSREF"
+      ],
+      "source_record_ids": [
+        "10.3989/scimar.05371.072"
+      ],
+      "doi": "10.3989/scimar.05371.072",
+      "title": "Psychedelics sea slugs: Observations on colour ontogeny in two nudibranch species from the genus Nembrotha (Doridina: Polyceridae)",
+      "authors": [
+        "Marta Pola",
+        "Yara Tibiri\u00e7\u00e1",
+        "Juan Lucas Cervera"
+      ],
+      "publication_date": "2023-10-3",
+      "url": "https://doi.org/10.3989/scimar.05371.072",
+      "known_case_match": false,
+      "evidences": [
+        {
+          "type": "AUTHOR",
+          "strength": "SUPPORTING",
+          "value": "Marta Pola",
+          "source_field": "authors",
+          "explanation": "A lista de autores coincide com o investigador do projeto."
+        },
+        {
+          "type": "OBJECT_NAME",
+          "strength": "WEAK",
+          "value": "Nembrotha cristata",
+          "source_field": "title_or_abstract",
+          "explanation": "O titulo ou resumo menciona o genero do taxon consultado."
+        },
+        {
+          "type": "AUTHOR_OBJECT",
+          "strength": "SUPPORTING",
+          "value": "Marta Pola | nembrotha",
+          "source_field": "authors+title_or_abstract",
+          "explanation": "Autor e genero do taxon coincidem no mesmo candidato."
+        }
+      ],
+      "human_decision": null,
+      "human_justification": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "review_id": "nembrotha-cristata-2026|doi:10.3989/scimar.2008.72n1145",
+      "case_id": "nembrotha-cristata-2026",
+      "deduplication_key": "doi:10.3989/scimar.2008.72n1145",
+      "sources": [
+        "CROSSREF"
+      ],
+      "source_record_ids": [
+        "10.3989/scimar.2008.72n1145"
+      ],
+      "doi": "10.3989/scimar.2008.72n1145",
+      "title": "Revision of the Indo-Pacific genus Nembrotha (Nudibranchia: Dorididae: Polyceridae), with a description of two new species",
+      "authors": [
+        "Marta Pola",
+        "J. Lucas Cervera",
+        "Terrence M. Gosliner"
+      ],
+      "publication_date": "2008-3-30",
+      "url": "https://doi.org/10.3989/scimar.2008.72n1145",
+      "known_case_match": false,
+      "evidences": [
+        {
+          "type": "AUTHOR",
+          "strength": "SUPPORTING",
+          "value": "Marta Pola",
+          "source_field": "authors",
+          "explanation": "A lista de autores coincide com o investigador do projeto."
+        },
+        {
+          "type": "OBJECT_NAME",
+          "strength": "SUPPORTING",
+          "value": "Nembrotha cristata",
+          "source_field": "title_or_abstract",
+          "explanation": "O titulo ou resumo menciona o objeto consultado."
+        },
+        {
+          "type": "AUTHOR_OBJECT",
+          "strength": "SUPPORTING",
+          "value": "Marta Pola | Nembrotha cristata",
+          "source_field": "authors+title_or_abstract",
+          "explanation": "Autor e objeto coincidem no mesmo candidato."
+        }
+      ],
+      "human_decision": null,
+      "human_justification": null,
+      "reviewer": null,
+      "reviewed_at": null
+    }
+  ],
+  "cases": [
+    {
+      "case_id": "rhoptropus-2025",
+      "expected_doi": "10.11646/zootaxa.5569.3.2",
+      "retrieved": true,
+      "best_rank": 1,
+      "actionable_candidates": 1,
+      "trajectories": [
+        {
+          "source": "CROSSREF",
+          "query_type": "INVENTORY",
+          "query": "\"MUHNAC/MB03-1707\"",
+          "result_count": 20,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "AUTHOR_INVENTORY",
+          "query": "\"Diogo Parrinha\" \"MUHNAC/MB03-1707\"",
+          "result_count": 19,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "INVENTORY_OBJECT",
+          "query": "\"MUHNAC/MB03-1707\" \"Rhoptropus nivimontanus\"",
+          "result_count": 20,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "AUTHOR_OBJECT",
+          "query": "\"Diogo Parrinha\" \"Rhoptropus nivimontanus\"",
+          "result_count": 19,
+          "actionable_count": 1,
+          "expected_rank": 1,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "INVENTORY",
+          "query": "\"MUHNAC/MB03-1707\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "AUTHOR_INVENTORY",
+          "query": "\"Diogo Parrinha\" \"MUHNAC/MB03-1707\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "INVENTORY_OBJECT",
+          "query": "\"MUHNAC/MB03-1707\" \"Rhoptropus nivimontanus\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "AUTHOR_OBJECT",
+          "query": "\"Diogo Parrinha\" \"Rhoptropus nivimontanus\"",
+          "result_count": 1,
+          "actionable_count": 0,
+          "expected_rank": 1,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "INVENTORY_OBJECT",
+          "query": "\"MUHNAC/MB03-1707\" \"Rhoptropus\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "AUTHOR_OBJECT",
+          "query": "\"Diogo Parrinha\" \"Rhoptropus\"",
+          "result_count": 2,
+          "actionable_count": 0,
+          "expected_rank": 1,
+          "error": null
+        }
+      ],
+      "source_results": [
+        {
+          "source": "CROSSREF",
+          "retrieved": true,
+          "best_rank": 1,
+          "actionable_candidates": 1,
+          "known_actionable_matches": 1,
+          "query_count": 4,
+          "error_count": 0
+        },
+        {
+          "source": "EUROPE_PMC",
+          "retrieved": true,
+          "best_rank": 1,
+          "actionable_candidates": 0,
+          "known_actionable_matches": 0,
+          "query_count": 6,
+          "error_count": 0
+        }
+      ],
+      "candidates": [
+        {
+          "review_id": "rhoptropus-2025|doi:10.11646/zootaxa.5569.3.2",
+          "case_id": "rhoptropus-2025",
+          "deduplication_key": "doi:10.11646/zootaxa.5569.3.2",
+          "sources": [
+            "CROSSREF"
+          ],
+          "source_record_ids": [
+            "10.11646/zootaxa.5569.3.2"
+          ],
+          "doi": "10.11646/zootaxa.5569.3.2",
+          "title": "A new species of Namib Day Gecko (Gekkonidae: Rhoptropus Peters, 1869) from the Serra da Neve inselberg, southwestern Angola",
+          "authors": [
+            "DIOGO PARRINHA",
+            "MARIANA P. MARQUES",
+            "ARTHUR TIUTENKO",
+            "MATTHEW P. HEINICKE",
+            "AARON M. BAUER",
+            "LUIS M.P. CER\u00cdACO"
+          ],
+          "publication_date": "2025-1-15",
+          "url": "https://doi.org/10.11646/zootaxa.5569.3.2",
+          "known_case_match": true,
+          "evidences": [
+            {
+              "type": "AUTHOR",
+              "strength": "SUPPORTING",
+              "value": "Diogo Parrinha",
+              "source_field": "authors",
+              "explanation": "A lista de autores coincide com o investigador do projeto."
+            },
+            {
+              "type": "OBJECT_NAME",
+              "strength": "SUPPORTING",
+              "value": "Rhoptropus nivimontanus",
+              "source_field": "title_or_abstract",
+              "explanation": "O titulo ou resumo menciona o objeto consultado."
+            },
+            {
+              "type": "AUTHOR_OBJECT",
+              "strength": "SUPPORTING",
+              "value": "Diogo Parrinha | Rhoptropus nivimontanus",
+              "source_field": "authors+title_or_abstract",
+              "explanation": "Autor e objeto coincidem no mesmo candidato."
+            }
+          ],
+          "human_decision": null,
+          "human_justification": null,
+          "reviewer": null,
+          "reviewed_at": null
+        }
+      ],
+      "declared_baseline_status": "RESOLVED",
+      "observed_baseline_status": "RESOLVED",
+      "observed_inventory_evidence": false,
+      "agentic_objective": "ENRICH_CANDIDATE",
+      "expected_gap": "UNKNOWN",
+      "declaration_matches": true
+    },
+    {
+      "case_id": "acontias-2023",
+      "expected_doi": "10.1080/21564574.2023.2246487",
+      "retrieved": true,
+      "best_rank": 1,
+      "actionable_candidates": 2,
+      "trajectories": [
+        {
+          "source": "CROSSREF",
+          "query_type": "INVENTORY",
+          "query": "\"MUHNAC/MB03-001522\"",
+          "result_count": 20,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "AUTHOR_INVENTORY",
+          "query": "\"Mariana P. Marques\" \"MUHNAC/MB03-001522\"",
+          "result_count": 16,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "INVENTORY_OBJECT",
+          "query": "\"MUHNAC/MB03-001522\" \"Acontias mukwando\"",
+          "result_count": 20,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "AUTHOR_OBJECT",
+          "query": "\"Mariana P. Marques\" \"Acontias mukwando\"",
+          "result_count": 16,
+          "actionable_count": 1,
+          "expected_rank": 1,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "INVENTORY",
+          "query": "\"MUHNAC/MB03-001522\"",
+          "result_count": 1,
+          "actionable_count": 1,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "AUTHOR_INVENTORY",
+          "query": "\"Mariana P. Marques\" \"MUHNAC/MB03-001522\"",
+          "result_count": 1,
+          "actionable_count": 1,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "INVENTORY_OBJECT",
+          "query": "\"MUHNAC/MB03-001522\" \"Acontias mukwando\"",
+          "result_count": 1,
+          "actionable_count": 1,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "AUTHOR_OBJECT",
+          "query": "\"Mariana P. Marques\" \"Acontias mukwando\"",
+          "result_count": 1,
+          "actionable_count": 1,
+          "expected_rank": null,
+          "error": null
+        }
+      ],
+      "source_results": [
+        {
+          "source": "CROSSREF",
+          "retrieved": true,
+          "best_rank": 1,
+          "actionable_candidates": 1,
+          "known_actionable_matches": 1,
+          "query_count": 4,
+          "error_count": 0
+        },
+        {
+          "source": "EUROPE_PMC",
+          "retrieved": false,
+          "best_rank": null,
+          "actionable_candidates": 1,
+          "known_actionable_matches": 0,
+          "query_count": 4,
+          "error_count": 0
+        }
+      ],
+      "candidates": [
+        {
+          "review_id": "acontias-2023|doi:10.1080/21564574.2023.2246487",
+          "case_id": "acontias-2023",
+          "deduplication_key": "doi:10.1080/21564574.2023.2246487",
+          "sources": [
+            "CROSSREF"
+          ],
+          "source_record_ids": [
+            "10.1080/21564574.2023.2246487"
+          ],
+          "doi": "10.1080/21564574.2023.2246487",
+          "title": "A new species of African legless skink, genus Acontias Cuvier, 1816 \u201c1817\u201d (Squamata: Scincidae) from Serra da Neve inselberg, south-western Angola",
+          "authors": [
+            "Mariana P. Marques",
+            "Diogo Parrinha",
+            "Arthur Tiutenko",
+            "Manuel Lopes-Lima",
+            "Aaron M. Bauer",
+            "Luis M. P. Cer\u00edaco"
+          ],
+          "publication_date": "2023-9-19",
+          "url": "https://doi.org/10.1080/21564574.2023.2246487",
+          "known_case_match": true,
+          "evidences": [
+            {
+              "type": "AUTHOR",
+              "strength": "SUPPORTING",
+              "value": "Mariana P. Marques",
+              "source_field": "authors",
+              "explanation": "A lista de autores coincide com o investigador do projeto."
+            },
+            {
+              "type": "OBJECT_NAME",
+              "strength": "WEAK",
+              "value": "Acontias mukwando",
+              "source_field": "title_or_abstract",
+              "explanation": "O titulo ou resumo menciona o genero do taxon consultado."
+            },
+            {
+              "type": "AUTHOR_OBJECT",
+              "strength": "SUPPORTING",
+              "value": "Mariana P. Marques | acontias",
+              "source_field": "authors+title_or_abstract",
+              "explanation": "Autor e genero do taxon coincidem no mesmo candidato."
+            }
+          ],
+          "human_decision": null,
+          "human_justification": null,
+          "reviewer": null,
+          "reviewed_at": null
+        },
+        {
+          "review_id": "acontias-2023|doi:10.3897/zookeys.1201.120750",
+          "case_id": "acontias-2023",
+          "deduplication_key": "doi:10.3897/zookeys.1201.120750",
+          "sources": [
+            "EUROPE_PMC"
+          ],
+          "source_record_ids": [
+            "MED:38779586"
+          ],
+          "doi": "10.3897/zookeys.1201.120750",
+          "title": "\ufeffAn island in a sea of sand: a first checklist of the herpetofauna of the Serra da Neve inselberg, southwestern Angola.",
+          "authors": [
+            "Marques MP",
+            "Parrinha D",
+            "Lopes-Lima M",
+            "Tiutenko A",
+            "Bauer AM",
+            "Cer\u00edaco LMP"
+          ],
+          "publication_date": "2024-05-14",
+          "url": "https://doi.org/10.3897/zookeys.1201.120750",
+          "known_case_match": false,
+          "evidences": [
+            {
+              "type": "INVENTORY_NUMBER",
+              "strength": "PRIMARY",
+              "value": "MUHNAC/MB03-001522",
+              "source_field": "full_text",
+              "explanation": "O registo bibliografico menciona o numero de inventario consultado."
+            },
+            {
+              "type": "OBJECT_NAME",
+              "strength": "SUPPORTING",
+              "value": "Acontias mukwando",
+              "source_field": "full_text",
+              "explanation": "O titulo ou resumo menciona o objeto consultado."
+            },
+            {
+              "type": "INVENTORY_OBJECT",
+              "strength": "PRIMARY",
+              "value": "MUHNAC/MB03-001522 | Acontias mukwando",
+              "source_field": "full_text",
+              "explanation": "Numero de inventario e objeto coincidem no mesmo candidato."
+            }
+          ],
+          "human_decision": null,
+          "human_justification": null,
+          "reviewer": null,
+          "reviewed_at": null
+        }
+      ],
+      "declared_baseline_status": "RESOLVED",
+      "observed_baseline_status": "RESOLVED",
+      "observed_inventory_evidence": false,
+      "agentic_objective": "ENRICH_CANDIDATE",
+      "expected_gap": "UNKNOWN",
+      "declaration_matches": true
+    },
+    {
+      "case_id": "pachydactylus-2025",
+      "expected_doi": "10.1643/h2024108",
+      "retrieved": true,
+      "best_rank": 2,
+      "actionable_candidates": 11,
+      "trajectories": [
+        {
+          "source": "CROSSREF",
+          "query_type": "INVENTORY",
+          "query": "\"MUHNAC/MB03-001801\"",
+          "result_count": 20,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "AUTHOR_INVENTORY",
+          "query": "\"Diogo Parrinha\" \"MUHNAC/MB03-001801\"",
+          "result_count": 19,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "INVENTORY_OBJECT",
+          "query": "\"MUHNAC/MB03-001801\" \"Pachydactylus namibensis\"",
+          "result_count": 20,
+          "actionable_count": 1,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "AUTHOR_OBJECT",
+          "query": "\"Diogo Parrinha\" \"Pachydactylus namibensis\"",
+          "result_count": 19,
+          "actionable_count": 11,
+          "expected_rank": 2,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "INVENTORY",
+          "query": "\"MUHNAC/MB03-001801\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "AUTHOR_INVENTORY",
+          "query": "\"Diogo Parrinha\" \"MUHNAC/MB03-001801\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "INVENTORY_OBJECT",
+          "query": "\"MUHNAC/MB03-001801\" \"Pachydactylus namibensis\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "AUTHOR_OBJECT",
+          "query": "\"Diogo Parrinha\" \"Pachydactylus namibensis\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "INVENTORY_OBJECT",
+          "query": "\"MUHNAC/MB03-001801\" \"Pachydactylus\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "AUTHOR_OBJECT",
+          "query": "\"Diogo Parrinha\" \"Pachydactylus\"",
+          "result_count": 1,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        }
+      ],
+      "source_results": [
+        {
+          "source": "CROSSREF",
+          "retrieved": true,
+          "best_rank": 2,
+          "actionable_candidates": 11,
+          "known_actionable_matches": 1,
+          "query_count": 4,
+          "error_count": 0
+        },
+        {
+          "source": "EUROPE_PMC",
+          "retrieved": false,
+          "best_rank": null,
+          "actionable_candidates": 0,
+          "known_actionable_matches": 0,
+          "query_count": 6,
+          "error_count": 0
+        }
+      ],
+      "candidates": [
+        {
+          "review_id": "pachydactylus-2025|doi:10.1643/h2024108",
+          "case_id": "pachydactylus-2025",
+          "deduplication_key": "doi:10.1643/h2024108",
+          "sources": [
+            "CROSSREF"
+          ],
+          "source_record_ids": [
+            "10.1643/h2024108"
+          ],
+          "doi": "10.1643/h2024108",
+          "title": "Two New Species of Pachydactylus (Squamata: Gekkonidae) from the Kaokoveld",
+          "authors": [
+            "Diogo Parrinha",
+            "Mariana P. Marques",
+            "Amanda M. Picelli",
+            "Adriaan Jordaan",
+            "Lacey J. Bishop-Schouster",
+            "Matthew P. Heinicke",
+            "Aaron M. Bauer",
+            "Luis M. P. Cer\u00edaco"
+          ],
+          "publication_date": "2025-8-8",
+          "url": "https://doi.org/10.1643/h2024108",
+          "known_case_match": true,
+          "evidences": [
+            {
+              "type": "AUTHOR",
+              "strength": "SUPPORTING",
+              "value": "Diogo Parrinha",
+              "source_field": "authors",
+              "explanation": "A lista de autores coincide com o investigador do projeto."
+            },
+            {
+              "type": "OBJECT_NAME",
+              "strength": "WEAK",
+              "value": "Pachydactylus namibensis",
+              "source_field": "title_or_abstract",
+              "explanation": "O titulo ou resumo menciona o genero do taxon consultado."
+            },
+            {
+              "type": "AUTHOR_OBJECT",
+              "strength": "SUPPORTING",
+              "value": "Diogo Parrinha | pachydactylus",
+              "source_field": "authors+title_or_abstract",
+              "explanation": "Autor e genero do taxon coincidem no mesmo candidato."
+            }
+          ],
+          "human_decision": null,
+          "human_justification": null,
+          "reviewer": null,
+          "reviewed_at": null
+        },
+        {
+          "review_id": "pachydactylus-2025|doi:10.3897/vz.73.e101329",
+          "case_id": "pachydactylus-2025",
+          "deduplication_key": "doi:10.3897/vz.73.e101329",
+          "sources": [
+            "CROSSREF"
+          ],
+          "source_record_ids": [
+            "10.3897/vz.73.e101329"
+          ],
+          "doi": "10.3897/vz.73.e101329",
+          "title": "A new species of thick-toed gecko (Pachydactylus) from Serra da Neve and surrounding rocky areas of southwestern Angola (Squamata: Gekkonidae)",
+          "authors": [
+            "Mariana P. Marques",
+            "Diogo Parrinha",
+            "Luis M. P. Cer\u00edaco",
+            "Ian G. Brennan",
+            "Matthew P. Heinicke",
+            "Aaron M. Bauer"
+          ],
+          "publication_date": "2023-4-6",
+          "url": "https://doi.org/10.3897/vz.73.e101329",
+          "known_case_match": false,
+          "evidences": [
+            {
+              "type": "AUTHOR",
+              "strength": "SUPPORTING",
+              "value": "Diogo Parrinha",
+              "source_field": "authors",
+              "explanation": "A lista de autores coincide com o investigador do projeto."
+            },
+            {
+              "type": "OBJECT_NAME",
+              "strength": "WEAK",
+              "value": "Pachydactylus namibensis",
+              "source_field": "title_or_abstract",
+              "explanation": "O titulo ou resumo menciona o genero do taxon consultado."
+            },
+            {
+              "type": "AUTHOR_OBJECT",
+              "strength": "SUPPORTING",
+              "value": "Diogo Parrinha | pachydactylus",
+              "source_field": "authors+title_or_abstract",
+              "explanation": "Autor e genero do taxon coincidem no mesmo candidato."
+            }
+          ],
+          "human_decision": null,
+          "human_justification": null,
+          "reviewer": null,
+          "reviewed_at": null
+        },
+        {
+          "review_id": "pachydactylus-2025|doi:10.3897/vz.73.e101329.figure1",
+          "case_id": "pachydactylus-2025",
+          "deduplication_key": "doi:10.3897/vz.73.e101329.figure1",
+          "sources": [
+            "CROSSREF"
+          ],
+          "source_record_ids": [
+            "10.3897/vz.73.e101329.figure1"
+          ],
+          "doi": "10.3897/vz.73.e101329.figure1",
+          "title": "Figure 1 from: Marques MP, Parrinha D, Cer\u00edaco LMP, Brennan IG, Heinicke MP, Bauer AM (2023) A new species of thick-toed gecko (Pachydactylus) from Serra da Neve and surrounding rocky areas of southwestern Angola (Squamata: Gekkonidae). Vertebrate Zoology 73: 325-343. https://doi.org/10.3897/vz.73.e101329",
+          "authors": [
+            "Mariana P. Marques",
+            "Diogo Parrinha",
+            "Luis M. P. Cer\u00edaco",
+            "Ian G. Brennan",
+            "Matthew P. Heinicke",
+            "Aaron M. Bauer"
+          ],
+          "publication_date": "2023-4-6",
+          "url": "https://doi.org/10.3897/vz.73.e101329.figure1",
+          "known_case_match": false,
+          "evidences": [
+            {
+              "type": "AUTHOR",
+              "strength": "SUPPORTING",
+              "value": "Diogo Parrinha",
+              "source_field": "authors",
+              "explanation": "A lista de autores coincide com o investigador do projeto."
+            },
+            {
+              "type": "OBJECT_NAME",
+              "strength": "WEAK",
+              "value": "Pachydactylus namibensis",
+              "source_field": "title_or_abstract",
+              "explanation": "O titulo ou resumo menciona o genero do taxon consultado."
+            },
+            {
+              "type": "AUTHOR_OBJECT",
+              "strength": "SUPPORTING",
+              "value": "Diogo Parrinha | pachydactylus",
+              "source_field": "authors+title_or_abstract",
+              "explanation": "Autor e genero do taxon coincidem no mesmo candidato."
+            }
+          ],
+          "human_decision": null,
+          "human_justification": null,
+          "reviewer": null,
+          "reviewed_at": null
+        },
+        {
+          "review_id": "pachydactylus-2025|doi:10.3897/vz.73.e101329.figure2",
+          "case_id": "pachydactylus-2025",
+          "deduplication_key": "doi:10.3897/vz.73.e101329.figure2",
+          "sources": [
+            "CROSSREF"
+          ],
+          "source_record_ids": [
+            "10.3897/vz.73.e101329.figure2"
+          ],
+          "doi": "10.3897/vz.73.e101329.figure2",
+          "title": "Figure 2 from: Marques MP, Parrinha D, Cer\u00edaco LMP, Brennan IG, Heinicke MP, Bauer AM (2023) A new species of thick-toed gecko (Pachydactylus) from Serra da Neve and surrounding rocky areas of southwestern Angola (Squamata: Gekkonidae). Vertebrate Zoology 73: 325-343. https://doi.org/10.3897/vz.73.e101329",
+          "authors": [
+            "Mariana P. Marques",
+            "Diogo Parrinha",
+            "Luis M. P. Cer\u00edaco",
+            "Ian G. Brennan",
+            "Matthew P. Heinicke",
+            "Aaron M. Bauer"
+          ],
+          "publication_date": "2023-4-6",
+          "url": "https://doi.org/10.3897/vz.73.e101329.figure2",
+          "known_case_match": false,
+          "evidences": [
+            {
+              "type": "AUTHOR",
+              "strength": "SUPPORTING",
+              "value": "Diogo Parrinha",
+              "source_field": "authors",
+              "explanation": "A lista de autores coincide com o investigador do projeto."
+            },
+            {
+              "type": "OBJECT_NAME",
+              "strength": "WEAK",
+              "value": "Pachydactylus namibensis",
+              "source_field": "title_or_abstract",
+              "explanation": "O titulo ou resumo menciona o genero do taxon consultado."
+            },
+            {
+              "type": "AUTHOR_OBJECT",
+              "strength": "SUPPORTING",
+              "value": "Diogo Parrinha | pachydactylus",
+              "source_field": "authors+title_or_abstract",
+              "explanation": "Autor e genero do taxon coincidem no mesmo candidato."
+            }
+          ],
+          "human_decision": null,
+          "human_justification": null,
+          "reviewer": null,
+          "reviewed_at": null
+        },
+        {
+          "review_id": "pachydactylus-2025|doi:10.3897/vz.73.e101329.figure3",
+          "case_id": "pachydactylus-2025",
+          "deduplication_key": "doi:10.3897/vz.73.e101329.figure3",
+          "sources": [
+            "CROSSREF"
+          ],
+          "source_record_ids": [
+            "10.3897/vz.73.e101329.figure3"
+          ],
+          "doi": "10.3897/vz.73.e101329.figure3",
+          "title": "Figure 3 from: Marques MP, Parrinha D, Cer\u00edaco LMP, Brennan IG, Heinicke MP, Bauer AM (2023) A new species of thick-toed gecko (Pachydactylus) from Serra da Neve and surrounding rocky areas of southwestern Angola (Squamata: Gekkonidae). Vertebrate Zoology 73: 325-343. https://doi.org/10.3897/vz.73.e101329",
+          "authors": [
+            "Mariana P. Marques",
+            "Diogo Parrinha",
+            "Luis M. P. Cer\u00edaco",
+            "Ian G. Brennan",
+            "Matthew P. Heinicke",
+            "Aaron M. Bauer"
+          ],
+          "publication_date": "2023-4-6",
+          "url": "https://doi.org/10.3897/vz.73.e101329.figure3",
+          "known_case_match": false,
+          "evidences": [
+            {
+              "type": "AUTHOR",
+              "strength": "SUPPORTING",
+              "value": "Diogo Parrinha",
+              "source_field": "authors",
+              "explanation": "A lista de autores coincide com o investigador do projeto."
+            },
+            {
+              "type": "OBJECT_NAME",
+              "strength": "WEAK",
+              "value": "Pachydactylus namibensis",
+              "source_field": "title_or_abstract",
+              "explanation": "O titulo ou resumo menciona o genero do taxon consultado."
+            },
+            {
+              "type": "AUTHOR_OBJECT",
+              "strength": "SUPPORTING",
+              "value": "Diogo Parrinha | pachydactylus",
+              "source_field": "authors+title_or_abstract",
+              "explanation": "Autor e genero do taxon coincidem no mesmo candidato."
+            }
+          ],
+          "human_decision": null,
+          "human_justification": null,
+          "reviewer": null,
+          "reviewed_at": null
+        },
+        {
+          "review_id": "pachydactylus-2025|doi:10.3897/vz.73.e101329.figure4",
+          "case_id": "pachydactylus-2025",
+          "deduplication_key": "doi:10.3897/vz.73.e101329.figure4",
+          "sources": [
+            "CROSSREF"
+          ],
+          "source_record_ids": [
+            "10.3897/vz.73.e101329.figure4"
+          ],
+          "doi": "10.3897/vz.73.e101329.figure4",
+          "title": "Figure 4 from: Marques MP, Parrinha D, Cer\u00edaco LMP, Brennan IG, Heinicke MP, Bauer AM (2023) A new species of thick-toed gecko (Pachydactylus) from Serra da Neve and surrounding rocky areas of southwestern Angola (Squamata: Gekkonidae). Vertebrate Zoology 73: 325-343. https://doi.org/10.3897/vz.73.e101329",
+          "authors": [
+            "Mariana P. Marques",
+            "Diogo Parrinha",
+            "Luis M. P. Cer\u00edaco",
+            "Ian G. Brennan",
+            "Matthew P. Heinicke",
+            "Aaron M. Bauer"
+          ],
+          "publication_date": "2023-4-6",
+          "url": "https://doi.org/10.3897/vz.73.e101329.figure4",
+          "known_case_match": false,
+          "evidences": [
+            {
+              "type": "AUTHOR",
+              "strength": "SUPPORTING",
+              "value": "Diogo Parrinha",
+              "source_field": "authors",
+              "explanation": "A lista de autores coincide com o investigador do projeto."
+            },
+            {
+              "type": "OBJECT_NAME",
+              "strength": "WEAK",
+              "value": "Pachydactylus namibensis",
+              "source_field": "title_or_abstract",
+              "explanation": "O titulo ou resumo menciona o genero do taxon consultado."
+            },
+            {
+              "type": "AUTHOR_OBJECT",
+              "strength": "SUPPORTING",
+              "value": "Diogo Parrinha | pachydactylus",
+              "source_field": "authors+title_or_abstract",
+              "explanation": "Autor e genero do taxon coincidem no mesmo candidato."
+            }
+          ],
+          "human_decision": null,
+          "human_justification": null,
+          "reviewer": null,
+          "reviewed_at": null
+        },
+        {
+          "review_id": "pachydactylus-2025|doi:10.3897/vz.73.e101329.figure5",
+          "case_id": "pachydactylus-2025",
+          "deduplication_key": "doi:10.3897/vz.73.e101329.figure5",
+          "sources": [
+            "CROSSREF"
+          ],
+          "source_record_ids": [
+            "10.3897/vz.73.e101329.figure5"
+          ],
+          "doi": "10.3897/vz.73.e101329.figure5",
+          "title": "Figure 5 from: Marques MP, Parrinha D, Cer\u00edaco LMP, Brennan IG, Heinicke MP, Bauer AM (2023) A new species of thick-toed gecko (Pachydactylus) from Serra da Neve and surrounding rocky areas of southwestern Angola (Squamata: Gekkonidae). Vertebrate Zoology 73: 325-343. https://doi.org/10.3897/vz.73.e101329",
+          "authors": [
+            "Mariana P. Marques",
+            "Diogo Parrinha",
+            "Luis M. P. Cer\u00edaco",
+            "Ian G. Brennan",
+            "Matthew P. Heinicke",
+            "Aaron M. Bauer"
+          ],
+          "publication_date": "2023-4-6",
+          "url": "https://doi.org/10.3897/vz.73.e101329.figure5",
+          "known_case_match": false,
+          "evidences": [
+            {
+              "type": "AUTHOR",
+              "strength": "SUPPORTING",
+              "value": "Diogo Parrinha",
+              "source_field": "authors",
+              "explanation": "A lista de autores coincide com o investigador do projeto."
+            },
+            {
+              "type": "OBJECT_NAME",
+              "strength": "WEAK",
+              "value": "Pachydactylus namibensis",
+              "source_field": "title_or_abstract",
+              "explanation": "O titulo ou resumo menciona o genero do taxon consultado."
+            },
+            {
+              "type": "AUTHOR_OBJECT",
+              "strength": "SUPPORTING",
+              "value": "Diogo Parrinha | pachydactylus",
+              "source_field": "authors+title_or_abstract",
+              "explanation": "Autor e genero do taxon coincidem no mesmo candidato."
+            }
+          ],
+          "human_decision": null,
+          "human_justification": null,
+          "reviewer": null,
+          "reviewed_at": null
+        },
+        {
+          "review_id": "pachydactylus-2025|doi:10.3897/vz.73.e101329.figure6",
+          "case_id": "pachydactylus-2025",
+          "deduplication_key": "doi:10.3897/vz.73.e101329.figure6",
+          "sources": [
+            "CROSSREF"
+          ],
+          "source_record_ids": [
+            "10.3897/vz.73.e101329.figure6"
+          ],
+          "doi": "10.3897/vz.73.e101329.figure6",
+          "title": "Figure 6 from: Marques MP, Parrinha D, Cer\u00edaco LMP, Brennan IG, Heinicke MP, Bauer AM (2023) A new species of thick-toed gecko (Pachydactylus) from Serra da Neve and surrounding rocky areas of southwestern Angola (Squamata: Gekkonidae). Vertebrate Zoology 73: 325-343. https://doi.org/10.3897/vz.73.e101329",
+          "authors": [
+            "Mariana P. Marques",
+            "Diogo Parrinha",
+            "Luis M. P. Cer\u00edaco",
+            "Ian G. Brennan",
+            "Matthew P. Heinicke",
+            "Aaron M. Bauer"
+          ],
+          "publication_date": "2023-4-6",
+          "url": "https://doi.org/10.3897/vz.73.e101329.figure6",
+          "known_case_match": false,
+          "evidences": [
+            {
+              "type": "AUTHOR",
+              "strength": "SUPPORTING",
+              "value": "Diogo Parrinha",
+              "source_field": "authors",
+              "explanation": "A lista de autores coincide com o investigador do projeto."
+            },
+            {
+              "type": "OBJECT_NAME",
+              "strength": "WEAK",
+              "value": "Pachydactylus namibensis",
+              "source_field": "title_or_abstract",
+              "explanation": "O titulo ou resumo menciona o genero do taxon consultado."
+            },
+            {
+              "type": "AUTHOR_OBJECT",
+              "strength": "SUPPORTING",
+              "value": "Diogo Parrinha | pachydactylus",
+              "source_field": "authors+title_or_abstract",
+              "explanation": "Autor e genero do taxon coincidem no mesmo candidato."
+            }
+          ],
+          "human_decision": null,
+          "human_justification": null,
+          "reviewer": null,
+          "reviewed_at": null
+        },
+        {
+          "review_id": "pachydactylus-2025|doi:10.3897/vz.73.e101329.figure7",
+          "case_id": "pachydactylus-2025",
+          "deduplication_key": "doi:10.3897/vz.73.e101329.figure7",
+          "sources": [
+            "CROSSREF"
+          ],
+          "source_record_ids": [
+            "10.3897/vz.73.e101329.figure7"
+          ],
+          "doi": "10.3897/vz.73.e101329.figure7",
+          "title": "Figure 7 from: Marques MP, Parrinha D, Cer\u00edaco LMP, Brennan IG, Heinicke MP, Bauer AM (2023) A new species of thick-toed gecko (Pachydactylus) from Serra da Neve and surrounding rocky areas of southwestern Angola (Squamata: Gekkonidae). Vertebrate Zoology 73: 325-343. https://doi.org/10.3897/vz.73.e101329",
+          "authors": [
+            "Mariana P. Marques",
+            "Diogo Parrinha",
+            "Luis M. P. Cer\u00edaco",
+            "Ian G. Brennan",
+            "Matthew P. Heinicke",
+            "Aaron M. Bauer"
+          ],
+          "publication_date": "2023-4-6",
+          "url": "https://doi.org/10.3897/vz.73.e101329.figure7",
+          "known_case_match": false,
+          "evidences": [
+            {
+              "type": "AUTHOR",
+              "strength": "SUPPORTING",
+              "value": "Diogo Parrinha",
+              "source_field": "authors",
+              "explanation": "A lista de autores coincide com o investigador do projeto."
+            },
+            {
+              "type": "OBJECT_NAME",
+              "strength": "WEAK",
+              "value": "Pachydactylus namibensis",
+              "source_field": "title_or_abstract",
+              "explanation": "O titulo ou resumo menciona o genero do taxon consultado."
+            },
+            {
+              "type": "AUTHOR_OBJECT",
+              "strength": "SUPPORTING",
+              "value": "Diogo Parrinha | pachydactylus",
+              "source_field": "authors+title_or_abstract",
+              "explanation": "Autor e genero do taxon coincidem no mesmo candidato."
+            }
+          ],
+          "human_decision": null,
+          "human_justification": null,
+          "reviewer": null,
+          "reviewed_at": null
+        },
+        {
+          "review_id": "pachydactylus-2025|doi:10.3897/vz.73.e101329.figure8",
+          "case_id": "pachydactylus-2025",
+          "deduplication_key": "doi:10.3897/vz.73.e101329.figure8",
+          "sources": [
+            "CROSSREF"
+          ],
+          "source_record_ids": [
+            "10.3897/vz.73.e101329.figure8"
+          ],
+          "doi": "10.3897/vz.73.e101329.figure8",
+          "title": "Figure 8 from: Marques MP, Parrinha D, Cer\u00edaco LMP, Brennan IG, Heinicke MP, Bauer AM (2023) A new species of thick-toed gecko (Pachydactylus) from Serra da Neve and surrounding rocky areas of southwestern Angola (Squamata: Gekkonidae). Vertebrate Zoology 73: 325-343. https://doi.org/10.3897/vz.73.e101329",
+          "authors": [
+            "Mariana P. Marques",
+            "Diogo Parrinha",
+            "Luis M. P. Cer\u00edaco",
+            "Ian G. Brennan",
+            "Matthew P. Heinicke",
+            "Aaron M. Bauer"
+          ],
+          "publication_date": "2023-4-6",
+          "url": "https://doi.org/10.3897/vz.73.e101329.figure8",
+          "known_case_match": false,
+          "evidences": [
+            {
+              "type": "AUTHOR",
+              "strength": "SUPPORTING",
+              "value": "Diogo Parrinha",
+              "source_field": "authors",
+              "explanation": "A lista de autores coincide com o investigador do projeto."
+            },
+            {
+              "type": "OBJECT_NAME",
+              "strength": "WEAK",
+              "value": "Pachydactylus namibensis",
+              "source_field": "title_or_abstract",
+              "explanation": "O titulo ou resumo menciona o genero do taxon consultado."
+            },
+            {
+              "type": "AUTHOR_OBJECT",
+              "strength": "SUPPORTING",
+              "value": "Diogo Parrinha | pachydactylus",
+              "source_field": "authors+title_or_abstract",
+              "explanation": "Autor e genero do taxon coincidem no mesmo candidato."
+            }
+          ],
+          "human_decision": null,
+          "human_justification": null,
+          "reviewer": null,
+          "reviewed_at": null
+        },
+        {
+          "review_id": "pachydactylus-2025|doi:10.3897/vz.73.e101329.figure9",
+          "case_id": "pachydactylus-2025",
+          "deduplication_key": "doi:10.3897/vz.73.e101329.figure9",
+          "sources": [
+            "CROSSREF"
+          ],
+          "source_record_ids": [
+            "10.3897/vz.73.e101329.figure9"
+          ],
+          "doi": "10.3897/vz.73.e101329.figure9",
+          "title": "Figure 9 from: Marques MP, Parrinha D, Cer\u00edaco LMP, Brennan IG, Heinicke MP, Bauer AM (2023) A new species of thick-toed gecko (Pachydactylus) from Serra da Neve and surrounding rocky areas of southwestern Angola (Squamata: Gekkonidae). Vertebrate Zoology 73: 325-343. https://doi.org/10.3897/vz.73.e101329",
+          "authors": [
+            "Mariana P. Marques",
+            "Diogo Parrinha",
+            "Luis M. P. Cer\u00edaco",
+            "Ian G. Brennan",
+            "Matthew P. Heinicke",
+            "Aaron M. Bauer"
+          ],
+          "publication_date": "2023-4-6",
+          "url": "https://doi.org/10.3897/vz.73.e101329.figure9",
+          "known_case_match": false,
+          "evidences": [
+            {
+              "type": "AUTHOR",
+              "strength": "SUPPORTING",
+              "value": "Diogo Parrinha",
+              "source_field": "authors",
+              "explanation": "A lista de autores coincide com o investigador do projeto."
+            },
+            {
+              "type": "OBJECT_NAME",
+              "strength": "WEAK",
+              "value": "Pachydactylus namibensis",
+              "source_field": "title_or_abstract",
+              "explanation": "O titulo ou resumo menciona o genero do taxon consultado."
+            },
+            {
+              "type": "AUTHOR_OBJECT",
+              "strength": "SUPPORTING",
+              "value": "Diogo Parrinha | pachydactylus",
+              "source_field": "authors+title_or_abstract",
+              "explanation": "Autor e genero do taxon coincidem no mesmo candidato."
+            }
+          ],
+          "human_decision": null,
+          "human_justification": null,
+          "reviewer": null,
+          "reviewed_at": null
+        }
+      ],
+      "declared_baseline_status": "RESOLVED",
+      "observed_baseline_status": "RESOLVED",
+      "observed_inventory_evidence": false,
+      "agentic_objective": "ENRICH_CANDIDATE",
+      "expected_gap": "UNKNOWN",
+      "declaration_matches": true
+    },
+    {
+      "case_id": "serra-da-neve-checklist-2024",
+      "expected_doi": "10.3897/zookeys.1201.120750",
+      "retrieved": true,
+      "best_rank": 1,
+      "actionable_candidates": 1,
+      "trajectories": [
+        {
+          "source": "CROSSREF",
+          "query_type": "INVENTORY",
+          "query": "\"MUNHAC/MB03-001552\"",
+          "result_count": 20,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "AUTHOR_INVENTORY",
+          "query": "\"Mariana P. Marques\" \"MUNHAC/MB03-001552\"",
+          "result_count": 16,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "INVENTORY_OBJECT",
+          "query": "\"MUNHAC/MB03-001552\" \"Afroedura praedicta\"",
+          "result_count": 20,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "AUTHOR_OBJECT",
+          "query": "\"Mariana P. Marques\" \"Afroedura praedicta\"",
+          "result_count": 16,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "INVENTORY_OBJECT",
+          "query": "\"MUNHAC/MB03-001552\" \"Afroedura\"",
+          "result_count": 20,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "AUTHOR_OBJECT",
+          "query": "\"Mariana P. Marques\" \"Afroedura\"",
+          "result_count": 16,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "INVENTORY",
+          "query": "\"MUNHAC/MB03-001552\"",
+          "result_count": 1,
+          "actionable_count": 1,
+          "expected_rank": 1,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "AUTHOR_INVENTORY",
+          "query": "\"Mariana P. Marques\" \"MUNHAC/MB03-001552\"",
+          "result_count": 1,
+          "actionable_count": 1,
+          "expected_rank": 1,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "INVENTORY_OBJECT",
+          "query": "\"MUNHAC/MB03-001552\" \"Afroedura praedicta\"",
+          "result_count": 1,
+          "actionable_count": 1,
+          "expected_rank": 1,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "AUTHOR_OBJECT",
+          "query": "\"Mariana P. Marques\" \"Afroedura praedicta\"",
+          "result_count": 1,
+          "actionable_count": 1,
+          "expected_rank": 1,
+          "error": null
+        }
+      ],
+      "source_results": [
+        {
+          "source": "CROSSREF",
+          "retrieved": false,
+          "best_rank": null,
+          "actionable_candidates": 0,
+          "known_actionable_matches": 0,
+          "query_count": 6,
+          "error_count": 0
+        },
+        {
+          "source": "EUROPE_PMC",
+          "retrieved": true,
+          "best_rank": 1,
+          "actionable_candidates": 1,
+          "known_actionable_matches": 1,
+          "query_count": 4,
+          "error_count": 0
+        }
+      ],
+      "candidates": [
+        {
+          "review_id": "serra-da-neve-checklist-2024|doi:10.3897/zookeys.1201.120750",
+          "case_id": "serra-da-neve-checklist-2024",
+          "deduplication_key": "doi:10.3897/zookeys.1201.120750",
+          "sources": [
+            "EUROPE_PMC"
+          ],
+          "source_record_ids": [
+            "MED:38779586"
+          ],
+          "doi": "10.3897/zookeys.1201.120750",
+          "title": "\ufeffAn island in a sea of sand: a first checklist of the herpetofauna of the Serra da Neve inselberg, southwestern Angola.",
+          "authors": [
+            "Marques MP",
+            "Parrinha D",
+            "Lopes-Lima M",
+            "Tiutenko A",
+            "Bauer AM",
+            "Cer\u00edaco LMP"
+          ],
+          "publication_date": "2024-05-14",
+          "url": "https://doi.org/10.3897/zookeys.1201.120750",
+          "known_case_match": true,
+          "evidences": [
+            {
+              "type": "INVENTORY_NUMBER",
+              "strength": "PRIMARY",
+              "value": "MUNHAC/MB03-001552",
+              "source_field": "full_text",
+              "explanation": "O registo bibliografico menciona o numero de inventario consultado."
+            },
+            {
+              "type": "OBJECT_NAME",
+              "strength": "SUPPORTING",
+              "value": "Afroedura praedicta",
+              "source_field": "full_text",
+              "explanation": "O titulo ou resumo menciona o objeto consultado."
+            },
+            {
+              "type": "INVENTORY_OBJECT",
+              "strength": "PRIMARY",
+              "value": "MUNHAC/MB03-001552 | Afroedura praedicta",
+              "source_field": "full_text",
+              "explanation": "Numero de inventario e objeto coincidem no mesmo candidato."
+            }
+          ],
+          "human_decision": null,
+          "human_justification": null,
+          "reviewer": null,
+          "reviewed_at": null
+        }
+      ],
+      "declared_baseline_status": "RESOLVED",
+      "observed_baseline_status": "RESOLVED",
+      "observed_inventory_evidence": true,
+      "agentic_objective": "NONE",
+      "expected_gap": "NONE",
+      "declaration_matches": true
+    },
+    {
+      "case_id": "sao-tome-barcode-2023",
+      "expected_doi": "10.3897/zookeys.1168.101334",
+      "retrieved": true,
+      "best_rank": 1,
+      "actionable_candidates": 1,
+      "trajectories": [
+        {
+          "source": "CROSSREF",
+          "query_type": "INVENTORY",
+          "query": "\"MUHNAC/MB04-000792\"",
+          "result_count": 20,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "AUTHOR_INVENTORY",
+          "query": "\"Luis M. P. Cer\u00edaco\" \"MUHNAC/MB04-000792\"",
+          "result_count": 20,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "INVENTORY_OBJECT",
+          "query": "\"MUHNAC/MB04-000792\" \"Leptopelis palmatus\"",
+          "result_count": 20,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "AUTHOR_OBJECT",
+          "query": "\"Luis M. P. Cer\u00edaco\" \"Leptopelis palmatus\"",
+          "result_count": 20,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "INVENTORY_OBJECT",
+          "query": "\"MUHNAC/MB04-000792\" \"Leptopelis\"",
+          "result_count": 20,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "AUTHOR_OBJECT",
+          "query": "\"Luis M. P. Cer\u00edaco\" \"Leptopelis\"",
+          "result_count": 20,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "INVENTORY",
+          "query": "\"MUHNAC/MB04-000792\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "AUTHOR_INVENTORY",
+          "query": "\"Luis M. P. Cer\u00edaco\" \"MUHNAC/MB04-000792\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "INVENTORY_OBJECT",
+          "query": "\"MUHNAC/MB04-000792\" \"Leptopelis palmatus\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "AUTHOR_OBJECT",
+          "query": "\"Luis M. P. Cer\u00edaco\" \"Leptopelis palmatus\"",
+          "result_count": 2,
+          "actionable_count": 1,
+          "expected_rank": 1,
+          "error": null
+        }
+      ],
+      "source_results": [
+        {
+          "source": "CROSSREF",
+          "retrieved": false,
+          "best_rank": null,
+          "actionable_candidates": 0,
+          "known_actionable_matches": 0,
+          "query_count": 6,
+          "error_count": 0
+        },
+        {
+          "source": "EUROPE_PMC",
+          "retrieved": true,
+          "best_rank": 1,
+          "actionable_candidates": 1,
+          "known_actionable_matches": 1,
+          "query_count": 4,
+          "error_count": 0
+        }
+      ],
+      "candidates": [
+        {
+          "review_id": "sao-tome-barcode-2023|doi:10.3897/zookeys.1168.101334",
+          "case_id": "sao-tome-barcode-2023",
+          "deduplication_key": "doi:10.3897/zookeys.1168.101334",
+          "sources": [
+            "EUROPE_PMC"
+          ],
+          "source_record_ids": [
+            "MED:37415718"
+          ],
+          "doi": "10.3897/zookeys.1168.101334",
+          "title": "\ufeffIllustrated keys and a DNA barcode reference library of the amphibians and terrestrial reptiles (Amphibia, Reptilia) of S\u00e3o Tom\u00e9 and Pr\u00edncipe (Gulf of Guinea, West Africa).",
+          "authors": [
+            "Cer\u00edaco LMP",
+            "Marques MP",
+            "de Sousa ACA",
+            "Ver\u00edssimo J",
+            "Beja P",
+            "Ferreira S"
+          ],
+          "publication_date": "2023-06-27",
+          "url": "https://doi.org/10.3897/zookeys.1168.101334",
+          "known_case_match": true,
+          "evidences": [
+            {
+              "type": "INVENTORY_NUMBER",
+              "strength": "PRIMARY",
+              "value": "MUHNAC/MB04-000792",
+              "source_field": "full_text",
+              "explanation": "O registo bibliografico menciona o numero de inventario consultado."
+            },
+            {
+              "type": "OBJECT_NAME",
+              "strength": "SUPPORTING",
+              "value": "Leptopelis palmatus",
+              "source_field": "full_text",
+              "explanation": "O titulo ou resumo menciona o objeto consultado."
+            },
+            {
+              "type": "INVENTORY_OBJECT",
+              "strength": "PRIMARY",
+              "value": "MUHNAC/MB04-000792 | Leptopelis palmatus",
+              "source_field": "full_text",
+              "explanation": "Numero de inventario e objeto coincidem no mesmo candidato."
+            }
+          ],
+          "human_decision": null,
+          "human_justification": null,
+          "reviewer": null,
+          "reviewed_at": null
+        }
+      ],
+      "declared_baseline_status": "RESOLVED",
+      "observed_baseline_status": "RESOLVED",
+      "observed_inventory_evidence": true,
+      "agentic_objective": "NONE",
+      "expected_gap": "NONE",
+      "declaration_matches": true
+    },
+    {
+      "case_id": "cynoscion-regalis-2017",
+      "expected_doi": "10.1111/jfb.13318",
+      "retrieved": true,
+      "best_rank": 9,
+      "actionable_candidates": 0,
+      "trajectories": [
+        {
+          "source": "CROSSREF",
+          "query_type": "INVENTORY",
+          "query": "\"MUHNAC/MB06-005747\"",
+          "result_count": 20,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "AUTHOR_INVENTORY",
+          "query": "\"Pedro Gomes\" \"MUHNAC/MB06-005747\"",
+          "result_count": 14,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "INVENTORY_OBJECT",
+          "query": "\"MUHNAC/MB06-005747\" \"Cynoscion regalis\"",
+          "result_count": 20,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "AUTHOR_OBJECT",
+          "query": "\"Pedro Gomes\" \"Cynoscion regalis\"",
+          "result_count": 20,
+          "actionable_count": 0,
+          "expected_rank": 9,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "INVENTORY_OBJECT",
+          "query": "\"MUHNAC/MB06-005747\" \"Cynoscion\"",
+          "result_count": 20,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "AUTHOR_OBJECT",
+          "query": "\"Pedro Gomes\" \"Cynoscion\"",
+          "result_count": 17,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "INVENTORY",
+          "query": "\"MUHNAC/MB06-005747\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "AUTHOR_INVENTORY",
+          "query": "\"Pedro Gomes\" \"MUHNAC/MB06-005747\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "INVENTORY_OBJECT",
+          "query": "\"MUHNAC/MB06-005747\" \"Cynoscion regalis\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "AUTHOR_OBJECT",
+          "query": "\"Pedro Gomes\" \"Cynoscion regalis\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "INVENTORY_OBJECT",
+          "query": "\"MUHNAC/MB06-005747\" \"Cynoscion\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "AUTHOR_OBJECT",
+          "query": "\"Pedro Gomes\" \"Cynoscion\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        }
+      ],
+      "source_results": [
+        {
+          "source": "CROSSREF",
+          "retrieved": true,
+          "best_rank": 9,
+          "actionable_candidates": 0,
+          "known_actionable_matches": 0,
+          "query_count": 6,
+          "error_count": 0
+        },
+        {
+          "source": "EUROPE_PMC",
+          "retrieved": false,
+          "best_rank": null,
+          "actionable_candidates": 0,
+          "known_actionable_matches": 0,
+          "query_count": 6,
+          "error_count": 0
+        }
+      ],
+      "candidates": [],
+      "declared_baseline_status": "GAP",
+      "observed_baseline_status": "GAP",
+      "observed_inventory_evidence": false,
+      "agentic_objective": "DISCOVER_CANDIDATE",
+      "expected_gap": "INVENTORY_FORMAT",
+      "declaration_matches": true
+    },
+    {
+      "case_id": "sao-tome-fishes-2019",
+      "expected_doi": "10.26028/cybium/2019-433-007",
+      "retrieved": false,
+      "best_rank": null,
+      "actionable_candidates": 0,
+      "trajectories": [
+        {
+          "source": "CROSSREF",
+          "query_type": "INVENTORY",
+          "query": "\"MUHNAC/MB06-004594\"",
+          "result_count": 20,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "AUTHOR_INVENTORY",
+          "query": "\"Armando J. Almeida\" \"MUHNAC/MB06-004594\"",
+          "result_count": 20,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "INVENTORY_OBJECT",
+          "query": "\"MUHNAC/MB06-004594\" \"Albula goreensis\"",
+          "result_count": 20,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "AUTHOR_OBJECT",
+          "query": "\"Armando J. Almeida\" \"Albula goreensis\"",
+          "result_count": 20,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "INVENTORY_OBJECT",
+          "query": "\"MUHNAC/MB06-004594\" \"Albula\"",
+          "result_count": 20,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "AUTHOR_OBJECT",
+          "query": "\"Armando J. Almeida\" \"Albula\"",
+          "result_count": 20,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "INVENTORY",
+          "query": "\"MUHNAC/MB06-004594\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "AUTHOR_INVENTORY",
+          "query": "\"Armando J. Almeida\" \"MUHNAC/MB06-004594\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "INVENTORY_OBJECT",
+          "query": "\"MUHNAC/MB06-004594\" \"Albula goreensis\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "AUTHOR_OBJECT",
+          "query": "\"Armando J. Almeida\" \"Albula goreensis\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "INVENTORY_OBJECT",
+          "query": "\"MUHNAC/MB06-004594\" \"Albula\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "AUTHOR_OBJECT",
+          "query": "\"Armando J. Almeida\" \"Albula\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        }
+      ],
+      "source_results": [
+        {
+          "source": "CROSSREF",
+          "retrieved": false,
+          "best_rank": null,
+          "actionable_candidates": 0,
+          "known_actionable_matches": 0,
+          "query_count": 6,
+          "error_count": 0
+        },
+        {
+          "source": "EUROPE_PMC",
+          "retrieved": false,
+          "best_rank": null,
+          "actionable_candidates": 0,
+          "known_actionable_matches": 0,
+          "query_count": 6,
+          "error_count": 0
+        }
+      ],
+      "candidates": [],
+      "declared_baseline_status": "GAP",
+      "observed_baseline_status": "GAP",
+      "observed_inventory_evidence": false,
+      "agentic_objective": "DISCOVER_CANDIDATE",
+      "expected_gap": "NOT_INDEXED",
+      "declaration_matches": true
+    },
+    {
+      "case_id": "ophichthus-rufus-2020",
+      "expected_doi": "10.3750/AIEP/02782",
+      "retrieved": true,
+      "best_rank": 1,
+      "actionable_candidates": 1,
+      "trajectories": [
+        {
+          "source": "CROSSREF",
+          "query_type": "INVENTORY",
+          "query": "\"MUHNAC/MB06-005900\"",
+          "result_count": 20,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "AUTHOR_INVENTORY",
+          "query": "\"Pedro Gomes\" \"MUHNAC/MB06-005900\"",
+          "result_count": 14,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "INVENTORY_OBJECT",
+          "query": "\"MUHNAC/MB06-005900\" \"Ophichthus rufus\"",
+          "result_count": 20,
+          "actionable_count": 1,
+          "expected_rank": 3,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "AUTHOR_OBJECT",
+          "query": "\"Pedro Gomes\" \"Ophichthus rufus\"",
+          "result_count": 16,
+          "actionable_count": 1,
+          "expected_rank": 1,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "INVENTORY",
+          "query": "\"MUHNAC/MB06-005900\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "AUTHOR_INVENTORY",
+          "query": "\"Pedro Gomes\" \"MUHNAC/MB06-005900\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "INVENTORY_OBJECT",
+          "query": "\"MUHNAC/MB06-005900\" \"Ophichthus rufus\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "AUTHOR_OBJECT",
+          "query": "\"Pedro Gomes\" \"Ophichthus rufus\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "INVENTORY_OBJECT",
+          "query": "\"MUHNAC/MB06-005900\" \"Ophichthus\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "AUTHOR_OBJECT",
+          "query": "\"Pedro Gomes\" \"Ophichthus\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        }
+      ],
+      "source_results": [
+        {
+          "source": "CROSSREF",
+          "retrieved": true,
+          "best_rank": 1,
+          "actionable_candidates": 1,
+          "known_actionable_matches": 1,
+          "query_count": 4,
+          "error_count": 0
+        },
+        {
+          "source": "EUROPE_PMC",
+          "retrieved": false,
+          "best_rank": null,
+          "actionable_candidates": 0,
+          "known_actionable_matches": 0,
+          "query_count": 6,
+          "error_count": 0
+        }
+      ],
+      "candidates": [
+        {
+          "review_id": "ophichthus-rufus-2020|doi:10.3750/aiep/02782",
+          "case_id": "ophichthus-rufus-2020",
+          "deduplication_key": "doi:10.3750/aiep/02782",
+          "sources": [
+            "CROSSREF"
+          ],
+          "source_record_ids": [
+            "10.3750/aiep/02782"
+          ],
+          "doi": "10.3750/aiep/02782",
+          "title": "First record of Ophichthus rufus (Actinopterygii: Anguilliformes: Ophichthidae) off the western Iberian coast: The northernmost occurrence in the eastern Atlantic",
+          "authors": [
+            "Pedro Gomes",
+            "Lu\u00eds Oliveira",
+            "Rui Oliveira",
+            "Helena Silva"
+          ],
+          "publication_date": "2020-6-1",
+          "url": "https://doi.org/10.3750/aiep/02782",
+          "known_case_match": true,
+          "evidences": [
+            {
+              "type": "AUTHOR",
+              "strength": "SUPPORTING",
+              "value": "Pedro Gomes",
+              "source_field": "authors",
+              "explanation": "A lista de autores coincide com o investigador do projeto."
+            },
+            {
+              "type": "OBJECT_NAME",
+              "strength": "SUPPORTING",
+              "value": "Ophichthus rufus",
+              "source_field": "title_or_abstract",
+              "explanation": "O titulo ou resumo menciona o objeto consultado."
+            },
+            {
+              "type": "AUTHOR_OBJECT",
+              "strength": "SUPPORTING",
+              "value": "Pedro Gomes | Ophichthus rufus",
+              "source_field": "authors+title_or_abstract",
+              "explanation": "Autor e objeto coincidem no mesmo candidato."
+            }
+          ],
+          "human_decision": null,
+          "human_justification": null,
+          "reviewer": null,
+          "reviewed_at": null
+        }
+      ],
+      "declared_baseline_status": "RESOLVED",
+      "observed_baseline_status": "RESOLVED",
+      "observed_inventory_evidence": false,
+      "agentic_objective": "ENRICH_CANDIDATE",
+      "expected_gap": "INVENTORY_FORMAT",
+      "declaration_matches": true
+    },
+    {
+      "case_id": "lipogenys-2024",
+      "expected_doi": "10.1111/jfb.15769",
+      "retrieved": true,
+      "best_rank": 1,
+      "actionable_candidates": 1,
+      "trajectories": [
+        {
+          "source": "CROSSREF",
+          "query_type": "INVENTORY",
+          "query": "\"MUHNAC/MB06-005861\"",
+          "result_count": 20,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "AUTHOR_INVENTORY",
+          "query": "\"Pedro Gomes\" \"MUHNAC/MB06-005861\"",
+          "result_count": 14,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "INVENTORY_OBJECT",
+          "query": "\"MUHNAC/MB06-005861\" \"Lipogenys hyalinumvelum\"",
+          "result_count": 20,
+          "actionable_count": 1,
+          "expected_rank": 20,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "AUTHOR_OBJECT",
+          "query": "\"Pedro Gomes\" \"Lipogenys hyalinumvelum\"",
+          "result_count": 14,
+          "actionable_count": 1,
+          "expected_rank": 2,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "INVENTORY",
+          "query": "\"MUHNAC/MB06-005861\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "AUTHOR_INVENTORY",
+          "query": "\"Pedro Gomes\" \"MUHNAC/MB06-005861\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "INVENTORY_OBJECT",
+          "query": "\"MUHNAC/MB06-005861\" \"Lipogenys hyalinumvelum\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "AUTHOR_OBJECT",
+          "query": "\"Pedro Gomes\" \"Lipogenys hyalinumvelum\"",
+          "result_count": 1,
+          "actionable_count": 0,
+          "expected_rank": 1,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "INVENTORY_OBJECT",
+          "query": "\"MUHNAC/MB06-005861\" \"Lipogenys\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "AUTHOR_OBJECT",
+          "query": "\"Pedro Gomes\" \"Lipogenys\"",
+          "result_count": 1,
+          "actionable_count": 0,
+          "expected_rank": 1,
+          "error": null
+        }
+      ],
+      "source_results": [
+        {
+          "source": "CROSSREF",
+          "retrieved": true,
+          "best_rank": 2,
+          "actionable_candidates": 1,
+          "known_actionable_matches": 1,
+          "query_count": 4,
+          "error_count": 0
+        },
+        {
+          "source": "EUROPE_PMC",
+          "retrieved": true,
+          "best_rank": 1,
+          "actionable_candidates": 0,
+          "known_actionable_matches": 0,
+          "query_count": 6,
+          "error_count": 0
+        }
+      ],
+      "candidates": [
+        {
+          "review_id": "lipogenys-2024|doi:10.1111/jfb.15769",
+          "case_id": "lipogenys-2024",
+          "deduplication_key": "doi:10.1111/jfb.15769",
+          "sources": [
+            "CROSSREF"
+          ],
+          "source_record_ids": [
+            "10.1111/jfb.15769"
+          ],
+          "doi": "10.1111/jfb.15769",
+          "title": "Hidden in the depths, discovery of a new spiny sucker eel of the genus Lipogenys Goode and Bean 1895 (Teleostei, Notacanthiformes, Notacanthidae) in the eastern North Atlantic Ocean",
+          "authors": [
+            "Pedro Gomes",
+            "Helena Silva",
+            "Catarina Churro"
+          ],
+          "publication_date": "2024-4-23",
+          "url": "https://doi.org/10.1111/jfb.15769",
+          "known_case_match": true,
+          "evidences": [
+            {
+              "type": "AUTHOR",
+              "strength": "SUPPORTING",
+              "value": "Pedro Gomes",
+              "source_field": "authors",
+              "explanation": "A lista de autores coincide com o investigador do projeto."
+            },
+            {
+              "type": "OBJECT_NAME",
+              "strength": "SUPPORTING",
+              "value": "Lipogenys hyalinumvelum",
+              "source_field": "title_or_abstract",
+              "explanation": "O titulo ou resumo menciona o objeto consultado."
+            },
+            {
+              "type": "AUTHOR_OBJECT",
+              "strength": "SUPPORTING",
+              "value": "Pedro Gomes | Lipogenys hyalinumvelum",
+              "source_field": "authors+title_or_abstract",
+              "explanation": "Autor e objeto coincidem no mesmo candidato."
+            }
+          ],
+          "human_decision": null,
+          "human_justification": null,
+          "reviewer": null,
+          "reviewed_at": null
+        }
+      ],
+      "declared_baseline_status": "RESOLVED",
+      "observed_baseline_status": "RESOLVED",
+      "observed_inventory_evidence": false,
+      "agentic_objective": "ENRICH_CANDIDATE",
+      "expected_gap": "INVENTORY_FORMAT",
+      "declaration_matches": true
+    },
+    {
+      "case_id": "xenopus-petersii-2024",
+      "expected_doi": "10.3897/zookeys.1201.120750",
+      "retrieved": true,
+      "best_rank": 1,
+      "actionable_candidates": 1,
+      "trajectories": [
+        {
+          "source": "CROSSREF",
+          "query_type": "INVENTORY",
+          "query": "\"MUHNAC/MB04-001066\"",
+          "result_count": 20,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "AUTHOR_INVENTORY",
+          "query": "\"Mariana P. Marques\" \"MUHNAC/MB04-001066\"",
+          "result_count": 16,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "INVENTORY_OBJECT",
+          "query": "\"MUHNAC/MB04-001066\" \"Xenopus petersii\"",
+          "result_count": 20,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "AUTHOR_OBJECT",
+          "query": "\"Mariana P. Marques\" \"Xenopus petersii\"",
+          "result_count": 16,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "INVENTORY_OBJECT",
+          "query": "\"MUHNAC/MB04-001066\" \"Xenopus\"",
+          "result_count": 20,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "AUTHOR_OBJECT",
+          "query": "\"Mariana P. Marques\" \"Xenopus\"",
+          "result_count": 16,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "INVENTORY",
+          "query": "\"MUHNAC/MB04-001066\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "AUTHOR_INVENTORY",
+          "query": "\"Mariana P. Marques\" \"MUHNAC/MB04-001066\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "INVENTORY_OBJECT",
+          "query": "\"MUHNAC/MB04-001066\" \"Xenopus petersii\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "AUTHOR_OBJECT",
+          "query": "\"Mariana P. Marques\" \"Xenopus petersii\"",
+          "result_count": 2,
+          "actionable_count": 1,
+          "expected_rank": 1,
+          "error": null
+        }
+      ],
+      "source_results": [
+        {
+          "source": "CROSSREF",
+          "retrieved": false,
+          "best_rank": null,
+          "actionable_candidates": 0,
+          "known_actionable_matches": 0,
+          "query_count": 6,
+          "error_count": 0
+        },
+        {
+          "source": "EUROPE_PMC",
+          "retrieved": true,
+          "best_rank": 1,
+          "actionable_candidates": 1,
+          "known_actionable_matches": 1,
+          "query_count": 4,
+          "error_count": 0
+        }
+      ],
+      "candidates": [
+        {
+          "review_id": "xenopus-petersii-2024|doi:10.3897/zookeys.1201.120750",
+          "case_id": "xenopus-petersii-2024",
+          "deduplication_key": "doi:10.3897/zookeys.1201.120750",
+          "sources": [
+            "EUROPE_PMC"
+          ],
+          "source_record_ids": [
+            "MED:38779586"
+          ],
+          "doi": "10.3897/zookeys.1201.120750",
+          "title": "\ufeffAn island in a sea of sand: a first checklist of the herpetofauna of the Serra da Neve inselberg, southwestern Angola.",
+          "authors": [
+            "Marques MP",
+            "Parrinha D",
+            "Lopes-Lima M",
+            "Tiutenko A",
+            "Bauer AM",
+            "Cer\u00edaco LMP"
+          ],
+          "publication_date": "2024-05-14",
+          "url": "https://doi.org/10.3897/zookeys.1201.120750",
+          "known_case_match": true,
+          "evidences": [
+            {
+              "type": "INVENTORY_NUMBER",
+              "strength": "PRIMARY",
+              "value": "MUHNAC/MB04-001066",
+              "source_field": "full_text",
+              "explanation": "O registo bibliografico menciona o numero de inventario consultado."
+            },
+            {
+              "type": "OBJECT_NAME",
+              "strength": "SUPPORTING",
+              "value": "Xenopus petersii",
+              "source_field": "full_text",
+              "explanation": "O titulo ou resumo menciona o objeto consultado."
+            },
+            {
+              "type": "INVENTORY_OBJECT",
+              "strength": "PRIMARY",
+              "value": "MUHNAC/MB04-001066 | Xenopus petersii",
+              "source_field": "full_text",
+              "explanation": "Numero de inventario e objeto coincidem no mesmo candidato."
+            }
+          ],
+          "human_decision": null,
+          "human_justification": null,
+          "reviewer": null,
+          "reviewed_at": null
+        }
+      ],
+      "declared_baseline_status": "RESOLVED",
+      "observed_baseline_status": "RESOLVED",
+      "observed_inventory_evidence": true,
+      "agentic_objective": "NONE",
+      "expected_gap": "NONE",
+      "declaration_matches": true
+    },
+    {
+      "case_id": "nembrotha-cristata-2026",
+      "expected_doi": "10.11646/zootaxa.5793.1.9",
+      "retrieved": true,
+      "best_rank": 1,
+      "actionable_candidates": 2,
+      "trajectories": [
+        {
+          "source": "CROSSREF",
+          "query_type": "INVENTORY",
+          "query": "\"MUHNAC/MB28-005003\"",
+          "result_count": 20,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "AUTHOR_INVENTORY",
+          "query": "\"Marta Pola\" \"MUHNAC/MB28-005003\"",
+          "result_count": 20,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "INVENTORY_OBJECT",
+          "query": "\"MUHNAC/MB28-005003\" \"Nembrotha cristata\"",
+          "result_count": 19,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "AUTHOR_OBJECT",
+          "query": "\"Marta Pola\" \"Nembrotha cristata\"",
+          "result_count": 19,
+          "actionable_count": 2,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "INVENTORY",
+          "query": "\"MUHNAC/MB28-005003\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "AUTHOR_INVENTORY",
+          "query": "\"Marta Pola\" \"MUHNAC/MB28-005003\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "INVENTORY_OBJECT",
+          "query": "\"MUHNAC/MB28-005003\" \"Nembrotha cristata\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "AUTHOR_OBJECT",
+          "query": "\"Marta Pola\" \"Nembrotha cristata\"",
+          "result_count": 1,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "INVENTORY_OBJECT",
+          "query": "\"MUHNAC/MB28-005003\" \"Nembrotha\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "AUTHOR_OBJECT",
+          "query": "\"Marta Pola\" \"Nembrotha\"",
+          "result_count": 3,
+          "actionable_count": 0,
+          "expected_rank": 1,
+          "error": null
+        }
+      ],
+      "source_results": [
+        {
+          "source": "CROSSREF",
+          "retrieved": false,
+          "best_rank": null,
+          "actionable_candidates": 2,
+          "known_actionable_matches": 0,
+          "query_count": 4,
+          "error_count": 0
+        },
+        {
+          "source": "EUROPE_PMC",
+          "retrieved": true,
+          "best_rank": 1,
+          "actionable_candidates": 0,
+          "known_actionable_matches": 0,
+          "query_count": 6,
+          "error_count": 0
+        }
+      ],
+      "candidates": [
+        {
+          "review_id": "nembrotha-cristata-2026|doi:10.3989/scimar.05371.072",
+          "case_id": "nembrotha-cristata-2026",
+          "deduplication_key": "doi:10.3989/scimar.05371.072",
+          "sources": [
+            "CROSSREF"
+          ],
+          "source_record_ids": [
+            "10.3989/scimar.05371.072"
+          ],
+          "doi": "10.3989/scimar.05371.072",
+          "title": "Psychedelics sea slugs: Observations on colour ontogeny in two nudibranch species from the genus Nembrotha (Doridina: Polyceridae)",
+          "authors": [
+            "Marta Pola",
+            "Yara Tibiri\u00e7\u00e1",
+            "Juan Lucas Cervera"
+          ],
+          "publication_date": "2023-10-3",
+          "url": "https://doi.org/10.3989/scimar.05371.072",
+          "known_case_match": false,
+          "evidences": [
+            {
+              "type": "AUTHOR",
+              "strength": "SUPPORTING",
+              "value": "Marta Pola",
+              "source_field": "authors",
+              "explanation": "A lista de autores coincide com o investigador do projeto."
+            },
+            {
+              "type": "OBJECT_NAME",
+              "strength": "WEAK",
+              "value": "Nembrotha cristata",
+              "source_field": "title_or_abstract",
+              "explanation": "O titulo ou resumo menciona o genero do taxon consultado."
+            },
+            {
+              "type": "AUTHOR_OBJECT",
+              "strength": "SUPPORTING",
+              "value": "Marta Pola | nembrotha",
+              "source_field": "authors+title_or_abstract",
+              "explanation": "Autor e genero do taxon coincidem no mesmo candidato."
+            }
+          ],
+          "human_decision": null,
+          "human_justification": null,
+          "reviewer": null,
+          "reviewed_at": null
+        },
+        {
+          "review_id": "nembrotha-cristata-2026|doi:10.3989/scimar.2008.72n1145",
+          "case_id": "nembrotha-cristata-2026",
+          "deduplication_key": "doi:10.3989/scimar.2008.72n1145",
+          "sources": [
+            "CROSSREF"
+          ],
+          "source_record_ids": [
+            "10.3989/scimar.2008.72n1145"
+          ],
+          "doi": "10.3989/scimar.2008.72n1145",
+          "title": "Revision of the Indo-Pacific genus Nembrotha (Nudibranchia: Dorididae: Polyceridae), with a description of two new species",
+          "authors": [
+            "Marta Pola",
+            "J. Lucas Cervera",
+            "Terrence M. Gosliner"
+          ],
+          "publication_date": "2008-3-30",
+          "url": "https://doi.org/10.3989/scimar.2008.72n1145",
+          "known_case_match": false,
+          "evidences": [
+            {
+              "type": "AUTHOR",
+              "strength": "SUPPORTING",
+              "value": "Marta Pola",
+              "source_field": "authors",
+              "explanation": "A lista de autores coincide com o investigador do projeto."
+            },
+            {
+              "type": "OBJECT_NAME",
+              "strength": "SUPPORTING",
+              "value": "Nembrotha cristata",
+              "source_field": "title_or_abstract",
+              "explanation": "O titulo ou resumo menciona o objeto consultado."
+            },
+            {
+              "type": "AUTHOR_OBJECT",
+              "strength": "SUPPORTING",
+              "value": "Marta Pola | Nembrotha cristata",
+              "source_field": "authors+title_or_abstract",
+              "explanation": "Autor e objeto coincidem no mesmo candidato."
+            }
+          ],
+          "human_decision": null,
+          "human_justification": null,
+          "reviewer": null,
+          "reviewed_at": null
+        }
+      ],
+      "declared_baseline_status": "GAP",
+      "observed_baseline_status": "GAP",
+      "observed_inventory_evidence": false,
+      "agentic_objective": "DISCOVER_CANDIDATE",
+      "expected_gap": "INVENTORY_FORMAT",
+      "declaration_matches": true
+    },
+    {
+      "case_id": "trichoniscoides-machadoi-2025",
+      "expected_doi": "10.3897/subtbiol.53.163632",
+      "retrieved": false,
+      "best_rank": null,
+      "actionable_candidates": 0,
+      "trajectories": [
+        {
+          "source": "CROSSREF",
+          "query_type": "INVENTORY",
+          "query": "\"MUHNAC/MB11-001283\"",
+          "result_count": 20,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "AUTHOR_INVENTORY",
+          "query": "\"Rita P. Eus\u00e9bio\" \"MUHNAC/MB11-001283\"",
+          "result_count": 19,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "INVENTORY_OBJECT",
+          "query": "\"MUHNAC/MB11-001283\" \"Trichoniscoides machadoi\"",
+          "result_count": 20,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "AUTHOR_OBJECT",
+          "query": "\"Rita P. Eus\u00e9bio\" \"Trichoniscoides machadoi\"",
+          "result_count": 19,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "INVENTORY_OBJECT",
+          "query": "\"MUHNAC/MB11-001283\" \"Trichoniscoides\"",
+          "result_count": 20,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "CROSSREF",
+          "query_type": "AUTHOR_OBJECT",
+          "query": "\"Rita P. Eus\u00e9bio\" \"Trichoniscoides\"",
+          "result_count": 19,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "INVENTORY",
+          "query": "\"MUHNAC/MB11-001283\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "AUTHOR_INVENTORY",
+          "query": "\"Rita P. Eus\u00e9bio\" \"MUHNAC/MB11-001283\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "INVENTORY_OBJECT",
+          "query": "\"MUHNAC/MB11-001283\" \"Trichoniscoides machadoi\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "AUTHOR_OBJECT",
+          "query": "\"Rita P. Eus\u00e9bio\" \"Trichoniscoides machadoi\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "INVENTORY_OBJECT",
+          "query": "\"MUHNAC/MB11-001283\" \"Trichoniscoides\"",
+          "result_count": 0,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        },
+        {
+          "source": "EUROPE_PMC",
+          "query_type": "AUTHOR_OBJECT",
+          "query": "\"Rita P. Eus\u00e9bio\" \"Trichoniscoides\"",
+          "result_count": 3,
+          "actionable_count": 0,
+          "expected_rank": null,
+          "error": null
+        }
+      ],
+      "source_results": [
+        {
+          "source": "CROSSREF",
+          "retrieved": false,
+          "best_rank": null,
+          "actionable_candidates": 0,
+          "known_actionable_matches": 0,
+          "query_count": 6,
+          "error_count": 0
+        },
+        {
+          "source": "EUROPE_PMC",
+          "retrieved": false,
+          "best_rank": null,
+          "actionable_candidates": 0,
+          "known_actionable_matches": 0,
+          "query_count": 6,
+          "error_count": 0
+        }
+      ],
+      "candidates": [],
+      "declared_baseline_status": "GAP",
+      "observed_baseline_status": "GAP",
+      "observed_inventory_evidence": false,
+      "agentic_objective": "DISCOVER_CANDIDATE",
+      "expected_gap": "INSTITUTIONAL_ACRONYM",
+      "declaration_matches": true
+    }
+  ]
+}

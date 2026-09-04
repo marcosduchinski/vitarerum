@@ -194,7 +194,7 @@ O relatorio regista com que configuracao foi produzido — modo, fontes, orcamen
 
 ## 7. Requisitos nao funcionais
 
-- **Reprodutibilidade**: o relatorio e determinista dadas as mesmas fontes e a mesma fixture versionada em `application/fixtures/evaluation_cases.json`; a mesma fixture produz o mesmo relatorio.
+- **Reprodutibilidade**: o relatorio e determinista dadas as mesmas fontes e a mesma fixture versionada em `application/fixtures/evaluation_cases.json`; as baselines publicadas em [`docs/evaluation/`](../../evaluation/) sao reexecutaveis.
 - **Honestidade metodologica**: uma fonte nao exercitada e registada como tal, nunca como zero.
 - **Custo**: a avaliacao contacta fontes reais; e um ato deliberado de linha de comando, nunca automatico.
 
@@ -206,6 +206,7 @@ O relatorio regista com que configuracao foi produzido — modo, fontes, orcamen
 | Execucao e metricas (RF-002..RF-006, RF-010) | `app/scientific_return/application/evaluation.py` |
 | Avaliacao agentic (RF-011..RF-014) | `app/scientific_return/application/agentic_evaluation.py` |
 | Linha de comando (RF-001, RF-010, RF-011) | `app/scientific_return/presentation/commands.py`, `app/jobs/scientific_return.py` |
+| Baselines publicadas | [`docs/evaluation/`](../../evaluation/) |
 
 ## 9. Questoes em aberto
 

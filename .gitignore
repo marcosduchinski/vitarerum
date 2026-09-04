@@ -11,6 +11,8 @@ vitarerum-data/postgres/
 vitarerum-data/pgdata/
 
 tmp/
+__pycache__/
+*.pyc
 .cache/
 *.log
 

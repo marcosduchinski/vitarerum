@@ -90,6 +90,7 @@ Once running: interactive OpenAPI at `http://localhost:8000/docs`.
 | `legal/` | Current | yes |
 | `cloud/` | Current | yes |
 | `diagrams/` | Current — rendered SVG plus PlantUML sources | yes |
+| `evaluation/` | Current — published, re-runnable baselines cited by SPEC-006 | yes |
 | `templates/` | Current — MUHNAC source document templates | yes |
 | `proposals/` | **Proposed — not implemented.** Design documents for behaviour that does not exist yet | yes |
 | `paper/` | Dissertation manuscript in progress (LaTeX sources) | no — ignored by Git |
