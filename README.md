@@ -155,3 +155,8 @@ Most direct entry points:
 The current deployment convention is one application instance per institution.
 Do not document multi-institution behavior as a guaranteed domain invariant
 unless the implementation is changed to enforce it.
+
+## Important Notes
+
+> **AI Usage Notice:** This codebase was developed with extensive assistance from AI agents. Approximately 90% of the code was generated or implemented by AI, with human supervision, review, testing, and architectural direction throughout the development process.
+
