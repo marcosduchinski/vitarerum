@@ -6,7 +6,7 @@
 | Status | Implemented |
 | Bounded context | `app/scientific_return` |
 | Derived from | `application/{analysis,use_cases}.py`, bibliographic-source ports and adapters, persistence mappings, configuration, routes, and scientific-return tests |
-| Related specs | [SPEC-002](../002-vigilancia-retorno-cientifico/spec.md), [SPEC-004](../004-decisao-candidato-publicacao/spec.md), [SPEC-001](../001-investigacao-agentica-assistida/spec.md), [SPEC-006](../006-avaliacao-retorno-cientifico/spec.md) |
+| Related specs | [SPEC-002](../002-vigilancia-retorno-cientifico/spec.md), [SPEC-004](../004-decisao-candidato-publicacao/spec.md), [SPEC-001](../001-investigacao-agentica-assistida/spec.md), [SPEC-006](../006-avaliacao-retorno-cientifico/spec.md), [SPEC-024](../024-investigacao-agentica-autonoma/spec.md) |
 
 ## 1. Problem
 
@@ -77,8 +77,8 @@ actionability, watch-local deduplication, candidate creation, and run/query
 audit data.
 
 **Out of scope:** watch lifecycle and cadence (SPEC-002), human decisions
-(SPEC-004), autonomous investigation (SPEC-001), and offline quality evaluation
-(SPEC-006).
+(SPEC-004), assisted agentic investigation (SPEC-001), autonomous agentic
+investigation (SPEC-024), and offline quality evaluation (SPEC-006).
 
 ## 6. Public operations
 

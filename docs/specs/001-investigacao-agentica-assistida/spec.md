@@ -135,7 +135,7 @@ failure. Terminal aggregates cannot reopen.
 
 ## 6. Functional requirements
 
-### RF-001 — Start discovery for a watch
+### FR-001 — Start discovery for a watch
 
 `POST /api/v1/scientific-return/watches/{watchId}/investigations` requires JWT
 authentication, `X-Permission-Id`, and membership in `CURATORIAL`,
@@ -151,7 +151,7 @@ one deterministic run. The newest run returned by the repository becomes
 This capability exists in the API but has no start control in the Angular
 application.
 
-### RF-002 — Start enrichment for a candidate
+### FR-002 — Start enrichment for a candidate
 
 `POST /api/v1/scientific-return/candidates/{candidateId}/investigations`
 requires the same mutation groups and returns `201 Created`. The route loads
@@ -166,7 +166,7 @@ The Angular service implements this request, but the corresponding “Investigat
 missing evidence” button is commented out. Manual enrichment is therefore not
 available through the current UI.
 
-### RF-003 — Assemble a constrained observation
+### FR-003 — Assemble a constrained observation
 
 The application gives the planner:
 
@@ -182,7 +182,7 @@ Candidate title is untrusted external data. The prompt explicitly treats the
 whole payload as data rather than instructions. Credentials, source endpoints,
 API keys, and arbitrary project records are not part of the observation.
 
-### RF-004 — Obtain one typed plan
+### FR-004 — Obtain one typed plan
 
 The reasoner loads the currently published assisted-plan prompt and asks for
 exactly one JSON plan containing:
@@ -198,7 +198,7 @@ contain at most 20 items. A malformed or out-of-contract plan closes the
 investigation as `FAILED` with `INVALID_PLAN`; a missing prompt, timeout, or
 other planner failure closes it with `REASONER_UNAVAILABLE`.
 
-### RF-005 — Authorize actions deterministically
+### FR-005 — Authorize actions deterministically
 
 The model cannot execute a tool. `AgentActionPolicy` evaluates the typed action
 and, when authorized, derives the complete `AuthorizedExecution`.
@@ -225,7 +225,7 @@ loaded candidate status is already decided.
 The status check uses the candidate object loaded before the planner call; it
 does not reload a concurrently decided candidate. See GAP-002.
 
-### RF-006 — Derive inventory queries and source routing
+### FR-006 — Derive inventory queries and source routing
 
 `SEARCH_INVENTORY_VARIANTS` derives variants from the registered inventory
 number in the watch snapshot. Supported variant categories are `EXACT`,
@@ -239,7 +239,7 @@ set may be routed. That set currently contains only `EUROPE_PMC`; Crossref is
 excluded because it returns relevance-ranked noise for nonexistent specimen
 codes, and OpenAlex has not been admitted to this capability.
 
-### RF-007 — Reserve budget before execution
+### FR-007 — Reserve budget before execution
 
 Opening an iteration reserves one iteration. Authorizing a source-contacting
 action reserves one action and the number of derived query variants before the
@@ -251,7 +251,7 @@ results per source query, and five newly created candidates. With the current
 single exact-match source, the query count also equals the number of external
 search calls.
 
-### RF-008 — Execute and persist findings
+### FR-008 — Execute and persist findings
 
 Before contacting a source, the application persists a tool-execution record
 whose idempotency key is derived from investigation, iteration, action, object,
@@ -269,7 +269,7 @@ content hash. Candidate creation stops at the investigation ceiling. Every
 state change is committed before the next model or source call, so the request
 does not keep a database transaction open while waiting on an external system.
 
-### RF-009 — Recalculate evidence and reflect
+### FR-009 — Recalculate evidence and reflect
 
 For enrichment, the application records evidence before and after execution,
 calculates an order-independent hash of each state, and stores the typed delta
@@ -282,7 +282,7 @@ recommendation, and a reasoning summary. Its recommendation is advisory. If
 reflection fails, a deterministic reflection derived from the delta closes the
 cycle.
 
-### RF-010 — Stop with a typed outcome
+### FR-010 — Stop with a typed outcome
 
 The deterministic stop policy chooses one of:
 
@@ -299,7 +299,7 @@ mean that new evidence was added; the `stopReason` explains the result.
 Otherwise the normal terminal state is `STOPPED`. Unrecoverable application
 failure produces `FAILED`.
 
-### RF-011 — Record model and execution telemetry
+### FR-011 — Record model and execution telemetry
 
 Each iteration stores model name, the planning prompt's version label, planning
 and reflection latency, response hashes, and their summed model latency. A
@@ -309,7 +309,7 @@ planner, may return `telemetry: null`.
 The reflection prompt has an independently published version, but that identity
 is currently discarded; see GAP-005.
 
-### RF-012 — Apply command idempotency and target exclusivity
+### FR-012 — Apply command idempotency and target exclusivity
 
 `Idempotency-Key` is optional. When present, a unique partial PostgreSQL index
 allows only one investigation row with that key. A replay returns the stored
@@ -327,7 +327,7 @@ Command replay does not verify that the key belongs to the requested target or
 caller, and the real advisory-lock exception is not mapped to the documented
 `409`; see GAP-003 and GAP-006.
 
-### RF-013 — Close abandoned synchronous cycles
+### FR-013 — Close abandoned synchronous cycles
 
 Before a scheduled sweep, the reaper finds non-terminal assisted investigations
 whose heartbeat, or start time when no heartbeat exists, is older than 30
@@ -338,7 +338,7 @@ leaves the active cycle alone.
 This is terminal cleanup, not resumption: an abandoned assisted investigation
 must be started again as a new cycle.
 
-### RF-014 — Read trajectories without executing work
+### FR-014 — Read trajectories without executing work
 
 The following endpoints require a staff identity and are strictly read-only:
 
@@ -357,7 +357,7 @@ reason, partial budget information, timestamps, creator, optional predecessor,
 and all iteration details. It omits `maxActions`, `usedActions`, and
 `maxResultsPerQuery` even though those values affect execution.
 
-### RF-015 — Expose assisted history in Angular
+### FR-015 — Expose assisted history in Angular
 
 The scientific-return panel can load candidate investigation history and shows
 each trajectory in a modal with outcome, mode, budget used, start time, policy,
@@ -370,7 +370,7 @@ client exist, but the start button is commented out. There is no UI-generated
 idempotency key for this dormant request. Assisted history remains visible for
 candidates that were enriched by the scheduler or another API client.
 
-### RF-016 — Run limited scheduled enrichment
+### FR-016 — Run limited scheduled enrichment
 
 After a full-agentic investigation reaches `COMPLETED`, the queue worker selects
 up to five oldest `PENDING` candidates from that watch that have no
@@ -383,7 +383,7 @@ preconditions, model, policy, tool, persistence, and budget. It does not require
 its permanent key prevents a later scheduled retry for the same candidate. See
 GAP-004.
 
-### RF-017 — Control capability through operating mode
+### FR-017 — Control capability through operating mode
 
 | Mode | Current behavior |
 | --- | --- |

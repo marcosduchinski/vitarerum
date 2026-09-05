@@ -60,7 +60,7 @@ only; the API performs the authoritative byte and path checks.
 
 ## 5. Public-channel requirements
 
-### RF-001 — Active templates by use type
+### FR-001 — Active templates by use type
 
 `GET /api/v1/public/document-templates?useType={UseType}` requires one valid
 `UseType`: `IN_SITU_VISIT`, `EXHIBITION`, or `OTHER`. It returns only active
@@ -82,7 +82,7 @@ The public item contains only:
 It does not expose use type, active state, display order, filename, storage
 reference, uploader, or upload time.
 
-### RF-002 — Public download hides inactive records
+### FR-002 — Public download hides inactive records
 
 `GET /api/v1/public/document-templates/{id}/file` downloads the current file
 only when the template is active. An unknown identifier, inactive template, or
@@ -98,7 +98,7 @@ does not require a `.docx` filename, valid accepted bytes uploaded with another
 extension may later be served with that extension's MIME type rather than the
 DOCX MIME type.
 
-### RF-003 — Angular consumption
+### FR-003 — Angular consumption
 
 Both `/submit-proposal` and the authenticated proposal-submission page load the
 public list whenever a use type is selected. They show title, optional
@@ -109,7 +109,7 @@ Template-list loading has no dedicated visible error state in these form
 sections: an unavailable request resolves to the resource error state while the
 template list appears absent.
 
-### RF-004 — Mandatory is informational
+### FR-004 — Mandatory is informational
 
 `mandatory` labels a template for the requester. Neither the public-submission
 API nor the authenticated proposal workflow verifies that a completed instance
@@ -117,7 +117,7 @@ of every mandatory template was attached.
 
 ## 6. Management requirements
 
-### RF-005 — Authorization and catalogue listing
+### FR-005 — Authorization and catalogue listing
 
 Every `/api/v1/document-templates` endpoint requires a bearer token,
 `X-Permission-Id`, and one of the four staff groups. External permissions receive
@@ -132,7 +132,7 @@ Staff items add `useType`, `active`, `displayOrder`, `fileName`, and
 `uploadedAt`. The persisted `uploadedBy` and internal storage reference are not
 returned.
 
-### RF-006 — Creation
+### FR-006 — Creation
 
 `POST /api/v1/document-templates` accepts `multipart/form-data`:
 
@@ -158,7 +158,7 @@ The untrusted filename is reduced to a safe basename before building
 `document_templates/{templateId}/{fileName}`. An empty or unusable name becomes
 `template.docx`. The response is `201` with the staff item.
 
-### RF-007 — Full metadata replacement through PATCH
+### FR-007 — Full metadata replacement through PATCH
 
 `PATCH /api/v1/document-templates/{id}` applies replacement semantics to all
 editable metadata: title, description, mandatory, active, and display order.
@@ -168,7 +168,7 @@ At the API schema, only `title` is required. Omitting other fields resets them
 to `""`, `false`, `true`, and `0`; this is not a partial merge. An unknown
 template returns `404`.
 
-### RF-008 — File replacement
+### FR-008 — File replacement
 
 `PUT /api/v1/document-templates/{id}/file` validates the new bytes and safe
 filename using the creation rules. It saves the new file, changes the aggregate
@@ -177,14 +177,14 @@ reference, commits, and then removes the old file when its reference differs.
 Replacement does not change `uploadedAt` or `uploadedBy`, so those fields keep
 describing the original publication rather than the current file revision.
 
-### RF-009 — Staff download
+### FR-009 — Staff download
 
 `GET /api/v1/document-templates/{id}/file` serves the current file whether the
 template is active or inactive. Missing metadata or bytes returns the same
 `404 DOCUMENT_TEMPLATE_NOT_FOUND` used by the public endpoint. Filename and
-media-type behavior matches RF-002.
+media-type behavior matches FR-002.
 
-### RF-010 — Deletion
+### FR-010 — Deletion
 
 `DELETE /api/v1/document-templates/{id}` deletes the database row, commits, and
 then deletes the stored file. A successful operation returns `204`; an unknown
@@ -193,7 +193,7 @@ template returns `404`.
 There is no domain reference check, soft deletion, archive, or restore. The
 catalogue does not record which template a requester previously downloaded.
 
-### RF-011 — Administration projection
+### FR-011 — Administration projection
 
 The standalone, OnPush Angular page at `/p/admin/document-templates` provides:
 

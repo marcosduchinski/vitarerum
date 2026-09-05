@@ -116,7 +116,7 @@ transitions and currently create no use event.
 
 ## 6. Functional requirements
 
-### RF-001 — Project materialisation and references
+### FR-001 — Project materialisation and references
 
 An initial project is materialised in the same transaction that approves its
 proposal. It starts in `CREATED`, records `REQUESTED`, copies the proposal's
@@ -135,7 +135,7 @@ logs, `OO-MUHNAC/COL/YYYY/XXXX` for occurrence logs, and
 `PUB` values remain recognized as legacy formats rather than production
 defaults.
 
-### RF-002 — Lists and project detail
+### FR-002 — Lists and project detail
 
 `GET /api/v1/collection-use-projects` is zero-based and accepts `page`, `size`
 from 1 to 100, `status`, `type`, `requestedBy`, `originProjectId`, `dateFrom`,
@@ -148,7 +148,7 @@ result, origin, linked-proposal summary, requester and authorization views, and
 project-owned objects. Requester and authorizer permission details are exposed
 only to staff; an external owner receives `null` for those views.
 
-### RF-003 — Starting a project
+### FR-003 — Starting a project
 
 `POST /api/v1/collection-use-projects/{projectId}/start` requires `CREATED`,
 changes the project to `IN_PROGRESS`, and records `STARTED`. Its optional note is
@@ -161,14 +161,14 @@ the caller. An empty project creates no log; an existing log is left untouched.
 
 After the database commit, the route e-mails the requester.
 
-### RF-004 — Completing a project
+### FR-004 — Completing a project
 
 `POST /api/v1/collection-use-projects/{projectId}/complete` requires
 `IN_PROGRESS` and at least one project object. It sets `status = COMPLETED`,
 `result = COMPLETED`, records `COMPLETED`, commits, and then e-mails the
 requester. Journal presence or completion is not a prerequisite.
 
-### RF-005 — Cancelling a project
+### FR-005 — Cancelling a project
 
 `POST /api/v1/collection-use-projects/{projectId}/cancel` accepts an accessible
 project in `CREATED` or `IN_PROGRESS`, sets `status = CANCELLED` and
@@ -180,7 +180,7 @@ terminal project returns `409`. Proposal-driven cancellation is the deliberate
 exception: cancelling an approved proposal forces its linked project to
 `CANCELLED`, even when the project was already `COMPLETED`.
 
-### RF-006 — Editing project metadata
+### FR-006 — Editing project metadata
 
 `PATCH /api/v1/collection-use-projects/{projectId}` is staff-only and partially
 updates title, purpose, begin date, and end date while the project is `CREATED`
@@ -190,7 +190,7 @@ before the begin date return `422`. Terminal projects return `409`.
 
 The edit creates no use event.
 
-### RF-007 — Adding project objects
+### FR-007 — Adding project objects
 
 `POST /api/v1/collection-use-projects/{projectId}/objects` is staff-only and
 accepts caller-supplied snapshots while the project is `CREATED` or
@@ -203,7 +203,7 @@ and adds one automatic access entry for every new object. It refuses additions
 when the access log is marked concluded. The current schema also permits an
 empty `objects` list, which returns `201` without changing the aggregate.
 
-### RF-008 — Removing project objects
+### FR-008 — Removing project objects
 
 `DELETE /api/v1/collection-use-projects/{projectId}/objects/{objectId}` is
 staff-only and removes an object in an editable project when it has no dependent
@@ -219,7 +219,7 @@ dependency type.
 entries, commits their database deletion, and then deletes their stored files.
 The reason is validated but is not persisted as an event or audit record.
 
-### RF-009 — Object Access Log
+### FR-009 — Object Access Log
 
 The access journal has at most one log per project and is created lazily by
 project start, object addition, or the first manual entry.
@@ -237,7 +237,7 @@ is `IN_PROGRESS`. Staff may perform those operations in any project state while
 the persisted log is not concluded. Reading follows project access regardless
 of state.
 
-### RF-010 — Object Occurrence Log
+### FR-010 — Object Occurrence Log
 
 The occurrence journal also has at most one lazily created log. Entries require
 a project object, `numberOfObjects >= 1`, occurrence date, non-empty location,
@@ -249,7 +249,7 @@ and non-empty detailed description. Testimonial is optional and explicit
 ownership and phase rules as the access journal. There is currently no endpoint
 to delete an entire occurrence entry; only its attachments can be removed.
 
-### RF-011 — Journal attachments
+### FR-011 — Journal attachments
 
 Access, occurrence, and publication entries accept attachments. Every upload is
 capped by the global `max_upload_bytes`, requires a non-empty description, and
@@ -265,7 +265,7 @@ stored file.
 Files live under configured `DATA_DIR` and use encryption when configured, as
 described by [SPEC-022](../022-cifragem-e-armazenamento/spec.md).
 
-### RF-012 — Publication Log phase and role rule
+### FR-012 — Publication Log phase and role rule
 
 Each project has at most one Publication Log, created with its first entry. All
 entry and attachment writes use the same phase/role rule:
@@ -290,7 +290,7 @@ A publication entry referenced by a confirmed scientific-return decision cannot
 be deleted and returns `409 PUBLICATION_ENTRY_IN_USE`. A foreign entry is
 reported as `404` so its existence is not disclosed.
 
-### RF-013 — Follow-up projects
+### FR-013 — Follow-up projects
 
 `POST /api/v1/collection-use-projects/{projectId}/follow-ups` is staff-only and
 requires a `COMPLETED` origin, a valid date interval, unique object IDs, and a
@@ -303,7 +303,7 @@ the selected snapshots, inherits requester and intended use, and records a
 requester can access it through direct project ownership. Because institution
 ownership is absent, the follow-up also has no tenant boundary to inherit.
 
-### RF-014 — Personal staff TODO items
+### FR-014 — Personal staff TODO items
 
 Staff can list, create, rename, reposition, complete, reopen, and delete their
 own TODO items below
@@ -316,7 +316,7 @@ learning that the item exists.
 owner-scoped dashboard with optional completion and project filters and
 `recent` or `project` ordering. External callers are rejected.
 
-### RF-015 — Official journal documents
+### FR-015 — Official journal documents
 
 The API renders institutional DOCX documents from persisted journal data:
 
@@ -332,14 +332,14 @@ project ownership protects every download. The RRP rejects more than 1,000
 entries with `422 DOCUMENT_ENTRY_LIMIT_EXCEEDED`; current RAIS and ROC rendering
 read only the first 1,000 entries without checking whether more exist.
 
-### RF-016 — Event history
+### FR-016 — Event history
 
 `GET /api/v1/collection-use-projects/{projectId}/events` supports an optional
 event-type filter and zero-based pagination with page size from 1 to 100. Events
 are sorted by `occurredAt` ascending before pagination and expose actor, instant,
 type, and optional note. Equal timestamps have no secondary ordering key.
 
-### RF-017 — CIDOC-CRM export
+### FR-017 — CIDOC-CRM export
 
 `POST /api/v1/collection-use-projects/{projectId}/export-in-situ-visit-record`
 is implemented by the CIDOC-CRM mapping context and is staff-only. It accepts
@@ -351,7 +351,7 @@ approval, objects, journal entries, attachments, and execution evidence. A
 missing project returns `404`; wrong use type or missing evidence returns `409`.
 The route uses the same global staff access model as the project context.
 
-### RF-018 — Angular workflow projection
+### FR-018 — Angular workflow projection
 
 The Angular project feature provides lazy routes for the requester's projects,
 staff lists by state, role-specific detail URLs, editing, follow-up creation,
@@ -571,7 +571,7 @@ role and journal-finalization policies are decided.
 
 ## 10. Acceptance criteria
 
-### CA-001 — Lifecycle guards and events
+### AC-001 — Lifecycle guards and events
 
 A project starts only from `CREATED`, completes only from `IN_PROGRESS` with an
 object, and direct cancellation rejects terminal states. Each successful command
@@ -583,7 +583,7 @@ records its event and result where applicable.
 
 → `test/use_of_collections/test_api.py::test_complete_project_without_objects_returns_409`
 
-### CA-002 — Lifecycle notifications follow commit
+### AC-002 — Lifecycle notifications follow commit
 
 Starting, completing, and cancelling a project commit before e-mailing the
 external requester.
@@ -592,7 +592,7 @@ external requester.
 `::test_complete_project_notifies_external_requester`,
 `::test_cancel_project_notifies_external_requester`
 
-### CA-003 — Project editing is staff-only and non-lifecycle
+### AC-003 — Project editing is staff-only and non-lifecycle
 
 Staff can partially edit non-terminal project metadata; external callers,
 terminal projects, blank required values, and invalid date ranges are rejected;
@@ -607,7 +607,7 @@ editing creates no lifecycle event.
 `::test_edit_project_blocks_terminal_status`,
 `::test_edit_project_rejects_invalid_effective_date_range`
 
-### CA-004 — Object addition synchronizes the access journal
+### AC-004 — Object addition synchronizes the access journal
 
 Staff can add objects only to editable projects; a missing access log is
 created, an existing log receives automatic entries, and a concluded log blocks
@@ -620,7 +620,7 @@ the operation.
 `::test_add_project_objects_creates_access_log_when_missing`,
 `::test_add_project_objects_blocks_when_access_log_concluded`
 
-### CA-005 — Object removal protects dependent records
+### AC-005 — Object removal protects dependent records
 
 Unused objects and untouched automatic entries can be removed directly;
 dependent work yields a counted conflict; confirmed cascade removes related
@@ -632,7 +632,7 @@ entries and files.
 `::test_remove_project_object_cascade_requires_confirmation`,
 `::test_remove_project_object_cascade_removes_dependencies`
 
-### CA-006 — Access journal preserves project ownership and edit semantics
+### AC-006 — Access journal preserves project ownership and edit semantics
 
 Access entries are linked to project objects, support multiple handling records,
 partial edits and explicit observation clearing, reject foreign or concluded-log
@@ -645,7 +645,7 @@ mutations, and expose absence without manufacturing a log.
 `::test_delete_log_entry_on_concluded_access_log_is_blocked`,
 `::test_get_object_access_log_returns_404_without_entries`
 
-### CA-007 — Occurrence journal validates required incident data
+### AC-007 — Occurrence journal validates required incident data
 
 Occurrence entries require an owned project object, quantity, time, location,
 and description; partial edits can clear testimony; a missing journal returns
@@ -656,7 +656,7 @@ and description; partial edits can clear testimony; a missing journal returns
 `::test_edit_occurrence_entry_is_partial_and_clears_testimonial`,
 `::test_get_object_occurrence_log_returns_404_without_entries`
 
-### CA-008 — Attachments are described, bounded, and entry-scoped
+### AC-008 — Attachments are described, bounded, and entry-scoped
 
 Invalid attachment categories and missing descriptions are rejected; storage
 uses the configured encrypted adapter; download and deletion remain scoped to
@@ -670,7 +670,7 @@ isolation.
 `::test_delete_log_entry_attachment_removes_file`,
 `::test_occurrence_entry_attachment_requires_description`
 
-### CA-009 — Publication writes obey phase and role
+### AC-009 — Publication writes obey phase and role
 
 The owning requester writes while `IN_PROGRESS`; Curatorial, Collections
 Management, or Direction staff write after `COMPLETED`; other combinations are
@@ -683,7 +683,7 @@ rejected; a referenced object must belong to the project.
 `::test_add_publication_entry_in_created_status_rejected`,
 `::test_add_publication_entry_rejects_foreign_collection_use_object_id`
 
-### CA-010 — Publication evidence cannot be erased
+### AC-010 — Publication evidence cannot be erased
 
 Publication entries support edit, deletion, attachments, pagination, and RRP
 rendering, but an entry used by a confirmed scientific-return decision is
@@ -695,7 +695,7 @@ protected.
 `::test_publication_entry_attachment_upload_and_download`,
 `::test_download_publication_log_document_fills_the_complete_rrp`
 
-### CA-011 — Follow-ups are independent projects
+### AC-011 — Follow-ups are independent projects
 
 Only staff can derive a follow-up from a completed project, with a valid date
 range and non-empty unique object subset. The project copies snapshots but not
@@ -709,7 +709,7 @@ journals, and remains accessible to the original requester.
 `::test_follow_up_project_does_not_copy_journal_logs`,
 `::test_follow_up_project_owner_can_access_created_follow_up_project`
 
-### CA-012 — TODO items are permission-private
+### AC-012 — TODO items are permission-private
 
 Staff task lists are isolated by active permission; only the owner can update,
 toggle, or delete an item; external users are rejected; the dashboard returns
@@ -721,7 +721,7 @@ only the current profile's items. Staff project access itself remains global.
 `::test_dashboard_postits_list_only_current_staff_profile_items`,
 `::test_todo_text_is_trimmed_and_limited`
 
-### CA-013 — Official documents use persisted journals and ownership
+### AC-013 — Official documents use persisted journals and ownership
 
 RAIS, ROC, and RRP documents are filled from their corresponding logs; missing
 logs return `404`; another requester cannot download the document.
@@ -733,7 +733,7 @@ logs return `404`; another requester cannot download the document.
 `::test_download_object_occurrence_document_returns_404_without_log`,
 `::test_download_publication_log_document_fills_the_complete_rrp`
 
-### CA-014 — Response contracts remain stable
+### AC-014 — Response contracts remain stable
 
 Representative project detail, list, events, journal, error, and access-denied
 shapes remain frozen by golden tests.
@@ -746,7 +746,7 @@ shapes remain frozen by golden tests.
 `::test_golden_error_bodies`,
 `::test_golden_access_denied_body`
 
-### CA-015 — Visit export requires operational evidence
+### AC-015 — Visit export requires operational evidence
 
 Only an in-situ project completed with a corresponding event can become a
 CIDOC-CRM visit record.
@@ -758,7 +758,7 @@ CIDOC-CRM visit record.
 → `test/cidoc_crm/test_export_in_situ_visit_use_case.py::test_export_rejects_non_in_situ_visit_use_type`,
 `::test_export_rejects_in_situ_visit_without_execution_evidence`
 
-### CA-016 — Angular projects the role- and phase-specific workflow
+### AC-016 — Angular projects the role- and phase-specific workflow
 
 External and staff routes lead to the appropriate detail pages; lifecycle
 controls follow project state and object count; journal guards enforce external

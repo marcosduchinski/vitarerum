@@ -72,7 +72,7 @@ bounded contexts then apply their own group and resource-ownership rules.
 
 ## 5. Functional requirements
 
-### RF-001 — Login is the only operation that establishes a session
+### FR-001 — Login is the only operation that establishes a session
 
 `POST /api/v1/auth/login`, with an email address and password, returns an
 `accessToken`, the user, all permissions held by that user, and the institution
@@ -85,7 +85,7 @@ The JWT carries only `sub`, `iat`, and `exp`; it does not carry the active role.
 Permission order has no explicit sort, so the login institution and Angular
 default role may be nondeterministic.
 
-### RF-002 — Login refusals are indistinguishable
+### FR-002 — Login refusals are indistinguishable
 
 An incorrect password, an unknown email address, a disabled user, and a user
 with no permissions all produce `401` with the same message. The system does
@@ -94,7 +94,7 @@ not disclose which email addresses are registered.
 This guarantee applies to login. Password-reset request responses can reveal a
 known account when email delivery fails; see GAP-004.
 
-### RF-003 — Protected requests carry identity and acting permission
+### FR-003 — Protected requests carry identity and acting permission
 
 Every session-protected endpoint, including
 `POST /api/v1/auth/change-password`, requires both headers:
@@ -112,7 +112,7 @@ The following Identity endpoints do not require a session:
 
 Other bounded contexts define their own explicitly public entry points.
 
-### RF-004 — Strict `401` and `403` semantics
+### FR-004 — Strict `401` and `403` semantics
 
 | Situation | Status |
 | --- | --- |
@@ -129,13 +129,13 @@ Other bounded contexts define their own explicitly public entry points.
 session. `403` means that the identity is valid, but the selected role may not
 perform the operation.
 
-### RF-005 — The acting group is never inferred from the token
+### FR-005 — The acting group is never inferred from the token
 
 The acting group is resolved exclusively from `X-Permission-Id`, which is
 always checked against the user identified by the access token. No use case
 infers an acting group from the token.
 
-### RF-006 — Password changes invalidate older sessions
+### FR-006 — Password changes invalidate older sessions
 
 Changing or resetting a password updates `passwordChangedAt`. Tokens issued
 before that instant are rejected with `401`.
@@ -148,7 +148,7 @@ a password reset.
 This also leaves a sub-second window in which an older token cannot be proven
 to predate the change.
 
-### RF-007 — One password policy
+### FR-007 — One password policy
 
 The same policy governs every flow that sets a password: user creation when a
 password is supplied, own-password change, administrative reset, and
@@ -156,13 +156,13 @@ self-service reset. A password must contain between 5 and 128 characters and
 must not be empty or consist only of whitespace. No flow may apply a weaker
 policy.
 
-### RF-008 — Change own password
+### FR-008 — Change own password
 
 `POST /api/v1/auth/change-password` requires the current password. An incorrect
 current password and a weak new password are refused. Success returns `204`,
 updates `passwordChangedAt`, and invalidates tokens issued before the change.
 
-### RF-009 — Self-service reset without account enumeration
+### FR-009 — Self-service reset without account enumeration
 
 `POST /api/v1/auth/password-reset/request` returns `204` for both known and
 unknown email addresses. No token is created for an unknown email address.
@@ -170,7 +170,7 @@ unknown email addresses. No token is created for an unknown email address.
 A new request invalidates every unused reset token previously issued for the
 same user.
 
-### RF-010 — Short-lived, single-use reset token
+### FR-010 — Short-lived, single-use reset token
 
 `POST /api/v1/auth/password-reset/confirm` consumes an opaque token and sets a
 new password. The database stores only the token's SHA-256 hash. The token
@@ -186,7 +186,7 @@ A `SYS_ADMIN` may also issue a reset token for a user through
 `POST /api/v1/users/{userId}/password-reset`; the reset is completed through
 the same public confirmation endpoint and policy.
 
-### RF-011 — Dedicated rate limits
+### FR-011 — Dedicated rate limits
 
 Password-reset requests and confirmations have independent rate limits. A
 request is limited per remote IP and normalized email address; confirmation is
@@ -198,14 +198,14 @@ Current limits are process-local sliding windows: 5 requests per IP per hour,
 per hour. `Retry-After` is always 60 seconds. Limits reset on process restart
 and are not shared across replicas.
 
-### RF-012 — Secrets never enter logs or representations
+### FR-012 — Secrets never enter logs or representations
 
 The raw reset token exists only in the link sent by email. The email adapter
 does not log it. The representation of a provisioned requester never exposes
 the generated temporary password. Stored passwords are bcrypt hashes and are
 never returned by an API.
 
-### RF-013 — External requester provisioning
+### FR-013 — External requester provisioning
 
 The context's published language provisions an `EXTERNAL` user from an email
 address and display name. If that email already has an external permission,
@@ -217,7 +217,7 @@ login.
 Provisioning an existing user does not verify that the user is active before
 returning an actor directly to the calling context; see GAP-006.
 
-### RF-014 — User and group administration
+### FR-014 — User and group administration
 
 Any authenticated actor, including `EXTERNAL`, may list users, read a user, and
 list groups. This is the behavior currently implemented; it is not an
@@ -238,7 +238,7 @@ Only `SYS_ADMIN` may:
 Updating the display name changes **only** that name. Creating a user may omit
 the password; such a user cannot log in until a password is established.
 
-### RF-015 — Protect the last active administrator
+### FR-015 — Protect the last active administrator
 
 Users are disabled and enabled through
 `POST /api/v1/users/{userId}/disable` and
@@ -252,14 +252,14 @@ administrative operation to leave the system without one.
 The count is global, not institution-scoped, and the read-then-write check has
 no lock or serializable constraint; see GAP-007.
 
-### RF-016 — Uniqueness
+### FR-016 — Uniqueness
 
 User email addresses are normalized by trimming surrounding whitespace and
 converting them to lowercase before lookup and persistence. They are therefore
 unique without case sensitivity. The same user-and-group permission cannot
 exist more than once.
 
-### RF-017 — Institutions
+### FR-017 — Institutions
 
 Institution CRUD is restricted to `SYS_ADMIN`. A duplicate institution name
 returns `409`; deleting an institution that still owns groups returns `409`.
@@ -271,7 +271,7 @@ database uniqueness constraint, while `get_by_name` expects at most one result
 globally. This cannot safely represent the same role in multiple institutions;
 see GAP-001.
 
-### RF-018 — Angular session and role selection
+### FR-018 — Angular session and role selection
 
 After login, the Angular service stores the response in a signal and in
 `localStorage` under `vitarerum.session`, selecting the first permission's
@@ -312,7 +312,7 @@ concurrency and delivery model; the gaps below define those limits.
 
 ## 7. Acceptance evidence
 
-### CA-001 — Authentication and indistinguishable refusals
+### AC-001 — Authentication and indistinguishable refusals
 
 Given an active user with at least one permission and valid credentials, login
 returns that user and their permissions. Unknown email addresses, incorrect
@@ -325,7 +325,7 @@ invalid credentials.
 `::test_authenticate_user_without_permissions_raises`,
 `::test_authenticate_disabled_user_raises`
 
-### CA-002 — Login HTTP contract
+### AC-002 — Login HTTP contract
 
 Given a valid login request, the API returns the token, user, flat group values,
 and institution. Invalid credentials return `401` with the same message, while
@@ -337,7 +337,7 @@ an invalid request body returns the shared `422` error envelope.
 `::test_login_unknown_email_is_401`,
 `::test_login_missing_password_is_422_with_errors`
 
-### CA-003 — `401`/`403` boundary when resolving the actor
+### AC-003 — `401`/`403` boundary when resolving the actor
 
 Given a protected request, missing or invalid bearer credentials return `401`;
 a missing, unknown, or unowned acting permission returns `403`; a disabled user
@@ -351,7 +351,7 @@ returns `401`; and a valid owned permission resolves to an actor.
 `::test_caller_disabled_user_is_401`,
 `::test_caller_valid_and_owned_returns_actor`
 
-### CA-004 — Password changes invalidate older sessions
+### AC-004 — Password changes invalidate older sessions
 
 Given a password-change timestamp, a token issued before it is refused, while
 a token issued after it or within the same second remains valid.
@@ -360,7 +360,7 @@ a token issued after it or within the same second remains valid.
 `::test_caller_token_issued_after_password_change_is_valid`,
 `::test_caller_token_issued_same_second_as_change_is_valid`
 
-### CA-005 — Password policy and own-password change
+### AC-005 — Password policy and own-password change
 
 Given an authenticated user, the correct current password and a compliant new
 password update the hash and timestamp and return `204`. An incorrect current
@@ -375,7 +375,7 @@ password or weak new password returns `400`; an unauthenticated request returns
 `::test_change_password_api_weak_new_password_is_400`,
 `::test_change_password_api_requires_authentication`
 
-### CA-006 — Reset without enumeration and with opaque token errors
+### AC-006 — Reset without enumeration and with opaque token errors
 
 Given an unknown email address, requesting a reset creates no token and returns
 the same response as a known address. Unknown, expired, and already-used tokens
@@ -387,7 +387,7 @@ produce the same opaque error.
 `::test_confirm_reset_unknown_token_raises_opaque_error`,
 `::test_confirm_with_invalid_token_is_404`
 
-### CA-007 — Single-use token, replacement, and rate limiting
+### AC-007 — Single-use token, replacement, and rate limiting
 
 Given a known user, a reset request creates a token; a later request invalidates
 the previous unused token. Request and confirmation limits are enforced, and a
@@ -400,7 +400,7 @@ successfully consumed token is persisted as used.
 `test_password_reset_token_repository.py::test_save_marks_token_used`,
 `::test_invalidate_active_for_user_marks_only_that_users_unused_tokens`
 
-### CA-008 — Secrets remain outside logs and representations
+### AC-008 — Secrets remain outside logs and representations
 
 Given a reset email or a provisioned requester, neither the raw reset token nor
 the temporary password appears in logs or object representations.
@@ -408,7 +408,7 @@ the temporary password appears in logs or object representations.
 → `test_email.py::test_logging_sender_never_logs_the_raw_reset_token`,
 `test_provision_external_requester.py::test_provisioned_requester_repr_does_not_expose_temporary_password`
 
-### CA-009 — Idempotent external requester provisioning
+### AC-009 — Idempotent external requester provisioning
 
 Given a public requester, provisioning creates the missing user and external
 permission, reuses an existing permission for the same email address, and
@@ -418,7 +418,7 @@ produces a temporary password that permits login for a new user.
 `::test_provision_reuses_existing_permission_for_same_email`,
 `::test_provisioned_temporary_password_allows_login`
 
-### CA-010 — The last active administrator is protected
+### AC-010 — The last active administrator is protected
 
 Given a single active `SYS_ADMIN`, attempting to disable that user is refused.
 
@@ -428,7 +428,7 @@ Removing the last active administrator's group membership is implemented by
 `RemoveUserFromGroup`, but has no direct acceptance test. This is a declared
 test gap.
 
-### CA-011 — Email and permission uniqueness
+### AC-011 — Email and permission uniqueness
 
 Given an existing user or permission, an email that differs only by case and a
 duplicate user-and-group association are refused.
@@ -436,7 +436,7 @@ duplicate user-and-group association are refused.
 → `test_identity_uniqueness.py::test_duplicate_email_is_rejected_case_insensitively`,
 `::test_duplicate_permission_is_rejected`
 
-### CA-012 — Institutions are restricted to `SYS_ADMIN`
+### AC-012 — Institutions are restricted to `SYS_ADMIN`
 
 Given an institution operation, a non-administrator is forbidden. Duplicate
 names and deletion while groups remain return `409`; listing is paginated and
@@ -448,7 +448,7 @@ group responses identify their institution.
 `::test_list_institutions_is_paginated`,
 `::test_groups_listing_includes_institution_id`
 
-### CA-013 — Group-based authorization for user administration
+### AC-013 — Group-based authorization for user administration
 
 Given an external actor, user creation and group assignment return `403`, while
 user listing succeeds for both external and administrative actors.
@@ -458,14 +458,14 @@ user listing succeeds for both external and administrative actors.
 `::test_external_user_can_list_identity_users`,
 `::test_administration_user_can_list_identity_users`
 
-### CA-014 — Administrative password reset
+### AC-014 — Administrative password reset
 
 Given an existing user, an administrative reset creates a new reset token for
 that user without directly changing the password.
 
 → `test_auth.py::test_admin_password_reset_mints_token_for_user`
 
-### CA-015 — Angular session, headers, role switching, and expiry handling
+### AC-015 — Angular session, headers, role switching, and expiry handling
 
 The client persists and rehydrates the login session, follows role switches
 when selecting `X-Permission-Id`, clears state on sign-out or protected-request
@@ -615,13 +615,13 @@ and retain server authorization as the security boundary.
 
 | Element | Location |
 | --- | --- |
-| Domain model (RF-006, RF-010) | `app/identity/domain/models.py`, `domain/enums.py` |
-| Password policy (RF-007) | `app/identity/application/password_policy.py` |
-| Use cases (RF-001, RF-008–RF-017) | `app/identity/application/use_cases.py` |
-| Actor resolution (RF-003–RF-006) | `app/shared/dependencies.py` |
-| Hashing, tokens, email, and rate limiting (RF-010–RF-012) | `app/identity/infrastructure/{security,email,rate_limiter}.py` |
-| Published language (RF-013) | `app/identity/public.py` |
-| Angular session and headers (RF-003–RF-006) | `vitarerum-ui/src/app/core/auth/` |
+| Domain model (FR-006, FR-010) | `app/identity/domain/models.py`, `domain/enums.py` |
+| Password policy (FR-007) | `app/identity/application/password_policy.py` |
+| Use cases (FR-001, FR-008–FR-017) | `app/identity/application/use_cases.py` |
+| Actor resolution (FR-003–FR-006) | `app/shared/dependencies.py` |
+| Hashing, tokens, email, and rate limiting (FR-010–FR-012) | `app/identity/infrastructure/{security,email,rate_limiter}.py` |
+| Published language (FR-013) | `app/identity/public.py` |
+| Angular session and headers (FR-003–FR-006) | `vitarerum-ui/src/app/core/auth/` |
 | Angular login, reset, password change, and role selector | `vitarerum-ui/src/app/features/auth/`, `features/account/change-password/`, `shared/layout/topbar/` |
 | Angular administration | `vitarerum-ui/src/app/features/admin/` |
 | Public API contract | OpenAPI schema at `/openapi.json`; cross-cutting rules in `docs/api_contracts/README.md` |

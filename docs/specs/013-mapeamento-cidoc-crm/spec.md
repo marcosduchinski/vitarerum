@@ -65,7 +65,7 @@ staff group. There is no public CIDOC endpoint in this context.
 
 ## 5. Snapshot requirements
 
-### RF-001 — Direct record creation
+### FR-001 — Direct record creation
 
 `POST /api/v1/cidoc-mapping/in-situ-visit` creates and commits a complete
 aggregate, returning `201`. Required root fields are `code`, `visitBeginDate`,
@@ -81,7 +81,7 @@ This endpoint can therefore create a snapshot without execution evidence. Such
 a record receives no visit time-span in JSON-LD. Its mandatory begin/end fields
 remain record data but are not asserted as event time.
 
-### RF-002 — Server-owned identity and generation time
+### FR-002 — Server-owned identity and generation time
 
 The root, every child, and every attachment receive UUIDs in the domain factory.
 The factory also stamps `generatedAt` in UTC and defaults
@@ -91,13 +91,13 @@ The factory also stamps `generatedAt` in UTC and defaults
 The clock and UUID generator are direct domain functions rather than injected
 ports.
 
-### RF-003 — Explicit source order
+### FR-003 — Explicit source order
 
 Every child and attachment carries a source identifier and integer position.
 ORM relationships order nested collections by position when records are loaded.
 The API and domain do not require non-negative or unique positions/source IDs.
 
-### RF-004 — Paginated record list
+### FR-004 — Paginated record list
 
 `GET /api/v1/cidoc-mapping/in-situ-visit?page=&size=` returns complete nested
 records newest first by `generatedAt`. Page defaults to `0`, size defaults to
@@ -109,7 +109,7 @@ language provide record views.
 
 ## 6. Project-export requirements
 
-### RF-005 — Export from a collection-use project
+### FR-005 — Export from a collection-use project
 
 `POST /api/v1/collection-use-projects/{id}/export-in-situ-visit-record`
 translates the upstream project view, persists a new snapshot, commits, and
@@ -125,7 +125,7 @@ returns `201`.
 Repeated exports are not deduplicated: each accepted call creates another
 snapshot for the same source project.
 
-### RF-006 — Minimum execution evidence
+### FR-006 — Minimum execution evidence
 
 The upstream published reader marks a visit as occurred only when the project
 is `COMPLETED` and contains a `COMPLETED` domain event. The event time and actor
@@ -135,7 +135,7 @@ captured as evidence gaps and reject export.
 This is operational evidence of project completion, not independent proof of
 the physical visit.
 
-### RF-007 — Exported provenance and enrichment
+### FR-007 — Exported provenance and enrichment
 
 The project reference becomes the record code. Export captures project ID,
 title, purpose, planned dates, execution evidence, latest approval evidence,
@@ -146,7 +146,7 @@ The configured `institutionName` is captured both as `institutionName` and
 `placeName`. This preserves deployment attribution but currently conflates an
 institutional actor/name with the physical visit place.
 
-### RF-008 — Anti-corruption boundary
+### FR-008 — Anti-corruption boundary
 
 Only `infrastructure/context_acl.py` knows the Use of Collections published
 types. It translates them into `ProjectExportData`, `ExportObject`, and
@@ -155,7 +155,7 @@ domain and application layers.
 
 ## 7. JSON-LD projection requirements
 
-### RF-009 — Config-driven mapping
+### FR-009 — Config-driven mapping
 
 `GET /api/v1/cidoc-mapping/in-situ-visit/{recordId}/cidoc-crm` loads the stored
 aggregate and applies `in_situ_visit_to_cidoc.json`. Unknown records return
@@ -165,7 +165,7 @@ The document contains an inlined CIDOC-CRM 7.1.3 term context plus local `ex`,
 `dcterms`, `schema`, `xsd`, and `rdfs` prefixes. It therefore requires no remote
 context resolution when parsed.
 
-### RF-010 — Conservative event time
+### FR-010 — Conservative event time
 
 The visit receives an `E52_Time-Span` only when `executionOccurredAt` exists.
 Its time primitive comes from that completion evidence. Planned project dates
@@ -174,7 +174,7 @@ and the direct-record begin/end fields are not asserted as visit event time.
 Occurrence/access-log child times are projected only when their respective
 source fields exist.
 
-### RF-011 — Object and relationship mapping
+### FR-011 — Object and relationship mapping
 
 Requested objects are typed as `crm:E19_Physical_Object`, never automatically
 as `E20_Biological_Object`. Related source IDs link occurrences, logs,
@@ -184,7 +184,7 @@ Attachments are `E31_Document` nodes, carry their reference as
 `schema:contentUrl`, and use their description as a note. Log authorship/time is
 modelled through activity-context nodes rather than loose properties.
 
-### RF-012 — Graph provenance
+### FR-012 — Graph provenance
 
 The provenance node is an `E73_Information_Object`. It records graph creation
 time and the mapping/CRM versions from the currently loaded mapping definition.
@@ -195,7 +195,7 @@ The stored `mappingVersion` and `crmVersion` are returned in record DTOs but are
 not used to select mapping rules or populate graph provenance during later
 reads.
 
-### RF-013 — Default semantic validation
+### FR-013 — Default semantic validation
 
 The CIDOC endpoint validates by default. It parses JSON-LD into RDF and invokes
 pySHACL with bundled shapes and a bundled partial class hierarchy using RDFS
@@ -210,7 +210,7 @@ CIDOC-CRM 7.1.3 constraints or every predicate emitted by the mapper.
 `expand_and_validate_cidoc`, exposed to downstream contexts, separately
 materializes RDFS closure and returns expanded JSON-LD.
 
-### RF-014 — Angular projection
+### FR-014 — Angular projection
 
 The report detail opens a standalone, OnPush native-dialog component. It calls
 the CIDOC endpoint with default validation, pretty-prints the JSON-LD as escaped

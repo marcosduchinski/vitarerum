@@ -103,7 +103,7 @@ available route for creating a new active version.
 
 ## 6. Functional requirements
 
-### RF-001 — Create human-authored knowledge
+### FR-001 — Create human-authored knowledge
 
 `POST /scientific-return/knowledge-items` requires JWT authentication,
 `X-Permission-Id`, an active institution, and membership in `CURATORIAL`,
@@ -119,7 +119,7 @@ The API accepts both knowledge kinds. The current Angular create flow only
 offers an inventory-example form; manually creating a free-text curatorial
 lesson is therefore an API-only capability.
 
-### RF-002 — Propose knowledge from a candidate decision
+### FR-002 — Propose knowledge from a candidate decision
 
 `POST /scientific-return/candidates/{candidateId}/knowledge-proposals` is
 restricted to the three mutation groups and returns `201 Created`. The caller
@@ -136,13 +136,13 @@ the proposal contains both number fields; otherwise it is a
 
 The item is stored as `PROPOSED`, without validation metadata, and records the
 source candidate, source decision, caller, model name, and a prompt-version
-label. It cannot inform an investigation before RF-005 validation.
+label. It cannot inform an investigation before FR-005 validation.
 
 The current route does not verify that the source candidate or decision belongs
 to the caller's institution. This is a critical gap, not an intended part of
 the contract; see GAP-001.
 
-### RF-003 — List, filter, search, and count knowledge
+### FR-003 — List, filter, search, and count knowledge
 
 `GET /scientific-return/knowledge-items` is available to staff with an active
 institutional permission. It returns only rows whose `institutionId` equals the
@@ -172,7 +172,7 @@ filters.
 
 Listing without an active institution returns `422`.
 
-### RF-004 — Replace instead of overwriting
+### FR-004 — Replace instead of overwriting
 
 `PUT /scientific-return/knowledge-items/{itemId}` is restricted to the mutation
 groups. It creates a new `ACTIVE` item of the same kind, copies the original
@@ -185,7 +185,7 @@ offers editing for an `ACTIVE` item. Persistence does not prevent two concurrent
 requests from creating different successors for the same predecessor; see
 GAP-002.
 
-### RF-005 — Validate, discard, and retire
+### FR-005 — Validate, discard, and retire
 
 | Operation | Current result |
 | --- | --- |
@@ -200,7 +200,7 @@ its resulting state rather than `204 No Content`. The Angular UI labels
 retirement of a proposal as “Discard proposal” and retirement of active
 knowledge as “Retire knowledge.”
 
-### RF-006 — Read complete lineage
+### FR-006 — Read complete lineage
 
 `GET /scientific-return/knowledge-items/{itemId}/history` is available to staff
 and returns the institutional lineage in oldest-to-newest order. Access to an
@@ -212,7 +212,7 @@ at each step. This yields a complete chain only while the lineage is linear and
 its references are intact. The database does not currently enforce either
 condition; see GAP-002.
 
-### RF-007 — Retrieve memory for the investigation agent
+### FR-007 — Retrieve memory for the investigation agent
 
 The full-agentic investigation supplies its institution when retrieving
 knowledge. The repository considers only `ACTIVE` rows from that institution.
@@ -227,7 +227,7 @@ not a per-object allowance. Duplicate items are removed. `PROPOSED` and
 The repository port also permits an unscoped `institution_id = None` call, but
 the inspected production full-agentic path passes the investigation institution.
 
-### RF-008 — Enforce institutional access
+### FR-008 — Enforce institutional access
 
 Create, list, replace, validate, retire, and history use the institution from
 the caller's active permission. Item-specific operations return `404` when the
@@ -238,7 +238,7 @@ remains nullable for migrated legacy rows, and source candidate/decision links
 have no foreign-key constraint. Proposal-source isolation is incomplete as
 declared in GAP-001.
 
-### RF-009 — Protect content and identifiers at rest
+### FR-009 — Protect content and identifiers at rest
 
 Knowledge content, registered number, and observed form are encrypted with
 field-specific additional authenticated data. Registered and observed numbers
@@ -249,7 +249,7 @@ and audit metadata remain queryable plaintext.
 Text search requires application-side decryption because ciphertext uses a
 random nonce. This design causes the search-completeness limitation in GAP-003.
 
-### RF-010 — Present the workflow in Angular
+### FR-010 — Present the workflow in Angular
 
 The knowledge-base page uses the caller's active permission, loads pages of 25
 items, and exposes status and kind filters, search, institution-wide counts,

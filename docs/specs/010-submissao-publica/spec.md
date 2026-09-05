@@ -53,7 +53,7 @@ inspection, and resource limits remain server responsibilities.
 
 ## 4. Public submission requirements
 
-### RF-001 — Unauthenticated public experience
+### FR-001 — Unauthenticated public experience
 
 The Angular route `/submit-proposal` is lazy-loaded without an authentication
 guard. It provides the form, the receipt page, the confirmation page, and the
@@ -63,7 +63,7 @@ Portuguese and English catalogues.
 The client does not attach a bearer token or cookies to the public proposal
 API. The API routes themselves do not require an authenticated actor.
 
-### RF-002 — Submission contract
+### FR-002 — Submission contract
 
 `POST /api/v1/public/proposals` accepts `multipart/form-data`:
 
@@ -97,7 +97,7 @@ The successful response is `202`:
 The response echoes the validated e-mail address. No proposal is visible to
 staff at this stage.
 
-### RF-003 — Client-side guidance
+### FR-003 — Client-side guidance
 
 The Angular form checks required fields, e-mail shape, consent, the date order,
 the document count, and the per-file size before submission. It also displays
@@ -111,14 +111,14 @@ If no Turnstile site key is configured, the Angular widget is hidden. Local and
 test backend environments use an always-pass verifier; non-local startup rejects
 the bundled Turnstile test secret.
 
-### RF-004 — Silent honeypot
+### FR-004 — Silent honeypot
 
 A non-empty `website` value returns the same `202 PENDING_CONFIRMATION` receipt
 as a human submission but performs no rate-limit check, captcha call, upload
 read, persistence, or e-mail send. The schema accepts a bounded value instead
 of returning `422`, which would reveal the trap to a bot.
 
-### RF-005 — Admission before upload buffering
+### FR-005 — Admission before upload buffering
 
 For a normal submission, the server applies these gates before reading uploaded
 files:
@@ -131,7 +131,7 @@ files:
 Exceeded limits return `429` with `Retry-After: 60`. Invalid captcha returns
 `403`; an unavailable captcha provider returns `503`.
 
-### RF-006 — Upload validation and storage
+### FR-006 — Upload validation and storage
 
 The server reads each upload with a hard 10 MiB cap and requires 1–5 files. It
 recognizes PDF, JPEG, PNG, and DOCX by content signature or DOCX container
@@ -143,7 +143,7 @@ reference is generated. Files are stored below `DATA_DIR`, outside the web
 root, through the shared storage adapter described by
 [SPEC-022](../022-cifragem-e-armazenamento/spec.md).
 
-### RF-007 — Pending record and confirmation e-mail
+### FR-007 — Pending record and confirmation e-mail
 
 After validation, the server stores the files and a pending aggregate containing
 the citizen details, intended use, dates, consent, and file references. It
@@ -158,7 +158,7 @@ The confirmation token is an opaque random bearer value; it is **not signed**
 and is stored in raw form in the pending-submission row. Section 8 records the
 resulting security and retention limitations.
 
-### RF-008 — Confirmation outcomes
+### FR-008 — Confirmation outcomes
 
 `POST /api/v1/public/proposals/confirm` accepts the token in a JSON body. It has
 a process-local limit of 50 requests per IP per hour. Expected outcomes return
@@ -175,7 +175,7 @@ Only rate limiting and unexpected failures use non-2xx responses. The default
 confirmation lifetime is 24 hours and is configured by
 `public_confirm_token_ttl_hours`.
 
-### RF-009 — Idempotent and concurrent confirmation
+### FR-009 — Idempotent and concurrent confirmation
 
 Confirmation loads the pending row with a database row lock. The first valid
 request materialises the proposal and changes the pending status to
@@ -185,7 +185,7 @@ without creating a second proposal. A confirmed pending row does not expire.
 Reference-number allocation runs inside the shared uniqueness-retry boundary,
 so a concurrent uniqueness collision can be retried.
 
-### RF-010 — Proposal materialisation
+### FR-010 — Proposal materialisation
 
 Confirmation creates a Use of Collections proposal with:
 
@@ -200,7 +200,7 @@ Confirmation creates a Use of Collections proposal with:
 The pending row retains the generated reference so later clicks can return the
 same result.
 
-### RF-011 — Staff notification after confirmation
+### FR-011 — Staff notification after confirmation
 
 On the first successful confirmation, in-app notifications are created in the
 same transaction for the distinct staff permissions returned from the
@@ -212,7 +212,7 @@ After commit, proposal-submitted e-mail is sent once per distinct staff user.
 An idempotent `ALREADY_CONFIRMED` response sends neither notification nor
 e-mail again.
 
-### RF-012 — Reactive expiry cleanup
+### FR-012 — Reactive expiry cleanup
 
 When a citizen attempts to confirm an expired pending submission, the server
 deletes its uploaded files and pending row, then returns `EXPIRED`. A second
@@ -226,7 +226,7 @@ the background.
 
 ## 5. Amendment-channel requirements
 
-### RF-013 — Scoped invitation
+### FR-013 — Scoped invitation
 
 When staff requests document corrections under
 [SPEC-008](../008-proposta-uso-de-colecoes/spec.md), the integration adapter
@@ -238,7 +238,7 @@ The token transaction is committed before the invitation e-mail is sent. The
 link opens `/submit-proposal/edit?token=...`. Amendment tokens currently reuse
 `public_confirm_token_ttl_hours`, whose default is 24 hours.
 
-### RF-014 — Amendment API
+### FR-014 — Amendment API
 
 All amendment routes are unauthenticated bearer-token endpoints under
 `/api/v1`:
@@ -253,7 +253,7 @@ All amendment routes are unauthenticated bearer-token endpoints under
 The upload, delete, and submit routes have the same process-local 50-per-IP per
 hour limit. The read-only `GET` route does not currently apply this limit.
 
-### RF-015 — Narrow read model and opaque failures
+### FR-015 — Narrow read model and opaque failures
 
 The amendment view exposes only correction items named by the token that are
 still `REQUESTED`, plus documents referenced by those items. It does not expose
@@ -263,7 +263,7 @@ Unknown, expired, and used tokens all return `404 AMENDMENT_UNAVAILABLE`. A
 missing proposal uses the same opaque response. A proposal that is no longer
 `PENDING` returns `409 PROPOSAL_NOT_PENDING`.
 
-### RF-016 — Scoped document changes
+### FR-016 — Scoped document changes
 
 An amendment upload must use a document type present in the token's still-open
 correction scope. The server trims the free-text `documentType`; the normalized
@@ -276,7 +276,7 @@ Uploading a valid replacement atomically detaches the flagged old document and
 reclaims its file. Deletion is restricted to document IDs in the active scope;
 deleting an already-detached scoped document is treated as idempotent `204`.
 
-### RF-017 — Amendment completion
+### FR-017 — Amendment completion
 
 Final submission succeeds only if every still-open correction item named by the
 token is satisfied by an appropriate current document. Otherwise it returns
@@ -354,7 +354,7 @@ These are properties of the current repository, not hypothetical future work:
 
 ## 9. Acceptance criteria
 
-### CA-001 — Valid intake creates only a pending submission
+### AC-001 — Valid intake creates only a pending submission
 
 Given a valid form and supporting file, when the citizen submits it, the API
 returns `202 PENDING_CONFIRMATION`, stores the proposed dates and files, and
@@ -363,7 +363,7 @@ sends the confirmation link only after commit.
 → `test/public_submission/test_api.py::test_submit_returns_202_receipt`,
 `::test_submit_persists_proposed_dates`, `::test_submit_does_not_email_when_commit_fails`
 
-### CA-002 — Honeypot performs no work
+### AC-002 — Honeypot performs no work
 
 Given a non-empty `website`, the API returns the normal receipt without
 validating documents, persisting data, or sending e-mail.
@@ -373,7 +373,7 @@ validating documents, persisting data, or sending e-mail.
 
 → `test/public_submission/test_use_cases.py::test_honeypot_accepts_and_drops`
 
-### CA-003 — Abuse gates run before file reads
+### AC-003 — Abuse gates run before file reads
 
 Given a rate-limited request or failed captcha without documents, the API
 returns the admission error rather than a document-validation error.
@@ -382,7 +382,7 @@ returns the admission error rather than a document-validation error.
 `::test_submit_captcha_checked_before_reading_uploads`,
 `::test_submit_rate_limited_429_with_retry_after`, `::test_submit_captcha_failure_403`
 
-### CA-004 — Form and file constraints are enforced
+### AC-004 — Form and file constraints are enforced
 
 Given missing consent, invalid use type, missing/too many documents, an
 oversized file, or unsupported content, the API rejects the request with the
@@ -393,7 +393,7 @@ documented status.
 `::test_submit_too_many_documents_is_rejected`, `::test_submit_oversized_document_is_rejected`,
 `::test_submit_unsupported_document_is_rejected`
 
-### CA-005 — Double opt-in is idempotent
+### AC-005 — Double opt-in is idempotent
 
 Given a stored pending submission, the first valid confirmation creates one
 public proposal and returns its reference; a second confirmation returns
@@ -406,7 +406,7 @@ public proposal and returns its reference; a second confirmation returns
 `::test_confirm_twice_is_already_confirmed`, `::test_confirm_uses_locking_read`,
 `::test_confirm_retries_reference_number_conflict`
 
-### CA-006 — Expired confirmation cleanup is reactive
+### AC-006 — Expired confirmation cleanup is reactive
 
 Given an expired pending submission whose link is clicked, its files and row are
 deleted and the result is `EXPIRED`. Confirmed submissions never expire.
@@ -416,7 +416,7 @@ deleted and the result is `EXPIRED`. Confirmed submissions never expire.
 → `test/public_submission/test_domain.py::test_is_expired_true_after_ttl`,
 `::test_confirmed_submission_never_expires`
 
-### CA-007 — Staff effects are not repeated
+### AC-007 — Staff effects are not repeated
 
 Given multiple staff permissions belonging to one user, the first confirmation
 dispatches one batch of in-app notifications and one e-mail to that user. A
@@ -424,7 +424,7 @@ repeated confirmation dispatches neither again.
 
 → `test/public_submission/test_api.py::test_confirm_public_proposal_notifies_staff_once`
 
-### CA-008 — Amendment tokens expire and are single-use
+### AC-008 — Amendment tokens expire and are single-use
 
 Given a fresh amendment token, it is active until its expiry or final use; once
 used it cannot be marked used again.
@@ -433,7 +433,7 @@ used it cannot be marked used again.
 `::test_amendment_token_expires_after_ttl`,
 `::test_amendment_token_mark_used_is_single_use`
 
-### CA-009 — Amendment scope and document normalization hold
+### AC-009 — Amendment scope and document normalization hold
 
 Given a scoped correction, an out-of-scope type is rejected before storage;
 free-text types are trimmed; blank types are rejected; a valid replacement
@@ -444,7 +444,7 @@ detaches the flagged file.
 `::test_amendment_upload_blank_type_rejected`,
 `::test_amendment_upload_replaces_flagged_document`
 
-### CA-010 — Unsatisfied amendments cannot complete
+### AC-010 — Unsatisfied amendments cannot complete
 
 Given an open correction with no satisfying document, final submission fails.
 After a valid upload, submission resolves the scoped correction while leaving
@@ -453,7 +453,7 @@ the proposal pending.
 → `test/use_of_collections/test_correction_flow.py::test_amendment_submit_without_document_is_rejected`,
 `::test_amendment_add_then_submit_resolves`
 
-### CA-011 — Amendment completion notifies assigned staff
+### AC-011 — Amendment completion notifies assigned staff
 
 Given an assigned pending proposal with satisfied corrections, final submission
 marks the token used and sends the in-app and e-mail notifications to the
@@ -461,7 +461,7 @@ assignee.
 
 → `test/public_submission/test_api.py::test_submit_amendment_notifies_assigned_staff`
 
-### CA-012 — Public Angular validation and localization
+### AC-012 — Public Angular validation and localization
 
 The public form uses translated catalogues, sends all required values, blocks
 missing consent/dates/documents and invalid date order, and shows document

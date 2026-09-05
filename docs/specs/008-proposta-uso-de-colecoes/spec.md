@@ -112,7 +112,7 @@ transitions and currently create no proposal event.
 
 ## 6. Functional requirements
 
-### RF-001 — Authenticated submission
+### FR-001 — Authenticated submission
 
 `POST /api/v1/proposals` accepts `multipart/form-data`, creates the proposal in
 `SUBMITTED`, creates its conversation with one opening message, and records the
@@ -128,7 +128,7 @@ The API accepts zero to five initial files. Each file is capped at 10 MiB and
 must contain PDF, JPEG, PNG, or DOCX data. Initial files are stored as
 `REQUESTER_ATTACHMENT`, independent of their filename or media type.
 
-### RF-002 — Authenticated Angular form
+### FR-002 — Authenticated Angular form
 
 The Angular route `/p/collections/proposals/submit` is guarded for `EXTERNAL`
 and presents a narrower workflow than the API:
@@ -140,7 +140,7 @@ and presents a narrower workflow than the API:
 - active document templates are shown for the selected intended use;
 - after success, the requester is taken to the generic proposal detail.
 
-### RF-003 — No requested objects or project at submission
+### FR-003 — No requested objects or project at submission
 
 Submission does not accept structured requested objects. The requester first
 describes the need in prose and may later add catalogue snapshots through
@@ -150,14 +150,22 @@ approved with no requested objects, producing an empty project.
 No project aggregate is persisted at submission. Rejected or pre-approval
 cancelled proposals never materialise a project.
 
-### RF-004 — Reference numbers
+### FR-004 — Reference numbers
 
-The proposal receives `VRP-YYYYMMDD-XXXX` on submission. Approval allocates a
-`CUP-XXXXXXXX` reference for the project. Both use the shared transactional
-allocator and uniqueness-retry boundary described by
-[SPEC-019](../019-numeros-de-referencia/spec.md).
+The proposal receives a reference number on submission and approval allocates
+one for the project. Both come from the active policy of their kind through the
+shared transactional allocator and uniqueness-retry boundary described by
+[SPEC-019](../019-numeros-de-referencia/spec.md). The seeded institutional masks
+are `PP-MUHNAC/COL/YYYY/XXXX` for proposals and `PR-MUHNAC/COL/YYYY/XXXX` for
+projects.
 
-### RF-005 — Lists, filters, and detail access
+The older `VRP-YYYYMMDD-XXXX` and `CUP-XXXXXXXX` forms are legacy: they remain
+recognised by the legacy validation patterns of
+[SPEC-019](../019-numeros-de-referencia/spec.md) and are still produced by the
+repository/use-case fallbacks used when a use case is constructed without the
+production generator, but production routes inject that generator.
+
+### FR-005 — Lists, filters, and detail access
 
 `GET /api/v1/proposals` is paginated with zero-based `page`, `size` from 1 to
 100, repeated `status` filters with OR semantics, and optional `type`,
@@ -172,7 +180,7 @@ callers can read only their own, and Direction can read only a proposal assigned
 to their active permission. Direction is nevertheless treated as generic staff
 by the list query (GAP-001 and GAP-002).
 
-### RF-006 — Atomic submission and staff broadcast
+### FR-006 — Atomic submission and staff broadcast
 
 If initial upload or persistence fails, every file already written for that
 submission is reclaimed. The proposal, conversation, opening event, in-app
@@ -184,7 +192,7 @@ submitting permission. In-app recipients are distinct permissions; post-commit
 e-mails are deduplicated by user. Recipient lookup is global by group and does
 not restrict the broadcast to the submitter's institution (GAP-001).
 
-### RF-007 — Requested objects
+### FR-007 — Requested objects
 
 `POST /api/v1/proposals/{proposalId}/requested-objects` appends one or more
 caller-supplied object snapshots. The API requires `inventoryNumber`,
@@ -197,7 +205,7 @@ Owners and operational staff may perform these operations while the proposal is
 changes. Approval copies the snapshots into independent project-owned
 `CollectionUseObject` entities.
 
-### RF-008 — Assignment and forwarding
+### FR-008 — Assignment and forwarding
 
 `POST /api/v1/proposals/{proposalId}/assign` assigns a specified operational
 staff permission or defaults to the caller, moves a non-terminal proposal to
@@ -216,7 +224,7 @@ and forwarding notify the new assignee in-app before commit and by e-mail after
 commit. Target validation checks activity and operational role, but not whether
 the target belongs to the same institution as the proposal or caller (GAP-001).
 
-### RF-009 — Requested documents
+### FR-009 — Requested documents
 
 `POST /api/v1/proposals/{proposalId}/request-documents` requires operational
 staff and a `PENDING` proposal. It appends requested-document records, leaves
@@ -227,7 +235,7 @@ be non-empty, and its maximum length is 128 characters. The current request
 schema permits an empty `requiredDocuments` list and this command does not send
 an e-mail or notification to the requester.
 
-### RF-010 — Authenticated document submission
+### FR-010 — Authenticated document submission
 
 `POST /api/v1/proposals/{proposalId}/documents` is available to an authorized
 requester or operational staff while the proposal is `PENDING`. Unlike initial
@@ -244,7 +252,7 @@ Authorized users may list, download, and attach proposal documents to
 conversation messages. Download authorization is checked against the parent
 proposal.
 
-### RF-011 — Document-correction request
+### FR-011 — Document-correction request
 
 `POST /api/v1/proposals/{proposalId}/request-document-corrections` requires
 operational staff, at least one item, and a `PENDING` proposal. It records
@@ -260,7 +268,7 @@ After the correction items commit, the Public Submission adapter creates and
 sends the scoped amendment invitation described by
 [SPEC-010](../010-submissao-publica/spec.md).
 
-### RF-012 — Correction satisfaction
+### FR-012 — Correction satisfaction
 
 The amendment channel accepts only document types and document IDs within the
 token's still-open scope. A replacement upload atomically detaches the flagged
@@ -272,7 +280,7 @@ document must have an ID different from the flagged document. Unsatisfied work
 returns `422 UNSATISFIED_CORRECTION`; a successful submission records
 `DOCUMENT_CORRECTIONS_SUBMITTED` and leaves the proposal `PENDING`.
 
-### RF-013 — Staff metadata editing
+### FR-013 — Staff metadata editing
 
 `PATCH /api/v1/proposals/{proposalId}` lets operational staff change `title`,
 `intendedUse`, `beginDate`, and `endDate` on `SUBMITTED` or `PENDING` proposals.
@@ -282,7 +290,7 @@ date interval is validated against both supplied and stored values.
 Terminal proposals return `409 INVALID_TRANSITION`; an invalid interval returns
 `422 INVALID_DATE_RANGE`. Metadata editing creates no proposal event.
 
-### RF-014 — Direction lane
+### FR-014 — Direction lane
 
 `POST /api/v1/proposals/{proposalId}/refer-to-direction` requires a caller in
 Curatorial or Collections Management who is the current assignee of a
@@ -301,14 +309,14 @@ Messages tab and redirects Direction away from the standard assignment detail.
 Other mutating routes block Direction, although their machine-readable error
 codes are not yet uniform (Section 9).
 
-### RF-015 — Rejection
+### FR-015 — Rejection
 
 `POST /api/v1/proposals/{proposalId}/reject` is restricted to `CURATORIAL` and
 requires `PENDING`. It changes the state to `REJECTED`, records the event, and
 adds a conversation message addressed to the requester in the same transaction.
 After commit, it sends the rejection e-mail.
 
-### RF-016 — Approval and project materialisation
+### FR-016 — Approval and project materialisation
 
 `POST /api/v1/proposals/{proposalId}/approve` is restricted to `CURATORIAL` and
 requires `PENDING` plus a valid date interval. In one transaction it:
@@ -323,7 +331,7 @@ requires `PENDING` plus a valid date interval. In one transaction it:
 
 Approval with no requested objects creates an empty project.
 
-### RF-017 — Public-requester provisioning at approval
+### FR-017 — Public-requester provisioning at approval
 
 For a public proposal with `requestedBy = null`, approval first verifies that
 the proposal is approvable, then asks Identity to provision or reuse the
@@ -336,7 +344,7 @@ account, it does not reset credentials and sends the approval e-mail after
 commit. A public proposal rejected or cancelled before approval never reaches
 provisioning.
 
-### RF-018 — Requester cancellation
+### FR-018 — Requester cancellation
 
 `POST /api/v1/proposals/{proposalId}/cancel` requires the caller's active
 permission to equal `requestedBy`. It rejects an already `CANCELLED` or
@@ -348,7 +356,7 @@ its result to `CANCELLED`, and records its event regardless of the previous
 project state, including `COMPLETED`. This proposal-driven exception is the only
 path that cancels a completed project.
 
-### RF-019 — Conversation
+### FR-019 — Conversation
 
 `GET /api/v1/proposals/{proposalId}/conversation` returns a paginated message
 thread. `POST .../conversation/messages` adds a message while the proposal is
@@ -361,7 +369,7 @@ message, but the staff Angular page hides its reply composer until an active
 requester identity exists. The Direction-specific page does not expose the
 conversation.
 
-### RF-020 — Event history
+### FR-020 — Event history
 
 `GET /api/v1/proposals/{proposalId}/events` sorts events by timestamp descending
 before applying zero-based pagination with page size from 1 to 100. Each event
@@ -370,7 +378,7 @@ may expose its actor, target permission, note, and timestamp. A public
 renders a generic external principal in that case. Equal timestamps have no
 secondary ordering key (Section 9).
 
-### RF-021 — Angular workflow projection
+### FR-021 — Angular workflow projection
 
 The Angular feature provides separate lazy routes for submission, the
 requester's proposals, unassigned proposals, own assignments, other staff
@@ -557,7 +565,7 @@ journey.
 
 ## 10. Acceptance criteria
 
-### CA-001 — Submission is atomic and bounded
+### AC-001 — Submission is atomic and bounded
 
 Given a valid authenticated request, submission returns `201`, creates a
 `SUBMITTED` proposal and conversation, preserves intended use and dates, accepts
@@ -568,7 +576,7 @@ supported initial files, and reclaims files on failure.
 `::test_submit_proposal_accepts_supporting_document_types`,
 `::test_submit_proposal_rolls_back_saved_documents_when_upload_fails`
 
-### CA-002 — Staff broadcast distinguishes permissions from users
+### AC-002 — Staff broadcast distinguishes permissions from users
 
 Submission notifies every eligible staff permission except the actor, while
 e-mail is sent once per distinct user. These tests describe the current global
@@ -577,7 +585,7 @@ broadcast and do not establish institution isolation.
 → `test/use_of_collections/test_api.py::test_submit_proposal_notifies_all_staff_except_actor`,
 `::test_submit_proposal_dedupes_broadcast_email_by_user_not_notifications`
 
-### CA-003 — Lists enforce requester ownership
+### AC-003 — Lists enforce requester ownership
 
 Repeated statuses and pagination reach the repository correctly. Staff may
 scope by requester; non-staff cannot widen or spoof their requester filter.
@@ -587,7 +595,7 @@ scope by requester; non-staff cannot widen or spoof their requester filter.
 `::test_staff_can_scope_list_with_requested_by`,
 `::test_non_staff_requested_by_is_ignored_and_forced_to_own_id`
 
-### CA-004 — Requested objects remain proposal snapshots
+### AC-004 — Requested objects remain proposal snapshots
 
 Adding searched object snapshots exposes them on detail; removal updates the
 proposal; approval with none creates an empty project.
@@ -596,7 +604,7 @@ proposal; approval with none creates an empty project.
 `::test_remove_requested_object_updates_proposal_detail`,
 `::test_approve_proposal_without_objects_creates_empty_project`
 
-### CA-005 — Assignment and forwarding validate targets and notifications
+### AC-005 — Assignment and forwarding validate targets and notifications
 
 Staff can assign or forward to valid operational staff, cannot target external
 or Direction permissions through generic commands, and self-assignment sends no
@@ -609,7 +617,7 @@ effect. Taking over notifies the previous assignee.
 `::test_assign_proposal_to_self_sends_no_notification_or_email`,
 `::test_take_over_assignment_notifies_previous_assignee`
 
-### CA-006 — Staff editing uses effective values
+### AC-006 — Staff editing uses effective values
 
 Omitted fields remain unchanged, explicit null clears nullable proposal fields,
 terminal states reject edits, and the effective date range is validated.
@@ -620,7 +628,7 @@ terminal states reject edits, and the effective date range is validated.
 `::test_patch_proposal_terminal_status_returns_409`,
 `::test_patch_proposal_invalid_date_range_returns_422`
 
-### CA-007 — Authenticated document delivery is DOCX-only
+### AC-007 — Authenticated document delivery is DOCX-only
 
 Blank document types and non-DOCX content are rejected; valid DOCX is stored and
 the assigned staff member is notified unless they are the uploader.
@@ -631,7 +639,7 @@ the assigned staff member is notified unless they are the uploader.
 `::test_submit_document_notifies_assigned_staff_target`,
 `::test_submit_document_to_self_sends_no_notification_or_email`
 
-### CA-008 — Correction scope and satisfaction hold
+### AC-008 — Correction scope and satisfaction hold
 
 Correction items require `PENDING`, reference only proposal documents, and
 resolve only when a new matching document satisfies each targeted item. Public
@@ -647,7 +655,7 @@ amendment operations remain within that scope and reclaim replaced files.
 `::test_amendment_upload_replaces_flagged_document`,
 `::test_amendment_remove_reclaims_file`
 
-### CA-009 — Direction lane preserves ownership and history
+### AC-009 — Direction lane preserves ownership and history
 
 Only the current operational assignee can refer a pending proposal to an active
 Direction target with a reason. Only the current Direction assignee can return
@@ -662,14 +670,14 @@ and record target and reason.
 `::test_direction_can_return_proposal_to_staff_with_required_reason`,
 `::test_direction_cannot_read_a_proposal_assigned_to_another_member`
 
-### CA-010 — Rejection closes the proposal with a message
+### AC-010 — Rejection closes the proposal with a message
 
 A Curatorial rejection of a pending proposal records `REJECTED` and appends the
 requester-facing reason to the conversation.
 
 → `test/use_of_collections/test_api.py::test_reject_proposal_creates_message_to_requester`
 
-### CA-011 — Approval materialises the project and resolves public identity
+### AC-011 — Approval materialises the project and resolves public identity
 
 Approval rejects an invalid interval, creates an empty project when no objects
 were requested, provisions a new public account before commit, and chooses the
@@ -681,7 +689,7 @@ correct post-commit e-mail for new versus existing accounts.
 `::test_approve_public_proposal_new_account_skips_approval_email`,
 `::test_approve_public_proposal_existing_account_sends_approval_email`
 
-### CA-012 — Requester cancellation cascades
+### AC-012 — Requester cancellation cascades
 
 Only `requestedBy` can cancel; rejected proposals cannot be cancelled; a linked
 project is cancelled from any state, including completed.
@@ -693,7 +701,7 @@ project is cancelled from any state, including completed.
 
 → `test/use_of_collections/test_domain_models.py::test_proposal_driven_project_cancellation_allows_completed_project`
 
-### CA-013 — External ownership protects resource reads
+### AC-013 — External ownership protects resource reads
 
 An external permission cannot read another requester's proposal events,
 documents, or resulting project events. Document downloads also enforce parent
@@ -704,13 +712,13 @@ proposal ownership.
 `::test_external_user_cannot_read_other_project_events`,
 `::test_download_document_rejects_non_owner`
 
-### CA-014 — Event sorting precedes pagination
+### AC-014 — Event sorting precedes pagination
 
 Events with distinct timestamps are sorted newest-first before pagination.
 
 → `test/use_of_collections/test_api.py::test_proposal_event_log_is_sorted_newest_first_before_pagination`
 
-### CA-015 — Angular exposes role-specific workflows
+### AC-015 — Angular exposes role-specific workflows
 
 The external form enforces the narrower in-situ submission flow; staff pages
 support assume, take-over, routing, edit, document correction, approval, and

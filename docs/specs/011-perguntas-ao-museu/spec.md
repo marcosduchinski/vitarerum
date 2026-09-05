@@ -81,7 +81,7 @@ be closed without a final response.
 
 ## 6. Public-channel requirements
 
-### RF-001 — Unauthenticated public experience
+### FR-001 — Unauthenticated public experience
 
 The Angular route `/ask-museum` is lazy-loaded without an authentication guard
 and uses the public shell and Portuguese/English public catalogues. The client
@@ -92,7 +92,7 @@ API route does not require an authenticated caller.
 reference number, status query, or reply thread; the final response arrives by
 e-mail.
 
-### RF-002 — Submission contract
+### FR-002 — Submission contract
 
 `POST /api/v1/public/museum-questions` accepts JSON or
 `multipart/form-data` when images are present:
@@ -124,7 +124,7 @@ A successful request returns `202`:
 The receipt does not expose the question identifier. It currently echoes the
 full e-mail address rather than a masked value.
 
-### RF-003 — Single-step acceptance
+### FR-003 — Single-step acceptance
 
 A valid question is persisted as `SUBMITTED` in the initial request. Unlike the
 public proposal channel in [SPEC-010](../010-submissao-publica/spec.md), there
@@ -133,7 +133,7 @@ is no e-mail ownership confirmation or double opt-in.
 The supplied consent is an admission requirement only. It is not stored in the
 question aggregate or in a separate consent record.
 
-### RF-004 — Silent honeypot
+### FR-004 — Silent honeypot
 
 A non-empty `website` value produces the normal `202 RECEIVED` receipt but no
 rate-limit check, captcha call, upload read, question persistence, notification,
@@ -141,7 +141,7 @@ or e-mail. Request-schema validation occurs first, so even a honeypot request
 must contain syntactically valid required fields, including a non-empty captcha
 token.
 
-### RF-005 — Admission controls
+### FR-005 — Admission controls
 
 For a normal submission, the server applies these process-local sliding-window
 limits before captcha verification:
@@ -160,7 +160,7 @@ Normal runtime configuration supplies a site key. If the key is omitted while
 the real API remains in use, the client submits an empty token that the API
 rejects during schema validation.
 
-### RF-006 — Image validation and storage
+### FR-006 — Image validation and storage
 
 The API enforces the image count and byte limits and recognizes PNG/JPEG content
 from its signature rather than trusting only the browser media type or filename.
@@ -172,7 +172,7 @@ question repository fails after files have been written, those files are
 reclaimed. Attachment content is fixed after submission; this context provides
 no public replacement or deletion operation.
 
-### RF-007 — Persistence and staff notification
+### FR-007 — Persistence and staff notification
 
 The persisted question receives a UUID, `SUBMITTED` status, creation time, and
 a response deadline 15 calendar days later. In-app notifications for distinct
@@ -185,13 +185,13 @@ staff e-mail is sent.
 
 ## 7. Internal-channel requirements
 
-### RF-008 — Authorization
+### FR-008 — Authorization
 
 Internal endpoints require a bearer token and `X-Permission-Id`. The active
 permission must belong to `CURATORIAL` or `COLLECTIONS_MANAGEMENT`. The Angular
 routes under `/p/museum-questions` apply the same group guard.
 
-### RF-009 — Queue, filters, and detail
+### FR-009 — Queue, filters, and detail
 
 `GET /api/v1/museum-questions` returns a page ordered by `createdAt` ascending.
 It accepts filters for status, exact normalized requester e-mail, assignee, and
@@ -218,7 +218,7 @@ The Angular projection provides:
 The history tab is a query-derived list of earlier questions, not an immutable
 audit log or conversation thread.
 
-### RF-010 — Manual answer
+### FR-010 — Manual answer
 
 `POST /api/v1/museum-questions/{id}/answer` accepts an `answerBody` of 1–4000
 characters from `SUBMITTED` or `IN_PROGRESS`. It moves the aggregate to
@@ -229,7 +229,7 @@ The Angular composer permits bold, italic, paragraphs, line breaks, and lists.
 Both client and e-mail renderer sanitize the rich text. The API commits the
 transition before attempting the requester e-mail.
 
-### RF-011 — Out-of-scope classification
+### FR-011 — Out-of-scope classification
 
 `POST /api/v1/museum-questions/{id}/mark-out-of-scope` accepts an optional
 reason of at most 1000 characters from `SUBMITTED` or `IN_PROGRESS`. It moves
@@ -240,7 +240,7 @@ The internal reason is not included in the standard e-mail. This backend action
 is implemented and tested, but its Angular controls are currently commented out
 and unavailable to staff.
 
-### RF-012 — Assignment and reassignment
+### FR-012 — Assignment and reassignment
 
 `POST /api/v1/museum-questions/{id}/forward` accepts a target permission from
 Curatorial or Collections Management. From `SUBMITTED` it sets `IN_PROGRESS`;
@@ -253,19 +253,19 @@ question. It builds target choices by reading at most 100 users from the generic
 identity list and filtering their permissions in the browser. Reassignment is
 therefore an API-only capability.
 
-### RF-013 — Closure
+### FR-013 — Closure
 
 `PATCH /api/v1/museum-questions/{id}/close` is valid only from `ANSWERED` or
 `OUT_OF_SCOPE`. It records the closing permission and time, moves the question
 to `CLOSED`, and sends no e-mail.
 
-### RF-014 — Attachment access
+### FR-014 — Attachment access
 
 `GET /api/v1/museum-questions/{questionId}/attachments/{attachmentId}` verifies
 staff access and attachment ownership. It returns the trusted media type with
 `Content-Disposition: inline` and `X-Content-Type-Options: nosniff`.
 
-### RF-015 — Response deadline and overdue warning
+### FR-015 — Response deadline and overdue warning
 
 A question is overdue only while `SUBMITTED` or `IN_PROGRESS`, unanswered, and
 past `responseDueAt`. The following command processes due, unnotified questions:
@@ -279,14 +279,14 @@ for every Collections Management permission and records
 `responseOverdueNotifiedAt`. If no collection manager exists, the marker is not
 set, so the warning remains due. The command must be scheduled externally.
 
-### RF-016 — Safe response e-mail rendering
+### FR-016 — Safe response e-mail rendering
 
 The answer e-mail is multipart with a readable plain-text alternative and an
 HTML body. The HTML renderer retains only `b`, `br`, `em`, `i`, `li`, `ol`, `p`,
 `strong`, and `ul`, removes attributes, and drops blocked active-content tags.
 Requester data inserted into templates is escaped.
 
-### RF-017 — Reserved summary endpoint
+### FR-017 — Reserved summary endpoint
 
 The historical API contract mentions `GET /museum-questions/summary`, but no
 route, use case, response schema, UI consumer, or test exists. Adding it after
@@ -333,9 +333,9 @@ Expected API failures include:
 | GAP-003 | Rate limits are process-local, reset on restart, and do not coordinate replicas; `Retry-After` is always 60 seconds rather than the remaining window. | Move counters to a shared atomic store and calculate an accurate retry delay. |
 | GAP-004 | The receipt and Angular route query string expose the full requester e-mail, placing personal data in browser history and potentially logs/referrers. | Stop putting the address in the URL; use navigation state or generic copy, and mask any displayed address. |
 | GAP-005 | Consent is required but not persisted with wording/version, time, or provenance. | Store auditable consent evidence or explicitly justify and document a no-retention policy. |
-| GAP-006 | Questions and attachments have no retention, anonymisation, or erasure workflow. | Define the legal retention period and add scheduled deletion/anonymisation with file reclamation. |
+| GAP-006 | Questions and attachments have no retention, anonymisation, or erasure workflow. The tables of the removed AI triage feature (`museum_question_triages`, `museum_question_triage_classifications`) also remain in the schema, still keyed by `question_id` and still holding suggested replies, awaiting a deliberate data-retention migration. | Define the legal retention period and add scheduled deletion/anonymisation with file reclamation; decide whether the retired triage rows are dropped or retained, and record that decision. |
 | GAP-007 | Assignment and lifecycle fields hold only the latest values; there is no immutable transition, reassignment, or delivery audit history. | Persist append-only lifecycle events with actor, time, operation, and relevant delivery outcome. |
-| GAP-008 | The Angular out-of-scope action is hidden, and reassignment is not exposed even though both are supported by the API. | Decide the intended staff workflow, then expose and test the actions or remove/rescope the backend contracts. |
+| GAP-008 | The Angular out-of-scope action is hidden, and reassignment is not exposed even though both are supported by the API. The staff detail template keeps the whole Scope block inside an HTML comment, while its component test still drives that block: `museum-question-detail-page.component.spec.ts::requires confirmation before marking out of scope` fails with `Cannot set properties of null` because the textarea it looks for is not rendered. | Decide the intended staff workflow, then expose and test the actions or remove/rescope the backend contracts and the orphaned component test. |
 | GAP-009 | Forward-target discovery fetches the first 100 users through a generic endpoint that is temporarily available to every authenticated profile, then filters in the browser. | Add a narrow authorized staff-recipient endpoint with server-side group filtering and pagination/search. |
 | GAP-010 | Concurrent overdue workers can select the same unclaimed rows, and the command has no built-in scheduler. | Claim/lock work or use idempotent notification keys, and document/provision the external schedule. |
 | GAP-011 | Queue ordering uses only `createdAt`; equal timestamps have no stable tie-breaker. | Add `id` as a deterministic secondary order. |
@@ -392,6 +392,9 @@ Component tests cover public receipt/form behavior, queue filtering and
 forwarding, detail rendering and sanitisation, previous-requester history, and
 the assigned-question list. The hidden out-of-scope control and API-only
 reassignment are not accepted UI capabilities.
+
+One component test still targets the hidden out-of-scope control and therefore
+fails; it is declared in GAP-008 rather than counted as evidence here.
 
 ## 11. Non-functional requirements
 
