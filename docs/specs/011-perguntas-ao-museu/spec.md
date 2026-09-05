@@ -1,269 +1,435 @@
-# SPEC-011 — Pergunte ao Museu
+# SPEC-011 — Ask the Museum
 
-| Campo | Valor |
+| Field | Value |
 | --- | --- |
-| Identificador | SPEC-011 |
-| Estado | Implementado |
-| Contexto delimitado | `app/museum_questions` |
-| Escrita a partir de | `app/museum_questions/`, `test/museum_questions/`, contratos 13 e 14 |
-| Specs relacionadas | [SPEC-010](../010-submissao-publica/spec.md), [SPEC-018](../018-notificacoes/spec.md) |
+| Identifier | SPEC-011 |
+| Status | Implemented (with declared delivery, audit, privacy, and operational gaps) |
+| Bounded context | `app/museum_questions` |
+| Written from | `app/museum_questions/`, `test/museum_questions/`, and the public and staff Angular features |
+| Related specs | [SPEC-010](../010-submissao-publica/spec.md), [SPEC-018](../018-notificacoes/spec.md), [SPEC-022](../022-cifragem-e-armazenamento/spec.md) |
 
-## 1. Problema
+## 1. Problem
 
-Nem todo o contacto com o museu e um pedido formal de acesso. Muitas mensagens
-sao perguntas simples — "posso visitar a colecao para a minha tese?" — e
-obriga-las a passar pelo circuito completo de proposta afasta quem pergunta e
-enche a fila do staff com pedidos que nao sao pedidos.
+Not every contact with the museum is a formal collection-use request. Forcing
+simple questions through the complete proposal workflow creates unnecessary
+friction for citizens and unnecessary work for staff.
 
-## 2. Objetivo
+The open channel must nevertheless resist abuse, protect personal data, keep
+uploaded images private, and give the institution a manageable response queue.
 
-Oferecer um canal publico leve para perguntas, com uma unica resposta manual do
-staff, sem fio de conversa nem consulta publica de estado, e com um prazo de
-resposta que a instituicao consegue vigiar.
+## 2. Goal
 
-## 3. Escopo declarado ao cidadao
+Provide a lightweight public channel for a question and one final staff reply,
+without a public account, public status lookup, or conversation thread. Give
+Curatorial and Collections Management staff an internal queue, assignment,
+response, closure, and overdue-warning workflow.
 
-Neste momento so recebem resposta manual as perguntas sobre uso de colecoes,
-sobretudo visitas in situ para investigacao. As restantes **nao sao recusadas na
-submissao**: sao aceites, marcadas fora de ambito pelo staff e encerradas com
-resposta automatica. O formulario publico anuncia esta regra.
+This spec describes the implemented behavior. Properties that the current
+system does not guarantee are listed in Section 9.
 
-A escolha e deliberada: recusar a entrada obrigaria o cidadao a adivinhar a
-fronteira administrativa do museu antes de conseguir escrever.
+## 3. Scope and ubiquitous language
 
-## 4. Linguagem ubiqua
+The public form explains that the operational scope is collection use,
+especially on-site research visits. Other questions are not rejected during
+submission. The backend can classify them as out of scope and send a standard
+notice, although that action is currently hidden in the Angular staff page.
 
-- **Pergunta**: mensagem publica. Estados `SUBMITTED`, `IN_PROGRESS`, `ANSWERED`, `OUT_OF_SCOPE`, `CLOSED`.
-- **Encaminhamento**: atribuicao da pergunta a um membro do staff; muda o estado para `IN_PROGRESS`.
-- **Prazo de resposta (`responseDueAt`)**: 15 dias de calendario a contar da submissao.
-- **Em atraso**: pergunta `SUBMITTED` ou `IN_PROGRESS`, sem resposta, com prazo ultrapassado.
+- **Museum question**: the aggregate root containing the request, response
+  state, latest assignment, lifecycle audit fields, and image attachments.
+- **Assignment**: the latest staff permission responsible for the question.
+  Assigning a question moves it to `IN_PROGRESS`.
+- **Response deadline**: 15 calendar days after submission, stored as
+  `responseDueAt`.
+- **Overdue question**: a `SUBMITTED` or `IN_PROGRESS` question without an
+  answer whose response deadline has passed.
+- **Final response**: either a manual answer or the standard out-of-scope
+  notice. The requester cannot reply through this context.
 
----
+The aggregate owns its attachment metadata. Files are held by the shared file
+storage adapter; identity supplies staff and permission details; notifications
+and e-mail are external effects coordinated outside the domain layer.
 
-## 5. Requisitos funcionais — canal publico
+## 4. Actors, channels, and trust boundaries
 
-### RF-001 — Submissao sem autenticacao
+| Actor or channel | Capability |
+| --- | --- |
+| Public visitor | Submit a question and optional images without authentication |
+| Curatorial staff | Read, assign, answer, classify, and close questions |
+| Collections Management staff | Same question-management access; also receives overdue warnings |
+| Direction and other groups | No initial access to the internal question API or Angular routes |
+| Scheduled operator | Invoke the overdue command; the application has no embedded scheduler |
 
-`POST /api/v1/public/museum-questions`, em JSON ou `multipart/form-data` quando
-ha imagens.
+Every public field and upload is untrusted. Angular checks improve the user
+experience, but authorization, schema validation, captcha verification, image
+inspection, and resource limits remain server responsibilities.
 
-| Campo | Obrigatorio | Restricao |
+## 5. Lifecycle
+
+| Current state | Operation | Next state |
 | --- | --- | --- |
-| `requesterName` | sim | 1–120 caracteres |
-| `requesterEmail` | sim | ate 180 caracteres; recebe a resposta |
-| `subject` | sim | 1–200 caracteres |
-| `message` | sim | 1–4000 caracteres |
-| `consent` | sim | tem de ser `true` (RGPD) |
-| `captchaToken` | sim | verificado no servidor |
-| `website` | nao | campo-armadilha |
-| `attachments` | nao | 0–10 ficheiros, PNG/JPEG, ate 5 MiB cada e 25 MiB no total |
+| `SUBMITTED` | assign/forward | `IN_PROGRESS` |
+| `SUBMITTED` | answer | `ANSWERED` |
+| `SUBMITTED` | mark out of scope | `OUT_OF_SCOPE` |
+| `IN_PROGRESS` | reassign/forward | `IN_PROGRESS` |
+| `IN_PROGRESS` | answer | `ANSWERED` |
+| `IN_PROGRESS` | mark out of scope | `OUT_OF_SCOPE` |
+| `ANSWERED` | close | `CLOSED` |
+| `OUT_OF_SCOPE` | close | `CLOSED` |
 
-Resposta `202` com ecra de confirmacao mascarado. Nao e devolvido nenhum
-identificador visivel ao staff.
+All other transitions are rejected. In particular, a submitted question cannot
+be closed without a final response.
 
-### RF-002 — Sem duplo opt-in
+## 6. Public-channel requirements
 
-Ao contrario da submissao de proposta
-([SPEC-010](../010-submissao-publica/spec.md)), uma submissao valida e
-persistida como `SUBMITTED` numa unica chamada. Nao ha email de confirmacao a
-clicar.
+### RF-001 — Unauthenticated public experience
 
-A diferenca justifica-se pelo risco: uma pergunta nao cria conta, nao entra no
-circuito de decisao e nao gera documentacao institucional.
+The Angular route `/ask-museum` is lazy-loaded without an authentication guard
+and uses the public shell and Portuguese/English public catalogues. The client
+does not attach a bearer token or cookies to the public question API, and the
+API route does not require an authenticated caller.
 
-### RF-003 — Protecoes do canal aberto
+`/ask-museum/received` confirms acceptance. There is no public tracking page,
+reference number, status query, or reply thread; the final response arrives by
+e-mail.
 
-Verificacao de Turnstile, limitacao de frequencia por IP, por email e global
-(`429` com `Retry-After`), limites de comprimento, remocao de caracteres de
-controlo e recusa de CR/LF em campos que entram no email.
+### RF-002 — Submission contract
 
-### RF-004 — Campo-armadilha silencioso
+`POST /api/v1/public/museum-questions` accepts JSON or
+`multipart/form-data` when images are present:
 
-`website` preenchido produz `202` sem trabalho.
+| Field | Required | Constraint |
+| --- | --- | --- |
+| `requesterName` | yes | 1–120 characters |
+| `requesterEmail` | yes | valid e-mail, at most 180 characters |
+| `subject` | yes | 1–200 characters |
+| `message` | yes | 1–4000 characters |
+| `consent` | yes | must be exactly `true` |
+| `captchaToken` | yes | 1–2048 characters |
+| `website` | no | honeypot, at most 255 characters |
+| `attachments` | no | 0–10 PNG/JPEG files; at most 5 MiB each and 25 MiB in total |
 
-### RF-005 — Imagens verificadas
+Names, subjects, and messages are trimmed and stripped of control characters.
+CR/LF is replaced in names and subjects before those values can enter e-mail
+content. The requester e-mail is validated by the server.
 
-Anexos sao verificados por assinatura de conteudo, limitados em numero e
-tamanho, e guardados fora de qualquer raiz web. Se a persistencia falhar depois
-de os ficheiros serem escritos, os ficheiros sao descartados.
+A successful request returns `202`:
 
-### RF-006 — Sem credenciais
-
-Os endpoints publicos nao aceitam nem dependem de cookies ou cabecalhos de
-autenticacao. CORS restrito a origem publica.
-
----
-
-## 6. Requisitos funcionais — canal interno
-
-### RF-007 — Autorizacao
-
-Endpoints internos exigem token e `X-Permission-Id`, restritos a `CURATORIAL` e
-`COLLECTIONS_MANAGEMENT`. `DIRECTION` nao tem acesso inicial a fila.
-
-### RF-008 — Fila de trabalho
-
-`GET /museum-questions` devolve fila paginada ordenada por `createdAt` ascendente,
-com filtros por estado, email do requerente, responsavel atribuido e apenas nao
-atribuidas. Os itens de lista trazem `attachmentCount`, nao os metadados
-completos dos anexos.
-
-O filtro por email do requerente opera sobre o **hash de pesquisa** do valor
-cifrado, nunca sobre texto em claro.
-
-### RF-009 — Transicoes validas
-
-```text
-SUBMITTED -> ANSWERED
-SUBMITTED -> OUT_OF_SCOPE
-SUBMITTED -> IN_PROGRESS (encaminhamento)
-IN_PROGRESS -> ANSWERED
-IN_PROGRESS -> OUT_OF_SCOPE
-IN_PROGRESS -> IN_PROGRESS (novo encaminhamento)
-ANSWERED  -> CLOSED
-OUT_OF_SCOPE -> CLOSED
+```json
+{
+  "status": "RECEIVED",
+  "email": "visitor@example.org"
+}
 ```
 
-`SUBMITTED -> CLOSED` e invalido: nada se encerra sem ter sido respondido ou
-declarado fora de ambito.
+The receipt does not expose the question identifier. It currently echoes the
+full e-mail address rather than a masked value.
 
-### RF-010 — Resposta manual
+### RF-003 — Single-step acceptance
 
-`POST /museum-questions/{id}/answer` e valido a partir de `SUBMITTED` ou
-`IN_PROGRESS`. Envia o email e regista quem respondeu, quando, o corpo da
-resposta e o instante do envio.
+A valid question is persisted as `SUBMITTED` in the initial request. Unlike the
+public proposal channel in [SPEC-010](../010-submissao-publica/spec.md), there
+is no e-mail ownership confirmation or double opt-in.
 
-### RF-011 — Fora de ambito
+The supplied consent is an admission requirement only. It is not stored in the
+question aggregate or in a separate consent record.
 
-`POST /museum-questions/{id}/mark-out-of-scope` aceita razao opcional, e valido
-a partir de `SUBMITTED` ou `IN_PROGRESS`, envia o email padrao e regista autor,
-instante, razao e envio.
+### RF-004 — Silent honeypot
 
-### RF-012 — Encaminhamento
+A non-empty `website` value produces the normal `202 RECEIVED` receipt but no
+rate-limit check, captcha call, upload read, question persistence, notification,
+or e-mail. Request-schema validation occurs first, so even a honeypot request
+must contain syntactically valid required fields, including a non-empty captcha
+token.
 
-`POST /museum-questions/{id}/forward` e valido a partir de `SUBMITTED` ou
-`IN_PROGRESS`. O alvo tem de pertencer a `CURATORIAL` ou
-`COLLECTIONS_MANAGEMENT`. Regista o responsavel, notifica-o na aplicacao e muda
-o estado para `IN_PROGRESS`.
+### RF-005 — Admission controls
 
-### RF-013 — Encerramento
+For a normal submission, the server applies these process-local sliding-window
+limits before captcha verification:
 
-`PATCH /museum-questions/{id}/close` so e valido a partir de `ANSWERED` ou
-`OUT_OF_SCOPE`. Regista autor e instante e **nao envia email**.
+1. 5 requests per IP address per hour;
+2. 3 requests per normalized e-mail address per day;
+3. 500 requests globally per hour.
 
-### RF-014 — Descarga de anexos
+An exceeded limit returns `429` with the fixed header `Retry-After: 60`.
+Turnstile failure returns `403`, and verifier unavailability returns `503`.
+Local/test uses an always-pass verifier; non-local startup requires a configured
+Turnstile secret.
 
-`GET /museum-questions/{questionId}/attachments/{attachmentId}` e exclusivo do
-staff, verifica que o anexo pertence a pergunta, devolve o `Content-Type` de
-confianca, `Content-Disposition: inline` e `X-Content-Type-Options: nosniff`.
+The Angular form requires a token only when a Turnstile site key is configured.
+Normal runtime configuration supplies a site key. If the key is omitted while
+the real API remains in use, the client submits an empty token that the API
+rejects during schema validation.
 
-### RF-015 — Resumo para painel *(especificado, nao implementado)*
+### RF-006 — Image validation and storage
 
-O contrato 14 documenta `GET /museum-questions/summary`, devolvendo contagens
-por estado. **Nao existe no codigo**: nao ha rota, caso de uso nem teste.
+The API enforces the image count and byte limits and recognizes PNG/JPEG content
+from its signature rather than trusting only the browser media type or filename.
+Safe filenames are bounded before storage references are generated.
 
-Alem de ausente, a rota colide com `GET /museum-questions/{questionId}` tal como
-esta declarada — `summary` seria interpretado como identificador. Implementa-la
-exige declara-la antes da rota parametrizada.
+Files are stored below `DATA_DIR`, outside the web root, through the shared
+storage adapter in [SPEC-022](../022-cifragem-e-armazenamento/spec.md). If the
+question repository fails after files have been written, those files are
+reclaimed. Attachment content is fixed after submission; this context provides
+no public replacement or deletion operation.
 
-Nao existe criterio de aceitacao para este requisito enquanto a lacuna nao for
-fechada.
+### RF-007 — Persistence and staff notification
 
-### RF-016 — Prazo de resposta e alerta de atraso
+The persisted question receives a UUID, `SUBMITTED` status, creation time, and
+a response deadline 15 calendar days later. In-app notifications for distinct
+Curatorial and Collections Management permissions are created in the question
+transaction.
 
-Cada pergunta recebe prazo de 15 dias de calendario, persistido em
-`responseDueAt`. Uma pergunta esta em atraso quando esta `SUBMITTED` ou
-`IN_PROGRESS`, sem resposta, e o prazo ja passou.
+After commit, a submission e-mail is sent once per distinct staff user across
+those groups. If the transaction fails, written images are reclaimed and no
+staff e-mail is sent.
+
+## 7. Internal-channel requirements
+
+### RF-008 — Authorization
+
+Internal endpoints require a bearer token and `X-Permission-Id`. The active
+permission must belong to `CURATORIAL` or `COLLECTIONS_MANAGEMENT`. The Angular
+routes under `/p/museum-questions` apply the same group guard.
+
+### RF-009 — Queue, filters, and detail
+
+`GET /api/v1/museum-questions` returns a page ordered by `createdAt` ascending.
+It accepts filters for status, exact normalized requester e-mail, assignee, and
+unassigned-only records. Page size is 1–100.
+
+List items contain the full request text and lifecycle fields plus
+`attachmentCount`; attachment metadata is returned only by the detail endpoint.
+The exact e-mail filter uses a keyed lookup hash over the encrypted value.
+
+`GET /api/v1/museum-questions/{id}` returns the question and its attachment
+metadata. The assignee is hydrated to a small permission/user summary; other
+actor audit fields remain raw permission identifiers.
+
+The Angular projection provides:
+
+- **All enquiries**, initially filtered to `SUBMITTED`, with status selection
+  and pagination;
+- **New inquiries**, restricted to unassigned `SUBMITTED` questions;
+- **My enquiries**, restricted to `IN_PROGRESS` questions assigned to the
+  active permission;
+- a detail view with request, inline image previews, answer composer, deadline,
+  and previous questions found by the same requester e-mail.
+
+The history tab is a query-derived list of earlier questions, not an immutable
+audit log or conversation thread.
+
+### RF-010 — Manual answer
+
+`POST /api/v1/museum-questions/{id}/answer` accepts an `answerBody` of 1–4000
+characters from `SUBMITTED` or `IN_PROGRESS`. It moves the aggregate to
+`ANSWERED` and records the responding permission, answer body, answer time, and
+an `answerSentAt` timestamp.
+
+The Angular composer permits bold, italic, paragraphs, line breaks, and lists.
+Both client and e-mail renderer sanitize the rich text. The API commits the
+transition before attempting the requester e-mail.
+
+### RF-011 — Out-of-scope classification
+
+`POST /api/v1/museum-questions/{id}/mark-out-of-scope` accepts an optional
+reason of at most 1000 characters from `SUBMITTED` or `IN_PROGRESS`. It moves
+the aggregate to `OUT_OF_SCOPE`, records actor and time, commits, and then sends
+a standard requester e-mail.
+
+The internal reason is not included in the standard e-mail. This backend action
+is implemented and tested, but its Angular controls are currently commented out
+and unavailable to staff.
+
+### RF-012 — Assignment and reassignment
+
+`POST /api/v1/museum-questions/{id}/forward` accepts a target permission from
+Curatorial or Collections Management. From `SUBMITTED` it sets `IN_PROGRESS`;
+from `IN_PROGRESS` it replaces the assignee while retaining that state. A new
+assignee other than the caller receives an in-app notification. No forwarding
+e-mail is sent.
+
+The Angular queue currently exposes Forward only for an unassigned `SUBMITTED`
+question. It builds target choices by reading at most 100 users from the generic
+identity list and filtering their permissions in the browser. Reassignment is
+therefore an API-only capability.
+
+### RF-013 — Closure
+
+`PATCH /api/v1/museum-questions/{id}/close` is valid only from `ANSWERED` or
+`OUT_OF_SCOPE`. It records the closing permission and time, moves the question
+to `CLOSED`, and sends no e-mail.
+
+### RF-014 — Attachment access
+
+`GET /api/v1/museum-questions/{questionId}/attachments/{attachmentId}` verifies
+staff access and attachment ownership. It returns the trusted media type with
+`Content-Disposition: inline` and `X-Content-Type-Options: nosniff`.
+
+### RF-015 — Response deadline and overdue warning
+
+A question is overdue only while `SUBMITTED` or `IN_PROGRESS`, unanswered, and
+past `responseDueAt`. The following command processes due, unnotified questions:
 
 ```bash
 uv run python -m app.museum_questions.presentation.commands notify-overdue --limit 100
 ```
 
-O comando envia **uma** notificacao `MUSEUM_QUESTION_RESPONSE_OVERDUE` aos
-gestores de colecoes quando a pergunta entra em atraso, e e idempotente por
-pergunta atraves de `responseOverdueNotifiedAt`. Sem gestores para notificar, a
-pergunta **nao** e marcada como notificada — o alerta fica devido em vez de se
-perder.
+For each question, it creates a `MUSEUM_QUESTION_RESPONSE_OVERDUE` notification
+for every Collections Management permission and records
+`responseOverdueNotifiedAt`. If no collection manager exists, the marker is not
+set, so the warning remains due. The command must be scheduled externally.
 
-### RF-017 — Email de resposta seguro na renderizacao
+### RF-016 — Safe response e-mail rendering
 
-O email de resposta e enviado em multipart: uma versao de texto legivel e uma
-versao HTML que preserva a marcacao permitida e remove a marcacao insegura.
+The answer e-mail is multipart with a readable plain-text alternative and an
+HTML body. The HTML renderer retains only `b`, `br`, `em`, `i`, `li`, `ol`, `p`,
+`strong`, and `ul`, removes attributes, and drops blocked active-content tags.
+Requester data inserted into templates is escaped.
 
-### RF-018 — Efeitos externos so depois do commit
+### RF-017 — Reserved summary endpoint
 
-Resposta e marcacao fora de ambito nao enviam email se a transacao falhar.
+The historical API contract mentions `GET /museum-questions/summary`, but no
+route, use case, response schema, UI consumer, or test exists. Adding it after
+the current `/{question_id}` declaration would also cause `summary` to be
+interpreted as an identifier; a future static route must be declared first.
 
----
+The summary is therefore not an implemented requirement or acceptance
+criterion.
 
-## 7. Invariantes
+## 8. Invariants and error behavior
 
-| Id | Invariante |
+| ID | Invariant |
 | --- | --- |
-| INV-001 | Uma pergunta nunca passa de `SUBMITTED` diretamente a `CLOSED` |
-| INV-002 | Encaminhar deixa a pergunta em `IN_PROGRESS` e regista o responsavel |
-| INV-003 | Encerrar nunca envia email |
-| INV-004 | O email do requerente e pesquisado por hash, nunca em claro |
-| INV-005 | Um alerta de atraso e enviado no maximo uma vez por pergunta |
-| INV-006 | Nenhum email parte antes de a transacao ficar duravel |
-| INV-007 | Um campo-armadilha preenchido nunca produz trabalho |
-| INV-008 | Texto submetido e sempre escapado na renderizacao para o staff |
+| INV-001 | A question cannot move directly from `SUBMITTED` to `CLOSED` |
+| INV-002 | Assignment leaves the question in `IN_PROGRESS` and stores the latest assignee |
+| INV-003 | A finalised question cannot be answered, classified, or reassigned |
+| INV-004 | Closure never sends an e-mail |
+| INV-005 | The requester e-mail is encrypted and exact lookup uses its keyed hash |
+| INV-006 | A honeypot request creates no persistent or external work |
+| INV-007 | Requester e-mail is attempted only after the state transaction commits |
+| INV-008 | Public text and staff rich text are safely rendered |
 
-## 8. Criterios de aceitacao
+Expected API failures include:
 
-### CA-001 — Submissao publica e recibo
-→ `test_api.py::test_submit_returns_202_receipt`, `test_use_cases.py::test_execute_persists_submitted_question`
-
-### CA-002 — Protecoes do canal aberto
-→ `test_api.py::test_submit_captcha_failure_403`, `::test_submit_captcha_unavailable_503`, `::test_submit_rate_limited_429_with_retry_after`, `::test_submit_honeypot_returns_202_no_work`, `test_use_cases.py::test_honeypot_accepts_and_drops`, `::test_rate_limit_raises`, `::test_captcha_failure_raises`, `::test_captcha_unavailable_raises`
-
-### CA-003 — Validacao e sanitizacao
-→ `test_api.py::test_submit_missing_consent_is_rejected`, `::test_submit_sanitizes_control_characters_and_crlf`, `::test_submit_whitespace_only_fields_are_rejected`, `::test_submit_missing_field_is_rejected`, `::test_submit_invalid_email_is_rejected`, `::test_submit_over_length_message_is_rejected`
-
-### CA-004 — Anexos de imagem verificados e limitados
-→ `test_api.py::test_submit_accepts_multipart_images`, `::test_submit_rejects_more_than_ten_images`, `::test_submit_rejects_non_image_attachment`, `::test_uploaded_images_rejects_configurable_total_limit`, `test_use_cases.py::test_persist_uploads_images_and_tracks_attachment_metadata`, `::test_persist_discards_uploaded_files_when_repository_fails`
-
-### CA-005 — Autorizacao do canal interno
-→ `test_api.py::test_internal_questions_reject_non_staff`, `::test_internal_questions_reject_direction_initial_access`, `test_use_cases.py::test_list_questions_requires_staff`, `::test_list_questions_rejects_direction_initial_access`
-
-### CA-006 — Fila, filtros e paginacao
-→ `test_api.py::test_list_internal_questions_filters_and_paginates`, `::test_list_internal_questions_filters_by_requester_email`, `::test_list_questions_filters_by_assignee_and_hydrates_assignment`, `::test_list_questions_filters_unassigned_submitted`, `test_use_cases.py::test_list_questions_filters_and_orders`, `::test_list_questions_filters_by_requester_email`
-
-### CA-007 — Transicoes e suas guardas
-→ `test_domain.py::test_new_question_defaults_to_submitted_with_no_audit_fields`, `::test_answer_transitions_submitted_question`, `::test_close_rejects_submitted_question`, `test_use_cases.py::test_answer_question_marks_answered`, `::test_answer_question_rejects_finalized_question`, `::test_mark_out_of_scope_updates_status`, `::test_close_question_after_final_response`, `::test_close_submitted_question_is_rejected`
-
-### CA-008 — Encaminhamento com alvo valido
-→ `test_api.py::test_forward_internal_question_assigns_and_notifies_target`, `::test_forward_internal_question_rejects_invalid_target_group`, `::test_forward_internal_question_rejects_answered_question`, `test_use_cases.py::test_forward_question_assigns_submitted_question`, `::test_forward_question_rejects_finalized_question`
-
-### CA-009 — Email so depois do commit
-→ `test_api.py::test_answer_internal_question_sends_email_and_commits`, `::test_answer_internal_question_does_not_email_when_commit_fails`, `::test_mark_out_of_scope_does_not_email_when_commit_fails`, `::test_mark_out_of_scope_sends_standard_email`, `::test_submit_commit_failure_propagates`
-
-### CA-010 — Prazo e alerta de atraso idempotente
-→ `test_domain.py::test_submitted_question_is_overdue_after_response_due_at`, `::test_answered_question_is_not_overdue`, `test_use_cases.py::test_notify_overdue_questions_notifies_collection_managers_once`, `::test_notify_overdue_questions_without_managers_does_not_mark_notified`
-
-### CA-011 — Email de resposta seguro
-→ `test_email.py::test_answer_text_body_turns_allowed_html_into_readable_text`, `::test_answer_html_body_keeps_allowed_markup_and_drops_unsafe_markup`, `::test_smtp_answer_email_is_multipart_with_plain_and_html`
-
-### CA-012 — Anexo servido em seguranca
-→ `test_api.py::test_download_internal_question_attachment_returns_inline_image`, `::test_get_internal_question_detail_includes_attachments`
-
-## 9. Requisitos nao funcionais
-
-- **Confidencialidade**: nome, email e mensagem do requerente sao dados sensiveis; o email e cifrado com hash de pesquisa.
-- **Duplicacao deliberada**: o adaptador de captcha e o limitador sao proprios deste contexto, e nao partilhados com `public_submission`, para nao criar acoplamento entre dois canais publicos com politicas que podem divergir.
-- **XSS armazenado**: o texto submetido e escapado na renderizacao para o staff.
-
-## 10. Rastreabilidade
-
-| Elemento | Localizacao |
+| Condition | Result |
 | --- | --- |
-| Agregado e transicoes (RF-009..RF-013, RF-016) | `app/museum_questions/domain/models.py` |
-| Casos de uso publicos e internos | `app/museum_questions/application/` |
-| Captcha, limitador, email e anexos | `app/museum_questions/infrastructure/` |
-| Endpoints e comando de atraso (RF-016) | `app/museum_questions/presentation/` |
-| Contrato publico | Esquema OpenAPI em `/openapi.json`; regras transversais em `docs/api_contracts/README.md` |
+| Invalid or missing public field | `422` |
+| Invalid captcha | `403` |
+| Captcha provider unavailable | `503` |
+| Rate limit exceeded | `429` with `Retry-After: 60` |
+| Too many images or invalid multipart data | `422` |
+| Oversized image | `413` |
+| Unsupported or signature-mismatched image | `415` |
+| Missing question or attachment | `404` |
+| Forbidden internal group or invalid target group | `403` |
+| Invalid lifecycle transition | `409` |
 
-## 11. Questoes em aberto
+## 9. Known gaps and required improvements
 
-1. O prazo de 15 dias e uma promessa institucional ou apenas um limiar operacional? A distincao muda o que deve ser exposto ao cidadao.
-2. Deve existir reencaminhamento em cadeia (A encaminha para B, B para C) com historico, ou a atribuicao unica e suficiente?
+| ID | Gap | Required change |
+| --- | --- | --- |
+| GAP-001 | `answerSentAt` and `outOfScopeEmailSentAt` are set before the post-commit SMTP attempt. A delivery failure therefore leaves a false sent marker. | Introduce durable delivery state/outbox processing and set the sent timestamp only after confirmed delivery. |
+| GAP-002 | Post-commit submission, answer, and out-of-scope e-mails have no durable retry or idempotency boundary. A committed submission may return an error after e-mail failure and be resubmitted. | Use an outbox with retry, stable idempotency keys, and observable terminal failure state. |
+| GAP-003 | Rate limits are process-local, reset on restart, and do not coordinate replicas; `Retry-After` is always 60 seconds rather than the remaining window. | Move counters to a shared atomic store and calculate an accurate retry delay. |
+| GAP-004 | The receipt and Angular route query string expose the full requester e-mail, placing personal data in browser history and potentially logs/referrers. | Stop putting the address in the URL; use navigation state or generic copy, and mask any displayed address. |
+| GAP-005 | Consent is required but not persisted with wording/version, time, or provenance. | Store auditable consent evidence or explicitly justify and document a no-retention policy. |
+| GAP-006 | Questions and attachments have no retention, anonymisation, or erasure workflow. | Define the legal retention period and add scheduled deletion/anonymisation with file reclamation. |
+| GAP-007 | Assignment and lifecycle fields hold only the latest values; there is no immutable transition, reassignment, or delivery audit history. | Persist append-only lifecycle events with actor, time, operation, and relevant delivery outcome. |
+| GAP-008 | The Angular out-of-scope action is hidden, and reassignment is not exposed even though both are supported by the API. | Decide the intended staff workflow, then expose and test the actions or remove/rescope the backend contracts. |
+| GAP-009 | Forward-target discovery fetches the first 100 users through a generic endpoint that is temporarily available to every authenticated profile, then filters in the browser. | Add a narrow authorized staff-recipient endpoint with server-side group filtering and pagination/search. |
+| GAP-010 | Concurrent overdue workers can select the same unclaimed rows, and the command has no built-in scheduler. | Claim/lock work or use idempotent notification keys, and document/provision the external schedule. |
+| GAP-011 | Queue ordering uses only `createdAt`; equal timestamps have no stable tie-breaker. | Add `id` as a deterministic secondary order. |
+| GAP-012 | The specified summary endpoint is absent and would collide with the parameter route if appended in the current order. | Either remove it from historical contracts or implement the static route before `/{question_id}` with tests and a real consumer. |
+| GAP-013 | CORS is configured globally for the application, not specifically for this public channel. Local defaults may allow `*`; non-local validation forbids it. | Keep explicit production origins and avoid describing route-specific CORS guarantees that the code does not enforce. |
+| GAP-014 | Empty frontend Turnstile configuration is incompatible with the API's non-empty token schema. | Fail frontend startup/config validation for real API mode, or align the local no-captcha contract across client and server. |
+
+## 10. Acceptance criteria
+
+### AC-001 — Public submission, receipt, and staff notification
+
+Covered by `test_api.py::test_submit_returns_202_receipt`,
+`::test_submit_notifies_access_groups_and_emails_curators_and_managers`, and
+`test_use_cases.py::test_execute_persists_submitted_question`.
+
+### AC-002 — Open-channel protections and validation
+
+Covered by the captcha, rate-limit, honeypot, consent, e-mail, length,
+whitespace, and control-character tests in `test_api.py` and
+`test_use_cases.py`.
+
+### AC-003 — Verified and bounded images
+
+Covered by the multipart, image-count, media-signature, total-size, persistence,
+and storage-cleanup tests in `test_api.py` and `test_use_cases.py`.
+
+### AC-004 — Internal authorization, queue, and detail
+
+Covered by the internal-group rejection, filter, pagination, assignment
+hydration, detail, and attachment-detail tests in `test_api.py` and the list
+authorization/filter tests in `test_use_cases.py`.
+
+### AC-005 — Lifecycle transitions
+
+Covered by the new-question, answer, assignment/reassignment, overdue, and
+closure tests in `test_domain.py`, `test_use_cases.py`, and `test_api.py`.
+
+### AC-006 — Commit boundary and e-mail rendering
+
+Covered by `test_api.py::test_answer_internal_question_does_not_email_when_commit_fails`,
+`::test_mark_out_of_scope_does_not_email_when_commit_fails`, and the multipart
+and sanitisation tests in `test_email.py`. These tests establish ordering, not
+durable delivery; GAP-001 and GAP-002 remain open.
+
+### AC-007 — Overdue notification behavior
+
+Covered by the overdue domain tests and
+`test_use_cases.py::test_notify_overdue_questions_notifies_collection_managers_once`
+and `::test_notify_overdue_questions_without_managers_does_not_mark_notified`.
+
+### AC-008 — Angular public and staff projections
+
+Component tests cover public receipt/form behavior, queue filtering and
+forwarding, detail rendering and sanitisation, previous-requester history, and
+the assigned-question list. The hidden out-of-scope control and API-only
+reassignment are not accepted UI capabilities.
+
+## 11. Non-functional requirements
+
+- **Confidentiality**: requester name, e-mail, subject, message, answer, internal
+  out-of-scope reason, and attachment filename are encrypted in the database;
+  attachment bytes use the configured shared encrypted file store.
+- **Least privilege**: internal question APIs and attachment reads are limited
+  to Curatorial and Collections Management permissions.
+- **Stored-XSS resistance**: public text is interpolated as text, and permitted
+  staff answer markup is allow-listed before e-mail and UI rendering.
+- **Observability**: operational failures must be logged without public message
+  bodies, tokens, or requester e-mail addresses. Durable delivery observability
+  remains part of GAP-001/GAP-002.
+- **Bounded-context independence**: captcha and rate-limit adapters are local to
+  this context so policy can evolve independently from public proposals.
+
+## 12. Traceability
+
+| Element | Location |
+| --- | --- |
+| Aggregate and transitions | `vitarerum-api/app/museum_questions/domain/models.py` |
+| Public and internal use cases | `vitarerum-api/app/museum_questions/application/` |
+| Repository, captcha, rate limit, e-mail, and file adapters | `vitarerum-api/app/museum_questions/infrastructure/` |
+| API routes, schemas, dependencies, and overdue command | `vitarerum-api/app/museum_questions/presentation/` |
+| Backend verification | `vitarerum-api/test/museum_questions/` |
+| Public Angular flow | `vitarerum-ui/src/app/features/public/ask-museum/` |
+| Staff Angular flow | `vitarerum-ui/src/app/features/museum-questions/` |
+| Cross-cutting API rules | `docs/api_contracts/README.md` |
+
+## 13. Open decisions
+
+1. Is the 15-day deadline a public service promise or only an internal warning
+   threshold?
+2. Is one final response still the intended service model, or should a tracked
+   conversation be introduced?
+3. Should staff see earlier questions linked by exact e-mail, and what privacy
+   and retention policy authorizes that correlation?
+4. Is out-of-scope classification still part of the product workflow, given
+   that its UI was intentionally disabled?
+5. Is reassignment history required, or is retaining only the latest assignee
+   sufficient?

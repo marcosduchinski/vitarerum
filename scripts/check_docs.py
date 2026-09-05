@@ -42,10 +42,13 @@ ALLOWED_STATUS = {
 DEFAULT_ALLOWED = {"current", "proposed"}
 
 # Specs carry their status in a metadata row instead of front-matter; one source
-# of truth per document, so nothing can drift between two of them.
+# of truth per document, so nothing can drift between two of them. Accept both
+# labels and values while the specifications are translated incrementally.
 SPEC_STATUS = {
     "implementado": "current",
+    "implemented": "current",
     "especificado, nao implementado": "proposed",
+    "specified, not implemented": "proposed",
 }
 
 
@@ -119,7 +122,7 @@ def check_spec_tests() -> list[str]:
 def _declared_status(p: pathlib.Path) -> str | None:
     text = p.read_text(encoding="utf-8")
     if p.name == "spec.md":
-        m = re.search(r"^\| Estado \| (.+?) \|$", text, re.M)
+        m = re.search(r"^\| (?:Estado|Status) \| (.+?) \|$", text, re.M)
         if not m:
             return None
         value = re.sub(r"\s*\(.*?\)", "", m.group(1)).replace("*", "").strip().lower()

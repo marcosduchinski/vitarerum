@@ -1,212 +1,406 @@
-# SPEC-022 — Cifragem em repouso e armazenamento de ficheiros
+# SPEC-022 — Encryption at Rest and File Storage
 
-| Campo | Valor |
+| Field | Value |
 | --- | --- |
-| Identificador | SPEC-022 |
-| Estado | Implementado |
-| Alcance | Transversal — `app/shared` (nucleo partilhado), consumido por todos os contextos |
-| Escrita a partir de | `app/shared/{field_encryption,file_encryption,file_storage,persistence}.py`, `test/shared/`, `docs/architecture/encryption-contracts.md` |
-| Specs relacionadas | [SPEC-011](../011-perguntas-ao-museu/spec.md), [SPEC-002](../002-vigilancia-retorno-cientifico/spec.md), [SPEC-009](../009-projeto-uso-de-colecoes/spec.md) |
+| Identifier | SPEC-022 |
+| Status | Implemented (with declared migration, key-rotation, coverage, metadata-leakage, and recovery gaps) |
+| Scope | Cross-cutting technical adapters in `app/shared`, consumed by multiple bounded contexts |
+| Derived from | Shared encryption/storage code, context adapters, configuration, migrations, architecture contracts, deployment files, and automated tests inspected on 2026-09-04 |
+| Related specs | [SPEC-002](../002-vigilancia-retorno-cientifico/spec.md), [SPEC-008](../008-proposta-uso-de-colecoes/spec.md), [SPEC-009](../009-projeto-uso-de-colecoes/spec.md), [SPEC-010](../010-submissao-publica/spec.md), [SPEC-011](../011-perguntas-ao-museu/spec.md), [SPEC-012](../012-modelos-de-documento/spec.md), [SPEC-014](../014-catalogo-e-indice-de-objetos/spec.md), [SPEC-023](../023-fronteiras-e-envelope-de-erro/spec.md) |
 
-## 1. Problema
+## 1. Problem
 
-O sistema guarda dados que identificam pessoas e revelam interesses de
-investigacao: emails de requerentes, mensagens de cidadaos, documentos
-carregados, e a associacao entre um investigador, um projeto e os objetos que
-consultou. Guardar isto em claro coloca a confidencialidade inteiramente nas maos
-do acesso a base de dados e ao sistema de ficheiros.
+The application persists personal information, citizen correspondence,
+research interests, model inputs and outputs, and uploaded documents. Database
+or filesystem access must not automatically reveal every protected value in
+plaintext, and tampering with protected data must be detected before it is
+returned as valid application data.
 
-## 2. Objetivo
+Encryption at rest is only one layer. It does not replace authorisation,
+transport security, secure backups, log redaction, retention, host/volume
+protection, or a tested incident-recovery process.
 
-Cifrar campos e ficheiros sensiveis em repouso, mantendo-os pesquisaveis onde e
-necessario, e fixar como **contrato criptografico** os identificadores usados
-como dados associados.
+## 2. Goal and scope
 
-## 3. Linguagem ubiqua
+Provide reusable application-level adapters that:
 
-- **Campo cifrado**: valor de coluna guardado cifrado com AES-GCM.
-- **Dados associados (AAD)**: cadeia autenticada junto com o texto cifrado, que o liga ao seu lugar.
-- **Hash de pesquisa**: derivacao estavel de um valor cifrado que permite procura por igualdade.
-- **Referencia de ficheiro (`file_reference`)**: endereco relativo e duravel de um ficheiro guardado.
-- **Campo corrompido**: qualquer texto cifrado que nao autentica.
+- encrypt selected database text/JSON fields with authenticated encryption;
+- derive keyed digests for selected equality lookups;
+- encrypt complete file contents behind existing storage ports;
+- confine local file references beneath a configured data directory; and
+- translate detected corruption into generic HTTP failures.
 
----
+This specification describes implemented protection, not a claim that every
+sensitive database column is encrypted. Password hashing, JWT/token hashing,
+TLS, infrastructure disk/database encryption, database credentials, secret-
+manager integration, backup policy, and the unrelated unique-conflict retry
+helper are outside its cryptographic boundary.
 
-## 4. Requisitos funcionais
+## 3. Strategic design and trust boundaries
 
-### RF-001 — Cifragem de campo com nonce distinto
+Encryption and local storage are generic infrastructure services, not a domain
+bounded context or aggregate. Domain/application models continue to use
+plaintext values in memory. Concrete repositories encrypt while mapping to ORM
+records and decrypt while mapping back; composition roots inject the configured
+adapters.
 
-Um valor cifrado e decifrado devolve o original. O texto cifrado nunca contem o
-texto em claro. O **mesmo** valor cifrado duas vezes produz textos cifrados
-diferentes, porque cada operacao usa um nonce proprio.
+| Component | Responsibility |
+| --- | --- |
+| `FieldEncryptor` | AES-GCM text/JSON sealing, opening, and keyed lookup digests. |
+| `EncryptedFileStorage` | Decorate any compatible storage adapter with whole-file AES-GCM encryption. |
+| `LocalDiskFileStorage` | Confine, atomically replace, read, and idempotently delete local files. |
+| Context repositories | Select protected fields and stable associated-data labels. |
+| Context composition roots | Construct encryptors/storage from runtime settings. |
+| Global exception handlers | Hide corruption details from HTTP clients while logging the internal identifier. |
 
-### RF-002 — Dados associados dos campos
+The database stores ciphertext, lookup digests, and unencrypted operational
+metadata. The local filesystem stores encrypted blobs when file encryption is
+enabled. The running API process and any code after repository decryption can
+see plaintext; application-level encryption does not defend against a fully
+compromised process or key store.
 
-Um campo cifrado autentica o seu nome logico como dados associados, na forma
-exata:
+## 4. Ubiquitous language and wire formats
+
+### 4.1 Field ciphertext
+
+An encrypted database field is encoded as:
 
 ```text
-<nome_da_tabela>.<nome_da_coluna>
+v1:<base64(12-byte nonce || AES-GCM ciphertext || 16-byte tag)>
 ```
 
-Consequencia: renomear uma tabela ou coluna cifrada **nao e** uma refatoracao de
-esquema. Os valores escritos sob os dados associados antigos nao decifram sob os
-novos.
+The textual `v1:` prefix identifies the field format. The application derives
+independent 256-bit AES and HMAC subkeys from the 32-byte field master key using
+HKDF-SHA-256 with fixed purpose-specific `info` and no salt.
 
-Qualquer migracao que renomeie tem de decifrar e recifrar sob a nova cadeia
-exata, ou manter um caminho de leitura versionado que aceite a anterior ate a
-reescrita estar concluida.
+### 4.2 File blob
 
-Os dados associados **nao** sao normalizados, alcunhados nem derivados
-dinamicamente: os nomes literais do mapeamento ORM sao o contrato.
+An encrypted file is encoded as binary:
 
-### RF-003 — Falhas de integridade sao explicitas
+```text
+0x01 || 12-byte nonce || AES-GCM ciphertext || 16-byte tag
+```
 
-Levantam erro tipado de campo corrompido: dados associados que nao correspondem,
-prefixo em falta, versao desconhecida, base64 invalido e texto cifrado adulterado.
+The first byte identifies the algorithm format, not the encryption key. File
+encryption uses its separate 32-byte file key directly.
 
-Um valor que nao autentica nunca e devolvido como se fosse valido.
+### 4.3 Associated data
 
-### RF-004 — Ausencia preservada
+Associated data (AAD) is authenticated but not encrypted. Changing it makes an
+otherwise intact ciphertext fail authentication.
 
-Um valor nulo permanece nulo. A cifragem nao converte ausencia em presenca.
+For files, AAD is the exact UTF-8 `file_reference`. For database fields, AAD is
+the exact literal supplied by each repository. Most phase-one fields use a
+`<table>.<logical-column>` form, for example
+`museum_questions.requester_email`. Some scientific-return adapters instead
+use stable conceptual namespaces such as
+`scientific_return.full_agentic.tool.result`; the implementation does not
+enforce one naming grammar or derive AAD from ORM metadata.
 
-### RF-005 — Hash de pesquisa estavel e normalizado
+AAD labels are therefore versioned cryptographic identifiers, even when they
+do not match physical table and column names.
 
-Emails cifrados possuem hash de pesquisa normalizado e estavel, que permite
-filtrar por igualdade sem decifrar
-([SPEC-011](../011-perguntas-ao-museu/spec.md), RF-008). O hash muda com os dados
-associados: o mesmo email em contextos diferentes nao produz o mesmo hash.
+### 4.4 Lookup digest
 
-### RF-006 — Estruturas cifradas
+A lookup digest is an HMAC-SHA-256 hexadecimal string over:
 
-Estruturas serializadas em JSON seguem o mesmo percurso: ida e volta preserva o
-valor, e uma descodificacao que falhe levanta campo corrompido.
+```text
+aad || 0x00 || utf8(trim(value).lower())
+```
 
-### RF-007 — Chave validada
+It supports exact normalized lookup and equality correlation within one AAD
+namespace. It is not encryption, cannot support arbitrary contains/range
+search, and deliberately reveals that equal normalized inputs in the same
+namespace are equal.
 
-Uma chave com comprimento invalido e recusada na construcao, nao no primeiro uso.
+## 5. Functional requirements
 
-### RF-008 — Cifragem de ficheiros
+### FR-001 — Encrypt fields non-deterministically
 
-Ficheiros guardados sao cifrados: o blob nunca contem o conteudo em claro, o
-mesmo conteudo produz blobs distintos, e conteudo adulterado, chave errada,
-cabecalho de versao ausente ou blob truncado levantam erro de ficheiro
-corrompido. Um ficheiro vazio faz ida e volta corretamente.
+`encrypt_text` accepts `str | None`. `None` remains `None`; a present string is
+UTF-8 encoded and encrypted with AES-256-GCM using a fresh cryptographically
+random 96-bit nonce. Re-encrypting the same value with the same key and AAD
+normally produces a different ciphertext.
 
-### RF-009 — Referencia de ficheiro como dados associados
+`encrypt_required_text` is a convenience wrapper used for non-null columns. It
+does not validate domain non-emptiness; domain/schema validation owns that
+rule.
 
-O blob cifrado autentica a `file_reference` como dados associados. Um blob
-escrito para uma referencia **nao decifra** noutra: mover ou renomear objetos
-guardados exige decifrar e recifrar sob as referencias exatas registadas na base
-de dados.
+### FR-002 — Decrypt only authenticated field values
 
-A `file_reference` e um caminho relativo estavel — nunca um caminho absoluto, URL,
-URI de objeto ou identificador especifico de fornecedor. O nome de balde, volume
-ou diretorio base pertence a configuracao de execucao e nao entra na referencia.
+`decrypt_text` requires the `v1:` prefix, strict Base64, more than 12 decoded
+bytes, the correct derived key, and the exact AAD. Invalid format,
+authentication failure, or invalid UTF-8 raises `CorruptedEncryptedField`.
+Plaintext legacy values have no compatibility read path and are rejected.
 
-Adaptadores futuros de armazenamento devem preservar esta propriedade.
+The minimum-length check does not separately require the 16-byte GCM tag;
+shorter malformed payloads still fail inside AES-GCM and become the same typed
+corruption error.
 
-### RF-010 — Cifragem opcional por configuracao
+### FR-003 — Encrypt JSON through the field format
 
-Sem chave configurada, o armazenamento e simples; com chave, o armazenamento
-simples e envolvido pela camada de cifragem. A decisao e da composicao, e os
-contextos consumidores nao mudam.
+`encrypt_json` serialises JSON-compatible values with sorted keys and compact
+separators, then delegates to text encryption. `decrypt_json` authenticates and
+decrypts first, then parses JSON. Authenticated plaintext that is not valid JSON
+raises `CorruptedEncryptedField`.
 
-### RF-011 — Armazenamento seguro e atomico
+Runtime JSON serialisation errors for unsupported Python objects remain normal
+`TypeError` failures and are not classified as storage corruption.
 
-O armazenamento de ficheiros:
+### FR-004 — Derive equality lookup digests
 
-- escreve de forma atomica e nao deixa ficheiros temporarios;
-- recusa travessia de caminho na leitura;
-- levanta erro na leitura de ficheiro inexistente;
-- apaga de forma idempotente;
-- suporta subpastas.
+`lookup_hash` preserves `None` and normalises every other value by trimming and
+lowercasing before applying the derived HMAC key and AAD namespace.
 
-### RF-012 — Repeticao em operacoes de persistencia
+Implemented uses include museum-question requester-email filtering and
+scientific-return knowledge matching for registered inventory numbers and
+observed forms. Changing normalisation, the field master key, or the AAD label
+requires recomputing every affected digest.
 
-Existe utilitario de repeticao para operacoes de persistencia sujeitas a conflito
-transitorio: repete ate ter sucesso e volta a levantar o erro depois de esgotar
-as tentativas ([SPEC-010](../010-submissao-publica/spec.md), RF-009).
+### FR-005 — Validate configured keys
 
-### RF-013 — Politica de autorizacao partilhada
+Both runtime keys are Base64 strings that must decode to exactly 32 bytes when
+non-empty. Invalid Base64 or length causes Pydantic settings validation to fail.
+Direct `FieldEncryptor` and `EncryptedFileStorage` construction also rejects raw
+keys whose length is not exactly 32 bytes.
 
-O nucleo partilhado reconhece os grupos de staff e oferece as verificacoes usadas
-transversalmente: exigir grupo, exigir staff, e acesso a proposta e a projeto —
-com o proprietario e o staff autorizados, e um `EXTERNAL` que nao seja o
-proprietario recusado. Um projeto sem proposta associada continua acessivel ao
-seu proprietario.
+`APP_ENV` values `local`, `test`, and `development` may start with empty keys.
+All other environment names require both keys at settings construction. An
+empty database-field key still fails later when an encrypted repository/public
+reader dependency constructs `FieldEncryptor`; there is no plaintext field
+fallback. An empty local file key intentionally selects plaintext file storage.
 
-### RF-014 — Nucleo partilhado sem dependencias
+### FR-006 — Encrypt complete file contents
 
-`app.shared.kernel` mantem-se dependente apenas da biblioteca padrao.
+`EncryptedFileStorage.save` encrypts the entire in-memory byte string with a
+fresh nonce and the exact reference as AAD, then delegates the binary blob to
+the inner storage. Reads validate the version/header and authenticate before
+returning plaintext. Empty files are supported; delete delegates unchanged.
 
----
+Wrong keys, another reference, modified data, plaintext/legacy blobs, unknown
+versions, and truncated blobs raise `CorruptedEncryptedFile`. There is no
+dual-key, dual-format, or automatic migration reader.
 
-## 5. Invariantes
+### FR-007 — Compose file storage from settings
 
-| Id | Invariante |
+`build_file_storage(data_dir, encryption_key)` always creates
+`LocalDiskFileStorage`. With a non-empty file key it wraps that adapter in
+`EncryptedFileStorage`; with an empty key it returns local plaintext storage.
+
+Use of Collections, Public Submission, Museum Questions, Document Templates,
+and Collection Object Index construct file storage through this builder. A
+configuration change applies to all future reads/writes through those
+dependencies; it does not rewrite existing blobs.
+
+### FR-008 — Keep file references provider-neutral but non-secret
+
+A `file_reference` is the relative logical address passed through application
+ports and persisted in the database. It does not contain `DATA_DIR`, a bucket
+name, cloud URI, or provider configuration. A future remote adapter must treat
+the same value as its relative object name.
+
+The reference is plaintext metadata and must not be treated as confidential.
+Several producers include a sanitised original filename in it, including
+proposal/public-submission attachments, journal attachments, document
+templates, and collection source documents. Encrypting a separate `file_name`
+column therefore does not hide that filename from database/filesystem metadata.
+
+### FR-009 — Confine local paths
+
+`LocalDiskFileStorage` resolves the configured base directory at construction.
+For every operation it joins and resolves the supplied reference, then rejects
+a destination outside the base with `FileNotFoundError`. Absolute paths outside
+the base and `..` traversal are therefore rejected.
+
+This check follows the filesystem state during resolution but does not use an
+open-directory file descriptor or otherwise eliminate symlink time-of-check/
+time-of-use races against a local actor able to mutate the storage tree.
+
+### FR-010 — Write local files atomically
+
+Save runs in an AnyIO worker thread, creates parent directories, writes a
+temporary sibling with `mkstemp`, and replaces the destination using
+`os.replace`. A write/replace failure removes the temporary file. Read and
+delete also run in a worker thread; missing/directory reads become
+`FileNotFoundError`, and delete is idempotent.
+
+Atomic replacement prevents readers from observing a partially written
+destination on the same filesystem. The adapter does not call `fsync` on the
+file or directory, so it does not claim crash-durable persistence after a
+reported success.
+
+### FR-011 — Expose generic corruption responses
+
+Global FastAPI exception handlers map:
+
+| Exception | HTTP response |
 | --- | --- |
-| INV-001 | Nenhum texto cifrado contem o texto em claro |
-| INV-002 | Duas cifragens do mesmo valor nunca produzem o mesmo texto cifrado |
-| INV-003 | Um valor que nao autentica nunca e devolvido |
-| INV-004 | O nome logico do campo faz parte do contrato criptografico |
-| INV-005 | A `file_reference` faz parte do contrato criptografico do blob |
-| INV-006 | A `file_reference` nunca contem configuracao de infraestrutura |
-| INV-007 | Chaves invalidas sao recusadas na construcao |
-| INV-008 | `app.shared.kernel` nao depende de terceiros |
+| `CorruptedEncryptedField` | `500 {"error":"FIELD_UNREADABLE","message":"Stored field could not be read."}` |
+| `CorruptedEncryptedFile` | `500 {"error":"FILE_UNREADABLE","message":"Stored file could not be read."}` |
 
-## 6. Criterios de aceitacao
+The client receives no key, cipher, AAD, or authentication detail. Server logs
+include the exception string: a field AAD label or file reference. References
+that embed filenames can consequently place those names in error logs.
 
-### CA-001 — Ida e volta, ausencia de texto em claro e nonce distinto
-→ `test_field_encryption.py::test_text_round_trip_returns_original_value`, `::test_ciphertext_does_not_contain_plaintext`, `::test_same_value_encrypts_with_distinct_nonce`, `::test_none_remains_none`
+## 6. Implemented database-field coverage
 
-### CA-002 — Falhas de integridade tipadas
-→ `test_field_encryption.py::test_aad_mismatch_raises_corrupted_field`, `::test_missing_prefix_raises_corrupted_field`, `::test_unknown_version_raises_corrupted_field`, `::test_invalid_base64_raises_corrupted_field`, `::test_tampered_ciphertext_raises_corrupted_field`, `::test_invalid_key_length_is_rejected`
+Encryption is selected by repository mapping, not automatically applied to all
+`Text` or personally identifiable columns.
 
-### CA-003 — Hash de pesquisa normalizado e ligado aos dados associados
-→ `test_field_encryption.py::test_email_hash_is_normalized_and_stable`, `::test_hash_changes_with_aad`
-
-### CA-004 — Estruturas JSON cifradas
-→ `test_field_encryption.py::test_json_round_trip_returns_original_value`, `::test_json_decode_failure_raises_corrupted_field`
-
-### CA-005 — Cifragem de ficheiros e sua integridade
-→ `test_file_encryption.py::test_round_trip_returns_original_content`, `::test_saved_blob_does_not_contain_plaintext`, `::test_same_content_saves_with_distinct_nonce`, `::test_ciphertext_tampering_raises_corrupted_file`, `::test_wrong_key_raises_corrupted_file`, `::test_blob_without_version_header_raises_corrupted_file`, `::test_truncated_versioned_blob_raises_corrupted_file`, `::test_invalid_key_length_is_rejected`, `::test_empty_file_round_trips`
-
-### CA-006 — Blob ligado a sua referencia
-→ `test_file_encryption.py::test_aad_binds_blob_to_file_reference`, `::test_delete_delegates_to_inner_storage`
-
-### CA-007 — Armazenamento atomico e seguro
-→ `test_file_storage.py::test_round_trip_into_subfolder`, `::test_read_missing_raises`, `::test_read_rejects_path_traversal`, `::test_save_is_atomic_and_leaves_no_temp_files`, `::test_delete_removes_file_and_is_idempotent`
-
-### CA-008 — Cifragem opcional por configuracao
-→ `test_file_storage.py::test_build_file_storage_returns_plain_storage_without_key`, `::test_build_file_storage_wraps_storage_when_key_is_configured`, `::test_file_storage_dependencies_use_configured_encryption_key`
-
-### CA-009 — Repeticao de persistencia
-→ `test_persistence.py::test_retries_until_success`, `::test_reraises_after_exhausting_attempts`
-
-### CA-010 — Politica de autorizacao partilhada
-→ `test_authorization.py::test_staff_groups_are_recognized`, `::test_require_group_rejects_wrong_group`, `::test_require_staff_rejects_external`, `::test_proposal_access_allows_owner_and_staff`, `::test_proposal_access_rejects_non_owner_external`, `::test_project_access_allows_owner_and_staff`, `::test_project_access_rejects_missing_or_foreign_proposal_for_external`, `::test_project_access_allows_owner_without_a_proposal`
-
-## 7. Requisitos nao funcionais
-
-- **Gestao de chaves**: as chaves vivem na configuracao de execucao, nunca no repositorio.
-- **Migracoes**: renomear tabela ou coluna cifrada exige plano de reescrita (RF-002).
-- **Portabilidade de armazenamento**: mudar de adaptador nao pode alterar a `file_reference` (RF-009).
-
-## 8. Rastreabilidade
-
-| Elemento | Localizacao |
+| Context | Encrypted values |
 | --- | --- |
-| Cifragem de campo (RF-001..RF-007) | `app/shared/field_encryption.py` |
-| Cifragem de ficheiro (RF-008, RF-009) | `app/shared/file_encryption.py` |
-| Armazenamento (RF-010, RF-011) | `app/shared/file_storage.py`, `uploads.py` |
-| Repeticao (RF-012) | `app/shared/persistence.py` |
-| Autorizacao partilhada (RF-013) | `app/shared/authorization.py` |
-| Nucleo partilhado (RF-014) | `app/shared/kernel.py` |
-| Contrato documentado | `docs/architecture/encryption-contracts.md` |
+| Museum Questions | Requester name/email, subject, message, answer body, out-of-scope reason, and attachment display filenames. |
+| Public Submission | Citizen name/email, subject, body, pending-document display filenames, and amendment-token requester email. |
+| Scientific Return | Project snapshot payload, query text, supervised-agent inputs/results, decision context, iteration observation/plan/reflection, tool queries, knowledge content/numbers/forms, full-agentic trajectory payloads, and tool invocation/results. |
 
-## 9. Questoes em aberto
+Examples of sensitive or correlating values that remain plaintext include:
 
-1. Existe procedimento definido de rotacao de chave, com caminho de leitura versionado durante a transicao?
-2. O que acontece operacionalmente quando um campo corrompido e detetado em producao — falha visivel, quarentena, ou registo e continuacao?
+- Identity user names/emails and permission/institution relationships;
+- proposal requester contact snapshots, conversation subject/body, notes, TODO
+  text, and attachment display filenames after materialisation in Use of
+  Collections;
+- pending public-submission confirmation token and all plaintext file
+  references;
+- museum-question assignee/actor IDs, timestamps, status, content type, size,
+  and file references;
+- scientific-return candidate title, authors, abstract, URL/DOI, objectives,
+  failure/error strings, and extensive workflow/provenance metadata; and
+- document-template/catalogue metadata and source-document filenames.
+
+Some plaintext is required for routing, indexing, workflow, or interoperability;
+other coverage has simply not been selected. The repository contains no formal
+data-classification inventory that justifies each decision.
+
+## 7. Migration and compatibility behaviour
+
+Migration `0054_db_field_encryption_p1` widens selected columns to `Text`, drops
+the public-submission email index, and adds a required museum-question email
+digest. It contains no data transformation or backfill.
+
+On an installation with rows created before encryption:
+
+- adding the non-null digest column can fail immediately;
+- existing plaintext selected fields cannot be read by the encrypted
+  repositories because they lack `v1:`; and
+- no existing requester-email hashes are calculated.
+
+The consolidated baseline describes fresh-start environments, which reduces
+the expected upgrade path, but the migration itself is not safe for a populated
+database. Downgrade similarly changes types/indexes without decrypting values,
+so ciphertext remains in columns that older application code expects as
+plaintext.
+
+File compatibility is equally strict. Enabling file encryption over a directory
+of plaintext blobs makes old files return `FILE_UNREADABLE`; changing the key
+makes all encrypted blobs unreadable; disabling encryption causes ciphertext
+bytes to be returned as if they were file content.
+
+## 8. Invariants
+
+| ID | Invariant |
+| --- | --- |
+| INV-001 | A successfully opened field/file was authenticated with the configured key and exact AAD. |
+| INV-002 | Every encryption operation uses a fresh 96-bit random nonce. |
+| INV-003 | Field encryption and lookup HMAC use independently derived keys. |
+| INV-004 | `None` field/JSON/digest input remains `None`. |
+| INV-005 | Invalid key length is rejected before cryptographic use. |
+| INV-006 | An encrypted file cannot be opened through a different reference. |
+| INV-007 | A resolved local reference must remain beneath `DATA_DIR`. |
+| INV-008 | Local delete is idempotent and replacement is atomic on one filesystem. |
+| INV-009 | Database-field repositories do not silently accept plaintext legacy values. |
+
+“All sensitive data is encrypted at rest”, “keys can be rotated without
+downtime”, and “migration 0054 upgrades a populated database safely” are not
+current invariants.
+
+## 9. Acceptance and test traceability
+
+| Behaviour | Representative automated evidence |
+| --- | --- |
+| Field text round trip, confidentiality, and nonce uniqueness | `test_field_encryption.py::test_text_round_trip_returns_original_value`, `test_field_encryption.py::test_ciphertext_does_not_contain_plaintext`, `test_field_encryption.py::test_same_value_encrypts_with_distinct_nonce` |
+| Field corruption and AAD mismatch | `test_field_encryption.py::test_aad_mismatch_raises_corrupted_field`, `test_field_encryption.py::test_missing_prefix_raises_corrupted_field`, `test_field_encryption.py::test_unknown_version_raises_corrupted_field`, `test_field_encryption.py::test_invalid_base64_raises_corrupted_field`, `test_field_encryption.py::test_tampered_ciphertext_raises_corrupted_field` |
+| Null preservation, keyed normalization, and JSON | `test_field_encryption.py::test_none_remains_none`, `test_field_encryption.py::test_email_hash_is_normalized_and_stable`, `test_field_encryption.py::test_hash_changes_with_aad`, `test_field_encryption.py::test_json_round_trip_returns_original_value`, `test_field_encryption.py::test_json_decode_failure_raises_corrupted_field` |
+| File round trip, confidentiality, nonce, empty content, and deletion | `test_file_encryption.py::test_round_trip_returns_original_content`, `test_file_encryption.py::test_saved_blob_does_not_contain_plaintext`, `test_file_encryption.py::test_same_content_saves_with_distinct_nonce`, `test_file_encryption.py::test_empty_file_round_trips`, `test_file_encryption.py::test_delete_delegates_to_inner_storage` |
+| File tamper/key/reference/header failures | `test_file_encryption.py::test_ciphertext_tampering_raises_corrupted_file`, `test_file_encryption.py::test_wrong_key_raises_corrupted_file`, `test_file_encryption.py::test_aad_binds_blob_to_file_reference`, `test_file_encryption.py::test_blob_without_version_header_raises_corrupted_file`, `test_file_encryption.py::test_truncated_versioned_blob_raises_corrupted_file` |
+| Local confinement and atomic replacement | `test_file_storage.py::test_round_trip_into_subfolder`, `test_file_storage.py::test_read_rejects_path_traversal`, `test_file_storage.py::test_save_is_atomic_and_leaves_no_temp_files`, `test_file_storage.py::test_delete_removes_file_and_is_idempotent` |
+| Builder and context file-storage wiring | `test_file_storage.py::test_build_file_storage_returns_plain_storage_without_key`, `test_file_storage.py::test_build_file_storage_wraps_storage_when_key_is_configured`, `test_file_storage.py::test_file_storage_dependencies_use_configured_encryption_key` |
+| Runtime key validation | `test_config.py::test_non_local_settings_require_file_encryption_key`, `test_config.py::test_non_local_settings_require_db_field_encryption_key`, `test_config.py::test_file_encryption_key_must_be_valid_base64_in_local`, `test_config.py::test_db_field_encryption_key_must_decode_to_32_bytes_in_local` |
+| Phase-one repository field wiring | `test_database_field_encryption_phase1.py::test_context_encryptor_uses_configured_db_field_key`, `test_database_field_encryption_phase1.py::test_museum_questions_wiring_encrypts_through_context_dependencies`, `test_database_field_encryption_phase1.py::test_public_submission_repository_stores_selected_fields_encrypted`, `test_database_field_encryption_phase1.py::test_museum_question_repository_filters_by_hash_and_encrypts`, `test_database_field_encryption_phase1.py::test_amendment_token_repository_stores_requester_email_encrypted` |
+| Route-level encrypted file round trip and generic error | `test_api.py::test_log_entry_attachment_uses_configured_encrypted_storage` |
+
+Tests do not cover populated-database migration/downgrade, plaintext-to-
+ciphertext file conversion, key rotation, mixed key versions, backup restore,
+AAD inventory drift, filename leakage through references/logs, symlink races,
+crash durability, large-file memory/latency, or systematic field-classification
+coverage.
+
+## 10. Non-functional requirements
+
+- **Confidentiality and integrity:** AES-GCM provides authenticated encryption;
+  nonce uniqueness depends on the operating-system random source.
+- **Key separation:** database AES/HMAC keys are derived separately, and file
+  encryption uses a distinct configured master key.
+- **Availability:** losing either key permanently loses access to its protected
+  data; there is no recovery key or escrow workflow in the application.
+- **Memory:** field and file encryption are one-shot operations. Complete file
+  bytes and ciphertext coexist in memory; there is no streaming encryption.
+- **Event-loop safety:** local filesystem I/O runs in worker threads, but AES-GCM
+  and field/JSON processing run synchronously in the request/worker task.
+- **Metadata:** encryption preserves lengths approximately and leaves table,
+  row, timestamps, relations, statuses, file references, and selected search
+  digests visible.
+- **Observability:** corruption is logged and returned generically, but there is
+  no metric, alert, quarantine state, repair queue, or integrity sweep.
+- **Portability:** application file references are storage-provider neutral;
+  only a local-disk adapter currently exists.
+
+## 11. Known gaps and recommended changes
+
+| Priority | Finding | Recommended change |
+| --- | --- | --- |
+| Critical | There is no key identifier, key ring, rotation reader, or rewrite workflow; replacing a key makes every existing value unreadable. | Define envelope/key-version metadata, load current plus previous keys from a secret manager, rotate by authenticated read/re-encrypt, verify counts, and retire old keys only after tested backup/rollback. |
+| Critical | Migration `0054` neither backfills the required digest nor encrypts existing plaintext, and its downgrade does not decrypt ciphertext. | Replace the upgrade assumption with an explicit expand/backfill/verify/contract migration or formally prohibit in-place upgrades and enforce an empty-database precondition. |
+| High | File encryption has no migration path between plaintext, encrypted, or rotated-key blobs. | Add format/key metadata and an idempotent, resumable file rewrite tool with inventory, integrity verification, checkpoints, and rollback/backup instructions. |
+| High | Filename-bearing plaintext `file_reference` values defeat the confidentiality gained by encrypting display filename columns. | Generate opaque references from IDs/extensions only; migrate existing blobs by decrypting/re-encrypting because the reference is AAD, and keep display names solely in protected metadata where required. |
+| High | Sensitive-field coverage is selective and undocumented as a data-classification decision; substantial requester, conversation, research, and AI metadata remains plaintext. | Create an owned data inventory with classification, purpose, retention, search needs, protection decision, AAD/key domain, and compensating controls for every sensitive column. |
+| High | AAD naming is inconsistent and the architecture document claims one physical-name grammar that code does not enforce. | Introduce a reviewed registry of stable versioned AAD constants, test uniqueness/coverage against encrypted mappings, and update `encryption-contracts.md` without deriving labels implicitly from mutable ORM names. |
+| High | Keys are runtime strings with no secret-manager lifecycle, provenance, startup key identity check, or recovery test in this codebase. | Load versioned keys from the deployment secret manager, restrict access, audit retrieval, record non-secret fingerprints, and exercise restore/rotation in staging. |
+| Medium | Enabling/disabling file encryption in local/development can silently change interpretation of an existing data directory. | Persist storage-format metadata or require a new/verified-empty `DATA_DIR`; refuse startup when configuration and on-disk inventory disagree. |
+| Medium | Corruption logs include AAD/file references, and references may contain original filenames. | Log opaque record/reference hashes plus controlled diagnostic context; redact filename-bearing paths and add security metrics/alerts. |
+| Medium | Local path confinement is vulnerable to filesystem races by an actor able to alter symlinks beneath `DATA_DIR`. | Use descriptor-relative, no-follow operations or a storage root not writable by untrusted local actors; add adversarial path tests. |
+| Medium | Atomic replacement is not crash durability, and no backup/restore integrity procedure is specified. | Add file/directory `fsync` where durability is required and document/test encrypted backup restoration with key availability. |
+| Medium | Whole-file encryption and JSON sealing duplicate complete plaintext/ciphertext buffers. | Enforce size limits consistently, measure peak memory/event-loop latency, and adopt an authenticated streaming/container format if larger objects are required. |
+| Medium | HMAC normalization is hard-coded to `strip().lower()` for every lookup domain. | Define per-field canonicalization (for example email/domain or inventory rules), version it with the digest namespace, and test Unicode/case semantics. |
+| Low | Error responses use `500` but offer no stable incident correlation identifier. | Attach a request/incident ID to logs and safe responses without exposing AAD or key details. |
+| Low | `run_with_unique_retry` was previously included as an encryption requirement although it is an unrelated persistence helper. | Keep it documented with the workflows that use it (for example SPEC-010/SPEC-019) rather than expanding this cryptographic boundary. |
+
+## 12. Traceability
+
+| Element | Location |
+| --- | --- |
+| Field encryption, JSON, digest, and key derivation | `vitarerum-api/app/shared/field_encryption.py` |
+| File encryption decorator | `vitarerum-api/app/shared/file_encryption.py` |
+| Local storage and composition | `vitarerum-api/app/shared/file_storage.py` |
+| Runtime key validation | `vitarerum-api/app/config.py` |
+| Global corruption error mapping | `vitarerum-api/app/main.py` |
+| Phase-one encrypted repositories | `vitarerum-api/app/museum_questions/infrastructure/repositories.py`, `app/public_submission/infrastructure/repositories.py` |
+| Scientific-return encrypted repositories | `vitarerum-api/app/scientific_return/infrastructure/repositories.py`, `full_agentic_repository.py` |
+| File-storage composition roots | `vitarerum-api/app/{use_of_collections,public_submission,museum_questions,document_templates,collection_object_index}/presentation/dependencies.py` |
+| Database schema preparation | `vitarerum-api/alembic/versions/00000054_0054_db_field_encryption_p1.py` |
+| Written cryptographic contract | `docs/architecture/encryption-contracts.md` |
+| Automated tests | `vitarerum-api/test/shared/`, `vitarerum-api/test/test_database_field_encryption_phase1.py`, `vitarerum-api/test/test_config.py` |
+
+## 13. Open product and operational decisions
+
+1. Is in-place upgrade of a populated pre-encryption database supported, or are
+   deployments contractually fresh-start only?
+2. Which system owns key generation, access, versioning, escrow, rotation,
+   revocation, and destruction?
+3. Which database fields and metadata are classified as confidential, and what
+   justifies each plaintext exception?
+4. Are original filenames confidential, and may they appear in file references
+   or operational logs?
+5. What restoration objective applies when authentication fails or a key is
+   unavailable?
+6. What maximum file size and encryption latency/memory budget must future
+   storage adapters support?

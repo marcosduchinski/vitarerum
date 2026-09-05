@@ -1,215 +1,489 @@
-# SPEC-006 — Avaliacao reprodutivel do retorno cientifico
+# SPEC-006 — Empirical evaluation of scientific-return discovery
 
-| Campo | Valor |
+| Field | Value |
 | --- | --- |
-| Identificador | SPEC-006 |
-| Estado | Implementado |
-| Contexto delimitado | `app/scientific_return` |
-| Escrita a partir de | `application/evaluation.py`, `application/agentic_evaluation.py`, `presentation/commands.py`, `test/scientific_return/test_evaluation_fixture.py`, `test_agentic_evaluation.py` |
-| Specs relacionadas | [SPEC-003](../003-pipeline-deterministico-bibliografico/spec.md), [SPEC-001](../001-investigacao-agentica-assistida/spec.md) |
+| Identifier | SPEC-006 |
+| Status | Implemented |
+| Bounded context | `app/scientific_return` |
+| Delivery surface | Operator CLI and JSON reports; no HTTP endpoint or Angular UI |
+| Derived from | Evaluation fixture, deterministic evaluator, agentic evaluator, CLI composition, published baselines, and automated tests |
+| Related specs | [SPEC-003](../003-pipeline-deterministico-bibliografico/spec.md), [SPEC-001](../001-investigacao-agentica-assistida/spec.md), [SPEC-024](../024-investigacao-agentica-autonoma/spec.md) |
 
-## 1. Problema
+## 1. Problem
 
-Uma funcionalidade que procura publicacoes so pode crescer em autonomia se
-alguem souber, com numeros, o que ela ja acerta e o que lhe escapa. Sem medicao,
-"o agente ajuda" e opiniao, e qualquer promocao de autonomia e um ato de fe.
+Scientific-return discovery cannot safely gain autonomy on anecdotal evidence.
+The team needs to distinguish whether a source returned a known publication,
+whether deterministic evidence made it reviewable, and whether the constrained
+agentic increment can close a measured baseline gap.
 
-Ha ainda um risco especifico: uma fixture cujas declaracoes divergem da
-realidade e pior do que nenhuma fixture, porque os criterios de promocao leem
-essas declaracoes.
+The instrument can itself mislead. Live indexes change, fixture declarations
+become stale, a retrieved record is not necessarily actionable, and a
+known-DOI proxy is not human-reviewed precision. Evaluation therefore needs
+explicit inputs, strict fixture validation, per-case evidence, and honest
+limitations.
 
-## 2. Objetivo
+## 2. Goal
 
-Medir, de forma reproduzivel e sem escrever na base de dados, o que o pipeline
-deterministico e o ciclo agentic conseguem sobre um conjunto versionado de
-publicacoes reais do MUHNAC cujo resultado esperado e conhecido.
+Run two empirical evaluations over a versioned MUHNAC fixture:
 
-## 3. Linguagem ubiqua
+- a deterministic baseline reusing production query planning, evidence,
+  actionability, deduplication, and live bibliographic adapters; and
+- a bounded agentic harness measuring planning, policy evaluation, one
+  inventory-variant search action, and reflection without creating production
+  watches, candidates, decisions, or publication records.
 
-- **Caso**: publicacao conhecida, com autor, numero de inventario, objeto, titulo e DOI esperados.
-- **Fixture**: conjunto versionado de casos, mais as publicacoes ainda nao exprimiveis como caso.
-- **Estado de baseline**: `RESOLVED`, `GAP` ou `UNVERIFIED`.
-- **Lacuna esperada (`expectedGap`)**: causa declarada pela qual a baseline falha o caso.
-- **Alvo agentic**: `DISCOVER_CANDIDATE` ou `ENRICH_CANDIDATE`, **derivado** da medicao, nunca declarado.
-- **Fila de revisao**: candidatos do relatorio que aguardam decisao humana para calcular precisao.
+The output is an operator-generated JSON report. This is a repeatable
+procedure, not a perfectly reproducible experiment: external indexes, model
+output, time, prompts, and server configuration may change between runs.
 
----
+## 3. Actors and delivery boundary
 
-## 4. Requisitos funcionais
+| Actor | Capability |
+| --- | --- |
+| Operator or developer | Run either evaluator and choose CLI sources/output |
+| Fixture maintainer | Curate known cases, declarations, cited forms, and unmapped papers |
+| Staff reviewer | Edit a deterministic review queue and finalise its metrics |
+| Bibliographic source | Return current external search results |
+| Investigation reasoner | Produce a plan and reflection for the agentic harness |
 
-### RF-001 — Executar a baseline deterministica
+There is no authentication check because evaluation has no HTTP endpoint.
+Access follows the operator's shell, database, network, model, and filesystem
+permissions. No Angular component presents the reports; review is an offline
+JSON-editing process.
+
+## 4. Architecture and domain position
+
+Evaluation is application-layer instrumentation, not a production aggregate.
+Its immutable data classes describe cases and report projections; they have no
+repository and are not persisted through the scientific-return domain model.
+
+| Role | Element | Responsibility |
+| --- | --- | --- |
+| Fixture value | `EvaluationFixture` | Version, cases, and unmapped publications |
+| Case value | `EvaluationCase` | Known publication and one-object snapshot |
+| Application service | `evaluate_cases` | Execute and aggregate the deterministic baseline |
+| Application service | `evaluate_agentic_cases` | Exercise the bounded agentic harness |
+| Parser | `parse_human_reviews` | Validate completed offline reviews |
+| Projector | `finalize_human_review_report` | Add review metrics without new searches |
+| Production policy | `AgentActionPolicy` | Authorise or reject a proposed action |
+| Production tool | `InventoryVariantSearchTool` | Search, deduplicate, build evidence, and classify actionability |
+| Composition root | `presentation.commands` | Select live dependencies, configuration, and output |
+
+The deterministic evaluator directly reuses production analysis functions. The
+agentic evaluator reuses the policy and inventory-variant tool, but not the
+complete production orchestrator described by SPEC-024.
+
+## 5. Ubiquitous language
+
+- **Case**: one museum object and one expected publication identified by DOI.
+- **Fixture**: versioned cases plus publications not yet expressible as cases.
+- **Retrieved**: the expected DOI appeared in a source result.
+- **Actionable**: deterministic evidence passes the production review gate.
+- **Baseline status**: `RESOLVED`, `GAP`, or `UNVERIFIED`.
+- **Resolved**: the expected DOI became actionable, not merely retrieved.
+- **Expected gap**: `NONE`, `UNKNOWN`, `INVENTORY_FORMAT`,
+  `INSTITUTIONAL_ACRONYM`, `NO_INVENTORY_IN_TEXT`, or `NOT_INDEXED`.
+- **Agentic objective**: `DISCOVER_CANDIDATE`, `ENRICH_CANDIDATE`, or `NONE`,
+  derived by deterministic measurement.
+- **Known-case precision proxy**: expected-DOI actionable matches divided by
+  all actionable candidates; it is not adjudicated precision.
+- **Review queue**: actionable candidates exported for offline classification.
+- **Gap closed**: a declared `GAP` whose expected DOI becomes actionable in the
+  agentic harness.
+- **Indexability ceiling**: fixture-derived reachability, separate from what
+  one run actually retrieved.
+
+## 6. Versioned fixture
+
+The shipped `scientific-return-eval-fixture-v3` currently contains 12 cases and
+6 unmapped publications. Five original resolved cases are protected by tests.
+
+### FR-001 — Required case data
+
+Every case requires its ID, author, museum inventory number, object name,
+expected title and DOI, notes, baseline status, and expected gap. It may also
+carry a measured inventory-evidence boolean and literal cited inventory forms.
+
+The case builds an in-memory `ProjectSnapshotPayload` containing one consulted
+object, a synthetic project ID/reference, and the author as researcher.
+
+### FR-002 — Fixture validation
+
+Loading rejects a non-object root, missing or empty case list, duplicate case
+IDs, missing required strings, unsupported enums, non-boolean inventory
+evidence, an `UNVERIFIED` case claiming measured inventory evidence, a fully
+resolved case with inventory evidence that also declares a gap, and a `GAP`
+whose expected gap is `NONE`.
+
+A resolved case without inventory evidence may declare an enrichment gap.
+Inventory-format and institutional-acronym cases are tested to ensure a cited
+form can be generated and attempted within the configured query budget.
+
+The loader silently skips non-object items within `cases` and `unmappedPapers`
+instead of rejecting them; see GAP-006.
+
+### FR-003 — Unmapped publications
+
+`unmappedPapers` retains a reference, expected DOI, cited forms, and reason when
+the museum-side number or another required fact is unavailable. These entries
+are visible in the fixture but excluded from both evaluators and report metrics.
+
+## 7. Deterministic baseline
+
+### FR-004 — Command
 
 ```bash
 uv run python -m app.jobs.scientific_return evaluate-phase0 \
-  --sources all --result-limit 20 --output relatorio.json
+  --sources crossref,europe_pmc \
+  --result-limit 20 \
+  --output scientific-return-baseline.json
 ```
 
-`--sources` aceita `crossref`, `openalex`, `europe_pmc` ou `all` (omissao).
-`all` ignora OpenAlex com aviso quando a chave nao esta configurada. Sem
-`--output`, o relatorio JSON e escrito no `stdout`.
+`--sources` accepts comma-separated `crossref`, `openalex`, and `europe_pmc`, or
+`all`. Empty selection and `all` expand to all three. Explicit OpenAlex without
+`OPENALEX_API_KEY` fails; `all` warns and skips it. Unknown names fail.
 
-### RF-002 — Avaliacao sem efeitos colaterais
+The result limit is coerced to at least one. Without `--output`, formatted JSON
+goes to standard output. CLI help still incorrectly calls this a “five-case”
+baseline; see GAP-007.
 
-A avaliacao nao cria vigilancias, candidatos nem decisoes. Constroi o snapshot
-de cada caso em memoria e usa as mesmas funcoes de planeamento, evidencia e
-acionabilidade do pipeline em producao.
+### FR-005 — Source execution
 
-### RF-003 — Criterio estrito de recuperacao
+For each case and source, the evaluator builds normal deterministic queries,
+calls the live adapter, records result count and expected-DOI rank, builds
+production evidence, retains actionable candidates, adds adaptive queries when
+the initial set produced none, and deduplicates by the production key.
 
-Um caso so conta como `RESOLVED` quando a publicacao esperada **chega a fila
-humana**, isto e, passa o criterio de acionabilidade. Aparecer numa lista de
-resultados sem produzir evidencia acionavel conta como nao encontrada: para
-efeitos de retorno cientifico, ninguem a veria.
+Source exceptions are truncated to 500 characters, counted, and do not stop
+later work. Adapters use the operational PostgreSQL-backed rate limiter and
+total source timeout. Thus evaluation does not write production aggregates but
+can write rate-limit coordination state; “no database writes” is not literal.
 
-### RF-004 — Metricas por fonte
+### FR-006 — Retrieval and resolution
 
-Para cada fonte: numero de casos, recuperados, *recall*, candidatos acionaveis,
-correspondencias acionaveis conhecidas, *proxy* de precisao sobre casos
-conhecidos, consultas emitidas e erros.
+| Measure | Condition |
+| --- | --- |
+| `retrieved` / top-level `recall` | Expected DOI appeared in results |
+| `observedBaselineStatus=RESOLVED` | Expected DOI became actionable |
 
-### RF-005 — Verificacao das declaracoes da fixture
+Only the second means the publication reaches a human. A retrieved but
+non-actionable DOI remains a `GAP`. The top-level `recall` preserves the older
+retrieval metric and must not be read as reviewable-candidate recall.
 
-O relatorio compara o que a fixture declara com o que a execucao observou e
-publica: contagens declaradas e observadas, `mismatched_case_ids`,
-`unverified_case_ids`, alvos de descoberta, alvos de enriquecimento e casos de
-lacuna por formato de inventario.
+DOI matching case-folds and removes only an exact `https://doi.org/` prefix; it
+does not otherwise canonicalise DOI syntax.
 
-Divergencias sao reportadas caso a caso, para a fixture ser corrigida **antes**
-de qualquer criterio de promocao ser avaliado.
+### FR-007 — Derived objective and declaration drift
 
-### RF-006 — Derivacao do alvo agentic
+| Observation | Derived objective |
+| --- | --- |
+| Expected DOI is not actionable | `DISCOVER_CANDIDATE` |
+| Expected DOI is actionable without primary inventory evidence | `ENRICH_CANDIDATE` |
+| Expected DOI is actionable with primary inventory evidence | `NONE` |
 
-O alvo agentic de um caso e derivado da baseline medida, nunca declarado: um
-caso que a baseline nunca transforma em candidato revisivel e alvo de
-descoberta; um que chega a fila sem evidencia de inventario e alvo de
-enriquecimento. Assim, a classificacao nao envelhece.
+Observed status and inventory evidence are compared with fixture declarations.
+`UNVERIFIED` declarations are listed separately and do not count as mismatches.
+Metrics publish declared/observed counts, mismatch and unverified IDs,
+discovery/enrichment targets, and reachable inventory-format gap IDs.
 
-### RF-007 — Integridade da fixture
+### FR-008 — Deterministic report
 
-A fixture recusa: identificadores duplicados, estados de baseline nao
-suportados, ficheiro vazio e campos obrigatorios em falta. Alem disso:
+The report includes generation time, fixture version, global and per-source
+retrieval/actionability metrics, declaration metrics, review metrics, a
+deduplicated actionable review queue, and per-case trajectories, source
+results, candidates, evidence, observed status, objective, and drift result.
 
-- um caso totalmente resolvido nao pode declarar lacuna;
-- um caso resolvido sem evidencia de inventario **pode** declarar lacuna;
-- um caso de lacuna tem de declarar a sua causa;
-- um caso `UNVERIFIED` nao pode reclamar uma medicao.
+It does not capture every effective setting or an immutable external-response
+snapshot; see GAP-002.
 
-### RF-008 — Alcancabilidade declarada das lacunas
+### FR-009 — Known-case proxy
 
-As formas de inventario citadas nas publicacoes de lacuna tem de ser alcancaveis
-pelo gerador de variantes ([SPEC-001](../001-investigacao-agentica-assistida/spec.md),
-RF-009) e dentro do orcamento de consultas configurado. Uma lacuna que o
-incremento nao consegue sequer tentar fechar e declarada como tal, nao
-silenciada.
+`knownCasePrecisionProxy` divides expected-DOI actionable matches by all
+actionable candidates. Other genuine returns not represented by the fixture are
+counted as non-matches. This is a noise proxy, not precision or a sufficient
+promotion gate.
 
-### RF-009 — Publicacoes ainda nao mapeadas
+## 8. Offline human review
 
-Publicacoes do corpus que ainda nao sao exprimiveis como caso — tipicamente
-porque falta o numero de inventario do lado do museu — ficam listadas com a sua
-razao. A fixture nao finge cobertura total.
+### FR-010 — Review entry
 
-### RF-010 — Metricas humanas em segunda passagem
+Each candidate has `review_id = case ID | deduplication key`. Staff may add
+`CONFIRMED`, `DISMISSED`, or `UNCERTAIN`, plus justification, reviewer, and an
+ISO 8601 timestamp with timezone. Blank decisions remain pending. Completed
+reviews require all fields, and duplicate completed IDs are rejected.
 
-O relatorio inclui uma fila de revisao. Depois de o staff preencher os campos de
-decisao humana:
+The queue exposes `known_case_match`, so reviewers can see the expected-answer
+signal before classifying; see GAP-004.
+
+### FR-011 — Finalisation without searches
 
 ```bash
-uv run python -m app.jobs.scientific_return evaluate-phase0 --reviews relatorio.json
+uv run python -m app.jobs.scientific_return evaluate-phase0 \
+  --reviews scientific-return-baseline.json \
+  --output scientific-return-reviewed.json
 ```
 
-calcula cobertura de revisao e precisao humana **sem repetir** qualquer pesquisa
-externa. Uma revisao exige fuso horario explicito na data.
+This reads the existing JSON, validates completed reviews, preserves the report,
+replaces `humanReviewMetrics`, and adds `reviewFinalizedAt`. It makes no source
+calls. `human_precision` is `confirmed / (confirmed + dismissed)`, excluding
+uncertain decisions. It is a confirmation share, not independently verified
+statistical precision.
 
-### RF-011 — Avaliacao do ciclo agentic
+Finalisation does not prove that reviewed IDs belong to the original queue;
+see GAP-005.
+
+## 9. Agentic harness
+
+### FR-012 — Command and modes
 
 ```bash
 uv run python -m app.jobs.scientific_return evaluate-agentic \
-  --mode SUPERVISED --sources europe_pmc --output relatorio-agentic.json
+  --mode SUPERVISED --sources europe_pmc \
+  --output scientific-return-agentic.json
 ```
 
-Mede o ciclo agentic sobre a mesma fixture, sem persistir. `--mode` aceita
-`SHADOW`, `POLICY_ONLY` e `SUPERVISED`. O orcamento e a allowlist vem da
-configuracao do servidor, nao de argumentos.
+| Documented mode | Plan | Policy | Search tool |
+| --- | --- | --- | --- |
+| `SHADOW` | Yes | No | No |
+| `POLICY_ONLY` | Yes | Yes, rejecting execution because of mode | No |
+| `SUPERVISED` | Yes | Yes | Only when authorised |
 
-### RF-012 — Criterio de fecho de lacuna
+Parsing also accepts enum values `DISABLED` and `SCHEDULED`, contrary to help.
+The adapters from `--sources` are separate from the server-side source allowlist
+used by policy; the report's `allowedSources` names only the latter.
 
-Uma lacuna so conta como fechada quando o caso se torna **acionavel**. Um
-registo recuperado mas sem correspondencia nao fecha lacuna nenhuma.
+### FR-013 — Observation
 
-### RF-013 — Falhas contadas, nao fatais
+Each case becomes a `DISCOVER_CANDIDATE` observation with its synthetic
+one-object snapshot, deterministic queries marked as already tried,
+server-configured budget, and three advertised actions. Policy narrows execution
+to `SEARCH_INVENTORY_VARIANTS`.
 
-Um plano invalido ou uma reflexao indisponivel sao contabilizados no relatorio e
-nao interrompem a avaliacao. O relatorio regista tambem a accao planeada por
-cada caso, para auditoria.
+Although baseline evaluation derives enrichment targets, the harness always
+uses discovery and does not measure `ENRICH_CANDIDATE`; see GAP-009.
 
-### RF-014 — Proveniencia do relatorio
+### FR-014 — Plan, policy, and execution
 
-O relatorio regista com que configuracao foi produzido — modo, fontes, orcamento
-— para que dois relatorios possam ser comparados sem ambiguidade.
+The reasoner produces a plan. Policy-capable modes apply the production action
+policy. Tool-capable modes run the production inventory-variant tool against
+selected live sources, deduplicate results, and apply production evidence and
+actionability.
 
----
+Plan failures are captured per case. Tool attempts retain query, source, result
+count, error, duplicates, actionable non-target counts, and planned action.
 
-## 5. Invariantes
+### FR-015 — Reflection
 
-| Id | Invariante |
+Reflection is requested whenever a plan exists, including non-executing modes.
+Invalid or unavailable reflection is counted, not raised. The context always
+contains an empty evidence delta and no executed queries or sources, even after
+execution. Thus validity measures response shape/service availability, not
+reflection over search results; see GAP-010.
+
+### FR-016 — Gap closure and reachability
+
+A declared `GAP` closes only when the expected DOI becomes actionable.
+Retrieval alone does not close it. The report separately exposes discovery
+recall, inventory-evidence recall, reviewable-candidate recall, indexability
+ceiling, and per-source `NOT_REACHED`, `DISCOVERED`, or `EVIDENCE_REACHED`.
+
+The ceiling comes from fixture declarations, never from one run's failure.
+
+### FR-017 — Agentic report provenance
+
+The report records generation time, fixture and agent-contract versions, mode,
+server-side allowed sources, part of the budget, validity rates, policy
+results, gaps, recalls, duplicates/noise, external attempts, reachability, and
+per-case results.
+
+It omits model/prompt identity, actual selected adapters, timeouts,
+`maxIterations`, and `maxActions`; see GAP-002.
+
+## 10. Side-effect boundary
+
+Neither evaluator creates production watches, runs, candidates, evidence rows,
+decisions, publication logs, agentic investigations, or trajectories.
+
+The deterministic command still makes network calls and writes rate-limit
+coordination. Agentic evaluation additionally reads published prompts from
+PostgreSQL and calls the configured model. Output-file replacement is an
+explicit CLI side effect.
+
+## 11. Enforced invariants
+
+| ID | Invariant | Enforcement |
+| --- | --- | --- |
+| INV-001 | No production scientific-return aggregate is persisted | In-memory evaluators |
+| INV-002 | Deterministic evidence/actionability uses production functions | Direct reuse |
+| INV-003 | Agentic search uses production policy and inventory tool | Harness composition |
+| INV-004 | `UNVERIFIED` cannot claim inventory measurement | Fixture parser |
+| INV-005 | A declared `GAP` requires a non-`NONE` cause | Fixture parser |
+| INV-006 | Gap closure requires expected-DOI actionability | Agentic projection |
+| INV-007 | Declaration drift is reported per case | Baseline metrics |
+| INV-008 | Completed review requires identity, rationale, and zoned time | Review parser |
+
+These do not guarantee stable live results, blinded review, complete
+provenance, full production parity, or valid review membership.
+
+## 12. Acceptance evidence
+
+| ID | Behaviour | Automated evidence |
+| --- | --- | --- |
+| AC-001 | Fixture loads and preserves original cases | `test_evaluation_fixture.py::test_the_shipped_fixture_loads`, `::test_the_original_cases_survive_the_extraction` |
+| AC-002 | Fixture has discovery and enrichment targets | `test_evaluation_fixture.py::test_the_fixture_separates_discovery_targets_from_enrichment_targets`, `::test_the_fixture_adds_cases_the_baseline_has_not_resolved` |
+| AC-003 | Declared gaps are generator- and budget-reachable | `test_evaluation_fixture.py::test_declared_inventory_gaps_are_reachable_by_the_variant_generator`, `::test_declared_gaps_are_reachable_within_the_configured_query_budget` |
+| AC-004 | Cited form alone does not close a gap | `test_evaluation_fixture.py::test_the_recorded_form_alone_does_not_close_a_declared_gap` |
+| AC-005 | Unmapped publications remain documented | `test_evaluation_fixture.py::test_unmapped_papers_are_documented` |
+| AC-006 | Invalid fixture declarations and duplicate IDs fail | `test_evaluation_fixture.py::test_a_fully_resolved_case_may_not_declare_a_gap`, `::test_a_gap_case_must_state_its_cause`, `::test_an_unverified_case_may_not_claim_a_measurement`, `::test_duplicated_case_ids_are_rejected` |
+| AC-007 | Baseline exposes source metrics and review queue | `test_scientific_return.py::test_evaluation_reports_per_source_metrics_and_review_queue` |
+| AC-008 | Review timestamps require a timezone | `test_scientific_return.py::test_phase_zero_review_requires_a_timezone` |
+| AC-009 | Three documented modes have distinct effects | `test_agentic_evaluation.py::test_shadow_mode_asks_the_model_and_executes_nothing`, `::test_policy_only_decides_but_still_executes_nothing`, `::test_supervised_mode_executes_the_authorised_action` |
+| AC-010 | Retrieval without actionability does not close a gap | `test_agentic_evaluation.py::test_a_gap_counts_as_closed_only_when_the_case_becomes_actionable`, `::test_a_retrieved_but_unmatched_record_does_not_close_the_gap` |
+| AC-011 | Report retains provenance subset, plan, duplicates, and noise | `test_agentic_evaluation.py::test_the_report_records_what_it_was_run_with`, `::test_the_plan_action_is_reported_for_auditing`, `::test_report_aggregates_measured_duplicates_and_false_positives` |
+| AC-012 | Invalid plans and reflections are non-fatal | `test_agentic_evaluation.py::test_an_invalid_plan_is_counted_not_fatal`, `::test_an_unavailable_reflection_is_counted_not_fatal` |
+| AC-013 | Agentic queries do not repeat baseline queries | `test_agentic_evaluation.py::test_the_cycle_starts_from_what_the_pipeline_already_tried` |
+| AC-014 | Ceiling does not hide agent recall failure | `test_agentic_evaluation.py::test_the_ceiling_does_not_absorb_the_agents_own_recall_failure` |
+
+## 13. Known implementation gaps
+
+### GAP-001 — Live evaluation is not strictly reproducible
+
+**Severity: high.** Indexes, full text, rankings, model output, prompts, time,
+and configuration change. The same fixture and command may produce a different
+report.
+
+**Required change:** distinguish repeatability from reproducibility and provide
+a sanitised source-response snapshot plus deterministic replay mode if strict
+reproduction is required.
+
+### GAP-002 — Execution provenance is incomplete
+
+**Severity: high.** Baseline omits explicit selected sources, result limit,
+planner/version identity, adapter versions, and response hashes. Agentic output
+also omits model/prompt identity, actual adapters, timeouts, and two budget
+dimensions.
+
+**Required change:** add a shared, versioned, secret-free execution manifest
+with code, fixture, prompt, input, and response hashes.
+
+### GAP-003 — Baseline `recall` means retrieval, not reviewability
+
+**Severity: high.** A record rejected by actionability increments headline
+recall although it remains a baseline gap.
+
+**Required change:** rename it `retrievalRecall`, add
+`reviewableCandidateRecall`, and version consumers and published reports.
+
+### GAP-004 — Human review is not blinded
+
+**Severity: high.** `known_case_match` reveals ground truth before review,
+potentially biasing the resulting metric.
+
+**Required change:** export a blinded package and join decisions to ground truth
+only during controlled finalisation.
+
+### GAP-005 — Review membership is not validated
+
+**Severity: high.** Injected IDs can make reviewed counts exceed queue length,
+make pending counts negative, and distort metrics.
+
+**Required change:** validate exact membership and duplicate queue IDs, and bind
+reviews to a hash of the original report.
+
+### GAP-006 — Malformed fixture array items are silently skipped
+
+**Severity: medium.** Non-object cases and unmapped papers are filtered out.
+
+**Required change:** reject each malformed item with its array index and add
+negative tests.
+
+### GAP-007 — CLI contract is stale and weakly constrained
+
+**Severity: medium.** Phase-zero help says five cases; agentic help lists three
+modes while parsing also accepts `DISABLED` and `SCHEDULED`.
+
+**Required change:** use fixture-neutral help, argparse choices, and CLI tests.
+
+### GAP-008 — Review has no managed UI or audit store
+
+**Severity: medium.** JSON editing uses free-text identity with no assignment,
+authentication, immutable audit history, concurrency control, or accessible UI.
+
+**Required change:** either retain this as a developer instrument or create a
+permissioned, blinded Angular evaluation workflow separate from production
+candidate decisions.
+
+### GAP-009 — Agentic evaluation ignores enrichment objectives
+
+**Severity: high.** Every case runs as discovery, including derived enrichment
+targets.
+
+**Required change:** run measured objectives with an existing candidate for
+enrichment and report the cohorts separately.
+
+### GAP-010 — Reflection is disconnected from tool results
+
+**Severity: high.** It always receives empty evidence, query, and source data.
+
+**Required change:** build the production-equivalent post-execution reflection
+context or rename the validity metric to reflect its narrower meaning.
+
+### GAP-011 — The harness is not the full production cycle
+
+**Severity: medium.** It omits production iteration state, persistence,
+presentation, reader grounding, stop semantics, idempotency, circuit breaker,
+and recovery paths.
+
+**Required change:** label it as component evaluation and add an isolated
+end-to-end evaluation around the production orchestrator.
+
+### GAP-012 — Metrics omit latency and cost
+
+**Severity: medium.** Reports do not measure source/model latency, token usage,
+monetary cost, or curator time per confirmed candidate.
+
+**Required change:** capture per-stage duration and usage/cost with explicit
+denominators and confidence intervals.
+
+## 14. Non-functional requirements
+
+- **Human authority:** evaluation cannot create a production decision.
+- **Methodological honesty:** retrieval, actionability, proxy precision, and
+  confirmation share remain separately named.
+- **Bounded execution:** calls obey configured rate limits, timeouts, result
+  limits, and agent budgets.
+- **Failure isolation:** one query, plan, tool, or reflection failure does not
+  invalidate unrelated cases.
+- **Confidentiality:** reports may contain researcher and reviewer identities,
+  metadata, and free-text rationale and require appropriate storage.
+- **No automatic scheduling:** evaluation is an explicit operator action.
+
+## 15. Traceability
+
+| Concern | Implementation |
 | --- | --- |
-| INV-001 | A avaliacao nunca escreve no dominio de producao |
-| INV-002 | A avaliacao usa as mesmas regras de evidencia do pipeline real |
-| INV-003 | Um caso nao verificado nunca reclama uma medicao |
-| INV-004 | O alvo agentic e derivado da medicao, nunca declarado |
-| INV-005 | Divergencias entre fixture e realidade sao publicadas, nao corrigidas em silencio |
-| INV-006 | Recuperar sem ser acionavel nunca conta como sucesso |
+| Fixture, baseline, report, and review finalisation | `vitarerum-api/app/scientific_return/application/evaluation.py` |
+| Shipped fixture | `vitarerum-api/app/scientific_return/application/fixtures/evaluation_cases.json` |
+| Agentic harness and report | `vitarerum-api/app/scientific_return/application/agentic_evaluation.py` |
+| Shared evidence/query rules | `vitarerum-api/app/scientific_return/application/analysis.py` |
+| Shared policy and tool | `vitarerum-api/app/scientific_return/domain/agent_policies.py`, `application/agent_tools.py` |
+| CLI composition | `vitarerum-api/app/scientific_return/presentation/commands.py` |
+| Job entry point | `vitarerum-api/app/jobs/scientific_return.py` |
+| Automated evidence | `vitarerum-api/test/scientific_return/test_evaluation_fixture.py`, `test_agentic_evaluation.py`, `test_scientific_return.py` |
+| Current baseline | [`docs/evaluation/scientific-return-fixture-v3-baseline.md`](../../evaluation/scientific-return-fixture-v3-baseline.md) and companion JSON |
+| Superseded baseline | [`docs/evaluation/scientific-return-phase0-crossref-baseline.md`](../../evaluation/scientific-return-phase0-crossref-baseline.md) |
 
-## 6. Criterios de aceitacao
+## 16. Open product decisions
 
-### CA-001 — A fixture publicada carrega e preserva os casos originais
-→ `test_evaluation_fixture.py::test_the_shipped_fixture_loads`, `::test_the_original_cases_survive_the_extraction`
-
-### CA-002 — Separacao entre alvos de descoberta e de enriquecimento
-→ `test_evaluation_fixture.py::test_the_fixture_separates_discovery_targets_from_enrichment_targets`
-
-### CA-003 — Integridade e coerencia das declaracoes
-→ `test_evaluation_fixture.py::test_a_fully_resolved_case_may_not_declare_a_gap`, `::test_a_resolved_case_without_inventory_evidence_may_declare_a_gap`, `::test_a_gap_case_must_state_its_cause`, `::test_an_unverified_case_may_not_claim_a_measurement`, `::test_duplicated_case_ids_are_rejected`, `::test_an_unsupported_status_is_rejected`, `::test_an_empty_fixture_is_rejected`, `::test_a_missing_field_is_rejected`
-
-### CA-004 — Lacunas alcancaveis pelo gerador e pelo orcamento
-→ `test_evaluation_fixture.py::test_declared_inventory_gaps_are_reachable_by_the_variant_generator`, `::test_declared_gaps_are_reachable_within_the_configured_query_budget`, `::test_the_recorded_form_alone_does_not_close_a_declared_gap`
-
-### CA-005 — Publicacoes nao mapeadas documentadas
-→ `test_evaluation_fixture.py::test_unmapped_papers_are_documented`
-
-### CA-006 — Metricas por fonte e fila de revisao
-→ `test_scientific_return.py::test_evaluation_reports_per_source_metrics_and_review_queue`, `::test_phase_zero_review_requires_a_timezone`
-
-### CA-007 — Modos do ciclo na avaliacao
-→ `test_agentic_evaluation.py::test_shadow_mode_asks_the_model_and_executes_nothing`, `::test_policy_only_decides_but_still_executes_nothing`, `::test_supervised_mode_executes_the_authorised_action`
-
-### CA-008 — Criterio de fecho de lacuna
-→ `test_agentic_evaluation.py::test_a_gap_counts_as_closed_only_when_the_case_becomes_actionable`, `::test_a_retrieved_but_unmatched_record_does_not_close_the_gap`
-
-### CA-009 — Falhas contadas e proveniencia registada
-→ `test_agentic_evaluation.py::test_an_invalid_plan_is_counted_not_fatal`, `::test_an_unavailable_reflection_is_counted_not_fatal`, `::test_the_report_records_what_it_was_run_with`, `::test_the_plan_action_is_reported_for_auditing`
-
-### CA-010 — O ciclo parte do que o pipeline ja tentou
-→ `test_agentic_evaluation.py::test_the_cycle_starts_from_what_the_pipeline_already_tried`
-
-## 7. Requisitos nao funcionais
-
-- **Reprodutibilidade**: o relatorio e determinista dadas as mesmas fontes e a mesma fixture versionada em `application/fixtures/evaluation_cases.json`; as baselines publicadas em [`docs/evaluation/`](../../evaluation/) sao reexecutaveis.
-- **Honestidade metodologica**: uma fonte nao exercitada e registada como tal, nunca como zero.
-- **Custo**: a avaliacao contacta fontes reais; e um ato deliberado de linha de comando, nunca automatico.
-
-## 8. Rastreabilidade
-
-| Elemento | Localizacao |
-| --- | --- |
-| Casos, fixture e integridade (RF-007..RF-009) | `app/scientific_return/application/evaluation.py`, `application/fixtures/evaluation_cases.json` |
-| Execucao e metricas (RF-002..RF-006, RF-010) | `app/scientific_return/application/evaluation.py` |
-| Avaliacao agentic (RF-011..RF-014) | `app/scientific_return/application/agentic_evaluation.py` |
-| Linha de comando (RF-001, RF-010, RF-011) | `app/scientific_return/presentation/commands.py`, `app/jobs/scientific_return.py` |
-| Baselines publicadas | [`docs/evaluation/`](../../evaluation/) |
-
-## 9. Questoes em aberto
-
-1. Qual o limiar de precisao humana que autoriza promover o ciclo de `SUPERVISED` para `SCHEDULED`?
-2. A fixture deve crescer com casos negativos explicitos (publicacoes do mesmo autor sem relacao com o especime)?
-3. Como incorporar o custo por candidato confirmado — consultas e latencia de modelo — nas metricas de promocao?
+1. Is evaluation developer-only, or does staff need a permissioned and blinded
+   workflow?
+2. Which metric and confidence threshold permit a mode promotion, and who owns
+   that decision?
+3. Are dated live reruns sufficient, or must published baselines be replayable
+   from captured responses?
+4. How should negative cases be sampled so precision is not inferred only from
+   one expected DOI per positive case?
+5. Should discovery, enrichment, and full-agentic reader evaluation remain
+   separate cohorts and gates?
+6. What latency, token, monetary, and curator-time budgets define acceptable
+   cost per confirmed scientific return?

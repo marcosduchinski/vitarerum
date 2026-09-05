@@ -1,259 +1,435 @@
-# SPEC-017 — Narrativa museologica assistida (KG-RAG)
+# SPEC-017 — AI-Assisted Museum Narrative
 
-| Campo | Valor |
+| Field | Value |
 | --- | --- |
-| Identificador | SPEC-017 |
-| Estado | Implementado |
-| Contexto delimitado | `app/ai/museum_narrative` |
-| Escrita a partir de | `app/ai/museum_narrative/`, `test/ai/museum_narrative/`, contrato 09 |
-| Specs relacionadas | [SPEC-013](../013-mapeamento-cidoc-crm/spec.md), [SPEC-016](../016-prompts-versionados/spec.md), [SPEC-015](../015-relatorio-visita-in-situ/spec.md) |
+| Identifier | SPEC-017 |
+| Status | Implemented (with declared authorisation, publication-safety, provenance, validation, and concurrency gaps) |
+| Bounded context | `app/ai/museum_narrative` |
+| Derived from | Backend, frontend, migrations, architecture contracts, consumers, diagrams, and automated tests inspected on 2026-09-04 |
+| Related specs | [SPEC-013](../013-mapeamento-cidoc-crm/spec.md), [SPEC-015](../015-relatorio-visita-in-situ/spec.md), [SPEC-016](../016-prompts-versionados/spec.md) |
 
-## 1. Problema
+## 1. Problem
 
-Um registo de visita in situ e uma estrutura de dados. Comunicar o que
-aconteceu — a um curador, a um investigador, a um visitante, a uma crianca —
-exige texto, e escrever esse texto a mao para cada publico e trabalho que nao
-escala.
+An in-situ visit record is structured evidence, not an accessible account for
+curators, researchers, visitors, or children. Writing a separate account for
+every audience and visit does not scale. Generating one with a language model,
+however, introduces the risk of plausible but unsupported people, dates,
+objects, places, and outcomes.
 
-O risco de gerar esse texto com um modelo e conhecido: o modelo inventa datas,
-pessoas, objetos e lugares que soam plausiveis.
+The system must therefore preserve the evidence used for generation, constrain
+the model to a compact factual representation, and retain deterministic review
+signals and human editorial history.
 
-## 2. Objetivo
+## 2. Goal and scope
 
-Gerar narrativas a partir de um registo de visita, usando o grafo CIDOC-CRM
-validado como **porta semantica**, factos canonicos como unica entrada do modelo,
-e verificacoes deterministicas que assinalam invencoes para revisao humana.
+This context generates a narrative from a persisted in-situ visit record. It:
 
-## 3. Linguagem ubiqua
+- rebuilds and validates the record's CIDOC-CRM projection as a semantic gate;
+- translates the record view into canonical visit facts;
+- resolves a versioned system prompt for the selected narrative style;
+- calls the configured Ollama-compatible model;
+- checks the generated text with deterministic heuristics;
+- persists generation provenance and a frozen fact snapshot; and
+- supports exact reads, history, preview, and append-only editorial revisions.
 
-- **Factos canonicos**: representacao factual do registo, derivada do instantaneo, que o prompt recebe.
-- **Porta semantica**: validacao do grafo (RDF + SHACL) que autoriza a geracao.
-- **Tipo de narrativa**: estilo de reescrita (persona do modelo), **nao** propriedade da visita.
-- **Instantaneo de factos (`facts_snapshot`)**: congelamento do que foi usado — factos, documento CIDOC compacto e relatorio de validacao.
-- **Achado de validacao**: deteccao deterministica de conteudo nao suportado pelos factos.
-- **Revisao editorial**: correcao manual do texto, registada em modo acrescento.
+The context does not create the source visit record, publish reports to external
+audiences, decide whether a flagged narrative is fit for publication, or manage
+prompt versions.
 
----
+The code and some historical documentation use the term **KG-RAG**. The
+implemented pipeline does not retrieve passages from a graph, run semantic
+search, use embeddings, or query a vector store. CIDOC-CRM is a validation gate;
+the model receives serialized canonical facts. KG-RAG must therefore be treated
+as a historical architectural label, not a claim that graph retrieval-augmented
+generation is implemented.
 
-## 4. Requisitos funcionais
+## 3. Strategic context
 
-### RF-001 — Gerar narrativa a partir de um registo
+`ai.museum_narrative` is a supporting AI context. Its principal relationships
+are:
 
-`POST /api/v1/cidoc-mapping/in-situ-visit/{recordId}/narrative`, apenas staff.
-Corpo opcional: `target_language` (omissao `pt`), `narrative_type` (omissao
-`institutional`), `creativity_temperature` (omissao `0.3`, entre 0.0 e 1.0).
-
-### RF-002 — Tipos de narrativa
-
-| Valor | Publico | Tom |
+| Relationship | Integration style | Responsibility |
 | --- | --- | --- |
-| `institutional` | Curadoria, direcao, portais de dados abertos | Formal, orientado a conformidade |
-| `scientific` | Investigadores | Rigoroso, metodologico |
-| `audioguide_adult` | Visitantes | Claro, pouco jargao |
-| `audioguide_child` | Publico jovem | Narrativo, pedagogico |
-| `social_media` | Comunidade digital | Conciso, com gancho e chamada a acao |
+| CIDOC-CRM Mapping → Museum Narrative | Published Language plus anti-corruption adapter | Build and validate the graph, then expose a record view translated into canonical facts. |
+| AI Prompts → Museum Narrative | Published Language plus anti-corruption adapter | Resolve the published prompt or an exact version for preview. |
+| Museum Narrative → In-Situ Visit Reports | Open Host Service / Published Language | Generate, read, revise, and delete narrative artefacts linked by a report. |
+| Museum Narrative → Ollama-compatible service | Driven port and infrastructure adapter | Generate text from the system prompt and canonical facts. |
 
-O tipo omitido resolve para `institutional` com origem `default`; fornecido, e
-ecoado com origem `request_body`. Um tipo desconhecido responde `400` e **nada e
-persistido**.
+Cross-context source dependencies are constrained by import-linter. The report
+context nevertheless imports narrative presentation DTOs in addition to the
+published-language module; that registered exception creates schema coupling.
 
-### RF-003 — O grafo e a porta, os factos sao a entrada
+## 4. Ubiquitous language and domain model
 
-O grafo CIDOC-CRM validado e a **unica** porta semantica autorizada. O prompt do
-modelo recebe apenas factos canonicos: nunca IRIs CIDOC, nunca JSON-LD expandido.
+### 4.1 Canonical visit facts
 
-A separacao e deliberada: o grafo serve para verificar; texto tecnico dentro do
-prompt so aumentaria a superficie de alucinacao.
+`CanonicalVisitFacts` is an immutable, model-facing representation of the visit.
+It includes the project reference, title and purpose, planned interval,
+requester, approval and execution evidence, requested objects, access logs,
+occurrences, publications, attachment references, evidence gaps, and source
+snapshot identity/version.
 
-### RF-004 — Falha da porta impede geracao
+Missing approval or execution evidence is represented explicitly with
+`MissingFact`; other gaps are rendered as `EvidenceGap` values. The model does
+not receive CIDOC IRIs or expanded JSON-LD.
 
-Falha de conformidade semantica responde `422`. Registo inexistente responde
-`404`.
+### 4.2 Semantic gate
 
-### RF-005 — Prompt vindo do registo de prompts publicados
+The CIDOC adapter first builds the current JSON-LD projection and validates it.
+A non-conforming graph stops the operation. Only then does the adapter read the
+record view and construct canonical facts. The validated document and validation
+report are returned with the facts for snapshotting.
 
-O prompt de sistema e obtido do registo de prompts versionados
-([SPEC-016](../016-prompts-versionados/spec.md)). Nao existe prompt embutido como
-recurso de recurso: sem prompt publicado, a geracao falha com `503`.
+This is a gate over a newly built projection, not retrieval from a knowledge
+graph and not proof that the generated prose is factually correct.
 
-Uma versao de prompt de outro tipo de narrativa e recusada.
+### 4.3 Fact snapshot
 
-### RF-006 — Metadados de geracao persistidos
+`NarrativeFactSnapshot` freezes:
 
-Cada geracao guarda: tipo resolvido e origem da resolucao, lingua, temperatura,
-modelo, identificador do instantaneo de factos, identificador e rotulo da versao
-de prompt, *hash* da resposta do modelo, conformidade da validacao e achados.
+- the canonical facts as sorted JSON and their SHA-256 hash;
+- the facts-builder version;
+- the prompt version label;
+- the CIDOC JSON-LD document;
+- the SHACL validation report and conformance result; and
+- the source record identifier and creation time.
 
-### RF-007 — Instantaneo de factos congelado
+The snapshot is persisted immediately before the model call in the same database
+transaction. A handled failure prevents the route-level commit, so normal
+request rollback removes the uncommitted snapshot.
 
-E persistido o `facts_snapshot` exato usado para construir o prompt, incluindo o
-documento CIDOC-CRM compacto e o relatorio de validacao SHACL que autorizou
-aquela geracao naquele momento.
+### 4.4 Generated narrative aggregate
 
-Uma narrativa existente **mantem** a sua versao de prompt depois de uma nova
-publicacao: o passado nao e reescrito.
+`GeneratedNarrative` is the aggregate root for one model execution. It retains
+the current narrative text, resolved style and source, language, temperature,
+model name, generation time, fact-snapshot identifier, prompt-version identifier
+and label, SHA-256 hash of the original model response, and deterministic
+validation result.
 
-### RF-008 — Verificacoes deterministicas contra os factos
+The same source record may have multiple independent generations. The report
+context links one generated narrative to each report.
 
-Depois da geracao, verificacoes deterministicas comparam o texto com os factos
-canonicos e produzem achados com codigo, mensagem e evidencia. Codigos atuais
-cobrem: datas inventadas, datas planeadas apresentadas como executadas, pessoas
-inventadas, objetos inventados e lugares inventados.
+### 4.5 Editorial revision
 
-Uma data **dentro** do intervalo planeado nao e assinalada.
+`GeneratedNarrativeRevision` records the previous text, revised text, editor's
+permission identifier, and timestamp. Editing changes the aggregate's current
+text while leaving original generation metadata and findings unchanged.
 
-Os achados marcam para revisao; nao bloqueiam a geracao.
+The revision history makes the original model response recoverable after the
+first edit. Before any edit, the aggregate's current text is the original
+response.
 
-### RF-009 — Ausencia declarada
+### 4.6 Narrative types
 
-O prompt recebe explicitamente a ausencia de informacao, em vez de a omitir: um
-facto ausente declarado e menos convidativo a invencao do que um campo em falta.
-
-### RF-010 — Historico de geracoes
-
-Cada geracao e persistida. O mesmo registo pode ser recontado varias vezes, em
-estilos, linguas e temperaturas diferentes, e todas as execucoes ficam guardadas,
-listadas da mais recente para a mais antiga.
-
-### RF-011 — Pre-visualizacao sem persistir
-
-Existe pre-visualizacao que devolve metadados de rascunho **sem persistir**
-narrativa. Aceita uma versao de prompt existente ou conteudo pontual — neste caso
-com identificador de versao nulo. Combinacoes invalidas de origem de prompt sao
-recusadas com `422` de forma estruturada.
-
-### RF-012 — Correcao editorial em modo acrescento
-
-`PATCH` corrige **apenas** o texto da narrativa. Os metadados de geracao
-permanecem inalterados, e e criada uma revisao editorial que guarda o texto
-anterior, o texto revisto, o editor e o instante.
-
-O historico de revisoes lista da mais antiga para a mais recente, com o editor.
-Texto vazio ou so com espacos e recusado com `422`.
-
-### RF-013 — Isolamento por registo
-
-Ler, corrigir ou listar revisoes de uma narrativa sob um registo que nao e o seu
-responde `404`.
-
-### RF-014 — Superficie HTTP
-
-Todos os caminhos abaixo assentam em `/api/v1/cidoc-mapping/in-situ-visit`, sao
-staff-only e respondem `404` quando a narrativa nao pertence ao registo indicado
-(RF-013).
-
-| Endpoint | Requisito |
+| Value | Intended audience and tone |
 | --- | --- |
-| `POST /{recordId}/narrative` | RF-001 — gerar e persistir |
-| `POST /{recordId}/narrative/preview` | RF-011 — pre-visualizar sem persistir |
-| `GET /{recordId}/narratives` | RF-010 — historico paginado, mais recente primeiro (`page`, `size`, maximo 100) |
-| `GET /{recordId}/narratives/{narrativeId}` | RF-010 — uma geracao guardada; `404` se desconhecida |
-| `PATCH /{recordId}/narratives/{narrativeId}` | RF-012 — corrigir o texto e criar revisao |
-| `GET /{recordId}/narratives/{narrativeId}/revisions` | RF-012 — revisoes paginadas, mais antiga primeiro |
+| `institutional` | Formal institutional, curatorial, compliance, and open-data communication. |
+| `scientific` | Rigorous and methodological research communication. |
+| `audioguide_adult` | Clear, engaging interpretation for adult visitors with limited jargon. |
+| `audioguide_child` | Playful, pedagogical storytelling for younger audiences. |
+| `social_media` | Concise, hook-driven copy with a call to action. |
 
-A leitura devolve a narrativa tal como esta — texto corrigido incluido — com os
-metadados de geracao originais intactos: quem le depois consegue distinguir o
-que o modelo produziu do que uma pessoa corrigiu.
+The style is a rendering choice, not a fact about the visit. An omitted type
+resolves to `institutional` with source `default`; an explicit value has source
+`request_body`.
 
-### RF-015 — Mapeamento de falhas do modelo
+## 5. Authorisation and data exposure
 
-| Situacao | Codigo |
+All narrative endpoints call `require_staff`. `EXTERNAL` callers receive `403`,
+but every staff group has the same capability to generate, preview, list, read,
+and edit narratives for any known record identifier. There is no project,
+collection, role, or creator ownership check.
+
+Stored responses expose canonical fact JSON, CIDOC JSON-LD, SHACL reports,
+people, evidence, model metadata, and revision actors to staff callers. Source
+facts, including names and attachment-reference metadata, are also sent to the
+configured model endpoint. Ollama defaults to localhost but may be configured
+for a hosted endpoint with a bearer token; deployment policy must therefore
+determine whether this is local or external processing.
+
+## 6. Functional requirements
+
+### FR-001 — Generate and persist a narrative
+
+`POST /api/v1/cidoc-mapping/in-situ-visit/{recordId}/narrative` accepts:
+
+| Field | Default | Validation |
+| --- | --- | --- |
+| `target_language` | `pt` | Currently an unrestricted string. |
+| `narrative_type` | omitted → `institutional` | Must be one of the five narrative types. |
+| `creativity_temperature` | `0.3` | Inclusive range `0.0..1.0`. |
+
+The use case resolves the published prompt, validates and translates the visit
+record, creates a fact snapshot, calls the model, validates the response, and
+persists a generation. An empty model response is rejected and no narrative is
+committed.
+
+The report UI is the main user-facing generation path. It offers Portuguese and
+English, all five styles, and a temperature slider in `0.1` increments. Report
+creation first exports a fresh visit record, then generates a fresh narrative,
+then links both in one transaction.
+
+### FR-002 — Enforce the semantic gate
+
+Generation and preview proceed only when the rebuilt CIDOC-CRM projection
+conforms. A missing record returns `404 IN_SITU_VISIT_NOT_FOUND`; failed semantic
+validation returns `422 SEMANTIC_VALIDATION_FAILED`.
+
+Prompt resolution currently happens before record preparation. Consequently, a
+missing published prompt can yield `503` before an invalid record identifier is
+checked.
+
+### FR-003 — Use canonical facts as the model input
+
+The model receives the selected versioned prompt as its system message and
+canonical facts serialized as JSON, the requested language code, and a task
+instruction as its user message. It receives neither the validated JSON-LD
+document nor CIDOC-CRM IRIs. The graph and validation report remain stored audit
+artefacts.
+
+### FR-004 — Resolve versioned prompts
+
+Persisted generation resolves the published `in_situ_narrative` prompt keyed by
+narrative type. A missing published prompt returns
+`503 NARRATIVE_PROMPT_UNAVAILABLE`. There is no embedded fallback prompt in the
+generation flow.
+
+Each stored narrative keeps both the prompt-version identifier and label.
+Publishing a newer prompt does not rewrite historical narrative metadata.
+
+`build_system_prompt()` and static persona descriptions remain in the
+application module but are not called by the production generation path. They
+must not be interpreted as an operational fallback.
+
+### FR-005 — Freeze generation provenance
+
+Every successful generation stores:
+
+- narrative type and resolution source;
+- target language and temperature;
+- configured model name and generation timestamp;
+- fact-snapshot identifier, payload and hash;
+- prompt-version identifier and label;
+- original model-response hash; and
+- validation conformance and findings.
+
+The stored provenance does not include the exact prompt content, model digest,
+provider/base URL, full sampling configuration, request actor, request ID, or
+execution latency.
+
+### FR-006 — Perform deterministic post-generation checks
+
+The current heuristic validator emits advisory findings for:
+
+| Code | Detection mechanism |
 | --- | --- |
-| Modelo indisponivel | `503` |
-| Sem prompt publicado | `503` |
-| Saida do modelo em branco | `503` |
-| Tempo esgotado | `504` |
-| Temperatura fora do intervalo | `422` |
-| Chamador `EXTERNAL` | `403` |
+| `invented_date` | ISO `YYYY-MM-DD` and numeric `D/M/YYYY` mentions absent from allowed factual dates. |
+| `planned_date_as_executed` | Planned boundary dates treated as execution evidence according to nearby Portuguese/English execution words and execution availability. |
+| `invented_person` | Title-led Portuguese/English person-name patterns absent from canonical people. |
+| `invented_object` | Identifier-like `INV`, `RO`, `OBJ`, or `XL` tokens absent from canonical objects. |
+| `invented_place` | Limited Portuguese/English room, gallery, laboratory, or reserve patterns absent from occurrence locations. |
 
----
+The validator is regex-based and intentionally incomplete. Findings set
+`validation_conforms` to false but do not change or reject the generated text.
+A date strictly inside the planned interval is allowed; planned interval
+boundaries receive additional execution-evidence checks.
 
-## 5. Invariantes
+### FR-007 — Preserve declared absence
 
-| Id | Invariante |
+The canonical payload explicitly includes missing approval, missing execution
+evidence, and calculated evidence gaps instead of silently dropping them. The
+prompt instructs the model not to fill those gaps with invented detail.
+
+### FR-008 — List and read generation history
+
+| Endpoint | Behaviour |
 | --- | --- |
-| INV-001 | Nenhuma narrativa e gerada sem o grafo passar a porta semantica |
-| INV-002 | O modelo nunca recebe IRIs CIDOC nem JSON-LD expandido |
-| INV-003 | Toda a narrativa identifica a versao de prompt e o modelo que a produziram |
-| INV-004 | O instantaneo de factos usado e congelado com a narrativa |
-| INV-005 | Publicar um prompt novo nao altera narrativas ja geradas |
-| INV-006 | Uma correcao manual nunca altera metadados de geracao |
-| INV-007 | O historico editorial e acrescento puro |
-| INV-008 | Achados de invencao marcam para revisao humana, nunca alteram o texto |
-| INV-009 | Nao existe prompt embutido no codigo |
+| `GET /{recordId}/narratives?page=0&size=20` | Paginated generations, newest first; size `1..100`. |
+| `GET /{recordId}/narratives/{narrativeId}` | Exact stored generation with current text and frozen snapshot. |
 
-## 6. Criterios de aceitacao
+Exact reads enforce that the narrative belongs to the record in the path and
+otherwise return `404 NARRATIVE_NOT_FOUND`. Listing does not verify that the
+record exists: an unknown identifier returns an empty page.
 
-### CA-001 — Tipo por omissao e tipo explicito
-→ `test_api.py::test_default_type_returns_institutional`, `::test_explicit_type_echoed_in_meta`, `test_use_case.py::test_omitted_type_defaults_to_institutional_and_persists`, `::test_explicit_type_is_used_with_request_body_source`, `::test_unsupported_type_raises_and_persists_nothing`, `test_api.py::test_invalid_type_is_400`
+The Angular report screens show the narrative linked to a report, not the full
+generation history for a source record.
 
-### CA-002 — Porta semantica e suas falhas
-→ `test_api.py::test_semantic_failure_is_422`, `::test_missing_record_is_404`, `test_use_case.py::test_fact_snapshot_freezes_cidoc_gate_output_used_for_generation`
+### FR-009 — Preview without persistence
 
-### CA-003 — Prompt do registo publicado, sem recurso embutido
-→ `test_use_case.py::test_generation_uses_published_prompt_registry_output`, `::test_missing_published_prompt_fails_without_hardcoded_fallback`, `::test_existing_narrative_keeps_prompt_version_after_new_publish`, `test_api.py::test_missing_published_prompt_is_503`, `test_prompt_acl.py::test_prompt_acl_rejects_version_from_another_narrative_type`
+`POST /{recordId}/narrative/preview` requires exactly one prompt source:
 
-### CA-004 — Instantaneo de factos congelado e entrada canonica
-→ `test_use_case.py::test_fact_snapshot_freezes_payload_used_for_generation`, `::test_user_prompt_receives_canonical_facts_and_declared_absence`
+- `prompt_version_id`, which may resolve a draft, published, or archived exact
+  version belonging to the selected narrative type; or
+- ad hoc `content`, which also requires an explicit narrative type.
 
-### CA-005 — Deteccao de invencoes
-→ `test_use_case.py::test_narrative_with_invented_date_is_marked_for_review`, `::test_planned_date_as_execution_is_marked_for_review`, `::test_date_inside_planned_interval_is_allowed`, `::test_invented_person_object_and_place_are_marked_for_review`
+Preview uses the same semantic gate, canonical facts, model, and deterministic
+validator as generation. It returns prompt source/status and generation
+metadata but persists neither a fact snapshot nor a narrative. Invalid source
+combinations return structured `422` validation errors.
 
-### CA-006 — Persistencia e historico
-→ `test_api.py::test_post_persists_and_returns_identifiers`, `::test_listed_newest_first_after_two_generations`, `::test_get_stored_narrative_by_id`, `::test_get_unknown_narrative_is_404`, `test_use_case.py::test_list_and_get_use_cases`, `::test_get_missing_narrative_raises`
+The prompt-management UI exposes this operation only for in-situ narrative
+templates. Its project selector resolves a previously generated report to a
+record identifier, so a completed project without a report cannot be previewed
+through that UI even though the API accepts a record directly.
 
-### CA-007 — Pre-visualizacao sem persistir
-→ `test_api.py::test_preview_returns_draft_metadata_without_persisting`, `::test_preview_accepts_ad_hoc_content_with_null_prompt_version_id`, `::test_preview_rejects_invalid_prompt_source_payloads_with_422_shape`, `::test_preview_rejects_prompt_version_for_another_narrative_type`, `test_use_case.py::test_preview_uses_prompt_version_without_persisting_narrative`, `::test_preview_uses_ad_hoc_content_without_persisting`, `::test_preview_rejects_invalid_prompt_source_combinations`
+### FR-010 — Edit narrative text and append a revision
 
-### CA-008 — Correcao editorial e revisoes
-→ `test_api.py::test_patch_updates_narrative_text`, `::test_list_revisions_empty_for_never_edited_narrative`, `::test_list_revisions_returns_original_text_first_and_editor`, `::test_patch_empty_narrative_is_422`, `::test_patch_whitespace_narrative_is_422`, `test_use_case.py::test_update_narrative_edits_text_and_persists`, `::test_list_revisions_returns_chronological_editorial_history`, `test_repository.py::test_repository_lists_revisions_oldest_first_with_editor`
+`PATCH /{recordId}/narratives/{narrativeId}` replaces only the current narrative
+text. Blank text returns `422`. A successful edit appends a revision containing
+the previous text, revised text, editor permission ID, and time.
 
-### CA-009 — Isolamento por registo
-→ `test_api.py::test_get_under_wrong_record_is_404`, `::test_list_revisions_under_wrong_record_is_404`, `::test_patch_under_wrong_record_is_404`, `test_use_case.py::test_get_under_wrong_record_raises`, `::test_update_under_wrong_record_raises`
+Original generation metadata, response hash, fact snapshot, and deterministic
+findings remain unchanged. The report detail UI provides this edit operation and
+warns before discarding unsaved changes.
 
-### CA-010 — Falhas do modelo com codigo proprio
-→ `test_api.py::test_model_unavailable_is_503`, `::test_model_timeout_is_504`, `::test_blank_model_output_is_503`, `::test_temperature_above_one_is_422`, `test_model_ollama.py::test_identifies_ollama_response_error`, `::test_does_not_identify_other_response_error`
+### FR-011 — List editorial revisions
 
-### CA-011 — Autorizacao staff-only
-→ `test_api.py::test_external_caller_is_403`, `::test_list_forbidden_for_external`, `::test_patch_forbidden_for_external`, `::test_list_revisions_forbidden_for_external`
+`GET /{recordId}/narratives/{narrativeId}/revisions?page=0&size=20` returns
+revisions oldest first with size `1..100`. The narrative must belong to the
+record in the path.
 
-### CA-012 — Leitura do historico e de uma geracao
-Dado duas geracoes sobre o mesmo registo
-Quando o historico e lido, e depois uma delas pelo seu identificador
-Entao a lista vem da mais recente para a mais antiga e a leitura devolve a geracao pedida; um identificador desconhecido responde `404`
-→ `test_api.py::test_listed_newest_first_after_two_generations`, `::test_get_stored_narrative_by_id`, `::test_get_unknown_narrative_is_404`
+Revisions are append-only through exposed use cases. There is no edit reason,
+review decision, electronic signature, or distinction between correction,
+redaction, and stylistic change.
 
-### CA-013 — Correcao editorial cria revisao
-Dado uma narrativa gerada
-Quando o texto e corrigido por `PATCH`
-Entao a narrativa passa a devolver o texto novo e as revisoes guardam o texto anterior, o revisto e o editor; texto vazio ou so com espacos responde `422`
-→ `test_api.py::test_patch_updates_narrative_text`, `::test_list_revisions_returns_original_text_first_and_editor`, `::test_list_revisions_empty_for_never_edited_narrative`, `::test_patch_empty_narrative_is_422`, `::test_patch_whitespace_narrative_is_422`, `test_use_case.py::test_update_narrative_edits_text_and_persists`, `::test_list_revisions_empty_for_never_edited_narrative`
+### FR-012 — Present an audit trail
 
-### CA-014 — Isolamento por registo em todas as leituras
-Dado uma narrativa de um registo
-Quando e lida, corrigida ou tem as revisoes listadas sob outro registo
-Entao todas respondem `404`
-→ `test_api.py::test_get_under_wrong_record_is_404`, `::test_list_revisions_under_wrong_record_is_404`, `::test_patch_under_wrong_record_is_404`, `::test_patch_unknown_narrative_is_404`, `test_use_case.py::test_get_missing_narrative_raises`, `::test_update_missing_narrative_raises`
+The report audit endpoint and Angular audit page aggregate:
 
-## 7. Requisitos nao funcionais
+1. source execution and approval evidence;
+2. persisted CIDOC-CRM/SHACL artefacts;
+3. frozen canonical facts;
+4. model, prompt, temperature, time, and response hash;
+5. deterministic findings over the original generated text; and
+6. chronological editorial revisions and current text.
 
-- **Postura advisory**: a narrativa e material de trabalho sujeito a revisao humana; achados de validacao acompanham-na.
-- **Modelo local**: geracao com Llama 3.1:8b via Ollama; latencia e disponibilidade sao do ambiente.
-- **Fronteiras**: o contexto le o mapeamento por `app.cidoc_crm.public` e os prompts pela linguagem publicada.
+The UI escapes narrative and finding text before applying trusted highlight
+markup. It links a recorded prompt-version identifier to its exact management
+view.
 
-## 8. Rastreabilidade
+### FR-013 — Delete through report lifecycle
 
-| Elemento | Localizacao |
+There is no public narrative-delete HTTP endpoint. The narrative Published
+Language exposes a hard-delete operation used when an in-situ report is deleted.
+It removes the generated narrative, all revisions, and its fact snapshot while
+preserving the exported visit record.
+
+Therefore, generated narrative history is not retained indefinitely. External
+report publications are revoked by the report workflow before deletion.
+
+### FR-014 — Map operational failures
+
+| Situation | HTTP result |
 | --- | --- |
-| Factos canonicos e verificacoes (RF-008, RF-009) | `app/ai/museum_narrative/application/` |
-| Porta semantica (RF-003, RF-004) | `app/cidoc_crm/in_situ_visit_mapping/application/cidoc/reasoning.py` via `app.cidoc_crm.public` |
-| Prompt publicado (RF-005) | `app/ai/museum_narrative/infrastructure/` (ACL de prompts) |
-| Adaptador do modelo (RF-015) | `app/ai/museum_narrative/infrastructure/` (Ollama) |
-| Endpoints de leitura e correcao (RF-014) | `app/ai/museum_narrative/presentation/routes.py` |
-| Historico e revisoes (RF-010, RF-012) | `app/ai/museum_narrative/domain/`, `infrastructure/repositories.py` |
-| Contrato publico | Esquema OpenAPI em `/openapi.json`; regras transversais em `docs/api_contracts/README.md` |
+| Unsupported narrative type | `400 INVALID_NARRATIVE_TYPE` |
+| Missing visit record | `404 IN_SITU_VISIT_NOT_FOUND` |
+| Missing narrative or record/narrative mismatch | `404 NARRATIVE_NOT_FOUND` |
+| Missing exact prompt version in preview | `404 PROMPT_VERSION_NOT_FOUND` |
+| Prompt version belongs to another style | `422 PROMPT_VERSION_NARRATIVE_TYPE_MISMATCH` |
+| CIDOC/SHACL gate failure | `422 SEMANTIC_VALIDATION_FAILED` |
+| Invalid preview combination or request validation | `422` validation envelope |
+| Model or published prompt unavailable, including blank output | `503` |
+| Model timeout | `504 MODEL_TIMEOUT` |
+| External caller | `403` |
 
-## 9. Questoes em aberto
+## 7. Invariants
 
-1. Um achado de invencao deve poder bloquear a publicacao externa da narrativa, e quem decide isso?
-2. O conjunto de verificacoes deterministicas cobre datas, pessoas, objetos e lugares: que outras categorias merecem verificacao (quantidades, instituicoes, tecnicas)?
+| ID | Invariant |
+| --- | --- |
+| INV-001 | No model call occurs unless the rebuilt CIDOC-CRM projection passes the semantic gate. |
+| INV-002 | The model receives canonical facts, not CIDOC IRIs or the JSON-LD graph. |
+| INV-003 | Every newly persisted narrative records the selected prompt-version ID/label and configured model name. |
+| INV-004 | A successful generation links to the frozen canonical facts and gate artefacts used for that execution. |
+| INV-005 | Publishing a new prompt does not mutate already generated narrative metadata. |
+| INV-006 | Editorial correction changes only current text and appends a revision. |
+| INV-007 | Original generation metadata, hash, findings, and fact snapshot survive editorial correction unchanged. |
+| INV-008 | Deterministic findings are advisory and never rewrite generated text. |
+| INV-009 | Exact reads, edits, and revision lists enforce record/narrative ownership. |
+| INV-010 | Preview persists neither a narrative nor a fact snapshot. |
+| INV-011 | Report deletion may hard-delete the linked narrative, revisions, and fact snapshot. |
+
+The database uses plain identifier columns rather than foreign keys between
+narrative, fact snapshot, prompt version, visit record, revision, and report
+records. Several invariants are application-enforced rather than
+database-enforced.
+
+## 8. Acceptance and test traceability
+
+| Behaviour | Representative automated evidence |
+| --- | --- |
+| Default/explicit type and invalid type | `test_api.py::test_default_type_returns_institutional`, `test_use_case.py::test_explicit_type_is_used_with_request_body_source`, `test_api.py::test_invalid_type_is_400` |
+| Semantic gate and frozen output | `test_api.py::test_semantic_failure_is_422`, `test_use_case.py::test_facts_adapter_validates_cidoc_before_facts`, `test_use_case.py::test_fact_snapshot_freezes_cidoc_gate_output_used_for_generation` |
+| Prompt resolution and historical identity | `test_use_case.py::test_generation_uses_published_prompt_registry_output`, `test_use_case.py::test_existing_narrative_keeps_prompt_version_after_new_publish`, `test_prompt_acl.py::test_prompt_acl_rejects_version_from_another_narrative_type` |
+| Canonical input and declared absence | `test_use_case.py::test_fact_snapshot_freezes_payload_used_for_generation`, `test_use_case.py::test_user_prompt_receives_canonical_facts_and_declared_absence` |
+| Deterministic findings | `test_use_case.py::test_narrative_with_invented_date_is_marked_for_review`, `test_use_case.py::test_planned_date_as_execution_is_marked_for_review`, `test_use_case.py::test_invented_person_object_and_place_are_marked_for_review` |
+| Preview rules and no persistence | `test_api.py::test_preview_returns_draft_metadata_without_persisting`, `test_api.py::test_preview_accepts_ad_hoc_content_with_null_prompt_version_id`, `test_use_case.py::test_preview_rejects_invalid_prompt_source_combinations` |
+| History, exact reads, and isolation | `test_api.py::test_listed_newest_first_after_two_generations`, `test_api.py::test_get_under_wrong_record_is_404`, `test_use_case.py::test_list_revisions_under_wrong_record_raises` |
+| Editorial correction and revisions | `test_api.py::test_patch_updates_narrative_text`, `test_api.py::test_list_revisions_returns_original_text_first_and_editor`, `test_repository.py::test_repository_lists_revisions_oldest_first_with_editor` |
+| Model and authorisation failures | `test_api.py::test_model_unavailable_is_503`, `test_api.py::test_model_timeout_is_504`, `test_api.py::test_blank_model_output_is_503`, `test_api.py::test_external_caller_is_403` |
+| Angular report and audit UI | `create-in-situ-visit-report-modal.component.spec.ts`, `in-situ-visit-report-narrative.component.spec.ts`, `edit-in-situ-visit-narrative-dialog.component.spec.ts`, `in-situ-visit-audit-trail-page.component.spec.ts` |
+
+## 9. Non-functional requirements
+
+- **Advisory posture:** model output and heuristic validation are review aids,
+  not factual certification or publication approval.
+- **Transactional generation:** direct generation and report orchestration commit
+  only after successful persistence of their complete operation.
+- **Architecture:** domain and application remain framework-free; cross-context
+  reads use published languages and adapters.
+- **Auditability:** hashes detect differences only when the retained input or
+  original text is available; they do not authenticate authorship themselves.
+- **Provider configuration:** generation uses a configurable Ollama-compatible
+  endpoint. The default is `llama3.1:8b` on localhost, not a deployment guarantee.
+- **Performance:** generation makes a synchronous model call in the HTTP request;
+  there is no background job, progress endpoint, cancellation, or idempotency key.
+
+## 10. Known gaps and recommended changes
+
+| Priority | Finding | Recommended change |
+| --- | --- | --- |
+| High | Any staff member can read sensitive facts and revisions, generate variants, and edit any narrative when identifiers are known. | Define reader, generator, editor, reviewer, and publisher permissions and enforce project/collection scope in the backend. |
+| High | A narrative with deterministic findings can still be linked to and externally published as a report. | Introduce an explicit human review decision and block external publication until the decided policy is satisfied. |
+| High | Model processing may be local or hosted, while prompts include personal and operational source data. | Document the deployment processing boundary, minimise/redact model input, and require an approved provider/privacy configuration outside local environments. |
+| High | Prompt labels allow 96 characters in `ai.prompts`, but both narrative prompt-label columns are `VARCHAR(64)`. | Align column and API limits through a migration and test the maximum valid prompt label. |
+| High | Exact prompt content and reproducible model identity are not frozen; prompt history may be removed by migrations. | Snapshot prompt content/hash and record provider, immutable model digest/version, and effective generation parameters. |
+| Medium | Regex checks cover narrow patterns and can produce false negatives or positives. | Treat `validation_conforms` as heuristic review status, expand multilingual fixtures, measure precision/recall, and avoid presenting it as factual conformance. |
+| Medium | Concurrent editorial updates have no expected version, row lock, or ETag and can overwrite each other. | Add optimistic concurrency with a version token and return `409` for stale edits. |
+| Medium | `target_language` is unrestricted and unbounded although persistence allows 16 characters. | Use a documented language enum or validated BCP 47 tag with matching database length and reject invalid input before generation. |
+| Medium | Generated-by identity, review decision, edit reason, request correlation, and latency are absent from provenance. | Persist the actor, review workflow, revision reason, request ID, and execution timing. |
+| Medium | Plain IDs without foreign keys permit orphaned cross-artefact references if workflows diverge. | Add safe constraints where lifecycle permits, or scheduled integrity checks where cross-context FKs are intentionally avoided. |
+| Medium | Direct generation is synchronous, not idempotent, and has no cancellation or progress state. | Add an idempotency key and consider an asynchronous job if production latency warrants it. |
+| Medium | Full generation history exists only in the API; the report UI shows one linked generation and its edits. | Add a staff history/comparison view if repeated generation is an intended workflow. |
+| Low | Listing narratives for a nonexistent record returns an empty `200` page. | Decide whether collection reads should verify record existence and consistently return `404`. |
+| Low | Historical `KG-RAG` naming overstates the validation-gated fact pipeline. | Rename user-facing/code documentation, or implement and evidence graph retrieval before retaining the term as a capability claim. |
+| Low | Static persona-building code is unused after prompts became managed content. | Remove or isolate the dead helper after verifying no external imports. |
+
+## 11. Traceability
+
+| Element | Location |
+| --- | --- |
+| Aggregate, snapshots, revisions, and types | `vitarerum-api/app/ai/museum_narrative/domain/` |
+| Canonical facts and deterministic validation | `vitarerum-api/app/ai/museum_narrative/domain/facts.py` and `validation.py` |
+| Generation, preview, read, list, and edit use cases | `vitarerum-api/app/ai/museum_narrative/application/use_cases.py` |
+| Canonical user-prompt serialization | `vitarerum-api/app/ai/museum_narrative/application/prompts.py` |
+| CIDOC-CRM and prompt adapters | `vitarerum-api/app/ai/museum_narrative/infrastructure/cidoc_acl.py` and `prompt_acl.py` |
+| Model adapter and persistence | `vitarerum-api/app/ai/museum_narrative/infrastructure/` |
+| Narrative HTTP API | `vitarerum-api/app/ai/museum_narrative/presentation/` |
+| Published language consumed by reports | `vitarerum-api/app/ai/museum_narrative/public.py` |
+| Report generation, detail, editor, and audit UI | `vitarerum-ui/src/app/features/collections/reports/` |
+| Backend automated tests | `vitarerum-api/test/ai/museum_narrative/` |
+| Context and generation-flow diagrams | `docs/diagrams/in-situ-visit-context-map.puml` and `in-situ-visit-cidoc-narrative-flow.puml` |
+
+## 12. Open product decisions
+
+1. Which staff roles and project/collection scopes may generate, read, edit,
+   review, and externally publish a narrative?
+2. Which findings or evidence gaps must block publication, and who can override
+   that decision with a recorded justification?
+3. Is hosted model processing permitted for the personal and collection data in
+   canonical facts, and under which retention and contractual controls?
+4. Which languages are officially supported and evaluated for generation and
+   deterministic checks?
+5. Must deleted reports retain narrative snapshots and revisions for an
+   institutional audit-retention period?
+6. What quality dataset and measurable thresholds are required for each
+   narrative type before prompt or model changes reach production?

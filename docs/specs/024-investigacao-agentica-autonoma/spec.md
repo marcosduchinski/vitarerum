@@ -1,296 +1,603 @@
-# SPEC-024 — Investigacao agentica autonoma (full-agentic)
+# SPEC-024 — Autonomous agentic investigation (full-agentic)
 
-| Campo | Valor |
+| Field | Value |
 | --- | --- |
-| Identificador | SPEC-024 |
-| Estado | Implementado |
-| Contexto delimitado | `app/scientific_return` |
-| Modo de execucao | Assincrono, executado por trabalhador fora do pedido |
-| Postura | Autonoma na descoberta, humana na decisao |
-| Specs relacionadas | [SPEC-001](../001-investigacao-agentica-assistida/spec.md), [SPEC-002](../002-vigilancia-retorno-cientifico/spec.md), [SPEC-004](../004-decisao-candidato-publicacao/spec.md), [SPEC-025](../025-base-de-conhecimento-curatorial/spec.md) |
-| Documentos relacionados | `docs/api_contracts/README.md` |
-| Escrita a partir de | `app/scientific_return/application/full_agentic.py`, `presentation/routes.py`, `test/scientific_return/test_full_agentic_*.py`, `test_provenance_contract.py`, `test_sweep_fan_out.py` |
+| Identifier | SPEC-024 |
+| Status | Implemented (with declared tenant-isolation and manual-targeting gaps) |
+| Bounded context | `app.scientific_return` |
+| Execution mode | Asynchronous, outside the initiating HTTP request |
+| Decision posture | Autonomous discovery; mandatory human decision |
+| Derived from | Domain model, use cases, source adapters, worker commands, migrations, API, Angular interface, deployment configuration, and automated tests inspected on 2026-09-04 |
+| Related specs | [SPEC-001](../001-investigacao-agentica-assistida/spec.md), [SPEC-002](../002-vigilancia-retorno-cientifico/spec.md), [SPEC-004](../004-decisao-candidato-publicacao/spec.md), [SPEC-022](../022-cifragem-e-armazenamento/spec.md), and [SPEC-025](../025-base-de-conhecimento-curatorial/spec.md) |
 
 ---
 
-## 1. Problema
+## 1. Problem
 
-O ciclo assistido de [SPEC-001](../001-investigacao-agentica-assistida/spec.md)
-corre dentro do pedido HTTP: alguem carrega, espera, ve o resultado. Isso limita
-a investigacao ao que cabe num pedido e obriga uma pessoa a estar presente.
+The assisted cycle in [SPEC-001](../001-investigacao-agentica-assistida/spec.md)
+runs while a person waits for an HTTP request. A scientific-return sweep over
+the consulted objects of a project can take longer than one request and does
+not require a person to watch every search happen.
 
-Uma varredura de retorno cientifico sobre todos os objetos de um projeto demora
-mais do que um pedido pode durar e nao tem de ser vista a acontecer. Mas
-executar fora do pedido levanta o que um pedido resolvia sozinho: quem autoriza,
-o que impede duas execucoes sobre o mesmo alvo, o que acontece quando o
-trabalhador morre a meio, e como se recusa comecar quando o sistema ja esta a
-produzir mau resultado.
+Moving work outside the request creates additional risks: authorization must be
+captured before enqueueing, duplicate executions must be prevented, model and
+source cost must be bounded, a dead worker must not hold a target forever, and
+untrusted publication text must not acquire decision-making authority.
 
-## 2. Objetivo
+## 2. Goal
 
-Executar investigacao de retorno cientifico de forma autonoma e retomavel, com
-o mesmo limite epistemico do ciclo assistido — o agente **descobre e propoe**,
-nunca decide — e com refusas tipadas antes de gastar seja o que for.
+Run resumable autonomous discovery with durable state, bounded cost, explicit
+source readiness, evidence grounding, and an auditable trajectory. The system
+may search, read, and propose candidates; only an authorized person may decide
+whether a candidate becomes an institutional scientific-return record.
 
-## 3. Atores
+This specification distinguishes implemented safeguards from guarantees that
+the current API does not yet enforce. The latter are listed in Section 9.
 
-| Ator | Papel |
+## 3. Actors
+
+| Actor | Responsibility |
 | --- | --- |
-| `CURATORIAL`, `COLLECTIONS_MANAGEMENT`, `DIRECTION` | Iniciam e cancelam investigacoes |
-| Restante staff | Leem estado, trajetoria e prontidao; nao iniciam nada |
-| Agendador | Inicia investigacoes por cadencia, sem chamador humano |
-| Trabalhador | Executa a investigacao enfileirada, sob concessao temporaria |
-| Modelo de linguagem | Planeia consultas; nunca decide o candidato |
+| `CURATORIAL`, `COLLECTIONS_MANAGEMENT`, `DIRECTION` | Start and cancel investigations; review candidates |
+| Other staff groups | Read monitoring state and autonomous trajectories |
+| Scheduler | Starts object-scoped investigations after a scheduled deterministic sweep |
+| Worker | Claims queued work under a time-limited lease and persists progress |
+| Planner model | Proposes structured searches within the allowed source capabilities |
+| Reader model | Assesses one bibliographic record without access to tools |
+| Grounding validator | Accepts only claims found in fields actually delivered by a source |
 
-## 4. Linguagem ubiqua
+## 4. Ubiquitous language and domain model
 
-- **Investigacao autonoma**: unidade de trabalho enfileirada sobre um alvo. Estados `QUEUED`, `RUNNING`, `CANCEL_REQUESTED`, `COMPLETED`, `FAILED`, `CANCELLED`; os tres ultimos sao terminais.
-- **Alvo**: a combinacao de vigilancia, candidato e objeto consultado a que a investigacao se refere.
-- **Concessao (lease)**: direito temporario de um trabalhador executar uma investigacao. Expira.
-- **Recuperacao**: retoma de uma investigacao cuja concessao expirou, contabilizada e limitada.
-- **Prontidao**: diagnostico por fonte, dizendo se esta operacional — sem revelar credenciais.
-- **Disjuntor (circuit breaker)**: recusa de novas investigacoes quando a precisao historica cai abaixo do limiar.
-- **Trajetoria**: sequencia persistida de eventos tipados do que a investigacao fez.
+- **Full-agentic investigation**: aggregate root that owns target identity,
+  lifecycle, budget, usage, lease, recovery count, and terminal outcome.
+- **Target**: tuple of watch, objective, optional candidate, and optional
+  consulted object. The current supported objective is discovery and therefore
+  requires no candidate.
+- **Lease**: temporary right of one worker to advance an investigation.
+- **Recovery**: takeover after a running lease expires. It is counted separately
+  from a healthy worker voluntarily yielding its execution slice.
+- **Execution slice**: application deadline shorter than the hosting platform's
+  termination window. Work yields to the queue before the platform kills it.
+- **Deterministic floor**: bounded first plan derived from recorded inventory,
+  object, and researcher data without a model call.
+- **Readiness**: configuration diagnostic for requested, operational, and
+  inspectable-evidence sources. It is not a live connectivity or credential
+  validity check.
+- **Circuit breaker**: admission guard based on the precision of human decisions
+  over candidates linked to full-agentic investigations.
+- **Trajectory**: ordered sequence of typed, persisted events describing plans,
+  calls, searches, assessments, fallbacks, candidates, and termination.
+- **Degraded completion**: terminal `COMPLETED` investigation that finished on
+  incomplete capability, such as the deterministic floor after planner failure.
+  It may contain candidates; zero candidates is not proof of absence.
+- **Grounded claim**: reader passage or inventory form found literally, after
+  Unicode, case, and whitespace normalization, in a delivered title, abstract,
+  or indexed-text field.
 
-## 5. Escopo
+### 4.1 Lifecycle
 
-### Dentro
+```text
+QUEUED ──claim──> RUNNING ──complete──> COMPLETED
+   │                 │  │
+   │                 │  ├──failure/recovery ceiling──> FAILED
+   │                 │  └──cancel request──> CANCEL_REQUESTED ──worker/reaper──> CANCELLED
+   │                 └──slice exhausted──> QUEUED
+   └──cancel request──> CANCELLED
+```
 
-- Enfileiramento, execucao retomavel e cancelamento de investigacoes.
-- Refusas tipadas antes de gastar recursos.
-- Leitura de estado, trajetoria e prontidao das fontes.
-- Fan-out de uma vigilancia pelos objetos consultados do projeto.
+`COMPLETED`, `FAILED`, and `CANCELLED` are terminal. Requesting cancellation of
+an already terminal investigation is currently a no-op that returns its
+unchanged state.
 
-### Fora
+## 5. Scope
 
-- A decisao curatorial sobre os candidatos produzidos ([SPEC-004](../004-decisao-candidato-publicacao/spec.md)).
-- A cadencia que aciona as investigacoes ([SPEC-002](../002-vigilancia-retorno-cientifico/spec.md)).
-- A memoria curatorial que informa o agente ([SPEC-025](../025-base-de-conhecimento-curatorial/spec.md)).
+### In scope
+
+- Admission, idempotency, queueing, leasing, recovery, yielding, and reaping.
+- Deterministic and model-planned searches over allowed bibliographic sources.
+- Tool-call replay, budgets, deadlines, grounding, and publication deduplication.
+- Candidate provenance, trajectory, readiness, health metrics, and Angular
+  presentation.
+- Scheduled fan-out by consulted object.
+
+### Out of scope
+
+- Human candidate decisions, defined by
+  [SPEC-004](../004-decisao-candidato-publicacao/spec.md).
+- Watch cadence and deterministic sweeps, defined by
+  [SPEC-002](../002-vigilancia-retorno-cientifico/spec.md).
+- Curatorial-knowledge lifecycle, defined by
+  [SPEC-025](../025-base-de-conhecimento-curatorial/spec.md).
+- Autonomous writing to the collection-use publication log.
 
 ---
 
-## 6. Requisitos funcionais
+## 6. Functional requirements
 
-### RF-001 — Iniciar uma investigacao autonoma
+### RF-001 — Start an autonomous discovery
 
-`POST /scientific-return/watches/{watchId}/full-agentic-investigations` enfileira
-uma investigacao e responde `202` com o seu estado inicial. Exige cabecalho
-`Idempotency-Key` e um `objective`; aceita `candidateId` opcional.
+`POST /scientific-return/watches/{watchId}/full-agentic-investigations`
+requires JWT authentication, `X-Permission-Id`, `Idempotency-Key`, and a JSON
+body. It is restricted to `CURATORIAL`, `COLLECTIONS_MANAGEMENT`, and
+`DIRECTION`, persists a `QUEUED` investigation, and returns `202 Accepted`.
 
-Restrito a `CURATORIAL`, `COLLECTIONS_MANAGEMENT` e `DIRECTION`. A resposta e
-`202` e nao `201` porque nada foi ainda investigado: so aceite.
+The public API currently supports only:
 
-### RF-002 — Refusas antes de gastar
+```json
+{ "objective": "DISCOVER_CANDIDATE" }
+```
 
-Verificadas por esta ordem, todas antes de enfileirar:
+`objective` defaults to `DISCOVER_CANDIDATE`. Although the request schema still
+exposes optional `candidateId` and the enum contains `ENRICH_CANDIDATE`, either a
+non-null candidate or the enrichment objective is rejected with `422`.
 
-| Situacao | Resposta |
-| --- | --- |
-| Chave de idempotencia reutilizada para outro alvo | `422` |
-| Fluxo desligado por configuracao | `409` `FULL_AGENTIC_DISABLED` |
-| Ja existe investigacao viva sobre o mesmo alvo | `409` `FULL_AGENTIC_ALREADY_RUNNING` |
-| Precisao historica abaixo do limiar | `503` `FULL_AGENTIC_CIRCUIT_OPEN` |
-| Fonte pedida sem configuracao operacional possivel | `503` `FULL_AGENTIC_SOURCE_CONFIGURATION_INVALID` |
-| Vigilancia inexistente | `404` `SCIENTIFIC_RETURN_WATCH_NOT_FOUND` |
-| `candidateId` que nao pertence a vigilancia | `422` |
-| `objectId` que nao e objeto consultado do instantaneo | `422` |
+The manual endpoint does not accept `objectId`; it creates a legacy
+project-scoped target with `objectId = null`.
 
-Uma configuracao de fontes impossivel e recusada **antes** do enfileiramento, e
-nao descoberta pelo trabalhador: uma investigacao que nunca poderia produzir
-nada nao chega a existir.
+### RF-002 — Ordered admission guards
 
-### RF-003 — Idempotencia por alvo
+The start use case evaluates these guards before creating a new row, in this
+order:
 
-A mesma chave sobre o mesmo alvo devolve a investigacao existente. A mesma chave
-sobre outro alvo e recusada com `422`. A chave identifica o pedido, nao o
-chamador.
+| Order | Condition | Result |
+| --- | --- | --- |
+| 1 | Same idempotency key and same target | Return the existing investigation |
+| 1 | Same idempotency key and a different target | `422` |
+| 2 | Objective is not discovery, or a candidate is supplied | `422` |
+| 3 | Feature switch is disabled | `409 FULL_AGENTIC_DISABLED` |
+| 4 | No requested operational source can supply inspectable evidence | `503 FULL_AGENTIC_SOURCE_CONFIGURATION_INVALID` |
+| 5 | Human-decision precision is below the configured threshold | `503 FULL_AGENTIC_CIRCUIT_OPEN` |
+| 6 | Watch does not exist | `404 SCIENTIFIC_RETURN_WATCH_NOT_FOUND` |
+| 7 | Caller and watch have different non-null institutions | `422` |
+| 8 | Candidate or object does not belong to the watch snapshot | `422` |
+| 9 | Another investigation is live for the same target | `409 FULL_AGENTIC_ALREADY_RUNNING` |
 
-### RF-004 — Exclusividade por alvo
+The institution, candidate, and object checks occur after feature, source, and
+circuit checks. The object branch is used by scheduled starts; the public route
+does not currently pass an object.
 
-Nao existe mais do que uma investigacao viva por alvo. Um alvo ja vivo nao
-impede os restantes alvos da mesma vigilancia de arrancar.
+### RF-003 — Durable idempotency and dispatch
 
-### RF-005 — Disjuntor por precisao observada
+An idempotency key is globally unique in persistence and bound to one complete
+target. The investigation row is committed before dispatch. If dispatch fails,
+the durable `QUEUED` row remains available to the database-polling worker; the
+initiating request may still fail because dispatch occurs after the commit.
 
-Com pelo menos `circuit_min_decisions` decisoes humanas registadas, a precisao
-e a fracao de candidatos confirmados sobre candidatos decididos. Abaixo do
-limiar configurado, novas investigacoes sao recusadas com `503`.
+The `DATABASE` dispatcher treats the row itself as the queue. The optional
+`CLOUD_TASKS` dispatcher sends an OIDC-authenticated task containing the
+investigation identifier and `X-Worker-Token`.
 
-O disjuntor conta **apenas** desfechos humanos de investigacoes autonomas: o
-sinal de qualidade e a decisao curatorial, nao a auto-avaliacao do agente.
+### RF-004 — One live investigation per target
 
-### RF-006 — Isolamento institucional
+At most one row in `QUEUED`, `RUNNING`, or `CANCEL_REQUESTED` may exist for the
+same watch, objective, candidate, and object. The application checks first and
+PostgreSQL enforces the invariant through the partial unique index
+`uq_sr_fa_live_target`.
 
-Uma vigilancia de outra instituicao e recusada. O objeto tem de pertencer ao
-instantaneo da propria vigilancia, e uma investigacao ve apenas o seu objeto.
+Different object identifiers are independent targets. A null object is also a
+distinct target, so a manual project-scoped investigation can currently coexist
+with scheduled object-scoped investigations.
 
-### RF-007 — Execucao retomavel
+### RF-005 — Circuit breaker uses human outcomes
 
-A execucao corre fora do pedido, sob concessao temporaria. Um trabalhador nao
-toma a concessao viva de outro. Uma concessao expirada e recuperavel, e cada
-recuperacao e contabilizada; esgotado o limite, a investigacao termina em vez de
-recuperar para sempre.
+When at least `circuit_min_decisions` linked candidates have a human outcome,
+precision is:
 
-Uma investigacao terminada nunca deixa a sua execucao de pesquisa em aberto.
+```text
+confirmed full-agentic candidates / (confirmed + dismissed full-agentic candidates)
+```
 
-### RF-008 — Cancelamento
+Admission is refused when this value is below `circuit_min_precision`. Pending
+candidates and model self-assessment do not enter the calculation. Both
+thresholds default to zero, which disables the breaker until explicitly
+configured. The metric is currently global rather than institution-scoped.
+
+### RF-006 — Source readiness
+
+`GET /scientific-return/full-agentic-readiness` is available to staff and
+returns:
+
+- whether the feature is enabled;
+- requested, operational, unavailable, and inspectable-evidence source names;
+- whether the combination is valid and a diagnostic message when it is not.
+
+No key, token, endpoint, or credential fragment is returned. “Operational” is
+derived from local configuration: Crossref is always registered, OpenAlex
+requires a configured API key, and Europe PMC requires its enable flag.
+Readiness does not call the upstream providers.
+
+### RF-007 — Object-scoped scheduled fan-out
+
+After a deterministic scheduled run, the sweep creates one discovery
+investigation per consulted object, up to `max_objects`. Each key contains the
+deterministic run and object identifiers, so replaying a sweep does not buy the
+same work twice.
+
+Failure or an already-live target for one object does not stop other objects.
+When the object ceiling truncates coverage, every created investigation receives
+a `COVERAGE_TRUNCATED` event containing covered count, total count, and uncovered
+object identifiers.
+
+### RF-008 — Lease, recovery, and execution slices
+
+A worker atomically claims either a queued row or a live row whose lease has
+expired. A live lease cannot be taken by a second worker. Lease renewal and LLM
+reservation require the current owner and an unexpired lease.
+
+Taking over an expired live lease increments `recoveryCount`. A voluntary slice
+yield returns the aggregate to `QUEUED`, records
+`EXECUTION_SLICE_EXHAUSTED`, and does not consume recovery allowance. A
+push-queue dispatcher is notified of the continuation; failure to announce it
+does not remove the durable queued row.
+
+If `recoveryCount` becomes greater than `max_recoveries`, the worker marks the
+investigation `FAILED`. Before each queue drain, a reaper terminates live rows
+older than `max_age_seconds`, measured from creation rather than heartbeat, and
+closes any associated search run.
+
+Configuration rejects deadline combinations in which an external call cannot
+fit inside a lease or an execution slice plus the longest call cannot fit inside
+the platform window.
+
+### RF-009 — Cancellation
 
 `POST /scientific-return/full-agentic-investigations/{investigationId}/cancel`
-marca `CANCEL_REQUESTED` e, quando o trabalho para, `CANCELLED`. Restrito aos
-mesmos grupos de RF-001. Cancelar duas vezes e idempotente. Uma investigacao ja
-terminal responde `422`.
+is restricted to the three mutation groups.
 
-### RF-009 — Leitura de estado e trajetoria
+- `QUEUED` becomes `CANCELLED` immediately;
+- `RUNNING` becomes `CANCEL_REQUESTED` until a worker or reaper closes it;
+- repeated cancellation while requested is idempotent;
+- terminal investigations are returned unchanged.
 
-| Endpoint | Devolve |
+### RF-010 — State and trajectory reads
+
+| Endpoint | Response |
 | --- | --- |
-| `GET /scientific-return/full-agentic-investigations/{investigationId}` | Estado, contagem de recuperacoes, limite de recuperacoes e expiracao da concessao |
-| `GET /scientific-return/watches/{watchId}/full-agentic-investigations` | Investigacoes da vigilancia, `limit` entre 1 e 100 (por omissao 20) |
-| `GET /scientific-return/full-agentic-investigations/{investigationId}/trajectory` | Eventos tipados por ordem de sequencia, com o instante |
+| `GET /scientific-return/full-agentic-investigations/{investigationId}` | Target, lifecycle, budget, usage, recovery details, degradation, and lease expiry |
+| `GET /scientific-return/watches/{watchId}/full-agentic-investigations` | Newest-first list, with `limit` from 1 to 100 and default 20 |
+| `GET /scientific-return/full-agentic-investigations/{investigationId}/trajectory` | Events ordered by sequence |
 
-Todas restritas a staff. A trajetoria e persistida passo a passo: uma falha a
-meio deixa registo parcial legivel, nao nada.
+All three require a staff identity. Individual state returns `404` for an
+unknown investigation. The list returns an empty array for an unknown watch,
+and trajectory returns an empty array for an unknown investigation. Current
+tenant-authorization gaps are declared in Section 9.
 
-### RF-010 — Prontidao das fontes
+### RF-011 — Deterministic floor and constrained planning
 
-`GET /scientific-return/full-agentic-readiness` devolve, por fonte pedida, se
-esta operacional. Restrito a staff. **Nunca** devolve credenciais nem parte
-delas — uma fonte configurada e uma fonte com chave valida sao coisas
-diferentes, e so a primeira e observavel aqui.
+The first iteration uses a deterministic floor rather than the planner. It
+interleaves author-plus-object and bare-inventory searches, uses at most half of
+the query budget, and leaves capacity for subsequent model planning.
 
-### RF-011 — Fan-out por objeto
+Later iterations ask the planner for structured search specifications. Unknown
+sources and strategies unsupported by a source's declared capabilities are
+filtered before execution. A malformed planner response is retried once. If it
+still fails, or the remaining model-call budget cannot fund a plan, the
+investigation completes as degraded on its deterministic floor.
 
-Uma varredura de vigilancia gera uma investigacao por objeto consultado, cada
-uma com a sua propria chave de idempotencia. Objetos acima do tecto configurado
-sao **registados**, nao descartados em silencio.
+### RF-012 — Bounded, replayable external work
 
-### RF-012 — Execucao interna nao publica
+Budgets independently cap iterations, queries, accepted results, candidate
+links, and LLM calls. Every model call is reserved and committed before leaving
+the process. A worker killed during that call therefore consumes the reservation
+instead of repeating calls indefinitely.
 
-`POST /scientific-return/internal/full-agentic/execute` e a porta do
-trabalhador. Exige `X-Worker-Token` comparado em tempo constante e esta
-**excluida do esquema OpenAPI**. Ao concluir com candidatos novos, notifica quem
-criou a vigilancia; uma falha a notificar nao desfaz a investigacao.
+Each search tool invocation has a normalized idempotency key and a persisted,
+encrypted invocation/result record. A completed call is replayed after resume;
+an already paid result is not silently discarded. Duplicate searches and
+records already assessed are skipped. Metadata-only sources receive a smaller
+per-query result allowance.
 
----
+### RF-013 — Reader isolation and evidence grounding
 
-## 7. Invariantes
+The reader receives one bibliographic record plus trusted project, search, and
+curatorial context. It has no tool registry and cannot select system-derived
+identifiers, write decisions, or publish to the collection-use log.
 
-- **INV-001**: uma investigacao terminal nao volta a mudar de estado.
-- **INV-002**: no maximo uma investigacao viva por alvo.
-- **INV-003**: uma chave de idempotencia pertence a um alvo unico.
-- **INV-004**: cada chamada ao modelo e debitada e confirmada **antes** de comecar; uma morte subita deixa-a gasta, nunca por gastar.
-- **INV-005**: esgotado o orcamento, o modelo nao e contactado.
-- **INV-006**: nenhum modo de falha deixa uma investigacao viva indefinidamente.
-- **INV-007**: a prontidao nunca expoe credenciais.
-- **INV-008**: a decisao sobre um candidato e sempre humana; o agente propoe.
+Reader passages and inventory forms are checked against the fields actually
+delivered by the source. Unsupported, duplicate, and empty claims are rejected
+and counted. Inventory evidence is:
 
----
-
-## 8. Criterios de aceitacao
-
-### CA-001 — Configuracao impossivel recusada antes do enfileiramento
-Dado uma fonte pedida sem configuracao operacional possivel
-Quando uma investigacao e iniciada
-Entao e recusada com `503` e nada e enfileirado
-→ `test_full_agentic_flow.py::test_invalid_operational_source_configuration_fails_before_enqueue`, `test_provenance_contract.py::test_an_impossible_source_configuration_is_refused_before_enqueue`
-
-### CA-002 — Chave de idempotencia presa ao alvo
-Dado uma chave ja usada
-Quando e reutilizada para outro alvo
-Entao o pedido e recusado
-→ `test_full_agentic_flow.py::test_idempotency_key_cannot_be_reused_for_another_target`
-
-### CA-003 — Disjuntor conta so desfechos humanos
-Dado historico de decisoes curatoriais sobre candidatos autonomos
-Quando a precisao cai abaixo do limiar
-Entao novas investigacoes sao recusadas, e apenas desfechos humanos entram no calculo
-→ `test_full_agentic_flow.py::test_circuit_breaker_uses_only_full_agentic_human_outcomes`
-
-### CA-004 — Concessao exclusiva e recuperacao limitada
-Dado uma investigacao com concessao viva
-Quando outro trabalhador tenta toma-la
-Entao e recusado; e uma investigacao recuperada repetidamente acaba terminada
-→ `test_full_agentic_flow.py::test_second_worker_cannot_take_a_live_lease`, `::test_a_repeatedly_recovered_investigation_is_terminated`, `::test_the_reaper_closes_only_investigations_past_their_age`
-
-### CA-005 — Orcamento debitado antes da chamada
-Dado uma chamada ao modelo prestes a comecar
-Quando o processo morre a meio
-Entao a chamada reservada fica gasta, e um orcamento esgotado nunca chega ao modelo
-→ `test_full_agentic_flow.py::test_every_model_call_is_charged_and_committed_before_it_starts`, `::test_a_hard_death_leaves_the_reserved_call_spent`, `::test_an_exhausted_budget_never_reaches_the_model`
-
-### CA-006 — Nenhuma investigacao fica viva para sempre
-Dado qualquer modo de falha
-Quando o tempo passa
-Entao a investigacao termina e nao deixa a sua execucao de pesquisa aberta
-→ `test_full_agentic_flow.py::test_no_failure_mode_keeps_an_investigation_alive_forever`, `::test_a_terminated_investigation_never_leaves_its_run_open`
-
-### CA-007 — Cancelamento idempotente
-Dado uma investigacao ja com cancelamento pedido
-Quando o cancelamento e repetido
-Entao o resultado e o mesmo
-→ `test_full_agentic_flow.py::test_repeated_cancel_request_is_idempotent`
-
-### CA-008 — Prontidao sem credenciais
-Dado fontes configuradas e fontes pedidas mas nao operacionais
-Quando a prontidao e lida
-Entao reporta o estado de cada uma sem devolver credenciais
-→ `test_provenance_contract.py::test_readiness_reports_operational_sources_without_credentials`, `::test_readiness_reports_a_source_that_is_requested_but_not_operational`
-
-### CA-009 — Fan-out por objeto com tecto visivel
-Dado um projeto com varios objetos consultados
-Quando a vigilancia e varrida
-Entao cada objeto gera a sua investigacao com chave propria, os objetos acima do tecto ficam registados e um objeto ja vivo nao trava os outros
-→ `test_sweep_fan_out.py::test_one_investigation_per_object_with_a_key_of_its_own`, `::test_objects_beyond_the_ceiling_are_recorded_not_dropped`, `::test_one_object_already_live_does_not_stop_the_others`
-
-### CA-010 — Isolamento por objeto e por instantaneo
-Dado uma vigilancia com varios objetos
-Quando uma investigacao corre
-Entao ve apenas o seu objeto, e um objeto fora do instantaneo e recusado
-→ `test_full_agentic_flow.py::test_an_investigation_sees_only_its_own_object`, `::test_an_object_outside_the_snapshot_is_refused`, `::test_two_objects_of_one_project_are_two_targets`, `::test_a_snapshot_narrowed_to_a_missing_object_is_refused`
-
-### CA-011 — Trajetoria persistida e legivel
-Dado uma investigacao executada
-Quando a trajetoria e lida
-Entao os eventos estao persistidos por sequencia, com a versao do prompt que correu
-→ `test_full_agentic_flow.py::test_plan_events_record_the_prompt_version_that_ran`, `test_investigation_repository.py::test_the_whole_trajectory_survives_the_database`
-
-### CA-012 — Provenencia do candidato preservada
-Dado candidatos produzidos por investigacao autonoma
-Quando a fila e a decisao sao lidas
-Entao cada candidato expoe a sua provenencia e a decisao guarda o que o curador viu
-→ `test_provenance_contract.py::test_the_queue_exposes_the_provenance_of_every_candidate`, `::test_the_decision_snapshot_keeps_what_the_curator_was_shown`
-
-### CA-013 — Endpoint interno fora do contrato publico
-Dado o esquema OpenAPI publicado
-Quando e inspecionado
-Entao a porta do trabalhador nao aparece, e as rotas operacionais aparecem
-→ `test_api_contract.py::test_openapi_excludes_bench_and_keeps_operational_scientific_return`
-
----
-
-## 9. Requisitos nao funcionais
-
-- **Seguranca**: JWT + `X-Permission-Id` nas rotas publicas; a porta do trabalhador usa um segredo proprio comparado em tempo constante.
-- **Custo**: orcamento por investigacao em iteracoes, consultas, resultados, candidatos e chamadas ao modelo; o disjuntor evita gastar num sistema a produzir mau resultado.
-- **Isolamento transacional**: nenhuma transacao aberta enquanto um modelo ou uma fonte responde.
-- **Auditabilidade**: trajetoria persistida passo a passo, com a versao de prompt de cada plano.
-- **Arquitetura**: dominio e aplicacao livres de FastAPI e SQLAlchemy; contratos import-linter preservados.
-
-## 10. Rastreabilidade
-
-| Elemento da spec | Localizacao |
+| Status | Meaning |
 | --- | --- |
-| Estados e agregado (INV-001) | `app/scientific_return/domain/enums.py`, `domain/full_agentic_models.py` |
-| Arranque, refusas e disjuntor (RF-001..RF-006) | `app/scientific_return/application/full_agentic.py` (`StartFullAgenticScientificReturn`) |
-| Concessao, recuperacao e ceifeira (RF-007) | `app/scientific_return/application/full_agentic.py` |
-| Cancelamento e leituras (RF-008, RF-009) | `app/scientific_return/application/full_agentic.py` (`CancelFullAgenticInvestigation`, `GetFullAgenticInvestigation`) |
-| Ancoragem de afirmacoes | `app/scientific_return/application/full_agentic_grounding.py` |
-| Estrategia de pesquisa | `app/scientific_return/application/full_agentic_strategy.py` |
-| Endpoints (RF-001, RF-008..RF-012) | `app/scientific_return/presentation/routes.py` |
-| Contrato publico | Esquema OpenAPI em `/openapi.json`; regras transversais em `docs/api_contracts/README.md` |
+| `VERIFIED` | At least one claimed form occurs in a delivered field |
+| `NOT_OBSERVED` | Inspectable full text was delivered and contains no claimed form |
+| `UNAVAILABLE` | The delivered material cannot establish absence |
 
-## 11. Questoes em aberto
+Grounding filters factual claims but does not silently rewrite the reader's
+relevance verdict. The curator sees provenance and rejection counts when making
+the separate human decision.
 
-1. O limiar do disjuntor e por instituicao ou global? Hoje a metrica e agregada.
-2. Uma investigacao terminada em `FAILED` por esgotamento de recuperacoes deve reentrar na fila por decisao humana, ou exigir novo pedido?
-3. O tecto de objetos por varredura devia ser por projeto ou por instituicao?
+### RF-014 — Candidate identity and provenance
+
+Records are deduplicated by publication identity so figures, tables, and other
+components do not consume the candidate ceiling as separate publications. The
+investigation links a candidate as `CREATED` or `REDISCOVERED`, preserving
+source, query, search intent, search strategy, grounded passages, grounded
+inventory forms, prompt identity, and knowledge identifiers.
+
+The later decision snapshot preserves what the reviewer saw. Only the separate
+human decision use case may confirm, correct-and-confirm, or dismiss a
+candidate.
+
+### RF-015 — Internal worker entry point
+
+`POST /scientific-return/internal/full-agentic/execute` executes one queued
+investigation. It requires `X-Worker-Token`, compared with the configured secret
+using constant-time comparison, and is excluded from OpenAPI.
+
+When a newly completed run produced candidates, the route attempts to notify
+the watch creator. Notification failure is logged and rolled back independently
+without undoing the investigation. OpenAPI exclusion is discoverability control,
+not network isolation; see Section 9.
+
+### RF-016 — Angular operational experience
+
+The project scientific-return panel uses standalone, signal-based Angular
+components and resources to:
+
+- disable manual start and explain when readiness is unavailable or invalid;
+- start the discovery objective with a fresh browser-generated idempotency key;
+- list and manually refresh investigation and candidate state;
+- label object-scoped investigations with inventory number and object name;
+- show partial object coverage, degraded completion, recovery count, recovery
+  ceiling, and last recovery reason;
+- render trajectory payloads in iterations and distinguish information sent to
+  the model from information produced by it;
+- allow authorized review groups to start and cancel work.
+
+The interface does not poll automatically. A user must refresh to observe work
+completed after the initial request.
+
+### RF-017 — Operational metrics
+
+The staff metrics response includes full-agentic run and candidate counts plus
+LLM timeouts, rejected source waits, recoveries, exhausted recoveries, live
+investigations, expired leases, and the oldest live age. These are global
+operational values in the current repository.
+
+---
+
+## 7. Invariants
+
+| ID | Invariant |
+| --- | --- |
+| INV-001 | Aggregate operations do not move a terminal investigation back to a live state |
+| INV-002 | PostgreSQL permits at most one live row for an exact target tuple |
+| INV-003 | One idempotency key is bound to one target |
+| INV-004 | A model call is durably charged before it begins |
+| INV-005 | No model call starts after its budget is exhausted |
+| INV-006 | A worker without the current live lease cannot reserve model budget or persist normal progress |
+| INV-007 | A yielded execution slice does not count as a worker recovery |
+| INV-008 | Under a recurring queue/reaper process, stale live work reaches a terminal state |
+| INV-009 | Readiness responses contain source diagnostics but no credentials |
+| INV-010 | Autonomous output remains a candidate until a separate human decision |
+| INV-011 | Grounded passages and inventory forms occur in material delivered by the source |
+
+## 8. Data protection and trust boundaries
+
+- Trajectory payloads and tool invocation/result documents are encrypted at
+  rest; identifiers, lifecycle fields, budgets, usage, failure reasons, and
+  degradation reasons remain queryable plaintext metadata.
+- LLM prompts are resolved through the published prompt interface, and plan and
+  assessment events retain the prompt identity that actually ran.
+- External publication text is untrusted input. It is read by a tool-free reader
+  and cannot define actions, object identifiers, evidence policy, or candidate
+  decisions.
+- Logs should identify investigations and failure types without reproducing
+  project content, publication text, credentials, or prompt payloads.
+- Scientific Return accesses project snapshots and publication writing only
+  through `use_of_collections.public`, and prompt templates through
+  `ai.prompts.public`.
+
+## 9. Declared implementation gaps
+
+1. **Critical — tenant authorization is missing from operational reads and
+   cancellation.** Individual read, list, trajectory, and cancel operations
+   require staff or an allowed group but do not compare the caller's institution
+   with `FullAgenticInvestigation.institution_id` or the watch. A staff member
+   who knows another tenant's identifiers can read its state/trajectory or, in
+   an allowed group, cancel its work.
+2. **Critical — idempotency lookup precedes watch and tenant validation.** A
+   mutation-group caller presenting the exact key and target of another tenant
+   receives that existing investigation before institutional ownership is
+   checked. The globally unique key also makes collisions cross-tenant.
+3. **High — manual and scheduled target models differ.** The public request has
+   no `objectId`, so the Angular button starts a legacy whole-project
+   investigation while scheduled sweeps create one investigation per object.
+   Null and object-scoped targets may run concurrently and spend overlapping
+   budgets.
+4. **High — the Angular coverage indicator ignores project-scoped rows.** It
+   counts only distinct non-null `objectId` values, so a manual investigation
+   that searched the full snapshot can still be displayed as zero objects
+   reached.
+5. **Medium — advertised request fields exceed implemented capability.** The
+   API schema exposes `candidateId` and `ENRICH_CANDIDATE`, but the start use
+   case rejects both. Either remove these inputs until implemented or document
+   them as reserved compatibility fields in generated API guidance.
+6. **Medium — the worker route is hidden, not intrinsically private.** The
+   application verifies only `X-Worker-Token`; OIDC/IAM and network restriction
+   depend on deployment configuration outside FastAPI. OpenAPI exclusion alone
+   is not an access-control boundary.
+7. **Medium — route-level contract tests are incomplete.** Most lifecycle,
+   lease, idempotency, and isolation assertions exercise use cases or in-memory
+   repositories. There are no focused API tests for start-group authorization,
+   worker-token rejection, read/cancel tenant isolation, unknown list/trajectory
+   semantics, or terminal cancellation.
+8. **Medium — circuit and operational metrics are global.** One institution's
+   reviewer outcomes can open the circuit for every institution, and the staff
+   metrics response is not tenant-scoped.
+9. **Low — completion is manually refreshed.** The Angular panel has no polling,
+   server-sent event, or push update, so status and candidate results remain
+   stale until the user presses Refresh or revisits the page.
+
+## 10. Acceptance criteria
+
+### CA-001 — Impossible source configuration is refused before enqueue
+
+Given no operational requested source capable of inspectable evidence, starting
+an investigation returns `503` and creates no work.
+
+→ `test/scientific_return/test_full_agentic_flow.py::test_invalid_operational_source_configuration_fails_before_enqueue`
+
+→ `test/scientific_return/test_provenance_contract.py::test_an_impossible_source_configuration_is_refused_before_enqueue`
+
+### CA-002 — Idempotency is bound to the target
+
+Given a key already used for one target, reusing it for another target is
+rejected.
+
+→ `test/scientific_return/test_full_agentic_flow.py::test_idempotency_key_cannot_be_reused_for_another_target`
+
+### CA-003 — Circuit breaker uses only human full-agentic outcomes
+
+→ `test/scientific_return/test_full_agentic_flow.py::test_circuit_breaker_uses_only_full_agentic_human_outcomes`
+
+### CA-004 — Lease ownership and bounded recovery
+
+Given a live lease, a second worker cannot take it; repeated expired-lease
+recoveries and over-age live work eventually terminate.
+
+→ `test/scientific_return/test_full_agentic_flow.py::test_second_worker_cannot_take_a_live_lease`
+
+→ `test/scientific_return/test_full_agentic_flow.py::test_a_repeatedly_recovered_investigation_is_terminated`
+
+→ `test/scientific_return/test_full_agentic_flow.py::test_the_reaper_closes_only_investigations_past_their_age`
+
+### CA-005 — Model budget is charged before each call
+
+→ `test/scientific_return/test_full_agentic_flow.py::test_every_model_call_is_charged_and_committed_before_it_starts`
+
+→ `test/scientific_return/test_full_agentic_flow.py::test_a_hard_death_leaves_the_reserved_call_spent`
+
+→ `test/scientific_return/test_full_agentic_flow.py::test_an_exhausted_budget_never_reaches_the_model`
+
+### CA-006 — A healthy slice yields without spending recovery allowance
+
+→ `test/scientific_return/test_full_agentic_flow.py::test_the_worker_hands_the_slice_back_instead_of_being_killed`
+
+→ `test/scientific_return/test_full_agentic_flow.py::test_a_yielded_slice_is_not_charged_as_a_recovery`
+
+→ `test/scientific_return/test_full_agentic_flow.py::test_a_handed_back_slice_is_announced_to_a_push_queue`
+
+### CA-007 — Terminal work closes its search run
+
+→ `test/scientific_return/test_full_agentic_flow.py::test_no_failure_mode_keeps_an_investigation_alive_forever`
+
+→ `test/scientific_return/test_full_agentic_flow.py::test_a_terminated_investigation_never_leaves_its_run_open`
+
+### CA-008 — Readiness discloses no credential
+
+→ `test/scientific_return/test_provenance_contract.py::test_readiness_reports_operational_sources_without_credentials`
+
+→ `test/scientific_return/test_provenance_contract.py::test_readiness_reports_a_source_that_is_requested_but_not_operational`
+
+### CA-009 — Scheduled fan-out is object-scoped and truncation is visible
+
+→ `test/scientific_return/test_sweep_fan_out.py::test_one_investigation_per_object_with_a_key_of_its_own`
+
+→ `test/scientific_return/test_sweep_fan_out.py::test_objects_beyond_the_ceiling_are_recorded_not_dropped`
+
+→ `test/scientific_return/test_sweep_fan_out.py::test_one_object_already_live_does_not_stop_the_others`
+
+### CA-010 — One investigation sees only its selected object
+
+→ `test/scientific_return/test_full_agentic_flow.py::test_an_investigation_sees_only_its_own_object`
+
+→ `test/scientific_return/test_full_agentic_flow.py::test_an_object_outside_the_snapshot_is_refused`
+
+→ `test/scientific_return/test_full_agentic_flow.py::test_two_objects_of_one_project_are_two_targets`
+
+### CA-011 — Planner failure retains deterministic discovery and is visible
+
+→ `test/scientific_return/test_full_agentic_flow.py::test_discovery_floor_never_spends_the_whole_query_budget`
+
+→ `test/scientific_return/test_full_agentic_flow.py::test_planner_failure_degrades_after_discovery_floor`
+
+→ frontend: `vitarerum-ui/src/app/features/collections/projects/components/scientific-return-panel/scientific-return-panel.component.spec.ts`
+
+### CA-012 — Reader claims are grounded in delivered fields
+
+→ `test/scientific_return/test_full_agentic_grounding.py::test_grounding_rejects_hallucinated_claims_without_changing_relevance`
+
+→ `test/scientific_return/test_full_agentic_grounding.py::test_a_source_without_inspectable_body_reports_unavailable`
+
+→ `test/scientific_return/test_agent_security.py::test_injected_text_cannot_move_a_candidate`
+
+→ `test/scientific_return/test_agent_security.py::test_no_candidate_is_ever_decided_by_the_cycle`
+
+### CA-013 — Trajectory and provenance survive persistence
+
+→ `test/scientific_return/test_full_agentic_flow.py::test_plan_events_record_the_prompt_version_that_ran`
+
+→ `test/scientific_return/test_investigation_repository.py::test_the_whole_trajectory_survives_the_database`
+
+→ `test/scientific_return/test_provenance_contract.py::test_the_queue_exposes_the_provenance_of_every_candidate`
+
+→ `test/scientific_return/test_provenance_contract.py::test_the_decision_snapshot_keeps_what_the_curator_was_shown`
+
+### CA-014 — Publication components do not fill the candidate queue
+
+→ `test/scientific_return/test_full_agentic_flow.py::test_the_parts_of_one_publication_do_not_fill_the_queue`
+
+### CA-015 — Internal worker route is absent from OpenAPI
+
+→ `test/scientific_return/test_api_contract.py::test_openapi_excludes_bench_and_keeps_operational_scientific_return`
+
+### CA-016 — Angular exposes readiness and autonomous audit state
+
+The panel queues explicitly, blocks invalid readiness, warns on degradation,
+shows recovery/object coverage, and renders the model boundary in the trajectory.
+
+→ `vitarerum-ui/src/app/features/collections/projects/components/scientific-return-panel/scientific-return-panel.component.spec.ts`
+
+→ `vitarerum-ui/src/app/features/collections/projects/services/scientific-return-api.service.spec.ts`
+
+## 11. Non-functional requirements
+
+- **Bounded cost**: server budgets and per-source result ceilings override any
+  model proposal.
+- **Transactional isolation**: no database transaction remains open while an
+  LLM or bibliographic provider responds.
+- **Recoverability**: progress required for replay is committed step by step.
+- **Auditability**: trajectory events identify the executed prompt, search,
+  source, grounding result, and terminal reason.
+- **Security**: public operational routes require JWT plus acting permission;
+  the worker has a separate secret and must also be protected at deployment.
+- **Architecture**: domain and application remain free of FastAPI and
+  SQLAlchemy; cross-context access uses published languages.
+- **Human authority**: autonomous discovery never becomes an institutional
+  publication decision without the review workflow.
+
+## 12. Traceability
+
+| Spec element | Location |
+| --- | --- |
+| Aggregate, budget, trajectory, and lifecycle | `vitarerum-api/app/scientific_return/domain/full_agentic_models.py`, `domain/enums.py` |
+| Admission, execution, lease, grounding orchestration, and reaper | `vitarerum-api/app/scientific_return/application/full_agentic.py` |
+| Deterministic floor and source capability policy | `vitarerum-api/app/scientific_return/application/full_agentic_strategy.py` |
+| Grounding validator | `vitarerum-api/app/scientific_return/application/full_agentic_grounding.py` |
+| Ports | `vitarerum-api/app/scientific_return/application/full_agentic_ports.py` |
+| SQL persistence and encrypted replay documents | `vitarerum-api/app/scientific_return/infrastructure/full_agentic_repository.py`, `infrastructure/models.py` |
+| Database and Cloud Tasks dispatch | `vitarerum-api/app/scientific_return/infrastructure/full_agentic_dispatcher.py` |
+| Scheduled fan-out, queue drain, and reaper invocation | `vitarerum-api/app/scientific_return/presentation/commands.py` |
+| HTTP routes and response mapping | `vitarerum-api/app/scientific_return/presentation/routes.py`, `presentation/schemas.py` |
+| Composition and source readiness | `vitarerum-api/app/scientific_return/presentation/dependencies.py` |
+| Configuration | `vitarerum-api/app/config.py`, `vitarerum-api/.env.example`, `deploy/provision.sh` |
+| Initial and hardening migrations | `vitarerum-api/alembic/versions/00000067_*.py`, `00000068_*.py`, `00000070_*.py`, `00000073_*.py`, `00000079_*.py`, `00000081_*.py`, `00000084_*.py` |
+| Angular model and API adapter | `vitarerum-ui/src/app/features/collections/projects/models/scientific-return.model.ts`, `services/scientific-return-api.service.ts` |
+| Angular operational panel | `vitarerum-ui/src/app/features/collections/projects/components/scientific-return-panel/` |
+
+## 13. Open questions
+
+1. Should every investigation route resolve the watch and return an opaque
+   `404` when the caller's institution does not own it?
+2. Should idempotency uniqueness be scoped by institution and checked only
+   after tenant authorization?
+3. Should manual start accept one explicit `objectId`, fan out all eligible
+   objects server-side, or be removed in favor of the scheduled model?
+4. Should the circuit breaker and operational metrics be institution-scoped?
+5. Should terminal cancellation remain a successful no-op or return a typed
+   conflict to reveal that no cancellation occurred?
+6. Does the worker deployment require both Cloud Run IAM/OIDC and the worker
+   token in every environment, and is that policy tested outside application
+   code?

@@ -1,191 +1,396 @@
-# SPEC-023 — Fronteiras de contexto, camadas e envelope de erro
+# SPEC-023 — Context boundaries, layers, and error envelopes
 
-| Campo | Valor |
+| Field | Value |
 | --- | --- |
-| Identificador | SPEC-023 |
-| Estado | Implementado |
-| Alcance | Transversal — todos os contextos |
-| Escrita a partir de | `pyproject.toml` (contratos import-linter), `app/main.py`, `AGENTS.md`, `docs/architecture/module-boundaries.md` |
-| Specs relacionadas | Todas |
+| Identifier | SPEC-023 |
+| Status | Implemented (with declared enforcement, catalog, and error-normalization gaps) |
+| Scope | Cross-cutting — backend architecture and public HTTP failures |
+| Derived from | Backend boundaries, application composition, HTTP handlers, Angular error handling, architecture documentation, and automated tests inspected on 2026-09-04 |
+| Related specs | All specs; [SPEC-007](../007-identidade-e-acesso/spec.md) defines authentication semantics and [SPEC-022](../022-cifragem-e-armazenamento/spec.md) defines encrypted-storage failures |
 
-## 1. Problema
+## 1. Problem
 
-Um sistema com muitos contextos degrada-se por dependencias que ninguem decidiu:
-um `import` conveniente entre modulos transforma dois contextos independentes num
-so, e a partir dai qualquer alteracao num propaga-se ao outro.
+A system with many bounded contexts can degrade through dependencies that were
+never deliberately designed. A convenient import between internal modules can
+couple two contexts and cause changes in one to propagate into the other.
 
-Igualmente, um cliente que consome dezenas de endpoints precisa de uma forma de
-erro previsivel; sem ela, cada ecra trata falhas a sua maneira.
+At the HTTP boundary, a client that consumes many endpoints also needs
+predictable failures. Without a shared envelope, every screen must interpret
+errors differently.
 
-## 2. Objetivo
+## 2. Goal
 
-Fazer das fronteiras arquiteturais uma regra **verificada por ferramenta**, e do
-envelope de erro um contrato unico da aplicacao.
+Make architectural boundaries executable through fitness functions, and give
+handled HTTP failures a stable shape that backend and frontend interpret
+consistently.
 
-## 3. Linguagem ubiqua
+This spec describes both the intended architecture policy and what the current
+fitness functions actually enforce. Known exceptions and coverage gaps are
+declared in Section 7 rather than presented as completed guarantees.
 
-- **Contexto delimitado**: modulo de topo com dominio, aplicacao, infraestrutura e apresentacao proprios.
-- **Linguagem publicada (`*.public`)**: unico ponto de entrada de um contexto para os restantes.
-- **Contrato de camadas**: regra que impoe `presentation > infrastructure > application > domain`.
-- **Contrato proibido**: regra que impede um conjunto de modulos de importar outro.
-- **Envelope de erro**: forma unica da resposta de falha.
+## 3. Ubiquitous language
+
+- **Bounded context**: a business-capability boundary with its own language,
+  model, use cases, and adapters.
+- **Published language (`*.public`)**: the supported entry point through which
+  another context consumes a capability.
+- **Layer contract**: an executable rule that allows dependencies inward in the
+  order `presentation > infrastructure > application > domain`.
+- **Forbidden-import contract**: an executable rule that blocks a specified
+  dependency unless it appears in an explicit allowlist.
+- **Fitness function**: an automated check that detects an architectural
+  violation.
+- **Error envelope**: the JSON shape returned for a handled HTTP failure.
+- **Golden contract test**: a characterization test that freezes a public JSON
+  shape or failure body during refactoring.
 
 ---
 
-## 4. Requisitos funcionais
+## 4. Architecture requirements
 
-### RF-001 — Camadas por contexto
+### RF-001 — Layer direction within active bounded contexts
 
-Cada contexto obedece a ordem `presentation > infrastructure > application >
-domain`. Uma camada nunca importa outra acima de si.
+Fourteen implemented backend contexts have an `import-linter` layer contract in
+`pyproject.toml` with the order:
 
-Intencao de cada camada:
-
-| Camada | Contem |
-| --- | --- |
-| `domain` | Modelo puro, entidades, objetos de valor, enumeracoes, invariantes |
-| `application` | Casos de uso, comandos, portas, politicas de autorizacao |
-| `infrastructure` | Registos SQLAlchemy, repositorios, armazenamento, adaptadores externos |
-| `presentation` | Rotas, dependencias, esquemas de pedido e resposta, mapeamento HTTP |
-
-### RF-002 — Pureza do dominio e da aplicacao
-
-O dominio nao importa FastAPI, SQLAlchemy, Pydantic, infraestrutura nem
-apresentacao. A aplicacao nao importa FastAPI nem SQLAlchemy.
-
-Regras praticas que daqui decorrem: nenhuma logica de negocio em rotas ou em
-modelos ORM; invariantes vivem no dominio ou em servicos de aplicacao; esquemas
-Pydantic apenas na fronteira de apresentacao.
-
-### RF-003 — Acesso entre contextos apenas por linguagem publicada
-
-Um contexto acede a outro exclusivamente pelo modulo `*.public` desse outro. Nao
-existe importacao direta para o interior de outro contexto.
-
-Contratos em vigor incluem, entre outros: identidade acedida so por
-`identity.public`; numeros de referencia so por `reference_numbers.public`;
-prompts so por `prompts.public`; CIDOC-CRM so por `cidoc_crm.public`; retorno
-cientifico acede aos fluxos de uso de colecoes so por linguagem publicada;
-relatorios e publicacoes externas compoem outros contextos so por linguagem
-publicada.
-
-### RF-004 — Contextos deliberadamente isolados
-
-Modelos de documento, indice de objetos de colecao e perguntas ao museu **nao
-dependem de outros contextos**, com a unica excecao de identidade pela sua
-linguagem publicada.
-
-Isolar reflete o desenho: sao capacidades que servem a instituicao sem participar
-no ciclo de vida de propostas e projetos.
-
-### RF-005 — Identidade nao depende de fluxos de negocio
-
-O contexto de identidade nao importa uso de colecoes. A dependencia e sempre no
-sentido oposto.
-
-### RF-006 — Nucleo partilhado minimo
-
-`app.shared.kernel` mantem-se dependente apenas da biblioteca padrao, para poder
-ser partilhado por qualquer contexto sem arrastar dependencias.
-
-### RF-007 — Registo obrigatorio de contratos
-
-Um contexto novo nao esta completo enquanto nao registar em `pyproject.toml`:
-
-1. o seu contrato de camadas;
-2. a sua cobertura nos contratos de pureza do dominio e da aplicacao.
-
-Alterar contratos entre contextos obriga a atualizar o mapa de contextos
-(`docs/architecture/vitarerum-context-map.puml`) na mesma alteracao.
-
-### RF-008 — Verificacao automatica
-
-As fronteiras sao verificadas por `uv run lint-imports`, a par de `pytest`,
-`ruff` e `mypy`. Nenhuma dessas configuracoes e enfraquecida para fazer passar
-uma alteracao.
-
-### RF-009 — Envelope de erro de validacao
-
-Falhas de validacao de pedido respondem `422` com:
-
-```json
-{ "message": "Validation failed", "errors": [ { "field": "...", "message": "..." } ] }
+```text
+presentation > infrastructure > application > domain
 ```
 
-### RF-010 — Envelope de erro de autorizacao
+A lower layer may not import a layer above it. Layer responsibilities are:
 
-`AccessDenied` responde `403 ACCESS_DENIED`; `InsufficientGroup` responde `403
-INSUFFICIENT_GROUP`. Ambos com `{ "error", "message" }`.
+| Layer | Responsibility |
+| --- | --- |
+| `domain` | Entities, value objects, enums, domain services, and invariants |
+| `application` | Use cases, commands, ports, read models, and authorization policies |
+| `infrastructure` | Repository implementations, ORM records, storage, and external adapters |
+| `presentation` | Routes, dependency composition, request/response schemas, and HTTP mapping |
 
-### RF-011 — Normalizacao das excecoes HTTP
+The empty `app.ai.in_situ_visit` scaffold is not an active context and has no
+contract. `app.shared` is cross-cutting infrastructure rather than a four-layer
+bounded context. Although the Identity contract contains all four layers, its
+display name currently omits `domain`; this is a naming defect, not a missing
+layer in the executable rule.
 
-As excecoes HTTP sao normalizadas para `{ "message", "errors?" }`, preservando o
-codigo legivel por maquina como superconjunto. O cliente le `message`, `errors` e
-`fieldErrors` e ignora o resto.
+### RF-002 — Domain and application framework isolation
 
-### RF-012 — Falha de decifragem nao expoe detalhe
+Registered domain modules are forbidden from importing FastAPI, SQLAlchemy, or
+Pydantic. Registered application modules are forbidden from importing FastAPI
+or SQLAlchemy.
 
-Ficheiro ou campo que nao decifram respondem `500` com codigo tipado
-(`FILE_UNREADABLE`, `FIELD_UNREADABLE`) e mensagem generica. O detalhe vai para o
-registo do servidor, nunca para a resposta
-([SPEC-022](../022-cifragem-e-armazenamento/spec.md), RF-003).
+Consequently, business rules belong to domain objects or application services,
+not routes or ORM records. Pydantic schemas belong at the presentation
+boundary. Section 7 records the active modules that are not yet included in
+these two aggregate purity contracts.
 
-### RF-013 — Semantica de codigos preservada
+### RF-003 — Cross-context access uses published languages by default
 
-`401` e exclusivo de autenticacao; `403` e autorizacao
-([SPEC-007](../007-identidade-e-acesso/spec.md), RF-004). Alterar formas de
-resposta publicas exige atualizar a documentacao e os testes de contrato.
+Cross-context dependencies covered by forbidden-import contracts must use the
+provider's `*.public` module. This includes, among others:
+
+- Identity consumers using `identity.public`;
+- Use of Collections using `reference_numbers.public` and
+  `notifications.public`;
+- Scientific Return using `use_of_collections.public`, `identity.public`, and
+  `ai.prompts.public`;
+- CIDOC-CRM using `use_of_collections.public`;
+- report aggregation using the published CIDOC-CRM and museum-narrative
+  interfaces;
+- external publication using the published collection-use and report
+  interfaces.
+
+The rule is not universal in the current codebase: `public_submission` and one
+report schema contain explicitly allowlisted imports into another context's
+internals. These exceptions are visible architectural debt, not published API.
+
+### RF-004 — Supporting contexts remain isolated
+
+Document Templates, Collection Object Index, and Museum Questions have
+dedicated forbidden-import contracts that block their known business-context
+dependencies. Their current source code does not participate directly in the
+proposal/project lifecycle.
+
+Identity access occurs through `identity.public` or shared helpers built on
+that published language. Museum Questions also publishes notifications through
+`notifications.public`.
+
+### RF-005 — Identity does not depend on collection-use workflows
+
+An explicit contract prevents `app.identity` from importing
+`app.use_of_collections`. Business contexts may consume Identity through its
+published language; Identity does not consume their models or use cases.
+
+### RF-006 — Minimal shared kernel
+
+`app.shared.kernel` currently imports only the Python standard library. It
+contains cross-context identifiers, small immutable value objects, and the
+shared collection-use taxonomy. It must not become a container for
+context-specific domain behavior. The policy is stricter than the current
+fitness function, whose incomplete denylist is recorded in Section 7.
+
+### RF-007 — Contract registration policy
+
+The repository's developer contract requires every new bounded context to
+register:
+
+1. a layer contract;
+2. domain and application purity coverage;
+3. any deliberate cross-context relationships.
+
+When a relationship between bounded contexts changes, the source PlantUML
+context map and its rendered SVG must be updated in the same change. This is a
+review and contributor rule; Section 7 identifies where automation does not yet
+fully enforce it.
+
+### RF-008 — Automated architecture verification
+
+`uv run lint-imports` evaluates 36 registered contracts. A violation not
+covered by an explicit ignore causes the command to fail. The command
+complements `pytest`, Ruff, and strict mypy; its configuration must not be
+weakened merely to make a change pass.
 
 ---
 
-## 5. Invariantes
+## 5. HTTP error requirements
 
-| Id | Invariante |
+### RF-009 — Request-validation envelope
+
+FastAPI request-validation failures return `422` with:
+
+```json
+{
+  "message": "Validation failed",
+  "errors": [{ "field": "beginDate", "message": "..." }]
+}
+```
+
+Each field is the dotted location reported by validation, with location
+segments equal to `body` or `query` removed.
+
+### RF-010 — Authorization envelopes
+
+`AccessDenied` returns `403` with:
+
+```json
+{ "error": "ACCESS_DENIED", "message": "..." }
+```
+
+`InsufficientGroup` returns `403` with:
+
+```json
+{ "error": "INSUFFICIENT_GROUP", "message": "..." }
+```
+
+The first means that the actor may not access a particular resource; the
+second means that the acting group may not perform the operation.
+
+### RF-011 — HTTP exception normalization
+
+Handled Starlette/FastAPI HTTP exceptions return a JSON object containing
+`message`. For dictionary details, the value is selected from `message`, then
+`error`, then the literal `"Error"`. When present in the original exception,
+the handler also preserves:
+
+- `error`, the machine-readable error code;
+- `errors`, the validation-error list;
+- `fieldErrors`, a field-to-message map;
+- `dependencies`, resource dependencies that prevent an operation.
+
+The original HTTP status and response headers, including `Retry-After`, are
+preserved. Other detail keys are discarded. Arbitrary unhandled exceptions and
+response-serialization failures are not normalized by this handler and are a
+declared gap in Section 7.
+
+### RF-012 — Decryption failures disclose no cryptographic detail
+
+`CorruptedEncryptedFile` returns `500` with `FILE_UNREADABLE` and a generic
+message. `CorruptedEncryptedField` returns `500` with `FIELD_UNREADABLE` and a
+generic message. The server records diagnostic context, but the response does
+not disclose it
+([SPEC-022](../022-cifragem-e-armazenamento/spec.md), RF-003 and RF-008).
+
+### RF-013 — `401` and `403` retain distinct meanings
+
+`401` is reserved for authentication failure and invalidates the Angular
+session. `403` represents authorization failure and leaves the session active
+([SPEC-007](../007-identidade-e-acesso/spec.md), RF-004).
+
+The Angular session-expiry interceptor excludes login and public password-reset
+requests from automatic logout. This prevents a failed public authentication
+operation from destroying an unrelated active session.
+
+### RF-014 — Angular error interpretation
+
+The Angular error model:
+
+- classifies `400` and `422` as validation errors;
+- classifies `403`, `404`, and `409` as forbidden, not-found, and conflict;
+- classifies statuses from `500` upward as server errors and status `0` as a
+  network error;
+- reads `message` when available;
+- accepts field errors in both `errors: [{field, message}]` and
+  `fieldErrors: {field: message}` forms;
+- presents generic text for forbidden, not-found, server, network, and unknown
+  failures rather than exposing a potentially sensitive backend message;
+- preserves backend text for validation and conflict presentation, but does not
+  retain the machine-readable `error` code in the shared `ApiError` type.
+
+---
+
+## 6. Invariants
+
+| ID | Invariant |
 | --- | --- |
-| INV-001 | Nenhum contexto importa o interior de outro |
-| INV-002 | O dominio nao conhece frameworks |
-| INV-003 | A aplicacao nao conhece FastAPI nem SQLAlchemy |
-| INV-004 | `app.shared.kernel` depende apenas da biblioteca padrao |
-| INV-005 | Toda a fronteira declarada esta registada como contrato verificavel |
-| INV-006 | Toda a falha sai no envelope de erro da aplicacao |
-| INV-007 | Nenhuma resposta de erro revela detalhe interno de armazenamento |
+| INV-001 | A dependency that violates a registered layer contract fails `lint-imports` |
+| INV-002 | A cross-context import covered by a forbidden contract must use a declared published-language exception or fail verification |
+| INV-003 | Registered domain and application modules do not import their forbidden frameworks |
+| INV-004 | The current `app.shared.kernel` source depends only on the standard library |
+| INV-005 | Every failure handled by one of the registered application handlers contains `message` |
+| INV-006 | Storage-corruption responses never expose cryptographic detail |
+| INV-007 | `401` ends an established client session; `403` does not |
 
-## 6. Criterios de aceitacao
+## 7. Declared implementation gaps
 
-### CA-001 — Fronteiras verificadas por ferramenta
-Dado o repositorio no seu estado atual
-Quando se executa `uv run lint-imports`
-Entao todos os contratos declarados passam
-→ ferramenta: `import-linter` sobre os contratos de `pyproject.toml`
+These are properties of the current repository, not hypothetical future work:
 
-### CA-002 — Envelope de validacao e de acesso negado
-→ `test/use_of_collections/test_golden_contracts.py::test_golden_error_bodies`, `::test_golden_access_denied_body`
+1. The aggregate domain-purity contract omits `app.identity.domain`,
+   `app.reference_numbers.domain`, and `app.scientific_return.domain`. Their
+   current source does not import FastAPI, SQLAlchemy, or Pydantic, but the
+   fitness function would not detect such an import.
+2. The aggregate application-purity contract omits
+   `app.reference_numbers.application`. Its current source is framework-free,
+   but that fact is not protected by the contract.
+3. The Notifications layer contract accidentally includes
+   `app.scientific_return.domain` as a fifth layer. Scientific Return already
+   has its own complete layer contract; the extra entry is anomalous.
+4. `public_submission` has explicitly ignored imports into Use of Collections
+   application, domain, and infrastructure modules. The report response schema
+   also imports presentation schemas from CIDOC-CRM and Museum Narrative.
+   `lint-imports` permits these known couplings.
+5. The contract named `Shared kernel imports stdlib only` does not prove that
+   claim. It forbids three frameworks and four internal namespaces, but it does
+   not forbid every other installed package or every other application context.
+   The source is currently stdlib-only, so the gap is in future enforcement.
+6. There is no catch-all JSON exception handler. Unexpected exceptions and
+   response-validation failures may use Starlette/FastAPI's default `500`
+   response instead of the documented JSON envelope. Consequently,
+   `docs/api_contracts/README.md` currently overstates the guarantee when it
+   says every failure has one of the documented shapes.
+7. The shared Angular `ApiError` discards the backend's machine-readable
+   `error` code and classifies every `400` as validation. This prevents generic
+   consumers from distinguishing typed `400` causes and may present a
+   non-validation bad request as invalid form data.
+8. `docs/architecture/module-boundaries.md` omits the active
+   `external_publications` context even though the context has code, a layer
+   contract, a cross-context contract, a spec, and entries in both context-map
+   diagrams.
+9. The context-map update rule is documented but is not itself checked by
+   `lint-imports`; diagram checks validate source/render consistency, not
+   semantic agreement with Python imports.
 
-### CA-003 — Fronteira `401` / `403`
-→ `test/identity/test_auth.py::test_caller_valid_token_missing_permission_header_is_403`, `::test_caller_malformed_token_is_401` (ver [SPEC-007](../007-identidade-e-acesso/spec.md), CA-003)
+## 8. Acceptance criteria
 
-### CA-004 — Formas de resposta estaveis por contrato dourado
-→ `test/use_of_collections/test_golden_contracts.py::test_golden_submit_proposal_response_shape`, `::test_golden_proposal_detail_response_shape`, `::test_golden_paginated_proposals_envelope_shape`, `::test_golden_project_detail_and_list_shapes`, `::test_golden_project_events_envelope_shape`
+### CA-001 — Registered architecture contracts pass
 
-## 7. Requisitos nao funcionais
+Given the current repository, when `uv run lint-imports` runs, all 36 registered
+contracts pass.
 
-- **Verificacao continua**: `pytest`, `ruff`, `mypy` estrito e `lint-imports` correm sobre o repositorio; nenhuma configuracao e relaxada para acomodar uma alteracao.
-- **Documentacao viva**: o mapa de contextos acompanha qualquer mudanca de fronteira.
-- **Nomenclatura**: classes ORM com sufixo `...Record`, ou `...Orm` quando o dominio ja usa `...Record`.
+→ tool: `import-linter` using the contracts in `pyproject.toml`
 
-## 8. Rastreabilidade
+### CA-002 — Stable error and access-denied bodies
 
-| Elemento | Localizacao |
+Given not-found, invalid-transition, and resource-access failures, the API
+returns the expected status, machine-readable code, and message.
+
+→ `test/use_of_collections/test_golden_contracts.py::test_golden_error_bodies`,
+`::test_golden_access_denied_body`
+
+### CA-003 — Request validation uses the shared envelope
+
+Given a malformed request body, the API returns `422`, the message
+`Validation failed`, and an `errors` list containing field/message pairs.
+
+→ `test/identity/test_auth.py::test_login_missing_password_is_422_with_errors`
+
+### CA-004 — Authentication and authorization remain distinct
+
+Given an invalid bearer token, the backend returns `401`; given a missing acting
+permission, it returns `403`. In Angular, `401` signs out and redirects an
+established session, while `403` passes through without signing out.
+
+→ `test/identity/test_auth.py::test_caller_valid_token_missing_permission_header_is_403`,
+`::test_caller_malformed_token_is_401`
+
+→ frontend: `vitarerum-ui/src/app/core/auth/session-expired.interceptor.spec.ts`
+
+### CA-005 — Public response shapes remain stable
+
+Given representative proposal and project operations, golden contract tests
+detect any change in their complete JSON key paths and collection envelopes.
+
+→ `test/use_of_collections/test_golden_contracts.py::test_golden_submit_proposal_response_shape`,
+`::test_golden_proposal_detail_response_shape`,
+`::test_golden_paginated_proposals_envelope_shape`,
+`::test_golden_project_detail_and_list_shapes`,
+`::test_golden_project_events_envelope_shape`
+
+### CA-006 — Encrypted-file failure uses a generic envelope
+
+Given a stored encrypted file whose blob is replaced under the wrong reference,
+download returns `500 FILE_UNREADABLE` without cryptographic detail.
+
+→ `test/use_of_collections/test_api.py::test_log_entry_attachment_uses_configured_encrypted_storage`
+
+### CA-007 — Angular maps API failures consistently
+
+Given backend errors with supported statuses and field-error shapes, Angular
+maps them to the correct error kinds, extracts field messages, and supplies a
+safe presentation.
+
+→ frontend: `vitarerum-ui/src/app/core/http/api-error.model.spec.ts`
+
+### CA-008 — Session expiry is handled independently of error presentation
+
+Given an established Angular session, a `401` from an authenticated request
+signs out and navigates to `/login`; a `403`, a login failure, or a failure from
+a public password-reset endpoint does not end the session.
+
+→ frontend: `vitarerum-ui/src/app/core/auth/session-expired.interceptor.spec.ts`
+
+## 9. Non-functional requirements
+
+- **Executable architecture**: architecture rules that claim enforcement must
+  have an `import-linter` contract rather than relying only on prose.
+- **Living context map**: architectural relationship changes require matching
+  updates to `docs/architecture/vitarerum-context-map.puml` and its SVG.
+- **Stable client contract**: public response-shape changes require updated
+  specifications and contract tests.
+- **ORM naming**: infrastructure persistence classes use the `...Record`
+  suffix, or `...Orm` when the domain already owns the `...Record` name.
+
+## 10. Traceability
+
+| Element | Location |
 | --- | --- |
-| Contratos de camadas e de proibicao (RF-001..RF-007) | `pyproject.toml`, seccao `tool.importlinter` |
-| Envelope de erro (RF-009..RF-012) | `app/main.py` |
-| Contrato transversal publicado (RF-009..RF-013) | `docs/api_contracts/README.md` |
-| Linguagens publicadas (RF-003) | `app/*/public.py` |
-| Nucleo partilhado (RF-006) | `app/shared/kernel.py` |
-| Mapa de contextos | `docs/architecture/vitarerum-context-map.puml`, `vitarerum-context-map.svg` |
-| Fronteiras documentadas | `docs/architecture/module-boundaries.md`, `AGENTS.md` |
+| Layer, purity, and forbidden-import contracts (RF-001–RF-008) | `vitarerum-api/pyproject.toml`, section `tool.importlinter` |
+| Error handlers (RF-009–RF-012) | `vitarerum-api/app/main.py` |
+| Session headers and actor resolution (RF-013) | `vitarerum-api/app/shared/dependencies.py` |
+| Angular session behavior (RF-013) | `vitarerum-ui/src/app/core/auth/session-expired.interceptor.ts` |
+| Angular error mapping (RF-014) | `vitarerum-ui/src/app/core/http/api-error.model.ts` |
+| Cross-cutting HTTP contract | `docs/api_contracts/README.md` |
+| Published languages (RF-003) | `vitarerum-api/app/*/public.py` and nested context equivalents |
+| Shared kernel (RF-006) | `vitarerum-api/app/shared/kernel.py` |
+| Context map | `docs/architecture/vitarerum-context-map.puml`, `vitarerum-context-map.svg` |
+| Context catalog and contributor rules | `docs/architecture/module-boundaries.md`, `vitarerum-api/AGENTS.md` |
+| Error-model and presentation tests | `vitarerum-ui/src/app/core/http/api-error.model.spec.ts` |
 
-## 9. Questoes em aberto
+## 11. Open questions
 
-1. Alguns contextos comunicam hoje por chamada sincrona atraves da linguagem publicada; em que ponto se justifica linguagem publicada **por eventos** (ver `docs/architecture/adr/0002-published-language-over-event-bus.md`)?
-2. Deve existir um teste que falhe quando um contexto novo nao registar os seus contratos, em vez de depender de revisao humana?
+1. Which allowlisted cross-context imports should be removed first in favor of
+   narrower published ingestion and response interfaces?
+2. Should unexpected exceptions receive the same generic JSON envelope as
+   handled server errors, with a correlation identifier for diagnostics?
+3. Should one generated fitness function discover every active context and
+   fail when its domain or application package is absent from purity coverage?
+4. Should `ApiError` retain the backend `error` code and distinguish generic
+   `400 Bad Request` from field validation?

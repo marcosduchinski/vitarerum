@@ -1,212 +1,426 @@
-# SPEC-015 — Relatorio de visita in situ
+# SPEC-015 — In-Situ Visit Reports
 
-| Campo | Valor |
+| Field | Value |
 | --- | --- |
-| Identificador | SPEC-015 |
-| Estado | Implementado |
-| Contexto delimitado | `app/reports/in_situ_visit` |
-| Escrita a partir de | `app/reports/in_situ_visit/`, `test/reports/`, contrato 10 |
-| Specs relacionadas | [SPEC-013](../013-mapeamento-cidoc-crm/spec.md), [SPEC-017](../017-narrativa-museologica/spec.md), [SPEC-009](../009-projeto-uso-de-colecoes/spec.md) |
+| Identifier | SPEC-015 |
+| Status | Implemented (with declared authorisation, audit, validation, and scalability gaps) |
+| Bounded context | `app/reports/in_situ_visit` |
+| Derived from | Backend, frontend, migrations, architecture contracts, and automated tests inspected on 2026-09-04 |
+| Related specs | [SPEC-009](../009-projeto-uso-de-colecoes/spec.md), [SPEC-013](../013-mapeamento-cidoc-crm/spec.md), [SPEC-016](../016-prompts-versionados/spec.md), [SPEC-017](../017-narrativa-museologica/spec.md) |
 
-## 1. Problema
+## 1. Problem
 
-Produzir um relatorio de visita in situ exige duas operacoes ja existentes —
-exportar o projeto para o modelo CIDOC-CRM e gerar a narrativa a partir desse
-registo — mas nada guarda a ligacao entre as tres coisas. Sem essa ligacao, um
-relatorio e um par de identificadores que alguem anotou.
+An in-situ visit report combines information owned by three different bounded
+contexts: a collection-use project, a CIDOC-CRM visit record exported from that
+project, and an AI-assisted narrative generated from a frozen factual
+projection. Without a durable link, the report is only an informal pair of
+identifiers and its production history cannot be reconstructed reliably.
 
-## 2. Objetivo
+## 2. Goal and scope
 
-Compor as duas operacoes numa unica chamada transacional e persistir a ligacao
-entre projeto, registo exportado e narrativa gerada como um relatorio duravel e
-auditavel.
+This context orchestrates the export and narrative-generation operations in one
+request and persists an `InSituVisitReport` that links:
 
-## 3. Natureza do contexto
+- the source collection-use project;
+- the newly exported in-situ visit record;
+- the newly generated narrative;
+- the permission that requested the report; and
+- the server generation timestamp.
 
-E um **orquestrador entre contextos**: possui apenas o agregado
-`InSituVisitReport` e compoe os casos de uso de exportacao e de narrativa
-atraves das respetivas interfaces publicadas. Nunca toca nos agregados de outro
-contexto.
+It also supplies staff-only list, detail, audit-trail, and removal operations.
+It does not own the project, visit record, narrative, narrative revisions,
+prompt versions, or external-publication records.
 
----
+PDF generation is not implemented. The Angular detail page supports browser
+printing and exports a simplified JSON representation on the client.
 
-## 4. Requisitos funcionais
+## 3. Strategic context and integration
 
-### RF-001 — Composicao numa unica chamada
+`reports.in_situ_visit` is a supporting orchestration context. It owns only the
+report linkage aggregate and accesses other contexts through ports implemented
+by adapters at the infrastructure boundary.
 
-`POST /api/v1/reports/collection-use/{projectId}/in_situ_visit`, apenas para
-staff, executa por esta ordem:
-
-1. exporta o projeto para um novo registo de visita;
-2. gera uma narrativa a partir desse registo, com os parametros do corpo;
-3. constroi e persiste o relatorio, carimbando autor e instante do servidor;
-4. faz commit uma unica vez e responde `201`.
-
-### RF-002 — Uma unica transacao
-
-Toda a cadeia corre na mesma transacao de base de dados. Uma falha na geracao da
-narrativa **nao deixa registo orfao**.
-
-### RF-003 — Parametros opcionais encaminhados
-
-O corpo aceita `target_language` (omissao `pt`), `narrative_type` (omissao
-`institutional`) e `creativity_temperature` (omissao `0.3`, entre 0.0 e 1.0),
-encaminhados para a geracao da narrativa.
-
-### RF-004 — Pre-condicao herdada
-
-O projeto tem de ter tipo de uso `IN_SITU_VISIT` e evidencia de execucao — a
-mesma pre-condicao da exportacao
-([SPEC-013](../013-mapeamento-cidoc-crm/spec.md), RF-005).
-
-### RF-005 — Cada chamada e acrescento
-
-Nao ha deduplicacao por projeto: cada chamada produz um registo novo, uma
-narrativa nova e um relatorio novo. Chamar duas vezes produz dois relatorios
-independentes.
-
-A escolha e deliberada: um relatorio e um ato datado, e refazer um relatorio nao
-apaga o anterior.
-
-### RF-006 — Resposta apenas com identificadores
-
-A resposta `201` devolve identificadores. O conteudo do registo e da narrativa e
-obtido pelos respetivos endpoints.
-
-### RF-007 — Mapeamento de erros da cadeia
-
-| Situacao | Codigo |
+| Relationship | Integration role |
 | --- | --- |
-| Chamador `EXTERNAL` | `403` |
-| Projeto inexistente | `404` |
-| Tipo de uso errado | `409` |
-| Visita sem evidencia de execucao | `409` |
-| Tipo de narrativa nao suportado | `400` |
-| Temperatura fora de 0.0–1.0 | `422` |
-| Falha de validacao semantica do grafo | `422` |
-| Modelo indisponivel | `503` |
-| Modelo esgotou o tempo | `504` |
+| Collection Use → CIDOC-CRM mapping | The published CIDOC exporter reads a project and creates a visit record. |
+| CIDOC-CRM mapping → Museum Narrative | The narrative pipeline builds and validates facts from the exported record. |
+| AI Prompts → Museum Narrative | The generator resolves the published prompt version for the requested narrative type. |
+| Report → External Publications | Report deletion revokes publications exposing that report. |
 
-Cada falha da cadeia mantem o codigo que lhe corresponde na operacao de origem:
-o orquestrador nao achata tudo em `500`.
+The three creation steps use the same SQLAlchemy session. Cross-context
+identifiers are stored as strings without foreign keys so database schemas do
+not couple aggregate lifecycles.
 
-### RF-008 — Leitura do historico
+The published languages currently return presentation DTOs from the CIDOC and
+narrative contexts. This avoids duplicate response mapping but exposes this
+context to the shape of another context's presentation layer.
 
-- listagem de todos os relatorios, do mais recente para o mais antigo, paginada;
-- listagem por projeto, isolada entre projetos;
-- leitura por identificador, `404` quando o relatorio nao pertence ao projeto indicado;
-- leitura detalhada com narrativa e registo embebidos.
+## 4. Domain model
 
-Um projeto desconhecido devolve **pagina vazia**, nao erro: a ausencia de
-relatorios e informacao legitima.
+### 4.1 Aggregate root
 
-### RF-009 — Campos de apresentacao e filtros
+`InSituVisitReport` is a thin aggregate root containing:
 
-As linhas da listagem global transportam campos de apresentacao do registo e
-podem ser filtradas por metadados do registo e da geracao.
-
-### RF-010 — Trilho de auditoria em seis fases
-
-O detalhe de auditoria expoe as entradas de cada fase da cadeia **sem recalcular**
-o documento CIDOC: o que se audita e o que foi usado, nao o que se obteria hoje.
-
-### RF-011 — Remocao delimitada
-
-Apagar um relatorio remove o relatorio e os artefactos da narrativa que ele
-gerou — e apenas esses. O que existia antes da cadeia permanece.
-
-### RF-012 — Rasto de auditoria de um relatorio
-
-`GET /reports/collection-use/{projectId}/in_situ_visit/{reportId}/audit-trail`
-devolve, numa leitura so, as seis entradas que produziram o relatorio, para que
-depois se possa reconstituir como ele foi feito:
-
-| Entrada | O que contem |
+| Field | Meaning |
 | --- | --- |
-| `evidence` | Identificadores do registo e do projeto que serviram de origem |
-| `cidoc` | O documento JSON-LD gerado e o relatorio de validacao, com `conforms` |
-| `facts` | O payload factual entregue ao modelo, incluindo lacunas de evidencia |
-| `generation` | Versao do prompt que correu, o seu identificador e o hash da resposta |
-| `validation` | Resultado da validacao da narrativa |
-| `revisions` | Historico paginado de edicoes humanas (`revisionsPage`, `revisionsSize`, maximo 100) |
+| `id` | Generated UUID string |
+| `createdAt` | UTC time generated by the server process |
+| `createdBy` | Calling permission identifier |
+| `projectId` | Source collection-use project identifier |
+| `inSituVisitRecordId` | Exported CIDOC-CRM visit-record identifier |
+| `narrativeId` | Generated narrative identifier |
 
-Alem destas, embute o registo (`record`) e a narrativa (`narrative`) tal como
-ficaram. O CIDOC **nao e recalculado** na leitura: e devolvido o documento
-persistido no momento da geracao — sem isso o rasto deixaria de descrever o que
-aconteceu e passaria a descrever o presente.
+Every generation creates a new aggregate. There is no uniqueness constraint or
+deduplication by project, record, narrative configuration, or content.
 
-Restrito a staff; um chamador `EXTERNAL` recebe `403`. Um relatorio pedido sob
-um projeto que nao e o seu responde `404` com `REPORT_NOT_FOUND`, e nao o
-conteudo de outro projeto.
+### 4.2 Lifecycle
 
----
+The report has no status transitions. It is created once and may later be
+hard-deleted. Narrative edits do not change the linkage. Removing a report
+preserves its exported visit record but removes its generated narrative,
+revision history, and fact snapshot.
 
-## 5. Invariantes
+No report-specific domain events or immutable create/delete audit log are
+currently emitted.
 
-| Id | Invariante |
+## 5. Authorisation
+
+All endpoints call the backend `require_staff` policy. `EXTERNAL` callers
+receive `403`.
+
+The implemented backend policy does not distinguish between staff groups and
+does not check project assignment or ownership. Consequently, any authenticated
+staff permission can:
+
+- create a report for any project satisfying the export preconditions;
+- list and read reports across all projects;
+- read complete report details and audit material;
+- edit the embedded narrative through the narrative context; and
+- permanently remove any report.
+
+The Angular project page is narrower: it offers report creation only to
+`CURATORIAL` and `COLLECTIONS_MANAGEMENT`, and only when the client-side project
+projection is an `IN_SITU_VISIT` in `COMPLETED` state. This UI condition is not
+a backend security boundary. The report list exposes removal to every staff
+user who can reach it.
+
+Project/report path isolation is enforced for item reads, detail, audit, and
+deletion: a report requested under a different `projectId` returns `404
+REPORT_NOT_FOUND` instead of disclosing the owning project.
+
+## 6. Functional requirements
+
+### FR-001 — Create a report in one request
+
+`POST /api/v1/reports/collection-use/{projectId}/in_situ_visit` performs these
+steps in order:
+
+1. export the project to a fresh persisted in-situ visit record;
+2. build and persist a factual snapshot, invoke the configured language model,
+   validate, and persist a fresh narrative;
+3. create and persist the report linkage; and
+4. commit the shared database transaction once and return `201`.
+
+The response contains the report identifier, creation time and actor, project
+identifier, visit-record identifier, and narrative identifier. The narrative
+and record content are obtained from detail or their owning contexts.
+
+### FR-002 — Database atomicity
+
+The exporter, narrative generator, and report repository share one database
+session. No step commits independently. A handled export or narrative failure
+therefore leaves no committed visit record, fact snapshot, narrative, or report
+linkage.
+
+The model invocation is an external side effect inside the open database
+transaction. Its elapsed time and computational or provider cost cannot be
+rolled back if a later database operation or final commit fails.
+
+### FR-003 — Generation options
+
+The request accepts snake-case fields:
+
+| Field | Default | Current validation |
+| --- | --- | --- |
+| `target_language` | `pt` | Arbitrary string at the report boundary |
+| `narrative_type` | `null`, resolved by the narrative context to `institutional` | Supported narrative enum checked by the narrative context |
+| `creativity_temperature` | `0.3` | Inclusive range from `0.0` to `1.0` |
+
+The Angular creation dialog exposes only Portuguese and English, the five
+supported narrative types, and a temperature slider in `0.1` steps. Backend
+clients are not limited to those two languages.
+
+### FR-004 — Export preconditions
+
+The project must exist, have use type `IN_SITU_VISIT`, and contain execution
+evidence accepted by the CIDOC export context. Violations preserve the
+published error vocabulary:
+
+- unknown project → `404 PROJECT_NOT_FOUND`;
+- another use type → `409 INVALID_USE_TYPE`;
+- missing execution evidence → `409 VISIT_NOT_EVIDENCED`.
+
+The backend report orchestrator does not independently require the project to
+have `COMPLETED` status; it delegates eligibility to the CIDOC exporter.
+
+### FR-005 — Append-only generation
+
+Each successful call creates a new visit record, fact snapshot, narrative, and
+report. Repeating the same request does not overwrite or supersede a previous
+report. This is a deliberate record-of-act model, but reports cannot currently
+be designated as draft, superseded, official, or preferred.
+
+### FR-006 — Generation error mapping
+
+| Condition | HTTP response |
 | --- | --- |
-| INV-001 | O contexto so possui o agregado do relatorio |
-| INV-002 | Os outros contextos sao alcancados apenas pelas suas interfaces publicadas |
-| INV-003 | Nao existe registo ou narrativa orfaos por falha a meio da cadeia |
-| INV-004 | Cada relatorio identifica projeto, registo e narrativa |
-| INV-005 | A auditoria mostra as entradas efetivamente usadas, nunca recalculadas |
-| INV-006 | Um relatorio nunca e visivel sob um projeto que nao o seu |
+| `EXTERNAL` caller | `403` |
+| Project not found | `404 PROJECT_NOT_FOUND` |
+| Project is not an in-situ visit | `409 INVALID_USE_TYPE` |
+| Visit has no accepted execution evidence | `409 VISIT_NOT_EVIDENCED` |
+| Unsupported narrative type | `400 INVALID_NARRATIVE_TYPE` |
+| Temperature outside `0.0..1.0` or malformed request | `422` validation error |
+| CIDOC/SHACL semantic validation failure | `422 SEMANTIC_VALIDATION_FAILED` |
+| Published narrative prompt unavailable | `503 NARRATIVE_PROMPT_UNAVAILABLE` |
+| Language model unavailable or returns empty content | `503 MODEL_UNAVAILABLE` |
+| Language model timeout | `504 MODEL_TIMEOUT` |
 
-## 6. Criterios de aceitacao
+The narrative's deterministic factual validation can persist a non-conforming
+narrative with findings for human review. It is distinct from the CIDOC/SHACL
+semantic gate, whose failure aborts report creation.
 
-### CA-001 — Composicao feliz e ligacao persistida
-→ `test_in_situ_visit_report_api.py::test_happy_path_returns_201_linking_record_and_narrative`
+### FR-007 — Project report history
 
-### CA-002 — Mapeamento de erros da cadeia
-→ `test_in_situ_visit_report_api.py::test_forbidden_for_external_caller`, `::test_project_not_found_maps_to_404`, `::test_wrong_use_type_maps_to_409`, `::test_visit_without_execution_evidence_maps_to_409`, `::test_unsupported_narrative_type_maps_to_400`, `::test_temperature_above_one_is_422`, `::test_semantic_validation_failure_maps_to_422`, `::test_model_unavailable_maps_to_503`, `::test_model_timeout_maps_to_504`
+`GET /reports/collection-use/{projectId}/in_situ_visit` returns a zero-based
+page of linkage responses ordered by descending creation time. `page` must be
+non-negative and `size` must be from 1 to 100. An unknown project returns an
+empty page because this endpoint checks stored reports, not project existence.
 
-### CA-003 — Historico por projeto e global
-→ `test_in_situ_visit_report_read_api.py::test_list_returns_project_reports_newest_first`, `::test_list_isolated_per_project`, `::test_list_unknown_project_is_empty_page`, `::test_list_all_spans_every_project_newest_first`, `::test_list_all_paginates`
+Rows with identical creation timestamps do not have an explicit secondary
+sort key in this project-scoped query.
 
-### CA-004 — Leitura por identificador e isolamento por projeto
-→ `test_in_situ_visit_report_read_api.py::test_get_by_id_returns_report`, `::test_get_by_id_unknown_is_404`, `::test_get_by_id_wrong_project_is_404`, `test_in_situ_visit_report_detail_api.py::test_detail_unknown_report_is_404`, `::test_detail_wrong_project_is_404`
+### FR-008 — Global enriched history
 
-### CA-005 — Campos de apresentacao e filtros
-→ `test_in_situ_visit_report_read_api.py::test_list_all_rows_carry_record_display_fields`, `::test_list_all_filters_by_record_and_generation_metadata`
+`GET /reports/collection-use/in_situ_visit` returns reports across every
+project, ordered by descending creation time and then report identifier. Each
+row is enriched with readable values from the linked record and narrative:
 
-### CA-006 — Detalhe embebido e auditoria sem recalculo
-→ `test_in_situ_visit_report_detail_api.py::test_detail_embeds_narrative_and_record_with_attachment`, `::test_audit_trail_embeds_six_stage_inputs_without_recomputing_cidoc`, `::test_audit_trail_wrong_project_is_404`
+- visit code, visitor, place, and visit dates;
+- narrative type, target language, and creativity temperature; and
+- all report linkage fields.
 
-### CA-007 — Autorizacao staff-only
-→ `test_in_situ_visit_report_read_api.py::test_list_forbidden_for_external`, `::test_list_all_forbidden_for_external`, `::test_get_by_id_forbidden_for_external`, `test_in_situ_visit_report_detail_api.py::test_audit_trail_forbidden_for_external`, `::test_detail_forbidden_for_external`
+If a linked record or narrative cannot be read, its enrichment fields are
+null. The page uses zero-based pagination with a size from 1 to 100.
 
-### CA-008 — Remocao delimitada
-→ `test_in_situ_visit_report_detail_api.py::test_delete_removes_report_and_generated_narrative_artifacts_only`
+For every returned row, the current implementation performs one record read
+and one narrative read after the paginated report query.
 
-### CA-009 — Rasto completo sem recalcular o CIDOC
-Dado um relatorio gerado e depois editado por uma pessoa
-Quando o rasto de auditoria e lido
-Entao devolve as seis entradas, o CIDOC persistido com o seu relatorio de validacao, a versao do prompt que correu, o hash da resposta e a revisao humana com o texto anterior, o novo e quem editou
-→ `test_in_situ_visit_report_detail_api.py::test_audit_trail_embeds_six_stage_inputs_without_recomputing_cidoc`
+### FR-009 — Global history filters
 
-### CA-010 — Rasto fechado ao projeto errado e a quem nao e staff
-Dado um relatorio de um projeto
-Quando e pedido sob outro projeto, ou por um chamador `EXTERNAL`
-Entao responde `404` com `REPORT_NOT_FOUND`, e `403`, respetivamente
-→ `test_in_situ_visit_report_detail_api.py::test_audit_trail_wrong_project_is_404`, `::test_audit_trail_forbidden_for_external`
+The global list accepts:
 
-## 7. Requisitos nao funcionais
-
-- **Transacionalidade**: um commit por relatorio (RF-002).
-- **Fronteiras**: composicao apenas por linguagem publicada; contratos import-linter preservados.
-- **Custo**: cada chamada invoca um modelo local; o acrescento sem deduplicacao e uma decisao consciente de custo.
-
-## 8. Rastreabilidade
-
-| Elemento | Localizacao |
+| Query parameter | Behaviour |
 | --- | --- |
-| Agregado do relatorio | `app/reports/in_situ_visit/domain/` |
-| Orquestracao (RF-001, RF-002, RF-007) | `app/reports/in_situ_visit/application/` |
-| Endpoints e leituras (RF-008..RF-012) | `app/reports/in_situ_visit/presentation/` |
-| Composicao do rasto de auditoria (RF-012) | `app/reports/in_situ_visit/application/use_cases.py` (`GetInSituVisitReportAuditTrail`) |
-| Contrato publico | Esquema OpenAPI em `/openapi.json`; regras transversais em `docs/api_contracts/README.md` |
+| `search` | Case-insensitive substring over report, project, narrative and record IDs, plus record code, visitor, place, and project title; maximum 255 characters |
+| `generatedFrom`, `generatedTo` | Inclusive report-creation timestamp bounds |
+| `visitFrom`, `visitTo` | Interval-overlap filtering against visit start/end dates |
+| `narrativeType` | Exact stored narrative-type match |
 
-## 9. Questoes em aberto
+The API does not reject inverted date intervals. SQL wildcard characters in
+`search` are not escaped, so `%` and `_` retain `LIKE` wildcard semantics.
 
-1. Um relatorio deve poder ser marcado como "oficial" entre varios do mesmo projeto?
-2. A cadeia sincrona e aceitavel enquanto o modelo for local; que forma toma se a geracao passar a demorar minutos?
+### FR-010 — Linkage read and detail
+
+`GET .../{reportId}` returns only the report linkage. `GET
+.../{reportId}/detail` composes the linkage with the current persisted visit
+record and current narrative, including evidence items and attachments.
+
+A missing report or project/report mismatch returns `404 REPORT_NOT_FOUND`.
+A report whose linked record or narrative is missing still returns `200`, with
+the unavailable dependent artefact represented as null.
+
+The Angular detail page presents the narrative, evidence record, validation
+state, print action, simplified JSON export, narrative editor, and link to the
+audit trail. Attachment links are accepted only for safe schemes by the record
+component.
+
+### FR-011 — Narrative editing
+
+The detail UI edits the narrative through the Museum Narrative endpoint, not
+through this report context. A successful edit trims and replaces the current
+narrative text and persists a revision containing the previous text, revised
+text, editor permission, and timestamp. The report linkage remains unchanged.
+
+### FR-012 — Six-stage production trace
+
+`GET .../{reportId}/audit-trail` composes the following view:
+
+| Stage | Source and meaning |
+| --- | --- |
+| `evidence` | Linked visit-record identifiers, execution evidence, gaps, and approval metadata |
+| `cidoc` | Persisted CIDOC JSON-LD and validation report from the fact snapshot, plus record mapping/schema versions |
+| `facts` | Persisted factual payload, hash, builder version, prompt label, and snapshot timestamp |
+| `generation` | Narrative type, resolution source, language, temperature, model, prompt-version identifier/label, generation time, and model-response hash |
+| `validation` | Persisted deterministic narrative-validation result and findings |
+| `revisions` | Chronological page of human narrative edits |
+
+The endpoint also embeds the current visit record and current narrative. It
+does not rebuild the CIDOC document or factual payload during the read.
+`revisions_page` defaults to 0; `revisions_size` defaults to and is capped at
+100.
+
+The trace mixes immutable generation snapshots with current state: the
+persisted facts, CIDOC document, prompt metadata, generation settings, response
+hash, and validation findings describe generation time, while the embedded
+narrative is the latest edited text. The chronological revisions reconstruct
+the changes when present.
+
+### FR-013 — Report removal
+
+`DELETE .../{reportId}` runs these operations in one database transaction:
+
+1. verify that the report belongs to the project in the path;
+2. revoke all external publications for the report, recording the calling
+   permission as revoker;
+3. hard-delete the generated narrative, its revisions, and its fact snapshot;
+4. hard-delete the report linkage; and
+5. commit once and return `204`.
+
+The exported in-situ visit record and the original collection-use project are
+preserved. Revoked external-publication records are retained. If the linked
+narrative is already absent, the deleter returns false but report deletion
+continues.
+
+### FR-014 — Angular report experience
+
+The Angular implementation uses standalone, `OnPush`, signal-driven components
+and declarative resources. It provides:
+
+- report creation from an eligible project page;
+- global paginated history with search, generation-date, visit-date, and
+  narrative-type filters;
+- explicit empty, loading, and API-error states;
+- detail presentation with record evidence and narrative;
+- safe CIDOC JSON inspection and copy;
+- narrative editing with unsaved-change confirmation;
+- a six-stage audit page with escaped finding highlights; and
+- confirmed permanent removal explaining publication revocation and visit
+  record preservation.
+
+The reports routes do not carry a dedicated staff route guard. Direct
+navigation can render the page shell for an external user, but backend calls
+remain protected and return `403`.
+
+## 7. Invariants
+
+| ID | Invariant |
+| --- | --- |
+| INV-001 | The report context owns only the report linkage aggregate. |
+| INV-002 | Cross-context operations use declared ports and published integration entry points. |
+| INV-003 | Successful creation links one project, one newly exported visit record, and one newly generated narrative. |
+| INV-004 | Creation has one database commit; a failed pre-commit step leaves no committed report-chain rows. |
+| INV-005 | Every successful creation adds a new report instead of replacing an older one. |
+| INV-006 | A report is never returned or deleted under a project identifier other than its stored `projectId`. |
+| INV-007 | Audit reads reuse persisted CIDOC and fact snapshots instead of recomputing them. |
+| INV-008 | Report deletion preserves the visit record and revokes external publication access. |
+| INV-009 | Narrative revisions belong to the narrative context and do not mutate report identity. |
+
+## 8. Acceptance and test traceability
+
+| Capability | Automated evidence |
+| --- | --- |
+| Creation response and upstream error mapping | `test_in_situ_visit_report_api.py` |
+| Project/global history, enrichment, filters, pagination, and project isolation | `test_in_situ_visit_report_read_api.py` |
+| Detail, six-stage trace, nullable dependencies, and bounded removal | `test_in_situ_visit_report_detail_api.py` |
+| Angular API wire mapping | `reports-api.service.spec.ts` |
+| Creation options and validation | `create-in-situ-visit-report-modal.component.spec.ts` and project-detail specs |
+| Report history, filters, pagination, and removal confirmation | `visits-in-situ-report-page.component.spec.ts` |
+| Detail, edit flow, safe attachments, JSON-LD dialog, and client export | Co-located report component specs |
+| Audit stages, prompt link, original/current narrative, and safe highlights | `in-situ-visit-audit-trail-page.component.spec.ts` |
+
+### Acceptance scenarios
+
+1. Given an evidenced in-situ project and available prompt/model, when staff
+   requests a report, then a fresh record, narrative, and report linkage are
+   committed and the API returns `201` with their identifiers.
+2. Given a failure before the final commit, when report creation ends, then no
+   partial report-chain rows are committed in the shared database transaction.
+3. Given two successful requests for the same project and options, when history
+   is listed, then two independent reports exist.
+4. Given a report belonging to project A, when requested or deleted under
+   project B, then the API returns `404 REPORT_NOT_FOUND`.
+5. Given persisted generation snapshots followed by human narrative edits,
+   when the audit trail is read, then it returns the stored generation inputs,
+   original-response hash, current narrative, and chronological revisions
+   without rebuilding CIDOC.
+6. Given a report with an active external publication, when staff removes the
+   report, then the publication is revoked, narrative artefacts and linkage are
+   deleted, and the visit record remains.
+7. Given an unavailable linked record or narrative, when detail is read, then
+   the report remains readable and the missing artefact is null.
+8. Given validation findings containing untrusted markup, when Angular renders
+   the highlighted original narrative, then the markup is escaped and only the
+   locally generated highlight element is trusted.
+
+## 9. Non-functional characteristics
+
+- Creation and deletion are database-transactional because all participating
+  adapters use one session and the route commits once.
+- The request remains open during synchronous CIDOC processing and model
+  generation; timeout is delegated to the model adapter.
+- Global list enrichment has an N+1 read pattern: up to 201 additional reads
+  for a page of 100 reports.
+- Cross-context references deliberately have no foreign keys. This preserves
+  context autonomy but permits dangling report references and partial detail.
+- Report identifiers and timestamps are generated directly in the domain
+  factory; there is no injected clock or identifier provider.
+- Report creation, reads, narrative editing, and deletion may expose sensitive
+  visit evidence and generated text and therefore require an explicit staff
+  access policy.
+
+## 10. Known gaps and required improvements
+
+| Priority | Gap | Required change |
+| --- | --- | --- |
+| High | Backend creation and deletion allow every staff group, while the creation UI allows only curatorial and collection-management users. | Define one authoritative role/project-scope policy and enforce it in backend use cases; align menu, routes, buttons, and tests with that policy. |
+| High | Any staff user can list and read every report, complete evidence, audit payload, and narrative across all projects. | Confirm the institutional data-disclosure policy and implement project/collection read scope if required. |
+| High | Report deletion is a hard delete with no report-level tombstone or immutable deletion audit. | Preserve an auditable report lifecycle or deletion event, including actor, reason, timestamp, artefact outcomes, and revoked publications. |
+| Medium | `target_language` is unconstrained in the API even though the UI offers only `pt` and `en`; blank or oversized values can reach the prompt or persistence layer. | Introduce a validated language value object or explicit supported-language contract and return a typed client error. |
+| Medium | Synchronous model generation occurs inside an open database transaction. | Add operational metrics and idempotency, then consider a queued state machine (`PENDING/RUNNING/READY/FAILED`) for longer-running or remote models. |
+| Medium | A successful model call can still be followed by a failed database commit, consuming external resources without a report. | Add request correlation, idempotency keys, failure telemetry, and a retry/reconciliation policy. |
+| Medium | The global list performs two dependent reads per row. | Replace N+1 enrichment with a dedicated read model/query or batch published-language readers. |
+| Medium | Project-scoped history sorts only by timestamp. | Add report ID as a deterministic secondary key to prevent unstable pagination for equal timestamps. |
+| Medium | `search` retains SQL wildcard semantics, and inverted filter ranges are accepted. | Escape literal wildcard input unless advanced patterns are intentional, and validate date-range order. |
+| Medium | Missing cross-context artefacts silently produce null detail or incomplete audit data. | Add consistency monitoring and distinguish expected legacy absence from broken references in the response or operational alerts. |
+| Medium | The application ports and schemas use DTO types owned by other contexts' presentation layers. | Publish context-neutral integration DTOs from each Open Host Service and map them at the report boundary. |
+| Low | The report detail exports client-generated JSON, not a stable server document or PDF. | Define the official report format, template/version metadata, server-side export, content disposition, and archival policy if an official document is required. |
+| Low | Reports cannot be marked official, superseded, or preferred. | Validate the product need before adding a report lifecycle; retain append-only generations meanwhile. |
+| Low | Report creation has no direct end-to-end test using the real shared database adapters and transaction rollback. | Add an integration test proving rollback of record, fact snapshot, narrative, and report rows on a downstream failure. |
+
+## 11. Traceability
+
+| Element | Location |
+| --- | --- |
+| Report aggregate | `vitarerum-api/app/reports/in_situ_visit/domain/` |
+| Orchestration and read composition | `vitarerum-api/app/reports/in_situ_visit/application/` |
+| Published-language adapters and repository | `vitarerum-api/app/reports/in_situ_visit/infrastructure/` |
+| HTTP schemas and routes | `vitarerum-api/app/reports/in_situ_visit/presentation/` |
+| CIDOC published language | `vitarerum-api/app/cidoc_crm/public.py` |
+| Narrative published language | `vitarerum-api/app/ai/museum_narrative/public.py` |
+| Report UI | `vitarerum-ui/src/app/features/collections/reports/` |
+| Project-page creation entry point | `vitarerum-ui/src/app/features/collections/projects/pages/staff-detail/` |
+| Backend tests | `vitarerum-api/test/reports/` |
+
+## 12. Open product decisions
+
+1. Which staff roles and project assignments authorise creation, reading,
+   editing, publication, and deletion of a report?
+2. Must a report be retained as an immutable institutional record after it has
+   been published externally?
+3. Should one generation be designated official or supersede previous
+   generations for the same project?
+4. Are Portuguese and English the only supported target languages?
+5. When should synchronous generation move to an asynchronous job with status,
+   progress, cancellation, and retry?
+6. Is simplified JSON/browser printing sufficient for the MVP, or is a
+   versioned server-generated PDF required?

@@ -1,211 +1,334 @@
-# SPEC-013 — Mapeamento CIDOC-CRM de visitas in situ
+# SPEC-013 — CIDOC-CRM mapping for in-situ visits
 
-| Campo | Valor |
+| Field | Value |
 | --- | --- |
-| Identificador | SPEC-013 |
-| Estado | Implementado |
-| Contexto delimitado | `app/cidoc_crm/in_situ_visit_mapping` |
-| Escrita a partir de | `domain/models.py`, `application/cidoc/`, `test/cidoc_crm/`, contrato 08 |
-| Specs relacionadas | [SPEC-009](../009-projeto-uso-de-colecoes/spec.md), [SPEC-015](../015-relatorio-visita-in-situ/spec.md) |
+| Identifier | SPEC-013 |
+| Status | Implemented (with declared semantic-identity, reproducibility, validation, and API-validation gaps) |
+| Bounded context | `app/cidoc_crm/in_situ_visit_mapping` |
+| Written from | Domain, mapping definition and engine, SHACL validation, persistence, APIs, cross-context adapters, Angular CIDOC viewer, and `test/cidoc_crm/` |
+| Related specs | [SPEC-009](../009-projeto-uso-de-colecoes/spec.md), [SPEC-015](../015-relatorio-visita-in-situ/spec.md), [SPEC-017](../017-narrativa-museologica/spec.md) |
 
-## 1. Problema
+## 1. Problem
 
-O registo interno de uma visita in situ e util para o museu, mas ininteligivel
-para o exterior. Para que a informacao possa ser partilhada, agregada ou
-publicada como dados do patrimonio, tem de ser expressa num modelo comum — o
-CIDOC-CRM.
+An internal record of an in-situ visit is useful to the museum but is not an
+interoperable heritage-data representation. Reuse by reports, knowledge graphs,
+or external systems requires an explicit semantic mapping.
 
-O risco de um mapeamento e afirmar mais do que se sabe: transformar uma data
-planeada numa data de evento, ou um objeto de tipo desconhecido numa especime
-biologica, produz dados formalmente validos e factualmente falsos.
+The principal risk is overstatement: planned dates are not evidence of an
+event, a free-text visitor is not necessarily one person, and an unknown
+collection object must not be classified more narrowly than the source permits.
 
-## 2. Objetivo
+## 2. Goal
 
-Guardar registos de mapeamento de visitas in situ como **instantaneos** e
-projeta-los em JSON-LD conforme ao CIDOC-CRM 7.1.3, afirmando apenas o que a
-evidencia suporta.
+Persist immutable-style in-situ visit snapshots and project them as
+self-contained JSON-LD targeting CIDOC-CRM 7.1.3. Preserve source evidence and
+omit unsupported event-time assertions.
 
-## 3. Linguagem ubiqua
+This spec documents implemented behavior. It does not claim full CIDOC-CRM
+conformance; the narrower guarantees and current gaps are stated below.
 
-- **Registo de visita (`InSituVisitRecord`)**: raiz do agregado; instantaneo de uma visita executada.
-- **Filhos**: `requestedObjects`, `inSituOccurrences`, `inSituLogs`, `inSituPublications`; os tres ultimos possuem anexos.
-- **Evidencia de execucao**: prova de que a visita ocorreu — tipo, instante e autor do registo.
-- **Lacunas de evidencia**: o que faltou para afirmar a execucao com plenitude.
-- **Projecao**: documento JSON-LD gerado a partir do registo segundo as regras de mapeamento.
+## 3. Strategic and tactical model
 
----
+The mapping context is a supporting subdomain. Use of Collections is its
+upstream supplier, accessed through that context's published language and a
+local anti-corruption adapter. In-situ Visit Reports and Museum Narrative are
+downstream consumers through `app.cidoc_crm.public`.
 
-## 4. Requisitos funcionais
+`InSituVisitRecord` is the aggregate root. Its consistency boundary contains:
 
-### RF-001 — Criacao do registo com o grafo completo
+- requested-object records;
+- occurrence, access-log, and publication records;
+- attachments owned by occurrences, logs, and publications.
 
-`POST /api/v1/cidoc-mapping/in-situ-visit` persiste o registo e todos os filhos
-numa unica chamada e responde `201`. Todo o grafo e uma unica fronteira de
-consistencia: cria-se junto e le-se inteiro.
+The root and every child/attachment are entities with server-generated UUIDs.
+`ChildData` and `AttachmentData` are immutable creation values. The repository
+writes the complete graph and eagerly reconstructs it. There are no update or
+delete operations for the snapshot in this context.
 
-Campos obrigatorios: `code`, `visitBeginDate`, `visitEndDate`, `visitorName`,
-`placeName`. As colecoes de filhos sao opcionais e assumem lista vazia.
+The root captures record-schema, mapping, and CRM version labels. The JSON-LD
+projection itself is generated on read from the mapping definition currently
+bundled with the running application.
 
-### RF-002 — Identificadores e instantes atribuidos pelo servidor
+## 4. Actors and interfaces
 
-O identificador do agregado, os identificadores de todos os filhos e anexos, e
-`generatedAt` sao atribuidos pelo servidor. O cliente **nunca** os fornece: um
-instantaneo cuja identidade venha de fora nao e um instantaneo.
-
-### RF-003 — Ordenacao explicita
-
-Cada filho e cada anexo carrega `sourceId` e `position`. A ordem e dado, nao
-consequencia da ordem de insercao.
-
-### RF-004 — Exportacao a partir de um projeto
-
-`POST /collection-use-projects/{id}/export-in-situ-visit-record` traduz um
-projeto de uso de colecoes num registo de mapeamento
-([SPEC-009](../009-projeto-uso-de-colecoes/spec.md), RF-017).
-
-Recusas:
-
-| Situacao | Codigo |
+| Actor or consumer | Capability |
 | --- | --- |
-| Projeto inexistente | `404` |
-| Tipo de uso diferente de `IN_SITU_VISIT` | `409` |
-| Projeto sem evidencia de execucao | `409` |
-| Chamador `EXTERNAL` | `403` |
+| Curatorial, Collections Management, Direction, System Administration | Create, list, export, and read CIDOC projections |
+| External permission | No access; receives `403` |
+| Use of Collections | Supplies project evidence through a published read contract |
+| In-situ Visit Reports | Exports a fresh record when generating a report and reads stored record views |
+| Museum Narrative | Consumes the published CIDOC document and semantic validation services |
+| Angular report user | Opens validated JSON-LD, retries loading, and copies it to the clipboard |
 
-### RF-005 — Evidencia de execucao como pre-condicao
+All HTTP endpoints require a bearer token and matching `X-Permission-Id` for a
+staff group. There is no public CIDOC endpoint in this context.
 
-So um projeto `COMPLETED` com evento de conclusao constitui evidencia de visita
-executada. Um projeto planeado, ou em curso, **nao** e uma visita.
+## 5. Snapshot requirements
 
-### RF-006 — Datas planeadas nunca viram intervalo do evento
+### RF-001 — Direct record creation
 
-As datas planeadas sao guardadas como tal e nao sao afirmadas como o intervalo
-temporal da visita. O intervalo do evento deriva da evidencia de execucao.
+`POST /api/v1/cidoc-mapping/in-situ-visit` creates and commits a complete
+aggregate, returning `201`. Required root fields are `code`, `visitBeginDate`,
+`visitEndDate`, `visitorName`, and `placeName`. The four child collections are
+optional and default to empty arrays.
 
-Sem evidencia, o mapeamento **omite** o intervalo em vez de o inventar.
+Direct creation accepts only the base child contract: `sourceId`, description,
+position, and attachments where applicable. It does not accept institution,
+project provenance, execution evidence, approval, enriched object/occurrence
+fields, attachment media type, or client-supplied identities.
 
-### RF-007 — Tipagem conservadora dos objetos
+This endpoint can therefore create a snapshot without execution evidence. Such
+a record receives no visit time-span in JSON-LD. Its mandatory begin/end fields
+remain record data but are not asserted as event time.
 
-Os objetos pretendidos sao tipados genericamente (`crm:E19_Physical_Object`) e
-nao como objetos biologicos. Afirmar `crm:E20_Biological_Object` exigiria saber
-que o objeto e um especime, o que o registo nao garante.
+### RF-002 — Server-owned identity and generation time
 
-### RF-008 — Alvo e contexto do vocabulario
+The root, every child, and every attachment receive UUIDs in the domain factory.
+The factory also stamps `generatedAt` in UTC and defaults
+`recordSchemaVersion` to `2`. Creation use cases read `mappingVersion` and
+`crmVersion` from the bundled mapping metadata (`0.7.0` and `7.1.3` currently).
 
-A projecao tem por alvo o CIDOC-CRM 7.1.3. O contexto JSON-LD e **incorporado**
-no documento: o contexto oficial 7.1.3 mais os prefixos locais. O documento nao
-depende de a rede resolver um contexto remoto no momento da leitura.
+The clock and UUID generator are direct domain functions rather than injected
+ports.
 
-### RF-009 — Autoria do grafo vem do registo
+### RF-003 — Explicit source order
 
-O criador do grafo e a instituicao registada no proprio registo, nao um valor
-fixo das regras de mapeamento. Sem instituicao no registo, a afirmacao de autoria
-e **omitida**.
+Every child and attachment carries a source identifier and integer position.
+ORM relationships order nested collections by position when records are loaded.
+The API and domain do not require non-negative or unique positions/source IDs.
 
-### RF-010 — Ligacao ao objeto relacionado
+### RF-004 — Paginated record list
 
-Ocorrencias, entradas de diario, publicacoes e respetivos anexos ligam-se ao
-objeto que documentam sempre que essa relacao existe no registo. A traducao do
-identificador de objeto de origem para o identificador relacionado e feita por
-uma camada anti-corrupcao.
+`GET /api/v1/cidoc-mapping/in-situ-visit?page=&size=` returns complete nested
+records newest first by `generatedAt`. Page defaults to `0`, size defaults to
+`20`, and size is constrained to 1–100. Equal generation times have no explicit
+ID tie-breaker.
 
-### RF-011 — Anexos como documentos
+There is no standalone raw-record detail endpoint; the list and the published
+language provide record views.
 
-Cada anexo transporta o seu localizador de conteudo e a sua descricao como nota.
+## 6. Project-export requirements
 
-### RF-012 — Contexto de atividade dos diarios
+### RF-005 — Export from a collection-use project
 
-Quem acrescentou uma entrada de diario e quando sao modelados como contexto de
-atividade, nao como propriedades soltas do objeto.
+`POST /api/v1/collection-use-projects/{id}/export-in-situ-visit-record`
+translates the upstream project view, persists a new snapshot, commits, and
+returns `201`.
 
-### RF-013 — Leitura da projecao com validacao por omissao
-
-`GET` da projecao CIDOC de um registo valida por omissao contra as *shapes* SHACL
-e responde `422` quando a validacao falha. A validacao pode ser explicitamente
-dispensada pelo chamador.
-
-Validar por omissao e a escolha certa quando o produto e um documento destinado
-a ser consumido por terceiros: sair silenciosamente com um grafo invalido custa
-mais do que falhar cedo.
-
-### RF-014 — Validacao sem materializar o grafo expandido
-
-A verificacao de conformidade reporta o resultado sem devolver nem materializar
-o grafo expandido.
-
-### RF-015 — Autorizacao
-
-Todos os endpoints deste contexto sao acoes de staff: `CURATORIAL`,
-`COLLECTIONS_MANAGEMENT`, `DIRECTION` e `SYS_ADMIN`. Chamadores `EXTERNAL`
-recebem `403`.
-
----
-
-## 5. Invariantes
-
-| Id | Invariante |
+| Condition | Result |
 | --- | --- |
-| INV-001 | O registo e um instantaneo: identidade e instante sao do servidor |
-| INV-002 | O grafo do registo e criado e lido como um todo |
-| INV-003 | Nenhuma data planeada e afirmada como data de evento |
-| INV-004 | Nenhum objeto e tipado alem do que a evidencia sustenta |
-| INV-005 | O contexto do vocabulario e incorporado, nao referenciado remotamente |
-| INV-006 | A autoria do grafo vem do registo ou e omitida |
-| INV-007 | Uma visita so e mapeavel com evidencia de execucao |
-| INV-008 | O contexto so acede a `use_of_collections` por camada anti-corrupcao |
+| Project not found | `404 PROJECT_NOT_FOUND` |
+| Intended use is not `IN_SITU_VISIT` | `409 INVALID_USE_TYPE` |
+| Execution evidence is insufficient | `409 VISIT_NOT_EVIDENCED` |
+| Caller is external | `403` |
 
-## 6. Criterios de aceitacao
+Repeated exports are not deduplicated: each accepted call creates another
+snapshot for the same source project.
 
-### CA-001 — Exportacao e suas recusas
-→ `test_export_in_situ_visit_api.py::test_export_happy_path_returns_201_with_mapped_record`, `::test_export_forbidden_for_external`, `::test_export_project_not_found_404`, `::test_export_wrong_use_type_409`, `::test_export_without_execution_evidence_409`, `test_export_in_situ_visit_use_case.py::test_export_maps_project_into_record_and_persists`, `::test_export_rejects_non_in_situ_visit_use_type`, `::test_export_rejects_in_situ_visit_without_execution_evidence`
+### RF-006 — Minimum execution evidence
 
-### CA-002 — Datas planeadas nao viram intervalo do evento
-→ `test_cidoc_mapping.py::test_planned_dates_are_not_asserted_as_visit_timespan_without_evidence`, `::test_visit_timespan_uses_execution_evidence_not_planned_interval`
+The upstream published reader marks a visit as occurred only when the project
+is `COMPLETED` and contains a `COMPLETED` domain event. The event time and actor
+become `executionOccurredAt` and `executionRecordedBy`. Missing conditions are
+captured as evidence gaps and reject export.
 
-### CA-003 — Tipagem conservadora
-→ `test_cidoc_mapping.py::test_requested_objects_are_typed_generically_not_as_biological_objects`
+This is operational evidence of project completion, not independent proof of
+the physical visit.
 
-### CA-004 — Alvo 7.1.3 com contexto incorporado
-→ `test_cidoc_mapping.py::test_targets_cidoc_713`, `::test_context_is_inlined_official_713_plus_local_prefixes`
+### RF-007 — Exported provenance and enrichment
 
-### CA-005 — Autoria do grafo
-→ `test_cidoc_mapping.py::test_graph_creator_comes_from_the_record_not_from_the_mapping_rules`, `::test_graph_creator_is_omitted_when_the_record_has_no_institution`
+The project reference becomes the record code. Export captures project ID,
+title, purpose, planned dates, execution evidence, latest approval evidence,
+requested-object snapshots, occurrences, access logs, publications, attachment
+references, and related-object source IDs.
 
-### CA-006 — Expansao completa e ligacoes
-→ `test_cidoc_mapping.py::test_full_expansion_emits_a_node_per_child`, `::test_visit_links_to_actor_place_and_type`, `::test_occurrence_and_log_link_to_related_object_when_present`, `::test_publication_information_object_links_to_related_object_when_present`, `::test_attachments_link_to_related_object_when_parent_has_one`
+The configured `institutionName` is captured both as `institutionName` and
+`placeName`. This preserves deployment attribution but currently conflates an
+institutional actor/name with the physical visit place.
 
-### CA-007 — Anexos e contexto de atividade
-→ `test_cidoc_mapping.py::test_attachments_carry_content_url`, `::test_attachments_carry_description_as_note`, `::test_access_log_added_at_and_added_by_are_modelled_as_activity_context`, `::test_enriched_snapshot_fields_shape_cidoc_labels_and_occurrence_context`
+### RF-008 — Anti-corruption boundary
 
-### CA-008 — Validacao SHACL por omissao
-→ `test_cidoc_api.py::test_get_cidoc_crm_validates_by_default`, `::test_get_cidoc_crm_returns_422_when_default_validation_fails`, `::test_get_cidoc_crm_can_skip_validation_explicitly`, `test_jsonld_validation.py::test_document_is_valid_rdf_with_resolved_terms`, `::test_generated_graph_conforms_to_crm_shapes`, `::test_shapes_reject_a_domain_range_violation`, `::test_validate_cidoc_reports_conformance_without_returning_expanded_graph`, `::test_validate_cidoc_does_not_materialise_expanded_graph`
+Only `infrastructure/context_acl.py` knows the Use of Collections published
+types. It translates them into `ProjectExportData`, `ExportObject`, and
+`ExportEntry`, keeping upstream aggregates and vocabulary out of the mapping
+domain and application layers.
 
-### CA-009 — Camada anti-corrupcao entre contextos
-→ `test_context_acl.py::test_acl_translates_object_source_id_into_related_object_source_id`, `test_export_in_situ_visit_use_case.py::test_export_propagates_related_object_source_id`
+## 7. JSON-LD projection requirements
 
-### CA-010 — Persistencia integral do instantaneo
-→ `test_in_situ_visit_repository.py::test_repository_round_trips_enriched_snapshot_fields`
+### RF-009 — Config-driven mapping
 
-## 7. Requisitos nao funcionais
+`GET /api/v1/cidoc-mapping/in-situ-visit/{recordId}/cidoc-crm` loads the stored
+aggregate and applies `in_situ_visit_to_cidoc.json`. Unknown records return
+`404 IN_SITU_VISIT_NOT_FOUND`.
 
-- **Conformidade**: o grafo gerado e verificado contra *shapes* SHACL derivadas do CRM; violacoes de dominio/alcance sao detetadas.
-- **Independencia de rede**: a projecao nao depende de resolucao remota de contexto.
-- **Nomenclatura**: as classes ORM deste contexto usam sufixo `...Orm`, porque o dominio ja possui os nomes `...Record`.
+The document contains an inlined CIDOC-CRM 7.1.3 term context plus local `ex`,
+`dcterms`, `schema`, `xsd`, and `rdfs` prefixes. It therefore requires no remote
+context resolution when parsed.
 
-## 8. Rastreabilidade
+### RF-010 — Conservative event time
 
-| Elemento | Localizacao |
+The visit receives an `E52_Time-Span` only when `executionOccurredAt` exists.
+Its time primitive comes from that completion evidence. Planned project dates
+and the direct-record begin/end fields are not asserted as visit event time.
+
+Occurrence/access-log child times are projected only when their respective
+source fields exist.
+
+### RF-011 — Object and relationship mapping
+
+Requested objects are typed as `crm:E19_Physical_Object`, never automatically
+as `E20_Biological_Object`. Related source IDs link occurrences, logs,
+publications, and their attachments to the corresponding generated object URI.
+
+Attachments are `E31_Document` nodes, carry their reference as
+`schema:contentUrl`, and use their description as a note. Log authorship/time is
+modelled through activity-context nodes rather than loose properties.
+
+### RF-012 — Graph provenance
+
+The provenance node is an `E73_Information_Object`. It records graph creation
+time and the mapping/CRM versions from the currently loaded mapping definition.
+`dcterms:creator` comes from the snapshot's institution name and is omitted when
+that value is empty.
+
+The stored `mappingVersion` and `crmVersion` are returned in record DTOs but are
+not used to select mapping rules or populate graph provenance during later
+reads.
+
+### RF-013 — Default semantic validation
+
+The CIDOC endpoint validates by default. It parses JSON-LD into RDF and invokes
+pySHACL with bundled shapes and a bundled partial class hierarchy using RDFS
+inference. Failure returns `422 SEMANTIC_VALIDATION_FAILED` with the textual
+validation report. `?validate=false` explicitly skips this gate.
+
+The validation shapes check domain/range for the subset of CIDOC properties
+listed in `in_situ_visit_shapes.ttl`; they are not a complete validation of all
+CIDOC-CRM 7.1.3 constraints or every predicate emitted by the mapper.
+
+`validate_cidoc` reports conformance without returning an expanded graph.
+`expand_and_validate_cidoc`, exposed to downstream contexts, separately
+materializes RDFS closure and returns expanded JSON-LD.
+
+### RF-014 — Angular projection
+
+The report detail opens a standalone, OnPush native-dialog component. It calls
+the CIDOC endpoint with default validation, pretty-prints the JSON-LD as escaped
+text, exposes retry/close behavior, and can copy the document to the clipboard.
+It does not download a `.jsonld` file or visualize the graph.
+
+## 8. Semantic invariants
+
+| ID | Invariant |
 | --- | --- |
-| Agregado e filhos (RF-001..RF-003) | `app/cidoc_crm/in_situ_visit_mapping/domain/models.py` |
-| Regras de mapeamento (RF-006..RF-012) | `app/cidoc_crm/in_situ_visit_mapping/application/cidoc/in_situ_visit_to_cidoc.json`, `engine.py` |
-| Contexto e *shapes* (RF-008, RF-013) | `application/cidoc/cidoc_context_7.1.3.jsonld`, `application/cidoc/shapes/` |
-| Validacao e raciocinio (RF-013, RF-014) | `application/cidoc/reasoning.py` |
-| Camada anti-corrupcao (RF-010) | `infrastructure/context_acl.py` |
-| Endpoints (RF-001, RF-013, RF-015) | `presentation/routes.py` |
-| Contrato publico | Esquema OpenAPI em `/openapi.json`; regras transversais em `docs/api_contracts/README.md` |
-| Modelo visual | `docs/diagrams/cidoc-crm-in-situ-visit-record-model.svg` |
+| INV-001 | Root and nested identities and `generatedAt` are server-owned |
+| INV-002 | The aggregate is persisted and reconstructed with all nested children |
+| INV-003 | Planned dates are never asserted as the visit event time |
+| INV-004 | Requested objects are not classified more narrowly than `E19` |
+| INV-005 | The JSON-LD context is bundled and inlined |
+| INV-006 | Graph creator comes from the snapshot or is omitted |
+| INV-007 | Project export requires completed-project event evidence |
+| INV-008 | Use of Collections is accessed through its published language and the local ACL |
+| INV-009 | External permissions cannot use the mapping APIs |
 
-## 9. Questoes em aberto
+## 9. Known gaps and required improvements
 
-1. A projecao deve ser publicada num ponto de acesso permanente (URI resolvivel por registo), e com que politica de versao?
-2. Que criterio autoriza tipar um objeto como `crm:E20_Biological_Object` — a colecao de origem basta?
+| ID | Gap | Required change |
+| --- | --- | --- |
+| GAP-001 | All generated resource URIs expand under `http://example.org/museum/`. They are placeholders, not institution-owned persistent identifiers. | Configure a validated institutional base URI, persist its version/provenance, and define URI permanence and redirect policy. |
+| GAP-002 | Export assigns configured `institutionName` to `placeName`, treating an institution name as `E53_Place`. | Capture a distinct authoritative place identifier/name and model institution and place as separate resources. |
+| GAP-003 | Free-text `visitorName` is always asserted as one `E21_Person`; it may represent an organization, team, or ambiguous name. | Capture typed actors with stable identifiers or use a less specific class until actor type is evidenced. |
+| GAP-004 | Stored mapping/CRM versions do not control regeneration; every read uses current rules and provenance metadata. Old snapshots can silently produce a different graph. | Version mapping assets immutably and select the stored version, or persist the generated graph/hash with the snapshot. |
+| GAP-005 | Normalizing source IDs into slugs can collapse distinct values to the same URI, while source IDs and positions are not unique within collections. | Detect collisions and derive identifiers from stable escaped IDs or hashes with aggregate-level uniqueness validation. |
+| GAP-006 | Direct creation accepts blank strings, reversed dates, negative/duplicate positions, arbitrary references, and unbounded collection/text sizes subject mainly to database columns. | Add domain invariants and bounded Pydantic schemas, including date order, identifiers, counts, positions, and reference formats. |
+| GAP-007 | SHACL shapes cover only selected domain/range rules, but earlier documentation described general CIDOC conformance. | Publish the exact conformance profile, expand shape coverage, and version shapes with the mapping. |
+| GAP-008 | `schema:contentUrl` may expose internal storage references rather than durable authorized content URLs. | Define reference semantics and emit resolvable access-controlled or public persistent URLs only when disclosure is authorized. |
+| GAP-009 | Repeated project export creates indistinguishable additional snapshots without an export reason or source revision marker. | Define idempotency or record source revision/hash, trigger, actor, and reason so multiple snapshots are interpretable. |
+| GAP-010 | Domain time and UUID generation are hard-coded, reducing deterministic testing and explicit provenance control. | Inject clock and identifier-generator ports at the application boundary. |
+| GAP-011 | List order lacks an ID tie-breaker and returns complete aggregates, which can become expensive. | Add deterministic ordering and consider summary rows plus a raw-record detail endpoint. |
+| GAP-012 | Direct create/list API behavior has little focused endpoint coverage compared with export and CIDOC generation. | Add tests for creation, list pagination/order, complete nested mapping, validation boundaries, and staff authorization. |
+| GAP-013 | The Angular viewer offers raw copy only, with no download, graph summary, provenance warning, or validation-profile explanation. | Add an accessible `.jsonld` download and human-readable provenance/validation summary where users need to assess or exchange the graph. |
+
+## 10. Acceptance criteria
+
+### AC-001 — Project export and rejection paths
+
+Covered by `test_export_in_situ_visit_api.py` and
+`test_export_in_situ_visit_use_case.py`, including missing project, wrong use
+type, insufficient evidence, external authorization, persistence, and related
+object propagation.
+
+### AC-002 — Conservative time and object semantics
+
+Covered by `test_cidoc_mapping.py` tests for planned dates, execution evidence,
+generic physical-object typing, visit actor/place/type links, and enriched
+occurrence context.
+
+### AC-003 — Self-contained version-targeted JSON-LD
+
+Covered by `test_cidoc_mapping.py::test_targets_cidoc_713`,
+`::test_context_is_inlined_official_713_plus_local_prefixes`, and graph-creator
+tests. GAP-001 and GAP-004 remain outside those assertions.
+
+### AC-004 — Children, attachments, and related-object links
+
+Covered by the full-expansion, content URL, note, activity-context, publication,
+attachment, and ACL tests in `test_cidoc_mapping.py` and `test_context_acl.py`.
+
+### AC-005 — Validation behavior
+
+Covered by `test_cidoc_api.py` and `test_jsonld_validation.py`: validation is on
+by default, may be skipped explicitly, detects the tested domain/range
+violation, and the non-expanding entry point does not call graph expansion.
+
+### AC-006 — Aggregate persistence
+
+Covered by `test_in_situ_visit_repository.py`, which round-trips enriched root,
+child, attachment, provenance, and version fields. Direct HTTP creation/listing
+coverage remains GAP-012.
+
+### AC-007 — Angular JSON-LD viewer
+
+The co-located Vitest suite verifies lazy loading on open, formatted output,
+retry, clipboard copy, and controlled close behavior.
+
+## 11. Non-functional requirements
+
+- **Network independence**: parsing the returned JSON-LD does not require
+  fetching a remote context.
+- **Semantic caution**: absent execution time is omitted instead of inferred
+  from planned dates.
+- **Consistency**: root and children are added in one transaction; report
+  generation composes export and narrative creation under its caller's single
+  commit.
+- **Performance**: semantic validation parses the document and performs RDFS
+  inference on each validated read; there is no projection cache.
+- **Architecture**: ORM classes use `...Orm` because domain entity names already
+  use `...Record`. Cross-context access uses published-language modules.
+
+## 12. Traceability
+
+| Element | Location |
+| --- | --- |
+| Aggregate, entities, and creation values | `vitarerum-api/app/cidoc_crm/in_situ_visit_mapping/domain/models.py` |
+| Use cases and ports | `vitarerum-api/app/cidoc_crm/in_situ_visit_mapping/application/` |
+| Mapping definition, context, engine, and shapes | `vitarerum-api/app/cidoc_crm/in_situ_visit_mapping/application/cidoc/` |
+| Use of Collections ACL | `vitarerum-api/app/cidoc_crm/in_situ_visit_mapping/infrastructure/context_acl.py` |
+| ORM mapping and repository | `vitarerum-api/app/cidoc_crm/in_situ_visit_mapping/infrastructure/` |
+| HTTP routes and DTOs | `vitarerum-api/app/cidoc_crm/in_situ_visit_mapping/presentation/` |
+| Downstream published language | `vitarerum-api/app/cidoc_crm/public.py` |
+| Backend verification | `vitarerum-api/test/cidoc_crm/` |
+| Angular viewer | `vitarerum-ui/src/app/features/collections/reports/components/in-situ-visit-cidoc-dialog/` |
+| Visual model | `docs/diagrams/cidoc-crm-in-situ-visit-record-model.svg` |
+
+## 13. Open decisions
+
+1. What institution-owned base URI and permanence policy should identify graph
+   resources?
+2. Which evidence distinguishes a person, organization, group, physical place,
+   and institution before a narrower CIDOC class is asserted?
+3. Must a stored snapshot reproduce byte-equivalent JSON-LD indefinitely, or is
+   remapping under newer declared rules acceptable?
+4. What exact SHACL profile constitutes acceptance for external publication?
+5. Should project export be idempotent per source revision, or intentionally
+   append-only with explicit export provenance?
