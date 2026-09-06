@@ -29,7 +29,7 @@ const SESSION: IdentitySession = {
 
 const PROPOSAL: ProposalSummary = {
   id: 'proposal-1',
-  referenceNumber: 'VR-2026-001',
+  referenceNumber: 'PR-MUHNAC/COL/2026/0001',
   title: 'Photographic history of Rio de Janeiro port, 1890-1930',
   status: 'PENDING',
   submissionChannel: 'AUTHENTICATED',
@@ -46,7 +46,7 @@ const PROPOSAL: ProposalSummary = {
   },
   collectionUseProject: {
     id: 'project-1',
-    referenceNumber: 'VR-2026-001',
+    referenceNumber: 'PR-MUHNAC/COL/2026/0001',
     title: 'Photographic history of Rio de Janeiro port, 1890-1930',
     status: 'CREATED',
   },
@@ -243,7 +243,7 @@ describe('ProposalsMyAssignmentsPageComponent', () => {
     expect(
       compiled.querySelector('a[href^="/p/collections/proposals/my-assignments/proposal-1"]'),
     ).not.toBeNull();
-    expect(compiled.querySelector('[aria-label="More actions for VR-2026-001"]')).not.toBeNull();
+    expect(compiled.querySelector('[aria-label="More actions for PR-MUHNAC/COL/2026/0001"]')).not.toBeNull();
   });
 
   it('keeps a cleared-title assignment link identifiable and accessible', async () => {
@@ -259,7 +259,7 @@ describe('ProposalsMyAssignmentsPageComponent', () => {
     );
 
     expect(link?.textContent?.trim()).toBe('Untitled proposal');
-    expect(compiled.textContent).toContain('VR-2026-001');
+    expect(compiled.textContent).toContain('PR-MUHNAC/COL/2026/0001');
   });
 
   it('shows forward and view details in the row menu', async () => {
@@ -270,7 +270,7 @@ describe('ProposalsMyAssignmentsPageComponent', () => {
 
     const compiled = fixture.nativeElement as HTMLElement;
     const actionButton = compiled.querySelector<HTMLButtonElement>(
-      '[aria-label="More actions for VR-2026-001"]',
+      '[aria-label="More actions for PR-MUHNAC/COL/2026/0001"]',
     );
 
     expect(actionButton).not.toBeNull();
@@ -293,7 +293,7 @@ describe('ProposalsMyAssignmentsPageComponent', () => {
 
     const compiled = fixture.nativeElement as HTMLElement;
     const actionButton = compiled.querySelector<HTMLButtonElement>(
-      '[aria-label="More actions for VR-2026-001"]',
+      '[aria-label="More actions for PR-MUHNAC/COL/2026/0001"]',
     );
 
     actionButton!.click();
@@ -334,7 +334,7 @@ describe('ProposalsMyAssignmentsPageComponent', () => {
     );
 
     expect(dialog).not.toBeNull();
-    expect(dialog!.textContent).toContain('VR-2026-001');
+    expect(dialog!.textContent).toContain('PR-MUHNAC/COL/2026/0001');
     expect(select).not.toBeNull();
     expect(note).not.toBeNull();
     expect(submit).not.toBeNull();
@@ -364,7 +364,7 @@ describe('ProposalsMyAssignmentsPageComponent', () => {
       },
     ]);
     expect(compiled.textContent).toContain('Assignment forwarded');
-    expect(compiled.textContent).toContain('VR-2026-001 was forwarded to Carol Lima');
+    expect(compiled.textContent).toContain('PR-MUHNAC/COL/2026/0001 was forwarded to Carol Lima');
   });
 });
 

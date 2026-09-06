@@ -32,6 +32,10 @@ decisão final. Não é possível enviar mensagens depois de **“Approved”**,
 
 ## Consultar a conversação
 
+![Lista "My proposals" com a referência, o título, o tipo, o estado, o requerente e a data de submissão de cada proposta.](../assets/investigador-propostas-lista.png)
+
+*Figura 1 — Onde localizar a proposta antes de abrir a conversação.*
+
 1. Abra **“Use of Collections”** > **“Proposals”** > **“My proposals”**.
 2. Se necessário, procure pelo número de referência ou título.
 3. Selecione o título da proposta ou escolha **“Details”** no menu de ações.

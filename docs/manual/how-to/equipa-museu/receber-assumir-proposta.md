@@ -22,10 +22,15 @@ assumida por outra pessoa.
 
 ## Passo a passo
 
+![Fila "New proposals" com uma proposta submetida e o botão "Assign to me" na coluna de ações.](../assets/equipa-proposta-assumir.png)
+
+*Figura 1 — Localização da ação para assumir uma proposta nova.*
+
 1. Abra **“New proposals”**.
 2. Procure por referência ou título em **“Search reference or title”** e
    selecione **“Search”**, se necessário.
-3. Reveja no cartão o requerente, o tipo de utilização, as datas e o resumo.
+3. Reveja na linha da tabela a referência, o título, o tipo de utilização, o
+   requerente e a data de submissão.
 4. Selecione a referência para abrir o detalhe antes de decidir, ou selecione
    diretamente **“Assign to me”**.
 5. Na confirmação **“Assign to me?”**, selecione novamente **“Assign to me”**.

@@ -31,6 +31,10 @@ e prepare as versões preenchidas para anexar.
 
 ### 1. Indicar os detalhes do pedido
 
+![Formulário "Submit a proposal" com as secções "Request details", "Opening message" e "Supporting documents".](../assets/investigador-proposta-submeter.png)
+
+*Figura 1 — As três secções do formulário de proposta autenticada.*
+
 1. No menu lateral, abra **“Use of Collections”** e depois **“Proposals”**.
 2. Selecione **“Submit proposal”**.
 3. Em **“Intended use”** (utilização pretendida), escolha **“In-situ visit”**.

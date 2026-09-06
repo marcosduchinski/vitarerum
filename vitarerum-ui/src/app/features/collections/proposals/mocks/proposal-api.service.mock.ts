@@ -60,7 +60,7 @@ export class ProposalApiServiceMock {
     this.nextId++;
     const now = new Date().toISOString();
     const seq = this.proposals.size + 1;
-    const proposalRef = `VRP-${now.slice(0, 10).replace(/-/g, '')}-${String(seq).padStart(4, '0')}`;
+    const proposalRef = `PP-MUHNAC/COL/${now.slice(0, 4)}/${String(seq).padStart(4, '0')}`;
     const convId = `conv-${id}`;
     const title = request.title?.trim() || request.initialMessageSubject?.trim() || proposalRef;
     const purpose = request.purpose?.trim() || request.initialMessageBody?.trim() || '';

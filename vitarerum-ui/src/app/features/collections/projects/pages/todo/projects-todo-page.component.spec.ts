@@ -40,9 +40,9 @@ function project(
   } as CollectionUseProjectSummary;
 }
 
-const ACTIVE = project('project-1', 'VR-2026-001', 'IN_PROGRESS');
-const CREATED = project('project-2', 'VR-2026-002', 'CREATED');
-const CLOSED = project('project-3', 'VR-2026-003', 'COMPLETED');
+const ACTIVE = project('project-1', 'PR-MUHNAC/COL/2026/0001', 'IN_PROGRESS');
+const CREATED = project('project-2', 'PR-MUHNAC/COL/2026/0002', 'CREATED');
+const CLOSED = project('project-3', 'PR-MUHNAC/COL/2026/0003', 'COMPLETED');
 
 function postit(id: string, projectId: string, reference: string, text: string): ProjectTodoPostit {
   return {
@@ -66,9 +66,9 @@ class ProjectApiServiceStub {
   readonly created: { projectId: string; text: string }[] = [];
 
   postits: ProjectTodoPostit[] = [
-    postit('todo-1', 'project-1', 'VR-2026-001', 'Confirm handling conditions'),
-    postit('todo-2', 'project-1', 'VR-2026-001', 'Book the reading room'),
-    postit('todo-3', 'project-2', 'VR-2026-002', 'Chase the loan agreement'),
+    postit('todo-1', 'project-1', 'PR-MUHNAC/COL/2026/0001', 'Confirm handling conditions'),
+    postit('todo-2', 'project-1', 'PR-MUHNAC/COL/2026/0001', 'Book the reading room'),
+    postit('todo-3', 'project-2', 'PR-MUHNAC/COL/2026/0002', 'Chase the loan agreement'),
   ];
 
   listMyTodoPostits(query: ProjectTodoPostitsQuery = {}) {
@@ -107,7 +107,7 @@ class ProjectApiServiceStub {
 
   createTodoItem(projectId: string, request: CreateProjectTodoItemRequest) {
     this.created.push({ projectId, text: request.text });
-    return of(postit('todo-new', projectId, 'VR-2026-001', request.text));
+    return of(postit('todo-new', projectId, 'PR-MUHNAC/COL/2026/0001', request.text));
   }
 }
 
@@ -156,9 +156,9 @@ describe('ProjectsTodoPageComponent', () => {
 
     const groups = compiled.querySelectorAll('.todo-group');
     expect(groups.length).toBe(2);
-    expect(groups[0].textContent).toContain('VR-2026-001');
+    expect(groups[0].textContent).toContain('PR-MUHNAC/COL/2026/0001');
     expect(groups[0].querySelectorAll('.todo-item').length).toBe(2);
-    expect(groups[1].textContent).toContain('VR-2026-002');
+    expect(groups[1].textContent).toContain('PR-MUHNAC/COL/2026/0002');
     expect(groups[1].querySelectorAll('.todo-item').length).toBe(1);
   });
 
@@ -202,7 +202,7 @@ describe('ProjectsTodoPageComponent', () => {
 
     const results = compiled.querySelector('.picker__results') as HTMLElement;
     expect(results.querySelectorAll('button').length).toBe(3);
-    expect(results.textContent).toContain('VR-2026-003');
+    expect(results.textContent).toContain('PR-MUHNAC/COL/2026/0003');
     expect(results.textContent).toContain('Completed');
   });
 
@@ -290,14 +290,14 @@ describe('ProjectsTodoPageComponent', () => {
     expect(results.textContent).toContain('In progress');
     expect(results.textContent).not.toContain('IN_PROGRESS');
     // The visible title is ellipsised, so the full text lives on the tooltip.
-    expect(results.querySelector('button')?.getAttribute('title')).toContain('Project VR-2026-001');
+    expect(results.querySelector('button')?.getAttribute('title')).toContain('Project PR-MUHNAC/COL/2026/0001');
   });
 
   it('steps back a page when the last item on it is removed', async () => {
     // 21 items over a page size of 20: page 1 holds exactly one item, so
     // removing it used to strand the view on an empty page.
     projectService.postits = Array.from({ length: 21 }, (_, index) =>
-      postit(`todo-${index + 1}`, 'project-1', 'VR-2026-001', `Item ${index + 1}`),
+      postit(`todo-${index + 1}`, 'project-1', 'PR-MUHNAC/COL/2026/0001', `Item ${index + 1}`),
     );
     const fixture = await render();
     const compiled = fixture.nativeElement as HTMLElement;

@@ -179,7 +179,7 @@ export const SEED_PROPOSALS: ProposalDetail[] = [
   // prop-1: SUBMITTED — alice, awaiting first review
   {
     id: 'prop-1',
-    referenceNumber: 'VRP-20260601-0001',
+    referenceNumber: 'PP-MUHNAC/COL/2026/0001',
     title: 'Zoology specimen catalogues from Atlantic forest surveys',
     status: 'SUBMITTED',
     submissionChannel: 'AUTHENTICATED',
@@ -190,7 +190,7 @@ export const SEED_PROPOSALS: ProposalDetail[] = [
     assignedTo: null,
     collectionUseProject: {
       id: 'proj-1',
-      referenceNumber: 'VR-2026-001',
+      referenceNumber: 'PR-MUHNAC/COL/2026/0001',
       title: 'Zoology specimen catalogues from Atlantic forest surveys',
       status: 'CREATED',
     },
@@ -221,7 +221,7 @@ export const SEED_PROPOSALS: ProposalDetail[] = [
   // prop-2: PENDING — iris, exhibition, assigned to greg
   {
     id: 'prop-2',
-    referenceNumber: 'VRP-20260601-0002',
+    referenceNumber: 'PP-MUHNAC/COL/2026/0002',
     title: 'Science history exhibition on botanical illustration',
     status: 'PENDING',
     submissionChannel: 'AUTHENTICATED',
@@ -232,7 +232,7 @@ export const SEED_PROPOSALS: ProposalDetail[] = [
     assignedTo: P['greg'],
     collectionUseProject: {
       id: 'proj-2',
-      referenceNumber: 'VR-2026-002',
+      referenceNumber: 'PR-MUHNAC/COL/2026/0002',
       title: 'Science history exhibition on botanical illustration',
       status: 'CREATED',
     },
@@ -273,7 +273,7 @@ export const SEED_PROPOSALS: ProposalDetail[] = [
   // prop-3: APPROVED — hugo, research; fran took it, forwarded to carol; eve watches; project in progress
   {
     id: 'prop-3',
-    referenceNumber: 'VRP-20260601-0003',
+    referenceNumber: 'PP-MUHNAC/COL/2026/0003',
     title: 'Comparative study of zoological field notebooks',
     status: 'APPROVED',
     submissionChannel: 'AUTHENTICATED',
@@ -284,7 +284,7 @@ export const SEED_PROPOSALS: ProposalDetail[] = [
     assignedTo: P['carol'],
     collectionUseProject: {
       id: 'proj-3',
-      referenceNumber: 'VR-2026-003',
+      referenceNumber: 'PR-MUHNAC/COL/2026/0003',
       title: 'Comparative study of zoological field notebooks',
       status: 'CREATED',
     },
@@ -298,7 +298,7 @@ export const SEED_PROPOSALS: ProposalDetail[] = [
   // prop-4: APPROVED — alice, lab instruments exhibition, bob assigned and approved; project ready to start
   {
     id: 'prop-4',
-    referenceNumber: 'VRP-20260601-0004',
+    referenceNumber: 'PP-MUHNAC/COL/2026/0004',
     title: 'Science history exhibition on early laboratory instruments',
     status: 'APPROVED',
     submissionChannel: 'AUTHENTICATED',
@@ -309,7 +309,7 @@ export const SEED_PROPOSALS: ProposalDetail[] = [
     assignedTo: P['bob'],
     collectionUseProject: {
       id: 'proj-4',
-      referenceNumber: 'VR-2026-004',
+      referenceNumber: 'PR-MUHNAC/COL/2026/0004',
       title: 'Science history exhibition on early laboratory instruments',
       status: 'CREATED',
     },
@@ -340,7 +340,7 @@ export const SEED_PROPOSALS: ProposalDetail[] = [
   // prop-5: REJECTED — iris, expedition photography exhibition, greg assigned and rejected
   {
     id: 'prop-5',
-    referenceNumber: 'VRP-20260601-0005',
+    referenceNumber: 'PP-MUHNAC/COL/2026/0005',
     title: 'Science history exhibition on expedition photography',
     status: 'REJECTED',
     submissionChannel: 'AUTHENTICATED',
@@ -351,7 +351,7 @@ export const SEED_PROPOSALS: ProposalDetail[] = [
     assignedTo: P['greg'],
     collectionUseProject: {
       id: 'proj-5',
-      referenceNumber: 'VR-2026-005',
+      referenceNumber: 'PR-MUHNAC/COL/2026/0005',
       title: 'Science history exhibition on expedition photography',
       status: 'CANCELLED',
     },
@@ -365,7 +365,7 @@ export const SEED_PROPOSALS: ProposalDetail[] = [
   // prop-6: REJECTED — hugo, botanical herbarium; bob assigned and rejected (scope too broad)
   {
     id: 'prop-6',
-    referenceNumber: 'VRP-20260601-0006',
+    referenceNumber: 'PP-MUHNAC/COL/2026/0006',
     title: 'Botanical herbarium records of medicinal plant collections',
     status: 'REJECTED',
     submissionChannel: 'AUTHENTICATED',
@@ -376,7 +376,7 @@ export const SEED_PROPOSALS: ProposalDetail[] = [
     assignedTo: P['bob'],
     collectionUseProject: {
       id: 'proj-6',
-      referenceNumber: 'VR-2026-006',
+      referenceNumber: 'PR-MUHNAC/COL/2026/0006',
       title: 'Botanical herbarium records of medicinal plant collections',
       status: 'CANCELLED',
     },
@@ -390,7 +390,7 @@ export const SEED_PROPOSALS: ProposalDetail[] = [
   // prop-7: APPROVED — hugo, port photography research; bob forwarded to dan who approved; project completed
   {
     id: 'prop-7',
-    referenceNumber: 'VRP-20260601-0007',
+    referenceNumber: 'PP-MUHNAC/COL/2026/0007',
     title: 'Photographic history of Rio de Janeiro port, 1890–1930',
     status: 'APPROVED',
     submissionChannel: 'AUTHENTICATED',
@@ -401,7 +401,7 @@ export const SEED_PROPOSALS: ProposalDetail[] = [
     assignedTo: P['dan'],
     collectionUseProject: {
       id: 'proj-7',
-      referenceNumber: 'VR-2026-007',
+      referenceNumber: 'PR-MUHNAC/COL/2026/0007',
       title: 'Photographic history of Rio de Janeiro port, 1890–1930',
       status: 'CREATED',
     },
@@ -493,7 +493,7 @@ export const SEED_MESSAGES: Record<string, Message[]> = {
       sentAt: '2026-06-01T09:00:00Z',
       sender: P['alice'].user.email,
       recipient: 'collections@vitarerum.example.com',
-      subject: 'Collection use request: VR-2026-001',
+      subject: 'Collection use request: PR-MUHNAC/COL/2026/0001',
       body: 'I am requesting access to the zoology specimen catalogues from Atlantic forest surveys for comparative research on collecting routes and specimen records.',
       attachments: [
         {
@@ -513,7 +513,7 @@ export const SEED_MESSAGES: Record<string, Message[]> = {
       sentAt: '2026-06-01T09:30:00Z',
       sender: P['iris'].user.email,
       recipient: 'collections@vitarerum.example.com',
-      subject: 'Collection use request: VR-2026-002',
+      subject: 'Collection use request: PR-MUHNAC/COL/2026/0002',
       body: 'I am requesting use of botanical illustration materials for a science history exhibition about observation, drawing, and botanical knowledge.',
     },
   ],
@@ -523,7 +523,7 @@ export const SEED_MESSAGES: Record<string, Message[]> = {
       sentAt: '2026-06-01T10:00:00Z',
       sender: P['hugo'].user.email,
       recipient: 'collections@vitarerum.example.com',
-      subject: 'Collection use request: VR-2026-003',
+      subject: 'Collection use request: PR-MUHNAC/COL/2026/0003',
       body: 'I am requesting access to zoological field notebooks, sketches, and specimen lists for a comparative research study.',
     },
   ],
@@ -533,7 +533,7 @@ export const SEED_MESSAGES: Record<string, Message[]> = {
       sentAt: '2026-06-01T10:30:00Z',
       sender: P['alice'].user.email,
       recipient: 'collections@vitarerum.example.com',
-      subject: 'Collection use request: VR-2026-004',
+      subject: 'Collection use request: PR-MUHNAC/COL/2026/0004',
       body: 'I am requesting use of early laboratory instrument materials for a science history exhibition about experimental practice and public education.',
       attachments: [
         {
@@ -553,7 +553,7 @@ export const SEED_MESSAGES: Record<string, Message[]> = {
       sentAt: '2026-06-01T11:00:00Z',
       sender: P['iris'].user.email,
       recipient: 'collections@vitarerum.example.com',
-      subject: 'Collection use request: VR-2026-005',
+      subject: 'Collection use request: PR-MUHNAC/COL/2026/0005',
       body: 'I am requesting use of expedition photography materials for a public science history exhibition on documentation and fieldwork.',
     },
   ],
@@ -563,7 +563,7 @@ export const SEED_MESSAGES: Record<string, Message[]> = {
       sentAt: '2026-06-01T11:30:00Z',
       sender: P['hugo'].user.email,
       recipient: 'collections@vitarerum.example.com',
-      subject: 'Collection use request: VR-2026-006',
+      subject: 'Collection use request: PR-MUHNAC/COL/2026/0006',
       body: 'I am requesting access to botanical herbarium records of medicinal plant collections for research on classification history and documented uses.',
     },
   ],
@@ -573,7 +573,7 @@ export const SEED_MESSAGES: Record<string, Message[]> = {
       sentAt: '2026-06-01T12:00:00Z',
       sender: P['hugo'].user.email,
       recipient: 'collections@vitarerum.example.com',
-      subject: 'Collection use request: VR-2026-007',
+      subject: 'Collection use request: PR-MUHNAC/COL/2026/0007',
       body: 'I am requesting access to photographic records documenting the Rio de Janeiro port area between 1890 and 1930.',
     },
   ],
@@ -601,7 +601,7 @@ export interface MutableProjectState {
 export const SEED_PROJECTS: MutableProjectState[] = [
   {
     id: 'proj-1',
-    referenceNumber: 'VR-2026-001',
+    referenceNumber: 'PR-MUHNAC/COL/2026/0001',
     title: 'Zoology specimen catalogues from Atlantic forest surveys',
     purpose: 'Research comparing zoological specimen catalogues and collecting routes.',
     type: 'IN_SITU_VISIT',
@@ -615,7 +615,7 @@ export const SEED_PROJECTS: MutableProjectState[] = [
   },
   {
     id: 'proj-2',
-    referenceNumber: 'VR-2026-002',
+    referenceNumber: 'PR-MUHNAC/COL/2026/0002',
     title: 'Science history exhibition on botanical illustration',
     purpose:
       'Selection and display of botanical illustration materials for a science history exhibition.',
@@ -630,7 +630,7 @@ export const SEED_PROJECTS: MutableProjectState[] = [
   },
   {
     id: 'proj-3',
-    referenceNumber: 'VR-2026-003',
+    referenceNumber: 'PR-MUHNAC/COL/2026/0003',
     title: 'Comparative study of zoological field notebooks',
     purpose: 'Research comparing zoological field notebooks, sketches, and specimen lists.',
     type: 'IN_SITU_VISIT',
@@ -671,7 +671,7 @@ export const SEED_PROJECTS: MutableProjectState[] = [
   },
   {
     id: 'proj-4',
-    referenceNumber: 'VR-2026-004',
+    referenceNumber: 'PR-MUHNAC/COL/2026/0004',
     title: 'Science history exhibition on early laboratory instruments',
     purpose: 'Preparation of early laboratory instruments for a science history exhibition.',
     type: 'EXHIBITION',
@@ -685,7 +685,7 @@ export const SEED_PROJECTS: MutableProjectState[] = [
   },
   {
     id: 'proj-5',
-    referenceNumber: 'VR-2026-005',
+    referenceNumber: 'PR-MUHNAC/COL/2026/0005',
     title: 'Science history exhibition on expedition photography',
     purpose: 'Selection of expedition photographs for a public science history exhibition.',
     type: 'EXHIBITION',
@@ -700,7 +700,7 @@ export const SEED_PROJECTS: MutableProjectState[] = [
   },
   {
     id: 'proj-6',
-    referenceNumber: 'VR-2026-006',
+    referenceNumber: 'PR-MUHNAC/COL/2026/0006',
     title: 'Botanical herbarium records of medicinal plant collections',
     purpose: 'Research on botanical herbarium records and medicinal plant classification.',
     type: 'IN_SITU_VISIT',
@@ -715,7 +715,7 @@ export const SEED_PROJECTS: MutableProjectState[] = [
   },
   {
     id: 'proj-7',
-    referenceNumber: 'VR-2026-007',
+    referenceNumber: 'PR-MUHNAC/COL/2026/0007',
     title: 'Photographic history of Rio de Janeiro port, 1890–1930',
     purpose: 'Research on photographic records documenting Rio de Janeiro port history.',
     type: 'IN_SITU_VISIT',
@@ -824,7 +824,7 @@ export const SEED_PROJECT_LOG_ENTRIES: Record<string, ObjectLogEntry[]> = {
 export const SEED_PROJECT_OBJECT_ACCESS_LOGS: Record<string, ObjectAccessLog> = {
   'proj-3': {
     id: 'oal-proj-3',
-    referenceNumber: 'OAL-PROJ3',
+    referenceNumber: 'OL-MUHNAC/COL/2026/0003',
     projectId: 'proj-3',
     dateConclusion: null,
     curator: null,
@@ -846,7 +846,7 @@ export const SEED_PROJECT_OCCURRENCE_ENTRIES: Record<string, ObjectOccurrenceEnt
 export const SEED_PROJECT_PUBLICATION_LOGS: Record<string, PublicationLog> = {
   'proj-3': {
     id: 'pub-proj-3',
-    referenceNumber: 'PUB-PROJ3',
+    referenceNumber: 'OP-MUHNAC/COL/2026/0003',
     projectId: 'proj-3',
     curator: null,
   },
@@ -955,7 +955,7 @@ export class MockProjectState {
     const referenceNumber =
       existing?.referenceNumber && existing.referenceNumber.trim()
         ? existing.referenceNumber
-        : `CUP-${String(this.nextId++).padStart(8, '0')}`;
+        : `PR-MUHNAC/COL/2026/${String(this.nextId++).padStart(4, '0')}`;
 
     const project: MutableProjectState = {
       id: projectId,
@@ -1045,7 +1045,7 @@ export class MockProjectState {
   }
 
   nextObjectAccessLogReference(): string {
-    return `OAL-${String(this.nextId++).padStart(8, '0')}`;
+    return `OL-MUHNAC/COL/2026/${String(this.nextId++).padStart(4, '0')}`;
   }
 
   nextObjectOccurrenceLogId(): string {
@@ -1053,7 +1053,7 @@ export class MockProjectState {
   }
 
   nextObjectOccurrenceLogReference(): string {
-    return `OOL-${String(this.nextId++).padStart(8, '0')}`;
+    return `OO-MUHNAC/COL/2026/${String(this.nextId++).padStart(4, '0')}`;
   }
 
   nextPublicationLogId(): string {
@@ -1061,7 +1061,7 @@ export class MockProjectState {
   }
 
   nextPublicationLogReference(): string {
-    return `PUB-${String(this.nextId++).padStart(8, '0')}`;
+    return `OP-MUHNAC/COL/2026/${String(this.nextId++).padStart(4, '0')}`;
   }
 
   nextProjectId(): string {
@@ -1069,7 +1069,7 @@ export class MockProjectState {
   }
 
   nextProjectReference(): string {
-    return `CUP-${String(this.nextId++).padStart(8, '0')}`;
+    return `PR-MUHNAC/COL/2026/${String(this.nextId++).padStart(4, '0')}`;
   }
 
   nextProjectObjectId(): string {

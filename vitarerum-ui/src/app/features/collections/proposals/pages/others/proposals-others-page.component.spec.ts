@@ -29,7 +29,7 @@ const SESSION: IdentitySession = {
 
 const OTHER_PROPOSAL: ProposalSummary = {
   id: 'proposal-other',
-  referenceNumber: 'VR-2026-001',
+  referenceNumber: 'PR-MUHNAC/COL/2026/0001',
   title: 'Photographic history of Rio de Janeiro port, 1890-1930',
   status: 'PENDING',
   submissionChannel: 'AUTHENTICATED',
@@ -46,7 +46,7 @@ const OTHER_PROPOSAL: ProposalSummary = {
   },
   collectionUseProject: {
     id: 'project-1',
-    referenceNumber: 'VR-2026-001',
+    referenceNumber: 'PR-MUHNAC/COL/2026/0001',
     title: 'Photographic history of Rio de Janeiro port, 1890-1930',
     status: 'CREATED',
   },
@@ -56,7 +56,7 @@ const OTHER_PROPOSAL: ProposalSummary = {
 const MY_PROPOSAL: ProposalSummary = {
   ...OTHER_PROPOSAL,
   id: 'proposal-mine',
-  referenceNumber: 'VR-2026-002',
+  referenceNumber: 'PR-MUHNAC/COL/2026/0002',
   title: 'Research assigned to Bob',
   assignedTo: {
     permissionId: 'permission-staff',
@@ -66,7 +66,7 @@ const MY_PROPOSAL: ProposalSummary = {
   collectionUseProject: {
     ...OTHER_PROPOSAL.collectionUseProject!,
     id: 'project-2',
-    referenceNumber: 'VR-2026-002',
+    referenceNumber: 'PR-MUHNAC/COL/2026/0002',
     title: 'Research assigned to Bob',
   },
 };
@@ -74,13 +74,13 @@ const MY_PROPOSAL: ProposalSummary = {
 const UNASSIGNED_PROPOSAL: ProposalSummary = {
   ...OTHER_PROPOSAL,
   id: 'proposal-unassigned',
-  referenceNumber: 'VR-2026-003',
+  referenceNumber: 'PR-MUHNAC/COL/2026/0003',
   title: 'Unassigned request',
   assignedTo: null,
   collectionUseProject: {
     ...OTHER_PROPOSAL.collectionUseProject!,
     id: 'project-3',
-    referenceNumber: 'VR-2026-003',
+    referenceNumber: 'PR-MUHNAC/COL/2026/0003',
     title: 'Unassigned request',
   },
 };
@@ -251,7 +251,7 @@ describe('ProposalsOthersPageComponent', () => {
     expect(
       compiled.querySelector('a[href^="/p/collections/proposals/others/proposal-other"]'),
     ).not.toBeNull();
-    expect(compiled.querySelector('[aria-label="More actions for VR-2026-001"]')).not.toBeNull();
+    expect(compiled.querySelector('[aria-label="More actions for PR-MUHNAC/COL/2026/0001"]')).not.toBeNull();
   });
 
   it('shows take over and view details in the row menu', async () => {
@@ -262,7 +262,7 @@ describe('ProposalsOthersPageComponent', () => {
 
     const compiled = fixture.nativeElement as HTMLElement;
     const actionButton = compiled.querySelector<HTMLButtonElement>(
-      '[aria-label="More actions for VR-2026-001"]',
+      '[aria-label="More actions for PR-MUHNAC/COL/2026/0001"]',
     );
 
     expect(actionButton).not.toBeNull();
@@ -283,7 +283,7 @@ describe('ProposalsOthersPageComponent', () => {
 
     const compiled = fixture.nativeElement as HTMLElement;
     const actionButton = compiled.querySelector<HTMLButtonElement>(
-      '[aria-label="More actions for VR-2026-001"]',
+      '[aria-label="More actions for PR-MUHNAC/COL/2026/0001"]',
     );
 
     expect(actionButton).not.toBeNull();
@@ -300,7 +300,7 @@ describe('ProposalsOthersPageComponent', () => {
     expect(proposalService.assignCalls).toEqual([]);
     expect(compiled.textContent).toContain('Take over assignment?');
     expect(compiled.textContent).toContain(
-      'This will move VR-2026-001 from Carolina Silva to you.',
+      'This will move PR-MUHNAC/COL/2026/0001 from Carolina Silva to you.',
     );
 
     buttonByText(compiled, 'Take over assignment').click();

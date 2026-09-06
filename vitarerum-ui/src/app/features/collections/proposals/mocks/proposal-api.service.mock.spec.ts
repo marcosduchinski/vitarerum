@@ -163,7 +163,7 @@ describe('ProposalApiServiceMock', () => {
     expect(eventsAfter.content).toEqual(eventsBefore.content);
 
     const searchResult = await firstValueFrom(
-      service.listProposals({ search: 'VRP-20260601-0001' }),
+      service.listProposals({ search: 'PP-MUHNAC/COL/2026/0001' }),
     );
     expect(searchResult.content.map((proposal) => proposal.id)).toContain('prop-1');
   });
@@ -214,7 +214,7 @@ describe('ProposalApiServiceMock', () => {
       id: 'msg-prop-1-initial',
       sender: 'alice@ext.example.com',
       recipient: 'collections@vitarerum.example.com',
-      subject: 'Collection use request: VR-2026-001',
+      subject: 'Collection use request: PR-MUHNAC/COL/2026/0001',
     });
     expect(conversation.messages[0].body).toContain('zoology specimen catalogues');
     expect(conversation.messages[0].attachments).toEqual([
@@ -242,7 +242,7 @@ describe('ProposalApiServiceMock', () => {
     expect(conversation.messages[0]).toMatchObject({
       id: 'msg-prop-4-initial',
       sender: 'alice@ext.example.com',
-      subject: 'Collection use request: VR-2026-004',
+      subject: 'Collection use request: PR-MUHNAC/COL/2026/0004',
     });
     expect(conversation.messages[0].attachments).toEqual([
       {

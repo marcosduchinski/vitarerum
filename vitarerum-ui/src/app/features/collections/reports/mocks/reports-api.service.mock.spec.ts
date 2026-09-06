@@ -136,7 +136,7 @@ describe('ReportsApiServiceMock', () => {
       totalPages: 2,
     });
     expect(page.content[0]).toMatchObject({
-      code: 'CUP-0002',
+      code: 'PR-MUHNAC/COL/2026/0002',
       visitorName: 'Hugo Andrade',
       placeName: 'MUHNAC',
       visitBeginDate: '2026-06-01',
@@ -215,10 +215,10 @@ describe('ReportsApiServiceMock', () => {
         },
       },
       record: {
-        code: 'CUP-0001',
+        code: 'PR-MUHNAC/COL/2026/0001',
         visitorName: 'Hugo Andrade',
         placeName: 'MUHNAC',
-        requestedObjects: [{ sourceId: 'VR-2026-007' }],
+        requestedObjects: [{ sourceId: 'PR-MUHNAC/COL/2026/0007' }],
       },
     });
   });

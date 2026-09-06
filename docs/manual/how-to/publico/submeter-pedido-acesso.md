@@ -45,6 +45,10 @@ Também pode abrir diretamente `/submit-proposal`.
 
 ### 2. Preencher os seus dados
 
+![Formulário público de pedido, com a secção "Os seus dados" seguida de "O seu pedido", onde aparecem a utilização pretendida, as datas propostas, o assunto e a mensagem.](../assets/publico-submeter-pedido-formulario.png)
+
+*Figura 1 — Estrutura do formulário de pedido público.*
+
 1. Em **“Os seus dados”**, introduza o seu **“Nome completo”**.
 2. Introduza um endereço válido em **“E-mail”**.
 3. Confirme cuidadosamente o endereço. A ligação que permite concluir o pedido

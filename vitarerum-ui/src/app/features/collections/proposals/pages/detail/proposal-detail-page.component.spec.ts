@@ -14,7 +14,7 @@ import { ProposalDetailPageComponent } from './proposal-detail-page.component';
 
 const PROPOSAL: ProposalDetail = {
   id: 'proposal-1',
-  referenceNumber: 'VR-2026-001',
+  referenceNumber: 'PR-MUHNAC/COL/2026/0001',
   title: 'Photographic history of Rio de Janeiro port, 1890-1930',
   status: 'SUBMITTED',
   submissionChannel: 'AUTHENTICATED',
@@ -27,7 +27,7 @@ const PROPOSAL: ProposalDetail = {
   assignedTo: null,
   collectionUseProject: {
     id: 'project-1',
-    referenceNumber: 'VR-2026-001',
+    referenceNumber: 'PR-MUHNAC/COL/2026/0001',
     title: 'Photographic history of Rio de Janeiro port, 1890-1930',
     status: 'CREATED',
   },
@@ -236,7 +236,7 @@ describe('ProposalDetailPageComponent', () => {
 
     expect(proposalService.assignCalls).toEqual([]);
     expect(compiled.textContent).toContain('Assign to me?');
-    expect(compiled.textContent).toContain('This will assign VR-2026-001 to you for review.');
+    expect(compiled.textContent).toContain('This will assign PR-MUHNAC/COL/2026/0001 to you for review.');
 
     compiled.querySelector<HTMLButtonElement>('.confirm-modal__button--primary')!.click();
     fixture.detectChanges();
@@ -281,7 +281,7 @@ describe('ProposalDetailPageComponent', () => {
 
     expect(compiled.querySelector('.forward-panel')).toBeNull();
     expect(dialog).not.toBeNull();
-    expect(dialog!.textContent).toContain('VR-2026-001');
+    expect(dialog!.textContent).toContain('PR-MUHNAC/COL/2026/0001');
     expect(select).not.toBeNull();
     expect(note).not.toBeNull();
     expect(submit).not.toBeNull();

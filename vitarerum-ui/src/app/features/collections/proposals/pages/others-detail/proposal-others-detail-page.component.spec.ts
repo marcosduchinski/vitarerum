@@ -16,7 +16,7 @@ const ASSIGNEE = {
 
 const PROPOSAL: ProposalDetail = {
   id: 'proposal-1',
-  referenceNumber: 'VR-2026-002',
+  referenceNumber: 'PR-MUHNAC/COL/2026/0002',
   title: 'Manuscript digitisation request',
   status: 'PENDING',
   submissionChannel: 'AUTHENTICATED',
@@ -116,7 +116,7 @@ describe('ProposalOthersDetailPageComponent', () => {
     const fixture = await render();
     const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
 
-    expect(text).toContain('VR-2026-002');
+    expect(text).toContain('PR-MUHNAC/COL/2026/0002');
     expect(text).toContain('Manuscript digitisation request');
     expect(text).toContain('Current assignment');
     expect(text).toContain('Carolina Silva');
@@ -147,7 +147,7 @@ describe('ProposalOthersDetailPageComponent', () => {
     expect(proposalService.assignCalls).toEqual([]);
     expect(compiled.textContent).toContain('Take over assignment?');
     expect(compiled.textContent).toContain(
-      'This will move VR-2026-002 from Carolina Silva to you.',
+      'This will move PR-MUHNAC/COL/2026/0002 from Carolina Silva to you.',
     );
 
     compiled.querySelector<HTMLButtonElement>('.confirm-modal__button--primary')!.click();

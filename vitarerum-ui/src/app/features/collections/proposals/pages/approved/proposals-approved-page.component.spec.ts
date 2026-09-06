@@ -12,7 +12,7 @@ import { ProposalsApprovedPageComponent } from './proposals-approved-page.compon
 
 const APPROVED_PROPOSAL: ProposalSummary = {
   id: 'proposal-approved',
-  referenceNumber: 'VR-2026-001',
+  referenceNumber: 'PR-MUHNAC/COL/2026/0001',
   title: 'Approved research request',
   status: 'APPROVED',
   submissionChannel: 'AUTHENTICATED',
@@ -29,7 +29,7 @@ const APPROVED_PROPOSAL: ProposalSummary = {
   },
   collectionUseProject: {
     id: 'project-1',
-    referenceNumber: 'VR-2026-001',
+    referenceNumber: 'PR-MUHNAC/COL/2026/0001',
     title: 'Approved research request',
     status: 'CREATED',
   },
@@ -40,7 +40,7 @@ const APPROVED_PROPOSAL: ProposalSummary = {
 const APPROVED_PROPOSAL_WITHOUT_PROJECT: ProposalSummary = {
   ...APPROVED_PROPOSAL,
   id: 'proposal-no-project',
-  referenceNumber: 'VR-2026-002',
+  referenceNumber: 'PR-MUHNAC/COL/2026/0002',
   collectionUseProject: undefined,
 };
 
@@ -106,7 +106,7 @@ describe('ProposalsApprovedPageComponent', () => {
     expect(compiled.textContent).toContain('Assigned to');
     expect(compiled.textContent).toContain('Approved');
     expect(compiled.textContent).toContain('Approved research request');
-    expect(compiled.querySelector('[aria-label="More actions for VR-2026-001"]')).not.toBeNull();
+    expect(compiled.querySelector('[aria-label="More actions for PR-MUHNAC/COL/2026/0001"]')).not.toBeNull();
   });
 
   it('shows proposal and project actions in the row menu', async () => {
@@ -117,7 +117,7 @@ describe('ProposalsApprovedPageComponent', () => {
 
     const compiled = fixture.nativeElement as HTMLElement;
     const actionButton = compiled.querySelector<HTMLButtonElement>(
-      '[aria-label="More actions for VR-2026-001"]',
+      '[aria-label="More actions for PR-MUHNAC/COL/2026/0001"]',
     );
 
     expect(actionButton).not.toBeNull();
@@ -140,7 +140,7 @@ describe('ProposalsApprovedPageComponent', () => {
 
     const compiled = fixture.nativeElement as HTMLElement;
     const actionButton = compiled.querySelector<HTMLButtonElement>(
-      '[aria-label="More actions for VR-2026-002"]',
+      '[aria-label="More actions for PR-MUHNAC/COL/2026/0002"]',
     );
 
     expect(actionButton).not.toBeNull();

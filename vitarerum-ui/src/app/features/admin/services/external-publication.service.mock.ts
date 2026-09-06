@@ -33,7 +33,7 @@ export class ExternalPublicationServiceMock implements ExternalPublicationApi {
     {
       id: 'proposal-1',
       resourceType: 'PROPOSAL',
-      reference: 'CUP-2026-0001',
+      reference: 'PR-MUHNAC/COL/2026/0001',
       title: 'Research visit request',
       status: 'APPROVED',
       subtitle: 'IN_SITU_VISIT',
@@ -41,7 +41,7 @@ export class ExternalPublicationServiceMock implements ExternalPublicationApi {
     {
       id: 'project-1',
       resourceType: 'PROJECT',
-      reference: 'CUP-2026-0001',
+      reference: 'PR-MUHNAC/COL/2026/0001',
       title: 'Research visit project',
       status: 'COMPLETED',
       subtitle: 'IN_SITU_VISIT',

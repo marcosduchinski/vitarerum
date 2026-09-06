@@ -20,7 +20,7 @@ import { ProjectCuratorialDetailPageComponent } from './project-curatorial-detai
 
 const PROJECT: CollectionUseProjectDetail = {
   id: 'proj-22',
-  referenceNumber: 'VR-2026-022',
+  referenceNumber: 'PR-MUHNAC/COL/2026/0022',
   title: 'Curatorial specimen access',
   purpose: 'Review object handling during a supervised research visit.',
   type: 'IN_SITU_VISIT',

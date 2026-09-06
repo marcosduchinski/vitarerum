@@ -37,7 +37,7 @@ const EXTERNAL_SESSION: IdentitySession = {
 
 const PROJECTS: readonly CollectionUseProjectSummary[] = Array.from({ length: 4 }, (_, index) => ({
   id: `project-${index + 1}`,
-  referenceNumber: `VR-2026-${String(index + 51).padStart(3, '0')}`,
+  referenceNumber: `PR-MUHNAC/COL/2026/${String(index + 51).padStart(4, '0')}`,
   title: index === 2 ? 'Field notebook transcription' : 'Illuminated manuscripts access',
   purpose: 'Active collection-use work with staff supervision.',
   type: index === 1 ? 'EXHIBITION' : index === 2 ? 'OTHER' : 'IN_SITU_VISIT',
@@ -236,7 +236,7 @@ describe('ProjectsMyPageComponent', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     const text = compiled.textContent ?? '';
 
-    expect(text).toContain('VR-2026-051');
+    expect(text).toContain('PR-MUHNAC/COL/2026/0051');
     expect(text).toContain('Illuminated manuscripts access');
     expect(text).toContain('In-situ visit');
     expect(text).toContain('Alice Ferreira');
@@ -331,15 +331,15 @@ describe('ProjectsMyPageComponent', () => {
     fixture.detectChanges();
 
     buttonByText(
-      cardByReference(fixture.nativeElement, 'VR-2026-051'),
+      cardByReference(fixture.nativeElement, 'PR-MUHNAC/COL/2026/0051'),
       'Object Access log',
     ).click();
     buttonByText(
-      cardByReference(fixture.nativeElement, 'VR-2026-052'),
+      cardByReference(fixture.nativeElement, 'PR-MUHNAC/COL/2026/0052'),
       'Object Access log',
     ).click();
     buttonByText(
-      cardByReference(fixture.nativeElement, 'VR-2026-053'),
+      cardByReference(fixture.nativeElement, 'PR-MUHNAC/COL/2026/0053'),
       'Object Access log',
     ).click();
 
@@ -356,15 +356,15 @@ describe('ProjectsMyPageComponent', () => {
     fixture.detectChanges();
 
     buttonByText(
-      cardByReference(fixture.nativeElement, 'VR-2026-051'),
+      cardByReference(fixture.nativeElement, 'PR-MUHNAC/COL/2026/0051'),
       'Object Occurrences',
     ).click();
     buttonByText(
-      cardByReference(fixture.nativeElement, 'VR-2026-052'),
+      cardByReference(fixture.nativeElement, 'PR-MUHNAC/COL/2026/0052'),
       'Object Occurrences',
     ).click();
     buttonByText(
-      cardByReference(fixture.nativeElement, 'VR-2026-053'),
+      cardByReference(fixture.nativeElement, 'PR-MUHNAC/COL/2026/0053'),
       'Object Occurrences',
     ).click();
 
@@ -583,7 +583,7 @@ describe('ProjectsMyPageComponent', () => {
     expect(projectService.completed).toEqual([]);
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('Conclude project?');
     expect((fixture.nativeElement as HTMLElement).textContent).toContain(
-      'This will mark VR-2026-051 as completed and move it out of active projects.',
+      'This will mark PR-MUHNAC/COL/2026/0051 as completed and move it out of active projects.',
     );
 
     buttonByText(fixture.nativeElement, 'Conclude project').click();
@@ -616,7 +616,7 @@ describe('ProjectsMyPageComponent', () => {
     expect(projectService.cancelled).toEqual([]);
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('Cancel project?');
     expect((fixture.nativeElement as HTMLElement).textContent).toContain(
-      'This will cancel VR-2026-051 and move it to completed / closed projects.',
+      'This will cancel PR-MUHNAC/COL/2026/0051 and move it to completed / closed projects.',
     );
 
     buttonByText(fixture.nativeElement, 'Cancel project').click();

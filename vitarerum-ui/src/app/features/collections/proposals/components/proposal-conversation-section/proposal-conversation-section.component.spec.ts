@@ -15,7 +15,7 @@ const proposalServiceStub = {
 
 const PROPOSAL: ProposalDetail = {
   id: 'proposal-1',
-  referenceNumber: 'VR-2026-001',
+  referenceNumber: 'PR-MUHNAC/COL/2026/0001',
   title: 'Photographic history of Rio de Janeiro port, 1890-1930',
   status: 'PENDING',
   submissionChannel: 'AUTHENTICATED',
@@ -32,7 +32,7 @@ const PROPOSAL: ProposalDetail = {
   },
   collectionUseProject: {
     id: 'project-1',
-    referenceNumber: 'VR-2026-001',
+    referenceNumber: 'PR-MUHNAC/COL/2026/0001',
     title: 'Photographic history of Rio de Janeiro port, 1890-1930',
     status: 'CREATED',
   },
@@ -88,7 +88,7 @@ const MESSAGES: readonly Message[] = [
     sentAt: '2026-05-01T14:00:00',
     sender: 'bob@example.test',
     recipient: 'alice@example.test',
-    subject: 'Response to VR-2026-001',
+    subject: 'Response to PR-MUHNAC/COL/2026/0001',
     body: '<p>Attached response.</p>',
     attachments: [{ documentId: 'document-1', fileName: 'signed-response.docx' }],
   },

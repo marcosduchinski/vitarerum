@@ -15,7 +15,7 @@ const STAFF = {
 
 const PROPOSAL: ProposalDetail = {
   id: 'proposal-1',
-  referenceNumber: 'VR-2026-009',
+  referenceNumber: 'PR-MUHNAC/COL/2026/0009',
   title: 'Out-of-scope reproduction request',
   status: 'REJECTED',
   submissionChannel: 'AUTHENTICATED',
@@ -113,7 +113,7 @@ describe('ProposalRejectedDetailPageComponent', () => {
     const compiled = await render();
     const text = compiled.textContent ?? '';
 
-    expect(text).toContain('VR-2026-009');
+    expect(text).toContain('PR-MUHNAC/COL/2026/0009');
     expect(text).toContain('Out-of-scope reproduction request');
     expect(text).toContain('Rejected');
 

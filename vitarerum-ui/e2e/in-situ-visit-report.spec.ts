@@ -5,7 +5,7 @@ const REPORT_ID = 'report-1';
 
 const PROJECT = {
   id: PROJECT_ID,
-  referenceNumber: 'VR-2026-007',
+  referenceNumber: 'PR-MUHNAC/COL/2026/0007',
   title: 'Photographic history of Rio de Janeiro port, 1890–1930',
   purpose: 'Research on photographic records documenting Rio de Janeiro port history.',
   type: 'IN_SITU_VISIT',

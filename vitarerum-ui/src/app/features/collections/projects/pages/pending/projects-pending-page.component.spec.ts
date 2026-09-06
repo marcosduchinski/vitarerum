@@ -12,7 +12,7 @@ import { ProjectsPendingPageComponent } from './projects-pending-page.component'
 
 const PROJECTS: readonly CollectionUseProjectSummary[] = Array.from({ length: 5 }, (_, index) => ({
   id: `project-${index + 1}`,
-  referenceNumber: `VR-2026-${String(index + 41).padStart(3, '0')}`,
+  referenceNumber: `PR-MUHNAC/COL/2026/${String(index + 41).padStart(4, '0')}`,
   title:
     index === 3
       ? 'Railway archive glass plate negatives'
@@ -127,7 +127,7 @@ describe('ProjectsPendingPageComponent', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     const text = compiled.textContent ?? '';
 
-    expect(text).toContain('VR-2026-041');
+    expect(text).toContain('PR-MUHNAC/COL/2026/0041');
     expect(text).toContain('Conservation study for ceramic collection');
     expect(text).toContain('In-situ visit');
     expect(text).toContain('Alice Ferreira');
@@ -397,7 +397,7 @@ describe('ProjectsPendingPageComponent', () => {
     expect(projectService.cancelled).toEqual([]);
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('Cancel project?');
     expect((fixture.nativeElement as HTMLElement).textContent).toContain(
-      'This will cancel VR-2026-041 before work starts and move it to cancelled projects.',
+      'This will cancel PR-MUHNAC/COL/2026/0041 before work starts and move it to cancelled projects.',
     );
 
     buttonByText(fixture.nativeElement, 'Cancel project').click();

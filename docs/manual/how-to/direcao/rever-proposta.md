@@ -22,6 +22,10 @@ modo de consulta: não aprova, rejeita, edita nem gere os documentos.
 
 ## Passo a passo
 
+![Separador "Actions" de uma proposta em revisão pela Direção, com a única ação disponível: "Return to the Staff".](../assets/direcao-revisao-devolver.png)
+
+*Figura 1 — A única decisão que a Direção regista nesta fase.*
+
 1. Abra a proposta na fila **“Direction reviews”**.
 2. Consulte **“Overview”**, **“Events”**, **“Documents”** e **“Objects”**.
 3. Em **“Actions”**, selecione **“Return to the Staff”**.

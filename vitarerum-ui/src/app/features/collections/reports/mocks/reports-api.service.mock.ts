@@ -334,7 +334,7 @@ export class ReportsApiServiceMock {
     };
     const record: InSituVisitRecord = {
       id: report.inSituVisitRecordId,
-      code: `CUP-${suffix}`,
+      code: `PR-MUHNAC/COL/2026/${suffix}`,
       visitBeginDate: project.beginDate,
       visitEndDate: project.endDate,
       visitorName: project.requestedBy.user.name,

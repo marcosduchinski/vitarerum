@@ -109,7 +109,7 @@ describe('AppTopbarComponent role switcher', () => {
       id: 'notification-1',
       relatedResourceType: 'PROPOSAL',
       relatedResourceId: 'proposal-1',
-      relatedResourceLabel: 'VR-2026-001',
+      relatedResourceLabel: 'PR-MUHNAC/COL/2026/0001',
       triggeredBy: {
         permissionId: 'perm-curatorial',
         group: 'CURATORIAL',
@@ -125,7 +125,7 @@ describe('AppTopbarComponent role switcher', () => {
     };
 
     expect(component.notificationText({ ...baseNotification, kind: 'PROPOSAL_SUBMITTED' })).toBe(
-      'New proposal VR-2026-001 was submitted.',
+      'New proposal PR-MUHNAC/COL/2026/0001 was submitted.',
     );
     expect(
       component.notificationText({
@@ -141,19 +141,19 @@ describe('AppTopbarComponent role switcher', () => {
         ...baseNotification,
         kind: 'PROPOSAL_DOCUMENTS_SUBMITTED',
       }),
-    ).toBe('Alice Curator submitted documents for VR-2026-001.');
+    ).toBe('Alice Curator submitted documents for PR-MUHNAC/COL/2026/0001.');
     expect(
       component.notificationText({
         ...baseNotification,
         kind: 'PROPOSAL_CORRECTIONS_SUBMITTED',
       }),
-    ).toBe('Corrections were submitted for VR-2026-001.');
+    ).toBe('Corrections were submitted for PR-MUHNAC/COL/2026/0001.');
     expect(
       component.notificationText({
         ...baseNotification,
         kind: 'PROPOSAL_TAKEN_OVER',
       }),
-    ).toBe('Alice Curator took over VR-2026-001.');
+    ).toBe('Alice Curator took over PR-MUHNAC/COL/2026/0001.');
     expect(
       component.notificationText({
         ...baseNotification,

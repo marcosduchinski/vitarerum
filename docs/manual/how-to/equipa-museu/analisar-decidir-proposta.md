@@ -24,6 +24,10 @@ rejeição são exclusivas de CURATORIAL
 
 ## Analisar e comunicar
 
+![Separador "Actions" de uma proposta atribuída, com as ações Accept, Reject, Forward, Send to Direction e Edit proposal.](../assets/equipa-proposta-acoes.png)
+
+*Figura 1 — Ações disponíveis numa proposta em análise.*
+
 1. Abra a proposta em **“My assignments”**.
 2. Consulte os separadores de resumo, documentos, objetos, conversação e
    eventos.
@@ -32,6 +36,10 @@ rejeição são exclusivas de CURATORIAL
    escolha **“Staff member”**, acrescente uma nota útil e confirme **“Forward”**.
 
 ## Pedir documentos ou correções
+
+![Separador "Documents" com um documento assinalado para correção e a lista "Correction requests", cada pedido com o tipo de documento e o motivo escrito pela equipa.](../assets/equipa-proposta-documentos.png)
+
+*Figura 2 — Documentos assinalados e pedidos de correção em preparação.*
 
 1. Abra o separador **“Documents”**.
 2. Para um documento que ainda não existe, selecione **“Request a missing

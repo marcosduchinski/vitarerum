@@ -18,7 +18,7 @@ class IdentityServiceStub {
 
 const PROJECT: CollectionUseProjectDetail = {
   id: 'proj-12',
-  referenceNumber: 'VR-2026-012',
+  referenceNumber: 'PR-MUHNAC/COL/2026/0012',
   title: 'Atlantic forest zoology specimens',
   purpose: 'Comparative study of specimen records.',
   type: 'IN_SITU_VISIT',
@@ -76,7 +76,7 @@ class ProjectApiServiceStub {
   startProject(id: string) {
     return of({
       id,
-      referenceNumber: 'VR-2026-012',
+      referenceNumber: 'PR-MUHNAC/COL/2026/0012',
       status: 'IN_PROGRESS' as const,
       result: null,
       lastEvent: EVENTS_PAGE.content[0],
@@ -85,7 +85,7 @@ class ProjectApiServiceStub {
   completeProject(id: string) {
     return of({
       id,
-      referenceNumber: 'VR-2026-012',
+      referenceNumber: 'PR-MUHNAC/COL/2026/0012',
       status: 'COMPLETED' as const,
       result: 'COMPLETED' as const,
       lastEvent: EVENTS_PAGE.content[0],
@@ -94,7 +94,7 @@ class ProjectApiServiceStub {
   cancelProject(id: string) {
     return of({
       id,
-      referenceNumber: 'VR-2026-012',
+      referenceNumber: 'PR-MUHNAC/COL/2026/0012',
       status: 'CANCELLED' as const,
       result: 'CANCELLED' as const,
       lastEvent: EVENTS_PAGE.content[0],
@@ -128,7 +128,7 @@ describe('ProjectDetailPageComponent', () => {
     fixture.detectChanges();
 
     const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
-    expect(text).toContain('VR-2026-012');
+    expect(text).toContain('PR-MUHNAC/COL/2026/0012');
     expect(text).toContain('Atlantic forest zoology specimens');
     expect(text).toContain('Bob Santos');
     expect(text).toContain('REQUESTED');

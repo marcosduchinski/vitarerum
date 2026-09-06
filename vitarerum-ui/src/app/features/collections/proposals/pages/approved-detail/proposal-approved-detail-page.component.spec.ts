@@ -15,7 +15,7 @@ const STAFF = {
 
 const PROPOSAL: ProposalDetail = {
   id: 'proposal-1',
-  referenceNumber: 'VR-2026-001',
+  referenceNumber: 'PR-MUHNAC/COL/2026/0001',
   title: 'Photographic history of Rio de Janeiro port, 1890-1930',
   status: 'APPROVED',
   submissionChannel: 'AUTHENTICATED',
@@ -108,7 +108,7 @@ describe('ProposalApprovedDetailPageComponent', () => {
     const compiled = await render();
     const text = compiled.textContent ?? '';
 
-    expect(text).toContain('VR-2026-001');
+    expect(text).toContain('PR-MUHNAC/COL/2026/0001');
     expect(text).toContain('Photographic history of Rio de Janeiro port, 1890-1930');
     expect(text).toContain('Approved');
 

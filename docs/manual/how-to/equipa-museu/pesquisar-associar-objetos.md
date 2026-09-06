@@ -24,6 +24,10 @@ associar objetos, abra uma proposta ou um projeto que possa editar.
 
 ## Pesquisar no catálogo
 
+![Resultados de pesquisa de objetos, cada um com número de inventário, título, coleção, ficheiro de origem e o trecho que produziu o acerto.](../assets/equipa-objetos-pesquisa.png)
+
+*Figura 1 — Um resultado de pesquisa e a evidência do acerto.*
+
 1. Abra **“Use of Collections”** > **“Objects”** > **“Object Search”**.
 2. Em **“Search inventory numbers, names, codes...”**, escreva um número de
    inventário, nome, código ou combinação de termos.

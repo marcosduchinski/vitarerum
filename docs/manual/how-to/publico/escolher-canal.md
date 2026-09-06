@@ -23,6 +23,10 @@ acesso às coleções.
 
 ## Qual opção devo escolher?
 
+![Página pública com os cartões "Pergunte ao Museu" e "Pedir uma visita in situ" lado a lado, sob o título "Como podemos ajudar?".](../assets/publico-escolher-canal.png)
+
+*Figura 1 — As duas opções da página de entrada pública.*
+
 | Se precisa de… | Escolha | O que acontece depois |
 | --- | --- | --- |
 | Esclarecer uma dúvida simples sobre o uso das coleções | **“Pergunte ao Museu”** | A equipa analisa a pergunta e responde uma vez por email |

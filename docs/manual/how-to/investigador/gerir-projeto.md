@@ -41,6 +41,10 @@ Para começar:
 
 ## Encontrar e abrir um projeto
 
+![Página "My projects" com dois cartões de projeto, cada um com referência, estado, título, equipa atribuída e acessos rápidos aos registos.](../assets/investigador-projeto-cartoes.png)
+
+*Figura 1 — Cartões de projeto e respetivos acessos rápidos.*
+
 1. Abra **“Use of Collections”** > **“Projects”** > **“My projects”**.
 2. Use **“Search reference or title”** e **“Search”** para procurar pelo número
    de referência ou título.

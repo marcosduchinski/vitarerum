@@ -12,7 +12,7 @@ test('collections staff can work through a my-assignment detail page', async ({ 
   await sidebar(page).getByRole('link', { name: 'New' }).click();
   await expect(page).toHaveURL(/\/p\/collections\/proposals\/new$/);
 
-  await page.getByRole('button', { name: 'Assign VRP-20260601-0001 to me' }).click();
+  await page.getByRole('button', { name: 'Assign PP-MUHNAC/COL/2026/0001 to me' }).click();
   await page.getByRole('button', { name: 'Assign to me', exact: true }).click();
   await expect(page).toHaveURL(/\/p\/collections\/proposals\/my-assignments\/prop-1$/);
 
@@ -75,7 +75,7 @@ test('collections staff can work through a my-assignment detail page', async ({ 
 
   await page.getByRole('tab', { name: 'Messages' }).click();
   await expect(page.getByRole('heading', { name: 'Conversation' })).toBeVisible();
-  await expect(page.getByText('Collection use request: VR-2026-001')).toBeVisible();
+  await expect(page.getByText('Collection use request: PR-MUHNAC/COL/2026/0001')).toBeVisible();
   const editor = page.getByRole('textbox', { name: 'Response message' });
   await editor.evaluate((element) => {
     element.innerHTML = '<p>E2E response from collections staff.</p>';

@@ -22,6 +22,10 @@ Confirme a data limite apresentada no processo. O prazo normal de resposta é de
 
 ## Passo a passo
 
+![Fila "New Inquiries" com uma pergunta pública por atribuir, mostrando o assunto, o requerente, o estado e a data limite de resposta.](../assets/equipa-pergunta-fila.png)
+
+*Figura 1 — Fila de perguntas públicas por tratar, com a data limite.*
+
 1. Abra a pergunta em **“New Inquiries”** ou procure-a em **“All Enquiries”**.
 2. Leia a mensagem original e abra as imagens anexadas, se existirem.
 3. Consulte **“History”** para verificar perguntas anteriores do mesmo email.

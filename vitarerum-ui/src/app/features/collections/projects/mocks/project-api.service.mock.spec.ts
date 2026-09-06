@@ -82,7 +82,7 @@ describe('ProjectApiServiceMock', () => {
     expect(detail.staffContext?.viewerGroup).toBe('COLLECTIONS_MANAGEMENT');
     expect(detail.staffContext?.proposal).toMatchObject({
       id: 'prop-4',
-      referenceNumber: 'VRP-20260601-0004',
+      referenceNumber: 'PP-MUHNAC/COL/2026/0004',
       submittedBy: { permissionId: 'perm-alice' },
       assignedTo: { permissionId: 'perm-bob' },
     });
@@ -187,7 +187,7 @@ describe('ProjectApiServiceMock', () => {
     expect(entry.observations).toBe('Session note.');
 
     const page = await firstValueFrom(service.listObjectLogEntries('proj-4'));
-    expect(page.accessLog?.referenceNumber).toMatch(/^OAL-/);
+    expect(page.accessLog?.referenceNumber).toMatch(/^OL-MUHNAC\/COL\//);
     expect(page.content.some((e) => e.id === entry.id)).toBe(true);
   });
 
@@ -203,7 +203,7 @@ describe('ProjectApiServiceMock', () => {
 
     const accessLog = await firstValueFrom(service.getObjectAccessLog('proj-4'));
     expect(accessLog.projectId).toBe('proj-4');
-    expect(accessLog.referenceNumber).toMatch(/^OAL-/);
+    expect(accessLog.referenceNumber).toMatch(/^OL-MUHNAC\/COL\//);
   });
 
   it('syncs added project objects to an existing object access log', async () => {
@@ -265,7 +265,7 @@ describe('ProjectApiServiceMock', () => {
     const entries = await firstValueFrom(service.listObjectLogEntries('proj-4'));
     const addedObject = detail.objects?.find((object) => object.inventoryNumber === 'INV-MOCK-004');
 
-    expect(entries.accessLog?.referenceNumber).toMatch(/^OAL-/);
+    expect(entries.accessLog?.referenceNumber).toMatch(/^OL-MUHNAC\/COL\//);
     expect(entries.content).toEqual([
       expect.objectContaining({
         collectionUseObjectId: addedObject?.id,
@@ -453,7 +453,7 @@ describe('ProjectApiServiceMock', () => {
     expect(entry.testimonial).toBe('Reported during consultation.');
 
     const page = await firstValueFrom(service.listObjectOccurrenceEntries('proj-4'));
-    expect(page.occurrenceLog?.referenceNumber).toMatch(/^OOL-/);
+    expect(page.occurrenceLog?.referenceNumber).toMatch(/^OO-MUHNAC\/COL\//);
     expect(page.content.some((e) => e.id === entry.id)).toBe(true);
   });
 
@@ -472,7 +472,7 @@ describe('ProjectApiServiceMock', () => {
 
     const occurrenceLog = await firstValueFrom(service.getObjectOccurrenceLog('proj-4'));
     expect(occurrenceLog.projectId).toBe('proj-4');
-    expect(occurrenceLog.referenceNumber).toMatch(/^OOL-/);
+    expect(occurrenceLog.referenceNumber).toMatch(/^OO-MUHNAC\/COL\//);
   });
 
   it('rejects object occurrence log lookup before the first occurrence entry', async () => {
@@ -735,7 +735,7 @@ describe('ProjectApiServiceMock', () => {
 
     const page = await firstValueFrom(service.listPublicationEntries('proj-4'));
     expect(page.content.some((e) => e.id === entry.id)).toBe(true);
-    expect(page.publicationLog?.referenceNumber).toMatch(/^PUB-/);
+    expect(page.publicationLog?.referenceNumber).toMatch(/^OP-MUHNAC\/COL\//);
   });
 
   it('rejects staff publication entries while the project is IN_PROGRESS', async () => {

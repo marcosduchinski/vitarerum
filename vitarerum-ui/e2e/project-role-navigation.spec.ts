@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 const PROJECT = {
   id: 'project-role-navigation',
-  referenceNumber: 'VR-2026-900',
+  referenceNumber: 'PR-MUHNAC/COL/2026/0900',
   title: 'Completed role navigation project',
   purpose: 'Verify role-specific project detail navigation.',
   type: 'IN_SITU_VISIT',

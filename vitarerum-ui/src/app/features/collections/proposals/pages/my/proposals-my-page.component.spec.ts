@@ -39,7 +39,7 @@ const STAFF_SESSION: IdentitySession = {
 
 const PROPOSAL: ProposalSummary = {
   id: 'proposal-1',
-  referenceNumber: 'VR-2026-001',
+  referenceNumber: 'PR-MUHNAC/COL/2026/0001',
   title: 'Photographic history of Rio de Janeiro port, 1890-1930',
   status: 'SUBMITTED',
   submissionChannel: 'AUTHENTICATED',
@@ -52,7 +52,7 @@ const PROPOSAL: ProposalSummary = {
   assignedTo: null,
   collectionUseProject: {
     id: 'project-1',
-    referenceNumber: 'VR-2026-001',
+    referenceNumber: 'PR-MUHNAC/COL/2026/0001',
     title: 'Photographic history of Rio de Janeiro port, 1890-1930',
     status: 'CREATED',
   },
@@ -226,7 +226,7 @@ describe('ProposalsMyPageComponent', () => {
     expect(compiled.textContent).toContain('Reference');
     expect(compiled.querySelector('a[href^="/p/collections/proposals/proposal-1"]')).not.toBeNull();
     expect(compiled.querySelector('a[href^="/p/collections/proposals/my/proposal-1"]')).toBeNull();
-    expect(compiled.querySelector('[aria-label="More actions for VR-2026-001"]')).not.toBeNull();
+    expect(compiled.querySelector('[aria-label="More actions for PR-MUHNAC/COL/2026/0001"]')).not.toBeNull();
   });
 
   it('navigates to the generic detail page with returnTo on view details', async () => {
@@ -239,7 +239,7 @@ describe('ProposalsMyPageComponent', () => {
 
     const compiled = fixture.nativeElement as HTMLElement;
     const actionButton = compiled.querySelector<HTMLButtonElement>(
-      '[aria-label="More actions for VR-2026-001"]',
+      '[aria-label="More actions for PR-MUHNAC/COL/2026/0001"]',
     );
 
     actionButton!.click();
@@ -266,7 +266,7 @@ describe('ProposalsMyPageComponent', () => {
 
     const compiled = fixture.nativeElement as HTMLElement;
     const actionButton = compiled.querySelector<HTMLButtonElement>(
-      '[aria-label="More actions for VR-2026-001"]',
+      '[aria-label="More actions for PR-MUHNAC/COL/2026/0001"]',
     );
 
     actionButton!.click();
@@ -285,7 +285,7 @@ describe('ProposalsMyPageComponent', () => {
 
     const compiled = fixture.nativeElement as HTMLElement;
     compiled
-      .querySelector<HTMLButtonElement>('[aria-label="More actions for VR-2026-001"]')!
+      .querySelector<HTMLButtonElement>('[aria-label="More actions for PR-MUHNAC/COL/2026/0001"]')!
       .click();
     fixture.detectChanges();
     await fixture.whenStable();
@@ -316,7 +316,7 @@ describe('ProposalsMyPageComponent', () => {
     proposalService.rows = Array.from({ length: 45 }, (_, i) => ({
       ...PROPOSAL,
       id: `proposal-${i + 1}`,
-      referenceNumber: `VR-2026-${String(i + 1).padStart(3, '0')}`,
+      referenceNumber: `PR-MUHNAC/COL/2026/${String(i + 1).padStart(4, '0')}`,
     }));
 
     const fixture = TestBed.createComponent(ProposalsMyPageComponent);
@@ -340,7 +340,7 @@ describe('ProposalsMyPageComponent', () => {
     proposalService.rows = Array.from({ length: 15 }, (_, i) => ({
       ...PROPOSAL,
       id: `proposal-${i + 1}`,
-      referenceNumber: `VR-2026-${String(i + 1).padStart(3, '0')}`,
+      referenceNumber: `PR-MUHNAC/COL/2026/${String(i + 1).padStart(4, '0')}`,
     }));
 
     const fixture = TestBed.createComponent(ProposalsMyPageComponent);
@@ -375,7 +375,7 @@ describe('ProposalsMyPageComponent', () => {
 
     const compiled = fixture.nativeElement as HTMLElement;
     compiled
-      .querySelector<HTMLButtonElement>('[aria-label="More actions for VR-2026-001"]')!
+      .querySelector<HTMLButtonElement>('[aria-label="More actions for PR-MUHNAC/COL/2026/0001"]')!
       .click();
     fixture.detectChanges();
     await fixture.whenStable();

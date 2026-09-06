@@ -25,6 +25,10 @@ relatório; DIRECTION consulta, exporta e imprime, mas não vê a ação de cria
 
 ## Criar o relatório
 
+![Formulário "Create in-situ visit report" com os campos "Target language", "Narrative type" e o cursor "Creativity" entre Precise e Expressive.](../assets/equipa-relatorio-criar.png)
+
+*Figura 1 — As três opções de geração do relatório.*
+
 1. Abra o projeto concluído e selecione **“Actions”**.
 2. Em **“Reports”**, selecione **“Create new In Situ Visit Report”**.
 3. Escolha **“Target language”**: **“Portuguese”** ou **“English”**.

@@ -32,7 +32,7 @@ export class PublicProposalApiServiceMock implements PublicProposalApi {
     const status = token?.trim() ? 'CONFIRMED' : 'INVALID';
     return of<PublicConfirmationResult>({
       status,
-      referenceNumber: status === 'CONFIRMED' ? 'VRP-PUBLIC-DEMO-0001' : undefined,
+      referenceNumber: status === 'CONFIRMED' ? 'PP-MUHNAC/COL/2026/0042' : undefined,
     }).pipe(delay(400));
   }
 
@@ -47,7 +47,7 @@ export class PublicProposalApiServiceMock implements PublicProposalApi {
       }).pipe(delay(400));
     }
     return of<PublicAmendmentView>({
-      referenceNumber: 'VRP-PUBLIC-DEMO-0001',
+      referenceNumber: 'PP-MUHNAC/COL/2026/0042',
       status: 'PENDING',
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       correctionItems: [

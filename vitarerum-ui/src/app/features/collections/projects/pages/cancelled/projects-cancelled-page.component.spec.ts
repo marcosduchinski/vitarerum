@@ -12,7 +12,7 @@ import { ProjectsCancelledPageComponent } from './projects-cancelled-page.compon
 
 const PROJECTS: readonly CollectionUseProjectSummary[] = Array.from({ length: 5 }, (_, index) => ({
   id: `project-${index + 1}`,
-  referenceNumber: `VR-2026-${String(index + 51).padStart(3, '0')}`,
+  referenceNumber: `PR-MUHNAC/COL/2026/${String(index + 51).padStart(4, '0')}`,
   title: index === 2 ? 'Cancelled railway survey access' : 'Cancelled manuscript request',
   purpose: 'Request cancelled before or during execution.',
   type: index % 3 === 1 ? 'EXHIBITION' : index % 3 === 2 ? 'OTHER' : 'IN_SITU_VISIT',
@@ -137,12 +137,12 @@ describe('ProjectsCancelledPageComponent', () => {
 
     expect(text).toContain('Reference');
     expect(text).toContain('Assigned staff');
-    expect(text).toContain('VR-2026-051');
+    expect(text).toContain('PR-MUHNAC/COL/2026/0051');
     expect(text).toContain('Cancelled manuscript request');
     expect(text).toContain('In-situ visit');
     expect(text).toContain('Alice Ferreira');
     expect(text).toContain('Bob Santos');
-    expect(compiled.querySelector('[aria-label="More actions for VR-2026-051"]')).not.toBeNull();
+    expect(compiled.querySelector('[aria-label="More actions for PR-MUHNAC/COL/2026/0051"]')).not.toBeNull();
   });
 
   it.each(DETAIL_ROUTE_CASES)(
@@ -164,7 +164,7 @@ describe('ProjectsCancelledPageComponent', () => {
       );
 
       (fixture.nativeElement as HTMLElement)
-        .querySelector<HTMLButtonElement>('[aria-label="More actions for VR-2026-051"]')!
+        .querySelector<HTMLButtonElement>('[aria-label="More actions for PR-MUHNAC/COL/2026/0051"]')!
         .click();
       fixture.detectChanges();
       await fixture.whenStable();

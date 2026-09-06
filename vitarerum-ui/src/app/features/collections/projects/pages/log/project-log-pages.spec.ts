@@ -334,7 +334,7 @@ describe('project log pages', () => {
     expect(createObjectURL).toHaveBeenCalledOnce();
     expect(anchorClick).toHaveBeenCalledOnce();
     const anchor = anchorClick.mock.instances[0] as HTMLAnchorElement;
-    expect(anchor.download).toMatch(/^OAL-.*-RAIS\.docx$/);
+    expect(anchor.download).toMatch(/^OL-MUHNAC-COL-.*-RAIS\.docx$/);
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:log-docx');
   });
 
@@ -760,7 +760,7 @@ describe('project log pages', () => {
     expect(createObjectURL).toHaveBeenCalledOnce();
     expect(anchorClick).toHaveBeenCalledOnce();
     const anchor = anchorClick.mock.instances[0] as HTMLAnchorElement;
-    expect(anchor.download).toMatch(/^OOL-.*-ROC\.docx$/);
+    expect(anchor.download).toMatch(/^OO-MUHNAC-COL-.*-ROC\.docx$/);
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:occurrence-docx');
   });
 
@@ -857,7 +857,7 @@ describe('project log pages', () => {
       'Front view showing abrasion.',
       'Detail image of handling mark.',
     ]);
-    expect(state.objectOccurrenceLogs.get('proj-3')?.referenceNumber).toMatch(/^OOL-/);
+    expect(state.objectOccurrenceLogs.get('proj-3')?.referenceNumber).toMatch(/^OO-MUHNAC\/COL\//);
   });
 
   it('uploads attachments for object occurrence entries from the expanded row', async () => {
@@ -1063,7 +1063,7 @@ describe('project log pages', () => {
     expect(createObjectURL).toHaveBeenCalledOnce();
     expect(anchorClick).toHaveBeenCalledOnce();
     const anchor = anchorClick.mock.instances[0] as HTMLAnchorElement;
-    expect(anchor.download).toBe('PUB-PROJ3-RRP.docx');
+    expect(anchor.download).toBe('OP-MUHNAC-COL-2026-0003-RRP.docx');
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:publication-docx');
   });
 

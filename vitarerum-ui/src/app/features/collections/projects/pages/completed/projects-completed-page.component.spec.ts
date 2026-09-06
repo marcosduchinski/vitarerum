@@ -12,7 +12,7 @@ import { ProjectsCompletedPageComponent } from './projects-completed-page.compon
 
 const PROJECTS: readonly CollectionUseProjectSummary[] = Array.from({ length: 25 }, (_, index) => ({
   id: `project-${index + 1}`,
-  referenceNumber: `VR-2026-${String(index + 81).padStart(3, '0')}`,
+  referenceNumber: `PR-MUHNAC/COL/2026/${String(index + 81).padStart(4, '0')}`,
   title: index === 4 ? 'Completed railway archive conservation' : 'Completed manuscript access',
   purpose: 'Completed collection-use work with staff supervision.',
   type: index % 3 === 1 ? 'EXHIBITION' : index % 3 === 2 ? 'OTHER' : 'IN_SITU_VISIT',
@@ -137,13 +137,13 @@ describe('ProjectsCompletedPageComponent', () => {
 
     expect(text).toContain('Reference');
     expect(text).toContain('Assigned staff');
-    expect(text).toContain('VR-2026-081');
+    expect(text).toContain('PR-MUHNAC/COL/2026/0081');
     expect(text).toContain('Completed manuscript access');
     expect(text).toContain('In-situ visit');
     expect(text).toContain('Alice Ferreira');
     expect(text).toContain('Bob Santos');
     expect(text).toContain('1-20 of 25 projects');
-    expect(compiled.querySelector('[aria-label="More actions for VR-2026-081"]')).not.toBeNull();
+    expect(compiled.querySelector('[aria-label="More actions for PR-MUHNAC/COL/2026/0081"]')).not.toBeNull();
   });
 
   it.each(DETAIL_ROUTE_CASES)(
@@ -165,7 +165,7 @@ describe('ProjectsCompletedPageComponent', () => {
       );
 
       (fixture.nativeElement as HTMLElement)
-        .querySelector<HTMLButtonElement>('[aria-label="More actions for VR-2026-081"]')!
+        .querySelector<HTMLButtonElement>('[aria-label="More actions for PR-MUHNAC/COL/2026/0081"]')!
         .click();
       fixture.detectChanges();
       await fixture.whenStable();

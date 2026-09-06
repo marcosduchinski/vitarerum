@@ -29,7 +29,7 @@ import { ProposalMyDetailPageComponent } from './proposal-my-detail-page.compone
 
 const PROPOSAL: ProposalDetail = {
   id: 'proposal-1',
-  referenceNumber: 'VR-2026-001',
+  referenceNumber: 'PR-MUHNAC/COL/2026/0001',
   title: 'Photographic history of Rio de Janeiro port, 1890-1930',
   status: 'PENDING',
   submissionChannel: 'AUTHENTICATED',
@@ -49,7 +49,7 @@ const PROPOSAL: ProposalDetail = {
   },
   collectionUseProject: {
     id: 'project-1',
-    referenceNumber: 'VR-2026-001',
+    referenceNumber: 'PR-MUHNAC/COL/2026/0001',
     title: 'Photographic history of Rio de Janeiro port, 1890-1930',
     status: 'CREATED',
   },
@@ -90,7 +90,7 @@ const CONVERSATION: Conversation = {
       sentAt: '2026-05-01T14:00:00',
       sender: 'bob@example.test',
       recipient: 'alice@example.test',
-      subject: 'Response to VR-2026-001',
+      subject: 'Response to PR-MUHNAC/COL/2026/0001',
       body: '<p>Attached signed response for museum review.</p>',
       attachments: [
         {
@@ -384,7 +384,7 @@ describe('ProposalMyDetailPageComponent', () => {
     expect(
       compiled.querySelector('a[href="/p/collections/proposals/my-assignments"]'),
     ).not.toBeNull();
-    expect(compiled.textContent).toContain('VR-2026-001');
+    expect(compiled.textContent).toContain('PR-MUHNAC/COL/2026/0001');
     expect(compiled.textContent).toContain('Photographic history of Rio de Janeiro port');
     expect(compiled.textContent).toContain('Under review');
     expect(compiled.textContent).toContain('Requested by');
@@ -520,7 +520,7 @@ describe('ProposalMyDetailPageComponent', () => {
     const heading = (fixture.nativeElement as HTMLElement).querySelector<HTMLHeadingElement>('h1');
 
     expect(heading?.textContent?.trim()).toBe('Untitled proposal');
-    expect((fixture.nativeElement as HTMLElement).textContent).toContain('VR-2026-001');
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('PR-MUHNAC/COL/2026/0001');
   });
 
   it('switches between overview and conversation panels', async () => {
@@ -681,7 +681,7 @@ describe('ProposalMyDetailPageComponent', () => {
         proposalId: 'proposal-1',
         payload: {
           recipient: 'alice@example.test',
-          subject: 'Response to VR-2026-001',
+          subject: 'Response to PR-MUHNAC/COL/2026/0001',
           body: '<p>Please review the attached signed files.</p>',
           documentIds: ['uploaded-document-1'],
         },

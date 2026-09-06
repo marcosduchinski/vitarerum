@@ -12,7 +12,7 @@ import { ProposalsRejectedPageComponent } from './proposals-rejected-page.compon
 
 const REJECTED_PROPOSAL: ProposalSummary = {
   id: 'proposal-rejected',
-  referenceNumber: 'VR-2026-001',
+  referenceNumber: 'PR-MUHNAC/COL/2026/0001',
   title: 'Rejected research request',
   status: 'REJECTED',
   submissionChannel: 'AUTHENTICATED',
@@ -29,7 +29,7 @@ const REJECTED_PROPOSAL: ProposalSummary = {
   },
   collectionUseProject: {
     id: 'project-1',
-    referenceNumber: 'VR-2026-001',
+    referenceNumber: 'PR-MUHNAC/COL/2026/0001',
     title: 'Rejected research request',
     status: 'CANCELLED',
   },
@@ -39,7 +39,7 @@ const REJECTED_PROPOSAL: ProposalSummary = {
 const CANCELLED_PROPOSAL: ProposalSummary = {
   ...REJECTED_PROPOSAL,
   id: 'proposal-cancelled',
-  referenceNumber: 'VR-2026-002',
+  referenceNumber: 'PR-MUHNAC/COL/2026/0002',
   title: 'Cancelled research request',
   status: 'CANCELLED',
   submittedAt: '2026-05-02T10:00:00',
@@ -121,7 +121,7 @@ describe('ProposalsRejectedPageComponent', () => {
     expect(compiled.textContent).toContain('Cancelled research request');
     expect(compiled.textContent).toContain('Rejected');
     expect(compiled.textContent).toContain('Cancelled');
-    expect(compiled.querySelector('[aria-label="More actions for VR-2026-001"]')).not.toBeNull();
+    expect(compiled.querySelector('[aria-label="More actions for PR-MUHNAC/COL/2026/0001"]')).not.toBeNull();
   });
 
   it('opens the row menu and navigates to the rejected proposal detail', async () => {
@@ -132,7 +132,7 @@ describe('ProposalsRejectedPageComponent', () => {
     fixture.detectChanges();
 
     (fixture.nativeElement as HTMLElement)
-      .querySelector<HTMLButtonElement>('[aria-label="More actions for VR-2026-001"]')!
+      .querySelector<HTMLButtonElement>('[aria-label="More actions for PR-MUHNAC/COL/2026/0001"]')!
       .click();
     fixture.detectChanges();
     await fixture.whenStable();

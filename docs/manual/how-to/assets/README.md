@@ -21,10 +21,28 @@ software, APIs, bases de dados ou outros elementos técnicos.
 Não é necessário incluir uma imagem quando o passo identifica claramente um
 único menu ou botão.
 
+## Como as capturas atuais são produzidas
+
+As imagens deste diretório não são feitas à mão: são geradas por
+`vitarerum-ui/e2e/capture-manual-screenshots.spec.ts`, que conduz a aplicação
+com a API e a autenticação *mock* em memória.
+
+```sh
+cd vitarerum-ui
+npx playwright test e2e/capture-manual-screenshots.spec.ts
+```
+
+Cada `test` dessa spec começa por um comentário com a rota, o papel ativo e o
+estado do recurso que a captura exige — é a forma de manter esse registo junto
+do código que o reproduz, em vez de depender da descrição de um *commit*. Ao
+alterar a interface, volte a correr o comando e reveja as imagens alteradas.
+
+Se acrescentar uma imagem por outro meio, aplique na mesma as regras abaixo.
+
 ## Origem e segurança dos dados
 
-- Produza as capturas numa execução local da aplicação com serviços *mock* ou
-  dados de demonstração.
+- Prefira gerar a captura pela spec acima; se a produzir manualmente, use uma
+  execução local da aplicação com serviços *mock* ou dados de demonstração.
 - Use apenas nomes, emails, referências, documentos e conteúdos fictícios.
 - Nunca mostre passwords, tokens, chaves, cabeçalhos HTTP, URLs assinados ou
   dados pessoais reais.
@@ -38,8 +56,10 @@ contiver dados que exigem desfoque, prefira recriá-la com dados fictícios.
 
 ## Estado da aplicação
 
-Cada captura deve representar uma situação reproduzível. Na alteração que
-adiciona a imagem, registe na descrição do *commit* ou da revisão:
+Cada captura deve representar uma situação reproduzível. Para as imagens
+geradas pela spec, esse registo vive no comentário de cada `test`; para uma
+imagem produzida de outra forma, registe na descrição do *commit* ou da
+revisão:
 
 - rota apresentada;
 - papel ativo;

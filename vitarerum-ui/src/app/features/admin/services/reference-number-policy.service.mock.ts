@@ -16,11 +16,11 @@ let _seq = 0;
 @Injectable()
 export class ReferenceNumberPolicyServiceMock implements ReferenceNumberPolicyApi {
   private policies: ReferencePolicy[] = [
-    policy('ref-proposal-active', 'PROPOSAL', 'VRP-YYYYMMDD-XXXX', 'ACTIVE'),
-    policy('ref-project-active', 'COLLECTION_USE_PROJECT', 'CUP-XXXXXXXX', 'ACTIVE'),
-    policy('ref-object-access-active', 'OBJECT_ACCESS_LOG', 'OAL-XXXXXXXX', 'ACTIVE'),
-    policy('ref-object-occurrence-active', 'OBJECT_OCCURRENCE_LOG', 'OOL-XXXXXXXX', 'ACTIVE'),
-    policy('ref-publication-active', 'PUBLICATION_LOG', 'PUB-XXXXXXXX', 'ACTIVE'),
+    policy('ref-proposal-active', 'PROPOSAL', 'PP-MUHNAC/COL/YYYY/XXXX', 'ACTIVE'),
+    policy('ref-project-active', 'COLLECTION_USE_PROJECT', 'PR-MUHNAC/COL/YYYY/XXXX', 'ACTIVE'),
+    policy('ref-object-access-active', 'OBJECT_ACCESS_LOG', 'OL-MUHNAC/COL/YYYY/XXXX', 'ACTIVE'),
+    policy('ref-object-occurrence-active', 'OBJECT_OCCURRENCE_LOG', 'OO-MUHNAC/COL/YYYY/XXXX', 'ACTIVE'),
+    policy('ref-publication-active', 'PUBLICATION_LOG', 'OP-MUHNAC/COL/YYYY/XXXX', 'ACTIVE'),
   ];
 
   list(kind?: ReferenceKind): Observable<ReferencePolicy[]> {
