@@ -96,17 +96,16 @@ elseif (Already confirmed?) then (yes)
   :Return 200 ALREADY_CONFIRMED\nwith proposal reference;
   stop
 elseif (Expired by TTL?) then (yes)
+  |public_submission.infrastructure|
+  :Delete the uploaded files and the pending row\n(the only point the live system sees an expired one);
   |public_submission.presentation|
   :Commit;
   :Return 200 EXPIRED;
   stop
 endif
 
-|Identity published language|
-:Provision/reuse EXTERNAL requester permission;
-
 |use_of_collections|
-:SubmitProposal\nsubmissionChannel = PUBLIC\nrequesterContact captured;
+:SubmitProposal\nsubmissionChannel = PUBLIC\nrequestedBy = null\nrequesterContact captured;
 :Allocate proposal reference;
 
 |public_submission.domain|
@@ -123,10 +122,7 @@ endif
 :Return 200 CONFIRMED\nwith proposal reference;
 stop
 
-note right
-  Public Submission owns PendingPublicSubmission and amendment tokens.
-  The materialized Proposal belongs to Use of Collections.
-  Staff notifications are side effects after successful materialization.
-end note
+
+
 
 @enduml

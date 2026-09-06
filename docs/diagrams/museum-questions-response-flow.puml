@@ -8,7 +8,9 @@ boundary "Angular /p/museum-questions" as UI
 control "museum_questions routes" as Routes
 control "Museum Questions use cases" as UseCases
 database "MuseumQuestionRepository" as Repo
+control "Notification dispatcher" as Notify
 control "Email sender" as Email
+control "notify-overdue CLI job" as Job
 
 Staff -> UI : open list
 UI -> Routes : GET /api/v1/museum-questions\nstatus?, requesterEmail?, page, size
@@ -16,24 +18,32 @@ Routes -> UseCases : list(caller, filters)
 UseCases -> Repo : query
 Repo --> UseCases : page
 UseCases --> Routes : page
-Routes --> UI : PaginatedMuseumQuestionsResponse
+Routes --> UI : PaginatedMuseumQuestionsResponse\n(each row carries responseOverdue)
 
 Staff -> UI : open detail
 UI -> Routes : GET /api/v1/museum-questions/{id}
 Routes -> UseCases : get(caller, id)
 UseCases -> Repo : load
-Repo --> UseCases : MuseumQuestion
+Repo --> UseCases : MuseumQuestion + attachments
 UseCases --> Routes : question
-Routes --> UI : MuseumQuestionResponse
+Routes --> UI : MuseumQuestionDetailResponse
 
-alt question is SUBMITTED or IN_PROGRESS and staff answers
+alt question is SUBMITTED or IN_PROGRESS and staff forwards it
+  Staff -> UI : pick a target permission
+  UI -> Routes : POST /api/v1/museum-questions/{id}/forward
+  Routes -> UseCases : forward(caller, id, targetPermissionId)
+  UseCases -> Repo : load + save\nassigned_to = target, status = IN_PROGRESS
+  Routes -> Notify : MUSEUM_QUESTION_FORWARDED\n(skipped when the target is the caller)
+  Routes -> Repo : commit transaction
+  Routes --> UI : MuseumQuestionDetailResponse
+else question is SUBMITTED or IN_PROGRESS and staff answers
   Staff -> UI : write answer
   UI -> Routes : POST /api/v1/museum-questions/{id}/answer
   Routes -> UseCases : answer(caller, id, body)
   UseCases -> Repo : load + save ANSWERED
   Routes -> Repo : commit transaction
   Routes -> Email : send answer after commit
-  Routes --> UI : MuseumQuestionResponse
+  Routes --> UI : MuseumQuestionDetailResponse
 else question is SUBMITTED or IN_PROGRESS and staff marks out-of-scope
   Staff -> UI : confirm out-of-scope reason
   UI -> Routes : POST /api/v1/museum-questions/{id}/mark-out-of-scope
@@ -41,16 +51,27 @@ else question is SUBMITTED or IN_PROGRESS and staff marks out-of-scope
   UseCases -> Repo : load + save OUT_OF_SCOPE
   Routes -> Repo : commit transaction
   Routes -> Email : send out-of-scope email after commit
-  Routes --> UI : MuseumQuestionResponse
+  Routes --> UI : MuseumQuestionDetailResponse
 else question is ANSWERED or OUT_OF_SCOPE
   Staff -> UI : close question
   UI -> Routes : PATCH /api/v1/museum-questions/{id}/close
   Routes -> UseCases : close(caller, id)
   UseCases -> Repo : load + save CLOSED
   Routes -> Repo : commit transaction
-  Routes --> UI : MuseumQuestionResponse
+  Routes --> UI : MuseumQuestionDetailResponse
 else question is CLOSED
   UI --> Staff : read-only archive state
 end
+
+Staff -> UI : open an attachment
+UI -> Routes : GET /api/v1/museum-questions/{id}/attachments/{attachmentId}
+Routes --> UI : stored file
+
+== Out of band ==
+
+Job -> Repo : list unanswered questions past response_due_at
+Job -> Notify : MUSEUM_QUESTION_RESPONSE_OVERDUE\nto every COLLECTIONS_MANAGEMENT permission
+Job -> Repo : mark_response_overdue_notified(now)
+
 
 @enduml

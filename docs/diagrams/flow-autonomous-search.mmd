@@ -1,73 +1,77 @@
 flowchart TD
     SEARCH_NOW["Search now"]:::gray
     START_AGENT["Start autonomous search"]:::gray
-    SCHEDULE["Data programada alcançada"]:::gray
+    SCHEDULE["Scheduled date reached"]:::gray
 
-    ACTIVE{"Monitorização ativa?"}:::dec
-    STOP["Nenhuma pesquisa executada"]:::gray
+    ACTIVE{"Monitoring active?"}:::dec
+    STOP["No search is run"]:::gray
 
-    RULES["Pesquisa por regras sobre o snapshot do projeto:<br/>inventário, autor+inventário, inventário+objeto e autor+objeto"]:::blue
-    ACTIONABLE{"O resultado liga-se ao objeto<br/>ou ao investigador?"}:::dec
-    DISCARD["Resultado descartado"]:::gray
-    CANDIDATE_RULES["Candidato pendente"]:::blue
+    RULES["Rule-based search over the project snapshot:<br/>inventory, author+inventory, inventory+object and author+object"]:::blue
+    ACTIONABLE{"Does the result tie back to the object<br/>or to the researcher?"}:::dec
+    DISCARD["Result discarded"]:::gray
+    CANDIDATE_RULES["Pending candidate"]:::blue
 
-    QUEUE_AI["Investigação autónoma em fila, executada em segundo plano"]:::viol
-    MEMORY["Carrega o snapshot e o conhecimento curatorial ativo"]:::gray
-    FLOOR["Pesquisa inicial garantida: apelido + objeto<br/>e número de inventário sem prefixo"]:::blue
-    READ["IA analisa cada publicação separadamente"]:::viol
-    RELEVANT{"Publicação relevante?"}:::dec
-    CANDIDATE_AI["Cria ou reutiliza candidato pendente"]:::blue
-    CONTINUE{"Continuar?"}:::dec
-    PLAN["IA prepara novas pesquisas e escolhe as fontes"]:::viol
-    FINISH["Investigação concluída"]:::viol
+    QUEUE_AI["Autonomous investigation queued, run in the background<br/>one investigation per consulted object"]:::viol
+    MEMORY["Loads the snapshot for its object and the active<br/>curatorial knowledge of that inventory number"]:::gray
+    FLOOR["Guaranteed first searches: surname + object<br/>and the inventory number without its prefix"]:::blue
+    READ["The AI reads each publication on its own"]:::viol
+    RELEVANT{"Publication relevant?"}:::dec
+    CANDIDATE_AI["Creates or reuses a pending candidate"]:::blue
+    CONTINUE{"Continue?"}:::dec
+    PLAN["The AI prepares new searches and picks the sources"]:::viol
+    FINISH["Investigation finished"]:::viol
+    ENRICH["Enrichment cycle over candidates with no inventory evidence"]:::viol
 
-    REVIEW["Fila de revisão humana"]:::green
-    DECISION{"Decisão do curador"}:::dec
-    PENDING["Continua pendente"]:::gray
-    DISMISSED["Candidato rejeitado"]:::red
-    PUBLICATION["Registo de publicação criado no Projeto"]:::green
-    LEARN["A justificação do curador é convertida pela IA numa lição proposta"]:::viol
-    ACTIVATE["Curador ativa a lição"]:::green
+    REVIEW["Human review queue"]:::green
+    DECISION{"Curator decision"}:::dec
+    PENDING["Stays pending"]:::gray
+    DISMISSED["Candidate dismissed"]:::red
+    PUBLICATION["Publication entry created on the Project"]:::green
+    LEARN["The curator's justification is turned by the AI into a proposed lesson"]:::viol
+    ACTIVATE["The curator activates the lesson"]:::green
 
     SEARCH_NOW --> ACTIVE
     SCHEDULE --> ACTIVE
     START_AGENT --> ACTIVE
-    ACTIVE -->|Não| STOP
-    ACTIVE -->|"Sim: Search now ou data programada"| RULES
-    ACTIVE -->|"Sim: Start autonomous search"| QUEUE_AI
+    ACTIVE -->|No| STOP
+    ACTIVE -->|"Yes: Search now or scheduled date"| RULES
+    ACTIVE -->|"Yes: Start autonomous search"| QUEUE_AI
+    RULES -.->|"scheduled sweep only: one investigation<br/>per consulted object, capped at 15"| QUEUE_AI
 
     RULES --> ACTIONABLE
-    ACTIONABLE -->|Não| DISCARD
-    ACTIONABLE -->|Sim| CANDIDATE_RULES
+    ACTIONABLE -->|No| DISCARD
+    ACTIONABLE -->|Yes| CANDIDATE_RULES
     CANDIDATE_RULES --> REVIEW
 
     QUEUE_AI --> MEMORY
     MEMORY --> FLOOR
     FLOOR --> READ
     READ --> RELEVANT
-    RELEVANT -->|"Não, descartada"| CONTINUE
-    RELEVANT -->|Sim| CANDIDATE_AI
+    RELEVANT -->|"No, discarded"| CONTINUE
+    RELEVANT -->|Yes| CANDIDATE_AI
     CANDIDATE_AI --> REVIEW
     CANDIDATE_AI --> CONTINUE
-    CONTINUE -->|"Sim, dentro dos limites"| PLAN
+    CONTINUE -->|"Yes, within the limits"| PLAN
     PLAN --> READ
-    CONTINUE -->|"Não: limite atingido ou a IA decidiu parar"| FINISH
-    FINISH -.->|"Segue para revisao humana"| REVIEW
+    CONTINUE -->|"No: limit reached or the AI chose to stop"| FINISH
+    FINISH --> ENRICH
+    ENRICH -.->|"decides nothing; unproven candidates stay pending"| REVIEW
+    FINISH -.->|"Goes on to human review"| REVIEW
 
     REVIEW --> DECISION
-    DECISION -->|"Decidir mais tarde"| PENDING
-    DECISION -->|"Rejeitar, com nota obrigatória"| DISMISSED
-    DECISION -->|"Confirmar, sem nota"| PUBLICATION
-    DECISION -->|"Corrigir e confirmar, com nota opcional"| PUBLICATION
+    DECISION -->|"Decide later"| PENDING
+    DECISION -->|"Dismiss, note required"| DISMISSED
+    DECISION -->|"Confirm, no note"| PUBLICATION
+    DECISION -->|"Correct and confirm, note optional"| PUBLICATION
     DISMISSED -.-> LEARN
-    PUBLICATION -.->|"só a partir de corrigir e confirmar,<br/>e só se a nota for preenchida"| LEARN
+    PUBLICATION -.->|"only from correct and confirm,<br/>and only if the note was filled in"| LEARN
     LEARN --> ACTIVATE
-    ACTIVATE -.->|"usada nas investigações seguintes"| MEMORY
+    ACTIVATE -.->|"used in the investigations that follow"| MEMORY
 
-    REFRESH["O painel só mostra o progresso depois de Refresh"]:::gray
+    REFRESH["The panel only shows progress after Refresh"]:::gray
     REFRESH -.-> QUEUE_AI
 
-    LIMITS["Limites padrão por investigação: 4 ciclos, 12 pesquisas,<br/>40 resultados, 5 candidatos e 20 chamadas à IA"]:::gray
+    LIMITS["Default limits per investigation: 4 cycles, 12 searches,<br/>40 results, 5 candidates and 20 AI calls"]:::gray
     LIMITS -.-> CONTINUE
 
     classDef blue fill:#E6F1FB,color:#0C447C,stroke:#378ADD,stroke-width:0.5px;

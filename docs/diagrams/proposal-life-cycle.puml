@@ -20,9 +20,11 @@ state "APPROVED" as Approved
 state "REJECTED" as Rejected
 state "CANCELLED" as Cancelled
 
+Submitted --> Submitted : add/remove requested objects\nedit details
 Submitted --> Pending : assign()\nProposalEvent.ASSIGNED
 
 Pending --> Pending
+
 Pending --> Approved : approve()\nProposalEvent.APPROVED
 Pending --> Rejected : reject()\nProposalEvent.REJECTED
 
@@ -33,5 +35,9 @@ Approved --> Cancelled : cancel approved proposal\nand coordinate project cancel
 Approved --> [*] : project exists or is created
 Rejected --> [*]
 Cancelled --> [*]
+
+
+
+
 
 @enduml

@@ -4,6 +4,10 @@ title Reference Number Policies
 skinparam classAttributeIconSize 0
 skinparam shadowing false
 skinparam packageStyle rectangle
+skinparam note {
+  BackgroundColor #FFFBEB
+  BorderColor #B45309
+}
 
 package "reference_numbers" <<Bounded Context>> {
   class ReferencePolicy <<Aggregate Root>> {
@@ -11,24 +15,36 @@ package "reference_numbers" <<Bounded Context>> {
     - kind: ReferenceKind
     - mask: ReferenceMask
     - status: ReferencePolicyStatus
-    + activate()
-    + deactivate()
+    - activeFrom: DateTime?
+    - activeUntil: DateTime?
+    + activate(actorId): ReferencePolicy
+    + deactivate(actorId): ReferencePolicy
+    + matches(value): Boolean
   }
 
   class ReferenceMask <<Value Object>> {
     - raw: String
-    + render(date, sequence): String
+    + render(onDate, sequence): String
+    + sequenceScope(): SequenceScope
+    + scopeKey(onDate): String
+    + toRegex(): Pattern
+  }
+
+  class LegacyReferenceFormat <<Value Object>> {
+    - kind: ReferenceKind
+    - name: String
+    + matches(value): Boolean
   }
 
   class ReferenceSequence <<Repository State>> {
     - policyId: ReferencePolicyId
-    - scope: SequenceScope
+    - scopeKey: String
     - nextValue: Integer
   }
 
   enum ReferenceKind {
     PROPOSAL
-    PROJECT
+    COLLECTION_USE_PROJECT
     OBJECT_ACCESS_LOG
     OBJECT_OCCURRENCE_LOG
     PUBLICATION_LOG
@@ -38,11 +54,21 @@ package "reference_numbers" <<Bounded Context>> {
     DRAFT
     ACTIVE
     INACTIVE
+    RETIRED
+  }
+
+  enum ReferencePolicyEvent {
+    CREATED
+    ACTIVATED
+    DEACTIVATED
+    RETIRED
   }
 
   enum SequenceScope {
     GLOBAL
     YEAR
+    MONTH
+    DAY
   }
 }
 
@@ -50,11 +76,13 @@ class "SYS_ADMIN" as admin
 class "Admin API\n/admin/reference-number-policies" as api
 class "Proposal/project/log use cases" as consumers
 
-admin --> api : preview / create / activate / deactivate
+admin --> api : list / preview / create / activate / deactivate
 api --> ReferencePolicy
 ReferencePolicy *-- ReferenceMask
 ReferencePolicy --> ReferenceSequence : allocates through active policy
+ReferenceMask ..> SequenceScope : derived from the mask tokens
 consumers ..> ReferencePolicy : request next reference by kind
+consumers ..> LegacyReferenceFormat : recognise pre-policy references
 
 
 @enduml

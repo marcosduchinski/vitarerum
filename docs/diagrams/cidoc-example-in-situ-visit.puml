@@ -1,5 +1,5 @@
 @startuml cidoc-example-in-situ-visit
-title CIDOC CRM Representation - In-Situ Visit
+title CIDOC-CRM Representation - In-Situ Visit (mapping 0.7.0, CRM 7.1.3)
 
 left to right direction
 
@@ -19,6 +19,10 @@ skinparam Arrow {
   FontSize 11
   Thickness 1.2
 }
+skinparam note {
+  BackgroundColor #FFFBEB
+  BorderColor #B45309
+}
 
 !define activity_color #7CA4BC
 !define entity_color #C68E65
@@ -28,30 +32,67 @@ skinparam Arrow {
 rectangle "<b>E7 Activity</b>\nIn-situ visit\nCUP-2026-001" as E7 activity_color
 rectangle "<b>E21 Person</b>\nRequester / visitor" as E21 entity_color
 rectangle "<b>E53 Place</b>\nMuseum" as E53 space_time_color
-rectangle "<b>E52 Time-Span</b>\nObserved execution time" as E52 space_time_color
-rectangle "<b>E55 Type</b>\nIn-situ collection visit" as E55_VISIT type_color
+rectangle "<b>E52 Time-Span</b>\nExecution evidence time\n<i>P170i time is defined by</i>" as E52 space_time_color
+rectangle "<b>E55 Type</b>\nIn situ collection visit" as E55_VISIT type_color
 
-rectangle "<b>E22 Human-Made Object</b>\nCollection object snapshot" as E22 entity_color
+rectangle "<b>E19 Physical Object</b>\nCollection object snapshot" as E19 entity_color
+rectangle "<b>E55 Type</b>\nCollection object" as E55_OBJ type_color
+
+rectangle "<b>E7 Activity</b>\nOccurrence entry" as E7_OCC activity_color
+rectangle "<b>E52 Time-Span</b>\nOccurrence date" as E52_OCC space_time_color
+rectangle "<b>E53 Place</b>\nOccurrence location" as E53_OCC space_time_color
+rectangle "<b>E21 Person</b>\nReported by" as E21_OCC entity_color
+
 rectangle "<b>E31 Document</b>\nAccess log entry" as E31_ACCESS entity_color
-rectangle "<b>E31 Document</b>\nOccurrence log entry" as E31_OCC entity_color
-rectangle "<b>E31 Document</b>\nPublication entry" as E31_PUB entity_color
-rectangle "<b>E31 Document</b>\nAttachment / evidence file" as E31_ATTACH entity_color
 rectangle "<b>E55 Type</b>\nField document" as E55_DOC type_color
+rectangle "<b>E7 Activity</b>\nAccess log event" as E7_ACCESS activity_color
+rectangle "<b>E52 Time-Span</b>\nAccess log time" as E52_ACCESS space_time_color
+rectangle "<b>E21 Person</b>\nAdded by" as E21_ACCESS entity_color
 
-E21 -left-> E7 : <b>P14</b>\ncarried out by
-E7 -up-> E53 : <b>P7</b>\ntook place at
-E7 -right-> E52 : <b>P4</b>\nhas time-span
-E7 -down-> E55_VISIT : <b>P2</b>\nhas type
+rectangle "<b>E65 Creation</b>\nScientific return creation" as E65 activity_color
+rectangle "<b>E73 Information Object</b>\nScientific return publication" as E73 entity_color
+rectangle "<b>E55 Type</b>\nScientific return publication" as E55_PUB type_color
+rectangle "<b>E52 Time-Span</b>\nPublication time" as E52_PUB space_time_color
+rectangle "<b>E21 Person</b>\nAdded by" as E21_PUB entity_color
 
-E7 -down-> E22 : <b>P16</b>\nused specific object
-E31_ACCESS -up-> E7 : <b>P70</b>\ndocuments
-E31_OCC -up-> E7 : <b>P70</b>\ndocuments
-E31_PUB -up-> E7 : <b>P70</b>\ndocuments
-E31_ATTACH -up-> E31_OCC : <b>P70</b>\ndocuments
+rectangle "<b>E31 Document</b>\nAttachment / evidence file" as E31_ATTACH entity_color
 
-E31_ACCESS -right-> E55_DOC : <b>P2</b>\nhas type
-E31_OCC -right-> E55_DOC : <b>P2</b>\nhas type
-E31_PUB -right-> E55_DOC : <b>P2</b>\nhas type
-E31_ATTACH -right-> E55_DOC : <b>P2</b>\nhas type
+' ── the visit itself ──────────────────────────────────────────────────────────
+E21 --> E7 : <b>P14</b>\ncarried out by
+E7 --> E53 : <b>P7</b>\ntook place at
+E7 --> E52 : <b>P4</b>\nhas time-span
+E7 --> E55_VISIT : <b>P2</b>\nhas type
+
+' ── requested objects ─────────────────────────────────────────────────────────
+E7 --> E19 : <b>P16</b>\nused specific object
+E19 --> E55_OBJ : <b>P2</b>\nhas type
+
+' ── occurrences are sub-activities, not documents ─────────────────────────────
+E7 --> E7_OCC : <b>P9</b>\nconsists of
+E7_OCC --> E52_OCC : <b>P4</b>\nhas time-span
+E7_OCC --> E53_OCC : <b>P7</b>\ntook place at
+E7_OCC --> E21_OCC : <b>P14</b>\ncarried out by
+E7_OCC --> E19 : <b>P16</b>\nused specific object
+
+' ── access logs are documents about the visit ─────────────────────────────────
+E31_ACCESS --> E7 : <b>P70</b>\ndocuments
+E31_ACCESS --> E55_DOC : <b>P2</b>\nhas type
+E31_ACCESS --> E7_ACCESS : <b>P70</b>\ndocuments
+E7_ACCESS --> E52_ACCESS : <b>P4</b>\nhas time-span
+E7_ACCESS --> E21_ACCESS : <b>P14</b>\ncarried out by
+E31_ACCESS --> E19 : <b>P129</b>\nis about
+
+' ── publications are creations of an information object ───────────────────────
+E7 --> E65 : <b>P9</b>\nconsists of
+E65 --> E73 : <b>P94</b>\nhas created
+E65 --> E52_PUB : <b>P4</b>\nhas time-span
+E65 --> E21_PUB : <b>P14</b>\ncarried out by
+E73 --> E55_PUB : <b>P2</b>\nhas type
+E73 --> E19 : <b>P129</b>\nis about
+
+' ── attachments document the visit, whatever entry they hang from ─────────────
+E31_ATTACH --> E7 : <b>P70</b>\ndocuments
+E31_ATTACH --> E19 : <b>P129</b>\nis about
+
 
 @enduml

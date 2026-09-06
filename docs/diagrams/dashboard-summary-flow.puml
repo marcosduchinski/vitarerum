@@ -1,27 +1,51 @@
 @startuml dashboard-summary-flow
-title Dashboard Summary - Read Model Aggregation
+title Dashboard - Implemented TODO Widget and Proposed Context-Owned Summaries
 
 skinparam shadowing false
+skinparam sequence {
+  BackgroundColor #F8FAFC
+  BorderColor #334155
+}
+skinparam note {
+  BackgroundColor #FFFBEB
+  BorderColor #B45309
+}
 
 actor "Authenticated staff" as staff
 participant "Angular dashboard\n/p/dashboard" as ui
-participant "Dashboard API\n/api/v1/dashboard/summary" as dashboard
-participant "use_of_collections readers" as uoc
-participant "museum_questions readers" as questions
-participant "notifications readers" as notifications
-participant "collection_object_index readers" as objects
+participant "use_of_collections\nprojects_router" as projects
+participant "use_of_collections\nproposals_router" as proposals
+participant "museum_questions\ninternal_router" as questions
+participant "collection_object_index\nadmin router" as catalog
 database "Application DB" as db
 
+== Implemented today ==
+
 staff -> ui : open dashboard
-ui -> dashboard : GET /api/v1/dashboard/summary
-dashboard -> uoc : proposal/project counts\nassignment summaries
-uoc -> db
-dashboard -> questions : question status counts
-questions -> db
-dashboard -> notifications : unread count / recent attention
-notifications -> db
-dashboard -> objects : object/source status metrics\nwhen exposed
-objects -> db
-dashboard --> ui : DashboardSummaryResponse
+ui -> projects : GET /collection-use-projects/my-todo-items\ncompleted=false, page=0, size=20
+projects -> db : TODOs owned by the active permission
+db --> projects : page + totalElements
+projects --> ui : ProjectTodoPostitsResponse
+ui --> staff : up to 20 open post-its,\neach linking to its project TODO tab
+
+
+== Proposed - SPEC-021, not implemented ==
+
+ui -> proposals : GET /proposals/summary
+proposals -> db : count by workflow/assignment bucket
+proposals --> ui : newProposals, myAssignments,\nothersAssignments, approved,\nrejectedOrCancelled
+
+ui -> projects : GET /collection-use-projects/summary
+projects -> db : count by UseStatus
+projects --> ui : pending, inProgress,\ncompleted, cancelled
+
+ui -> questions : GET /museum-questions/summary
+questions -> db : count by MuseumQuestionStatus
+questions --> ui : submitted, inProgress, answered,\noutOfScope, closed
+
+ui -> catalog : GET /admin/collection-data-sources/summary
+catalog -> db : count live documents in the caller's\nmanagement scope
+catalog --> ui : collections, liveDocuments,\ndocumentsByStatus, documentsPendingReindex
+
 
 @enduml

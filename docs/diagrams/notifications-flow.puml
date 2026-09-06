@@ -1,21 +1,51 @@
 @startuml notifications-flow
-title Notifications - Proposal Events to Staff In-App and Email
+title Notifications - Domain Events to Staff In-App and Email
 
 skinparam shadowing false
+skinparam note {
+  BackgroundColor #FFFBEB
+  BorderColor #B45309
+}
 
 actor "Staff actor" as staff
-participant "use_of_collections\napplication route/use case" as uoc
-participant "notifications.public\nor dispatcher" as dispatcher
+participant "Emitting context\nroute or CLI job" as emitter
+participant "notifications.public\nNotificationDispatcher" as dispatcher
 database "notifications table" as store
 participant "Identity published language" as identity
 participant "Email sender" as email
 participant "Angular topbar / notifications UI" as ui
 
-uoc -> dispatcher : proposal event\nsubmitted / assigned / forwarded /\ndocuments submitted / corrections submitted
+emitter -> dispatcher : notify() / notify_many()
 dispatcher -> identity : resolve target PermissionId(s)
 identity --> dispatcher : staff permissions + user emails
-dispatcher -> store : create Notification\nrecipient_permission_id
-dispatcher -> email : send staff email after commit\nwhere event requires email
+dispatcher -> store : create Notification\nrecipient_permission_id\nrelated_resource_type / _id / _label
+emitter -> email : send e-mail after commit,\nwhere the event has a template
+
+note over emitter, email
+  **Kinds and who emits them**
+
+  use_of_collections.proposal_routes
+    PROPOSAL_SUBMITTED, PROPOSAL_ASSIGNED, PROPOSAL_FORWARDED,
+    PROPOSAL_TAKEN_OVER, PROPOSAL_REFERRED_TO_DIRECTION,
+    PROPOSAL_RETURNED_TO_STAFF, PROPOSAL_DOCUMENTS_SUBMITTED
+
+  public_submission.routes
+    PROPOSAL_SUBMITTED (after double opt-in materialisation),
+    PROPOSAL_CORRECTIONS_SUBMITTED
+
+  museum_questions
+    MUSEUM_QUESTION_SUBMITTED, MUSEUM_QUESTION_FORWARDED,
+    MUSEUM_QUESTION_RESPONSE_OVERDUE (notify-overdue CLI job)
+
+  scientific_return
+    SCIENTIFIC_RETURN_CANDIDATES_FOUND
+    (run-watch route, and the run-due / agentic-queue jobs)
+
+  RelatedResourceType is PROPOSAL, PROJECT or MUSEUM_QUESTION.
+  E-mail is a separate channel: approval, rejection and project
+  start/complete/cancel e-mail the requester without writing an
+  in-app notification.
+end note
 
 staff -> ui : open authenticated workspace
 ui -> store : GET /api/v1/notifications/unread-count

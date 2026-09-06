@@ -1,5 +1,5 @@
 @startuml scientific-return-flow
-title Scientific Return — fluxos coexistentes e ciclo full-agentic
+title Scientific Return — coexisting flows and the full-agentic cycle
 
 skinparam shadowing false
 skinparam backgroundColor #FFFFFF
@@ -19,67 +19,71 @@ skinparam partition {
 
 start
 
-partition "Staff autorizado" #DBEAFE {
-  :Ativar vigilância sobre projeto concluído;
-  :Escolher pesquisa existente ou busca autônoma;
+partition "Authorised staff" #DBEAFE {
+  :Activate a watch over a completed project;
+  :Choose an existing search or an autonomous one;
+
 }
 
 partition "Scientific Return" #DCFCE7 {
-  :Reutilizar snapshot imutável e cifrado;
-  if (Regime?) then (determinístico / assistido)
-    :Executar o fluxo existente sem alterações;
-    :Gerar queries e evidências pelas regras atuais;
-    if (Análise assistida solicitada?) then (sim)
-      :LLM recomenda; política controla a execução;
+  :Reuse the immutable, encrypted snapshot;
+  if (Regime?) then (deterministic / assisted)
+    :Run the existing flow unchanged;
+    :Generate queries and evidence by the current rules;
+    if (Assisted analysis requested?) then (yes)
+      :The LLM recommends; policy controls execution;
     endif
   else (full-agentic)
-    :Criar FullAgenticInvestigation QUEUED;
-    :Persistir Idempotency-Key e alvo único;
-    :Despachar para Cloud Tasks ou fila no banco;
+    :Create a QUEUED FullAgenticInvestigation
+    per consulted object, capped at max_objects;
+    :Persist the Idempotency-Key and the single target;
+    :Dispatch to Cloud Tasks or to the database queue;
 
-    partition "Worker agentic" #F3E8FF {
-      :Assumir lease recuperável;
-      :Recuperar exemplos curatoriais ACTIVE;
+    partition "Agentic worker" #F3E8FF {
+      :Take a recoverable lease;
+      :Retrieve ACTIVE curatorial examples;
       repeat
-        :Planejador LLM propõe variações,
-        queries e fontes;
-        partition "Fontes bibliográficas" #FEF3C7 {
-          :Executar Crossref, Europe PMC ou OpenAlex
-          sob rate limit global;
+        :The LLM planner proposes variants,
+        queries and sources;
+        partition "Bibliographic sources" #FEF3C7 {
+          :Call Crossref, Europe PMC or OpenAlex
+          under a global rate limit;
         }
-        :Persistir query, resultado e trajetória cifrada;
-        :Leitor LLM sem ferramentas interpreta
-        texto externo não confiável;
-        :Devolver avaliação estruturada ao planejador;
-      repeat while (Agente quer refinar e há orçamento?) is (sim)
-      ->não;
-      :Apresentar candidatos semanticamente fortes
-      sem gate determinístico;
-      :Concluir envelope FULL_AGENTIC;
+        :Persist the query, the result and the encrypted trajectory;
+        :A tool-less LLM reader interprets
+        untrusted external text;
+        :Return a structured assessment to the planner;
+      repeat while (Does the agent want to refine, and is there budget?) is (yes)
+      ->no;
+      :Present semantically strong candidates
+      with no deterministic gate;
+      :Close the FULL_AGENTIC envelope;
+      :Run one enrichment cycle over candidates
+      still lacking inventory evidence;
     }
   endif
 }
 
-partition "Painel de curadoria" #DBEAFE {
-  :Mostrar origem, artigo, trecho, query,
-  confiança, contradições e memória usada;
-  if (Decisão humana?) then (confirmar / corrigir)
+partition "Curatorial panel" #DBEAFE {
+  :Show the source, article, passage, query,
+  confidence, contradictions and memory used;
+  if (Human decision?) then (confirm / correct)
     partition "Use of Collections" #FEF3C7 {
-      :Criar PublicationLogEntry;
+      :Create a PublicationLogEntry;
     }
-  else (rejeitar / adiar)
-    :Preservar decisão e justificativa;
+  else (dismiss / defer)
+    :Preserve the decision and its justification;
   endif
-  :Guardar contexto de decisão cifrado;
+  :Store the encrypted decision context;
 
-  if (Explicação pode ensinar?) then (sim)
-    partition "Aprendiz LLM" #F3E8FF {
-      :Transformar texto livre em lição PROPOSED;
+  if (Can the explanation teach?) then (yes)
+    partition "LLM learner" #F3E8FF {
+      :Turn free text into a PROPOSED lesson;
     }
-    :Curador edita ou ativa a proposta;
-    partition "Memória curatorial" #DCFCE7 {
-      :Persistir item ACTIVE imutável;
-      :Usar como exemplo em investigações futuras;
+    :The curator edits or activates the proposal;
+    partition "Curatorial memory" #DCFCE7 {
+      :Persist an immutable ACTIVE item;
+      :Use it as an example in future investigations;
     }
   endif
 }
@@ -87,16 +91,16 @@ partition "Painel de curadoria" #DBEAFE {
 stop
 
 legend right
-  |= Cor |= Responsabilidade |
-  |<#DBEAFE>| Autoridade e validação humana |
-  |<#DCFCE7>| Domínio e persistência |
-  |<#F3E8FF>| Raciocínio agentic por LLM |
-  |<#FEF3C7>| Serviços externos / published language |
+  |= Colour |= Responsibility |
+  |<#DBEAFE>| Human authority and validation |
+  |<#DCFCE7>| Domain and persistence |
+  |<#F3E8FF>| Agentic reasoning by an LLM |
+  |<#FEF3C7>| External services / published language |
 
-  **Invariantes institucionais**
-  candidato ≠ retorno confirmado
-  hipótese do LLM ≠ alias oficial
-  memória proposta ≠ memória ativa
+  **Institutional invariants**
+  candidate ≠ confirmed return
+  LLM hypothesis ≠ official alias
+  proposed memory ≠ active memory
 endlegend
 
 @enduml

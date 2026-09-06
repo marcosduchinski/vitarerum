@@ -16,8 +16,8 @@ start
 :Citizen opens /public;
 
 if (Choice?) then (Ask the Museum)
-  :Fill /ask-museum form\nname, email, subject, message,\nconsent, captcha, honeypot;
-  :POST /api/v1/public/museum-questions;
+  :Fill /ask-museum form\nname, email, subject, message,\nconsent, captcha, honeypot,\noptional image attachments;
+  :POST /api/v1/public/museum-questions\nJSON, or multipart when images are attached;
 
   if (Honeypot filled?) then (yes)
     :Accept and drop silently\n202 same receipt shape;
@@ -39,7 +39,16 @@ if (Choice?) then (Ask the Museum)
     stop
   endif
 
-  :Persist MuseumQuestion\nstatus = SUBMITTED;
+  if (Attachments within limits?) then (no)
+    :422 for more than 10 images\nor a disallowed type;
+    :413 for an image over 5 MB\nor over 25 MB in total;
+    stop
+  endif
+
+  :Persist MuseumQuestion\nstatus = SUBMITTED\n+ stored image attachments;
+  :Notify every configured staff permission\nMUSEUM_QUESTION_SUBMITTED;
+  :Commit transaction\n(discard uploaded files on failure);
+  :Send deduplicated staff e-mail after commit;
   :202 MuseumQuestionReceipt;
   :Citizen sees received page;
   stop

@@ -104,6 +104,12 @@ package "use_of_collections" <<BoundedContext>> {
   }
   class Conversation <<AggregateRoot>> {
   }
+  class StaffProjectTodoItem <<AggregateRoot>> {
+    - projectId: CollectionUseProjectId
+    - ownerPermissionId: PermissionId
+    - completed: Boolean
+    - position: Integer
+  }
   class RequesterContact <<ValueObject>> {
   }
   enum ProposalStatus {
@@ -165,6 +171,7 @@ package "museum_questions" <<BoundedContext>> {
   }
   enum MuseumQuestionStatus {
     SUBMITTED
+    IN_PROGRESS
     ANSWERED
     OUT_OF_SCOPE
     CLOSED
@@ -177,6 +184,88 @@ package "notifications" <<BoundedContext>> {
     - kind: NotificationKind
     - readAt: DateTime?
     - clearedAt: DateTime?
+  }
+}
+
+package "scientific_return" <<BoundedContext>> {
+  class ScientificReturnWatch <<AggregateRoot>> {
+    - projectId: CollectionUseProjectId
+    - status: WatchStatus
+    - reviewIntervalDays: Integer
+    - projectSnapshotId: SnapshotId?
+    - nextRunAt: DateTime
+  }
+  class ScientificReturnProjectSnapshot <<Entity>> {
+    - payload: ProjectSnapshotPayload
+  }
+  class ScientificReturnSearchRun <<AggregateRoot>> {
+    - runKind: RunKind
+    - status: RunStatus
+    - newCandidateCount: Integer
+  }
+  class ScientificReturnQuery <<Entity>> {
+    - queryType: QueryType
+    - status: QueryStatus
+  }
+  class CandidatePublication <<AggregateRoot>> {
+    - status: CandidateStatus
+    - doi: String?
+    - evidences: List of CandidateEvidence
+  }
+  class CandidateEvidence <<Entity>> {
+    - type: EvidenceType
+    - strength: EvidenceStrength
+  }
+  class CandidateDecision <<Entity>> {
+    - decision: DecisionType
+    - justification: String?
+    - decisionContext: CandidateDecisionContext?
+  }
+  class FullAgenticInvestigation <<AggregateRoot>> {
+    - objective: InvestigationObjective
+    - status: FullAgenticInvestigationStatus
+    - idempotencyKey: String
+    - objectId: String?
+    - budget: AgenticBudget
+    - usage: AgenticUsage
+    - leaseOwner: String?
+  }
+  class AgenticTrajectoryEvent <<Entity>> {
+    - sequence: Integer
+    - kind: AgenticTrajectoryEventKind
+  }
+  class ScientificReturnKnowledgeItem <<AggregateRoot>> {
+    - kind: KnowledgeKind
+    - status: KnowledgeStatus
+    - institutionId: String?
+  }
+  enum WatchStatus {
+    ACTIVE
+    PAUSED
+    CLOSED
+  }
+  enum CandidateStatus {
+    PENDING
+    CONFIRMED
+    DISMISSED
+  }
+  enum DecisionType {
+    CONFIRM
+    CORRECT_AND_CONFIRM
+    DISMISS
+  }
+  enum FullAgenticInvestigationStatus {
+    QUEUED
+    RUNNING
+    CANCEL_REQUESTED
+    COMPLETED
+    FAILED
+    CANCELLED
+  }
+  enum KnowledgeStatus {
+    PROPOSED
+    ACTIVE
+    RETIRED
   }
 }
 
@@ -247,8 +336,25 @@ CollectionArea "1" o-- "0..*" Collection
 Collection "1" o-- "0..*" SourceDocument
 SourceDocument "1" o-- "0..*" CollectionObject
 
+StaffProjectTodoItem --> CollectionUseProject : projectId (own root)
+
+ScientificReturnWatch ..> CollectionUseProject : watches a COMPLETED project
+ScientificReturnWatch "1" o-- "0..1" ScientificReturnProjectSnapshot
+ScientificReturnWatch "1" o-- "0..*" ScientificReturnSearchRun
+ScientificReturnSearchRun "1" o-- "0..*" ScientificReturnQuery
+ScientificReturnWatch "1" o-- "0..*" CandidatePublication
+CandidatePublication "1" *-- "0..*" CandidateEvidence
+CandidatePublication "1" o-- "0..*" CandidateDecision
+CandidatePublication ..> PublicationLog : confirmation writes an entry
+FullAgenticInvestigation --> ScientificReturnWatch : one per consulted object
+FullAgenticInvestigation "1" o-- "0..*" AgenticTrajectoryEvent
+FullAgenticInvestigation ..> ScientificReturnSearchRun : FULL_AGENTIC envelope
+FullAgenticInvestigation ..> ScientificReturnKnowledgeItem : reads ACTIVE examples
+CandidateDecision ..> ScientificReturnKnowledgeItem : proposes a lesson
+
 Notification ..> Proposal : related resource
 Notification ..> CollectionUseProject : related resource
+Notification ..> MuseumQuestion : related resource
 ReferencePolicy ..> ReferenceNumber : allocates
 DocumentTemplate ..> UseType
 

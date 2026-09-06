@@ -5,77 +5,148 @@ skinparam classAttributeIconSize 0
 skinparam linetype ortho
 skinparam shadowing false
 skinparam packageStyle rectangle
+skinparam note {
+  BackgroundColor #FFFBEB
+  BorderColor #B45309
+}
 
 package "use_of_collections.public" <<Published Language>> {
   class ProjectExportView <<DTO>> {
     + projectId: String
     + referenceNumber: String
+    + title: String
+    + purpose: String
+    + beginDate: Date
+    + endDate: Date
     + intendedUse: UseType
-    + objects: List<ObjectView>
-    + accessLogs: List<AccessView>
-    + occurrenceLogs: List<OccurrenceView>
-    + publicationLogs: List<PublicationView>
+    + visitorName: String
+    + visitExecutionEvidence: VisitExecutionEvidenceView
+    + approval: ApprovalView?
+    + requestedObjects: List<ExportObjectView>
+    + inSituOccurrences: List<ExportEntryView>
+    + inSituLogs: List<ExportEntryView>
+    + inSituPublications: List<ExportEntryView>
+  }
+
+  class VisitExecutionEvidenceView <<DTO>> {
+    + occurred: Boolean
+    + evidenceType: String
+    + occurredAt: DateTime?
+    + recordedBy: PermissionId?
+    + gaps: List<String>
+  }
+
+  class ApprovalView <<DTO>> {
+    + approvedAt: DateTime
+    + approvedBy: PermissionId?
+    + approvalNote: String?
   }
 }
 
 package "cidoc_crm.in_situ_visit_mapping" <<Bounded Context>> {
   class InSituVisitRecord <<Aggregate Root>> {
     + id: UUID
-    + sourceProjectId: String
     + code: String
-    + mappingVersion: String
-    + crmVersion: String
-    + plannedBeginDate: Date?
-    + plannedEndDate: Date?
-    + executionOccurredAt: DateTime?
-    + approvedAt: DateTime?
+    + visitBeginDate: Date
+    + visitEndDate: Date
     + visitorName: String
     + placeName: String
     + generatedAt: DateTime
+    + institutionName: String
+    + recordSchemaVersion: Integer?
+    + mappingVersion: String?
+    + crmVersion: String?
+    + sourceProjectId: String?
+    + projectTitle: String?
+    + projectPurpose: String?
+    + plannedBeginDate: Date?
+    + plannedEndDate: Date?
+    + executionEvidenceType: String?
+    + executionOccurredAt: DateTime?
+    + executionRecordedBy: String?
+    + executionEvidenceGaps: List<String>
+    + approvedAt: DateTime?
+    + approvedBy: String?
+    + approvalNote: String?
   }
 
   class RequestedObjectRecord <<Entity>> {
     + id: UUID
+    + visitRecordId: UUID
     + sourceId: String
-    + inventoryNumber: String
-    + displayTitle: String?
-    + objectName: String?
     + description: Text
     + position: Integer
+    + displayTitle: String?
+    + objectName: String?
+    + briefDescriptionSnapshot: String?
   }
 
   class InSituOccurrenceRecord <<Entity>> {
     + id: UUID
     + sourceId: String
     + description: Text
+    + position: Integer
+    + relatedObjectSourceId: String?
+    + numberOfObjects: Integer?
     + occurrenceDate: DateTime?
     + location: String?
     + reportedBy: String?
-    + position: Integer
+    + testimonial: String?
+    + occurrenceLogDateConclusion: DateTime?
+    + occurrenceLogCurator: String?
   }
 
   class InSituLogRecord <<Entity>> {
     + id: UUID
     + sourceId: String
     + description: Text
-    + curatorName: String?
     + position: Integer
+    + relatedObjectSourceId: String?
+    + numberOfObjects: Integer?
+    + addedAt: DateTime?
+    + addedBy: String?
+    + accessLogDateConclusion: DateTime?
+    + accessLogCurator: String?
   }
 
   class InSituPublicationRecord <<Entity>> {
     + id: UUID
     + sourceId: String
     + description: Text
-    + addedBy: String?
     + position: Integer
+    + relatedObjectSourceId: String?
+    + addedAt: DateTime?
+    + addedBy: String?
   }
 
-  class AttachmentRecord <<Entity>> {
+  class InSituOccurrenceAttachmentRecord <<Entity>> {
     + id: UUID
+    + occurrenceId: UUID
     + sourceId: String
     + description: Text
     + reference: String
     + position: Integer
+    + mediaType: String?
+  }
+
+  class InSituLogAttachmentRecord <<Entity>> {
+    + id: UUID
+    + logId: UUID
+    + sourceId: String
+    + description: Text
+    + reference: String
+    + position: Integer
+    + mediaType: String?
+  }
+
+  class InSituPublicationAttachmentRecord <<Entity>> {
+    + id: UUID
+    + publicationId: UUID
+    + sourceId: String
+    + description: Text
+    + reference: String
+    + position: Integer
+    + mediaType: String?
   }
 
   class CidocProjection <<Domain Service>> {
@@ -84,14 +155,17 @@ package "cidoc_crm.in_situ_visit_mapping" <<Bounded Context>> {
   }
 }
 
+ProjectExportView *-- VisitExecutionEvidenceView
+ProjectExportView *-- ApprovalView
 ProjectExportView ..> InSituVisitRecord : ACL exports project snapshot
 InSituVisitRecord "1" *-- "0..*" RequestedObjectRecord
 InSituVisitRecord "1" *-- "0..*" InSituOccurrenceRecord
 InSituVisitRecord "1" *-- "0..*" InSituLogRecord
 InSituVisitRecord "1" *-- "0..*" InSituPublicationRecord
-InSituOccurrenceRecord "1" *-- "0..*" AttachmentRecord : attachments
-InSituLogRecord "1" *-- "0..*" AttachmentRecord : attachments
-InSituPublicationRecord "1" *-- "0..*" AttachmentRecord : attachments
+InSituOccurrenceRecord "1" *-- "0..*" InSituOccurrenceAttachmentRecord
+InSituLogRecord "1" *-- "0..*" InSituLogAttachmentRecord
+InSituPublicationRecord "1" *-- "0..*" InSituPublicationAttachmentRecord
 InSituVisitRecord ..> CidocProjection : semantic JSON-LD
+
 
 @enduml
