@@ -9,7 +9,10 @@ status: current
 Criar lembretes pessoais associados a projetos e acompanhar o trabalho aberto
 do papel ativo.
 
-**Disponível para:** COLLECTIONS_MANAGEMENT, CURATORIAL, DIRECTION e SYS_ADMIN
+**Disponível para:** COLLECTIONS_MANAGEMENT, CURATORIAL e DIRECTION. O
+servidor também autoriza SYS_ADMIN, mas esse papel não tem o menu **“Use of
+Collections”**; nesse caso, aceda diretamente a
+`/p/collections/projects/todo`.
 
 **Onde começar:** **“Use of Collections”** > **“Projects”** > **“TODO List”**
 

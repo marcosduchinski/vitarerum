@@ -129,5 +129,5 @@ proposta tenha sido aprovada.
 
 - [Submeter e confirmar um pedido de acesso às coleções](submeter-pedido-acesso.md)
 - [Escolher o canal certo para contactar o museu](escolher-canal.md)
-- [Manual do Utilizador — correção de documentos](../../user-manual.md#54-corrigir-ou-completar-documentos-depois-de-submeter)
+- [Manual do Utilizador — correção de documentos](../../user-manual.md#5-submeter-uma-proposta-de-uso-de-coleção-pedido-público)
 - [Índice dos guias práticos](../README.md)

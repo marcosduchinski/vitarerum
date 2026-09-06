@@ -9,7 +9,8 @@ status: current
 Gerar uma narrativa a partir dos registos de uma visita concluída, rever o
 conteúdo e exportar ou imprimir o relatório com proveniência verificável.
 
-**Disponível para:** COLLECTIONS_MANAGEMENT, CURATORIAL e DIRECTION
+**Disponível para:** COLLECTIONS_MANAGEMENT e CURATORIAL para criar o
+relatório; DIRECTION consulta, exporta e imprime, mas não vê a ação de criação
 
 **Onde começar:** detalhe de um projeto de visita in situ > **“Actions”**
 
@@ -72,7 +73,7 @@ correções manuais ficam registadas como revisões.
 
 | Situação | O que verificar ou fazer |
 | --- | --- |
-| A ação de relatório não aparece | Confirme que é uma visita in situ concluída e que o papel ativo tem acesso |
+| A ação de relatório não aparece | Confirme que é uma visita in situ concluída e que o papel ativo é COLLECTIONS_MANAGEMENT ou CURATORIAL |
 | A criação devolve um conflito | Complete os registos operacionais que comprovam a visita e tente novamente |
 | A geração demora | Aguarde a resposta; não repita a submissão, pois cada tentativa concluída cria outro relatório |
 | Precisa de PDF | Use **“Print”** e escolha a opção PDF do navegador; **“Export”** produz JSON |

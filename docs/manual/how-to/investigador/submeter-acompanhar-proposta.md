@@ -118,9 +118,11 @@ rejeitadas ou já canceladas.
 
 ## Resultado esperado
 
-Depois da submissão, o detalhe apresenta um número de referência no formato
-`VRP-AAAAMMDD-XXXX`, o estado **“Submitted”**, a mensagem de abertura e o
-primeiro evento do histórico.
+Depois da submissão, o detalhe apresenta um número de referência, o estado
+**“Submitted”**, a mensagem de abertura e o primeiro evento do histórico.
+
+O formato da referência é definido pela máscara ativa para propostas. A máscara
+institucional em uso produz referências como `PP-MUHNAC/COL/2026/0007`.
 
 A evolução pode ser acompanhada em **“My proposals”**. Se a proposta for
 aprovada, o sistema cria um projeto associado, que fica disponível em **“My

@@ -33,7 +33,7 @@ assumida por outra pessoa.
 
 ## Resultado esperado
 
-A proposta muda de **“Submitted”** para **“Pending”**, deixa de aparecer em
+A proposta muda de **“Submitted”** para **“Under review”**, deixa de aparecer em
 **“New proposals”**, passa para **“My assignments”** e regista a atribuição no
 histórico de eventos.
 

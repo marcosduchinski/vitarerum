@@ -35,8 +35,8 @@ CURATORIAL apenas nas coleções em que é curador
 8. Em **“Searchable columns”**, marque pelo menos uma coluna; inclua apenas
    campos que devam participar na pesquisa.
 9. Selecione **“Upload and index”** e aguarde o estado **“INDEXED”**.
-10. Pesquise alguns números, nomes e códigos em **“Objects”** > **“Search”** para
-    validar o resultado.
+10. Pesquise alguns números, nomes e códigos em **“Use of Collections”** >
+    **“Objects”** > **“Object Search”** para validar o resultado.
 
 ## Resultado esperado
 

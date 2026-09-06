@@ -11,7 +11,7 @@ projetos concluídos.
 
 **Disponível para:** COLLECTIONS_MANAGEMENT, CURATORIAL e DIRECTION
 
-**Onde começar:** **“Use of Collections”** > **“Projects”** > **“Watchers”**
+**Onde começar:** **“AI”** > **“Watchers”**
 
 **Tempo aproximado:** 3 minutos por projeto
 
@@ -36,7 +36,7 @@ requerente e os objetos, incluindo número de inventário e nome do objeto.
 - Num watcher **“Paused”**, altere a data ou o intervalo, se necessário, e
   selecione **“Start”** para retomar.
 - Para executar uma pesquisa fora do agendamento, abra o projeto pelo título,
-  selecione **“Scientific return”** e use **“Search now”**. Se a investigação
+  selecione **“Scientific Return”** e use **“Search now”**. Se a investigação
   autónoma estiver configurada e disponível, **“Start autonomous search”**
   inicia esse fluxo separado.
 - Use o filtro **“Closed”** para consultar watchers já encerrados.
@@ -44,7 +44,7 @@ requerente e os objetos, incluindo número de inventário e nome do objeto.
 ## Encerrar definitivamente
 
 1. Abra o projeto pelo título apresentado em **“Watchers”**.
-2. Selecione o separador **“Scientific return”**.
+2. Selecione o separador **“Scientific Return”**.
 3. Na área de monitorização, selecione o botão **“Close monitoring”**.
 4. Leia **“Close monitoring?”** e confirme em **“Close monitoring”**. Para
    manter o watcher, escolha **“Keep monitoring”**.

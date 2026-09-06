@@ -12,8 +12,8 @@ proposta ou a um projeto.
 **Disponível para:** COLLECTIONS_MANAGEMENT, CURATORIAL e DIRECTION para
 pesquisa; a associação depende das permissões de gestão do recurso
 
-**Onde começar:** **“Objects”** > **“Search”**, ou separador **“Objects”** de
-uma proposta ou projeto
+**Onde começar:** **“Use of Collections”** > **“Objects”** > **“Object
+Search”**, ou separador **“Objects”** de uma proposta ou projeto
 
 **Tempo aproximado:** 5 minutos
 
@@ -24,7 +24,7 @@ associar objetos, abra uma proposta ou um projeto que possa editar.
 
 ## Pesquisar no catálogo
 
-1. Abra **“Objects”** > **“Search”**.
+1. Abra **“Use of Collections”** > **“Objects”** > **“Object Search”**.
 2. Em **“Search inventory numbers, names, codes...”**, escreva um número de
    inventário, nome, código ou combinação de termos.
 3. Se necessário, escolha uma coleção para limitar a pesquisa.
@@ -79,6 +79,6 @@ para os registos operacionais aplicáveis.
 ## Tarefas relacionadas
 
 - [Analisar, pedir documentos e decidir uma proposta](analisar-decidir-proposta.md)
-- [Criar, corrigir e reindexar uma fonte de coleção](../administracao/reindexar-fonte-colecao.md)
+- [Corrigir e reindexar uma fonte de coleção](../administracao/reindexar-fonte-colecao.md)
 - [Manual do Utilizador — pesquisa de objetos](../../user-manual.md#13-pesquisa-de-objetos-de-coleção-pobjectssearch)
 - [Índice dos guias práticos](../README.md)

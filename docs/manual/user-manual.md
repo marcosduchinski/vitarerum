@@ -4,7 +4,7 @@ status: current
 
 # Manual do Utilizador — Vitarerum
 
-> Versão 0.1 — revista em 4 de setembro de 2026
+> Versão 0.1 — revista em 6 de setembro de 2026
 > Idioma: PT-PT
 
 Este manual descreve as funcionalidades visíveis na aplicação. Detalhes de
@@ -266,12 +266,15 @@ dados"** e **"O seu pedido"**.
   antes do envio.
 
 **5.3 Confirmação por email (duplo opt-in)**
-Depois de submeter, a pessoa vê um ecrã de "Pedido recebido" e recebe um
-email com um link de confirmação de utilização única.
+Depois de submeter, a pessoa vê um ecrã de "Quase — verifique a sua caixa
+de entrada" e recebe um email com um link de confirmação de utilização única.
 
 - Ao clicar no link (`/submit-proposal/confirm?token=...`), o pedido é
   finalmente criado e passa a ficar visível para a equipa do museu; o ecrã
-  mostra o **número de referência** atribuído (ex.: `VRP-20260625-0007`).
+  mostra "Pedido confirmado". O **número de referência** é atribuído nesse
+  momento, mas não é apresentado nesta página nem enviado por email ao
+  requerente: passa a identificar a proposta na correspondência seguinte da
+  equipa do museu e no ecrã de correção de documentos (secção 5.4).
 - Clicar num link já usado mostra uma mensagem de "já confirmado" — não é
   tratado como erro.
 - Um link expirado pede para reenviar o pedido; **um segundo clique** no
@@ -350,12 +353,13 @@ O formulário tem três secções:
 **7.3 Documentos de suporte**
 - Entre 1 e 5 ficheiros, em PDF, JPG, PNG ou DOCX, até 10 MB cada.
 
-Ao submeter, é atribuído um **número de referência** à proposta (formato
-`VRP-AAAAMMDD-XXXX`) e a pessoa é encaminhada para "As minhas propostas".
-Tal como no formulário público, **a proposta é sempre criada sem objetos
-de coleção associados** — descreva no corpo da mensagem o que precisa;
-associar objetos concretos do catálogo à proposta é feito depois, pela
-equipa do museu (a pesquisa de objetos, Parte IV secção 13, não está
+Ao submeter, é atribuído um **número de referência** à proposta, segundo a
+máscara ativa para propostas (secção 27) — na configuração institucional
+atual, no formato `PP-MUHNAC/COL/AAAA/XXXX` — e a pessoa é encaminhada para
+"As minhas propostas". Tal como no formulário público, **a proposta é sempre
+criada sem objetos de coleção associados** — descreva no corpo da mensagem o
+que precisa; associar objetos concretos do catálogo à proposta é feito depois,
+pela equipa do museu (a pesquisa de objetos, Parte IV secção 13, não está
 disponível no menu do investigador). A lista de objetos pedidos passa a
 ficar visível no detalhe da proposta assim que a equipa a preencher.
 
@@ -400,7 +404,9 @@ que funciona como uma troca de emails estruturada dentro do sistema:
   alguém da equipa de gestão de coleções — antes disso não há um
   destinatário definido do lado do museu.
 - O editor de resposta permite formatação simples (negrito, itálico, lista
-  com marcadores) e anexar novos ficheiros diretamente na mensagem.
+  com marcadores) e anexar novos ficheiros diretamente na mensagem. Os anexos
+  enviados por esta via — de ambos os lados da conversa — têm de ser ficheiros
+  `.docx` válidos; os restantes formatos são recusados pelo servidor.
 - **Não é possível enviar mais mensagens depois de a proposta atingir um
   estado terminal** (`APPROVED`, `REJECTED` ou `CANCELLED`) — a conversa
   fecha com a decisão.
@@ -416,10 +422,11 @@ que funciona como uma troca de emails estruturada dentro do sistema:
 *Figura 2 — Percurso de um projeto de uso de coleções.*
 
 Quando uma proposta é **aprovada**, o sistema cria automaticamente um
-**projeto de uso de coleções** (referência `CUP-XXXXXXXX`), que passa a ser
-o espaço de trabalho para o período de acesso autorizado. Não existe
-criação manual de projeto pelo investigador — só nasce por aprovação da
-proposta correspondente.
+**projeto de uso de coleções**, com referência própria atribuída pela máscara
+ativa para projetos (secção 27) — na configuração institucional atual, no
+formato `PR-MUHNAC/COL/AAAA/XXXX`. O projeto passa a ser o espaço de trabalho
+para o período de acesso autorizado. Não existe criação manual de projeto pelo
+investigador — só nasce por aprovação da proposta correspondente.
 
 **10.1 "Os meus projetos" (`/p/collections/projects/my`)**
 Lista todos os projetos da pessoa, em qualquer estado, com pesquisa e
@@ -495,9 +502,12 @@ proposals". Atribuir a proposta a si próprio (ou, via "Forward", a outro
 colega) transita-a de `SUBMITTED` para `PENDING` — é este passo que a
 retira da fila de novos pedidos e a coloca em análise ativa.
 
-**11.3 Reencaminhar ("Forward")**: só possível com a proposta em
-`PENDING`. Escolhe-se outro membro da equipa e, opcionalmente, uma nota;
-a proposta passa a estar atribuída a essa pessoa.
+**11.3 Reencaminhar ("Forward")**: escolhe-se outro membro da equipa e,
+opcionalmente, uma nota; a proposta passa a estar atribuída a essa pessoa. O
+botão existe em dois sítios, com regras diferentes: em "New proposals" atribui
+um pedido ainda `SUBMITTED` diretamente a outro colega (é a variante referida
+em 11.2); no detalhe de uma proposta já assumida, transfere-a entre membros da
+equipa e exige o estado `PENDING`.
 
 **11.4 Enviar à Direção**: COLLECTIONS_MANAGEMENT ou CURATORIAL pode enviar
 uma proposta `PENDING` para revisão por um membro de DIRECTION. É obrigatório
@@ -526,9 +536,11 @@ situações diferentes:
   públicos, é o ecrã descrito na secção 5.4; para propostas autenticadas,
   a mesma lógica aplica-se através da conversação/documentos da proposta.
 
-**11.6 Aprovar** (só CURATORIAL): ao aprovar, confirma-se ou ajusta-se
-título, propósito e datas do futuro projeto — **é este passo que cria o
-projeto de uso de coleções**, nunca antes disso. Se a proposta veio do
+**11.6 Aprovar** (só CURATORIAL): a ação "Accept" abre apenas uma confirmação
+("Accept proposal?") — **é este passo que cria o projeto de uso de coleções**,
+nunca antes disso. O projeto herda o título e o período da própria proposta; o
+ecrã de aprovação não permite ajustá-los, pelo que qualquer correção tem de ser
+feita antes, com "Edit" no detalhe da proposta. Se a proposta veio do
 formulário público e a pessoa ainda não tinha conta, o Vitarerum cria
 automaticamente uma conta EXTERNAL nesse momento e envia-lhe as
 credenciais de acesso por email (esta é atualmente a única forma de um
@@ -545,7 +557,7 @@ final — `REJECTED` é um estado terminal; a proposta não gera projeto.
 ### 12. Gestão de projetos
 
 **12.1 Filas de trabalho** (`/p/collections/projects/...`): **Pending**
-(`CREATED`, ainda não iniciado), **In progress**, **Completed / closed**,
+(`CREATED`, ainda não iniciado), **In progress**, **Completed** e
 **Cancelled**. Ao contrário do investigador (que só vê os seus próprios
 projetos), a equipa vê todos os projetos da instituição.
 
@@ -691,9 +703,12 @@ texto livre sem proveniência.
 ### 16. Relatórios (`/p/collections/reports/visits-in-situ`)
 
 **16.1 Gerar um relatório**: a partir do separador "Actions" do detalhe
-de um projeto de visita in situ concluído, a ação "Reports" abre um
-formulário curto com três opções, todas relativas apenas à forma como o
-texto é gerado (o conteúdo factual vem sempre dos registos do projeto):
+de um projeto de visita in situ concluído, a ação "Create new In Situ Visit
+Report" abre um formulário curto com três opções. A ação só aparece para
+COLLECTIONS_MANAGEMENT e CURATORIAL; a Direção consulta, imprime e exporta os
+relatórios já gerados, mas não os cria. As três opções dizem respeito apenas à
+forma como o texto é gerado (o conteúdo factual vem sempre dos registos do
+projeto):
 - **Idioma de destino** (português ou inglês);
 - **Tipo de narrativa**: institucional, científica, audioguia (adulto),
   audioguia (criança) ou redes sociais — cada uma ajusta o tom e o nível
@@ -814,7 +829,7 @@ consultar dados bibliográficos, abrir o DOI ou registo de origem e ver:
 - `DISMISSED` — o candidato foi rejeitado, mantendo-se a decisão no histórico.
 
 **18.3 Rever um candidato**: "Review candidate" abre o projeto no separador
-"Scientific return". A equipa pode confirmar, corrigir dados bibliográficos e
+"Scientific Return". A equipa pode confirmar, corrigir dados bibliográficos e
 confirmar, ou rejeitar o candidato. A justificação e a evidência usada ficam
 registadas. Uma confirmação cria a correspondente entrada no registo de
 publicações; resultados automáticos nunca entram nesse registo sem decisão
@@ -1056,8 +1071,20 @@ libertado depois de confirmada a remoção.
 ### 27. Máscaras de número de referência (`/p/admin/reference-number-policies`)
 
 Controla o formato dos números de referência atribuídos a propostas,
-projetos e registos operacionais (por exemplo `VRP-20260730-0001` ou
-`CUP-00000001`).
+projetos e registos operacionais. As máscaras institucionais em uso nesta
+instalação são:
+
+| Tipo de referência | Máscara ativa |
+| --- | --- |
+| Proposta | `PP-MUHNAC/COL/YYYY/XXXX` |
+| Projeto de uso de coleções | `PR-MUHNAC/COL/YYYY/XXXX` |
+| Registo de acesso a objetos | `OL-MUHNAC/COL/YYYY/XXXX` |
+| Registo de ocorrências | `OO-MUHNAC/COL/YYYY/XXXX` |
+| Registo de publicações | `OP-MUHNAC/COL/YYYY/XXXX` |
+
+Todas reiniciam a sequência a cada ano. Os formatos `VRP-...`, `CUP-...`,
+`OAL-...`, `OOL-...` e `PUB-...` são **legados**: continuam a ser reconhecidos
+em referências antigas, mas já não são atribuídos a registos novos.
 
 **27.1 Como funciona uma máscara**: combina texto fixo, tokens de data
 opcionais (`YYYY`, `YY`, `MM`, `DD`) e, no final, um token de sequência
@@ -1065,7 +1092,8 @@ opcionais (`YYYY`, `YY`, `MM`, `DD`) e, no final, um token de sequência
 numeração reinicia — por ano, mês, dia, ou nunca (sequência global). Só
 são permitidas letras, dígitos, barras, underscores e hífens.
 
-Exemplos concretos mostrados no próprio ecrã:
+Exemplos concretos mostrados no próprio ecrã, para explicar a sintaxe (não
+são as máscaras em uso):
 - `VRP-YYYYMMDD-XXXX` → `VRP-20260730-0001` (reinicia todos os dias).
 - `CUP-XXXXXXXX` → `CUP-00000001` (sequência global de oito dígitos, sem
   data).
@@ -1228,12 +1256,14 @@ qualquer momento pelo SYS_ADMIN; não afeta o histórico da conta.
 
 **Proposta** — pedido inicial de acesso a uma coleção, submetido pelo
 público (Parte II) ou por um investigador autenticado (Parte III).
-Identificada por uma referência `VRP-AAAAMMDD-XXXX`. Só dá origem a um
-projeto quando aprovada.
+Identificada por uma referência atribuída pela máscara ativa para propostas
+(`PP-MUHNAC/COL/AAAA/XXXX` nesta instalação). Só dá origem a um projeto quando
+aprovada.
 
 **Projeto de uso de coleções** — espaço de trabalho criado
 automaticamente quando uma proposta é aprovada; é onde o acesso à
-coleção é efetivamente registado. Identificado por `CUP-XXXXXXXX`.
+coleção é efetivamente registado. Identificado por uma referência atribuída
+pela máscara ativa para projetos (`PR-MUHNAC/COL/AAAA/XXXX` nesta instalação).
 
 **Uso pretendido** (`intendedUse`) — o que a proposta/projeto destina-se
 a fazer: `EXHIBITION` (exposição), `IN_SITU_VISIT` (visita técnica no
@@ -1302,11 +1332,12 @@ científico de um projeto concluído (Parte V, secção 19).
 orientações curatoriais validados para apoiar futuras investigações de retorno
 científico (Parte V, secção 20).
 
-**Número de referência** — identificador legível atribuído
-automaticamente a propostas (`VRP-...`), projetos (`CUP-...`), registos
-de acesso (`OAL-...`), de ocorrências (`OOL-...`) e de publicações
-(`PUB-...`), gerado a partir de uma máscara configurável (Parte VI,
-secção 27).
+**Número de referência** — identificador legível atribuído automaticamente a
+propostas, projetos, registos de acesso, de ocorrências e de publicações, cada
+um gerado a partir da máscara configurável do seu tipo (Parte VI, secção 27).
+Nesta instalação, os prefixos em uso são `PP-`, `PR-`, `OL-`, `OO-` e `OP-`;
+`VRP-`, `CUP-`, `OAL-`, `OOL-` e `PUB-` são formatos legados, ainda
+reconhecidos em registos antigos.
 
 ### B. Perguntas frequentes
 

@@ -11,7 +11,7 @@ correta sem perder o histórico.
 
 **Disponível para:** SYS_ADMIN
 
-**Onde começar:** **“Administration”** > **“Reference number masks”**
+**Onde começar:** **“Administration”** > **“Reference masks”**
 
 **Tempo aproximado:** 5 minutos
 

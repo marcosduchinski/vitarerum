@@ -22,7 +22,7 @@ conta sem grupo não consegue iniciar sessão.
 
 ## Criar e ativar o acesso
 
-1. Em **“Users”**, selecione a ação de criar utilizador.
+1. Em **“Users”**, selecione **“New user”**.
 2. Preencha **“Name”**, **“Email”** e **“Password”** inicial.
 3. Selecione **“Create user”**.
 4. No detalhe criado, vá a **“Assign to group”**.

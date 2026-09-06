@@ -150,5 +150,5 @@ curso; os documentos são gerados apenas com os dados já guardados.
 
 - [Iniciar, utilizar, concluir ou cancelar um projeto](gerir-projeto.md)
 - [Responder à equipa e enviar documentos](responder-enviar-documentos.md)
-- [Manual do Utilizador — registos do projeto](../../user-manual.md#104-registos-disponíveis-enquanto-o-projeto-está-em-curso)
+- [Manual do Utilizador — registos do projeto](../../user-manual.md#10-projetos-de-uso-de-coleções)
 - [Índice dos guias práticos](../README.md)

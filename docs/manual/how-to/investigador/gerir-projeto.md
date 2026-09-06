@@ -19,8 +19,9 @@ dos seus registos depende da visita
 ## Antes de começar
 
 Um projeto não é criado manualmente. Quando uma proposta é aprovada, o sistema
-cria automaticamente o projeto correspondente com um número no formato
-`CUP-XXXXXXXX`.
+cria automaticamente o projeto correspondente e atribui-lhe uma referência
+própria, segundo a máscara ativa para projetos. A máscara institucional em uso
+produz referências como `PR-MUHNAC/COL/2026/0007`.
 
 Para começar:
 

@@ -18,7 +18,7 @@ rejeição são exclusivas de CURATORIAL
 
 ## Antes de começar
 
-- A proposta deve estar **“Pending”** e atribuída ao papel ativo.
+- A proposta deve estar **“Under review”** e atribuída ao papel ativo.
 - Confirme o título, a utilização pretendida, as datas, os objetos, os
   documentos e o **“Event log”** antes de decidir.
 
@@ -44,8 +44,8 @@ rejeição são exclusivas de CURATORIAL
    request”**.
 
 O requerente recebe a indicação do que deve enviar. A proposta permanece
-**“Pending”** e a resposta fica visível nos documentos, na conversação e nos
-eventos.
+**“Under review”** e a resposta fica visível nos documentos, na conversação e
+nos eventos.
 
 ## Enviar à Direção
 
@@ -54,7 +54,7 @@ eventos.
 3. Registe em **“Reason”** a questão concreta que precisa de parecer.
 4. Confirme **“Send to Direction”**.
 
-A proposta continua **“Pending”**. Aguarde a devolução da Direção antes da
+A proposta continua **“Under review”**. Aguarde a devolução da Direção antes da
 decisão operacional.
 
 ## Aprovar uma proposta
@@ -96,7 +96,7 @@ projeto vazio, ao qual a equipa pode associar objetos posteriormente.
 
 | Situação | O que verificar ou fazer |
 | --- | --- |
-| **“Accept”** ou **“Reject”** não aparece | Ative CURATORIAL e confirme que a proposta está **“Pending”** e atribuída a si |
+| **“Accept”** ou **“Reject”** não aparece | Ative CURATORIAL e confirme que a proposta está **“Under review”** e atribuída a si |
 | **“Send to Direction”** está indisponível | Escolha uma pessoa da Direção e preencha o motivo obrigatório |
 | Não consegue enviar correções | Adicione pelo menos um pedido válido e preencha os motivos obrigatórios |
 | A proposta passou para outro colega | Consulte **“Other's assignments”** e o **“Event log”** antes de agir |

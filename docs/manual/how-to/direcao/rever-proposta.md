@@ -34,8 +34,8 @@ modo de consulta: não aprova, rejeita, edita nem gere os documentos.
 ## Resultado esperado
 
 A proposta deixa a fila da Direção, volta à pessoa da equipa selecionada e
-permanece **“Pending”**. A resposta fica registada no histórico e o destinatário
-recebe uma notificação.
+permanece **“Under review”**. A resposta fica registada no histórico e o
+destinatário recebe uma notificação.
 
 ## Atenção
 

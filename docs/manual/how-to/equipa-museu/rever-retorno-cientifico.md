@@ -11,7 +11,7 @@ projeto e confirmar, corrigir ou rejeitar a associação.
 
 **Disponível para:** COLLECTIONS_MANAGEMENT, CURATORIAL e DIRECTION
 
-**Onde começar:** **“Use of Collections”** > **“Projects”** > **“Scientific return”**
+**Onde começar:** **“AI”** > **“Scientific return”**
 
 **Tempo aproximado:** 10 a 20 minutos por candidato
 
