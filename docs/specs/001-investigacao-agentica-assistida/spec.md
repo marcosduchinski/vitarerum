@@ -140,12 +140,15 @@ failure. Terminal aggregates cannot reopen.
 `POST /api/v1/scientific-return/watches/{watchId}/investigations` requires JWT
 authentication, `X-Permission-Id`, and membership in `CURATORIAL`,
 `COLLECTIONS_MANAGEMENT`, or `DIRECTION`. It starts
-`DISCOVER_CANDIDATE` without a candidate and returns `201 Created` with the
-already-terminal trajectory.
+`DISCOVER_CANDIDATE` without a candidate and returns `201 Created` after the
+new synchronous cycle ends. An idempotent replay returns the stored trajectory,
+which may still be non-terminal if the original request is running; it does not
+wait for that request to finish (FR-012).
 
 The watch must exist, be `ACTIVE`, have a project snapshot, and have at least
-one deterministic run. The newest run returned by the repository becomes
-`initialRunId`. Invalid preconditions produce `422`; disabled mode produces
+one search run. The lookup does not filter by run kind or status: the newest
+run returned by the repository becomes `initialRunId`, even if it is not a
+completed deterministic run. Invalid preconditions produce `422`; disabled mode produces
 `503 SCIENTIFIC_RETURN_AGENT_DISABLED`.
 
 This capability exists in the API but has no start control in the Angular
@@ -313,7 +316,7 @@ is currently discarded; see GAP-005.
 
 `Idempotency-Key` is optional. When present, a unique partial PostgreSQL index
 allows only one investigation row with that key. A replay returns the stored
-investigation before checking for an existing live target or deterministic-run
+investigation before checking for an existing live target or search-run
 precondition and does not contact a source again.
 
 The live-target key is watch, objective, and nullable candidate. The application
@@ -398,21 +401,21 @@ but does not enforce the caller/mode distinction implied by the mode names.
 
 ## 7. Invariants and actual enforcement
 
-| Invariant | Enforcement |
-| --- | --- |
-| The cycle never writes to the project publication log | No such port is available to the use case; security test |
-| The cycle never decides a candidate | Tool and use case only create pending candidates or append evidence |
-| Enrichment does not rewrite candidate metadata or status | Application persistence path and tests |
-| Executed queries derive from an observed snapshot object | Proposed-action contract plus deterministic action policy |
-| Publication text cannot redefine evidence rules | Deterministic evidence builder and injection tests |
-| A source-contacting action must be authorized and budgeted first | Aggregate transition and policy-generated execution |
-| Every normally terminal investigation has a typed stop reason | Aggregate and stop policy |
-| A terminal investigation cannot reopen | Aggregate transition guard |
-| One live investigation exists per target | Application check, database partial unique index, and advisory lock |
-| A successful tool execution is not repeated | Unique deterministic tool-execution key and replay |
-| A retry is linked to its predecessor | Supported by the model, but not populated by the run use case |
-| A candidate decided during an external call stops enrichment | Policy supports it, but the use case does not reload candidate status |
-| Assisted investigations remain inside one institution | Not represented or enforced |
+| ID | Invariant | Enforcement |
+| --- | --- | --- |
+| INV-001 | The cycle never writes to the project publication log | No such port is available to the use case; security test |
+| INV-002 | The cycle never decides a candidate | Tool and use case only create pending candidates or append evidence |
+| INV-003 | Enrichment does not rewrite candidate metadata or status | Application persistence path and tests |
+| INV-004 | Executed queries derive from an observed snapshot object | Proposed-action contract plus deterministic action policy |
+| INV-005 | Publication text cannot redefine evidence rules | Deterministic evidence builder and injection tests |
+| INV-006 | A source-contacting action must be authorized and budgeted first | Aggregate transition and policy-generated execution |
+| INV-007 | Every normally terminal investigation has a typed stop reason | Aggregate and stop policy |
+| INV-008 | A terminal investigation cannot reopen | Aggregate transition guard |
+| INV-009 | One live investigation exists per target | Application check, database partial unique index, and advisory lock |
+| INV-010 | A successful tool execution is not repeated | Unique deterministic tool-execution key and replay |
+| INV-011 | A retry is linked to its predecessor | Supported by the model, but not populated by the run use case |
+| INV-012 | A candidate decided during an external call stops enrichment | Policy supports it, but the use case does not reload candidate status |
+| INV-013 | Assisted investigations remain inside one institution | Not represented or enforced |
 
 ## 8. Server configuration
 
@@ -433,26 +436,26 @@ part of the per-investigation budget returned by this API.
 
 ## 9. Acceptance criteria and verification
 
-| Criterion | Evidence |
-| --- | --- |
-| Discovery creates a pending candidate and awaits a human | `test_run_investigation.py::test_a_discovery_creates_a_candidate_and_awaits_a_human` |
-| Created candidate and evidence carry investigation provenance | `test_run_investigation.py::test_the_created_candidate_carries_its_provenance` |
-| Enrichment adds evidence without rewriting the candidate | `test_run_investigation.py::test_enrichment_adds_evidence_without_touching_the_candidate` |
-| Candidate decisions and publication-log writes remain outside the cycle | `test_run_investigation.py::test_the_candidate_still_requires_a_human_decision`, `test_agent_security.py::test_the_cycle_has_no_route_to_the_publication_log` |
-| Invented objects and actions never reach a source | `test_agent_security.py::test_the_model_cannot_investigate_an_object_it_invented`, `::test_an_invented_action_never_reaches_a_source`, `::test_an_action_outside_the_allowlist_never_reaches_a_source` |
-| External text cannot move a candidate or change evidence rules | `test_agent_security.py::test_injected_text_cannot_move_a_candidate`, `::test_injected_text_does_not_change_the_evidence_rules`, `::test_an_injection_claiming_an_inventory_number_proves_nothing` |
-| Query and candidate ceilings are respected | `test_agent_security.py::test_one_investigation_cannot_exceed_its_query_budget`, `test_run_investigation.py::test_the_candidate_ceiling_is_respected` |
-| Budget is reserved before tool execution | `test_investigation_aggregate.py::test_the_budget_is_charged_before_the_tool_runs`, `::test_an_authorized_search_must_reserve_queries` |
-| Command replay does not contact a source or create a second candidate | `test_run_investigation.py::test_the_same_client_key_never_contacts_a_source_twice`, `::test_a_repeated_key_creates_no_second_candidate`, `::test_a_command_without_a_key_is_not_deduplicated` |
-| Only exact-match-capable sources are routed | `test_run_investigation.py::test_a_source_that_cannot_match_exactly_is_refused`, `test_agent_policies.py::test_only_sources_that_honour_an_exact_phrase_are_routed_to` |
-| Planner and source failures close without deciding the queue | `test_run_investigation.py::test_an_unavailable_reasoner_leaves_the_queue_untouched`, `::test_an_unavailable_source_is_audited_without_blocking_review`, `::test_an_authorised_source_without_an_adapter_stops_as_unavailable` |
-| Reflection failure uses deterministic fallback | `test_run_investigation.py::test_an_unavailable_reflection_falls_back_to_the_delta` |
-| Disabled mode and unauthorized mutation are refused | `test_run_investigation.py::test_a_disabled_mode_refuses_to_start`, `::test_a_caller_outside_the_review_groups_is_refused` |
-| Trajectory and telemetry persist step by step | `test_run_investigation.py::test_the_trajectory_is_persisted_step_by_step`, `::test_the_full_trajectory_is_readable_afterwards`, `::test_the_iteration_records_which_model_and_prompt_produced_it` |
-| Optimistic persistence rejects a stale writer | `test_investigation_repository.py::test_a_save_is_refused_after_another_writer_moved_the_row` |
-| Lock is released on success and failure | `test_run_investigation.py::test_the_lock_is_taken_for_the_target_and_always_released`, `::test_the_lock_is_released_even_when_the_cycle_fails` |
-| Stale cycles close as abandoned while live cycles survive | `test_run_investigation.py::test_an_abandoned_cycle_is_closed_with_a_typed_reason`, `::test_a_live_cycle_is_never_closed_by_the_sweep` |
-| Angular displays candidate-assisted history | `scientific-return-panel.component.spec.ts::opens each candidate history in its own dialog` |
+| ID | Criterion | Evidence |
+| --- | --- | --- |
+| AC-001 | Discovery creates a pending candidate and awaits a human | `test/scientific_return/test_run_investigation.py::test_a_discovery_creates_a_candidate_and_awaits_a_human` |
+| AC-002 | Created candidate and evidence carry investigation provenance | `test/scientific_return/test_run_investigation.py::test_the_created_candidate_carries_its_provenance` |
+| AC-003 | Enrichment adds evidence without rewriting the candidate | `test/scientific_return/test_run_investigation.py::test_enrichment_adds_evidence_without_touching_the_candidate` |
+| AC-004 | Candidate decisions and publication-log writes remain outside the cycle | `test/scientific_return/test_run_investigation.py::test_the_candidate_still_requires_a_human_decision`, `test/scientific_return/test_agent_security.py::test_the_cycle_has_no_route_to_the_publication_log` |
+| AC-005 | Invented objects and actions never reach a source | `test/scientific_return/test_agent_security.py::test_the_model_cannot_investigate_an_object_it_invented`, `test/scientific_return/test_agent_security.py::test_an_invented_action_never_reaches_a_source`, `test/scientific_return/test_agent_security.py::test_an_action_outside_the_allowlist_never_reaches_a_source` |
+| AC-006 | External text cannot move a candidate or change evidence rules | `test/scientific_return/test_agent_security.py::test_injected_text_cannot_move_a_candidate`, `test/scientific_return/test_agent_security.py::test_injected_text_does_not_change_the_evidence_rules`, `test/scientific_return/test_agent_security.py::test_an_injection_claiming_an_inventory_number_proves_nothing` |
+| AC-007 | Query and candidate ceilings are respected | `test/scientific_return/test_agent_security.py::test_one_investigation_cannot_exceed_its_query_budget`, `test/scientific_return/test_run_investigation.py::test_the_candidate_ceiling_is_respected` |
+| AC-008 | Budget is reserved before tool execution | `test/scientific_return/test_investigation_aggregate.py::test_the_budget_is_charged_before_the_tool_runs`, `test/scientific_return/test_investigation_aggregate.py::test_an_authorized_search_must_reserve_queries` |
+| AC-009 | Command replay does not contact a source or create a second candidate | `test/scientific_return/test_run_investigation.py::test_the_same_client_key_never_contacts_a_source_twice`, `test/scientific_return/test_run_investigation.py::test_a_repeated_key_creates_no_second_candidate`, `test/scientific_return/test_run_investigation.py::test_a_command_without_a_key_is_not_deduplicated` |
+| AC-010 | Only exact-match-capable sources are routed | `test/scientific_return/test_run_investigation.py::test_a_source_that_cannot_match_exactly_is_refused`, `test/scientific_return/test_agent_policies.py::test_only_sources_that_honour_an_exact_phrase_are_routed_to` |
+| AC-011 | Planner and source failures close without deciding the queue | `test/scientific_return/test_run_investigation.py::test_an_unavailable_reasoner_leaves_the_queue_untouched`, `test/scientific_return/test_run_investigation.py::test_an_unavailable_source_is_audited_without_blocking_review`, `test/scientific_return/test_run_investigation.py::test_an_authorised_source_without_an_adapter_stops_as_unavailable` |
+| AC-012 | Reflection failure uses deterministic fallback | `test/scientific_return/test_run_investigation.py::test_an_unavailable_reflection_falls_back_to_the_delta` |
+| AC-013 | Disabled mode and unauthorized mutation are refused | `test/scientific_return/test_run_investigation.py::test_a_disabled_mode_refuses_to_start`, `test/scientific_return/test_run_investigation.py::test_a_caller_outside_the_review_groups_is_refused` |
+| AC-014 | Trajectory and telemetry persist step by step | `test/scientific_return/test_run_investigation.py::test_the_trajectory_is_persisted_step_by_step`, `test/scientific_return/test_run_investigation.py::test_the_full_trajectory_is_readable_afterwards`, `test/scientific_return/test_run_investigation.py::test_the_iteration_records_which_model_and_prompt_produced_it` |
+| AC-015 | Optimistic persistence rejects a stale writer | `test/scientific_return/test_investigation_repository.py::test_a_save_is_refused_after_another_writer_moved_the_row` |
+| AC-016 | Lock is released on success and failure | `test/scientific_return/test_run_investigation.py::test_the_lock_is_taken_for_the_target_and_always_released`, `test/scientific_return/test_run_investigation.py::test_the_lock_is_released_even_when_the_cycle_fails` |
+| AC-017 | Stale cycles close as abandoned while live cycles survive | `test/scientific_return/test_run_investigation.py::test_an_abandoned_cycle_is_closed_with_a_typed_reason`, `test/scientific_return/test_run_investigation.py::test_a_live_cycle_is_never_closed_by_the_sweep` |
+| AC-018 | Angular displays candidate-assisted history | `scientific-return-panel.component.spec.ts::opens each candidate history in its own dialog` |
 
 The suite does not establish institutional isolation, target-bound replay,
 candidate decision reload after an external call, real PostgreSQL lock-conflict
@@ -619,6 +622,16 @@ Required changes:
 3. Add adversarial tests whose exception messages contain query text, URLs,
    tokens, and publication content.
 
+### GAP-011 — Medium: initial run is not required to be completed or deterministic
+
+The precondition message asks for a completed deterministic run, but the use
+case calls `list_runs(watch_id, 0, 1)` without a kind or status filter. A failed,
+running, or full-agentic search run may therefore become `initialRunId`.
+
+Required change: decide which run kinds and outcomes qualify, enforce that
+selection explicitly, and add tests for each excluded kind/status. The current
+acceptance suite does not establish the stronger prerequisite.
+
 ## 11. Non-functional requirements
 
 - **Authorization:** JWT plus `X-Permission-Id`; manual mutations require one of
@@ -658,7 +671,7 @@ Required changes:
 | Dependency composition and settings mapping | `vitarerum-api/app/scientific_return/presentation/dependencies.py`, `vitarerum-api/app/config.py` |
 | Scheduled enrichment | `vitarerum-api/app/scientific_return/presentation/commands.py` |
 | Angular history and dormant start flow | `vitarerum-ui/src/app/features/collections/projects/components/candidate-investigations-modal/`, `investigation-timeline/`, and `scientific-return-panel/` |
-| Backend behavior tests | `vitarerum-api/test/scientific_return/test_run_investigation.py`, `test_agent_policies.py`, `test_agent_security.py`, `test_investigation_aggregate.py`, and `test_investigation_repository.py` |
+| Backend behavior tests | `vitarerum-api/test/scientific_return/test_run_investigation.py`, `test/scientific_return/test_agent_policies.py`, `test/scientific_return/test_agent_security.py`, `test/scientific_return/test_investigation_aggregate.py`, and `test/scientific_return/test_investigation_repository.py` |
 
 ## 13. Open questions
 

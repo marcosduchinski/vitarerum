@@ -266,34 +266,34 @@ The page currently has no form for creating a human-authored
 
 ## 7. Invariants and actual enforcement
 
-| Invariant | Enforcement |
-| --- | --- |
-| A human-authored item starts active and validated | Domain constructor and create use case |
-| A model proposal starts proposed and unvalidated | Proposal use case and domain constructor |
-| Only active knowledge is retrieved by the production agent path | Repository filter and application call |
-| A retired item cannot be activated | Domain transition |
-| Retirement never physically deletes a row | State transition and repository save |
-| Item mutations and history are scoped to the caller's institution | Application access checks |
-| An inventory example contains both number fields | Domain validation |
-| A replacement preserves its predecessor and retires it | Application transaction; not protected against concurrent branching |
-| Every item belongs to exactly one institution | Enforced for new application writes, but not by the nullable database column |
-| Proposal provenance identifies the prompt that actually ran | Not enforced; the stored label is hard-coded |
+| ID | Invariant | Enforcement |
+| --- | --- | --- |
+| INV-001 | A human-authored item starts active and validated | Domain constructor and create use case |
+| INV-002 | A model proposal starts proposed and unvalidated | Proposal use case and domain constructor |
+| INV-003 | Only active knowledge is retrieved by the production agent path | Repository filter and application call |
+| INV-004 | A retired item cannot be activated | Domain transition |
+| INV-005 | Retirement never physically deletes a row | State transition and repository save |
+| INV-006 | Item mutations and history are scoped to the caller's institution | Application access checks |
+| INV-007 | An inventory example contains both number fields | Domain validation |
+| INV-008 | A replacement preserves its predecessor and retires it | Application transaction; not protected against concurrent branching |
+| INV-009 | Every item belongs to exactly one institution | Enforced for new application writes, but not by the nullable database column |
+| INV-010 | Proposal provenance identifies the prompt that actually ran | Not enforced; the stored label is hard-coded |
 
 ## 8. Acceptance criteria and verification
 
-| Criterion | Evidence |
-| --- | --- |
-| Human creation produces an active, human-validated inventory example | `test_full_agentic_knowledge.py::test_curator_creates_active_textual_inventory_example` |
-| Replacement retires the predecessor and links the successor | `::test_replacement_retires_previous_and_preserves_supersession` |
-| Retired and discarded proposed items are not retrieved | `::test_retired_memory_is_not_retrieved`, `::test_discarded_proposal_stays_unvalidated_and_unretrieved` |
-| Calling activate on an already active item preserves original validation | `::test_reactivating_active_knowledge_keeps_the_original_validation` |
-| The global memory limit and structural ranking are applied | `::test_memory_limit_is_global_across_multiple_objects`, `::test_structurally_similar_memory_precedes_unrelated_recent_item` |
-| Search covers lesson words and exact normalized citations | `::test_search_finds_an_agent_lesson_by_its_own_words`, `::test_search_still_matches_an_inventory_citation`, `::test_search_matches_lesson_content_ignoring_case_and_accents`, `::test_search_ignores_a_citation_fragment_that_matches_nothing` |
-| Listing, retrieval, and item mutations use institutional scope | `::test_knowledge_page_is_scoped_to_the_callers_institution`, `::test_retrieval_uses_only_active_knowledge_from_the_institution`, `::test_mutation_hides_another_institutions_knowledge` |
-| Listing requires an active institution | `::test_institutional_listing_requires_an_active_institution` |
-| Linear replacement history is returned in full | `::test_history_returns_the_complete_supersession_chain` |
-| The public API exposes operational knowledge endpoints | `test_api_contract.py::test_openapi_excludes_bench_and_keeps_operational_scientific_return` |
-| Angular renders catalogue actions, inventory editor, proposal discard, filtering, and search | `scientific-return-knowledge-base-page.component.spec.ts` |
+| ID | Criterion | Evidence |
+| --- | --- | --- |
+| AC-001 | Human creation produces an active, human-validated inventory example | `test/scientific_return/test_full_agentic_knowledge.py::test_curator_creates_active_textual_inventory_example` |
+| AC-002 | Replacement retires the predecessor and links the successor | `test/scientific_return/test_full_agentic_knowledge.py::test_replacement_retires_previous_and_preserves_supersession` |
+| AC-003 | Retired and discarded proposed items are not retrieved | `test/scientific_return/test_full_agentic_knowledge.py::test_retired_memory_is_not_retrieved`, `test/scientific_return/test_full_agentic_knowledge.py::test_discarded_proposal_stays_unvalidated_and_unretrieved` |
+| AC-004 | Calling activate on an already active item preserves original validation | `test/scientific_return/test_full_agentic_knowledge.py::test_reactivating_active_knowledge_keeps_the_original_validation` |
+| AC-005 | The global memory limit and structural ranking are applied | `test/scientific_return/test_full_agentic_knowledge.py::test_memory_limit_is_global_across_multiple_objects`, `test/scientific_return/test_full_agentic_knowledge.py::test_structurally_similar_memory_precedes_unrelated_recent_item` |
+| AC-006 | Search covers lesson words and exact normalized citations | `test/scientific_return/test_full_agentic_knowledge.py::test_search_finds_an_agent_lesson_by_its_own_words`, `test/scientific_return/test_full_agentic_knowledge.py::test_search_still_matches_an_inventory_citation`, `test/scientific_return/test_full_agentic_knowledge.py::test_search_matches_lesson_content_ignoring_case_and_accents`, `test/scientific_return/test_full_agentic_knowledge.py::test_search_ignores_a_citation_fragment_that_matches_nothing` |
+| AC-007 | Listing, retrieval, and item mutations use institutional scope | `test/scientific_return/test_full_agentic_knowledge.py::test_knowledge_page_is_scoped_to_the_callers_institution`, `test/scientific_return/test_full_agentic_knowledge.py::test_retrieval_uses_only_active_knowledge_from_the_institution`, `test/scientific_return/test_full_agentic_knowledge.py::test_mutation_hides_another_institutions_knowledge` |
+| AC-008 | Listing requires an active institution | `test/scientific_return/test_full_agentic_knowledge.py::test_institutional_listing_requires_an_active_institution` |
+| AC-009 | Linear replacement history is returned in full | `test/scientific_return/test_full_agentic_knowledge.py::test_history_returns_the_complete_supersession_chain` |
+| AC-010 | The public API exposes operational knowledge endpoints | `test/scientific_return/test_api_contract.py::test_openapi_excludes_bench_and_keeps_operational_scientific_return` |
+| AC-011 | Angular renders catalogue actions, inventory editor, proposal discard, filtering, and search | `scientific-return-knowledge-base-page.component.spec.ts` |
 
 The current suite does not establish cross-tenant isolation for proposal
 creation, retired-item activation rejection at the HTTP boundary, concurrent

@@ -156,6 +156,11 @@ The institution, candidate, and object checks occur after feature, source, and
 circuit checks. The object branch is used by scheduled starts; the public route
 does not currently pass an object.
 
+Admission does not require the watch to be `ACTIVE` or due, and the worker does
+not recheck watch status before searching. Pausing or closing a watch therefore
+does not cancel queued autonomous work or prevent a direct manual start. This
+differs from deterministic/assisted starts; see GAP-010.
+
 ### FR-003 — Durable idempotency and dispatch
 
 An idempotency key is globally unique in persistence and bound to one complete
@@ -300,12 +305,17 @@ and counted. Inventory evidence is:
 | Status | Meaning |
 | --- | --- |
 | `VERIFIED` | At least one claimed form occurs in a delivered field |
-| `NOT_OBSERVED` | Inspectable full text was delivered and contains no claimed form |
+| `NOT_OBSERVED` | Inspectable full text was delivered, but no reader-submitted inventory form survived grounding |
 | `UNAVAILABLE` | The delivered material cannot establish absence |
 
 Grounding filters factual claims but does not silently rewrite the reader's
 relevance verdict. The curator sees provenance and rejection counts when making
 the separate human decision.
+
+Literal occurrence does not establish that a claimed form denotes the watched
+object; the grounding function does not compare it with the registered number.
+Nor is `NOT_OBSERVED` an exhaustive absence finding: the reader may submit no
+forms even when the text contains an inventory number.
 
 ### FR-014 — Candidate identity and provenance
 
@@ -315,9 +325,11 @@ investigation links a candidate as `CREATED` or `REDISCOVERED`, preserving
 source, query, search intent, search strategy, grounded passages, grounded
 inventory forms, prompt identity, and knowledge identifiers.
 
-The later decision snapshot preserves what the reviewer saw. Only the separate
-human decision use case may confirm, correct-and-confirm, or dismiss a
-candidate.
+The later decision snapshot preserves the latest eligible reader context
+selected by the server when deciding. It does not prove which analysis the
+reviewer actually saw; the review-receipt gap is documented in SPEC-004,
+GAP-005. Only the separate human decision use case may confirm,
+correct-and-confirm, or dismiss a candidate.
 
 ### FR-015 — Internal worker entry point
 
@@ -391,44 +403,52 @@ operational values in the current repository.
 
 ## 9. Declared implementation gaps
 
-1. **Critical — tenant authorization is missing from operational reads and
+1. **GAP-001** — **Critical — tenant authorization is missing from operational reads and
    cancellation.** Individual read, list, trajectory, and cancel operations
    require staff or an allowed group but do not compare the caller's institution
    with `FullAgenticInvestigation.institution_id` or the watch. A staff member
    who knows another tenant's identifiers can read its state/trajectory or, in
    an allowed group, cancel its work.
-2. **Critical — idempotency lookup precedes watch and tenant validation.** A
+2. **GAP-002** — **Critical — idempotency lookup precedes watch and tenant validation.** A
    mutation-group caller presenting the exact key and target of another tenant
    receives that existing investigation before institutional ownership is
    checked. The globally unique key also makes collisions cross-tenant.
-3. **High — manual and scheduled target models differ.** The public request has
+3. **GAP-003** — **High — manual and scheduled target models differ.** The public request has
    no `objectId`, so the Angular button starts a legacy whole-project
    investigation while scheduled sweeps create one investigation per object.
    Null and object-scoped targets may run concurrently and spend overlapping
    budgets.
-4. **High — the Angular coverage indicator ignores project-scoped rows.** It
+4. **GAP-004** — **High — the Angular coverage indicator ignores project-scoped rows.** It
    counts only distinct non-null `objectId` values, so a manual investigation
    that searched the full snapshot can still be displayed as zero objects
    reached.
-5. **Medium — advertised request fields exceed implemented capability.** The
+5. **GAP-005** — **Medium — advertised request fields exceed implemented capability.** The
    API schema exposes `candidateId` and `ENRICH_CANDIDATE`, but the start use
    case rejects both. Either remove these inputs until implemented or document
    them as reserved compatibility fields in generated API guidance.
-6. **Medium — the worker route is hidden, not intrinsically private.** The
+6. **GAP-006** — **Medium — the worker route is hidden, not intrinsically private.** The
    application verifies only `X-Worker-Token`; OIDC/IAM and network restriction
    depend on deployment configuration outside FastAPI. OpenAPI exclusion alone
    is not an access-control boundary.
-7. **Medium — route-level contract tests are incomplete.** Most lifecycle,
+7. **GAP-007** — **Medium — route-level contract tests are incomplete.** Most lifecycle,
    lease, idempotency, and isolation assertions exercise use cases or in-memory
    repositories. There are no focused API tests for start-group authorization,
    worker-token rejection, read/cancel tenant isolation, unknown list/trajectory
    semantics, or terminal cancellation.
-8. **Medium — circuit and operational metrics are global.** One institution's
+8. **GAP-008** — **Medium — circuit and operational metrics are global.** One institution's
    reviewer outcomes can open the circuit for every institution, and the staff
    metrics response is not tenant-scoped.
-9. **Low — completion is manually refreshed.** The Angular panel has no polling,
+9. **GAP-009** — **Low — completion is manually refreshed.** The Angular panel has no polling,
    server-sent event, or push update, so status and candidate results remain
    stale until the user presses Refresh or revisits the page.
+10. **GAP-010** — **High — watch status does not gate autonomous work.** Start
+    checks watch existence and conditional institutional equality, but not
+    `ACTIVE` status. Execution loads the snapshot without rechecking watch
+    state. A direct start may run against a paused/closed watch, and closing a
+    watch does not stop previously queued work. Define whether watch suspension
+    stops only scheduled discovery or all autonomous work, enforce the chosen
+    rule at admission/resume, and test pause/close races. Current acceptance
+    evidence does not establish this policy.
 
 ## 10. Acceptance criteria
 
@@ -529,11 +549,17 @@ recoveries and over-age live work eventually terminate.
 
 → `test/scientific_return/test_full_agentic_flow.py::test_plan_events_record_the_prompt_version_that_ran`
 
-→ `test/scientific_return/test_investigation_repository.py::test_the_whole_trajectory_survives_the_database`
+→ `test/scientific_return/test_full_agentic_repository_postgres.py::test_tool_result_round_trips_encrypted_replay_text_and_unique_key`
 
 → `test/scientific_return/test_provenance_contract.py::test_the_queue_exposes_the_provenance_of_every_candidate`
 
 → `test/scientific_return/test_provenance_contract.py::test_the_decision_snapshot_keeps_what_the_curator_was_shown`
+
+The PostgreSQL test establishes encrypted tool replay, while the provenance
+tests establish response fields using repository doubles. They do not prove a
+complete autonomous-trajectory database round trip or what a human viewed.
+`test/scientific_return/test_investigation_repository.py::test_the_whole_trajectory_survives_the_database`
+belongs to the separate assisted flow and is not autonomous persistence evidence.
 
 ### AC-014 — Publication components do not fill the candidate queue
 

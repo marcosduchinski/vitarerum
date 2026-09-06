@@ -211,6 +211,11 @@ A literal form in title or abstract is sufficient for `VERIFIED`. A source that
 can sometimes provide full text but did not return it is `UNAVAILABLE`, not
 `NOT_OBSERVED`.
 
+These statuses describe the reader's submitted forms, not an exhaustive search
+of every possible inventory spelling. `VERIFIED` proves literal occurrence of
+a claimed form, not its equivalence to the watched object's registered number.
+`NOT_OBSERVED` does not prove that the publication contains no such number.
+
 Grounding does not change the model's `relevant` verdict. A record may therefore
 be presented as relevant with no grounded passage or inventory form; see
 GAP-003.
@@ -371,23 +376,26 @@ endpoint.
 | INV-008 | Malformed reader output cannot create a reader analysis | Strict JSON parser and orchestration |
 
 The implementation does not guarantee a durable failed-analysis row, complete
-model-call replay, cryptographic payload integrity, institution isolation, or
+model-call replay, complete-payload hash verification, institution isolation, or
 concurrency-safe one-time feedback.
+
+Authenticated encryption does protect the encrypted input/result fields;
+GAP-004 concerns the separate audit hashes and their incomplete coverage.
 
 ## 10. Acceptance evidence
 
 | ID | Behaviour | Automated evidence |
 | --- | --- | --- |
-| AC-001 | A relevant full-agentic assessment produces a pending candidate and reader provenance | `test_full_agentic_flow.py::test_agent_presents_without_deterministic_gate` |
-| AC-002 | Malformed reader output does not abort later articles | `test_full_agentic_flow.py::test_malformed_reader_result_does_not_abort_later_articles` |
-| AC-003 | The reader returns the published prompt identity | `test_full_agentic_reasoner.py::test_reader_returns_the_published_prompt_identity` |
-| AC-004 | Literal claims are grounded and invented claims rejected | `test_full_agentic_grounding.py` |
-| AC-005 | Hostile publication text cannot decide a candidate | `test_agent_security.py::test_injected_text_cannot_move_a_candidate` |
-| AC-006 | Completed reader feedback is accepted once and a second attempt rejected | `test_scientific_return.py::test_curator_can_record_feedback_once_on_completed_analysis` |
-| AC-007 | Non-reader records are hidden from history and feedback | `test_scientific_return.py::test_analysis_history_and_feedback_exclude_non_reader_records` |
-| AC-008 | The real published reader prompt ID fits and the input payload is encrypted | `test_full_agentic_repository_postgres.py::test_agent_analysis_accepts_the_real_published_prompt_id` |
-| AC-009 | OpenAPI excludes shadow generation and retains reader provenance | `test_api_contract.py::test_openapi_removes_shadow_generation_but_keeps_reader_provenance` |
-| AC-010 | Shadow downgrade restores schema but not deleted rows | `test_shadow_removal_migration.py::test_downgrade_restores_prompt_structure_but_not_deleted_analysis_data` |
+| AC-001 | A relevant full-agentic assessment produces a pending candidate and reader provenance | `test/scientific_return/test_full_agentic_flow.py::test_agent_presents_without_deterministic_gate` |
+| AC-002 | Malformed reader output does not abort later articles | `test/scientific_return/test_full_agentic_flow.py::test_malformed_reader_result_does_not_abort_later_articles` |
+| AC-003 | The reader returns the published prompt identity | `test/scientific_return/test_full_agentic_reasoner.py::test_reader_returns_the_published_prompt_identity` |
+| AC-004 | Literal claims are grounded and invented claims rejected | `test/scientific_return/test_full_agentic_grounding.py` |
+| AC-005 | Hostile publication text cannot decide a candidate | `test/scientific_return/test_agent_security.py::test_injected_text_cannot_move_a_candidate` |
+| AC-006 | Completed reader feedback is accepted once and a second attempt rejected | `test/scientific_return/test_scientific_return.py::test_curator_can_record_feedback_once_on_completed_analysis` |
+| AC-007 | Non-reader records are hidden from history and feedback | `test/scientific_return/test_scientific_return.py::test_analysis_history_and_feedback_exclude_non_reader_records` |
+| AC-008 | The real published reader prompt ID fits and the input payload is encrypted | `test/scientific_return/test_full_agentic_repository_postgres.py::test_agent_analysis_accepts_the_real_published_prompt_id` |
+| AC-009 | OpenAPI excludes shadow generation and retains reader provenance | `test/scientific_return/test_api_contract.py::test_openapi_removes_shadow_generation_but_keeps_reader_provenance` |
+| AC-010 | Shadow downgrade restores schema but not deleted rows | `test/scientific_return/test_shadow_removal_migration.py::test_downgrade_restores_prompt_structure_but_not_deleted_analysis_data` |
 | AC-011 | Angular exposes reader analysis separately from investigation history | `scientific-return-panel.component.spec.ts::opens each candidate history in its own dialog` |
 | AC-012 | Angular shows where agent-created evidence is retained | `scientific-return-panel.component.spec.ts::says where the evidence of an agent-found candidate is held` |
 | AC-013 | Angular service keeps history and feedback endpoints separate | `scientific-return-api.service.spec.ts::keeps the reader analysis and staff feedback on separate endpoints` |

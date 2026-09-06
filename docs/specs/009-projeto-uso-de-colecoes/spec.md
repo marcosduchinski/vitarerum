@@ -578,8 +578,8 @@ object, and direct cancellation rejects terminal states. Each successful command
 records its event and result where applicable.
 
 → `test/use_of_collections/test_domain_models.py::test_submitted_project_records_requested_event`,
-`::test_cancel_project_blocks_completed_project`,
-`::test_cancel_project_blocks_already_cancelled_project`
+`test/use_of_collections/test_domain_models.py::test_cancel_project_blocks_completed_project`,
+`test/use_of_collections/test_domain_models.py::test_cancel_project_blocks_already_cancelled_project`
 
 → `test/use_of_collections/test_api.py::test_complete_project_without_objects_returns_409`
 
@@ -589,8 +589,8 @@ Starting, completing, and cancelling a project commit before e-mailing the
 external requester.
 
 → `test/use_of_collections/test_api.py::test_start_project_notifies_external_requester`,
-`::test_complete_project_notifies_external_requester`,
-`::test_cancel_project_notifies_external_requester`
+`test/use_of_collections/test_api.py::test_complete_project_notifies_external_requester`,
+`test/use_of_collections/test_api.py::test_cancel_project_notifies_external_requester`
 
 ### AC-003 — Project editing is staff-only and non-lifecycle
 
@@ -599,13 +599,13 @@ terminal projects, blank required values, and invalid date ranges are rejected;
 editing creates no lifecycle event.
 
 → `test/use_of_collections/test_api.py::test_staff_can_patch_project_details`,
-`::test_patch_project_requires_staff`,
-`::test_patch_project_invalid_date_range_returns_422`,
-`::test_patch_project_terminal_status_returns_409`
+`test/use_of_collections/test_api.py::test_patch_project_requires_staff`,
+`test/use_of_collections/test_api.py::test_patch_project_invalid_date_range_returns_422`,
+`test/use_of_collections/test_api.py::test_patch_project_terminal_status_returns_409`
 
 → `test/use_of_collections/test_domain_models.py::test_edit_project_updates_metadata_without_lifecycle_event`,
-`::test_edit_project_blocks_terminal_status`,
-`::test_edit_project_rejects_invalid_effective_date_range`
+`test/use_of_collections/test_domain_models.py::test_edit_project_blocks_terminal_status`,
+`test/use_of_collections/test_domain_models.py::test_edit_project_rejects_invalid_effective_date_range`
 
 ### AC-004 — Object addition synchronizes the access journal
 
@@ -614,11 +614,11 @@ created, an existing log receives automatic entries, and a concluded log blocks
 the operation.
 
 → `test/use_of_collections/test_api.py::test_staff_can_add_project_objects`,
-`::test_add_project_objects_requires_staff`,
-`::test_add_project_objects_terminal_status_returns_409`,
-`::test_add_project_objects_syncs_new_objects_to_existing_access_log`,
-`::test_add_project_objects_creates_access_log_when_missing`,
-`::test_add_project_objects_blocks_when_access_log_concluded`
+`test/use_of_collections/test_api.py::test_add_project_objects_requires_staff`,
+`test/use_of_collections/test_api.py::test_add_project_objects_terminal_status_returns_409`,
+`test/use_of_collections/test_api.py::test_add_project_objects_syncs_new_objects_to_existing_access_log`,
+`test/use_of_collections/test_api.py::test_add_project_objects_creates_access_log_when_missing`,
+`test/use_of_collections/test_api.py::test_add_project_objects_blocks_when_access_log_concluded`
 
 ### AC-005 — Object removal protects dependent records
 
@@ -627,10 +627,10 @@ dependent work yields a counted conflict; confirmed cascade removes related
 entries and files.
 
 → `test/use_of_collections/test_api.py::test_staff_can_remove_unused_project_object`,
-`::test_remove_project_object_removes_automatic_log_entry`,
-`::test_remove_project_object_blocks_with_dependencies`,
-`::test_remove_project_object_cascade_requires_confirmation`,
-`::test_remove_project_object_cascade_removes_dependencies`
+`test/use_of_collections/test_api.py::test_remove_project_object_removes_automatic_log_entry`,
+`test/use_of_collections/test_api.py::test_remove_project_object_blocks_with_dependencies`,
+`test/use_of_collections/test_api.py::test_remove_project_object_cascade_requires_confirmation`,
+`test/use_of_collections/test_api.py::test_remove_project_object_cascade_removes_dependencies`
 
 ### AC-006 — Access journal preserves project ownership and edit semantics
 
@@ -639,11 +639,11 @@ partial edits and explicit observation clearing, reject foreign or concluded-log
 mutations, and expose absence without manufacturing a log.
 
 → `test/use_of_collections/test_api.py::test_add_log_entry_returns_201_with_access_log_created`,
-`::test_log_entry_records_several_accesses_to_the_same_object`,
-`::test_edit_log_entry_is_partial_and_clears_observations`,
-`::test_delete_log_entry_returns_404_for_another_project`,
-`::test_delete_log_entry_on_concluded_access_log_is_blocked`,
-`::test_get_object_access_log_returns_404_without_entries`
+`test/use_of_collections/test_api.py::test_log_entry_records_several_accesses_to_the_same_object`,
+`test/use_of_collections/test_api.py::test_edit_log_entry_is_partial_and_clears_observations`,
+`test/use_of_collections/test_api.py::test_delete_log_entry_returns_404_for_another_project`,
+`test/use_of_collections/test_api.py::test_delete_log_entry_on_concluded_access_log_is_blocked`,
+`test/use_of_collections/test_api.py::test_get_object_access_log_returns_404_without_entries`
 
 ### AC-007 — Occurrence journal validates required incident data
 
@@ -652,9 +652,9 @@ and description; partial edits can clear testimony; a missing journal returns
 `404` through its metadata endpoint.
 
 → `test/use_of_collections/test_api.py::test_add_occurrence_entry_returns_201_with_occurrence_log_created`,
-`::test_edit_occurrence_entry_updates_editable_fields`,
-`::test_edit_occurrence_entry_is_partial_and_clears_testimonial`,
-`::test_get_object_occurrence_log_returns_404_without_entries`
+`test/use_of_collections/test_api.py::test_edit_occurrence_entry_updates_editable_fields`,
+`test/use_of_collections/test_api.py::test_edit_occurrence_entry_is_partial_and_clears_testimonial`,
+`test/use_of_collections/test_api.py::test_get_object_occurrence_log_returns_404_without_entries`
 
 ### AC-008 — Attachments are described, bounded, and entry-scoped
 
@@ -664,11 +664,11 @@ the owning entry and project. This criterion does not establish institution
 isolation.
 
 → `test/use_of_collections/test_api.py::test_log_entry_attachment_invalid_media_type_returns_422`,
-`::test_log_entry_attachment_requires_description`,
-`::test_log_entry_attachment_uses_configured_encrypted_storage`,
-`::test_download_log_entry_attachment_unknown_reference_returns_404`,
-`::test_delete_log_entry_attachment_removes_file`,
-`::test_occurrence_entry_attachment_requires_description`
+`test/use_of_collections/test_api.py::test_log_entry_attachment_requires_description`,
+`test/use_of_collections/test_api.py::test_log_entry_attachment_uses_configured_encrypted_storage`,
+`test/use_of_collections/test_api.py::test_download_log_entry_attachment_unknown_reference_returns_404`,
+`test/use_of_collections/test_api.py::test_delete_log_entry_attachment_removes_file`,
+`test/use_of_collections/test_api.py::test_occurrence_entry_attachment_requires_description`
 
 ### AC-009 — Publication writes obey phase and role
 
@@ -677,23 +677,23 @@ Management, or Direction staff write after `COMPLETED`; other combinations are
 rejected; a referenced object must belong to the project.
 
 → `test/use_of_collections/test_api.py::test_add_publication_entry_in_progress_external_creates_log`,
-`::test_add_publication_entry_staff_while_in_progress_rejected`,
-`::test_add_publication_entry_staff_once_completed_ok`,
-`::test_add_publication_entry_external_once_completed_rejected`,
-`::test_add_publication_entry_in_created_status_rejected`,
-`::test_add_publication_entry_rejects_foreign_collection_use_object_id`
+`test/use_of_collections/test_api.py::test_add_publication_entry_staff_while_in_progress_rejected`,
+`test/use_of_collections/test_api.py::test_add_publication_entry_staff_once_completed_ok`,
+`test/use_of_collections/test_api.py::test_add_publication_entry_external_once_completed_rejected`,
+`test/use_of_collections/test_api.py::test_add_publication_entry_in_created_status_rejected`,
+`test/use_of_collections/test_api.py::test_add_publication_entry_rejects_foreign_collection_use_object_id`
 
-### AC-010 — Publication evidence cannot be erased
+### AC-010 — Confirmed publication entries reject direct deletion
 
 Publication entries support edit, deletion, attachments, pagination, and RRP
-rendering, but an entry used by a confirmed scientific-return decision is
-protected.
+rendering, but direct deletion of an entry used by a confirmed scientific-return
+decision is blocked. This does not make its note or attachments immutable.
 
 → `test/use_of_collections/test_api.py::test_edit_publication_entry_updates_note`,
-`::test_delete_publication_entry_removes_entry_and_attachments`,
-`::test_delete_confirmed_scientific_return_entry_is_blocked`,
-`::test_publication_entry_attachment_upload_and_download`,
-`::test_download_publication_log_document_fills_the_complete_rrp`
+`test/use_of_collections/test_api.py::test_delete_publication_entry_removes_entry_and_attachments`,
+`test/use_of_collections/test_api.py::test_delete_confirmed_scientific_return_entry_is_blocked`,
+`test/use_of_collections/test_api.py::test_publication_entry_attachment_upload_and_download`,
+`test/use_of_collections/test_api.py::test_download_publication_log_document_fills_the_complete_rrp`
 
 ### AC-011 — Follow-ups are independent projects
 
@@ -702,12 +702,12 @@ range and non-empty unique object subset. The project copies snapshots but not
 journals, and remains accessible to the original requester.
 
 → `test/use_of_collections/test_api.py::test_staff_can_create_follow_up_project`,
-`::test_follow_up_project_requires_staff`,
-`::test_follow_up_project_rejects_non_completed_origin`,
-`::test_follow_up_project_rejects_empty_object_ids`,
-`::test_follow_up_project_rejects_invalid_date_range`,
-`::test_follow_up_project_does_not_copy_journal_logs`,
-`::test_follow_up_project_owner_can_access_created_follow_up_project`
+`test/use_of_collections/test_api.py::test_follow_up_project_requires_staff`,
+`test/use_of_collections/test_api.py::test_follow_up_project_rejects_non_completed_origin`,
+`test/use_of_collections/test_api.py::test_follow_up_project_rejects_empty_object_ids`,
+`test/use_of_collections/test_api.py::test_follow_up_project_rejects_invalid_date_range`,
+`test/use_of_collections/test_api.py::test_follow_up_project_does_not_copy_journal_logs`,
+`test/use_of_collections/test_api.py::test_follow_up_project_owner_can_access_created_follow_up_project`
 
 ### AC-012 — TODO items are permission-private
 
@@ -716,10 +716,10 @@ toggle, or delete an item; external users are rejected; the dashboard returns
 only the current profile's items. Staff project access itself remains global.
 
 → `test/use_of_collections/test_project_todos.py::test_todo_items_are_isolated_by_staff_permission`,
-`::test_todo_update_toggle_and_delete_require_item_owner`,
-`::test_external_callers_cannot_use_project_todos`,
-`::test_dashboard_postits_list_only_current_staff_profile_items`,
-`::test_todo_text_is_trimmed_and_limited`
+`test/use_of_collections/test_project_todos.py::test_todo_update_toggle_and_delete_require_item_owner`,
+`test/use_of_collections/test_project_todos.py::test_external_callers_cannot_use_project_todos`,
+`test/use_of_collections/test_project_todos.py::test_dashboard_postits_list_only_current_staff_profile_items`,
+`test/use_of_collections/test_project_todos.py::test_todo_text_is_trimmed_and_limited`
 
 ### AC-013 — Official documents use persisted journals and ownership
 
@@ -727,11 +727,11 @@ RAIS, ROC, and RRP documents are filled from their corresponding logs; missing
 logs return `404`; another requester cannot download the document.
 
 → `test/use_of_collections/test_api.py::test_download_object_access_log_document_fills_the_rais_form`,
-`::test_download_object_access_log_document_is_denied_to_other_researchers`,
-`::test_download_object_access_log_document_returns_404_without_log`,
-`::test_download_object_occurrence_document_fills_the_roc_form`,
-`::test_download_object_occurrence_document_returns_404_without_log`,
-`::test_download_publication_log_document_fills_the_complete_rrp`
+`test/use_of_collections/test_api.py::test_download_object_access_log_document_is_denied_to_other_researchers`,
+`test/use_of_collections/test_api.py::test_download_object_access_log_document_returns_404_without_log`,
+`test/use_of_collections/test_api.py::test_download_object_occurrence_document_fills_the_roc_form`,
+`test/use_of_collections/test_api.py::test_download_object_occurrence_document_returns_404_without_log`,
+`test/use_of_collections/test_api.py::test_download_publication_log_document_fills_the_complete_rrp`
 
 ### AC-014 — Response contracts remain stable
 
@@ -739,12 +739,12 @@ Representative project detail, list, events, journal, error, and access-denied
 shapes remain frozen by golden tests.
 
 → `test/use_of_collections/test_golden_contracts.py::test_golden_project_detail_and_list_shapes`,
-`::test_golden_project_events_envelope_shape`,
-`::test_golden_log_entries_shapes`,
-`::test_golden_occurrence_entries_shapes`,
-`::test_golden_publication_entries_shapes`,
-`::test_golden_error_bodies`,
-`::test_golden_access_denied_body`
+`test/use_of_collections/test_golden_contracts.py::test_golden_project_events_envelope_shape`,
+`test/use_of_collections/test_golden_contracts.py::test_golden_log_entries_shapes`,
+`test/use_of_collections/test_golden_contracts.py::test_golden_occurrence_entries_shapes`,
+`test/use_of_collections/test_golden_contracts.py::test_golden_publication_entries_shapes`,
+`test/use_of_collections/test_golden_contracts.py::test_golden_error_bodies`,
+`test/use_of_collections/test_golden_contracts.py::test_golden_access_denied_body`
 
 ### AC-015 — Visit export requires operational evidence
 
@@ -752,11 +752,11 @@ Only an in-situ project completed with a corresponding event can become a
 CIDOC-CRM visit record.
 
 → `test/use_of_collections/test_domain_models.py::test_visit_execution_evidence_rejects_created_project`,
-`::test_visit_execution_evidence_rejects_in_progress_project`,
-`::test_visit_execution_evidence_accepts_completed_project_with_event`
+`test/use_of_collections/test_domain_models.py::test_visit_execution_evidence_rejects_in_progress_project`,
+`test/use_of_collections/test_domain_models.py::test_visit_execution_evidence_accepts_completed_project_with_event`
 
 → `test/cidoc_crm/test_export_in_situ_visit_use_case.py::test_export_rejects_non_in_situ_visit_use_type`,
-`::test_export_rejects_in_situ_visit_without_execution_evidence`
+`test/cidoc_crm/test_export_in_situ_visit_use_case.py::test_export_rejects_in_situ_visit_without_execution_evidence`
 
 ### AC-016 — Angular projects the role- and phase-specific workflow
 

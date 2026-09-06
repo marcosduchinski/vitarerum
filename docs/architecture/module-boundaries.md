@@ -60,6 +60,16 @@ notifications through `notifications.public`; the read API hydrates actor labels
 through `identity.public` and deliberately stores only small resource snapshots,
 not source-context aggregates.
 
+### `reference_numbers`
+
+Owns configurable reference-number masks, policy activation, per-policy
+sequences, legacy validation patterns, and the allocation service other contexts
+use. Proposal, public-submission, project, and journal workflows request a
+number through `reference_numbers.public` instead of building one from a mask.
+The generator shares the consumer's database session, so reserving a sequence
+and persisting the resource commit or roll back together. Policy administration
+is restricted to `SYS_ADMIN`.
+
 ### `scientific_return`
 
 Owns monitoring of scientific outputs after a collection-use project is
@@ -98,6 +108,16 @@ Owns versioned prompt templates for AI-assisted contexts. Consumers depend on
 the published prompt interface, not on prompt persistence or draft-management
 internals.
 
+### `external_publications`
+
+Owns revocable grants that expose a selected resource outside the authenticated
+application: opaque token generation and resolution, content-profile projection
+(`SUMMARY`, `DETAIL`, `JSON_LD`), access-attempt records, and the
+system-administration registry. It owns no proposal, project, report, narrative,
+or CIDOC record. Every resolution re-reads the current resource through the
+owning context's published language, so a grant exposes live data rather than a
+frozen export.
+
 ### `shared`
 
 Contains shared exceptions, authorization/dependency helpers, upload helpers,
@@ -111,3 +131,13 @@ context.
 the expected layer directories and has no import-linter contracts. It should not
 be treated as an active bounded context until it has real behavior and the
 corresponding architecture contracts.
+
+`app/ai/museum_question_triage` is the remnant of a removed feature. It holds
+only the ORM metadata of two tables that still exist in the schema
+(`museum_question_triages`, `museum_question_triage_classifications`), imported
+by `app/orm_registry.py` so that `alembic revision --autogenerate` does not
+propose dropping them. It has no domain, application, presentation, or
+import-linter contract, and no specification owns the retained data. It is not a
+bounded context: either drop the tables with a deliberate data-retention
+migration or record the retention decision and its owning specification
+([SPEC-023](../specs/023-fronteiras-e-envelope-de-erro/spec.md), gap 9).

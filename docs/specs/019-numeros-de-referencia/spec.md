@@ -75,8 +75,11 @@ Consequently:
 
 - `VRP-YYYYMMDD-XXXX` recognises three date tokens;
 - `COMM-XXXX` keeps `COMM` literal rather than reading its `MM` as a month; and
-- `PREFIXYYYY-XXXX` keeps the complete `PREFIXYYYY` run literal because fixed
+- `REFYYYY-XXXX` keeps the complete `REFYYYY` run literal because fixed
   letters and a date token are not separated.
+
+An uppercase `X` cannot appear in the literal prefix: `PREFIXYYYY-XXXX` is
+invalid because it contains two sequence runs, before date parsing even starts.
 
 ### 4.3 Sequence scope
 
@@ -322,14 +325,14 @@ database-enforced invariant under concurrent transactions.
 
 | Behaviour | Representative automated evidence |
 | --- | --- |
-| Rendering and scope derivation | `test_domain.py::test_mask_renders_and_derives_year_scope` |
-| Final sequence and width | `test_domain.py::test_mask_rejects_sequence_that_is_not_final_token`, `test_domain.py::test_mask_sequence_width_is_hard_ceiling` |
-| Conservative token parsing | `test_domain.py::test_literal_text_containing_a_date_token_substring_is_not_misparsed`, `test_domain.py::test_concatenated_date_tokens_still_parse_correctly` |
-| Legacy format distinction and shared wrapper | `test_domain.py::test_numeric_mask_does_not_validate_legacy_hex_without_legacy_format`, `test_domain.py::test_reference_number_wrapper_allows_policy_valid_long_values` |
-| Lifecycle checks | `test_domain.py::test_inactive_policy_can_be_reactivated_but_active_cannot_be_activated_again`, `test_domain.py::test_cannot_activate_a_retired_policy`, `test_domain.py::test_cannot_deactivate_a_draft_policy` |
-| Ignore never-active drafts | `test_application.py::test_validate_reference_number_ignores_never_activated_draft_policy` |
-| Event foreign-key ordering | `test_application.py::test_add_policy_does_not_violate_the_event_foreign_key`, `test_application.py::test_activate_and_deactivate_do_not_violate_the_event_foreign_key` |
-| Admin authorisation and HTTP preview/create | `test_api.py::test_sys_admin_can_preview_and_create_reference_policy`, `test_api.py::test_staff_cannot_read_or_mutate_reference_policies`, `test_application.py::test_preview_reference_policy_requires_sys_admin` |
+| Rendering and scope derivation | `test/reference_numbers/test_domain.py::test_mask_renders_and_derives_year_scope` |
+| Final sequence and width | `test/reference_numbers/test_domain.py::test_mask_rejects_sequence_that_is_not_final_token`, `test/reference_numbers/test_domain.py::test_mask_sequence_width_is_hard_ceiling` |
+| Conservative token parsing | `test/reference_numbers/test_domain.py::test_literal_text_containing_a_date_token_substring_is_not_misparsed`, `test/reference_numbers/test_domain.py::test_concatenated_date_tokens_still_parse_correctly` |
+| Legacy format distinction and shared wrapper | `test/reference_numbers/test_domain.py::test_numeric_mask_does_not_validate_legacy_hex_without_legacy_format`, `test/reference_numbers/test_domain.py::test_reference_number_wrapper_allows_policy_valid_long_values` |
+| Lifecycle checks | `test/reference_numbers/test_domain.py::test_inactive_policy_can_be_reactivated_but_active_cannot_be_activated_again`, `test/reference_numbers/test_domain.py::test_cannot_activate_a_retired_policy`, `test/reference_numbers/test_domain.py::test_cannot_deactivate_a_draft_policy` |
+| Ignore never-active drafts | `test/reference_numbers/test_application.py::test_validate_reference_number_ignores_never_activated_draft_policy` |
+| Event foreign-key ordering | `test/reference_numbers/test_application.py::test_add_policy_does_not_violate_the_event_foreign_key`, `test/reference_numbers/test_application.py::test_activate_and_deactivate_do_not_violate_the_event_foreign_key` |
+| Admin authorisation and HTTP preview/create | `test/reference_numbers/test_api.py::test_sys_admin_can_preview_and_create_reference_policy`, `test/reference_numbers/test_api.py::test_staff_cannot_read_or_mutate_reference_policies`, `test/reference_numbers/test_application.py::test_preview_reference_policy_requires_sys_admin` |
 | Angular page and API adapter | `reference-number-policies-page.component.spec.ts`, `reference-number-policy.service.spec.ts`, `sys-admin.guard.spec.ts` |
 
 There are no PostgreSQL concurrency tests for sequence reservation or policy
@@ -353,23 +356,23 @@ invalid masks, missing policies, or conflict mapping.
 
 ## 11. Known gaps and recommended changes
 
-| Priority | Finding | Recommended change |
-| --- | --- | --- |
-| Critical | No unique partial constraint or serialization mechanism enforces one `ACTIVE` policy per kind; concurrent activations can leave multiple active rows. | Add a PostgreSQL partial unique index, lock activation by kind, and test two concurrent transactions. |
-| High | Masks up to 128 characters can be activated although proposal/project columns allow 64 and log columns allow 32. | Define per-kind rendered-length limits from consumer contracts, align database columns, and reject incompatible drafts before activation. |
-| High | `DD` without month/year or `MM` without year can reset a hidden scope while rendering indistinguishable references in later periods. | Require hierarchical date tokens (`DD` with month/year, `MM` with year) or include the complete scope in rendered output. |
-| High | Sequence width allows 10–12 digits but `next_value` is a PostgreSQL 32-bit integer. | Migrate to `BIGINT` or lower the width ceiling consistently before production approaches integer capacity. |
-| High | Automatic replacement does not emit `DEACTIVATED` events, and events cannot be read through admin boundaries. | Record both sides of replacement and expose a paginated audit history with resolved actors. |
-| Medium | `RETIRED` is only a dormant enum state with no supported transition, yet the UI would offer to activate it. | Implement complete retirement semantics or remove the unused state/event and hide invalid UI actions. |
-| Medium | Historical validation accepts syntactically matching but never-issued references and invalid calendar components. | Rename it to format recognition or validate parsed dates, activation interval, and issuance records according to the business need. |
-| Medium | Validation and legacy formats are inaccessible through the Published Language/admin API. | Expose the capability if consumers need it, and add governed legacy-format management or document migrations as the sole mechanism. |
-| Medium | Deactivation may leave a kind without an active policy and stop downstream creation. | Require replacement activation, an explicit emergency confirmation, or a health check/alert for missing active policies. |
-| Medium | Identical policies are allowed and each restarts its own sequence, increasing collision risk. | Detect duplicate masks and perform an impact/collision simulation before activation. |
-| Medium | `get_active(kind, on_date)` ignores whether the supplied date precedes `active_from`. | Decide whether generation is current-policy-only or effective-dated, then enforce and name the contract accordingly. |
-| Medium | Activation/deactivation are one-click actions without confirmation or preview linkage. | Add confirmation showing kind, sample output, reset scope, current replacement, and downstream impact. |
-| Medium | Sequence overflow has no public error contract and consumer retry behaviour is inconsistent. | Publish typed allocation failures and standardise safe retry/mapping across all consumers. |
-| Low | The diagram lists `PROJECT` instead of implemented `COLLECTION_USE_PROJECT` and shows only `GLOBAL`/`YEAR` scopes. | Update PlantUML with all implemented kinds, statuses, scopes, legacy formats, and concurrency boundaries. |
-| Low | Raw actor permission IDs are shown without user names. | Resolve audit actors through Identity for the admin response or dedicated history view. |
+| ID | Priority | Finding | Recommended change |
+| --- | --- | --- | --- |
+| GAP-001 | Critical | No unique partial constraint or serialization mechanism enforces one `ACTIVE` policy per kind; concurrent activations can leave multiple active rows. | Add a PostgreSQL partial unique index, lock activation by kind, and test two concurrent transactions. |
+| GAP-002 | High | Masks up to 128 characters can be activated although proposal/project columns allow 64 and log columns allow 32. | Define per-kind rendered-length limits from consumer contracts, align database columns, and reject incompatible drafts before activation. |
+| GAP-003 | High | `DD` without month/year or `MM` without year can reset a hidden scope while rendering indistinguishable references in later periods. | Require hierarchical date tokens (`DD` with month/year, `MM` with year) or include the complete scope in rendered output. |
+| GAP-004 | High | Sequence width allows 10–12 digits but `next_value` is a PostgreSQL 32-bit integer. | Migrate to `BIGINT` or lower the width ceiling consistently before production approaches integer capacity. |
+| GAP-005 | High | Automatic replacement does not emit `DEACTIVATED` events, and events cannot be read through admin boundaries. | Record both sides of replacement and expose a paginated audit history with resolved actors. |
+| GAP-006 | Medium | `RETIRED` is only a dormant enum state with no supported transition, yet the UI would offer to activate it. | Implement complete retirement semantics or remove the unused state/event and hide invalid UI actions. |
+| GAP-007 | Medium | Historical validation accepts syntactically matching but never-issued references and invalid calendar components. | Rename it to format recognition or validate parsed dates, activation interval, and issuance records according to the business need. |
+| GAP-008 | Medium | Validation and legacy formats are inaccessible through the Published Language/admin API. | Expose the capability if consumers need it, and add governed legacy-format management or document migrations as the sole mechanism. |
+| GAP-009 | Medium | Deactivation may leave a kind without an active policy and stop downstream creation. | Require replacement activation, an explicit emergency confirmation, or a health check/alert for missing active policies. |
+| GAP-010 | Medium | Identical policies are allowed and each restarts its own sequence, increasing collision risk. | Detect duplicate masks and perform an impact/collision simulation before activation. |
+| GAP-011 | Medium | `get_active(kind, on_date)` ignores whether the supplied date precedes `active_from`. | Decide whether generation is current-policy-only or effective-dated, then enforce and name the contract accordingly. |
+| GAP-012 | Medium | Activation/deactivation are one-click actions without confirmation or preview linkage. | Add confirmation showing kind, sample output, reset scope, current replacement, and downstream impact. |
+| GAP-013 | Medium | Sequence overflow has no public error contract and consumer retry behaviour is inconsistent. | Publish typed allocation failures and standardise safe retry/mapping across all consumers. |
+| GAP-014 | Low | The diagram lists `PROJECT` instead of implemented `COLLECTION_USE_PROJECT` and shows only `GLOBAL`/`YEAR` scopes. | Update PlantUML with all implemented kinds, statuses, scopes, legacy formats, and concurrency boundaries. |
+| GAP-015 | Low | Raw actor permission IDs are shown without user names. | Resolve audit actors through Identity for the admin response or dedicated history view. |
 
 ## 12. Traceability
 

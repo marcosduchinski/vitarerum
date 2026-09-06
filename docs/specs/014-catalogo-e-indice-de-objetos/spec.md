@@ -251,7 +251,9 @@ There is no restore, source-file download, or retry-cleanup endpoint.
 Matching combines PostgreSQL `plainto_tsquery('simple', ...)`, case-insensitive
 substring matching, and `pg_trgm.word_similarity` above the fixed `0.4`
 threshold. Results are ordered by the provisional sum of full-text rank and
-word similarity, then by source-document identifier and row number.
+word similarity, then by source-document identifier and row number. Equal-ranked
+rows at the same row number on different sheets of one document still tie;
+stable cross-sheet pagination is not guaranteed (GAP-013).
 
 The backend validates only that `q` has at least one character; direct API
 clients can currently submit whitespace-only input. The Angular UI trims the
@@ -328,11 +330,11 @@ collection.
 
 | Capability | Automated evidence |
 | --- | --- |
-| Workbook parsing and normalisation | `test_parser.py` |
-| Catalogue, areas, curators, upload API, mapping, and deletion | `test_api.py` |
-| Domain scope, deduplication, versioning, reindex, and rollback behaviour | `test_use_cases.py` |
-| Search endpoint contract and staff restriction | `test_search_api.py` |
-| PostgreSQL full-text/trigram search, reasons, facets, and stable pagination | `test_search_postgres.py` |
+| Workbook parsing and normalisation | `test/collection_object_index/test_parser.py` |
+| Catalogue, areas, curators, upload API, mapping, and deletion | `test/collection_object_index/test_api.py` |
+| Domain scope, deduplication, versioning, reindex, and rollback behaviour | `test/collection_object_index/test_use_cases.py` |
+| Search endpoint contract and staff restriction | `test/collection_object_index/test_search_api.py` |
+| PostgreSQL full-text/trigram search, reasons, facets, and stable pagination | `test/collection_object_index/test_search_postgres.py` |
 | Angular catalogue administration and upload/mapping flow | `collection-data-sources-page.component.spec.ts` |
 | Angular search, filters, empty states, snapshots, and safe highlighting | `object-search-page.component.spec.ts` |
 
@@ -380,20 +382,21 @@ collection.
 
 ## 11. Known gaps and required improvements
 
-| Priority | Gap | Required change |
-| --- | --- | --- |
-| High | The Angular search explanation says accent differences are ignored, but the PostgreSQL query does not use `unaccent` or another accent-folding strategy. | Either implement and test accent-insensitive indexing/querying, including a migration for the generated search vector, or remove that UI claim. |
-| High | Selecting searchable columns does not prevent other row cells from being returned to every staff user. | Confirm the data-disclosure policy. If searchable columns are also intended as a visibility boundary, filter `cells` in the API/index and add authorisation/privacy tests. |
-| High | Search is intentionally global for every staff group, including `DIRECTION` and curators outside their assigned collections. | Obtain an explicit institutional decision and add collection-level read scope if collection data is sensitive. |
-| High | Stored-file deletion occurs after commit and has no durable retry/outbox. A storage failure can return an error after the database change is already committed and leave an orphaned file. | Add idempotent asynchronous cleanup with retry and observability for document deletion, collection deletion, and same-name replacement. |
-| Medium | Failed source files are retained but cannot be downloaded for diagnosis or replaced by document identifier. | Add a protected download/diagnostic flow or revise the retention rationale and UI guidance. |
-| Medium | The fixed row limit does not bound workbook complexity or ZIP expansion, and ingestion is synchronous. | Add OOXML decompression/complexity safeguards, time/resource limits, metrics, and consider queued ingestion for operational scale. |
-| Medium | Whitespace-only API queries pass request validation. | Trim and reject blank queries in the backend domain/application boundary. |
-| Medium | Filename sanitisation does not enforce the 255-character persistence limit. | Normalise and cap filenames before persistence, preserving an extension and collision-safe storage key. |
-| Medium | Catalogue mutation and ingestion have no audit events or optimistic concurrency protection. | Record actor/action/outcome events and define conflict handling for concurrent uploads, replacements, mapping updates, and deletions. |
-| Medium | Formula values depend on workbook caches and can silently be empty when caches are absent. | Document the requirement to save/recalculate workbooks before upload or detect formula cells without cached values and warn the user. |
-| Low | Collection and area uniqueness follows database comparison rules and is not explicitly case-insensitive. | Decide whether names that differ only by case are valid; enforce the decision consistently. |
-| Low | Search results cannot be sorted or inspected beyond relevance pagination, and there is no direct source-document download. | Validate the MVP need for sort, export, source inspection, or deep links before expanding the UI. |
+| ID | Priority | Gap | Required change |
+| --- | --- | --- | --- |
+| GAP-001 | High | The Angular search explanation says accent differences are ignored, but the PostgreSQL query does not use `unaccent` or another accent-folding strategy. | Either implement and test accent-insensitive indexing/querying, including a migration for the generated search vector, or remove that UI claim. |
+| GAP-002 | High | Selecting searchable columns does not prevent other row cells from being returned to every staff user. | Confirm the data-disclosure policy. If searchable columns are also intended as a visibility boundary, filter `cells` in the API/index and add authorisation/privacy tests. |
+| GAP-003 | High | Search is intentionally global for every staff group, including `DIRECTION` and curators outside their assigned collections. | Obtain an explicit institutional decision and add collection-level read scope if collection data is sensitive. |
+| GAP-004 | High | Stored-file deletion occurs after commit and has no durable retry/outbox. A storage failure can return an error after the database change is already committed and leave an orphaned file. | Add idempotent asynchronous cleanup with retry and observability for document deletion, collection deletion, and same-name replacement. |
+| GAP-005 | Medium | Failed source files are retained but cannot be downloaded for diagnosis or replaced by document identifier. | Add a protected download/diagnostic flow or revise the retention rationale and UI guidance. |
+| GAP-006 | Medium | The fixed row limit does not bound workbook complexity or ZIP expansion, and ingestion is synchronous. | Add OOXML decompression/complexity safeguards, time/resource limits, metrics, and consider queued ingestion for operational scale. |
+| GAP-007 | Medium | Whitespace-only API queries pass request validation. | Trim and reject blank queries in the backend domain/application boundary. |
+| GAP-008 | Medium | Filename sanitisation does not enforce the 255-character persistence limit. | Normalise and cap filenames before persistence, preserving an extension and collision-safe storage key. |
+| GAP-009 | Medium | Catalogue mutation and ingestion have no audit events or optimistic concurrency protection. | Record actor/action/outcome events and define conflict handling for concurrent uploads, replacements, mapping updates, and deletions. |
+| GAP-010 | Medium | Formula values depend on workbook caches and can silently be empty when caches are absent. | Document the requirement to save/recalculate workbooks before upload or detect formula cells without cached values and warn the user. |
+| GAP-011 | Low | Collection and area uniqueness follows database comparison rules and is not explicitly case-insensitive. | Decide whether names that differ only by case are valid; enforce the decision consistently. |
+| GAP-012 | Low | Search results cannot be sorted or inspected beyond relevance pagination, and there is no direct source-document download. | Validate the MVP need for sort, export, source inspection, or deep links before expanding the UI. |
+| GAP-013 | Medium | Search ordering omits sheet and row identity; equal-ranked rows at the same row number in different sheets of one workbook are not totally ordered. Existing pagination evidence does not establish this cross-sheet boundary. | Add sheet plus a unique row ID to the ordering and test tied results spanning sheets and pages. |
 
 ## 12. Traceability
 

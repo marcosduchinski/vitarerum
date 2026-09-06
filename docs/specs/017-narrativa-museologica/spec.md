@@ -357,15 +357,15 @@ database-enforced.
 
 | Behaviour | Representative automated evidence |
 | --- | --- |
-| Default/explicit type and invalid type | `test_api.py::test_default_type_returns_institutional`, `test_use_case.py::test_explicit_type_is_used_with_request_body_source`, `test_api.py::test_invalid_type_is_400` |
-| Semantic gate and frozen output | `test_api.py::test_semantic_failure_is_422`, `test_use_case.py::test_facts_adapter_validates_cidoc_before_facts`, `test_use_case.py::test_fact_snapshot_freezes_cidoc_gate_output_used_for_generation` |
-| Prompt resolution and historical identity | `test_use_case.py::test_generation_uses_published_prompt_registry_output`, `test_use_case.py::test_existing_narrative_keeps_prompt_version_after_new_publish`, `test_prompt_acl.py::test_prompt_acl_rejects_version_from_another_narrative_type` |
-| Canonical input and declared absence | `test_use_case.py::test_fact_snapshot_freezes_payload_used_for_generation`, `test_use_case.py::test_user_prompt_receives_canonical_facts_and_declared_absence` |
-| Deterministic findings | `test_use_case.py::test_narrative_with_invented_date_is_marked_for_review`, `test_use_case.py::test_planned_date_as_execution_is_marked_for_review`, `test_use_case.py::test_invented_person_object_and_place_are_marked_for_review` |
-| Preview rules and no persistence | `test_api.py::test_preview_returns_draft_metadata_without_persisting`, `test_api.py::test_preview_accepts_ad_hoc_content_with_null_prompt_version_id`, `test_use_case.py::test_preview_rejects_invalid_prompt_source_combinations` |
-| History, exact reads, and isolation | `test_api.py::test_listed_newest_first_after_two_generations`, `test_api.py::test_get_under_wrong_record_is_404`, `test_use_case.py::test_list_revisions_under_wrong_record_raises` |
-| Editorial correction and revisions | `test_api.py::test_patch_updates_narrative_text`, `test_api.py::test_list_revisions_returns_original_text_first_and_editor`, `test_repository.py::test_repository_lists_revisions_oldest_first_with_editor` |
-| Model and authorisation failures | `test_api.py::test_model_unavailable_is_503`, `test_api.py::test_model_timeout_is_504`, `test_api.py::test_blank_model_output_is_503`, `test_api.py::test_external_caller_is_403` |
+| Default/explicit type and invalid type | `test/ai/museum_narrative/test_api.py::test_default_type_returns_institutional`, `test/ai/museum_narrative/test_use_case.py::test_explicit_type_is_used_with_request_body_source`, `test/ai/museum_narrative/test_api.py::test_invalid_type_is_400` |
+| Semantic gate and frozen output | `test/ai/museum_narrative/test_api.py::test_semantic_failure_is_422`, `test/ai/museum_narrative/test_use_case.py::test_facts_adapter_validates_cidoc_before_facts`, `test/ai/museum_narrative/test_use_case.py::test_fact_snapshot_freezes_cidoc_gate_output_used_for_generation` |
+| Prompt resolution and historical identity | `test/ai/museum_narrative/test_use_case.py::test_generation_uses_published_prompt_registry_output`, `test/ai/museum_narrative/test_use_case.py::test_existing_narrative_keeps_prompt_version_after_new_publish`, `test/ai/museum_narrative/test_prompt_acl.py::test_prompt_acl_rejects_version_from_another_narrative_type` |
+| Canonical input and declared absence | `test/ai/museum_narrative/test_use_case.py::test_fact_snapshot_freezes_payload_used_for_generation`, `test/ai/museum_narrative/test_use_case.py::test_user_prompt_receives_canonical_facts_and_declared_absence` |
+| Deterministic findings | `test/ai/museum_narrative/test_use_case.py::test_narrative_with_invented_date_is_marked_for_review`, `test/ai/museum_narrative/test_use_case.py::test_planned_date_as_execution_is_marked_for_review`, `test/ai/museum_narrative/test_use_case.py::test_invented_person_object_and_place_are_marked_for_review` |
+| Preview rules and no persistence | `test/ai/museum_narrative/test_api.py::test_preview_returns_draft_metadata_without_persisting`, `test/ai/museum_narrative/test_api.py::test_preview_accepts_ad_hoc_content_with_null_prompt_version_id`, `test/ai/museum_narrative/test_use_case.py::test_preview_rejects_invalid_prompt_source_combinations` |
+| History, exact reads, and isolation | `test/ai/museum_narrative/test_api.py::test_listed_newest_first_after_two_generations`, `test/ai/museum_narrative/test_api.py::test_get_under_wrong_record_is_404`, `test/ai/museum_narrative/test_use_case.py::test_list_revisions_under_wrong_record_raises` |
+| Editorial correction and revisions | `test/ai/museum_narrative/test_api.py::test_patch_updates_narrative_text`, `test/ai/museum_narrative/test_api.py::test_list_revisions_returns_original_text_first_and_editor`, `test/ai/museum_narrative/test_repository.py::test_repository_lists_revisions_oldest_first_with_editor` |
+| Model and authorisation failures | `test/ai/museum_narrative/test_api.py::test_model_unavailable_is_503`, `test/ai/museum_narrative/test_api.py::test_model_timeout_is_504`, `test/ai/museum_narrative/test_api.py::test_blank_model_output_is_503`, `test/ai/museum_narrative/test_api.py::test_external_caller_is_403` |
 | Angular report and audit UI | `create-in-situ-visit-report-modal.component.spec.ts`, `in-situ-visit-report-narrative.component.spec.ts`, `edit-in-situ-visit-narrative-dialog.component.spec.ts`, `in-situ-visit-audit-trail-page.component.spec.ts` |
 
 ## 9. Non-functional requirements
@@ -385,23 +385,23 @@ database-enforced.
 
 ## 10. Known gaps and recommended changes
 
-| Priority | Finding | Recommended change |
-| --- | --- | --- |
-| High | Any staff member can read sensitive facts and revisions, generate variants, and edit any narrative when identifiers are known. | Define reader, generator, editor, reviewer, and publisher permissions and enforce project/collection scope in the backend. |
-| High | A narrative with deterministic findings can still be linked to and externally published as a report. | Introduce an explicit human review decision and block external publication until the decided policy is satisfied. |
-| High | Model processing may be local or hosted, while prompts include personal and operational source data. | Document the deployment processing boundary, minimise/redact model input, and require an approved provider/privacy configuration outside local environments. |
-| High | Prompt labels allow 96 characters in `ai.prompts`, but both narrative prompt-label columns are `VARCHAR(64)`. | Align column and API limits through a migration and test the maximum valid prompt label. |
-| High | Exact prompt content and reproducible model identity are not frozen; prompt history may be removed by migrations. | Snapshot prompt content/hash and record provider, immutable model digest/version, and effective generation parameters. |
-| Medium | Regex checks cover narrow patterns and can produce false negatives or positives. | Treat `validation_conforms` as heuristic review status, expand multilingual fixtures, measure precision/recall, and avoid presenting it as factual conformance. |
-| Medium | Concurrent editorial updates have no expected version, row lock, or ETag and can overwrite each other. | Add optimistic concurrency with a version token and return `409` for stale edits. |
-| Medium | `target_language` is unrestricted and unbounded although persistence allows 16 characters. | Use a documented language enum or validated BCP 47 tag with matching database length and reject invalid input before generation. |
-| Medium | Generated-by identity, review decision, edit reason, request correlation, and latency are absent from provenance. | Persist the actor, review workflow, revision reason, request ID, and execution timing. |
-| Medium | Plain IDs without foreign keys permit orphaned cross-artefact references if workflows diverge. | Add safe constraints where lifecycle permits, or scheduled integrity checks where cross-context FKs are intentionally avoided. |
-| Medium | Direct generation is synchronous, not idempotent, and has no cancellation or progress state. | Add an idempotency key and consider an asynchronous job if production latency warrants it. |
-| Medium | Full generation history exists only in the API; the report UI shows one linked generation and its edits. | Add a staff history/comparison view if repeated generation is an intended workflow. |
-| Low | Listing narratives for a nonexistent record returns an empty `200` page. | Decide whether collection reads should verify record existence and consistently return `404`. |
-| Low | Historical `KG-RAG` naming overstates the validation-gated fact pipeline. | Rename user-facing/code documentation, or implement and evidence graph retrieval before retaining the term as a capability claim. |
-| Low | Static persona-building code is unused after prompts became managed content. | Remove or isolate the dead helper after verifying no external imports. |
+| ID | Priority | Finding | Recommended change |
+| --- | --- | --- | --- |
+| GAP-001 | High | Any staff member can read sensitive facts and revisions, generate variants, and edit any narrative when identifiers are known. | Define reader, generator, editor, reviewer, and publisher permissions and enforce project/collection scope in the backend. |
+| GAP-002 | High | A narrative with deterministic findings can still be linked to and externally published as a report. | Introduce an explicit human review decision and block external publication until the decided policy is satisfied. |
+| GAP-003 | High | Model processing may be local or hosted, while prompts include personal and operational source data. | Document the deployment processing boundary, minimise/redact model input, and require an approved provider/privacy configuration outside local environments. |
+| GAP-004 | High | Prompt labels allow 96 characters in `ai.prompts`, but both narrative prompt-label columns are `VARCHAR(64)`. | Align column and API limits through a migration and test the maximum valid prompt label. |
+| GAP-005 | High | Exact prompt content and reproducible model identity are not frozen; prompt history may be removed by migrations. | Snapshot prompt content/hash and record provider, immutable model digest/version, and effective generation parameters. |
+| GAP-006 | Medium | Regex checks cover narrow patterns and can produce false negatives or positives. | Treat `validation_conforms` as heuristic review status, expand multilingual fixtures, measure precision/recall, and avoid presenting it as factual conformance. |
+| GAP-007 | Medium | Concurrent editorial updates have no expected version, row lock, or ETag and can overwrite each other. | Add optimistic concurrency with a version token and return `409` for stale edits. |
+| GAP-008 | Medium | `target_language` is unrestricted and unbounded although persistence allows 16 characters. | Use a documented language enum or validated BCP 47 tag with matching database length and reject invalid input before generation. |
+| GAP-009 | Medium | Generated-by identity, review decision, edit reason, request correlation, and latency are absent from provenance. | Persist the actor, review workflow, revision reason, request ID, and execution timing. |
+| GAP-010 | Medium | Plain IDs without foreign keys permit orphaned cross-artefact references if workflows diverge. | Add safe constraints where lifecycle permits, or scheduled integrity checks where cross-context FKs are intentionally avoided. |
+| GAP-011 | Medium | Direct generation is synchronous, not idempotent, and has no cancellation or progress state. | Add an idempotency key and consider an asynchronous job if production latency warrants it. |
+| GAP-012 | Medium | Full generation history exists only in the API; the report UI shows one linked generation and its edits. | Add a staff history/comparison view if repeated generation is an intended workflow. |
+| GAP-013 | Low | Listing narratives for a nonexistent record returns an empty `200` page. | Decide whether collection reads should verify record existence and consistently return `404`. |
+| GAP-014 | Low | Historical `KG-RAG` naming overstates the validation-gated fact pipeline. | Rename user-facing/code documentation, or implement and evidence graph retrieval before retaining the term as a capability claim. |
+| GAP-015 | Low | Static persona-building code is unused after prompts became managed content. | Remove or isolate the dead helper after verifying no external imports. |
 
 ## 11. Traceability
 

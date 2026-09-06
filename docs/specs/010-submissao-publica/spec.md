@@ -327,26 +327,26 @@ Handled failures use the shared error-envelope rules in
 
 These are properties of the current repository, not hypothetical future work:
 
-1. There is no scheduled purge for pending submissions whose confirmation link
+1. **GAP-001** — There is no scheduled purge for pending submissions whose confirmation link
    is never clicked. Their encrypted personal fields, raw confirmation token,
    database rows, and files can remain indefinitely.
-2. Confirmation tokens are opaque random values but are stored raw, not hashed
+2. **GAP-002** — Confirmation tokens are opaque random values but are stored raw, not hashed
    or signed. Amendment tokens use the stronger hash-at-rest design.
-3. The sliding-window limiter is in memory and process-local. Limits are not
+3. **GAP-003** — The sliding-window limiter is in memory and process-local. Limits are not
    coordinated across replicas and are reset when a process restarts.
-4. The amendment `GET` route has no application rate limit, although the three
+4. **GAP-004** — The amendment `GET` route has no application rate limit, although the three
    mutating amendment routes do.
-5. The Angular form rejects an end date earlier than the start date, but the
+5. **GAP-005** — The Angular form rejects an end date earlier than the start date, but the
    public API and proposal constructor do not enforce that ordering. A direct
    API caller can therefore persist an inverted interval.
-6. E-mails are sent after commit without a durable outbox or retry queue. If an
+6. **GAP-006** — E-mails are sent after commit without a durable outbox or retry queue. If an
    SMTP call fails, durable state can exist without the intended confirmation,
    amendment, or staff e-mail being delivered.
-7. CORS is configured globally from `cors_origins` with credentials enabled.
+7. **GAP-007** — CORS is configured globally from `cors_origins` with credentials enabled.
    Non-local startup forbids the wildcard, but it does not require the list to
    equal `public_origin`. The current public Angular client sends no credentials;
    CORS itself is not a route-level security boundary.
-8. Backend route coverage exercises intake, confirmation, notification, and
+8. **GAP-008** — Backend route coverage exercises intake, confirmation, notification, and
    amendment completion, while the amendment read/upload/delete error matrix is
    covered mainly through domain and application tests rather than complete HTTP
    tests. There is no end-to-end browser scenario for the full double-opt-in or
@@ -361,7 +361,7 @@ returns `202 PENDING_CONFIRMATION`, stores the proposed dates and files, and
 sends the confirmation link only after commit.
 
 → `test/public_submission/test_api.py::test_submit_returns_202_receipt`,
-`::test_submit_persists_proposed_dates`, `::test_submit_does_not_email_when_commit_fails`
+`test/public_submission/test_api.py::test_submit_persists_proposed_dates`, `test/public_submission/test_api.py::test_submit_does_not_email_when_commit_fails`
 
 ### AC-002 — Honeypot performs no work
 
@@ -369,7 +369,7 @@ Given a non-empty `website`, the API returns the normal receipt without
 validating documents, persisting data, or sending e-mail.
 
 → `test/public_submission/test_api.py::test_submit_honeypot_returns_202_no_work`,
-`::test_submit_honeypot_skips_document_validation`
+`test/public_submission/test_api.py::test_submit_honeypot_skips_document_validation`
 
 → `test/public_submission/test_use_cases.py::test_honeypot_accepts_and_drops`
 
@@ -379,8 +379,8 @@ Given a rate-limited request or failed captcha without documents, the API
 returns the admission error rather than a document-validation error.
 
 → `test/public_submission/test_api.py::test_submit_rate_limited_before_reading_uploads`,
-`::test_submit_captcha_checked_before_reading_uploads`,
-`::test_submit_rate_limited_429_with_retry_after`, `::test_submit_captcha_failure_403`
+`test/public_submission/test_api.py::test_submit_captcha_checked_before_reading_uploads`,
+`test/public_submission/test_api.py::test_submit_rate_limited_429_with_retry_after`, `test/public_submission/test_api.py::test_submit_captcha_failure_403`
 
 ### AC-004 — Form and file constraints are enforced
 
@@ -389,9 +389,9 @@ oversized file, or unsupported content, the API rejects the request with the
 documented status.
 
 → `test/public_submission/test_api.py::test_submit_missing_consent_is_rejected`,
-`::test_submit_invalid_use_type_is_rejected`, `::test_submit_missing_documents_is_rejected`,
-`::test_submit_too_many_documents_is_rejected`, `::test_submit_oversized_document_is_rejected`,
-`::test_submit_unsupported_document_is_rejected`
+`test/public_submission/test_api.py::test_submit_invalid_use_type_is_rejected`, `test/public_submission/test_api.py::test_submit_missing_documents_is_rejected`,
+`test/public_submission/test_api.py::test_submit_too_many_documents_is_rejected`, `test/public_submission/test_api.py::test_submit_oversized_document_is_rejected`,
+`test/public_submission/test_api.py::test_submit_unsupported_document_is_rejected`
 
 ### AC-005 — Double opt-in is idempotent
 
@@ -400,11 +400,11 @@ public proposal and returns its reference; a second confirmation returns
 `ALREADY_CONFIRMED`. An unknown token returns `200 INVALID`.
 
 → `test/public_submission/test_api.py::test_submit_then_confirm_flow`,
-`::test_confirm_unknown_token_returns_200_invalid`
+`test/public_submission/test_api.py::test_confirm_unknown_token_returns_200_invalid`
 
 → `test/public_submission/test_use_cases.py::test_confirm_materialises_proposal`,
-`::test_confirm_twice_is_already_confirmed`, `::test_confirm_uses_locking_read`,
-`::test_confirm_retries_reference_number_conflict`
+`test/public_submission/test_use_cases.py::test_confirm_twice_is_already_confirmed`, `test/public_submission/test_use_cases.py::test_confirm_uses_locking_read`,
+`test/public_submission/test_use_cases.py::test_confirm_retries_reference_number_conflict`
 
 ### AC-006 — Expired confirmation cleanup is reactive
 
@@ -414,7 +414,7 @@ deleted and the result is `EXPIRED`. Confirmed submissions never expire.
 → `test/public_submission/test_use_cases.py::test_confirm_expired_token_reclaims_files_and_row`
 
 → `test/public_submission/test_domain.py::test_is_expired_true_after_ttl`,
-`::test_confirmed_submission_never_expires`
+`test/public_submission/test_domain.py::test_confirmed_submission_never_expires`
 
 ### AC-007 — Staff effects are not repeated
 
@@ -430,8 +430,8 @@ Given a fresh amendment token, it is active until its expiry or final use; once
 used it cannot be marked used again.
 
 → `test/public_submission/test_domain.py::test_amendment_token_is_active_when_fresh`,
-`::test_amendment_token_expires_after_ttl`,
-`::test_amendment_token_mark_used_is_single_use`
+`test/public_submission/test_domain.py::test_amendment_token_expires_after_ttl`,
+`test/public_submission/test_domain.py::test_amendment_token_mark_used_is_single_use`
 
 ### AC-009 — Amendment scope and document normalization hold
 
@@ -440,9 +440,9 @@ free-text types are trimmed; blank types are rejected; a valid replacement
 detaches the flagged file.
 
 → `test/use_of_collections/test_correction_flow.py::test_amendment_upload_out_of_scope_is_rejected`,
-`::test_amendment_upload_free_text_type_trims_and_matches_scope`,
-`::test_amendment_upload_blank_type_rejected`,
-`::test_amendment_upload_replaces_flagged_document`
+`test/use_of_collections/test_correction_flow.py::test_amendment_upload_free_text_type_trims_and_matches_scope`,
+`test/use_of_collections/test_correction_flow.py::test_amendment_upload_blank_type_rejected`,
+`test/use_of_collections/test_correction_flow.py::test_amendment_upload_replaces_flagged_document`
 
 ### AC-010 — Unsatisfied amendments cannot complete
 
@@ -451,7 +451,7 @@ After a valid upload, submission resolves the scoped correction while leaving
 the proposal pending.
 
 → `test/use_of_collections/test_correction_flow.py::test_amendment_submit_without_document_is_rejected`,
-`::test_amendment_add_then_submit_resolves`
+`test/use_of_collections/test_correction_flow.py::test_amendment_add_then_submit_resolves`
 
 ### AC-011 — Amendment completion notifies assigned staff
 

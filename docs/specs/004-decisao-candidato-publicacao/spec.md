@@ -129,7 +129,7 @@ The global route defaults to `status=PENDING` and accepts optional filters:
 
 | Query parameter | Meaning |
 | --- | --- |
-| `status` | `PENDING`, `CONFIRMED`, `DISMISSED`, or omitted for all |
+| `status` | `PENDING`, `CONFIRMED`, or `DISMISSED`; omission selects `PENDING` |
 | `projectId` | Exact project identifier |
 | `source` | Exact candidate source string |
 | `evidenceStrength` | Candidate has at least one evidence row of this strength |
@@ -145,6 +145,10 @@ exists:
 - rejected passage and inventory-form counts;
 - number of distinct consulted objects whose investigations linked to the
   candidate.
+
+Unlike the project list, the global HTTP queue has no supported all-status
+selector: an omitted parameter uses `PENDING`, and an empty string is not a
+valid enum. The repository's nullable filter does not imply an HTTP null value.
 
 Evidence strength is information for human review, not an automated confidence
 score. The queue remains reviewable when evidence is `NOT_OBSERVED` or
@@ -334,14 +338,14 @@ not enforced by the current implementation.
 
 | ID | Behaviour | Automated evidence |
 | --- | --- | --- |
-| AC-001 | Confirmation materialises a publication entry and stores evidence | `test_scientific_return.py::test_confirm_materializes_publication_and_audits_evidence` |
-| AC-002 | The latest full-agentic reader analysis becomes the decision context | `test_scientific_return.py::test_decision_context_uses_latest_full_agentic_reader_only` |
-| AC-003 | A rolled-back reader prompt version still supplies context | `test_scientific_return.py::test_a_rolled_back_reader_version_still_yields_a_decision_context` |
-| AC-004 | Unrelated analyses do not become decision context | `test_scientific_return.py::test_non_reader_analysis_does_not_create_agentic_decision_context` |
-| AC-005 | Dismissed status survives deterministic rediscovery | `test_scientific_return.py::test_dismissed_candidate_is_remembered_on_later_run` |
-| AC-006 | Autonomous discovery leaves candidates pending | `test_run_investigation.py::test_the_candidate_still_requires_a_human_decision` |
-| AC-007 | Autonomous code has no publication writer and creates no candidate decisions | `test_agent_security.py::test_the_cycle_has_no_route_to_the_publication_log`, `::test_no_candidate_is_ever_decided_by_the_cycle` |
-| AC-008 | Decision context fields are exposed through the API contract | `test_provenance_contract.py::test_the_decision_snapshot_keeps_what_the_curator_was_shown` |
+| AC-001 | Confirmation materialises a publication entry and stores evidence | `test/scientific_return/test_scientific_return.py::test_confirm_materializes_publication_and_audits_evidence` |
+| AC-002 | The latest full-agentic reader analysis becomes the decision context | `test/scientific_return/test_scientific_return.py::test_decision_context_uses_latest_full_agentic_reader_only` |
+| AC-003 | A rolled-back reader prompt version still supplies context | `test/scientific_return/test_scientific_return.py::test_a_rolled_back_reader_version_still_yields_a_decision_context` |
+| AC-004 | Unrelated analyses do not become decision context | `test/scientific_return/test_scientific_return.py::test_non_reader_analysis_does_not_create_agentic_decision_context` |
+| AC-005 | Dismissed status survives deterministic rediscovery | `test/scientific_return/test_scientific_return.py::test_dismissed_candidate_is_remembered_on_later_run` |
+| AC-006 | Autonomous discovery leaves candidates pending | `test/scientific_return/test_run_investigation.py::test_the_candidate_still_requires_a_human_decision` |
+| AC-007 | Autonomous code has no publication writer and creates no candidate decisions | `test/scientific_return/test_agent_security.py::test_the_cycle_has_no_route_to_the_publication_log`, `test/scientific_return/test_agent_security.py::test_no_candidate_is_ever_decided_by_the_cycle` |
+| AC-008 | Decision context fields are exposed through the API contract | `test/scientific_return/test_provenance_contract.py::test_the_decision_snapshot_keeps_what_the_curator_was_shown` |
 | AC-009 | The review page renders grounded and unavailable evidence states | `scientific-return-queue-page.component.spec.ts` |
 | AC-010 | The Angular service sends decisions through a separate endpoint | `scientific-return-api.service.spec.ts::sends a human decision separately from candidate discovery` |
 

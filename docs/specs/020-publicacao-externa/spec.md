@@ -301,15 +301,15 @@ the grant record has already been written.
 
 | Behaviour | Representative automated evidence |
 | --- | --- |
-| One-time token hashing | `test_use_cases.py::test_create_external_publication_hashes_token_once` |
-| Reject non-conformant report | `test_use_cases.py::test_rejects_non_conformant_report_publication` |
-| Delegate publishable-resource listing | `test_use_cases.py::test_list_publishable_resources_delegates_by_type` |
-| Opaque revoked-token semantics | `test_use_cases.py::test_resolve_returns_404_semantics_for_revoked_publication` |
-| Expiration and naive-time normalisation | `test_use_cases.py::test_domain_blocks_expired_publication`, `test_use_cases.py::test_domain_normalizes_naive_expiration_before_access_check` |
-| Granted access record | `test_use_cases.py::test_resolve_records_granted_access` |
-| JSON-LD detail and summary rules | `test_use_cases.py::test_json_ld_is_returned_for_report_detail_publication`, `test_use_cases.py::test_json_ld_rejects_summary_profile` |
-| Public summary and JSON-LD media type | `test_api.py::test_public_summary_response_omits_heavy_fields`, `test_api.py::test_json_ld_route_uses_json_ld_content_type` |
-| Administrative authorisation | `test_api.py::test_sys_admin_can_list_external_publications`, `test_api.py::test_staff_cannot_manage_external_publications` |
+| One-time token hashing | `test/external_publications/test_use_cases.py::test_create_external_publication_hashes_token_once` |
+| Reject non-conformant report | `test/external_publications/test_use_cases.py::test_rejects_non_conformant_report_publication` |
+| Delegate publishable-resource listing | `test/external_publications/test_use_cases.py::test_list_publishable_resources_delegates_by_type` |
+| Opaque revoked-token semantics | `test/external_publications/test_use_cases.py::test_resolve_returns_404_semantics_for_revoked_publication` |
+| Expiration and naive-time normalisation | `test/external_publications/test_use_cases.py::test_domain_blocks_expired_publication`, `test/external_publications/test_use_cases.py::test_domain_normalizes_naive_expiration_before_access_check` |
+| Granted access record | `test/external_publications/test_use_cases.py::test_resolve_records_granted_access` |
+| JSON-LD detail and summary rules | `test/external_publications/test_use_cases.py::test_json_ld_is_returned_for_report_detail_publication`, `test/external_publications/test_use_cases.py::test_json_ld_rejects_summary_profile` |
+| Public summary and JSON-LD media type | `test/external_publications/test_api.py::test_public_summary_response_omits_heavy_fields`, `test/external_publications/test_api.py::test_json_ld_route_uses_json_ld_content_type` |
+| Administrative authorisation | `test/external_publications/test_api.py::test_sys_admin_can_list_external_publications`, `test/external_publications/test_api.py::test_staff_cannot_manage_external_publications` |
 | Angular create workflow | `external-publications-page.component.spec.ts` |
 
 There are no automated tests for invalid-token denial records, known-resource
@@ -339,24 +339,24 @@ after publication, rate limiting, or PostgreSQL persistence constraints.
 
 ## 11. Known gaps and recommended changes
 
-| Priority | Finding | Recommended change |
-| --- | --- | --- |
-| Critical | `INTEGRATION_CLIENT` is advertised by the request schema and domain but cannot be created or authenticated end to end. | Remove it from the public contract until supported, or add client identity input, credential authentication, resolver routing, authorisation policy, revocation, UI, and tests. |
-| High | JSON-LD requests returning `409` are recorded as `GRANTED`. | Move the success record after all profile/type/document checks, record failed operations as `DENIED` with a reason, and test both outcomes. |
-| High | A grant exposes mutable live data, so its disclosed content can expand after administrative approval. | Decide explicitly between live projection and immutable publication snapshot. For live data, re-run disclosure policy on every access and show administrators what changed; for snapshots, persist versioned payloads/hashes. |
-| High | Report CIDOC conformance is checked only at creation, unlike proposal/project eligibility on every resolution; reports with changed conformance or flagged narrative findings may remain public. | Define one consistent continuing-eligibility rule and require human narrative approval before initial and subsequent disclosure. |
-| High | Invalid-token probes always create database rows, with no rate limit, bounded retention, or aggregation. | Apply gateway/application throttling, cap token length before hashing, aggregate hostile probes, and establish deletion/retention policy. |
-| High | `SUMMARY` still exposes personal names, internal/linkage IDs, dates, intended use, and semantic metadata. | Define per-resource disclosure schemas from data-classification and privacy requirements; remove internal IDs and personal data unless explicitly justified. |
-| High | Raw `User-Agent` and an unsalted IP hash are retained and returned to admins without a retention policy. | Use a keyed, rotating pseudonym where correlation is necessary, truncate/sanitise user agents, restrict access, and document retention and lawful purpose. |
-| Medium | The raw URL is recoverable only during creation, but the UI neither clearly labels it one-time nor provides a dedicated copy action in the receipt. | Add a one-time-secret warning, explicit Copy/Download receipt action, confirmation before closing, and recovery guidance based on revoke/reissue. |
-| Medium | Expirations in the past are accepted and the UI permits no-expiry grants without additional confirmation. | Require `expiresAt > now`, define a default/maximum lifetime, and require an explicit exception for non-expiring links. |
-| Medium | Revocation has no UI confirmation and `private, max-age=300` may leave JSON-LD usable from a client cache after revocation. | Confirm destructive intent and use an approved cache policy, normally `no-store` for bearer-token responses requiring immediate revocation. |
-| Medium | Access history is implemented only in the backend; unknown-token denials are not queryable at all. | Add a protected audit UI, global security view for unlinked denials, outcome/reason filters, actor-friendly metadata, and export/retention controls. |
-| Medium | Multiple equivalent active grants are allowed and there is no rotation operation. | Warn on duplicates, show all grants for a resource, and implement atomic rotation/reissue that revokes the former token. |
-| Medium | Public URL generation trusts the effective inbound request origin. | Configure and validate one canonical public base URL and explicitly configure trusted proxies/hosts. |
-| Medium | Creation/revocation actors are persisted but omitted from admin responses. | Expose resolved audit actors to authorised administrators without leaking permission IDs publicly. |
-| Low | Search terms and raw user-agent values have no application-level length bound; leading-wildcard search is poorly indexed. | Add bounded request/header lengths and use exact/prefix or trigram-indexed search as required. |
-| Low | The flow diagram calls the response DTO “stable” and places access recording ambiguously around JSON-LD checks. | Update the diagram to show live resource resolution, continuing eligibility differences, one-time token disclosure, and final-outcome audit placement. |
+| ID | Priority | Finding | Recommended change |
+| --- | --- | --- | --- |
+| GAP-001 | Critical | `INTEGRATION_CLIENT` is advertised by the request schema and domain but cannot be created or authenticated end to end. | Remove it from the public contract until supported, or add client identity input, credential authentication, resolver routing, authorisation policy, revocation, UI, and tests. |
+| GAP-002 | High | JSON-LD requests returning `409` are recorded as `GRANTED`. | Move the success record after all profile/type/document checks, record failed operations as `DENIED` with a reason, and test both outcomes. |
+| GAP-003 | High | A grant exposes mutable live data, so its disclosed content can expand after administrative approval. | Decide explicitly between live projection and immutable publication snapshot. For live data, re-run disclosure policy on every access and show administrators what changed; for snapshots, persist versioned payloads/hashes. |
+| GAP-004 | High | Report CIDOC conformance is checked only at creation, unlike proposal/project eligibility on every resolution; reports with changed conformance or flagged narrative findings may remain public. | Define one consistent continuing-eligibility rule and require human narrative approval before initial and subsequent disclosure. |
+| GAP-005 | High | Invalid-token probes always create database rows, with no rate limit, bounded retention, or aggregation. | Apply gateway/application throttling, cap token length before hashing, aggregate hostile probes, and establish deletion/retention policy. |
+| GAP-006 | High | `SUMMARY` still exposes personal names, internal/linkage IDs, dates, intended use, and semantic metadata. | Define per-resource disclosure schemas from data-classification and privacy requirements; remove internal IDs and personal data unless explicitly justified. |
+| GAP-007 | High | Raw `User-Agent` and an unsalted IP hash are retained and returned to admins without a retention policy. | Use a keyed, rotating pseudonym where correlation is necessary, truncate/sanitise user agents, restrict access, and document retention and lawful purpose. |
+| GAP-008 | Medium | The raw URL is recoverable only during creation, but the UI neither clearly labels it one-time nor provides a dedicated copy action in the receipt. | Add a one-time-secret warning, explicit Copy/Download receipt action, confirmation before closing, and recovery guidance based on revoke/reissue. |
+| GAP-009 | Medium | Expirations in the past are accepted and the UI permits no-expiry grants without additional confirmation. | Require `expiresAt > now`, define a default/maximum lifetime, and require an explicit exception for non-expiring links. |
+| GAP-010 | Medium | Revocation has no UI confirmation and `private, max-age=300` may leave JSON-LD usable from a client cache after revocation. | Confirm destructive intent and use an approved cache policy, normally `no-store` for bearer-token responses requiring immediate revocation. |
+| GAP-011 | Medium | Access history is implemented only in the backend; unknown-token denials are not queryable at all. | Add a protected audit UI, global security view for unlinked denials, outcome/reason filters, actor-friendly metadata, and export/retention controls. |
+| GAP-012 | Medium | Multiple equivalent active grants are allowed and there is no rotation operation. | Warn on duplicates, show all grants for a resource, and implement atomic rotation/reissue that revokes the former token. |
+| GAP-013 | Medium | Public URL generation trusts the effective inbound request origin. | Configure and validate one canonical public base URL and explicitly configure trusted proxies/hosts. |
+| GAP-014 | Medium | Creation/revocation actors are persisted but omitted from admin responses. | Expose resolved audit actors to authorised administrators without leaking permission IDs publicly. |
+| GAP-015 | Low | Search terms and raw user-agent values have no application-level length bound; leading-wildcard search is poorly indexed. | Add bounded request/header lengths and use exact/prefix or trigram-indexed search as required. |
+| GAP-016 | Low | The flow diagram calls the response DTO “stable” and places access recording ambiguously around JSON-LD checks. | Update the diagram to show live resource resolution, continuing eligibility differences, one-time token disclosure, and final-outcome audit placement. |
 
 ## 12. Traceability
 

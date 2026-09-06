@@ -332,15 +332,15 @@ has not been implemented.
 | AC-003 | External proposal/project summaries cannot widen or spoof their caller scope. | Not implemented |
 | AC-004 | All four `UseStatus` values are counted and zero buckets remain present. | Not implemented |
 | AC-005 | All five `MuseumQuestionStatus` values are counted; only the two authorised groups can call the endpoint. | Not implemented |
-| AC-006 | Both static `/summary` routes preceding identifier routes resolve as summaries, not IDs. | Not implemented |
+| AC-006 | The three static `/summary` routes for proposals, projects, and museum questions precede their identifier routes and resolve as summaries, not IDs; the collection-source summary also resolves at its declared path. | Not implemented |
 | AC-007 | Catalogue totals exclude deleted documents and count stale searchable content across the exact management scope. | Not implemented |
 | AC-008 | Changing active Angular permission cancels/invalidates stale card state and loads the new role's allowed cards. | Not implemented |
 | AC-009 | One card failure does not hide successful independent cards, and retry is available. | Not implemented |
 | AC-010 | Card links open lists whose `totalElements` matches the card under an unchanged database state. | Not implemented |
 
 Existing evidence covers only the separate TODO widget:
-`test_project_todos.py::test_dashboard_postits_list_only_current_staff_profile_items`,
-`test_project_todos.py::test_dashboard_postits_paginate_and_order_by_project`,
+`test/use_of_collections/test_project_todos.py::test_dashboard_postits_list_only_current_staff_profile_items`,
+`test/use_of_collections/test_project_todos.py::test_dashboard_postits_paginate_and_order_by_project`,
 and `dashboard.component.spec.ts`.
 
 ## 9. Non-functional requirements
@@ -364,19 +364,19 @@ and `dashboard.component.spec.ts`.
 
 ## 10. Known gaps and recommended changes
 
-| Priority | Finding | Recommended change |
-| --- | --- | --- |
-| High | None of the four summary contracts is implemented or tested. | Implement one application read query and repository aggregation per owning context, then add API contract and Angular tests. |
-| High | The earlier museum-question response omitted `IN_PROGRESS` and its `submitted` count did not exactly match the actionable New Inquiries queue. | Keep all five status buckets and either add explicit `unassignedSubmitted`/`myInProgress` counts or label status totals as context rather than personal queues. |
-| High | The proposed external proposal response ignores the caller's `SUBMITTED` and `PENDING` proposals and therefore cannot represent My Proposals. | Define a dedicated external summary, such as total/by-status counts, or restrict the five-bucket staff contract to staff callers. |
-| High | Current Other's Assignments and Rejected / Cancelled Angular pages fetch at most 100 rows and paginate/filter locally. | Add server-side not-equal assignment filtering and correct repeated-status serialisation independently of the dashboard work. |
-| Medium | The catalogue proposal said it mirrored the collection list, but the list exposes all collections with `manageable` flags while the desired count is mutation-scoped. | Name and test the summary as a management backlog and reuse the `can_manage_all_collections`/curated-ID policy. |
-| Medium | The current dashboard masks TODO load failures as an empty result and labels the visible-slice count as the open count. | Map `postitsResource.error()` to an error state with retry and label/display `totalElements` separately from visible items. |
-| Medium | Reusing identity list endpoints for cards inherits inconsistent authorisation: users and groups are visible to every authenticated role, while institutions require `SYS_ADMIN`. | Decide intended Identity visibility first; show only authorised cards and tighten the underlying endpoints if broad access is temporary. |
-| Medium | Four independent summary calls can produce a visually mixed-time dashboard and repeated database load on navigation. | Fetch cards concurrently, show freshness, measure query cost, and introduce short caller-aware caching only when invalidation/staleness requirements are defined. |
-| Medium | The planned Angular card set and role-to-widget visibility are not specified visually or in routes. | Define the MVP card matrix, ordering, labels, zero states, target routes, responsive layout, and per-card failure behaviour before implementation. |
-| Low | The dashboard diagram shows a single nonexistent `/api/v1/dashboard/summary` endpoint plus Notifications, contradicting the four context-owned endpoints. | Redraw it with the implemented TODO request and the four independently proposed summary routes, clearly marking current versus planned flows. |
-| Low | The companion proposal still calls the dashboard a static placeholder and describes only four museum-question states. | Align `docs/proposals/17Dashboard-Summary-API.md` after the product decisions above. |
+| ID | Priority | Finding | Recommended change |
+| --- | --- | --- | --- |
+| GAP-001 | High | None of the four summary contracts is implemented or tested. | Implement one application read query and repository aggregation per owning context, then add API contract and Angular tests. |
+| GAP-002 | High | The earlier museum-question response omitted `IN_PROGRESS` and its `submitted` count did not exactly match the actionable New Inquiries queue. | Keep all five status buckets and either add explicit `unassignedSubmitted`/`myInProgress` counts or label status totals as context rather than personal queues. |
+| GAP-003 | High | The proposed external proposal response ignores the caller's `SUBMITTED` and `PENDING` proposals and therefore cannot represent My Proposals. | Define a dedicated external summary, such as total/by-status counts, or restrict the five-bucket staff contract to staff callers. |
+| GAP-004 | High | Current Other's Assignments and Rejected / Cancelled Angular pages fetch at most 100 rows and paginate/filter locally. | Add server-side not-equal assignment filtering and correct repeated-status serialisation independently of the dashboard work. |
+| GAP-005 | Medium | The catalogue proposal said it mirrored the collection list, but the list exposes all collections with `manageable` flags while the desired count is mutation-scoped. | Name and test the summary as a management backlog and reuse the `can_manage_all_collections`/curated-ID policy. |
+| GAP-006 | Medium | The current dashboard masks TODO load failures as an empty result and labels the visible-slice count as the open count. | Map `postitsResource.error()` to an error state with retry and label/display `totalElements` separately from visible items. |
+| GAP-007 | Medium | Reusing identity list endpoints for cards inherits inconsistent authorisation: users and groups are visible to every authenticated role, while institutions require `SYS_ADMIN`. | Decide intended Identity visibility first; show only authorised cards and tighten the underlying endpoints if broad access is temporary. |
+| GAP-008 | Medium | Four independent summary calls can produce a visually mixed-time dashboard and repeated database load on navigation. | Fetch cards concurrently, show freshness, measure query cost, and introduce short caller-aware caching only when invalidation/staleness requirements are defined. |
+| GAP-009 | Medium | The planned Angular card set and role-to-widget visibility are not specified visually or in routes. | Define the MVP card matrix, ordering, labels, zero states, target routes, responsive layout, and per-card failure behaviour before implementation. |
+| GAP-010 | Low | The dashboard diagram shows a single nonexistent `/api/v1/dashboard/summary` endpoint plus Notifications, contradicting the four context-owned endpoints. | Redraw it with the implemented TODO request and the four independently proposed summary routes, clearly marking current versus planned flows. |
+| GAP-011 | Low | The companion proposal still calls the dashboard a static placeholder and describes only four museum-question states. | Align `docs/proposals/17Dashboard-Summary-API.md` after the product decisions above. |
 
 ## 11. Traceability
 

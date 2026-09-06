@@ -309,17 +309,17 @@ no two runs of any kind can overlap is not true in the current implementation.
 
 | ID | Behaviour | Automated evidence |
 | --- | --- | --- |
-| AC-001 | A watch can be created paused without changing the default active behaviour | `test_scientific_return.py::test_watch_creation_can_be_paused_without_changing_the_default` |
-| AC-002 | Creation and lookup return typed ineligibility reasons | `test_scientific_return.py::test_watch_creation_reports_typed_and_human_readable_ineligibility`, `::test_watch_lookup_exposes_each_typed_ineligibility_reason` |
-| AC-003 | Bulk lookup preserves order and reports eligibility | `test_scientific_return.py::test_watch_lookup_preserves_order_and_reports_eligibility` |
-| AC-004 | A new interval is derived from the anchor, not from update time | `test_scientific_return.py::test_a_new_interval_is_re_derived_from_the_anchor_not_from_now` |
-| AC-005 | A late run does not shift the series | `test_scientific_return.py::test_a_late_search_does_not_push_the_series_later` |
-| AC-006 | A long outage resumes at the next future grid point | `test_scientific_return.py::test_a_long_outage_resumes_at_the_next_future_slot` |
-| AC-007 | A future anchor postpones the first review | `test_scientific_return.py::test_a_future_anchor_postpones_the_first_review` |
-| AC-008 | A never-run watch remains due at its anchor after interval change | `test_scientific_return.py::test_a_new_interval_leaves_a_never_run_watch_due` |
-| AC-009 | A closed watch cannot be rescheduled | `test_scientific_return.py::test_a_closed_watch_cannot_be_rescheduled` |
-| AC-010 | Intervals outside 1–365 are rejected | `test_scientific_return.py::test_an_interval_outside_the_allowed_range_is_refused` |
-| AC-011 | Scheduled autonomous work fans out per object and isolates queue failures | `test_sweep_fan_out.py` |
+| AC-001 | A watch can be created paused without changing the default active behaviour | `test/scientific_return/test_scientific_return.py::test_watch_creation_can_be_paused_without_changing_the_default` |
+| AC-002 | Creation and lookup return typed ineligibility reasons | `test/scientific_return/test_scientific_return.py::test_watch_creation_reports_typed_and_human_readable_ineligibility`, `test/scientific_return/test_scientific_return.py::test_watch_lookup_exposes_each_typed_ineligibility_reason` |
+| AC-003 | Bulk lookup preserves order and reports eligibility | `test/scientific_return/test_scientific_return.py::test_watch_lookup_preserves_order_and_reports_eligibility` |
+| AC-004 | A new interval is derived from the anchor, not from update time | `test/scientific_return/test_scientific_return.py::test_a_new_interval_is_re_derived_from_the_anchor_not_from_now` |
+| AC-005 | A late run does not shift the series | `test/scientific_return/test_scientific_return.py::test_a_late_search_does_not_push_the_series_later` |
+| AC-006 | A long outage resumes at the next future grid point | `test/scientific_return/test_scientific_return.py::test_a_long_outage_resumes_at_the_next_future_slot` |
+| AC-007 | A future anchor postpones the first review | `test/scientific_return/test_scientific_return.py::test_a_future_anchor_postpones_the_first_review` |
+| AC-008 | A never-run watch remains due at its anchor after interval change | `test/scientific_return/test_scientific_return.py::test_a_new_interval_leaves_a_never_run_watch_due` |
+| AC-009 | A closed watch cannot be rescheduled | `test/scientific_return/test_scientific_return.py::test_a_closed_watch_cannot_be_rescheduled` |
+| AC-010 | Intervals outside 1–365 are rejected | `test/scientific_return/test_scientific_return.py::test_an_interval_outside_the_allowed_range_is_refused` |
+| AC-011 | Scheduled autonomous work fans out per object and isolates queue failures | `test/scientific_return/test_sweep_fan_out.py` |
 | AC-012 | The watchers page batches lookup and hides unfinished bulk controls | `project-watchers-page.component.spec.ts` |
 
 No focused automated test was found for the scheduled `run-due` selection and
@@ -454,8 +454,9 @@ delivery mechanism or record retryable delivery state.
   query outcomes, and candidate counts.
 - **Determinism:** calculate cadence from the anchor grid, never from scheduler
   delay.
-- **Cost control:** contact sources only for active due watches; search-level
-  source and query limits are defined in SPEC-003.
+- **Cost control:** scheduled sweeps contact sources only for active due
+  watches. Manual deterministic runs require an active watch but may run before
+  its next due time. Search-level limits are defined in SPEC-003.
 - **Resilience:** isolate notification and per-object autonomous-queue failures
   from an already committed deterministic run.
 - **Time:** persist and compare scheduling instants in UTC.

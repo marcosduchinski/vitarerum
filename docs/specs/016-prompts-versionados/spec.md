@@ -307,13 +307,13 @@ than using Angular's declarative `resource()` API.
 
 | ID | Invariant |
 | --- | --- |
-| INV-001 | Version content and default temperature do not change after creation. |
+| INV-001 | Runtime lifecycle operations preserve version content and default temperature; migrations can change or remove installed versions as described in FR-007. |
 | INV-002 | At most one version per template has `published` status. |
 | INV-003 | Publishing a draft archives the current published version in the same transaction. |
 | INV-004 | A published version cannot be archived without publishing a replacement. |
 | INV-005 | Consumers resolve managed prompts through the published language. |
 | INV-006 | A missing published prompt is an explicit operational error, not a hidden code fallback. |
-| INV-007 | Exact historical versions remain readable through their stable identifier. |
+| INV-007 | Runtime publication/archive operations preserve exact historical reads; versions removed by migrations are no longer available. |
 | INV-008 | Preview does not persist a prompt version or generated narrative. |
 
 ## 8. Error contract
@@ -338,9 +338,9 @@ prompt error vocabulary.
 
 | Capability | Automated evidence |
 | --- | --- |
-| Published resolution, uniqueness, and current-state filters | `test_repository.py` |
-| Publish replacement, archive guard, copy semantics, and missing active prompt | `test_use_cases.py` |
-| Staff access, immutable historical read, and draft validation | `test_api.py` |
+| Published resolution, uniqueness, and current-state filters | `test/ai/prompts/test_repository.py` |
+| Publish replacement, archive guard, copy semantics, and missing active prompt | `test/ai/prompts/test_use_cases.py` |
+| Staff access, immutable historical read, and draft validation | `test/ai/prompts/test_api.py` |
 | Angular HTTP wire contract and preview fallback | `ai-prompt-management.service.spec.ts` |
 | Angular list, detail, editor, lifecycle actions, and preview bench | `ai-prompts-page.component.spec.ts` |
 | Consumer resolution and provenance | Museum Narrative and Scientific Return prompt-adapter/use-case tests |
@@ -386,23 +386,23 @@ prompt error vocabulary.
 
 ## 11. Known gaps and required improvements
 
-| Priority | Gap | Required change |
-| --- | --- | --- |
-| High | Every staff permission can change production prompts, including direction and ordinary curatorial users. | Introduce explicit prompt reader/editor/publisher permissions and enforce them in backend use cases, routes, menus, and tests. |
-| High | Publication has no approval, separation of duties, confirmation, reason, diff, or mandatory evaluation evidence. | Define a governed review/publish workflow with actor separation, content diff, approval evidence, and rollback procedure. |
-| High | Concurrent publications are serialised and may both succeed, so a later request can immediately replace the first without a conflict. | Add expected-active-version or optimistic concurrency input and reject stale publication attempts with `409`. |
-| High | Draft numbering uses `max + 1` without locking, and label/number integrity errors are not translated. | Allocate versions under the template lock or database sequence and map uniqueness conflicts to a stable `409` error. |
-| Medium | Archive records no actor or reason, and re-archiving changes its timestamp. | Add `archivedBy`/reason, define idempotent or conflict semantics, and preserve the first lifecycle event. |
-| Medium | Exact source-copy provenance is discarded after draft creation. | Persist `sourceVersionId` when auditability of derived prompts is required. |
-| Medium | `version_label` and content have no API maximum; an oversized label can fail at the 96-character database column. | Align Pydantic/domain limits with persistence and define a safe maximum prompt size. |
-| Medium | Preview against a selected completed project requires a pre-existing report and silently retries after a `404`. | Provide an explicit project-to-record selection API or safely prepare a preview record, and distinguish project IDs from record IDs in the UI. |
-| Medium | Scientific-return prompts cannot be previewed or evaluated from the management UI. | Add consumer-specific fixtures/evaluations before allowing publication, rather than reusing the narrative preview contract. |
-| Medium | Variables schemas are stored but not enforced. | Validate declared variables/placeholders against consumer input or remove the unused metadata to avoid false assurance. |
-| Medium | Prompt lists are unpaginated and the UI performs an N+1 version-history fan-out. | Add summary fields/read model and pagination before the catalogue grows materially. |
-| Medium | Consumer attribution is contractual rather than centrally enforced. | Add consumer contract tests requiring version ID/label persistence for every managed-prompt invocation. |
-| Low | `proposal_assistance` and `project_assistance` are unused enum values. | Either implement and seed those consumers or remove/deprecate the unsupported purposes. |
-| Low | `SYS_ADMIN` is permitted by the API but lacks the AI Prompts menu entry. | Align menu visibility with the decided permission model. |
-| Low | The Angular index performs side effects in its constructor and manage/view pages depend on seeded `ptpl-` ID conventions for parts of the UX. | Move loading to declarative resources and replace identifier-prefix checks with explicit server capabilities. |
+| ID | Priority | Gap | Required change |
+| --- | --- | --- | --- |
+| GAP-001 | High | Every staff permission can change production prompts, including direction and ordinary curatorial users. | Introduce explicit prompt reader/editor/publisher permissions and enforce them in backend use cases, routes, menus, and tests. |
+| GAP-002 | High | Publication has no approval, separation of duties, confirmation, reason, diff, or mandatory evaluation evidence. | Define a governed review/publish workflow with actor separation, content diff, approval evidence, and rollback procedure. |
+| GAP-003 | High | Concurrent publications are serialised and may both succeed, so a later request can immediately replace the first without a conflict. | Add expected-active-version or optimistic concurrency input and reject stale publication attempts with `409`. |
+| GAP-004 | High | Draft numbering uses `max + 1` without locking, and label/number integrity errors are not translated. | Allocate versions under the template lock or database sequence and map uniqueness conflicts to a stable `409` error. |
+| GAP-005 | Medium | Archive records no actor or reason, and re-archiving changes its timestamp. | Add `archivedBy`/reason, define idempotent or conflict semantics, and preserve the first lifecycle event. |
+| GAP-006 | Medium | Exact source-copy provenance is discarded after draft creation. | Persist `sourceVersionId` when auditability of derived prompts is required. |
+| GAP-007 | Medium | `version_label` and content have no API maximum; an oversized label can fail at the 96-character database column. | Align Pydantic/domain limits with persistence and define a safe maximum prompt size. |
+| GAP-008 | Medium | Preview against a selected completed project requires a pre-existing report and silently retries after a `404`. | Provide an explicit project-to-record selection API or safely prepare a preview record, and distinguish project IDs from record IDs in the UI. |
+| GAP-009 | Medium | Scientific-return prompts cannot be previewed or evaluated from the management UI. | Add consumer-specific fixtures/evaluations before allowing publication, rather than reusing the narrative preview contract. |
+| GAP-010 | Medium | Variables schemas are stored but not enforced. | Validate declared variables/placeholders against consumer input or remove the unused metadata to avoid false assurance. |
+| GAP-011 | Medium | Prompt lists are unpaginated and the UI performs an N+1 version-history fan-out. | Add summary fields/read model and pagination before the catalogue grows materially. |
+| GAP-012 | Medium | Consumer attribution is contractual rather than centrally enforced. | Add consumer contract tests requiring version ID/label persistence for every managed-prompt invocation. |
+| GAP-013 | Low | `proposal_assistance` and `project_assistance` are unused enum values. | Either implement and seed those consumers or remove/deprecate the unsupported purposes. |
+| GAP-014 | Low | `SYS_ADMIN` is permitted by the API but lacks the AI Prompts menu entry. | Align menu visibility with the decided permission model. |
+| GAP-015 | Low | The Angular index performs side effects in its constructor and manage/view pages depend on seeded `ptpl-` ID conventions for parts of the UX. | Move loading to declarative resources and replace identifier-prefix checks with explicit server capabilities. |
 
 ## 12. Traceability
 

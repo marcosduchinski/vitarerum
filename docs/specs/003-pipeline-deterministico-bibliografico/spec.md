@@ -407,19 +407,19 @@ rediscovery, or one open transaction never spanning a source call.
 
 | ID | Behaviour | Automated evidence |
 | --- | --- | --- |
-| AC-001 | Exact planning uses researcher, inventory, and object | `test_scientific_return.py::test_planner_uses_only_author_inventory_and_object` |
-| AC-002 | Adaptive planning replaces a multi-token object with its first term | `test_scientific_return.py::test_adaptive_planner_broadens_only_binomial_object_to_genus` |
-| AC-003 | Adaptive trajectories follow an exact pass with no touched candidate | `test_scientific_return.py::test_pipeline_uses_adaptive_query_after_exact_queries_fail` |
-| AC-004 | Museum-prefix and repeated collection segments are normalised | `test_scientific_return.py::test_evidence_normalizes_museum_prefix_and_repeated_inventory_segments` |
-| AC-005 | A record returned by multiple trajectories creates one candidate | `test_scientific_return.py::test_pipeline_deduplicates_same_record_across_query_trajectories` |
-| AC-006 | Query limit is enforced and shared across sources | `test_scientific_return.py::test_pipeline_caps_external_queries_per_run`, `::test_pipeline_query_cap_is_shared_across_sources` |
-| AC-007 | A dismissed candidate remains dismissed when rediscovered | `test_scientific_return.py::test_dismissed_candidate_is_remembered_on_later_run` |
-| AC-008 | Crossref retries `429` and does not retry a permanent client error | `test_crossref.py` |
-| AC-009 | OpenAlex maps records, routes structured authors, requires a key, and redacts it from logs | `test_openalex.py` |
-| AC-010 | Europe PMC enriches from and caches open-access full text | `test_europe_pmc.py` |
-| AC-011 | Excessive retry waits and total call duration are bounded | `test_source_wait_budget.py` |
-| AC-012 | PostgreSQL coordinates source throttle reservations | `test_source_rate_limiter.py` |
-| AC-013 | Logical query text round-trips through the encrypted repository mapping | `test_investigation_repository.py::test_queries_are_listed_across_every_run_of_a_watch` |
+| AC-001 | Exact planning uses researcher, inventory, and object | `test/scientific_return/test_scientific_return.py::test_planner_uses_only_author_inventory_and_object` |
+| AC-002 | Adaptive planning replaces a multi-token object with its first term | `test/scientific_return/test_scientific_return.py::test_adaptive_planner_broadens_only_binomial_object_to_genus` |
+| AC-003 | Adaptive trajectories follow an exact pass with no touched candidate | `test/scientific_return/test_scientific_return.py::test_pipeline_uses_adaptive_query_after_exact_queries_fail` |
+| AC-004 | Museum-prefix and repeated collection segments are normalised | `test/scientific_return/test_scientific_return.py::test_evidence_normalizes_museum_prefix_and_repeated_inventory_segments` |
+| AC-005 | A record returned by multiple trajectories creates one candidate | `test/scientific_return/test_scientific_return.py::test_pipeline_deduplicates_same_record_across_query_trajectories` |
+| AC-006 | Query limit is enforced and shared across sources | `test/scientific_return/test_scientific_return.py::test_pipeline_caps_external_queries_per_run`, `test/scientific_return/test_scientific_return.py::test_pipeline_query_cap_is_shared_across_sources` |
+| AC-007 | A dismissed candidate remains dismissed when rediscovered | `test/scientific_return/test_scientific_return.py::test_dismissed_candidate_is_remembered_on_later_run` |
+| AC-008 | Crossref retries `429` and does not retry a permanent client error | `test/scientific_return/test_crossref.py` |
+| AC-009 | OpenAlex maps records, routes structured authors, requires a key, and redacts it from logs | `test/scientific_return/test_openalex.py` |
+| AC-010 | Europe PMC enriches from and caches open-access full text | `test/scientific_return/test_europe_pmc.py` |
+| AC-011 | Excessive retry waits and total call duration are bounded | `test/scientific_return/test_source_wait_budget.py` |
+| AC-012 | PostgreSQL coordinates source throttle reservations | `test/scientific_return/test_source_rate_limiter.py` |
+| AC-013 | Logical query text round-trips through the encrypted repository mapping | `test/scientific_return/test_investigation_repository.py::test_queries_are_listed_across_every_run_of_a_watch` |
 
 ## 11. Known implementation gaps
 

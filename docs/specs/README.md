@@ -5,7 +5,9 @@ status: current
 # Especificacoes (specs)
 
 Uma spec descreve **o que o sistema faz e sob que regras**, a partir do
-comportamento ja implementado. Distingue-se dos documentos vizinhos:
+comportamento ja implementado e das suas lacunas declaradas. A SPEC-021 e a
+excecao explicita: descreve requisitos ainda por implementar. Distingue-se dos
+documentos vizinhos:
 
 | Pasta | Responde a |
 | --- | --- |
@@ -34,8 +36,14 @@ docs/specs/NNN-nome-curto/
   teste e uma lacuna **declarada**, nao uma omissao silenciosa.
 - Cada spec declara as suas lacunas de implementacao em `GAP-nnn` — propriedades
   do repositorio atual, nao trabalho hipotetico futuro.
-- A spec nao descreve implementacao; a rastreabilidade para o codigo vive numa
-  seccao final propria.
+- Os identificadores publicados sao estaveis: uma lacuna resolvida conserva o
+  identificador reservado, sem renumerar as seguintes.
+- As referencias a testes Python usam caminhos relativos a `vitarerum-api/`,
+  como `test/contexto/test_modulo.py::test_caso`, para distinguir ficheiros
+  homonimos. A existencia do teste nao prova, por si so, toda a garantia citada.
+- A spec privilegia comportamento observavel; inclui mecanismos de
+  implementacao quando explicam garantias ou limites. A rastreabilidade para
+  o codigo tem uma seccao final propria.
 - Cada spec termina com questoes em aberto — decisoes que o codigo nao responde.
 - As specs estao escritas em ingles; este indice e os nomes das pastas mantem-se
   em portugues sem acentos.
@@ -50,14 +58,16 @@ pelos ADR e por trabalho externo a este repositorio.
 Nao le como ordem de desenvolvimento nem como ordem de dependencia, e nao
 podia:
 
-- **Cronologia**: o que esta numerado 001–006 e o **ultimo** a ser construido
-  (2026-08-14). O primeiro (2026-06-27) e o conjunto 007, 008, 009, 010, 013,
+- **Cronologia**: o contexto das specs 001–006 chegou depois do nucleo
+  institucional (2026-08-14), mas antes das funcionalidades 024 e 025.
+  O primeiro (2026-06-27) e o conjunto 007, 008, 009, 010, 013,
   015, 017, 022 e 023 — nove specs sobre sete contextos que nasceram no mesmo
   commit inicial, portanto sem ordem nenhuma entre si.
-- **Dependencia**: o grafo de citacoes entre specs **nao e aciclico**. Ha 32
-  pares mutuamente dependentes (008↔009, 013↔015, 024↔025, entre outros), porque
+- **Dependencia**: o grafo de citacoes entre specs **nao e aciclico**. Ha 33
+  pares com citacoes reciprocas (008↔009, 013↔015, 024↔025, entre outros), porque
   uma proposta aprovada *torna-se* um projeto e uma visita *produz* um relatorio.
-  Nao existe ordenacao linear para codificar num numero.
+  Nao existe ordenacao linear para codificar num numero. Citacoes reciprocas
+  nao implicam dependencias circulares entre modulos em runtime.
 
 As duas leituras que um numero nao consegue dar estao abaixo: um percurso de
 leitura e o grafo de dependencias. A coluna "Contexto desde" no inventario da a
@@ -65,8 +75,8 @@ cronologia.
 
 ## Percurso de leitura
 
-Para quem chega ao sistema, por camadas. Dentro de cada camada a ordem e a
-sugerida; entre camadas, cada uma assenta nas anteriores.
+Para quem chega ao sistema, por camadas. A ordem e pedagogica, nao uma
+sequencia obrigatoria de desenvolvimento ou de dependencias.
 
 | # | Camada | Ler por esta ordem |
 | --- | --- | --- |
@@ -91,15 +101,14 @@ flowchart TD
 
     I -->|8| F
     C -->|5| I
-    F -->|5| I
     C -->|4| F
+    F -->|4| I
     F -->|3| C
     P -->|3| I
     R -->|3| F
     P -->|2| R
     R -->|2| P
     C -->|1| R
-    F -->|1| P
     F -->|1| R
     I -->|1| P
     I -->|1| R
@@ -107,7 +116,8 @@ flowchart TD
     R -->|1| I
 ```
 
-As setas contam citacoes entre specs das duas camadas. Que apontem nos dois
+As setas contam pares distintos de origem e destino entre specs das duas
+camadas, excluindo a SPEC-021 proposta. Que apontem nos dois
 sentidos e o ponto: as camadas **compoem-se**, nao se empilham. Uma spec de
 fundacoes cita o fluxo porque e ai que a garantia se manifesta.
 
@@ -127,7 +137,7 @@ Extraidas das citacoes `SPEC-NNN` dentro de cada spec.
 | 008 | 007, 009, 010, 019, 022, 023 |
 | 009 | 004, 008, 013, 019, 022, 023 |
 | 010 | 007, 008, 019, 022, 023 |
-| 011 | 010, 018, 022 |
+| 011 | 010, 018, 021, 022 |
 | 012 | 008, 010, 022 |
 | 013 | 009, 015, 017 |
 | 014 | 007, 008 |
@@ -139,7 +149,7 @@ Extraidas das citacoes `SPEC-NNN` dentro de cada spec.
 | 020 | 009, 013, 015, 017, 023 |
 | 021 | 007, 008, 009, 011, 014, 018 |
 | 022 | 002, 008, 009, 010, 011, 012, 014, 019, 023 |
-| 023 | 007, 019, 020, 022 |
+| 023 | 007, 022 |
 | 024 | 001, 002, 004, 022, 025 |
 | 025 | 001, 004, 022, 024 |
 
@@ -155,6 +165,9 @@ delimitado que a spec descreve — a cronologia real de construcao, que o numero
 da spec nao da. As specs 024 e 025 trazem a data da propria funcionalidade, por
 terem chegado ao contexto `scientific_return` depois de ele existir.
 
+"Implementado" identifica uma capacidade existente, nao a ausencia de
+lacunas: os limites e requisitos nao satisfeitos estao declarados em cada spec.
+
 
 ### Retorno cientifico (`scientific_return`)
 
@@ -165,7 +178,7 @@ terem chegado ao contexto `scientific_return` depois de ele existir.
 | [SPEC-003](003-pipeline-deterministico-bibliografico/spec.md) | Pipeline deterministico de descoberta | Implementado | 2026-08-14 |
 | [SPEC-004](004-decisao-candidato-publicacao/spec.md) | Decisao curatorial e registo de publicacao | Implementado | 2026-08-14 |
 | [SPEC-005](005-analise-agentica-de-candidato/spec.md) | Analise agentica de candidato e retorno curatorial | Implementado | 2026-08-14 |
-| [SPEC-006](006-avaliacao-retorno-cientifico/spec.md) | Avaliacao reprodutivel | Implementado | 2026-08-14 |
+| [SPEC-006](006-avaliacao-retorno-cientifico/spec.md) | Avaliacao empirica com fontes e modelos vivos | Implementado | 2026-08-14 |
 | [SPEC-024](024-investigacao-agentica-autonoma/spec.md) | Ciclo agentic autonomo (full-agentic) | Implementado | 2026-08-24 |
 | [SPEC-025](025-base-de-conhecimento-curatorial/spec.md) | Base de conhecimento curatorial | Implementado | 2026-08-24 |
 
@@ -177,7 +190,7 @@ terem chegado ao contexto `scientific_return` depois de ele existir.
 | [SPEC-008](008-proposta-uso-de-colecoes/spec.md) | `use_of_collections` — fase de proposta | Implementado | 2026-06-27 |
 | [SPEC-009](009-projeto-uso-de-colecoes/spec.md) | `use_of_collections` — fase de projeto e diarios | Implementado | 2026-06-27 |
 | [SPEC-010](010-submissao-publica/spec.md) | `public_submission` | Implementado | 2026-06-27 |
-| [SPEC-011](011-perguntas-ao-museu/spec.md) | `museum_questions` | Implementado (com uma lacuna declarada) | 2026-07-05 |
+| [SPEC-011](011-perguntas-ao-museu/spec.md) | `museum_questions` | Implementado | 2026-07-05 |
 | [SPEC-012](012-modelos-de-documento/spec.md) | `document_templates` | Implementado | 2026-07-02 |
 | [SPEC-014](014-catalogo-e-indice-de-objetos/spec.md) | `collection_object_index` | Implementado | 2026-07-04 |
 | [SPEC-019](019-numeros-de-referencia/spec.md) | `reference_numbers` | Implementado | 2026-07-24 |
@@ -197,7 +210,7 @@ terem chegado ao contexto `scientific_return` depois de ele existir.
 
 | Spec | Ambito | Estado | Contexto desde |
 | --- | --- | --- | --- |
-| [SPEC-022](022-cifragem-e-armazenamento/spec.md) | Cifragem em repouso, armazenamento e autorizacao partilhada | Implementado | 2026-06-27 |
+| [SPEC-022](022-cifragem-e-armazenamento/spec.md) | Cifragem em repouso e armazenamento de ficheiros | Implementado | 2026-06-27 |
 | [SPEC-023](023-fronteiras-e-envelope-de-erro/spec.md) | Fronteiras de contexto, camadas e envelope de erro | Implementado | 2026-06-27 |
 
 ### Por implementar
@@ -210,6 +223,30 @@ terem chegado ao contexto `scientific_return` depois de ele existir.
 
 O inventario cobre todos os contextos delimitados ativos listados em
 `AGENTS.md`.
+
+### Revisao concluida em 2026-09-06
+
+- As 25 specs foram lidas e confrontadas entre si e com os pontos de codigo e
+  testes relevantes. Foram qualificados os caminhos dos testes Python e
+  identificadas as lacunas que ainda nao tinham `GAP-nnn`.
+- `python3 scripts/check_docs.py` e `git diff --check`: sem erros.
+- Testes direcionados de investigacao, grounding, proveniencia, identidade,
+  notificacoes e referencias: **115 passaram**, com 5 avisos de limpeza de
+  sessoes SQLite/threads. `uv run lint-imports`: **36 contratos respeitados,
+  zero quebrados**. Estas execucoes ocorreram em 2026-09-05.
+- Em 2026-09-06, um ensaio SQLite isolado em memoria confirmou a restauracao
+  indevida de uma notificacao limpa por uma gravacao desatualizada
+  (SPEC-018, GAP-016); outro confirmou a mascara invalida corrigida na SPEC-019.
+- Nao foram repetidas as suites integrais do backend/frontend nem testes
+  PostgreSQL; nao foram chamados servicos externos ou modelos. As contagens
+  integrais abaixo sao registos anteriores, nao resultados desta execucao.
+
+O verificador documental confere referencias e rotas por segmento nomeado;
+nao demonstra cobertura exaustiva de pares metodo/caminho HTTP nem a validade
+semantica de cada garantia. As lacunas declaradas prevalecem sobre uma
+contagem historica de cobertura.
+
+### Registos anteriores
 
 Em 2026-08-18, ao escrever as specs:
 
@@ -300,18 +337,41 @@ mesma data:
 10. Esta tabela de dependencias, a contagem de pares mutuos, as specs mais
     citadas e o grafo de camadas estavam desatualizados face as citacoes reais.
     Regenerados.
+11. O catalogo de contextos estava incompleto: o
+    [`module-boundaries.md`](../architecture/module-boundaries.md) nao listava
+    `external_publications` nem `reference_numbers`, e o
+    [`AGENTS.md`](../../vitarerum-api/AGENTS.md) omitia esses dois e ainda
+    `notifications`. Os dois documentos foram completados, e
+    `app/ai/museum_question_triage` passou a constar em ambos como scaffold
+    inativo. A GAP-008 da
+    [SPEC-023](023-fronteiras-e-envelope-de-erro/spec.md) ficou resolvida e
+    reservada. A GAP-009 descreve o que resta: nada verifica que um contexto
+    novo entre no catalogo.
 
 Levantadas na mesma revisao e **por resolver** — ficam declaradas nas specs:
 
-11. `app/ai/museum_question_triage` mantem metadados ORM e duas tabelas de uma
-    funcionalidade removida, sem spec, sem contrato e sem decisao de retencao
-    ([SPEC-023](023-fronteiras-e-envelope-de-erro/spec.md), lacuna 10, e
+12. As tabelas da triagem removida (`museum_question_triages`,
+    `museum_question_triage_classifications`) continuam no esquema, sem spec que
+    as possua e sem decisao de retencao
+    ([SPEC-023](023-fronteiras-e-envelope-de-erro/spec.md), GAP-010, e
     [SPEC-011](011-perguntas-ao-museu/spec.md), GAP-006).
-12. `docs/architecture/module-boundaries.md` e `vitarerum-api/AGENTS.md` nao
-    listam todos os contextos ativos: falta `external_publications` e
-    `reference_numbers` em ambos, e `notifications` no AGENTS.md
-    ([SPEC-023](023-fronteiras-e-envelope-de-erro/spec.md), lacuna 8).
 13. Tres testes de componente Angular falham: dois ja declarados pela
     [SPEC-008](008-proposta-uso-de-colecoes/spec.md) (GAP-014) e um terceiro,
     o controlo de fora de ambito escondido, agora declarado pela
     [SPEC-011](011-perguntas-ao-museu/spec.md) (GAP-008).
+
+### Correcoes e lacunas da revisao concluida em 2026-09-06
+
+As divergencias documentais abaixo foram corrigidas. As lacunas de codigo
+foram explicitadas, nao implementadas nesta revisao.
+
+| Specs | Correcao ou limite identificado |
+| --- | --- |
+| 001, 002, 024 | Separados replay idempotente, execucao manual e cadencia. O ciclo autonomo nao exige vigilancia ativa nem a revalida no worker (024, GAP-010). |
+| 004, 005, 024 | A fila global omite outros estados por defeito (`PENDING`). Grounding literal nao prova identidade do objeto ou ausencia exaustiva; o snapshot nao prova o que o revisor viu. |
+| 007 | Pedidos e confirmacoes de recuperacao partilham o limite por IP, em vez de terem quotas independentes. |
+| 008, 022 | Delimitada a cifragem apos materializacao de propostas; reconhecida a integracao ja existente com Secret Manager, sem a confundir com rotacao versionada. |
+| 009, 016 | Imutabilidade limitada as operacoes realmente impedidas; notas/anexos e migracoes nao estao cobertos por uma garantia absoluta. |
+| 011, 012, 013 | Explicitada a ausencia de propriedade/filtro institucional para perguntas, modelos e mapeamentos (GAP-015, GAP-013 e GAP-014, respetivamente). |
+| 014, 015, 018 | Falta desempate total na paginacao; corrigida a contagem de leituras dependentes; documentada a concorrencia insegura entre marcar e limpar notificacoes. |
+| 019, 021 | Corrigido exemplo de mascara invalida e a precedencia das tres rotas de resumo propostas; removida duplicacao de contrato em SPEC-011. |

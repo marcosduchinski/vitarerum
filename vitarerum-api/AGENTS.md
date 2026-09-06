@@ -22,8 +22,13 @@ Primary bounded contexts:
 - `collection_object_index`: searchable collection-object source data and snapshots.
 - `document_templates`: managed document templates and uploaded template files.
 - `museum_questions`: public museum questions and staff responses.
+- `notifications`: in-app notifications addressed to one acting permission.
+- `reference_numbers`: configurable reference-number policies, sequences, and
+  the allocator used by proposal, project, and journal workflows.
 - `scientific_return`: supervised bibliographic monitoring and evidence review
   for scientific outputs from completed collection-use projects.
+- `external_publications`: revocable token grants that expose a proposal,
+  project, or in-situ visit report outside the authenticated application.
 - `reports.in_situ_visit`: in-situ visit report aggregation across record and narrative contexts.
 - `ai.museum_narrative`: AI-assisted (KG-RAG) museum narrative generation.
 - `ai.prompts`: versioned prompt templates used by AI-assisted contexts.
@@ -37,6 +42,11 @@ Context namespaces:
 - `app/ai/in_situ_visit` currently exists only as an empty scaffold with no
   implementation and no import-linter contracts. Do not list it as an active
   bounded context until it has real behavior and architecture contracts.
+- `app/ai/museum_question_triage` holds only the ORM metadata of a removed
+  feature, so `alembic revision --autogenerate` does not propose dropping the
+  tables it still describes. It has no behavior, no import-linter contract, and
+  no specification. Do not list it as an active bounded context; the retained
+  tables need either a data-retention migration or a recorded decision.
 
 > This file is the canonical `AGENTS.md`. It complements `CLAUDE.md` and the
 > agent memory; when guidance conflicts, prefer the most specific and most

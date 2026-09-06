@@ -71,7 +71,8 @@ repository and are not persisted through the scientific-return domain model.
 
 The deterministic evaluator directly reuses production analysis functions. The
 agentic evaluator reuses the policy and inventory-variant tool, but not the
-complete production orchestrator described by SPEC-024.
+complete assisted orchestrator described by SPEC-001 or the autonomous
+orchestrator described by SPEC-024.
 
 ## 5. Ubiquitous language
 
@@ -329,20 +330,20 @@ provenance, full production parity, or valid review membership.
 
 | ID | Behaviour | Automated evidence |
 | --- | --- | --- |
-| AC-001 | Fixture loads and preserves original cases | `test_evaluation_fixture.py::test_the_shipped_fixture_loads`, `::test_the_original_cases_survive_the_extraction` |
-| AC-002 | Fixture has discovery and enrichment targets | `test_evaluation_fixture.py::test_the_fixture_separates_discovery_targets_from_enrichment_targets`, `::test_the_fixture_adds_cases_the_baseline_has_not_resolved` |
-| AC-003 | Declared gaps are generator- and budget-reachable | `test_evaluation_fixture.py::test_declared_inventory_gaps_are_reachable_by_the_variant_generator`, `::test_declared_gaps_are_reachable_within_the_configured_query_budget` |
-| AC-004 | Cited form alone does not close a gap | `test_evaluation_fixture.py::test_the_recorded_form_alone_does_not_close_a_declared_gap` |
-| AC-005 | Unmapped publications remain documented | `test_evaluation_fixture.py::test_unmapped_papers_are_documented` |
-| AC-006 | Invalid fixture declarations and duplicate IDs fail | `test_evaluation_fixture.py::test_a_fully_resolved_case_may_not_declare_a_gap`, `::test_a_gap_case_must_state_its_cause`, `::test_an_unverified_case_may_not_claim_a_measurement`, `::test_duplicated_case_ids_are_rejected` |
-| AC-007 | Baseline exposes source metrics and review queue | `test_scientific_return.py::test_evaluation_reports_per_source_metrics_and_review_queue` |
-| AC-008 | Review timestamps require a timezone | `test_scientific_return.py::test_phase_zero_review_requires_a_timezone` |
-| AC-009 | Three documented modes have distinct effects | `test_agentic_evaluation.py::test_shadow_mode_asks_the_model_and_executes_nothing`, `::test_policy_only_decides_but_still_executes_nothing`, `::test_supervised_mode_executes_the_authorised_action` |
-| AC-010 | Retrieval without actionability does not close a gap | `test_agentic_evaluation.py::test_a_gap_counts_as_closed_only_when_the_case_becomes_actionable`, `::test_a_retrieved_but_unmatched_record_does_not_close_the_gap` |
-| AC-011 | Report retains provenance subset, plan, duplicates, and noise | `test_agentic_evaluation.py::test_the_report_records_what_it_was_run_with`, `::test_the_plan_action_is_reported_for_auditing`, `::test_report_aggregates_measured_duplicates_and_false_positives` |
-| AC-012 | Invalid plans and reflections are non-fatal | `test_agentic_evaluation.py::test_an_invalid_plan_is_counted_not_fatal`, `::test_an_unavailable_reflection_is_counted_not_fatal` |
-| AC-013 | Agentic queries do not repeat baseline queries | `test_agentic_evaluation.py::test_the_cycle_starts_from_what_the_pipeline_already_tried` |
-| AC-014 | Ceiling does not hide agent recall failure | `test_agentic_evaluation.py::test_the_ceiling_does_not_absorb_the_agents_own_recall_failure` |
+| AC-001 | Fixture loads and preserves original cases | `test/scientific_return/test_evaluation_fixture.py::test_the_shipped_fixture_loads`, `test/scientific_return/test_evaluation_fixture.py::test_the_original_cases_survive_the_extraction` |
+| AC-002 | Fixture has discovery and enrichment targets | `test/scientific_return/test_evaluation_fixture.py::test_the_fixture_separates_discovery_targets_from_enrichment_targets`, `test/scientific_return/test_evaluation_fixture.py::test_the_fixture_adds_cases_the_baseline_has_not_resolved` |
+| AC-003 | Declared gaps are generator- and budget-reachable | `test/scientific_return/test_evaluation_fixture.py::test_declared_inventory_gaps_are_reachable_by_the_variant_generator`, `test/scientific_return/test_evaluation_fixture.py::test_declared_gaps_are_reachable_within_the_configured_query_budget` |
+| AC-004 | Cited form alone does not close a gap | `test/scientific_return/test_evaluation_fixture.py::test_the_recorded_form_alone_does_not_close_a_declared_gap` |
+| AC-005 | Unmapped publications remain documented | `test/scientific_return/test_evaluation_fixture.py::test_unmapped_papers_are_documented` |
+| AC-006 | Invalid fixture declarations and duplicate IDs fail | `test/scientific_return/test_evaluation_fixture.py::test_a_fully_resolved_case_may_not_declare_a_gap`, `test/scientific_return/test_evaluation_fixture.py::test_a_gap_case_must_state_its_cause`, `test/scientific_return/test_evaluation_fixture.py::test_an_unverified_case_may_not_claim_a_measurement`, `test/scientific_return/test_evaluation_fixture.py::test_duplicated_case_ids_are_rejected` |
+| AC-007 | Baseline exposes source metrics and review queue | `test/scientific_return/test_scientific_return.py::test_evaluation_reports_per_source_metrics_and_review_queue` |
+| AC-008 | Review timestamps require a timezone | `test/scientific_return/test_scientific_return.py::test_phase_zero_review_requires_a_timezone` |
+| AC-009 | Three documented modes have distinct effects | `test/scientific_return/test_agentic_evaluation.py::test_shadow_mode_asks_the_model_and_executes_nothing`, `test/scientific_return/test_agentic_evaluation.py::test_policy_only_decides_but_still_executes_nothing`, `test/scientific_return/test_agentic_evaluation.py::test_supervised_mode_executes_the_authorised_action` |
+| AC-010 | Retrieval without actionability does not close a gap | `test/scientific_return/test_agentic_evaluation.py::test_a_gap_counts_as_closed_only_when_the_case_becomes_actionable`, `test/scientific_return/test_agentic_evaluation.py::test_a_retrieved_but_unmatched_record_does_not_close_the_gap` |
+| AC-011 | Report retains provenance subset, plan, duplicates, and noise | `test/scientific_return/test_agentic_evaluation.py::test_the_report_records_what_it_was_run_with`, `test/scientific_return/test_agentic_evaluation.py::test_the_plan_action_is_reported_for_auditing`, `test/scientific_return/test_agentic_evaluation.py::test_report_aggregates_measured_duplicates_and_false_positives` |
+| AC-012 | Invalid plans and reflections are non-fatal | `test/scientific_return/test_agentic_evaluation.py::test_an_invalid_plan_is_counted_not_fatal`, `test/scientific_return/test_agentic_evaluation.py::test_an_unavailable_reflection_is_counted_not_fatal` |
+| AC-013 | Agentic queries do not repeat baseline queries | `test/scientific_return/test_agentic_evaluation.py::test_the_cycle_starts_from_what_the_pipeline_already_tried` |
+| AC-014 | Ceiling does not hide agent recall failure | `test/scientific_return/test_agentic_evaluation.py::test_the_ceiling_does_not_absorb_the_agents_own_recall_failure` |
 
 ## 13. Known implementation gaps
 
@@ -469,7 +470,7 @@ denominators and confidence intervals.
 | Shared policy and tool | `vitarerum-api/app/scientific_return/domain/agent_policies.py`, `application/agent_tools.py` |
 | CLI composition | `vitarerum-api/app/scientific_return/presentation/commands.py` |
 | Job entry point | `vitarerum-api/app/jobs/scientific_return.py` |
-| Automated evidence | `vitarerum-api/test/scientific_return/test_evaluation_fixture.py`, `test_agentic_evaluation.py`, `test_scientific_return.py` |
+| Automated evidence | `vitarerum-api/test/scientific_return/test_evaluation_fixture.py`, `test/scientific_return/test_agentic_evaluation.py`, `test/scientific_return/test_scientific_return.py` |
 | Current baseline | [`docs/evaluation/scientific-return-fixture-v3-baseline.md`](../../evaluation/scientific-return-fixture-v3-baseline.md) and companion JSON |
 | Superseded baseline | [`docs/evaluation/scientific-return-phase0-crossref-baseline.md`](../../evaluation/scientific-return-phase0-crossref-baseline.md) |
 

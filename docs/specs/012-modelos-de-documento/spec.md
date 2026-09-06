@@ -243,42 +243,43 @@ component test; only the HTTP management service is unit-tested.
 | GAP-010 | The administration page has no component tests for creation, grouping, editing, replacement, deletion confirmation, authorization UX, or errors. | Add focused Vitest coverage for the delivered management workflow. |
 | GAP-011 | `mandatory` is informational and no attachment is linked to a template/version. | Before enforcement, define template-instance identity, version matching, legacy behavior, and server-side validation. |
 | GAP-012 | CORS is application-global rather than a guarantee owned by these public routes. | Keep explicit non-local origins and avoid documenting per-route CORS isolation not enforced by the code. |
+| GAP-013 | Templates carry no institution owner. Public queries select only use type and active state, and staff management checks role without institution scope; the catalogue is shared deployment-wide. | Explicitly retain a deployment-wide catalogue or introduce institutional ownership and public institution selection before supporting separate institutional catalogues. Add tests for the chosen visibility and management boundary. |
 
 ## 9. Acceptance criteria
 
 ### AC-001 — Public active list and narrow projection
 
-Covered by `test_api.py::test_public_list_returns_only_active_for_use_type` and
+Covered by `test/document_templates/test_api.py::test_public_list_returns_only_active_for_use_type` and
 the public/authenticated proposal-form component tests that render template
 links and Mandatory badges.
 
 ### AC-002 — Public visibility and safe download filename
 
-Covered by `test_api.py::test_public_download_streams_docx`,
-`::test_public_download_missing_returns_404`,
-`::test_public_download_hides_inactive_template`, and
-`::test_public_download_uses_safe_content_disposition`.
+Covered by `test/document_templates/test_api.py::test_public_download_streams_docx`,
+`test/document_templates/test_api.py::test_public_download_missing_returns_404`,
+`test/document_templates/test_api.py::test_public_download_hides_inactive_template`, and
+`test/document_templates/test_api.py::test_public_download_uses_safe_content_disposition`.
 
 ### AC-003 — Staff authorization and inactive access
 
-Covered by `test_api.py::test_staff_list_includes_inactive`,
-`::test_staff_download_serves_inactive_template`,
-`::test_staff_download_forbidden_for_external`, and
-`::test_staff_endpoints_forbidden_for_external`.
+Covered by `test/document_templates/test_api.py::test_staff_list_includes_inactive`,
+`test/document_templates/test_api.py::test_staff_download_serves_inactive_template`,
+`test/document_templates/test_api.py::test_staff_download_forbidden_for_external`, and
+`test/document_templates/test_api.py::test_staff_endpoints_forbidden_for_external`.
 
 ### AC-004 — Creation and failed-commit cleanup
 
-Covered by `test_api.py::test_staff_create_persists_template_and_file`,
-`::test_staff_create_sanitizes_traversal_filename`,
-`::test_staff_create_rejects_non_docx`, and
-`::test_staff_create_cleans_up_file_when_commit_fails`.
+Covered by `test/document_templates/test_api.py::test_staff_create_persists_template_and_file`,
+`test/document_templates/test_api.py::test_staff_create_sanitizes_traversal_filename`,
+`test/document_templates/test_api.py::test_staff_create_rejects_non_docx`, and
+`test/document_templates/test_api.py::test_staff_create_cleans_up_file_when_commit_fails`.
 
 ### AC-005 — Metadata, replacement, and deletion
 
-Covered by `test_api.py::test_staff_patch_updates_metadata`,
-`::test_staff_patch_missing_returns_404`,
-`::test_staff_replace_file_swaps_stored_bytes`, and
-`::test_staff_delete_removes_template_and_file`. The same-filename rollback and
+Covered by `test/document_templates/test_api.py::test_staff_patch_updates_metadata`,
+`test/document_templates/test_api.py::test_staff_patch_missing_returns_404`,
+`test/document_templates/test_api.py::test_staff_replace_file_swaps_stored_bytes`, and
+`test/document_templates/test_api.py::test_staff_delete_removes_template_and_file`. The same-filename rollback and
 post-commit cleanup failure paths in GAP-004/GAP-005 are not covered.
 
 ### AC-006 — Angular HTTP contract

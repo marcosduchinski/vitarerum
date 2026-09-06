@@ -6,7 +6,7 @@
 | Status | Implemented |
 | Bounded context | `app/identity` (published language in `app/identity/public.py`) |
 | Derived from | Identity domain, application services, SQLAlchemy repositories, authentication routes, shared actor resolution, Angular session/guards, configuration, and automated tests |
-| Related specs | All other specs: none operates without an authenticated actor, except explicitly public entry points |
+| Related specs | Protected HTTP workflows resolve an authenticated actor here; public endpoints, operator CLIs, and scheduled/worker entry points use their separately specified access boundaries |
 
 ## 1. Problem
 
@@ -188,12 +188,13 @@ the same public confirmation endpoint and policy.
 
 ### FR-011 — Dedicated rate limits
 
-Password-reset requests and confirmations have independent rate limits. A
-request is limited per remote IP and normalized email address; confirmation is
-limited per remote IP and token hash. Exceeding a limit returns `429` with a
-`Retry-After` header.
+Password-reset requests and confirmations share the process-local
+`ip:{remote_ip}` bucket. Requests additionally use a normalized-email bucket;
+confirmations additionally use a token-hash bucket. Exceeding a limit returns
+`429` with a `Retry-After` header.
 
-Current limits are process-local sliding windows: 5 requests per IP per hour,
+Current limits are process-local sliding windows: 5 combined request/confirm
+attempts per IP per hour,
 3 requests per normalized email per day, and 10 confirmations per token hash
 per hour. `Retry-After` is always 60 seconds. Limits reset on process restart
 and are not shared across replicas.
@@ -319,11 +320,11 @@ returns that user and their permissions. Unknown email addresses, incorrect
 passwords, disabled users, and users without permissions are all refused as
 invalid credentials.
 
-→ `test_auth.py::test_authenticate_success_returns_user_and_permissions`,
-`::test_authenticate_wrong_password_raises`,
-`::test_authenticate_unknown_email_raises`,
-`::test_authenticate_user_without_permissions_raises`,
-`::test_authenticate_disabled_user_raises`
+→ `test/identity/test_auth.py::test_authenticate_success_returns_user_and_permissions`,
+`test/identity/test_auth.py::test_authenticate_wrong_password_raises`,
+`test/identity/test_auth.py::test_authenticate_unknown_email_raises`,
+`test/identity/test_auth.py::test_authenticate_user_without_permissions_raises`,
+`test/identity/test_auth.py::test_authenticate_disabled_user_raises`
 
 ### AC-002 — Login HTTP contract
 
@@ -331,11 +332,11 @@ Given a valid login request, the API returns the token, user, flat group values,
 and institution. Invalid credentials return `401` with the same message, while
 an invalid request body returns the shared `422` error envelope.
 
-→ `test_auth.py::test_login_success_returns_token_user_and_flat_group`,
-`::test_login_wrong_password_is_401_with_message`,
-`::test_login_disabled_user_is_401_with_message`,
-`::test_login_unknown_email_is_401`,
-`::test_login_missing_password_is_422_with_errors`
+→ `test/identity/test_auth.py::test_login_success_returns_token_user_and_flat_group`,
+`test/identity/test_auth.py::test_login_wrong_password_is_401_with_message`,
+`test/identity/test_auth.py::test_login_disabled_user_is_401_with_message`,
+`test/identity/test_auth.py::test_login_unknown_email_is_401`,
+`test/identity/test_auth.py::test_login_missing_password_is_422_with_errors`
 
 ### AC-003 — `401`/`403` boundary when resolving the actor
 
@@ -343,22 +344,22 @@ Given a protected request, missing or invalid bearer credentials return `401`;
 a missing, unknown, or unowned acting permission returns `403`; a disabled user
 returns `401`; and a valid owned permission resolves to an actor.
 
-→ `test_auth.py::test_caller_missing_authorization_is_401`,
-`::test_caller_malformed_token_is_401`,
-`::test_caller_valid_token_missing_permission_header_is_403`,
-`::test_caller_unknown_permission_is_403`,
-`::test_caller_permission_not_owned_is_403`,
-`::test_caller_disabled_user_is_401`,
-`::test_caller_valid_and_owned_returns_actor`
+→ `test/identity/test_auth.py::test_caller_missing_authorization_is_401`,
+`test/identity/test_auth.py::test_caller_malformed_token_is_401`,
+`test/identity/test_auth.py::test_caller_valid_token_missing_permission_header_is_403`,
+`test/identity/test_auth.py::test_caller_unknown_permission_is_403`,
+`test/identity/test_auth.py::test_caller_permission_not_owned_is_403`,
+`test/identity/test_auth.py::test_caller_disabled_user_is_401`,
+`test/identity/test_auth.py::test_caller_valid_and_owned_returns_actor`
 
 ### AC-004 — Password changes invalidate older sessions
 
 Given a password-change timestamp, a token issued before it is refused, while
 a token issued after it or within the same second remains valid.
 
-→ `test_auth.py::test_caller_token_issued_before_password_change_is_401`,
-`::test_caller_token_issued_after_password_change_is_valid`,
-`::test_caller_token_issued_same_second_as_change_is_valid`
+→ `test/identity/test_auth.py::test_caller_token_issued_before_password_change_is_401`,
+`test/identity/test_auth.py::test_caller_token_issued_after_password_change_is_valid`,
+`test/identity/test_auth.py::test_caller_token_issued_same_second_as_change_is_valid`
 
 ### AC-005 — Password policy and own-password change
 
@@ -367,13 +368,13 @@ password update the hash and timestamp and return `204`. An incorrect current
 password or weak new password returns `400`; an unauthenticated request returns
 `401`.
 
-→ `test_auth.py::test_change_password_success_updates_hash_and_changed_at`,
-`::test_change_password_wrong_current_password_raises`,
-`::test_change_password_weak_new_password_raises`,
-`::test_change_password_api_success_returns_204`,
-`::test_change_password_api_wrong_current_is_400`,
-`::test_change_password_api_weak_new_password_is_400`,
-`::test_change_password_api_requires_authentication`
+→ `test/identity/test_auth.py::test_change_password_success_updates_hash_and_changed_at`,
+`test/identity/test_auth.py::test_change_password_wrong_current_password_raises`,
+`test/identity/test_auth.py::test_change_password_weak_new_password_raises`,
+`test/identity/test_auth.py::test_change_password_api_success_returns_204`,
+`test/identity/test_auth.py::test_change_password_api_wrong_current_is_400`,
+`test/identity/test_auth.py::test_change_password_api_weak_new_password_is_400`,
+`test/identity/test_auth.py::test_change_password_api_requires_authentication`
 
 ### AC-006 — Reset without enumeration and with opaque token errors
 
@@ -381,11 +382,11 @@ Given an unknown email address, requesting a reset creates no token and returns
 the same response as a known address. Unknown, expired, and already-used tokens
 produce the same opaque error.
 
-→ `test_password_reset.py::test_request_reset_unknown_email_returns_none_and_creates_no_token`,
-`::test_confirm_reset_used_token_raises_opaque_error`,
-`::test_confirm_reset_expired_token_raises_opaque_error`,
-`::test_confirm_reset_unknown_token_raises_opaque_error`,
-`::test_confirm_with_invalid_token_is_404`
+→ `test/identity/test_password_reset.py::test_request_reset_unknown_email_returns_none_and_creates_no_token`,
+`test/identity/test_password_reset.py::test_confirm_reset_used_token_raises_opaque_error`,
+`test/identity/test_password_reset.py::test_confirm_reset_expired_token_raises_opaque_error`,
+`test/identity/test_password_reset.py::test_confirm_reset_unknown_token_raises_opaque_error`,
+`test/identity/test_password_reset.py::test_confirm_with_invalid_token_is_404`
 
 ### AC-007 — Single-use token, replacement, and rate limiting
 
@@ -393,20 +394,20 @@ Given a known user, a reset request creates a token; a later request invalidates
 the previous unused token. Request and confirmation limits are enforced, and a
 successfully consumed token is persisted as used.
 
-→ `test_password_reset.py::test_request_reset_known_email_creates_token_and_returns_raw_token`,
-`::test_request_reset_invalidates_previous_unused_token`,
-`::test_request_reset_respects_rate_limit`,
-`::test_confirm_reset_respects_rate_limit`,
-`test_password_reset_token_repository.py::test_save_marks_token_used`,
-`::test_invalidate_active_for_user_marks_only_that_users_unused_tokens`
+→ `test/identity/test_password_reset.py::test_request_reset_known_email_creates_token_and_returns_raw_token`,
+`test/identity/test_password_reset.py::test_request_reset_invalidates_previous_unused_token`,
+`test/identity/test_password_reset.py::test_request_reset_respects_rate_limit`,
+`test/identity/test_password_reset.py::test_confirm_reset_respects_rate_limit`,
+`test/identity/test_password_reset_token_repository.py::test_save_marks_token_used`,
+`test/identity/test_password_reset_token_repository.py::test_invalidate_active_for_user_marks_only_that_users_unused_tokens`
 
 ### AC-008 — Secrets remain outside logs and representations
 
 Given a reset email or a provisioned requester, neither the raw reset token nor
 the temporary password appears in logs or object representations.
 
-→ `test_email.py::test_logging_sender_never_logs_the_raw_reset_token`,
-`test_provision_external_requester.py::test_provisioned_requester_repr_does_not_expose_temporary_password`
+→ `test/identity/test_email.py::test_logging_sender_never_logs_the_raw_reset_token`,
+`test/identity/test_provision_external_requester.py::test_provisioned_requester_repr_does_not_expose_temporary_password`
 
 ### AC-009 — Idempotent external requester provisioning
 
@@ -414,15 +415,15 @@ Given a public requester, provisioning creates the missing user and external
 permission, reuses an existing permission for the same email address, and
 produces a temporary password that permits login for a new user.
 
-→ `test_provision_external_requester.py::test_provision_creates_user_and_external_permission_when_absent`,
-`::test_provision_reuses_existing_permission_for_same_email`,
-`::test_provisioned_temporary_password_allows_login`
+→ `test/identity/test_provision_external_requester.py::test_provision_creates_user_and_external_permission_when_absent`,
+`test/identity/test_provision_external_requester.py::test_provision_reuses_existing_permission_for_same_email`,
+`test/identity/test_provision_external_requester.py::test_provisioned_temporary_password_allows_login`
 
 ### AC-010 — The last active administrator is protected
 
 Given a single active `SYS_ADMIN`, attempting to disable that user is refused.
 
-→ `test_auth.py::test_disable_last_active_sys_admin_is_rejected`
+→ `test/identity/test_auth.py::test_disable_last_active_sys_admin_is_rejected`
 
 Removing the last active administrator's group membership is implemented by
 `RemoveUserFromGroup`, but has no direct acceptance test. This is a declared
@@ -433,8 +434,8 @@ test gap.
 Given an existing user or permission, an email that differs only by case and a
 duplicate user-and-group association are refused.
 
-→ `test_identity_uniqueness.py::test_duplicate_email_is_rejected_case_insensitively`,
-`::test_duplicate_permission_is_rejected`
+→ `test/identity/test_identity_uniqueness.py::test_duplicate_email_is_rejected_case_insensitively`,
+`test/identity/test_identity_uniqueness.py::test_duplicate_permission_is_rejected`
 
 ### AC-012 — Institutions are restricted to `SYS_ADMIN`
 
@@ -442,28 +443,28 @@ Given an institution operation, a non-administrator is forbidden. Duplicate
 names and deletion while groups remain return `409`; listing is paginated and
 group responses identify their institution.
 
-→ `test_institutions_api.py::test_non_sysadmin_is_forbidden`,
-`::test_create_duplicate_name_returns_409`,
-`::test_delete_institution_with_groups_returns_409`,
-`::test_list_institutions_is_paginated`,
-`::test_groups_listing_includes_institution_id`
+→ `test/identity/test_institutions_api.py::test_non_sysadmin_is_forbidden`,
+`test/identity/test_institutions_api.py::test_create_duplicate_name_returns_409`,
+`test/identity/test_institutions_api.py::test_delete_institution_with_groups_returns_409`,
+`test/identity/test_institutions_api.py::test_list_institutions_is_paginated`,
+`test/identity/test_institutions_api.py::test_groups_listing_includes_institution_id`
 
 ### AC-013 — Group-based authorization for user administration
 
 Given an external actor, user creation and group assignment return `403`, while
 user listing succeeds for both external and administrative actors.
 
-→ `test_auth.py::test_external_user_cannot_create_identity_user`,
-`::test_external_user_cannot_assign_identity_group`,
-`::test_external_user_can_list_identity_users`,
-`::test_administration_user_can_list_identity_users`
+→ `test/identity/test_auth.py::test_external_user_cannot_create_identity_user`,
+`test/identity/test_auth.py::test_external_user_cannot_assign_identity_group`,
+`test/identity/test_auth.py::test_external_user_can_list_identity_users`,
+`test/identity/test_auth.py::test_administration_user_can_list_identity_users`
 
 ### AC-014 — Administrative password reset
 
 Given an existing user, an administrative reset creates a new reset token for
 that user without directly changing the password.
 
-→ `test_auth.py::test_admin_password_reset_mints_token_for_user`
+→ `test/identity/test_auth.py::test_admin_password_reset_mints_token_for_user`
 
 ### AC-015 — Angular session, headers, role switching, and expiry handling
 
@@ -557,7 +558,10 @@ reflect the remaining window.
 
 **Required change:** use a shared atomic rate-limit store, define trusted-proxy
 handling, return an accurate retry delay, and monitor abuse without logging
-secrets.
+secrets. Decide whether intake should share the confirmation IP bucket: the
+current shared bucket lets reset requests exhaust the allowance needed to use
+an already issued link. Existing rate-limit tests do not establish independent
+request/confirmation budgets.
 
 ### GAP-009 — Access-token lifecycle has no explicit revocation or refresh
 

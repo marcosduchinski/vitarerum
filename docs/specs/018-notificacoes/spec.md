@@ -194,8 +194,11 @@ and `9+` above that threshold.
 ### FR-007 — Mark one notification as read
 
 `POST /api/v1/notifications/{notificationId}/read` sets `read_at` once and
-returns the hydrated item. Repeating the call for the same recipient preserves
+returns the hydrated item. Sequential repetition for the same recipient preserves
 the original timestamp, making the transition idempotent.
+
+This is a read-modify-write operation, not an atomic first-write guarantee;
+concurrent mark-read and clear-all operations are covered by GAP-016.
 
 The operation checks recipient ownership after loading the row. It does not
 reject an already cleared item, although such an item is no longer list-visible.
@@ -273,7 +276,7 @@ failure, or retry state.
 | INV-001 | Every notification is addressed to one permission, never directly to a user. |
 | INV-002 | User-facing list, count, and bulk operations are scoped to the active permission. |
 | INV-003 | A visible unread item has neither `read_at` nor `cleared_at`. |
-| INV-004 | Marking an owned notification read more than once preserves its first read time. |
+| INV-004 | Sequentially marking an owned notification read more than once preserves its first read time; concurrent calls are not protected. |
 | INV-005 | Clearing hides rather than deletes and also removes the item from unread counts. |
 | INV-006 | `notify_many` creates at most one item per recipient inside one call. |
 | INV-007 | The emitting context owns recipient selection, self-notification policy, transaction commit, and any email. |
@@ -285,14 +288,14 @@ Database integrity does not ensure that their referenced records still exist.
 
 | Behaviour | Representative automated evidence |
 | --- | --- |
-| Create an unread item | `test_use_cases.py::test_create_notification_persists_unread_item` |
-| Deduplicate one fan-out call | `test_use_cases.py::test_create_notification_many_dedupes_recipients` |
-| Resolve each actor once per page | `test_use_cases.py::test_list_notifications_dedupes_triggered_by_resolution` |
-| Idempotent and recipient-scoped mark-read | `test_use_cases.py::test_mark_read_is_idempotent_and_scoped_to_recipient` |
-| Permission-scoped read-all | `test_use_cases.py::test_mark_all_read_scopes_to_active_permission` |
-| Permission-scoped soft clear | `test_use_cases.py::test_clear_all_hides_notifications_and_scopes_to_active_permission`, `test_repository_and_api.py::test_repo_clear_all_hides_active_permission` |
-| Persistence and list/count/read routes | `test_repository_and_api.py::test_sqlalchemy_notification_repository_round_trip_and_mark_all_read`, `test_repository_and_api.py::test_notifications_routes_list_filter_count_and_mark_read` |
-| HTTP isolation and external rejection | `test_repository_and_api.py::test_notification_routes_reject_other_recipient_and_external_callers` |
+| Create an unread item | `test/notifications/test_use_cases.py::test_create_notification_persists_unread_item` |
+| Deduplicate one fan-out call | `test/notifications/test_use_cases.py::test_create_notification_many_dedupes_recipients` |
+| Resolve each actor once per page | `test/notifications/test_use_cases.py::test_list_notifications_dedupes_triggered_by_resolution` |
+| Idempotent and recipient-scoped mark-read | `test/notifications/test_use_cases.py::test_mark_read_is_idempotent_and_scoped_to_recipient` |
+| Permission-scoped read-all | `test/notifications/test_use_cases.py::test_mark_all_read_scopes_to_active_permission` |
+| Permission-scoped soft clear | `test/notifications/test_use_cases.py::test_clear_all_hides_notifications_and_scopes_to_active_permission`, `test/notifications/test_repository_and_api.py::test_repo_clear_all_hides_active_permission` |
+| Persistence and list/count/read routes | `test/notifications/test_repository_and_api.py::test_sqlalchemy_notification_repository_round_trip_and_mark_all_read`, `test/notifications/test_repository_and_api.py::test_notifications_routes_list_filter_count_and_mark_read` |
+| HTTP isolation and external rejection | `test/notifications/test_repository_and_api.py::test_notification_routes_reject_other_recipient_and_external_callers` |
 | Topbar copy, links, and clear behaviour | `app-topbar.component.spec.ts` |
 
 Backend tests cover the notification context directly. The Angular API service
@@ -316,23 +319,24 @@ subset through a mock API.
 
 ## 11. Known gaps and recommended changes
 
-| Priority | Finding | Recommended change |
-| --- | --- | --- |
-| High | Notifications have no business-event identity or database uniqueness; retries and concurrent emitters can create duplicates. | Require an idempotency/event key and enforce recipient-plus-event uniqueness in persistence. |
-| High | Self-notification suppression is inconsistently delegated to emitters despite being described previously as a global invariant. | Define the intended policy and enforce it centrally or provide a dispatcher option with tests for explicit exceptions. |
-| High | Hosted workflows can commit successfully and then fail to send their companion email without retry/audit state. | Add an outbox and delivery state when email is a required consequence of the same business event. |
-| Medium | Mark-read returns `403` for a foreign existing ID and `404` for an unknown ID, enabling existence probing. | Return the same opaque `404` for missing and non-owned notification IDs. |
-| Medium | The API returns the triggering user's email although the topbar uses only their name. | Minimise the principal DTO for notifications or justify and authorise email disclosure. |
-| Medium | Notification creation does not validate recipient/resource IDs or label lengths; oversized values fail at flush/commit. | Validate public dispatcher inputs against storage limits and add boundary tests. |
-| Medium | Topbar operations and count polling have no error handling or visible retry state; a failed mark-read prevents navigation. | Catch failures in the facade, expose an error signal, allow retry, and decide whether navigation may proceed independently. |
-| Medium | “Clear all” hides all history without confirmation or undo and there is no cleared-item view. | Add confirmation and either restore/history support or explicit retention language. |
-| Medium | Only eight recent items are visible and there is no full notification centre despite a paginated API. | Add a notification page with pagination and unread/kind filters if workload exceeds the topbar MVP. |
-| Medium | Actor resolution is an N+1 pattern across distinct actors and fan-out inserts are sequential. | Add a batch permission reader and bulk repository insert before notification volume grows. |
-| Medium | No composite indexes match recipient, clear/read state, and newest-first ordering. | Measure production queries and add targeted partial/composite indexes if volume warrants it. |
-| Low | Notes for scientific-return and direction notifications can appear twice because generated copy includes the note and the template renders it again. | Keep the note out of generated copy or suppress the separate note element for those kinds. |
-| Low | Polling refreshes only the badge; an already open popover can remain stale. | Refresh the visible page with the count or adopt a push/event mechanism when needed. |
-| Low | There are no direct frontend tests for the API service, facade polling, permission switching, or network failures. | Add focused service/facade tests with fake timers and error cases. |
-| Low | The current flow diagram shows the dispatcher resolving recipients and sending email, but emitters select recipients and own email delivery. | Update the PlantUML sequence so Identity and email interactions originate from the emitting context. |
+| ID | Priority | Finding | Recommended change |
+| --- | --- | --- | --- |
+| GAP-001 | High | Notifications have no business-event identity or database uniqueness; retries and concurrent emitters can create duplicates. | Require an idempotency/event key and enforce recipient-plus-event uniqueness in persistence. |
+| GAP-002 | High | Self-notification suppression is inconsistently delegated to emitters despite being described previously as a global invariant. | Define the intended policy and enforce it centrally or provide a dispatcher option with tests for explicit exceptions. |
+| GAP-003 | High | Hosted workflows can commit successfully and then fail to send their companion email without retry/audit state. | Add an outbox and delivery state when email is a required consequence of the same business event. |
+| GAP-004 | Medium | Mark-read returns `403` for a foreign existing ID and `404` for an unknown ID, enabling existence probing. | Return the same opaque `404` for missing and non-owned notification IDs. |
+| GAP-005 | Medium | The API returns the triggering user's email although the topbar uses only their name. | Minimise the principal DTO for notifications or justify and authorise email disclosure. |
+| GAP-006 | Medium | Notification creation does not validate recipient/resource IDs or label lengths; oversized values fail at flush/commit. | Validate public dispatcher inputs against storage limits and add boundary tests. |
+| GAP-007 | Medium | Topbar operations and count polling have no error handling or visible retry state; a failed mark-read prevents navigation. | Catch failures in the facade, expose an error signal, allow retry, and decide whether navigation may proceed independently. |
+| GAP-008 | Medium | “Clear all” hides all history without confirmation or undo and there is no cleared-item view. | Add confirmation and either restore/history support or explicit retention language. |
+| GAP-009 | Medium | Only eight recent items are visible and there is no full notification centre despite a paginated API. | Add a notification page with pagination and unread/kind filters if workload exceeds the topbar MVP. |
+| GAP-010 | Medium | Actor resolution is an N+1 pattern across distinct actors and fan-out inserts are sequential. | Add a batch permission reader and bulk repository insert before notification volume grows. |
+| GAP-011 | Medium | No composite indexes match recipient, clear/read state, and newest-first ordering. | Measure production queries and add targeted partial/composite indexes if volume warrants it. |
+| GAP-012 | Low | Notes for scientific-return and direction notifications can appear twice because generated copy includes the note and the template renders it again. | Keep the note out of generated copy or suppress the separate note element for those kinds. |
+| GAP-013 | Low | Polling refreshes only the badge; an already open popover can remain stale. | Refresh the visible page with the count or adopt a push/event mechanism when needed. |
+| GAP-014 | Low | There are no direct frontend tests for the API service, facade polling, permission switching, or network failures. | Add focused service/facade tests with fake timers and error cases. |
+| GAP-015 | Low | The current flow diagram shows the dispatcher resolving recipients and sending email, but emitters select recipients and own email delivery. | Update the PlantUML sequence so Identity and email interactions originate from the emitting context. |
+| GAP-016 | High | Single-item mark-read loads an entity and saves both `read_at` and `cleared_at` without a concurrency token. Two reads can overwrite the first read timestamp; a stale mark-read save can also restore `cleared_at = null` after clear-all commits. Existing sequential idempotency tests do not establish concurrent safety. | Use a conditional update of only `read_at`, preserve the existing timestamp and clear state in SQL, and test mark/mark and mark/clear races. |
 
 ## 12. Traceability
 

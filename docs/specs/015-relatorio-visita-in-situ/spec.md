@@ -329,9 +329,9 @@ remain protected and return `403`.
 
 | Capability | Automated evidence |
 | --- | --- |
-| Creation response and upstream error mapping | `test_in_situ_visit_report_api.py` |
-| Project/global history, enrichment, filters, pagination, and project isolation | `test_in_situ_visit_report_read_api.py` |
-| Detail, six-stage trace, nullable dependencies, and bounded removal | `test_in_situ_visit_report_detail_api.py` |
+| Creation response and upstream error mapping | `test/reports/test_in_situ_visit_report_api.py` |
+| Project/global history, enrichment, filters, pagination, and project isolation | `test/reports/test_in_situ_visit_report_read_api.py` |
+| Detail, six-stage trace, nullable dependencies, and bounded removal | `test/reports/test_in_situ_visit_report_detail_api.py` |
 | Angular API wire mapping | `reports-api.service.spec.ts` |
 | Creation options and validation | `create-in-situ-visit-report-modal.component.spec.ts` and project-detail specs |
 | Report history, filters, pagination, and removal confirmation | `visits-in-situ-report-page.component.spec.ts` |
@@ -368,8 +368,10 @@ remain protected and return `403`.
   adapters use one session and the route commits once.
 - The request remains open during synchronous CIDOC processing and model
   generation; timeout is delegated to the model adapter.
-- Global list enrichment has an N+1 read pattern: up to 201 additional reads
-  for a page of 100 reports.
+- Global list enrichment has an N+1 read pattern: up to 200 dependent
+  record/narrative read calls for a page of 100 reports, in addition to the
+  report repository's count and page queries. This is a call count, not an
+  exact bound on SQL statements issued by the downstream readers.
 - Cross-context references deliberately have no foreign keys. This preserves
   context autonomy but permits dangling report references and partial detail.
 - Report identifiers and timestamps are generated directly in the domain
@@ -380,22 +382,22 @@ remain protected and return `403`.
 
 ## 10. Known gaps and required improvements
 
-| Priority | Gap | Required change |
-| --- | --- | --- |
-| High | Backend creation and deletion allow every staff group, while the creation UI allows only curatorial and collection-management users. | Define one authoritative role/project-scope policy and enforce it in backend use cases; align menu, routes, buttons, and tests with that policy. |
-| High | Any staff user can list and read every report, complete evidence, audit payload, and narrative across all projects. | Confirm the institutional data-disclosure policy and implement project/collection read scope if required. |
-| High | Report deletion is a hard delete with no report-level tombstone or immutable deletion audit. | Preserve an auditable report lifecycle or deletion event, including actor, reason, timestamp, artefact outcomes, and revoked publications. |
-| Medium | `target_language` is unconstrained in the API even though the UI offers only `pt` and `en`; blank or oversized values can reach the prompt or persistence layer. | Introduce a validated language value object or explicit supported-language contract and return a typed client error. |
-| Medium | Synchronous model generation occurs inside an open database transaction. | Add operational metrics and idempotency, then consider a queued state machine (`PENDING/RUNNING/READY/FAILED`) for longer-running or remote models. |
-| Medium | A successful model call can still be followed by a failed database commit, consuming external resources without a report. | Add request correlation, idempotency keys, failure telemetry, and a retry/reconciliation policy. |
-| Medium | The global list performs two dependent reads per row. | Replace N+1 enrichment with a dedicated read model/query or batch published-language readers. |
-| Medium | Project-scoped history sorts only by timestamp. | Add report ID as a deterministic secondary key to prevent unstable pagination for equal timestamps. |
-| Medium | `search` retains SQL wildcard semantics, and inverted filter ranges are accepted. | Escape literal wildcard input unless advanced patterns are intentional, and validate date-range order. |
-| Medium | Missing cross-context artefacts silently produce null detail or incomplete audit data. | Add consistency monitoring and distinguish expected legacy absence from broken references in the response or operational alerts. |
-| Medium | The application ports and schemas use DTO types owned by other contexts' presentation layers. | Publish context-neutral integration DTOs from each Open Host Service and map them at the report boundary. |
-| Low | The report detail exports client-generated JSON, not a stable server document or PDF. | Define the official report format, template/version metadata, server-side export, content disposition, and archival policy if an official document is required. |
-| Low | Reports cannot be marked official, superseded, or preferred. | Validate the product need before adding a report lifecycle; retain append-only generations meanwhile. |
-| Low | Report creation has no direct end-to-end test using the real shared database adapters and transaction rollback. | Add an integration test proving rollback of record, fact snapshot, narrative, and report rows on a downstream failure. |
+| ID | Priority | Gap | Required change |
+| --- | --- | --- | --- |
+| GAP-001 | High | Backend creation and deletion allow every staff group, while the creation UI allows only curatorial and collection-management users. | Define one authoritative role/project-scope policy and enforce it in backend use cases; align menu, routes, buttons, and tests with that policy. |
+| GAP-002 | High | Any staff user can list and read every report, complete evidence, audit payload, and narrative across all projects. | Confirm the institutional data-disclosure policy and implement project/collection read scope if required. |
+| GAP-003 | High | Report deletion is a hard delete with no report-level tombstone or immutable deletion audit. | Preserve an auditable report lifecycle or deletion event, including actor, reason, timestamp, artefact outcomes, and revoked publications. |
+| GAP-004 | Medium | `target_language` is unconstrained in the API even though the UI offers only `pt` and `en`; blank or oversized values can reach the prompt or persistence layer. | Introduce a validated language value object or explicit supported-language contract and return a typed client error. |
+| GAP-005 | Medium | Synchronous model generation occurs inside an open database transaction. | Add operational metrics and idempotency, then consider a queued state machine (`PENDING/RUNNING/READY/FAILED`) for longer-running or remote models. |
+| GAP-006 | Medium | A successful model call can still be followed by a failed database commit, consuming external resources without a report. | Add request correlation, idempotency keys, failure telemetry, and a retry/reconciliation policy. |
+| GAP-007 | Medium | The global list performs two dependent reads per row. | Replace N+1 enrichment with a dedicated read model/query or batch published-language readers. |
+| GAP-008 | Medium | Project-scoped history sorts only by timestamp. | Add report ID as a deterministic secondary key to prevent unstable pagination for equal timestamps. |
+| GAP-009 | Medium | `search` retains SQL wildcard semantics, and inverted filter ranges are accepted. | Escape literal wildcard input unless advanced patterns are intentional, and validate date-range order. |
+| GAP-010 | Medium | Missing cross-context artefacts silently produce null detail or incomplete audit data. | Add consistency monitoring and distinguish expected legacy absence from broken references in the response or operational alerts. |
+| GAP-011 | Medium | The application ports and schemas use DTO types owned by other contexts' presentation layers. | Publish context-neutral integration DTOs from each Open Host Service and map them at the report boundary. |
+| GAP-012 | Low | The report detail exports client-generated JSON, not a stable server document or PDF. | Define the official report format, template/version metadata, server-side export, content disposition, and archival policy if an official document is required. |
+| GAP-013 | Low | Reports cannot be marked official, superseded, or preferred. | Validate the product need before adding a report lifecycle; retain append-only generations meanwhile. |
+| GAP-014 | Low | Report creation has no direct end-to-end test using the real shared database adapters and transaction rollback. | Add an integration test proving rollback of record, fact snapshot, narrative, and report rows on a downstream failure. |
 
 ## 11. Traceability
 

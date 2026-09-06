@@ -572,9 +572,9 @@ Given a valid authenticated request, submission returns `201`, creates a
 supported initial files, and reclaims files on failure.
 
 → `test/use_of_collections/test_api.py::test_submit_proposal_returns_201`,
-`::test_submit_proposal_carries_intended_use_through_to_detail`,
-`::test_submit_proposal_accepts_supporting_document_types`,
-`::test_submit_proposal_rolls_back_saved_documents_when_upload_fails`
+`test/use_of_collections/test_api.py::test_submit_proposal_carries_intended_use_through_to_detail`,
+`test/use_of_collections/test_api.py::test_submit_proposal_accepts_supporting_document_types`,
+`test/use_of_collections/test_api.py::test_submit_proposal_rolls_back_saved_documents_when_upload_fails`
 
 ### AC-002 — Staff broadcast distinguishes permissions from users
 
@@ -583,7 +583,7 @@ e-mail is sent once per distinct user. These tests describe the current global
 broadcast and do not establish institution isolation.
 
 → `test/use_of_collections/test_api.py::test_submit_proposal_notifies_all_staff_except_actor`,
-`::test_submit_proposal_dedupes_broadcast_email_by_user_not_notifications`
+`test/use_of_collections/test_api.py::test_submit_proposal_dedupes_broadcast_email_by_user_not_notifications`
 
 ### AC-003 — Lists enforce requester ownership
 
@@ -591,9 +591,9 @@ Repeated statuses and pagination reach the repository correctly. Staff may
 scope by requester; non-staff cannot widen or spoof their requester filter.
 
 → `test/use_of_collections/test_api.py::test_list_proposals_paginates_results`,
-`::test_list_proposals_filters_by_multiple_statuses`,
-`::test_staff_can_scope_list_with_requested_by`,
-`::test_non_staff_requested_by_is_ignored_and_forced_to_own_id`
+`test/use_of_collections/test_api.py::test_list_proposals_filters_by_multiple_statuses`,
+`test/use_of_collections/test_api.py::test_staff_can_scope_list_with_requested_by`,
+`test/use_of_collections/test_api.py::test_non_staff_requested_by_is_ignored_and_forced_to_own_id`
 
 ### AC-004 — Requested objects remain proposal snapshots
 
@@ -601,8 +601,8 @@ Adding searched object snapshots exposes them on detail; removal updates the
 proposal; approval with none creates an empty project.
 
 → `test/use_of_collections/test_api.py::test_relate_searched_objects_surfaces_them_on_detail`,
-`::test_remove_requested_object_updates_proposal_detail`,
-`::test_approve_proposal_without_objects_creates_empty_project`
+`test/use_of_collections/test_api.py::test_remove_requested_object_updates_proposal_detail`,
+`test/use_of_collections/test_api.py::test_approve_proposal_without_objects_creates_empty_project`
 
 ### AC-005 — Assignment and forwarding validate targets and notifications
 
@@ -611,11 +611,11 @@ or Direction permissions through generic commands, and self-assignment sends no
 effect. Taking over notifies the previous assignee.
 
 → `test/use_of_collections/test_api.py::test_staff_can_assign_proposal_to_staff_target`,
-`::test_staff_can_forward_proposal_to_staff_target`,
-`::test_assign_proposal_rejects_external_target_permission`,
-`::test_forward_proposal_rejects_external_target_permission`,
-`::test_assign_proposal_to_self_sends_no_notification_or_email`,
-`::test_take_over_assignment_notifies_previous_assignee`
+`test/use_of_collections/test_api.py::test_staff_can_forward_proposal_to_staff_target`,
+`test/use_of_collections/test_api.py::test_assign_proposal_rejects_external_target_permission`,
+`test/use_of_collections/test_api.py::test_forward_proposal_rejects_external_target_permission`,
+`test/use_of_collections/test_api.py::test_assign_proposal_to_self_sends_no_notification_or_email`,
+`test/use_of_collections/test_api.py::test_take_over_assignment_notifies_previous_assignee`
 
 ### AC-006 — Staff editing uses effective values
 
@@ -623,10 +623,10 @@ Omitted fields remain unchanged, explicit null clears nullable proposal fields,
 terminal states reject edits, and the effective date range is validated.
 
 → `test/use_of_collections/test_api.py::test_staff_can_patch_proposal_title`,
-`::test_patch_proposal_null_title_clears_it`,
-`::test_patch_proposal_omitted_fields_left_unchanged`,
-`::test_patch_proposal_terminal_status_returns_409`,
-`::test_patch_proposal_invalid_date_range_returns_422`
+`test/use_of_collections/test_api.py::test_patch_proposal_null_title_clears_it`,
+`test/use_of_collections/test_api.py::test_patch_proposal_omitted_fields_left_unchanged`,
+`test/use_of_collections/test_api.py::test_patch_proposal_terminal_status_returns_409`,
+`test/use_of_collections/test_api.py::test_patch_proposal_invalid_date_range_returns_422`
 
 ### AC-007 — Authenticated document delivery is DOCX-only
 
@@ -634,10 +634,10 @@ Blank document types and non-DOCX content are rejected; valid DOCX is stored and
 the assigned staff member is notified unless they are the uploader.
 
 → `test/use_of_collections/test_api.py::test_submit_document_empty_document_type_returns_422`,
-`::test_submit_document_rejects_non_docx_content`,
-`::test_submit_document_accepts_valid_docx`,
-`::test_submit_document_notifies_assigned_staff_target`,
-`::test_submit_document_to_self_sends_no_notification_or_email`
+`test/use_of_collections/test_api.py::test_submit_document_rejects_non_docx_content`,
+`test/use_of_collections/test_api.py::test_submit_document_accepts_valid_docx`,
+`test/use_of_collections/test_api.py::test_submit_document_notifies_assigned_staff_target`,
+`test/use_of_collections/test_api.py::test_submit_document_to_self_sends_no_notification_or_email`
 
 ### AC-008 — Correction scope and satisfaction hold
 
@@ -646,14 +646,14 @@ resolve only when a new matching document satisfies each targeted item. Public
 amendment operations remain within that scope and reclaim replaced files.
 
 → `test/use_of_collections/test_domain_models.py::test_request_document_corrections_requires_pending`,
-`::test_request_document_corrections_unknown_document_id_raises`,
-`::test_submit_document_corrections_rejects_unsatisfied_item`,
-`::test_submit_document_corrections_replacement_needs_fresh_document`
+`test/use_of_collections/test_domain_models.py::test_request_document_corrections_unknown_document_id_raises`,
+`test/use_of_collections/test_domain_models.py::test_submit_document_corrections_rejects_unsatisfied_item`,
+`test/use_of_collections/test_domain_models.py::test_submit_document_corrections_replacement_needs_fresh_document`
 
 → `test/use_of_collections/test_correction_flow.py::test_amendment_add_then_submit_resolves`,
-`::test_amendment_upload_out_of_scope_is_rejected`,
-`::test_amendment_upload_replaces_flagged_document`,
-`::test_amendment_remove_reclaims_file`
+`test/use_of_collections/test_correction_flow.py::test_amendment_upload_out_of_scope_is_rejected`,
+`test/use_of_collections/test_correction_flow.py::test_amendment_upload_replaces_flagged_document`,
+`test/use_of_collections/test_correction_flow.py::test_amendment_remove_reclaims_file`
 
 ### AC-009 — Direction lane preserves ownership and history
 
@@ -663,12 +663,12 @@ it to active operational staff with a response. Both commands preserve state
 and record target and reason.
 
 → `test/use_of_collections/test_domain_models.py::test_refer_to_direction_changes_assignee_and_records_reason_and_target`,
-`::test_return_to_staff_requires_reason_and_current_direction_assignee`,
-`::test_return_to_staff_records_direction_clarification`
+`test/use_of_collections/test_domain_models.py::test_return_to_staff_requires_reason_and_current_direction_assignee`,
+`test/use_of_collections/test_domain_models.py::test_return_to_staff_records_direction_clarification`
 
 → `test/use_of_collections/test_api.py::test_curator_can_refer_assigned_proposal_to_direction`,
-`::test_direction_can_return_proposal_to_staff_with_required_reason`,
-`::test_direction_cannot_read_a_proposal_assigned_to_another_member`
+`test/use_of_collections/test_api.py::test_direction_can_return_proposal_to_staff_with_required_reason`,
+`test/use_of_collections/test_api.py::test_direction_cannot_read_a_proposal_assigned_to_another_member`
 
 ### AC-010 — Rejection closes the proposal with a message
 
@@ -684,10 +684,10 @@ were requested, provisions a new public account before commit, and chooses the
 correct post-commit e-mail for new versus existing accounts.
 
 → `test/use_of_collections/test_api.py::test_approve_proposal_invalid_date_range_returns_422`,
-`::test_approve_proposal_without_objects_creates_empty_project`,
-`::test_approve_public_proposal_sends_access_email_after_commit`,
-`::test_approve_public_proposal_new_account_skips_approval_email`,
-`::test_approve_public_proposal_existing_account_sends_approval_email`
+`test/use_of_collections/test_api.py::test_approve_proposal_without_objects_creates_empty_project`,
+`test/use_of_collections/test_api.py::test_approve_public_proposal_sends_access_email_after_commit`,
+`test/use_of_collections/test_api.py::test_approve_public_proposal_new_account_skips_approval_email`,
+`test/use_of_collections/test_api.py::test_approve_public_proposal_existing_account_sends_approval_email`
 
 ### AC-012 — Requester cancellation cascades
 
@@ -695,9 +695,9 @@ Only `requestedBy` can cancel; rejected proposals cannot be cancelled; a linked
 project is cancelled from any state, including completed.
 
 → `test/use_of_collections/test_api.py::test_cancel_proposal_by_requester_without_project_returns_cancelled`,
-`::test_cancel_proposal_cascades_to_existing_project_any_status`,
-`::test_cancel_proposal_rejects_non_requester`,
-`::test_cancel_proposal_rejects_rejected_status`
+`test/use_of_collections/test_api.py::test_cancel_proposal_cascades_to_existing_project_any_status`,
+`test/use_of_collections/test_api.py::test_cancel_proposal_rejects_non_requester`,
+`test/use_of_collections/test_api.py::test_cancel_proposal_rejects_rejected_status`
 
 → `test/use_of_collections/test_domain_models.py::test_proposal_driven_project_cancellation_allows_completed_project`
 
@@ -708,9 +708,9 @@ documents, or resulting project events. Document downloads also enforce parent
 proposal ownership.
 
 → `test/use_of_collections/test_api.py::test_external_user_cannot_read_other_proposal_events`,
-`::test_external_user_cannot_read_other_proposal_documents`,
-`::test_external_user_cannot_read_other_project_events`,
-`::test_download_document_rejects_non_owner`
+`test/use_of_collections/test_api.py::test_external_user_cannot_read_other_proposal_documents`,
+`test/use_of_collections/test_api.py::test_external_user_cannot_read_other_project_events`,
+`test/use_of_collections/test_api.py::test_download_document_rejects_non_owner`
 
 ### AC-014 — Event sorting precedes pagination
 
@@ -737,8 +737,11 @@ read-only history.
   transaction where their command requires them.
 - **External effects**: e-mails are attempted only after the relevant commit;
   the limitations of that strategy are declared in Section 9.
-- **Sensitive data**: requester contact fields and stored files use the shared
-  encryption rules in [SPEC-022](../022-cifragem-e-armazenamento/spec.md).
+- **Sensitive data**: proposal requester-contact snapshots and conversation
+  text are stored in plaintext. Encryption of the upstream pending public
+  submission does not carry over to these fields after materialisation. Stored
+  files use the configured shared file-encryption adapter; see the coverage
+  inventory in [SPEC-022](../022-cifragem-e-armazenamento/spec.md).
 - **Tenant isolation**: the actor carries an institution identifier, but this
   context does not yet enforce it on proposal or project data; GAP-001 is a
   release-blocking security concern for multi-institution operation.

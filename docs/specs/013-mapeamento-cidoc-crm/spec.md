@@ -63,6 +63,9 @@ bundled with the running application.
 All HTTP endpoints require a bearer token and matching `X-Permission-Id` for a
 staff group. There is no public CIDOC endpoint in this context.
 
+Staff access is deployment-wide. `institutionName` is descriptive provenance,
+not an institution identifier or authorization boundary; see GAP-014.
+
 ## 5. Snapshot requirements
 
 ### FR-001 — Direct record creation
@@ -248,42 +251,43 @@ It does not download a `.jsonld` file or visualize the graph.
 | GAP-011 | List order lacks an ID tie-breaker and returns complete aggregates, which can become expensive. | Add deterministic ordering and consider summary rows plus a raw-record detail endpoint. |
 | GAP-012 | Direct create/list API behavior has little focused endpoint coverage compared with export and CIDOC generation. | Add tests for creation, list pagination/order, complete nested mapping, validation boundaries, and staff authorization. |
 | GAP-013 | The Angular viewer offers raw copy only, with no download, graph summary, provenance warning, or validation-profile explanation. | Add an accessible `.jsonld` download and human-readable provenance/validation summary where users need to assess or exchange the graph. |
+| GAP-014 | Records have no institution ownership ID, and create/list/export/CIDOC routes enforce only staff membership. Any staff permission can read nested visit data and project exports across a shared deployment. | Derive institutional ownership from the source boundary, scope reads and exports, and test cross-institution denials before multi-institution use. Do not infer ownership from the free-text `institutionName`. |
 
 ## 10. Acceptance criteria
 
 ### AC-001 — Project export and rejection paths
 
-Covered by `test_export_in_situ_visit_api.py` and
-`test_export_in_situ_visit_use_case.py`, including missing project, wrong use
+Covered by `test/cidoc_crm/test_export_in_situ_visit_api.py` and
+`test/cidoc_crm/test_export_in_situ_visit_use_case.py`, including missing project, wrong use
 type, insufficient evidence, external authorization, persistence, and related
 object propagation.
 
 ### AC-002 — Conservative time and object semantics
 
-Covered by `test_cidoc_mapping.py` tests for planned dates, execution evidence,
+Covered by `test/cidoc_crm/test_cidoc_mapping.py` tests for planned dates, execution evidence,
 generic physical-object typing, visit actor/place/type links, and enriched
 occurrence context.
 
 ### AC-003 — Self-contained version-targeted JSON-LD
 
-Covered by `test_cidoc_mapping.py::test_targets_cidoc_713`,
-`::test_context_is_inlined_official_713_plus_local_prefixes`, and graph-creator
+Covered by `test/cidoc_crm/test_cidoc_mapping.py::test_targets_cidoc_713`,
+`test/cidoc_crm/test_cidoc_mapping.py::test_context_is_inlined_official_713_plus_local_prefixes`, and graph-creator
 tests. GAP-001 and GAP-004 remain outside those assertions.
 
 ### AC-004 — Children, attachments, and related-object links
 
 Covered by the full-expansion, content URL, note, activity-context, publication,
-attachment, and ACL tests in `test_cidoc_mapping.py` and `test_context_acl.py`.
+attachment, and ACL tests in `test/cidoc_crm/test_cidoc_mapping.py` and `test/cidoc_crm/test_context_acl.py`.
 
 ### AC-005 — Validation behavior
 
-Covered by `test_cidoc_api.py` and `test_jsonld_validation.py`: validation is on
+Covered by `test/cidoc_crm/test_cidoc_api.py` and `test/cidoc_crm/test_jsonld_validation.py`: validation is on
 by default, may be skipped explicitly, detects the tested domain/range
 violation, and the non-expanding entry point does not call graph expansion.
 
 ### AC-006 — Aggregate persistence
 
-Covered by `test_in_situ_visit_repository.py`, which round-trips enriched root,
+Covered by `test/cidoc_crm/test_in_situ_visit_repository.py`, which round-trips enriched root,
 child, attachment, provenance, and version fields. Direct HTTP creation/listing
 coverage remains GAP-012.
 

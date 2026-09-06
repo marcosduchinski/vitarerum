@@ -296,6 +296,10 @@ interpreted as an identifier; a future static route must be declared first.
 The summary is therefore not an implemented requirement or acceptance
 criterion.
 
+Its proposed response and acceptance criteria belong to
+[SPEC-021](../021-resumos-de-painel/spec.md), FR-005. This reserved entry does
+not define a second summary contract.
+
 ## 8. Invariants and error behavior
 
 | ID | Invariant |
@@ -339,52 +343,53 @@ Expected API failures include:
 | GAP-009 | Forward-target discovery fetches the first 100 users through a generic endpoint that is temporarily available to every authenticated profile, then filters in the browser. | Add a narrow authorized staff-recipient endpoint with server-side group filtering and pagination/search. |
 | GAP-010 | Concurrent overdue workers can select the same unclaimed rows, and the command has no built-in scheduler. | Claim/lock work or use idempotent notification keys, and document/provision the external schedule. |
 | GAP-011 | Queue ordering uses only `createdAt`; equal timestamps have no stable tie-breaker. | Add `id` as a deterministic secondary order. |
-| GAP-012 | The specified summary endpoint is absent and would collide with the parameter route if appended in the current order. | Either remove it from historical contracts or implement the static route before `/{question_id}` with tests and a real consumer. |
+| GAP-012 | The proposed summary endpoint is absent and would collide with the parameter route if appended in the current order. The consolidated HTTP contract no longer advertises it as implemented. | If the summary is built, follow SPEC-021 FR-005 and declare the static route before `/{question_id}`, with tests and a real consumer. |
 | GAP-013 | CORS is configured globally for the application, not specifically for this public channel. Local defaults may allow `*`; non-local validation forbids it. | Keep explicit production origins and avoid describing route-specific CORS guarantees that the code does not enforce. |
 | GAP-014 | Empty frontend Turnstile configuration is incompatible with the API's non-empty token schema. | Fail frontend startup/config validation for real API mode, or align the local no-captcha contract across client and server. |
+| GAP-015 | Questions have no institution owner. Internal authorization checks only the two allowed groups; list/detail, attachment reads, mutations, staff recipients, and overdue warnings are not institution-scoped. | Before sharing one deployment across institutions, derive ownership at public intake and scope repositories, target validation, and recipients; add negative cross-institution tests. Staff-role restriction alone does not establish tenant isolation. |
 
 ## 10. Acceptance criteria
 
 ### AC-001 — Public submission, receipt, and staff notification
 
-Covered by `test_api.py::test_submit_returns_202_receipt`,
-`::test_submit_notifies_access_groups_and_emails_curators_and_managers`, and
-`test_use_cases.py::test_execute_persists_submitted_question`.
+Covered by `test/museum_questions/test_api.py::test_submit_returns_202_receipt`,
+`test/museum_questions/test_api.py::test_submit_notifies_access_groups_and_emails_curators_and_managers`, and
+`test/museum_questions/test_use_cases.py::test_execute_persists_submitted_question`.
 
 ### AC-002 — Open-channel protections and validation
 
 Covered by the captcha, rate-limit, honeypot, consent, e-mail, length,
-whitespace, and control-character tests in `test_api.py` and
-`test_use_cases.py`.
+whitespace, and control-character tests in `test/museum_questions/test_api.py` and
+`test/museum_questions/test_use_cases.py`.
 
 ### AC-003 — Verified and bounded images
 
 Covered by the multipart, image-count, media-signature, total-size, persistence,
-and storage-cleanup tests in `test_api.py` and `test_use_cases.py`.
+and storage-cleanup tests in `test/museum_questions/test_api.py` and `test/museum_questions/test_use_cases.py`.
 
 ### AC-004 — Internal authorization, queue, and detail
 
 Covered by the internal-group rejection, filter, pagination, assignment
-hydration, detail, and attachment-detail tests in `test_api.py` and the list
-authorization/filter tests in `test_use_cases.py`.
+hydration, detail, and attachment-detail tests in `test/museum_questions/test_api.py` and the list
+authorization/filter tests in `test/museum_questions/test_use_cases.py`.
 
 ### AC-005 — Lifecycle transitions
 
 Covered by the new-question, answer, assignment/reassignment, overdue, and
-closure tests in `test_domain.py`, `test_use_cases.py`, and `test_api.py`.
+closure tests in `test/museum_questions/test_domain.py`, `test/museum_questions/test_use_cases.py`, and `test/museum_questions/test_api.py`.
 
 ### AC-006 — Commit boundary and e-mail rendering
 
-Covered by `test_api.py::test_answer_internal_question_does_not_email_when_commit_fails`,
-`::test_mark_out_of_scope_does_not_email_when_commit_fails`, and the multipart
-and sanitisation tests in `test_email.py`. These tests establish ordering, not
+Covered by `test/museum_questions/test_api.py::test_answer_internal_question_does_not_email_when_commit_fails`,
+`test/museum_questions/test_api.py::test_mark_out_of_scope_does_not_email_when_commit_fails`, and the multipart
+and sanitisation tests in `test/museum_questions/test_email.py`. These tests establish ordering, not
 durable delivery; GAP-001 and GAP-002 remain open.
 
 ### AC-007 — Overdue notification behavior
 
 Covered by the overdue domain tests and
-`test_use_cases.py::test_notify_overdue_questions_notifies_collection_managers_once`
-and `::test_notify_overdue_questions_without_managers_does_not_mark_notified`.
+`test/museum_questions/test_use_cases.py::test_notify_overdue_questions_notifies_collection_managers_once`
+and `test/museum_questions/test_use_cases.py::test_notify_overdue_questions_without_managers_does_not_mark_notified`.
 
 ### AC-008 — Angular public and staff projections
 
