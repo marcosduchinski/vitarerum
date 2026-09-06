@@ -1,5 +1,6 @@
 ---
 status: current
+language: pt-PT
 ---
 
 # Padrões das imagens dos guias práticos

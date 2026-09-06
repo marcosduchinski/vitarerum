@@ -1,5 +1,6 @@
 ---
 status: current
+language: pt-PT
 ---
 
 # Guias práticos do Vitarerum
