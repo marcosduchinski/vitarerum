@@ -42,7 +42,9 @@ set -a; . "${ENV_FILE}"; set +a
 : "${SCIENTIFIC_RETURN_JOB:=vitarerum-scientific-return}"
 : "${SCIENTIFIC_RETURN_LIMIT:=25}"
 : "${SCIENTIFIC_RETURN_AGENT_LIMIT:=10}"
-: "${SCIENTIFIC_RETURN_SCHEDULE:=0 3 * * 1}"
+# Diario: o intervalo de cada watch (1 a 365 dias) mora no dominio; o
+# Scheduler so' precisa acordar o job pelo menos uma vez a cada menor intervalo.
+: "${SCIENTIFIC_RETURN_SCHEDULE:=0 3 * * *}"
 : "${SCIENTIFIC_RETURN_TIMEZONE:=Europe/Lisbon}"
 # Fluxo agentico autonomo. Com 'false' (o default do config.py) o sweep faz so'
 # a busca deterministica e a fila fica sempre vazia. Ligado, cada watch vencido

@@ -688,6 +688,37 @@ async def test_a_future_anchor_postpones_the_first_review() -> None:
     assert updated.next_run_at == future
 
 
+@pytest.mark.parametrize("interval_days", [1, 2, 10])
+@pytest.mark.asyncio
+async def test_a_daily_sweep_runs_the_watch_every_interval_from_the_anchor(
+    interval_days: int,
+) -> None:
+    """A daily sweep runs the watch on the anchor and every interval after it.
+
+    The panel stores the anchor at midnight UTC and the scheduler wakes the job
+    once a day, a few hours later. Only the watch's own interval may decide
+    which of those wake-ups search; the wake-up cadence must never show through.
+    """
+    repository = _Repository()
+    anchor = datetime(2026, 9, 5, tzinfo=UTC)
+    watch = await ActivateScientificReturnWatch(repository, _ProjectProvider()).execute(
+        ActivateWatchInput(
+            "project-1", interval_days, _caller(), schedule_anchor_at=anchor
+        )
+    )
+
+    searched_on = []
+    for day in range(30):
+        sweep_at = anchor + timedelta(days=day, hours=2)
+        if watch.next_run_at <= sweep_at:
+            watch.record_run(sweep_at + timedelta(minutes=1))
+            searched_on.append(sweep_at.date())
+
+    assert searched_on == [
+        (anchor + timedelta(days=day)).date() for day in range(0, 30, interval_days)
+    ]
+
+
 @pytest.mark.asyncio
 async def test_a_new_interval_leaves_a_never_run_watch_due() -> None:
     """Re-cadencing is not a way to postpone a review that is already owed."""
